@@ -126,6 +126,7 @@ export default function ExploreSearch() {
         resizeMode="cover"
       />
       
+      
    
       <View className="absolute top-2 left-2 bg-black/50 rounded-full p-1">
         <Ionicons 
