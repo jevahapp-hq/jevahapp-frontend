@@ -2,8 +2,9 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: 'Jevah App',
+    name: 'jevah-app',
     slug: 'jevah-app',
+    owner: 'piuslucky469',
     version: '1.0.2',
     orientation: 'portrait',
     icon: './assets/images/icon.png',
@@ -14,19 +15,19 @@ export default {
       API_URL: process.env.EXPO_PUBLIC_API_URL,
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
-        projectId: '950f2be5-a0c8-4a40-ab5e-5922d7a04d17',
+        projectId: 'dcbafd4e-7087-4d44-982f-481637a0b516',
       },
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.tevahapp.TevahApp1',
+      bundleIdentifier: 'com.piuslucky469.jevahapp',
       infoPlist: {
         NSPhotoLibraryUsageDescription: 'This app needs access to your photo and video library.',
         NSCameraUsageDescription: 'This app needs access to your camera for media upload.',
       },
     },
     android: {
-      package: 'com.tevahapp.TevahApp1',
+      package: 'com.piuslucky469.jevahapp',
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
         foregroundImage: './assets/images/adaptive-icon.png',
