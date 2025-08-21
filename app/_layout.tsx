@@ -8,23 +8,34 @@ import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useMediaStore } from './store/useUploadStore';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useMediaStore } from './store/useUploadStore';
 
 // ✅ Initialize Sentry
 Sentry.init({
   dsn: 'https://70c2253e1290544381fe6dae9bfdd172@o4509865295020032.ingest.us.sentry.io/4509865711763457',
+  debug: __DEV__, // only log in development
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
   sendDefaultPii: true,
   tracesSampleRate: 1.0,
-  enableInExpoDevelopment: true, // capture errors in dev
-  debug: true, // log for debugging
+  profilesSampleRate: 1.0,
+
+  // Configure Session Replay
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
 });
 
 const API_BASE_URL =
   Constants.expoConfig?.extra?.API_URL ||
   (__DEV__ ? "http://192.168.100.133:4000" : "https://jevahapp-backend.onrender.com");
 
-const publishableKey = Constants.expoConfig?.extra?.CLERK_KEY || 
+const publishableKey = Constants.expoConfig?.extra?.CLERK_KEY ||
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
   "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"; // fallback
 
@@ -122,13 +133,13 @@ export default function RootLayout() {
   // ✅ Normal app rendering
   return (
     <ErrorBoundary>
-    <SafeAreaProvider>
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <Slot />
-        </GestureHandlerRootView>
-      </ClerkProvider>
-    </SafeAreaProvider>
+      <SafeAreaProvider>
+        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <Slot />
+          </GestureHandlerRootView>
+        </ClerkProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
