@@ -6,7 +6,7 @@ export default {
     slug: 'jevah-app',
     version: '1.0.2',
     orientation: 'portrait',
-    icon: './assets/images/icon.png',
+    icon: './assets/images/Jevah.png',
     scheme: 'jevahapp',
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
