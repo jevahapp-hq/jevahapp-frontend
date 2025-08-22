@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import { API_BASE_URL } from "../utils/api";
 
 const defaultAvatar = require("../../assets/images/image (5).png");
@@ -67,53 +67,66 @@ export default function Header() {
 
   return (
     <>
-      <View className="flex-row justify-between items-center bg-white mt-12 w-[370px] mx-auto">
-        <View className="flex-row items-center justify-center">
-          <TouchableOpacity onPress={() => router.push("/auth/Logout")}>
-            <Image
-              source={
-                typeof user?.avatar === "string" &&
-                user.avatar.startsWith("http")
-                  ? { uri: user.avatar.trim() }
-                  : defaultAvatar
-              }
-              className="w-[38px] h-[38px] rounded-[8px]"
-            />
-          </TouchableOpacity>
+      {/* Status bar spacing for iOS */}
+      {Platform.OS === 'ios' && (
+        <View className="h-12 bg-white" />
+      )}
+      
+      {/* Main header container */}
+      <View className="w-full bg-white px-4 py-3 shadow-sm">
+        <View className="flex-row justify-between items-center">
+          {/* Left side - User info */}
+          <View className="flex-row items-center flex-1">
+            <TouchableOpacity onPress={() => router.push("/auth/Logout")}>
+              <Image
+                source={
+                  typeof user?.avatar === "string" &&
+                  user.avatar.startsWith("http")
+                    ? { uri: user.avatar.trim() }
+                    : defaultAvatar
+                }
+                className="w-[38px] h-[38px] rounded-[8px]"
+              />
+            </TouchableOpacity>
 
-          <View className="ml-2">
-            <Text className="text-[14px] font-rubik font-medium text-[#090E24]">
-              {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
-            </Text>
-            <Text className="text-[10px] text-[#090E24] font-rubik font-medium">
-              {user?.section?.toUpperCase()}
-            </Text>
+            <View className="ml-3 flex-1">
+              <Text className="text-[14px] font-rubik font-medium text-[#090E24]">
+                {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
+              </Text>
+              <Text className="text-[10px] text-[#090E24] font-rubik font-medium">
+                {user?.section?.toUpperCase()}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <View className="flex-row gap-4">
-          <TouchableOpacity
-            onPress={() => router.push("/ExploreSearch/ExploreSearch")}
-          >
-            <Ionicons name="search-outline" size={24} color="#090E24" />
-          </TouchableOpacity>
+          {/* Right side - Action buttons */}
+          <View className="flex-row gap-4">
+            <TouchableOpacity
+              onPress={() => router.push("/ExploreSearch/ExploreSearch")}
+              className="p-2"
+            >
+              <Ionicons name="search-outline" size={24} color="#090E24" />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => router.push("/noitfication/NotificationsScreen")}
-          >
-            <Ionicons name="notifications-outline" size={24} color="#090E24" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push("/noitfication/NotificationsScreen")}
+              className="p-2"
+            >
+              <Ionicons name="notifications-outline" size={24} color="#090E24" />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => router.push("/downloads/DownloadsScreen")}
-          >
-            <Ionicons name="download-outline" size={24} color="#090E24" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push("/downloads/DownloadsScreen")}
+              className="p-2"
+            >
+              <Ionicons name="download-outline" size={24} color="#090E24" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {/* Gray horizontal line under the component */}
-      <View className=" w-full h-[1px] bg-gray-300 mt-3" />
+      <View className="w-full h-[1px] bg-gray-300" />
     </>
   );
 }
