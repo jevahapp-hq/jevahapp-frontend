@@ -129,7 +129,7 @@ export default function SignUpScreen() {
 
 
   return (
-    <View className="flex-1 bg-[#FCFCFD]">
+    <View className="flex-1 bg-white">
      
 
       <View className="px-4 mt-6">
@@ -148,7 +148,7 @@ export default function SignUpScreen() {
           }}
           keyboardShouldPersistTaps="handled"
         >
-          <View className="flex flex-col justify-center items-start h-[160px] w-[333px] mt-3">
+          <View className="flex flex-col justify-center items-start h-[160px] w-[333px] mt-3 bg-[#FCFCFD]">
             <Text className="font-rubik-semibold text-[#1D2939] text-star text-[40px]">
               Welcome to the {"\n"}family!{" "}
               <Image

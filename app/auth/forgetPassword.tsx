@@ -10,11 +10,11 @@ import AuthHeader from "../components/AuthHeader";
 export default function ForgotPassword() {
   return (
 
-    <View className="flex flex-col justify-center w-[333px]  mx-auto">
- <View className="px-4 mt-6">
+    <View className="flex flex-col justify-center w-[333px]  mx-auto bg-white">
+ <View className="px-5 mt-6 ">
         <AuthHeader title="Forgot Password" />
       </View>
-<View className="flex flex-col w-[333px] h-[176px] mt-6">
+<View className="flex flex-col w-[333px] h-[176px] mt-6 bg-[#FCFCFD]">
 
 
      <Text className="text-4xl font-bold mb-4 text-[#1D2939]">

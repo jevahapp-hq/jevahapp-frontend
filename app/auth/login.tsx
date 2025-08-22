@@ -134,11 +134,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#FCFCFD]">
+    <View className="flex-1 bg-white">
        <View className="px-4 mt-6">
         <AuthHeader title="Sign In" />
       </View>
-      <View className="flex flex-col justify-center items-center mx-auto px-4 mt-0 w-[333px]">
+      <View className="flex flex-col justify-center items-center mx-auto px-4 mt-0 w-[333px] bg-[#FCFCFD]">
         <View className="flex flex-col justify-center items-start h-[160px] w-[333px] mt-3">
           <Text className="font-rubik-semibold text-[#1D2939] text-star text-[40px]">
             Great to see you {"\n"}again{" "}
