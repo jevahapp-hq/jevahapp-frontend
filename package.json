@@ -15,6 +15,7 @@
     "i-local": "eas build --platform ios --local",
     "bpa": "eas build --profile preview --platform android",
     "bda": "eas build --profile development --platform android",
+    "bota": "eas build --profile ota-preview --platform android",
     "bpra": "eas build --profile production --platform android",
     "bpi": "eas build --profile preview --platform ios",
     "bpri": "eas build --profile production --platform ios",

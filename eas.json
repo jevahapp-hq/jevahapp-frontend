@@ -11,6 +11,16 @@
     "preview": {
       "distribution": "internal"
     },
+    "ota-preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+      }
+    },
     "debug": {
       "android": {
         "buildType": "apk"
