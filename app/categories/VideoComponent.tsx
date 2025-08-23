@@ -1,40 +1,41 @@
 import {
-    AntDesign,
-    Feather,
-    Ionicons,
-    MaterialIcons
+  AntDesign,
+  Feather,
+  Ionicons,
+  MaterialIcons
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Dimensions,
-    Image,
-    ImageSourcePropType,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    PanResponder,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Image,
+  ImageSourcePropType,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  PanResponder,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
+import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
-import { useDownloadHandler, convertToDownloadableItem } from "../utils/downloadUtils";
+import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
-    getFavoriteState,
-    getPersistedStats,
-    getViewed,
-    persistStats,
-    persistViewed,
-    toggleFavorite,
+  getFavoriteState,
+  getPersistedStats,
+  getViewed,
+  persistStats,
+  persistViewed,
+  toggleFavorite,
 } from "../utils/persistentStorage";
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
@@ -81,6 +82,7 @@ export default function VideoComponent() {
   
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { loadDownloadedItems } = useDownloadStore();
   
   // 📱 Viewport detection for auto-play
   const { calculateVideoVisibility } = useVideoViewport();
@@ -168,6 +170,9 @@ export default function VideoComponent() {
       if (!libraryStore.isLoaded) {
         await libraryStore.loadSavedItems();
       }
+      
+      // 📥 Load downloaded items
+      await loadDownloadedItems();
       
       // 📊 Load video stats and viewed videos (media list is already loaded globally)
       const stats = await getPersistedStats();
@@ -1167,6 +1172,8 @@ export default function VideoComponent() {
                   const result = await handleDownload(downloadableItem);
                   if (result.success) {
                     setModalVisible(null);
+                    // Force re-render to update download status
+                    await loadDownloadedItems();
                   }
                 }}
               >
@@ -1364,6 +1371,8 @@ export default function VideoComponent() {
                         const result = await handleDownload(downloadableItem);
                         if (result.success) {
                           closeAllMenus();
+                          // Force re-render to update download status
+                          await loadDownloadedItems();
                         }
                       }}
                     >

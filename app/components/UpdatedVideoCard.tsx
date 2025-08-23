@@ -1,7 +1,7 @@
 // Example: Updated Video Card component using the new backend interaction system
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Image,
     Text,
@@ -10,8 +10,10 @@ import {
     View,
 } from 'react-native';
 import { usePlaybackView } from '../hooks/useContentView';
+import { useDownloadStore } from '../store/useDownloadStore';
 import { useGlobalVideoStore } from '../store/useGlobalVideoStore';
 import { useInteractionStore } from '../store/useInteractionStore';
+import { convertToDownloadableItem, useDownloadHandler } from '../utils/downloadUtils';
 import CommentsModal from './CommentsModal';
 import InteractionButtons from './InteractionButtons';
 
@@ -37,6 +39,15 @@ export default function UpdatedVideoCard({ video, index, isModalView = false }: 
   const [modalVisible, setModalVisible] = useState(false);
 
   const videoRef = useRef<Video>(null);
+  
+  // Download functionality
+  const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { loadDownloadedItems } = useDownloadStore();
+  
+  // Load downloaded items on component mount
+  useEffect(() => {
+    loadDownloadedItems();
+  }, [loadDownloadedItems]);
   
   // Generate consistent content ID
   const contentId = video._id || video.id || `${video.fileUrl}_${index}`;
@@ -200,9 +211,30 @@ export default function UpdatedVideoCard({ video, index, isModalView = false }: 
                   <Text className="text-gray-700 font-rubik ml-3">View Details</Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity className="py-2 flex-row items-center">
-                  <Ionicons name="download-outline" size={20} color="#374151" />
-                  <Text className="text-gray-700 font-rubik ml-3">Download</Text>
+                <TouchableOpacity 
+                  className="py-2 flex-row items-center"
+                  onPress={async () => {
+                    try {
+                      const downloadableItem = convertToDownloadableItem(video, 'video');
+                      const result = await handleDownload(downloadableItem);
+                      if (result.success) {
+                        setModalVisible(false);
+                        // Force re-render to update download status
+                        await loadDownloadedItems();
+                      }
+                    } catch (error) {
+                      console.error('Download error:', error);
+                    }
+                  }}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={20} 
+                    color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#374151"} 
+                  />
+                  <Text className="text-gray-700 font-rubik ml-3">
+                    {checkIfDownloaded(video._id || video.fileUrl) ? "Downloaded" : "Download"}
+                  </Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity className="py-2 flex-row items-center">

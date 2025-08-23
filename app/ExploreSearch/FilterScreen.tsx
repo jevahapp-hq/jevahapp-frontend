@@ -1,14 +1,13 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
   ScrollView,
+  Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import AuthHeader from "../components/AuthHeader";
 
 const creators = [
@@ -58,8 +57,8 @@ export default function FilterScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Search */}
-        <View className="flex flex-row items-center mt-3">
-          <View className="flex-row items-center px-2 bg-gray-100 w-[270px] rounded-xl  h-[42px] mb-3">
+        <View className="flex flex-row items-center mt-3 w-full">
+          <View className="flex-row items-center px-2 bg-gray-100 w-[308px] rounded-xl h-[42px] mb-3 flex-1">
             <View className="ml-2">
               <Ionicons name="search" size={20} color="#666" />
             </View>

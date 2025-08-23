@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   FlatList,
   Image,
   ScrollView,
@@ -12,7 +13,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
+import { useDownloadStore } from "../store/useDownloadStore";
 import allMediaAPI, { AllMediaItem } from "../utils/allMediaAPI";
+import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 
 const pastSearchesInitial = [
   "Miracles",
@@ -29,6 +32,44 @@ export default function ExploreSearch() {
   const [searchResults, setSearchResults] = useState<AllMediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  
+  // Download functionality
+  const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { loadDownloadedItems } = useDownloadStore();
+  
+  // Load downloaded items on component mount
+  useEffect(() => {
+    loadDownloadedItems();
+  }, [loadDownloadedItems]);
+
+  // Test download function for debugging
+  const testDownloadFromSearch = async () => {
+    if (searchResults.length > 0) {
+      const testItem = searchResults[0];
+      console.log('🧪 Testing download with first search result:', testItem);
+      
+      const contentType = testItem.contentType === 'music' ? 'audio' : 
+                        testItem.contentType === 'videos' ? 'video' : 
+                        testItem.contentType === 'books' ? 'ebook' : 
+                        testItem.contentType === 'live' ? 'live' : 'video';
+      
+      const downloadableItem = convertToDownloadableItem(testItem, contentType as any);
+      console.log('🧪 Converted test item:', downloadableItem);
+      
+      const result = await handleDownload(downloadableItem);
+      console.log('🧪 Test download result:', result);
+      
+      if (result.success) {
+        Alert.alert('Test Success', 'Test download successful!');
+      } else {
+        Alert.alert('Test Failed', result.message || 'Test download failed');
+      }
+    } else {
+      Alert.alert('No Items', 'No search results to test with');
+    }
+  };
+
+
 
   const removePastSearch = (item: string) => {
     setPastSearches(pastSearches.filter((keyword) => keyword !== item));
@@ -161,9 +202,59 @@ export default function ExploreSearch() {
             <Text className="text-sm text-[#1D2939] font-rubik">Share</Text>
             <Ionicons name="share-outline" size={16} color="#3A3E50" />
           </TouchableOpacity>
-          <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-            <Text className="text-[#1D2939] font-rubik text-sm">Download</Text>
-            <Ionicons name="download-outline" size={16} color="#3A3E50" />
+          <TouchableOpacity 
+            className="py-2 border-b border-gray-200 flex-row items-center justify-between"
+            onPress={async () => {
+              try {
+                console.log('🔍 Download button pressed for item:', JSON.stringify(item, null, 2));
+                console.log('🔍 Item structure:', {
+                  _id: item._id,
+                  title: item.title,
+                  description: item.description,
+                  contentType: item.contentType,
+                  fileUrl: item.fileUrl,
+                  thumbnailUrl: item.thumbnailUrl,
+                  uploadedBy: item.uploadedBy,
+                  duration: item.duration
+                });
+                
+                const contentType = item.contentType === 'music' ? 'audio' : 
+                                  item.contentType === 'videos' ? 'video' : 
+                                  item.contentType === 'books' ? 'ebook' : 
+                                  item.contentType === 'live' ? 'live' : 'video';
+                console.log('📱 Content type determined:', contentType);
+                const downloadableItem = convertToDownloadableItem(item, contentType as any);
+                console.log('📦 Converted downloadable item:', JSON.stringify(downloadableItem, null, 2));
+                const result = await handleDownload(downloadableItem);
+                console.log('📥 Download result:', result);
+                
+                if (result.success) {
+                  console.log('✅ Download successful, closing modal');
+                  Alert.alert('Success', 'Item downloaded successfully!');
+                  setModalIndex(null);
+                  // Force a re-render to update the download status
+                  setTimeout(() => {
+                    console.log('🔄 Forcing re-render');
+                    // Force reload downloads
+                    loadDownloadedItems();
+                  }, 100);
+                } else {
+                  console.log('❌ Download failed:', result.message);
+                  Alert.alert('Info', result.message || 'Download failed');
+                }
+              } catch (error) {
+                console.error('💥 Download error:', error);
+              }
+            }}
+          >
+            <Text className="text-[#1D2939] font-rubik text-sm">
+              {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
+            </Text>
+            <Ionicons 
+              name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+              size={16} 
+              color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
+            />
           </TouchableOpacity>
           <TouchableOpacity className="py-2 flex-row items-center justify-between">
             <Text className="text-[#1D2939] font-rubik text-sm">Save</Text>
@@ -209,16 +300,23 @@ export default function ExploreSearch() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Top Content */}
-      <View className="px-6">
-        <AuthHeader title="Explore" />
+      {/* Header */}
+      <AuthHeader title="Search and Filter" />
 
-        {/* Search Bar */}
-        <View className="flex flex-row w-[360px] justify-between">
-          <View className="flex-row items-center px-4 bg-gray-100 w-[320px] rounded-xl  h-[42px] mb-3">
-           <View className="ml-2">
-           <Ionicons name="search" size={20} color="#666" />
-           </View>
+      {/* Main Scrollable Content */}
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 120 }}
+        className="px-4 bg-[#FCFCFD]"
+        showsVerticalScrollIndicator={false}
+        onScroll={closeModal}
+        scrollEventThrottle={16}
+      >
+        {/* Search */}
+        <View className="flex flex-row items-center mt-3 w-full">
+          <View className="flex-row items-center px-2 bg-gray-100 w-[315px] rounded-xl h-[42px] mb-3 flex-1">
+            <View className="ml-2">
+              <Ionicons name="search" size={20} color="#666" />
+            </View>
             <TextInput
               placeholder="Search for anything..."
               className="ml-3 flex-1 text-base font-rubik items-center"
@@ -227,19 +325,25 @@ export default function ExploreSearch() {
             />
           </View>
 
-          <TouchableOpacity onPress={() => router.push("/ExploreSearch/FilterScreen")} className="ml-3">
-            <Ionicons name="options" size={36} color="#666" />
+          <TouchableOpacity 
+            onPress={() => router.push("/ExploreSearch/FilterScreen")}
+            className="ml-3 mb-2 w-6 h-6 items-center justify-center"
+          >
+            <Ionicons name="options-outline" size={24} color="#3B3B3B" />
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Scrollable Content with matching px-6 */}
-      <ScrollView
-        className="flex-1 px-6"
-        contentContainerStyle={{ paddingBottom: 50 }}
-        onScroll={closeModal}
-        scrollEventThrottle={16}
-      >
+        {/* Test Download Button */}
+        {searchResults.length > 0 && (
+          <TouchableOpacity 
+            onPress={testDownloadFromSearch}
+            className="bg-green-500 px-4 py-2 rounded-lg mb-4"
+          >
+            <Text className="text-white font-rubik">Test Download First Result</Text>
+          </TouchableOpacity>
+        )}
+
+
         {/* Past Search Keywords - only show when no search is active */}
         {!hasSearched && pastSearches.length > 0 && (
           <View className="mb-4">

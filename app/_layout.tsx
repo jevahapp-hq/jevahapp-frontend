@@ -9,6 +9,7 @@ import { Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useDownloadStore } from './store/useDownloadStore';
 import { useMediaStore } from './store/useUploadStore';
 
 // ✅ Initialize Sentry
@@ -67,6 +68,7 @@ export default function RootLayout() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadPersistedMedia = useMediaStore((state) => state.loadPersistedMedia);
+  const loadDownloadedItems = useDownloadStore((state) => state.loadDownloadedItems);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -84,6 +86,14 @@ export default function RootLayout() {
           console.warn('⚠️ Media loading failed (continuing anyway):', mediaErr);
         }
 
+        // Try to load downloaded items
+        try {
+          await loadDownloadedItems();
+          console.log('✅ Downloads loaded successfully');
+        } catch (downloadErr) {
+          console.warn('⚠️ Downloads loading failed (continuing anyway):', downloadErr);
+        }
+
         console.log('✅ App initialization complete');
         setIsInitialized(true);
       } catch (err) {
@@ -96,7 +106,7 @@ export default function RootLayout() {
     if (fontsLoaded && !isInitialized) {
       initializeApp();
     }
-  }, [fontsLoaded, loadPersistedMedia, isInitialized]);
+  }, [fontsLoaded, loadPersistedMedia, loadDownloadedItems, isInitialized]);
 
   // ✅ Fonts not loaded
   if (!fontsLoaded) {
