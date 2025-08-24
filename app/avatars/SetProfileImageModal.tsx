@@ -1,17 +1,17 @@
-import React, { useEffect } from "react";
-import { Text, View, TouchableOpacity, Dimensions } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-} from "react-native-reanimated";
+import { useEffect } from "react";
+import { Dimensions, Text, TouchableOpacity, View } from "react-native";
 import {
-  PanGestureHandler,
-  GestureHandlerRootView,
-  PanGestureHandlerGestureEvent,
-  HandlerStateChangeEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
+import Animated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from "react-native-reanimated";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -20,12 +20,14 @@ type Props = {
   isVisible: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  isLoading?: boolean;
 };
 
 export default function SlideUpSetProfileImageModal({
   isVisible,
   onConfirm,
   onCancel,
+  isLoading = false,
 }: Props) {
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
@@ -107,9 +109,14 @@ export default function SlideUpSetProfileImageModal({
                 translateY.value = withSpring(SCREEN_HEIGHT);
                 runOnJS(onConfirm)();
               }}
-              className="flex-1 py-3 bg-gray-900 rounded-full"
+              className={`flex-1 py-3 rounded-full ${
+                isLoading ? "bg-gray-400" : "bg-gray-900"
+              }`}
+              disabled={isLoading}
             >
-              <Text className="text-center text-white font-semibold">Yes please</Text>
+              <Text className="text-center text-white font-semibold">
+                {isLoading ? "Uploading..." : "Yes please"}
+              </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

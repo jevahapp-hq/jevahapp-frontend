@@ -1,28 +1,27 @@
-import React, { useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { useRef, useState } from "react";
 import {
   Image,
   ImageSourcePropType,
+  Animated as RNAnimated,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
-  Animated as RNAnimated,
 } from "react-native";
-import { useRouter } from "expo-router";
 
+import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
+import axios from "axios";
 import AuthHeader from "../components/AuthHeader";
+import FailureCard from "../components/failureCard";
 import ProgressBar from "../components/ProgressBar";
+import SuccessfulCard from "../components/successfulCard";
 import CartoonAvatar from "./CatoonAvatar";
 import CuteAvatar from "./CuteAvatars";
 import Images from "./ImagesAvatars";
 import SlideUpSetProfileImageModal from "./SetProfileImageModal";
-import SuccessfulCard from "../components/successfulCard";
-import FailureCard from "../components/failureCard";
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
 
 import { Asset } from "expo-asset";
-import { API_BASE_URL } from "../utils/api";
 import Constants from "expo-constants";
 
 const avatarTabs = ["Cartoon", "Cute Avatars", "Images"];
@@ -43,6 +42,7 @@ const AvatarSelection = () => {
   const dropdownAnim = useRef(new RNAnimated.Value(-200)).current;
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const imageSize = 80;
   const FLOOR_Y = 280;
@@ -98,64 +98,89 @@ const AvatarSelection = () => {
   //   }
   // };
 
-  const uploadAvatarToBackend = async (uri: string, token: string) => {
-    const fileExtension = uri.split(".").pop()?.toLowerCase() || "jpg";
-    const mimeType = `image/${
-      fileExtension === "jpg" ? "jpeg" : fileExtension
-    }`;
+  const uploadAvatarToBackend = async (uri: string, token: string): Promise<string> => {
+    try {
+      const fileExtension = uri.split(".").pop()?.toLowerCase() || "jpg";
+      const mimeType = `image/${
+        fileExtension === "jpg" ? "jpeg" : fileExtension
+      }`;
 
-    const formData = new FormData();
-    formData.append("avatar", {
-      uri,
-      name: `avatar.${fileExtension}`,
-      type: mimeType,
-    } as any);
+      const formData = new FormData();
+      formData.append("avatar", {
+        uri: uri,
+        name: `avatar.${fileExtension}`,
+        type: mimeType,
+      } as any);
 
+      console.log("📤 Uploading avatar to:", `${API_BASE_URL}/auth/avatar`);
+      console.log("📤 FormData:", formData);
 
+      // ✅ CORRECT ENDPOINT - matches your backend code
+      const res = await fetch(
+        `${API_BASE_URL}/auth/avatar`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            // Don't set Content-Type for FormData - let the browser set it
+          },
+          body: formData,
+        }
+      );
 
-
-    const res = await fetch(
-      `${API_BASE_URL}/api/auth/update-avatar`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+      console.log("📤 Upload response status:", res.status);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Upload failed:", errorText);
+        throw new Error(`Upload failed: ${res.status} - ${errorText}`);
       }
-    );
 
-    const json = await res.json();
+      const json = await res.json();
+      console.log("📤 Upload response:", json);
 
-    if (!json.success) {
-      throw new Error(json.message || "Failed to upload avatar");
+      if (!json.success) {
+        throw new Error(json.message || "Failed to upload avatar");
+      }
+
+      return json.avatarUrl; // this is the Cloudflare R2 URL returned by your backend
+    } catch (error) {
+      console.error("❌ Avatar upload error:", error);
+      throw error;
     }
-
-    return json.avatarUrl; // this is the Cloudinary URL returned by your backend
   };
 
   const handleConfirm = async () => {
     setIsModalVisible(false);
+    setIsUploading(true);
 
     if (!selectedAvatar) {
+      console.log("❌ No avatar selected");
+      setIsUploading(false);
       triggerBounceDrop("failure");
       return;
     }
 
     try {
-      const token = await AsyncStorage.getItem("token");
+      // ✅ Use correct token key
+      const token = await AsyncStorage.getItem("userToken");
       if (!token) {
+        console.log("❌ No user token found");
         triggerBounceDrop("failure");
         return;
       }
+
+      console.log("✅ Token found, processing avatar...");
 
       let fileUri: string;
 
       if (typeof selectedAvatar === "string") {
         fileUri = selectedAvatar;
+        console.log("📁 Using string URI:", fileUri);
       } else {
         // Ensure it's a static resource (require)
         const assetModule = selectedAvatar as number;
+        console.log("📁 Processing asset module:", assetModule);
 
         const asset = Asset.fromModule(assetModule);
         await asset.downloadAsync();
@@ -164,13 +189,17 @@ const AvatarSelection = () => {
         if (!fileUri) {
           throw new Error("Failed to resolve local file URI from asset");
         }
+        console.log("📁 Asset URI resolved:", fileUri);
       }
 
+      console.log("🚀 Starting avatar upload...");
       const avatarUrl = await uploadAvatarToBackend(fileUri, token);
+      console.log("✅ Avatar uploaded successfully:", avatarUrl);
+      
       setConfirmedAvatar(avatarUrl);
 
-
-      
+      // Update user profile with the new avatar URL
+      console.log("🔄 Updating user profile...");
       const response = await axios.post(
         `${API_BASE_URL}/api/auth/complete-profile`,
         { avatarUpload: avatarUrl },
@@ -181,15 +210,26 @@ const AvatarSelection = () => {
         }
       );
 
+      console.log("📤 Profile update response:", response.data);
+
       if (response.data.success) {
         setConfirmedAvatar(avatarUrl);
+        console.log("✅ Profile updated successfully");
         triggerBounceDrop("success");
       } else {
+        console.log("❌ Profile update failed:", response.data);
         triggerBounceDrop("failure");
       }
     } catch (error: any) {
-      console.error("Avatar submission failed:", error);
+      console.error("❌ Avatar submission failed:", error);
+      console.error("❌ Error details:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
       triggerBounceDrop("failure");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -311,10 +351,15 @@ const AvatarSelection = () => {
       {/* Buttons */}
       <View className="mb-20 items-center">
         <TouchableOpacity
-          className="bg-black py-3 rounded-full items-center w-[325px]"
+          className={`py-3 rounded-full items-center w-[325px] ${
+            isUploading ? "bg-gray-400" : "bg-black"
+          }`}
           onPress={handleUseAvatar}
+          disabled={isUploading}
         >
-          <Text className="text-white font-semibold">Use Avatar</Text>
+          <Text className="text-white font-semibold">
+            {isUploading ? "Uploading..." : "Use Avatar"}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity className="mt-6 items-center"
          onPress={() => router.push("/categories/HomeScreen")}>
@@ -328,6 +373,7 @@ const AvatarSelection = () => {
         isVisible={isModalVisible}
         onConfirm={handleConfirm}
         onCancel={() => setIsModalVisible(false)}
+        isLoading={isUploading}
       />
     </View>
   );

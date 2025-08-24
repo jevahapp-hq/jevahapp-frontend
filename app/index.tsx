@@ -4,17 +4,17 @@ import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import '../global.css';
 import AnimatedLogoIntro from './components/AnimatedLogoIntro';
@@ -192,6 +192,7 @@ export default function Welcome() {
 
       await SecureStore.setItemAsync('jwt', result.token);
       await AsyncStorage.setItem('token', result.token);
+      await AsyncStorage.setItem('userToken', result.token);
 
       if (result.user) {
         if (result.user.firstName && result.user.lastName) {
@@ -239,11 +240,6 @@ export default function Welcome() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onMomentumScrollEnd}
-        getItemLayout={(_, index) => ({
-          length: width,
-          offset: width * index,
-          index,
-        })}
       />
       <View className="absolute top-[500px] left-0 right-0 items-center w-full px-4">
         <Text className="text-[#344054] text-[12px] font-rubik-bold text-center mt-6">

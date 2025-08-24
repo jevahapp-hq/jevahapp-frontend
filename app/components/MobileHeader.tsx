@@ -99,7 +99,7 @@ export default function MobileHeader({
     <View className="flex-row items-center justify-between w-full px-4 py-3">
       {/* Left Side - User Profile */}
       <TouchableOpacity 
-        onPress={() => router.push("/auth/Logout")}
+        onPress={() => router.push("/Profile/ProfileSwitch")}
         className="flex-row items-center flex-1"
         activeOpacity={0.7}
       >
@@ -110,8 +110,14 @@ export default function MobileHeader({
                 ? { uri: user.avatar.trim() }
                 : require("../../assets/images/image (5).png")
             }
-            className="w-10 h-10 rounded-full"
+            className="w-10 h-10 rounded-lg"
             style={{ borderWidth: 1, borderColor: '#E5E7EB' }}
+            onError={(error) => {
+              console.warn("❌ Failed to load avatar image:", error.nativeEvent.error);
+            }}
+            onLoad={() => {
+              console.log("✅ Avatar image loaded successfully:", user?.avatar);
+            }}
           />
           {user?.isOnline && (
             <View className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
@@ -137,7 +143,7 @@ export default function MobileHeader({
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
             activeOpacity={0.7}
           >
-            <Ionicons name={action.icon as any} size={20} color={textColor} />
+            <Ionicons name={action.icon as any} size={24} color={textColor} />
             {action.badge && (
               <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
             )}
@@ -164,7 +170,7 @@ export default function MobileHeader({
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50"
             activeOpacity={0.7}
           >
-            <MaterialIcons name="arrow-back" size={20} color={textColor} />
+            <MaterialIcons name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -191,7 +197,7 @@ export default function MobileHeader({
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50"
             activeOpacity={0.7}
           >
-            <MaterialIcons name="close" size={20} color={textColor} />
+            <MaterialIcons name="close" size={24} color={textColor} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -209,7 +215,7 @@ export default function MobileHeader({
               className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
               activeOpacity={0.7}
             >
-              <Ionicons name={leftAction.icon as any} size={20} color={textColor} />
+              <Ionicons name={leftAction.icon as any} size={24} color={textColor} />
               {leftAction.badge && (
                 <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
               )}
@@ -247,7 +253,7 @@ export default function MobileHeader({
                 className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
                 activeOpacity={0.7}
               >
-                <Ionicons name={action.icon as any} size={20} color={textColor} />
+                <Ionicons name={action.icon as any} size={24} color={textColor} />
                 {action.badge && (
                   <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
                 )}
