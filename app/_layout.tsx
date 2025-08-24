@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useDownloadStore } from './store/useDownloadStore';
 import { useMediaStore } from './store/useUploadStore';
+import { PerformanceOptimizer } from './utils/performance';
 
 // ✅ Initialize Sentry
 Sentry.init({
@@ -92,6 +93,14 @@ export default function RootLayout() {
           console.log('✅ Downloads loaded successfully');
         } catch (downloadErr) {
           console.warn('⚠️ Downloads loading failed (continuing anyway):', downloadErr);
+        }
+
+        // Preload critical data for better performance
+        try {
+          await PerformanceOptimizer.preloadCriticalData();
+          console.log('✅ Critical data preloaded successfully');
+        } catch (preloadErr) {
+          console.warn('⚠️ Critical data preloading failed (continuing anyway):', preloadErr);
         }
 
         console.log('✅ App initialization complete');

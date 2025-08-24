@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from "react";
+import { Audio, ResizeMode, Video } from "expo-av";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Dimensions,
     Image,
@@ -17,7 +18,7 @@ import {
     PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import { MagnifyingGlassIcon } from "react-native-heroicons/outline";
-import { PlayIcon, SpeakerWaveIcon } from "react-native-heroicons/solid";
+import { PauseIcon, PlayIcon, SpeakerWaveIcon } from "react-native-heroicons/solid";
 import Animated, {
     runOnJS,
     useAnimatedStyle,
@@ -43,81 +44,243 @@ type User = {
   section: string;
 };
 
-const DownloadCard: React.FC<{ item: DownloadItem }> = ({ item }) => (
-  <View className="mb-5 flex-row w-[362px] gap-6 justify-between">
-    <Image
-      source={
-        item.thumbnailUrl 
-          ? { uri: item.thumbnailUrl }
-          : require("../../assets/images/1.png") // fallback image
+interface DownloadCardProps {
+  item: DownloadItem;
+}
+
+const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [position, setPosition] = useState(0);
+  const videoRef = useRef<Video>(null);
+  const audioRef = useRef<Audio.Sound>(null);
+  const progressInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const isVideo = item.contentType === 'video' || item.contentType === 'videos';
+  const isAudio = item.contentType === 'audio' || item.contentType === 'music';
+
+  useEffect(() => {
+    return () => {
+      if (progressInterval.current) {
+        clearInterval(progressInterval.current);
       }
-      className="w-[60px] h-[72px] rounded-xl"
-      resizeMode="cover"
-    />
+      if (audioRef.current) {
+        audioRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
-    <View className="flex-col w-[268px] ">
-      <Text className="mt-2 font-rubik-semibold text-[16px] text-[#1D2939]">
-        {item.title}
-      </Text>
-      <Text
-        className="text-[#667085] text-sm mt-2 font-rubik"
-        numberOfLines={2}
-      >
-      {item.description}
-    </Text>
+  const togglePlay = async () => {
+    try {
+      if (isVideo) {
+        if (isPlaying) {
+          await videoRef.current?.pauseAsync();
+        } else {
+          await videoRef.current?.playAsync();
+        }
+        setIsPlaying(!isPlaying);
+      } else if (isAudio) {
+        if (isPlaying) {
+          await audioRef.current?.pauseAsync();
+        } else {
+          if (!audioRef.current) {
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: item.fileUrl },
+              { shouldPlay: true }
+            );
+            audioRef.current = sound;
+            sound.setOnPlaybackStatusUpdate((status) => {
+              if (status.isLoaded) {
+                setProgress(status.positionMillis / status.durationMillis);
+                setPosition(status.positionMillis);
+                setDuration(status.durationMillis);
+                if (status.didJustFinish) {
+                  setIsPlaying(false);
+                  setProgress(0);
+                  setPosition(0);
+                }
+              }
+            });
+          } else {
+            await audioRef.current.playAsync();
+          }
+        }
+        setIsPlaying(!isPlaying);
+      }
+    } catch (error) {
+      console.error('Error toggling playback:', error);
+    }
+  };
 
-      <View className="flex-row items-center mt-3">
-        <TouchableOpacity className="mr-3">
-          <PlayIcon size={18} color="black" />
-        </TouchableOpacity>
+  const toggleMute = async () => {
+    try {
+      if (isVideo) {
+        await videoRef.current?.setIsMutedAsync(!isMuted);
+      } else if (isAudio) {
+        await audioRef.current?.setVolumeAsync(isMuted ? 1 : 0);
+      }
+      setIsMuted(!isMuted);
+    } catch (error) {
+      console.error('Error toggling mute:', error);
+    }
+  };
 
-        <View className="mr-3">
-          <View className="w-[200px] h-1 bg-gray-300 rounded-full">
-            <View className="w-4 h-1 bg-black rounded-full" />
-          </View>
-        </View>
-        
-        <TouchableOpacity>
-          <SpeakerWaveIcon size={18} color="black" />
-        </TouchableOpacity>
+  const seekTo = async (seekPosition: number) => {
+    try {
+      if (isVideo) {
+        await videoRef.current?.setPositionAsync(seekPosition);
+      } else if (isAudio) {
+        await audioRef.current?.setPositionAsync(seekPosition);
+      }
+    } catch (error) {
+      console.error('Error seeking:', error);
+    }
+  };
+
+  const formatTime = (milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleVideoStatusUpdate = (status: any) => {
+    if (status.isLoaded) {
+      setProgress(status.positionMillis / status.durationMillis);
+      setPosition(status.positionMillis);
+      setDuration(status.durationMillis);
+      setIsPlaying(status.isPlaying);
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setProgress(0);
+        setPosition(0);
+      }
+    }
+  };
+
+  return (
+    <View className="mb-5 flex-row w-[362px] gap-6 justify-between">
+      {/* Thumbnail/Video/Audio Display */}
+      <View className="w-[60px] h-[72px] rounded-xl overflow-hidden">
+        {isVideo ? (
+          <Video
+            ref={videoRef}
+            source={{ uri: item.fileUrl }}
+            style={{ width: "100%", height: "100%" }}
+            resizeMode={ResizeMode.COVER}
+            useNativeControls={false}
+            isMuted={isMuted}
+            onPlaybackStatusUpdate={handleVideoStatusUpdate}
+          />
+        ) : (
+          <Image
+            source={
+              item.thumbnailUrl 
+                ? { uri: item.thumbnailUrl }
+                : require("../../assets/images/1.png")
+            }
+            className="w-full h-full"
+            resizeMode="cover"
+          />
+        )}
       </View>
 
-      <View className="flex-row items-center justify-between mt-3">
-      <Image source={profileImage} className="w-6 h-6 rounded-full" />
-        <View className="flex-row items-center flex-wrap">
+      <View className="flex-col w-[268px]">
+        <Text className="mt-2 font-rubik-semibold text-[16px] text-[#1D2939]">
+          {item.title}
+        </Text>
+        <Text
+          className="text-[#667085] text-sm mt-2 font-rubik"
+          numberOfLines={2}
+        >
+          {item.description}
+        </Text>
+
+        {/* Playback Controls */}
+        <View className="flex-row items-center mt-3">
+          <TouchableOpacity className="mr-3" onPress={togglePlay}>
+            {isPlaying ? (
+              <PauseIcon size={18} color="black" />
+            ) : (
+              <PlayIcon size={18} color="black" />
+            )}
+          </TouchableOpacity>
+
+          {/* Progress Bar */}
+          <View className="flex-1 mr-3">
+            <TouchableOpacity
+              onPress={(event) => {
+                const { locationX } = event.nativeEvent;
+                const progressBarWidth = 200; // Approximate width
+                const seekRatio = locationX / progressBarWidth;
+                const seekPosition = seekRatio * duration;
+                seekTo(seekPosition);
+              }}
+            >
+              <View className="w-[200px] h-1 bg-gray-300 rounded-full">
+                <View 
+                  className="h-1 bg-black rounded-full" 
+                  style={{ width: `${progress * 100}%` }}
+                />
+              </View>
+            </TouchableOpacity>
+            {duration > 0 && (
+              <View className="flex-row justify-between mt-1">
+                <Text className="text-xs text-gray-500 font-rubik">
+                  {formatTime(position)}
+                </Text>
+                <Text className="text-xs text-gray-500 font-rubik">
+                  {formatTime(duration)}
+                </Text>
+              </View>
+            )}
+          </View>
           
-          <Text className="ml-2 text-[14px] font-rubik-semibold text-[#344054]">
-            {item.author}
-          </Text>
-          <View className="flex-row items-center mt-2">
-            <View className="flex-row items-center">
-              <Ionicons name="time-outline" size={12} color="#667085" />
-              <Text className="ml-1 text-xs text-[#667085] font-rubik">
-                {new Date(item.downloadedAt).toLocaleDateString()}
-              </Text>
-            </View>
-            <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
-            <View className="flex-row items-center">
-              <Ionicons name="document-outline" size={12} color="#667085" />
-              <Text className="ml-1 text-xs text-[#667085] font-rubik">
-                {item.size || "Unknown"}
-              </Text>
-            </View>
-            <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
-            <View className="flex-row items-center">
-              <Ionicons name="checkmark-circle-outline" size={12} color="#256E63" />
-              <Text className="ml-1 text-xs text-[#256E63] font-rubik-semibold">
-                {item.status}
-              </Text>
+          <TouchableOpacity onPress={toggleMute}>
+            <SpeakerWaveIcon 
+              size={18} 
+              color={isMuted ? "gray" : "black"} 
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Author & Metadata */}
+        <View className="flex-row items-center justify-between mt-3">
+          <Image source={profileImage} className="w-6 h-6 rounded-full" />
+          <View className="flex-row items-center flex-wrap">
+            <Text className="ml-2 text-[14px] font-rubik-semibold text-[#344054]">
+              {item.author}
+            </Text>
+            <View className="flex-row items-center mt-2">
+              <View className="flex-row items-center">
+                <Ionicons name="time-outline" size={12} color="#667085" />
+                <Text className="ml-1 text-xs text-[#667085] font-rubik">
+                  {new Date(item.downloadedAt).toLocaleDateString()}
+                </Text>
+              </View>
+              <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
+              <View className="flex-row items-center">
+                <Ionicons name="document-outline" size={12} color="#667085" />
+                <Text className="ml-1 text-xs text-[#667085] font-rubik">
+                  {item.size || "Unknown"}
+                </Text>
+              </View>
+              <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
+              <View className="flex-row items-center">
+                <Ionicons name="checkmark-circle-outline" size={12} color="#256E63" />
+                <Text className="ml-1 text-xs text-[#256E63] font-rubik-semibold">
+                  {item.status}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
       </View>
-</View>
-
-    {/* Author & Actions */}
-  </View>
-);
+    </View>
+  );
+};
 
 const DownloadScreen: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);

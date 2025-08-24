@@ -1,26 +1,26 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
-  Image,
-  ImageSourcePropType,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  PanResponder,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    ImageSourcePropType,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    PanResponder,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
@@ -30,12 +30,12 @@ import { useMediaStore } from "../store/useUploadStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  getViewed,
-  persistStats,
-  persistViewed,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    getViewed,
+    persistStats,
+    persistViewed,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
@@ -952,7 +952,11 @@ export default function VideoComponent() {
               ref={(ref) => {
                 if (ref) videoRefs.current[modalKey] = ref;
               }}
-              source={{ uri: video.fileUrl }}
+              source={{ 
+                uri: video.fileUrl && video.fileUrl.trim() && video.fileUrl.trim() !== 'https://example.com/placeholder.mp4' 
+                  ? video.fileUrl.trim() 
+                  : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+              }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               isMuted={mutedVideos[modalKey] ?? false}
@@ -1174,16 +1178,18 @@ export default function VideoComponent() {
                     setModalVisible(null);
                     // Force re-render to update download status
                     await loadDownloadedItems();
+                    // Force component re-render by updating a state
+                    setModalVisible(null);
                   }
                 }}
               >
                 <Text className="text-[#1D2939] font-rubik ml-2">
-                  {checkIfDownloaded(video._id || video.fileUrl) ? "Downloaded" : "Download"}
+                  {checkIfDownloaded(video.fileUrl) ? "Downloaded" : "Download"}
                 </Text>
                 <Ionicons 
-                  name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                  name={checkIfDownloaded(video.fileUrl) ? "checkmark-circle" : "download-outline"} 
                   size={24} 
-                  color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#090E24"} 
+                  color={checkIfDownloaded(video.fileUrl) ? "#256E63" : "#090E24"} 
                 />
               </TouchableOpacity>
             </View>
@@ -1289,7 +1295,11 @@ export default function VideoComponent() {
                   ref={(ref) => {
                     if (ref) miniCardRefs.current[key] = ref;
                   }}
-                  source={{ uri: item.fileUrl }}
+                  source={{ 
+                    uri: item.fileUrl && item.fileUrl.trim() && item.fileUrl.trim() !== 'https://example.com/placeholder.mp4' 
+                      ? item.fileUrl.trim() 
+                      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+                  }}
                   style={{
                     width: "100%",
                     height: "100%",

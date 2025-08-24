@@ -1,27 +1,29 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons
 } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Image,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View
+    Image,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View
 } from "react-native";
+import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
+import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
-  persistStats,
-  toggleFavorite
+    persistStats,
+    toggleFavorite
 } from "../utils/persistentStorage";
 import { getDisplayName } from "../utils/userValidation";
 
@@ -73,9 +75,14 @@ export default function SermonComponent() {
   const globalVideoStore = useGlobalVideoStore();
   const libraryStore = useLibraryStore();
   
+  // Download functionality
+  const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { loadDownloadedItems } = useDownloadStore();
+  
   useFocusEffect(
     useCallback(() => {
       mediaStore.refreshUserDataForExistingMedia();
+      loadDownloadedItems();
     }, [])
   );
   
@@ -108,7 +115,8 @@ export default function SermonComponent() {
 
   // Mock previously viewed data (in real app, this would come from user's viewing history)
   const previouslyViewed: RecommendedItem[] = useMemo(() => 
-    sermonContent.slice(0, 3).map(item => ({
+    sermonContent.slice(0, 3).map((item, index) => ({
+      key: `previously-viewed-${item._id || index}`,
       fileUrl: item.fileUrl,
       title: item.title,
       imageUrl: item.imageUrl || { uri: item.fileUrl },
@@ -449,16 +457,15 @@ export default function SermonComponent() {
               />
             </View>
             <TouchableOpacity onPress={async () => {
-              const currentMuted = audioMuteMap[modalKey] ?? false;
-              const newMuted = !currentMuted;
-              setAudioMuteMap((prev) => ({ ...prev, [modalKey]: newMuted }));
-              const snd = soundMap[modalKey];
-              if (snd) {
-                try { await snd.setIsMutedAsync(newMuted); } catch {}
+              const contentType = audio.fileUrl?.includes('.mp4') ? 'video' : 'audio';
+              const downloadableItem = convertToDownloadableItem(audio, contentType);
+              const result = await handleDownload(downloadableItem);
+              if (result.success) {
+                setModalVisible(null);
               }
             }}>
               <Ionicons
-                name={(audioMuteMap[modalKey] ?? false) ? "volume-mute" : "volume-high"}
+                name={checkIfDownloaded(audio._id || audio.fileUrl) ? "checkmark-circle" : "download-outline"}
                 size={20}
                 color="#FEA74E"
               />
@@ -601,7 +608,11 @@ export default function SermonComponent() {
                   delete videoRefs.current[modalKey];
                 }
               }}
-              source={{ uri: video.fileUrl }}
+              source={{ 
+                uri: video.fileUrl && video.fileUrl.trim() && video.fileUrl.trim() !== 'https://example.com/placeholder.mp4' 
+                  ? video.fileUrl.trim() 
+                  : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+              }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               isMuted={globalVideoStore.mutedVideos[modalKey] ?? false}
@@ -850,11 +861,33 @@ export default function SermonComponent() {
                     </Text>
                     <AntDesign name="sharealt" size={16} color="##3A3E50" />
                   </TouchableOpacity>
-                  <TouchableOpacity className="py-2 flex-row items-center justify-between">
+                  <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                     <Text className="text-[#1D2939] font-rubik mr-2">
                       Save to Library
                     </Text>
                     <MaterialIcons name="library-add" size={18} color="#3A3E50" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="py-2 flex-row items-center justify-between"
+                    onPress={async () => {
+                      const contentType = item.fileUrl?.includes('.mp4') ? 'video' : 'audio';
+                      const downloadableItem = convertToDownloadableItem(item, contentType);
+                      const result = await handleDownload(downloadableItem);
+                      if (result.success) {
+                        setModalIndex(null);
+                        // Force re-render to update download status
+                        await loadDownloadedItems();
+                      }
+                    }}
+                  >
+                    <Text className="text-[#1D2939] font-rubik ml-2">
+                      {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
+                    </Text>
+                    <Ionicons 
+                      name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                      size={16} 
+                      color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
+                    />
                   </TouchableOpacity>
                 </View>
               </>
@@ -959,7 +992,8 @@ export default function SermonComponent() {
       {trendingSermons.length > 0 && (
         renderMiniCards(
           "Trending Now",
-          trendingSermons.map(item => ({
+          trendingSermons.map((item, index) => ({
+            key: `trending-sermon-${item._id || index}`,
             fileUrl: item.fileUrl,
             title: item.title,
             imageUrl: item.imageUrl || { uri: item.fileUrl },
@@ -992,7 +1026,8 @@ export default function SermonComponent() {
       {recommendedSermons.length > 0 && (
         renderMiniCards(
           "Recommended for you",
-          recommendedSermons.map(item => ({
+          recommendedSermons.map((item, index) => ({
+            key: `recommended-sermon-${item._id || index}`,
             fileUrl: item.fileUrl,
             title: item.title,
             imageUrl: item.imageUrl || { uri: item.fileUrl },

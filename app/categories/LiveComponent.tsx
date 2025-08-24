@@ -9,7 +9,7 @@ import { Image, ImageSourcePropType, ScrollView, Text, TouchableOpacity, Touchab
 
 import { router, useFocusEffect, useRouter } from "expo-router";
 import { useMediaStore } from "../store/useUploadStore";
-import { useDownloadHandler, convertToDownloadableItem } from "../utils/downloadUtils";
+import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 
 
 interface VideoCard {
@@ -362,8 +362,15 @@ export default function LiveComponent() {
 const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
     const modalKey = `video-${index}`;
 
-    const getImageSource = (src: string | ImageSourcePropType) =>
-      typeof src === "string" ? { uri: src } : src;
+    const getImageSource = (src: string | ImageSourcePropType) => {
+      if (typeof src === "string") {
+        if (!src || !src.trim()) {
+          return require("../../assets/images/Avatar-1.png");
+        }
+        return { uri: src.trim() };
+      }
+      return src;
+    };
 
     return (
       <TouchableOpacity
@@ -424,6 +431,9 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                   marginTop: 15,
                 }}
                 resizeMode="cover"
+                onError={(error) => {
+                  console.warn("❌ Failed to load speaker avatar:", error.nativeEvent.error);
+                }}
               />
             </View>
             <View className="ml-3">
@@ -585,7 +595,11 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                 activeOpacity={0.9}
               >
                 <Image
-                  source={typeof item.imageUrl === "string" ? { uri: item.imageUrl } : item.imageUrl}
+                  source={
+                    typeof item.imageUrl === "string" && item.imageUrl && item.imageUrl.trim()
+                      ? { uri: item.imageUrl.trim() }
+                      : require("../../assets/images/image (5).png")
+                  }
                   className="w-full h-full absolute"
                   resizeMode="cover"
                 />

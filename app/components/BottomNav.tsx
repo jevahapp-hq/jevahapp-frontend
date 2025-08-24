@@ -209,19 +209,28 @@
 
 
 import {
-    AntDesign,
-    Ionicons,
-    MaterialCommunityIcons,
+  AntDesign,
+  Ionicons,
+  MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-    Platform,
-    Text,
-    TouchableOpacity,
-    View
+  Platform,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
+import {
+  getBottomNavHeight,
+  getFabSize,
+  getIconSize,
+  getResponsiveBorderRadius,
+  getResponsiveShadow,
+  getResponsiveSpacing,
+  getResponsiveTextStyle
+} from "../../utils/responsive";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 
@@ -284,27 +293,67 @@ export default function BottomNav({
 
       {/* FAB Action Buttons */}
       {showActions && (
-     <View 
-        className="absolute bottom-[100px] left-1/2 -translate-x-1/2 w-[220px] flex-row justify-center items-center"
-        style={{ zIndex: 30 }} // Lower than FAB button
-      >
-
-          <View className="rounded-2xl overflow-hidden w-full h-[70px]">
+        <View 
+          style={{
+            position: 'absolute',
+            bottom: getBottomNavHeight() - getResponsiveSpacing(40, 44, 48, 52) + getFabSize().size + getResponsiveSpacing(8, 10, 12, 16),
+            left: '50%',
+            transform: [{ translateX: -140 }], // Half of wider width
+            width: 280,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 30,
+          }}
+        >
+          <View style={{
+            borderRadius: getResponsiveBorderRadius('large'),
+            overflow: 'hidden',
+            width: '100%',
+            height: 70,
+          }}>
             {Platform.OS !== "web" ? (
               <BlurView
                 intensity={80}
                 tint="light"
-                className="flex-row w-full h-full items-center justify-center gap-4 bg-white/20"
+                style={{
+                  flexDirection: 'row',
+                  width: '100%',
+                  height: '100%',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: getResponsiveSpacing(12, 16, 20, 24),
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                }}
               >
                 <TouchableOpacity
-                  className="bg-[#256E63] px-4 py-2 rounded-full border-4 border-white"
+                  style={{
+                    backgroundColor: '#256E63',
+                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    borderRadius: getResponsiveBorderRadius('round'),
+                    borderWidth: 4,
+                    borderColor: 'white',
+                  }}
                   onPress={handleUpload}
                 >
-                  <Text className="text-white font-medium">Upload</Text>
+                  <Text style={[
+                    getResponsiveTextStyle('button'),
+                    { color: 'white' }
+                  ]}>
+                    Upload
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="bg-black px-4 py-2 rounded-full border-4 border-white"
+                  style={{
+                    backgroundColor: 'black',
+                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    borderRadius: getResponsiveBorderRadius('round'),
+                    borderWidth: 4,
+                    borderColor: 'white',
+                  }}
                   onPress={() => {
                     useMediaStore.getState().stopAudioFn?.();
                     setShowActions(false);
@@ -313,20 +362,54 @@ export default function BottomNav({
                     }, 300);
                   }}
                 >
-                  <Text className="text-white font-medium">Go Live</Text>
+                  <Text style={[
+                    getResponsiveTextStyle('button'),
+                    { color: 'white' }
+                  ]}>
+                    Go Live
+                  </Text>
                 </TouchableOpacity>
               </BlurView>
             ) : (
-              <View className="flex-row w-full h-full items-center justify-center gap-4 bg-white/70 px-2 rounded-2xl">
+              <View style={{
+                flexDirection: 'row',
+                width: '100%',
+                height: '100%',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: getResponsiveSpacing(12, 16, 20, 24),
+                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                paddingHorizontal: getResponsiveSpacing(8, 10, 12, 14),
+                borderRadius: getResponsiveBorderRadius('large'),
+              }}>
                 <TouchableOpacity
-                  className="bg-[#256E63] px-4 py-2 rounded-full border-4 border-white"
+                  style={{
+                    backgroundColor: '#256E63',
+                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    borderRadius: getResponsiveBorderRadius('round'),
+                    borderWidth: 4,
+                    borderColor: 'white',
+                  }}
                   onPress={handleUpload}
                 >
-                  <Text className="text-white font-medium">Upload</Text>
+                  <Text style={[
+                    getResponsiveTextStyle('button'),
+                    { color: 'white' }
+                  ]}>
+                    Upload
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="bg-black px-4 py-2 rounded-full border-4 border-white"
+                  style={{
+                    backgroundColor: 'black',
+                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    borderRadius: getResponsiveBorderRadius('round'),
+                    borderWidth: 4,
+                    borderColor: 'white',
+                  }}
                   onPress={() => {
                     useMediaStore.getState().stopAudioFn?.();
                     setShowActions(false);
@@ -335,7 +418,12 @@ export default function BottomNav({
                     }, 300);
                   }}
                 >
-                  <Text className="text-white font-medium">Go Live</Text>
+                  <Text style={[
+                    getResponsiveTextStyle('button'),
+                    { color: 'white' }
+                  ]}>
+                    Go Live
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -344,7 +432,19 @@ export default function BottomNav({
       )}
 
       {/* Bottom Navigation Bar */}
-      <View className="absolute bottom-0 left-0 right-0 h-24 bg-white flex-row justify-around items-center shadow-lg z-10">
+      <View style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: getBottomNavHeight(),
+        backgroundColor: 'white',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        ...getResponsiveShadow(),
+        zIndex: 10,
+      }}>
         {/* First half of tabs */}
         {Object.entries(tabConfig)
           .slice(0, 2)
@@ -367,18 +467,23 @@ export default function BottomNav({
                   }
                   setSelectedTab(tab);
                 }}
-                className="items-center justify-center "
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <IconComponent
                   name={name}
-                  size={24}
+                  size={getIconSize('medium')}
                   color={isActive ? "#256E63" : "#000"}
                 />
-                <Text
-                  className={`text-xs mt-1 ${
-                    isActive ? "text-[#256E63]" : "text-black"
-                  }`}
-                >
+                <Text style={[
+                  getResponsiveTextStyle('caption'),
+                  {
+                    marginTop: getResponsiveSpacing(2, 3, 4, 5),
+                    color: isActive ? "#256E63" : "#000",
+                  }
+                ]}>
                   {label}
                 </Text>
               </TouchableOpacity>
@@ -409,18 +514,23 @@ export default function BottomNav({
                   }
                   setSelectedTab(tab);
                 }}
-                className="items-center justify-center"
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <IconComponent
                   name={name}
-                  size={24}
+                  size={getIconSize('medium')}
                   color={isActive ? "#256E63" : "#000"}
                 />
-                <Text
-                  className={`text-xs mt-1 ${
-                    isActive ? "text-[#256E63]" : "text-black"
-                  }`}
-                >
+                <Text style={[
+                  getResponsiveTextStyle('caption'),
+                  {
+                    marginTop: getResponsiveSpacing(2, 3, 4, 5),
+                    color: isActive ? "#256E63" : "#000",
+                  }
+                ]}>
                   {label}
                 </Text>
               </TouchableOpacity>
@@ -428,23 +538,37 @@ export default function BottomNav({
           })}
       </View>
 
-      {/* Floating Action Button - Rendered separately to ensure it's always on top */}
+      {/* Floating Action Button - Positioned at middle of Community and Library tabs */}
       <View 
-        className="absolute bottom-[52px] left-1/2 -translate-x-1/2 bg-white p-1 rounded-full shadow-md"
-        style={{ zIndex: 100 }}
+        style={{
+          position: 'absolute',
+          bottom: getBottomNavHeight() - getResponsiveSpacing(40, 44, 48, 52),
+          left: '50%',
+          transform: [{ translateX: -getFabSize().size / 2 }],
+          backgroundColor: 'white',
+          padding: getResponsiveSpacing(2, 3, 4, 5),
+          borderRadius: getResponsiveBorderRadius('round'),
+          ...getResponsiveShadow(),
+          zIndex: 100,
+        }}
       >
-                  <TouchableOpacity
-            className="w-12 h-12 rounded-full bg-white items-center justify-center"
-            onPress={handleFabToggle}
-            style={{ 
-              zIndex: 100,
-              elevation: 15
-            }}
-            activeOpacity={0.7}
-          >
+        <TouchableOpacity
+          style={{
+            width: getFabSize().size,
+            height: getFabSize().size,
+            borderRadius: getResponsiveBorderRadius('round'),
+            backgroundColor: 'white',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            elevation: 15,
+          }}
+          onPress={handleFabToggle}
+          activeOpacity={0.7}
+        >
           <AntDesign
             name={showActions ? "close" : "plus"}
-            size={18}
+            size={getFabSize().iconSize}
             color="#256E63"
           />
         </TouchableOpacity>

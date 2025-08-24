@@ -6,77 +6,224 @@ import { View, TouchableOpacity, Image } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { Pressable, Text } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useRouter } from "expo-router";
-
-// Optional: if you're using TypeScript and have a type for your stack
-
-const router = useRouter();
+import {
+  getResponsiveFontSize,
+  getResponsiveSpacing,
+  getResponsiveTextStyle,
+  getResponsiveBorderRadius,
+  getResponsiveShadow,
+  getIconSize,
+  getResponsiveSize,
+} from "../../utils/responsive";
 
 const AllowPermissionsScreen = () => {
+  const router = useRouter();
+  const navigation = useNavigation();
+
+  const handleBackPress = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      router.back();
+    }
+  };
+
+  const handleCancelPress = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      router.back();
+    }
+  };
+
   return (
-    <View className="flex-1 bg-white px-4 pt-12 pb-6">
-      {/* Header */}
-      <View className="flex-row items-center justify-between mb-6">
-        <TouchableOpacity>
-          <Ionicons name="arrow-back" size={24} color="#000" />
+    <View style={{
+      flex: 1,
+      backgroundColor: 'white',
+      paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+      paddingTop: getResponsiveSpacing(40, 44, 48, 52),
+      paddingBottom: getResponsiveSpacing(20, 24, 28, 32),
+    }}>
+      {/* Header - Same pattern as GoLive */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: getResponsiveSpacing(20, 24, 28, 32),
+        paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+      }}>
+        {/* Back Button */}
+        <TouchableOpacity 
+          onPress={handleBackPress} 
+          activeOpacity={0.7}
+          style={{
+            padding: getResponsiveSpacing(4, 6, 8, 10),
+          }}
+        >
+          <Ionicons 
+            name="arrow-back" 
+            size={getIconSize('medium')} 
+            color="#000" 
+          />
         </TouchableOpacity>
-        <Text className="text-[16px] font-rubik-semibold text-[#3B3B3B]">
+        
+        {/* Title */}
+        <Text style={[
+          getResponsiveTextStyle('subtitle'),
+          {
+            color: '#3B3B3B',
+            fontWeight: '600',
+          }
+        ]}>
           Allow Permissions
         </Text>
-        <TouchableOpacity>
-          <Feather name="x" size={24} color="#000" />
+        
+        {/* Cancel Button */}
+        <TouchableOpacity 
+          onPress={handleCancelPress} 
+          activeOpacity={0.7}
+          style={{
+            padding: getResponsiveSpacing(4, 6, 8, 10),
+          }}
+        >
+          <Feather 
+            name="x" 
+            size={getIconSize('medium')} 
+            color="#000" 
+          />
         </TouchableOpacity>
       </View>
 
       {/* Main Card */}
-      <View className="bg-gray-100 rounded-xl p-6 flex-1   justify-between">
+      <View style={{
+        backgroundColor: '#F3F4F6',
+        borderRadius: getResponsiveBorderRadius('large'),
+        padding: getResponsiveSpacing(20, 24, 28, 32),
+        flex: 1,
+        justifyContent: 'space-between',
+      }}>
         {/* Icon + Title */}
-        <View className="items-center mt-9">
-          <View className="bg-indigo-500 rounded-full p-4 mb-4">
-            <Feather name="help-circle" size={36} color="#fff" />
+        <View style={{
+          alignItems: 'center',
+          marginTop: getResponsiveSpacing(32, 36, 40, 44),
+        }}>
+          <View style={{
+            backgroundColor: '#6366F1',
+            borderRadius: getResponsiveBorderRadius('round'),
+            padding: getResponsiveSpacing(16, 20, 24, 28),
+            marginBottom: getResponsiveSpacing(16, 20, 24, 28),
+          }}>
+            <Feather 
+              name="help-circle" 
+              size={getResponsiveSize(32, 36, 40, 44)} 
+              color="#fff" 
+            />
           </View>
-          <Text className=" font-rubik-bold text-center text-[18px] text-[#344054] mb-4">
+          <Text style={[
+            getResponsiveTextStyle('subtitle'),
+            {
+              textAlign: 'center',
+              color: '#344054',
+              marginBottom: getResponsiveSpacing(16, 20, 24, 28),
+            }
+          ]}>
             Allow JevahApp to access your{"\n"}camera and microphone
           </Text>
         </View>
 
         {/* Features */}
-        <View className="mb-24">
-          <View className="flex-row space-x-4">
-            <Feather name="camera" size={24} color="#000" />
-            <View className="flex-1 ml-3">
-              <Text className="font-semibold text-base text-[#475467]">
+        <View style={{
+          marginBottom: getResponsiveSpacing(96, 100, 104, 108),
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            marginBottom: getResponsiveSpacing(12, 16, 20, 24),
+          }}>
+            <Feather 
+              name="camera" 
+              size={getIconSize('medium')} 
+              color="#000" 
+            />
+            <View style={{
+              flex: 1,
+              marginLeft: getResponsiveSpacing(12, 16, 20, 24),
+            }}>
+              <Text style={[
+                getResponsiveTextStyle('body'),
+                {
+                  fontWeight: '600',
+                  color: '#475467',
+                }
+              ]}>
                 Enjoy certain features using Jevah App
               </Text>
-              <Text className="text-sm font-rubik text-[#344054]">
+              <Text style={[
+                getResponsiveTextStyle('caption'),
+                {
+                  color: '#344054',
+                }
+              ]}>
                 Allow permissions to take pictures, photos, record sounds, and
                 videos from your phone.
               </Text>
             </View>
           </View>
 
-          <View className="flex-row space-x-4 mt-3">
-            <Feather name="settings" size={24} color="#000" />
-            <View className="flex-1 ml-3">
-              <Text className="font-semibold text-base text-[#475467]">
+          <View style={{
+            flexDirection: 'row',
+            marginTop: getResponsiveSpacing(12, 16, 20, 24),
+          }}>
+            <Feather 
+              name="settings" 
+              size={getIconSize('medium')} 
+              color="#000" 
+            />
+            <View style={{
+              flex: 1,
+              marginLeft: getResponsiveSpacing(12, 16, 20, 24),
+            }}>
+              <Text style={[
+                getResponsiveTextStyle('body'),
+                {
+                  fontWeight: '600',
+                  color: '#475467',
+                }
+              ]}>
                 Manage permissions
               </Text>
-              <Text className="text-sm text-[#344054]">
+              <Text style={[
+                getResponsiveTextStyle('caption'),
+                {
+                  color: '#344054',
+                }
+              ]}>
                 Not to worry, you can always go back to your settings at any
                 time to change your preference.
               </Text>
             </View>
           </View>
         </View>
-        
 
         {/* Allow Button */}
         <Pressable
           onPress={() => router.push("/goLlive/GoLive")}
-          className="bg-black rounded-full mt-8 py-4"
+          style={{
+            backgroundColor: 'black',
+            borderRadius: getResponsiveBorderRadius('round'),
+            marginTop: getResponsiveSpacing(32, 36, 40, 44),
+            paddingVertical: getResponsiveSpacing(16, 20, 24, 28),
+          }}
+          android_ripple={{ color: 'rgba(255, 255, 255, 0.1)' }}
         >
-          <Text className="text-center text-white text-base font-semibold">
+          <Text style={[
+            getResponsiveTextStyle('button'),
+            {
+              textAlign: 'center',
+              color: 'white',
+              fontWeight: '600',
+            }
+          ]}>
             Allow Permissions
           </Text>
         </Pressable>

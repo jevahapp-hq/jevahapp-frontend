@@ -7,6 +7,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { useDownloadStore } from "../store/useDownloadStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 
@@ -36,10 +37,12 @@ export default function EbookComponent() {
   
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { loadDownloadedItems } = useDownloadStore();
 
   useFocusEffect(
     useCallback(() => {
       mediaStore.refreshUserDataForExistingMedia();
+      loadDownloadedItems();
     }, [])
   );
 
@@ -294,11 +297,32 @@ export default function EbookComponent() {
                   </Text>
                   <AntDesign name="sharealt" size={16} color="##3A3E50" />
                 </TouchableOpacity>
-                <TouchableOpacity className="py-2 flex-row items-center justify-between">
+                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                   <Text className="text-[#1D2939] font-rubik mr-2">
                     Save to Library
                   </Text>
                   <MaterialIcons name="library-add" size={18} color="#3A3E50" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="py-2 flex-row items-center justify-between"
+                  onPress={async () => {
+                    const downloadableItem = convertToDownloadableItem(item, 'ebook');
+                    const result = await handleDownload(downloadableItem);
+                    if (result.success) {
+                      setModalIndex(null);
+                      // Force re-render to update download status
+                      await loadDownloadedItems();
+                    }
+                  }}
+                >
+                  <Text className="text-[#1D2939] font-rubik ml-2">
+                    {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
+                  </Text>
+                  <Ionicons 
+                    name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={16} 
+                    color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
+                  />
                 </TouchableOpacity>
               </View>
             )}

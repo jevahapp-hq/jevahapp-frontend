@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Lock, Pencil } from 'lucide-react-native';
+import { useState } from 'react';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import AuthHeader from '../components/AuthHeader';
 
 const ProfileSwitch = () => {
+  const router = useRouter();
   const [selected, setSelected] = useState<'ADULTS' | 'KIDS'>('ADULTS');
 
   const profiles = [
@@ -34,7 +36,13 @@ const ProfileSwitch = () => {
         {profiles.map((profile) => (
           <Pressable
             key={profile.key}
-            onPress={() => setSelected(profile.key as 'ADULTS' | 'KIDS')}
+            onPress={() => {
+              setSelected(profile.key as 'ADULTS' | 'KIDS');
+              // Navigate to home when adult profile is selected
+              if (profile.key === 'ADULTS') {
+                router.replace('/categories/HomeScreen');
+              }
+            }}
             className={`items-center rounded-xl p-4 w-[48%] ${
               selected === profile.key ? 'border-2 border-indigo-500' : ''
             }`}

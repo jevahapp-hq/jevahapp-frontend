@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -76,6 +76,7 @@ export default function MobileHeader({
   statusBarStyle = 'dark-content',
   statusBarBackgroundColor = 'transparent'
 }: MobileHeaderProps) {
+  const [avatarError, setAvatarError] = useState(false);
   
   const router = useRouter();
   
@@ -104,21 +105,33 @@ export default function MobileHeader({
         activeOpacity={0.7}
       >
         <View className="relative">
-          <Image
-            source={
-              user?.avatar && user.avatar.startsWith("http")
-                ? { uri: user.avatar.trim() }
-                : require("../../assets/images/image (5).png")
-            }
-            className="w-10 h-10 rounded-lg"
-            style={{ borderWidth: 1, borderColor: '#E5E7EB' }}
-            onError={(error) => {
-              console.warn("❌ Failed to load avatar image:", error.nativeEvent.error);
-            }}
-            onLoad={() => {
-              console.log("✅ Avatar image loaded successfully:", user?.avatar);
-            }}
-          />
+          {user?.avatar && user.avatar.trim() && user.avatar.startsWith("http") && !avatarError ? (
+            <Image
+              source={{ uri: user.avatar.trim() }}
+              className="w-10 h-10 rounded-lg"
+              style={{ borderWidth: 1, borderColor: '#E5E7EB' }}
+              onError={(error) => {
+                console.warn("❌ Failed to load avatar image:", error.nativeEvent.error);
+                setAvatarError(true);
+              }}
+              onLoad={() => {
+                console.log("✅ Avatar image loaded successfully:", user?.avatar);
+              }}
+            />
+          ) : (
+            <View 
+              className="w-10 h-10 rounded-lg justify-center items-center"
+              style={{ 
+                borderWidth: 1, 
+                borderColor: '#E5E7EB',
+                backgroundColor: '#F3F4F6'
+              }}
+            >
+              <Text className="text-gray-600 font-rubik-semibold text-sm">
+                {user?.firstName?.[0]?.toUpperCase() || user?.lastName?.[0]?.toUpperCase() || 'U'}
+              </Text>
+            </View>
+          )}
           {user?.isOnline && (
             <View className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
           )}

@@ -17,6 +17,7 @@ import {
     View,
 } from "react-native";
 import useVideoViewport from "../hooks/useVideoViewport";
+import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
@@ -885,18 +886,17 @@ export default function AllContent() {
           <View className="w-full h-[400px] overflow-hidden relative">
             <Video
               ref={(ref) => {
-                if (ref) {
-                  videoRefs.current[modalKey] = ref;
-                } else {
-                  // Clean up ref when component unmounts
-                  delete videoRefs.current[modalKey];
-                }
+                if (ref) videoRefs.current[modalKey] = ref;
               }}
-              source={{ uri: videoUrl }}
+              source={{ 
+                uri: videoUrl && videoUrl.trim() && videoUrl.trim() !== 'https://example.com/placeholder.mp4' 
+                  ? videoUrl.trim() 
+                  : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+              }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               isMuted={mutedVideos[modalKey] ?? false}
-              volume={mutedVideos[modalKey] ? 0.0 : videoVolume} // 🔊 Add volume control
+              volume={mutedVideos[modalKey] ? 0.0 : videoVolume}
               shouldPlay={playingVideos[modalKey] ?? false}
               useNativeControls={false}
               onPlaybackStatusUpdate={(status) => {
@@ -1035,6 +1035,9 @@ export default function AllContent() {
                 }
                 style={{ width: 30, height: 30, borderRadius: 999 }}
                 resizeMode="cover"
+                onError={(error) => {
+                  console.warn("❌ Failed to load video speaker avatar:", error.nativeEvent.error);
+                }}
               />
             </View>
             <View className="ml-3">
@@ -1109,6 +1112,8 @@ export default function AllContent() {
                   const result = await handleDownload(downloadableItem);
                   if (result.success) {
                     closeAllMenus();
+                    // Force re-render to update download status
+                    await loadDownloadedItems();
                   }
                 }}
               >
@@ -1660,7 +1665,11 @@ export default function AllContent() {
               >
                 {(item.contentType === "videos" || (item.contentType === "sermon" && (item.fileUrl.includes(".mp4") || item.fileUrl.includes(".mov")))) && !failedVideoLoads.has(item._id || item.fileUrl) ? (
                   <Video
-                    source={{ uri: item.fileUrl }}
+                    source={{ 
+                      uri: item.fileUrl && item.fileUrl.trim() && item.fileUrl.trim() !== 'https://example.com/placeholder.mp4' 
+                        ? item.fileUrl.trim() 
+                        : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+                    }}
                     style={{ width: "100%", height: "100%", position: "absolute" }}
                     resizeMode={ResizeMode.COVER}
                     shouldPlay={false}
@@ -1846,6 +1855,7 @@ export default function AllContent() {
 
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { loadDownloadedItems } = useDownloadStore();
 
   // Close all open menus/popovers across the component
   const closeAllMenus = () => {
@@ -1934,8 +1944,9 @@ export default function AllContent() {
           ...allMusic.slice(1, 2),
           ...allSermons.slice(1, 2),
           ...allEbooks.slice(0, 2)
-        ].slice(0, 4).map(item => ({
+        ].slice(0, 4).map((item, index) => ({
           ...item,
+          key: `trending-${item._id || index}`,
           isHot: Math.random() > 0.7,
           isRising: Math.random() > 0.8,
           trendingScore: Math.floor(Math.random() * 1000) + 100
@@ -1989,8 +2000,9 @@ export default function AllContent() {
           ...allMusic.slice(2, 3),
           ...allSermons.slice(2, 3),
           ...allEbooks.slice(2, 4)
-        ].slice(0, 4).map(item => ({
+        ].slice(0, 4).map((item, index) => ({
           ...item,
+          key: `recommended-${item._id || index}`,
           personalScore: Math.floor(Math.random() * 500) + 50
         }));
         

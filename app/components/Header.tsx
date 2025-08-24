@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../utils/api";
+import { PerformanceMonitor, PerformanceOptimizer } from "../utils/performance";
 import MobileHeader from "./MobileHeader";
 
 type User = {
@@ -18,53 +19,63 @@ export default function Header() {
 
   useEffect(() => {
     const fetchUser = async () => {
+      PerformanceMonitor.startTimer('header-user-fetch');
       setIsLoading(true);
+      
       try {
-        let token = await AsyncStorage.getItem("userToken");
-        if (!token) {
-          token = await AsyncStorage.getItem("token");
-        }
-        if (!token) {
-          try {
-            const { default: SecureStore } = await import('expo-secure-store');
-            token = await SecureStore.getItemAsync('jwt');
-                  } catch (secureStoreError) {
-          // Silent fallback
-        }
-        }
-        
-              if (!token) {
-        setIsLoading(false);
-        return;
-      }
+        // Use performance optimizer for user data fetching
+        const userData = await PerformanceOptimizer.optimizedFetch('user-profile', async () => {
+          let token = await AsyncStorage.getItem("userToken");
+          if (!token) {
+            token = await AsyncStorage.getItem("token");
+          }
+          if (!token) {
+            try {
+              const { default: SecureStore } = await import('expo-secure-store');
+              token = await SecureStore.getItemAsync('jwt');
+            } catch (secureStoreError) {
+              // Silent fallback
+            }
+          }
+          
+          if (!token) {
+            return null;
+          }
 
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          // Handle different possible response structures
+          const userData = data.user || data.data || null;
+          
+          if (userData && userData.firstName && userData.lastName) {
+            await AsyncStorage.setItem("user", JSON.stringify(userData));
+            // Refresh any media that was stuck with "Anonymous User"
+            try {
+              const { useMediaStore } = await import("../store/useUploadStore");
+              await useMediaStore.getState().forceRefreshWithCompleteUserData();
+            } catch (error) {
+              console.error("❌ Failed to trigger media refresh:", error);
+            }
+          }
+          
+          return userData;
+        }, {
+          cacheDuration: 5 * 60 * 1000, // 5 minutes cache
+          background: true,
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // 🔄 Handle different possible response structures
-        const userData = data.user || data.data || null;
-        
-        if (userData && userData.firstName && userData.lastName) {
+        if (userData) {
           setUser(userData);
-          await AsyncStorage.setItem("user", JSON.stringify(userData));
-          // 🔄 Now that we have complete user data, refresh any media that was stuck with "Anonymous User"
-          try {
-            const { useMediaStore } = await import("../store/useUploadStore");
-            await useMediaStore.getState().forceRefreshWithCompleteUserData();
-          } catch (error) {
-            console.error("❌ Failed to trigger media refresh:", error);
-          }
-        } else if (userData) {
-          setUser(userData); // Still set in UI, but don't save to AsyncStorage
         }
       } catch (error) {
         console.error("❌ Failed to fetch user:", error);
@@ -81,6 +92,7 @@ export default function Header() {
         }
       } finally {
         setIsLoading(false);
+        PerformanceMonitor.endTimer('header-user-fetch');
       }
     };
 
