@@ -25,7 +25,7 @@ import {
     persistStats,
     toggleFavorite
 } from "../utils/persistentStorage";
-import { getDisplayName } from "../utils/userValidation";
+import { getDisplayName, getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 interface SermonCard {
   fileUrl: string;
@@ -485,7 +485,7 @@ export default function SermonComponent() {
           <View className="flex flex-row items-center">
             <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
               <Image
-                source={speakerAvatar}
+                source={getUserAvatarFromContent(audio)}
                 style={{ width: 30, height: 30, borderRadius: 999 }}
                 resizeMode="cover"
               />
@@ -493,7 +493,7 @@ export default function SermonComponent() {
             <View className="ml-3">
               <View className="flex-row items-center">
                 <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {speakerName}
+                  {getUserDisplayNameFromContent(audio)}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={14} color="#9CA3AF" />
@@ -724,7 +724,7 @@ export default function SermonComponent() {
             <View className="flex flex-row items-center">
               <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
                 <Image
-                  source={speakerAvatar}
+                  source={getUserAvatarFromContent(video)}
                   style={{ width: 30, height: 30, borderRadius: 999 }}
                   resizeMode="cover"
                 />
@@ -732,7 +732,7 @@ export default function SermonComponent() {
               <View className="ml-3">
                 <View className="flex-row items-center">
                   <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                    {speakerName}
+                    {getUserDisplayNameFromContent(video)}
                   </Text>
                   <View className="flex flex-row mt-2 ml-2">
                     <Ionicons name="time-outline" size={14} color="#9CA3AF" />

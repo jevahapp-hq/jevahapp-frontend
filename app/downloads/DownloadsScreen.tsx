@@ -2,34 +2,35 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
-    Image,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Image,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import {
-    GestureHandlerRootView,
-    HandlerStateChangeEvent,
-    PanGestureHandler,
-    PanGestureHandlerGestureEvent,
+  GestureHandlerRootView,
+  HandlerStateChangeEvent,
+  PanGestureHandler,
+  PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import { MagnifyingGlassIcon } from "react-native-heroicons/outline";
 import { PauseIcon, PlayIcon, SpeakerWaveIcon } from "react-native-heroicons/solid";
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AuthHeader from "../components/AuthHeader";
 import { DownloadItem, useDownloadStore } from "../store/useDownloadStore";
 import { API_BASE_URL } from "../utils/api";
+import { authUtils } from "../utils/authUtils";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -299,7 +300,12 @@ const DownloadScreen: React.FC = () => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
+        const token = await authUtils.getStoredToken();
+        if (!token) {
+          console.error("❌ No authentication token found");
+          return;
+        }
+        
         const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -356,8 +362,8 @@ const DownloadScreen: React.FC = () => {
   const liveDownloads = downloadedItems.filter(item => item.contentType === 'live');
 
   return (
-    <SafeAreaView className="flex-1 w-full">
-      <View className="px-4 m">
+    <SafeAreaView className="flex-1 w-full bg-white">
+      <View className="px-4 mt-6">
         <AuthHeader title="Downloads" />
       </View>
 

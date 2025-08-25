@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Dimensions, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Platform, Text, TouchableOpacity, View } from "react-native";
 import {
     GestureHandlerRootView,
     HandlerStateChangeEvent,
@@ -7,11 +7,18 @@ import {
     PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
+    Easing,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
     withSpring,
+    withTiming,
 } from "react-native-reanimated";
+import {
+    getResponsiveBorderRadius,
+    getResponsiveSpacing,
+    getResponsiveTextStyle,
+} from "../../utils/responsive";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -34,9 +41,24 @@ export default function SlideUpSetProfileImageModal({
 
   useEffect(() => {
     if (isVisible) {
-      translateY.value = withSpring(0, { damping: 30 });
+      // Use slower animation for Android to ensure smooth sliding
+      if (Platform.OS === 'android') {
+        translateY.value = withTiming(0, {
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+        });
+      } else {
+        translateY.value = withSpring(0, { damping: 30 });
+      }
     } else {
-      translateY.value = withSpring(SCREEN_HEIGHT);
+      if (Platform.OS === 'android') {
+        translateY.value = withTiming(SCREEN_HEIGHT, {
+          duration: 300,
+          easing: Easing.in(Easing.cubic),
+        });
+      } else {
+        translateY.value = withSpring(SCREEN_HEIGHT);
+      }
     }
   }, [isVisible]);
 
@@ -56,10 +78,24 @@ export default function SlideUpSetProfileImageModal({
     _event: HandlerStateChangeEvent<Record<string, unknown>>
   ) => {
     if (lastTranslateY.value > 150) {
-      translateY.value = withSpring(SCREEN_HEIGHT);
+      if (Platform.OS === 'android') {
+        translateY.value = withTiming(SCREEN_HEIGHT, {
+          duration: 300,
+          easing: Easing.in(Easing.cubic),
+        });
+      } else {
+        translateY.value = withSpring(SCREEN_HEIGHT);
+      }
       runOnJS(onCancel)();
     } else {
-      translateY.value = withSpring(0, { damping: 30 });
+      if (Platform.OS === 'android') {
+        translateY.value = withTiming(0, {
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+        });
+      } else {
+        translateY.value = withSpring(0, { damping: 30 });
+      }
     }
   };
 
@@ -68,7 +104,21 @@ export default function SlideUpSetProfileImageModal({
   return (
     <GestureHandlerRootView className="absolute inset-0 z-50 items-center justify-end">
       {/* Background overlay */}
-      <View className="absolute inset-0 bg-black/30" />
+      <TouchableOpacity 
+        className="absolute inset-0 bg-black/30" 
+        activeOpacity={1}
+        onPress={() => {
+          if (Platform.OS === 'android') {
+            translateY.value = withTiming(SCREEN_HEIGHT, {
+              duration: 300,
+              easing: Easing.in(Easing.cubic),
+            });
+          } else {
+            translateY.value = withSpring(SCREEN_HEIGHT);
+          }
+          runOnJS(onCancel)();
+        }}
+      />
 
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
@@ -80,44 +130,126 @@ export default function SlideUpSetProfileImageModal({
             {
               position: "absolute",
               bottom: 0,
-              width: SCREEN_WIDTH, // ✅ full screen width
+              width: SCREEN_WIDTH,
+              // Android-specific left offset (slightly less left)
+              ...(Platform.OS === 'android' && {
+                left: -getResponsiveSpacing(160, 200, 240, 280), // Slightly less left offset
+              }),
             },
           ]}
-          className="bg-white rounded-t-3xl p-6 h-[301px]"
+          className="bg-white rounded-t-3xl"
         >
-          <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
-          <Text className="text-[30px] font-rubik-semibold text-center text-[#1D2939] mb-2">
-            Set as profile image?
-          </Text>
-          <Text className="text-center font-rubik text-[15px] text-gray-700 mb-6">
-            Well done choosing this avatar as your profile picture. Don’t worry, you can always change it whenever you want.
-          </Text>
+          {/* Content container with responsive padding */}
+          <View style={{
+            paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+            paddingVertical: getResponsiveSpacing(20, 24, 28, 32),
+          }}>
+            {/* Drag indicator */}
+            <View style={{
+              width: getResponsiveSpacing(36, 40, 44, 48),
+              height: getResponsiveSpacing(4, 5, 6, 7),
+              marginBottom: getResponsiveSpacing(20, 24, 28, 32),
+              marginTop: 0,
+            }} className="bg-gray-300 self-center rounded-full" />
+            
+            {/* Title */}
+            <Text style={[
+              getResponsiveTextStyle('title'),
+              {
+                textAlign: 'center',
+                color: '#1D2939',
+                marginBottom: getResponsiveSpacing(8, 10, 12, 16),
+              }
+            ]} className="font-rubik-semibold">
+              Set as profile image?
+            </Text>
+            
+            {/* Description */}
+            <Text style={[
+              getResponsiveTextStyle('body'),
+              {
+                textAlign: 'center',
+                color: '#6B7280',
+                marginBottom: getResponsiveSpacing(20, 24, 28, 32),
+                lineHeight: getResponsiveSpacing(20, 22, 24, 26),
+              }
+            ]} className="font-rubik">
+              Well done choosing this avatar as your profile picture. Don't worry, you can always change it whenever you want.
+            </Text>
 
-          <View className="flex-row justify-between space-x-4 gap-4 mt-3">
-            <TouchableOpacity
-              onPress={() => {
-                translateY.value = withSpring(SCREEN_HEIGHT);
-                runOnJS(onCancel)();
-              }}
-              className="flex-1 py-3 border border-gray-300 rounded-full"
-            >
-              <Text className="text-center text-gray-700 font-semibold">Cancel</Text>
-            </TouchableOpacity>
+            {/* Action buttons */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              gap: getResponsiveSpacing(12, 16, 20, 24),
+              marginTop: getResponsiveSpacing(12, 16, 20, 24),
+            }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (Platform.OS === 'android') {
+                    translateY.value = withTiming(SCREEN_HEIGHT, {
+                      duration: 300,
+                      easing: Easing.in(Easing.cubic),
+                    });
+                  } else {
+                    translateY.value = withSpring(SCREEN_HEIGHT);
+                  }
+                  runOnJS(onCancel)();
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: getResponsiveSpacing(12, 14, 16, 18),
+                  borderWidth: 1,
+                  borderColor: '#D1D5DB',
+                  borderRadius: getResponsiveBorderRadius('round'),
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  getResponsiveTextStyle('button'),
+                  {
+                    textAlign: 'center',
+                    color: '#6B7280',
+                    fontWeight: '600',
+                  }
+                ]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => {
-                translateY.value = withSpring(SCREEN_HEIGHT);
-                runOnJS(onConfirm)();
-              }}
-              className={`flex-1 py-3 rounded-full ${
-                isLoading ? "bg-gray-400" : "bg-gray-900"
-              }`}
-              disabled={isLoading}
-            >
-              <Text className="text-center text-white font-semibold">
-                {isLoading ? "Uploading..." : "Yes please"}
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (Platform.OS === 'android') {
+                    translateY.value = withTiming(SCREEN_HEIGHT, {
+                      duration: 300,
+                      easing: Easing.in(Easing.cubic),
+                    });
+                  } else {
+                    translateY.value = withSpring(SCREEN_HEIGHT);
+                  }
+                  runOnJS(onConfirm)();
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: getResponsiveSpacing(12, 14, 16, 18),
+                  backgroundColor: isLoading ? '#9CA3AF' : '#111827',
+                  borderRadius: getResponsiveBorderRadius('round'),
+                }}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  getResponsiveTextStyle('button'),
+                  {
+                    textAlign: 'center',
+                    color: 'white',
+                    fontWeight: '600',
+                  }
+                ]}>
+                  {isLoading ? "Uploading..." : "Yes please"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Animated.View>
       </PanGestureHandler>

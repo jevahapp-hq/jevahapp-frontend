@@ -4,7 +4,7 @@ import axios from "axios";
 import Constants from "expo-constants";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -190,24 +190,25 @@ function ChurchNameAndLocation() {
   };
 
   return (
-    <SafeAreaView className="flex-1 ">
+    <SafeAreaView className="flex-1 bg-white">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <View className="w-full items-center">
-          <View className="w-[370px]">
-            <AuthHeader title="Profile Setup" />
-          </View>
-          <View className="w-[333px] mt-4 bg-[#FCFCFD]">
+
+        <View className="px-4 mt-6">
+        <AuthHeader title="Profile Setup" />
+      </View>
+         
             <ProgressBar currentStep={3} totalSteps={7} />
             <Text className="text-[#1D2939] font-semibold mt-3 ml-1">
               Let&apos;s make this feel like home
             </Text>
           </View>
-        </View>
+      
 
-        <View className="flex-1 w-full items-center mt-2">
+        <View className="flex-1 w-full items-center mt-2 bg-[#FCFCFD]">
           <View className="flex-1 w-[333px]">
             <Text className="font-rubik-semibold text-[32px] text-[#1D2939]">
               What’s the name of your church?

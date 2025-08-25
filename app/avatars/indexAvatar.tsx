@@ -112,12 +112,12 @@ const AvatarSelection = () => {
         type: mimeType,
       } as any);
 
-      console.log("📤 Uploading avatar to:", `${API_BASE_URL}/auth/avatar`);
+      console.log("📤 Uploading avatar to:", `${API_BASE_URL}/api/auth/avatar`);
       console.log("📤 FormData:", formData);
 
-      // ✅ CORRECT ENDPOINT - matches your backend code
+      // ✅ CORRECT ENDPOINT - matches your backend API documentation
       const res = await fetch(
-        `${API_BASE_URL}/auth/avatar`,
+        `${API_BASE_URL}/api/auth/avatar`,
         {
           method: "POST",
           headers: {
@@ -133,7 +133,17 @@ const AvatarSelection = () => {
       if (!res.ok) {
         const errorText = await res.text();
         console.error("❌ Upload failed:", errorText);
-        throw new Error(`Upload failed: ${res.status} - ${errorText}`);
+        
+        // Handle specific error cases based on backend documentation
+        if (res.status === 400) {
+          throw new Error("Invalid image file. Please use JPEG, PNG, or GIF format.");
+        } else if (res.status === 401) {
+          throw new Error("Unauthorized. Please log in again.");
+        } else if (res.status === 413) {
+          throw new Error("File too large. Please choose a smaller image (max 5MB).");
+        } else {
+          throw new Error(`Upload failed: ${res.status} - ${errorText}`);
+        }
       }
 
       const json = await res.json();
@@ -143,7 +153,8 @@ const AvatarSelection = () => {
         throw new Error(json.message || "Failed to upload avatar");
       }
 
-      return json.avatarUrl; // this is the Cloudflare R2 URL returned by your backend
+      // ✅ Return the avatarUrl from the data object as per backend API
+      return json.data.avatarUrl;
     } catch (error) {
       console.error("❌ Avatar upload error:", error);
       throw error;
@@ -202,7 +213,7 @@ const AvatarSelection = () => {
       console.log("🔄 Updating user profile...");
       const response = await axios.post(
         `${API_BASE_URL}/api/auth/complete-profile`,
-        { avatarUpload: avatarUrl },
+        { avatar: avatarUrl }, // ✅ Use 'avatar' field as per backend API
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -215,6 +226,20 @@ const AvatarSelection = () => {
       if (response.data.success) {
         setConfirmedAvatar(avatarUrl);
         console.log("✅ Profile updated successfully");
+        
+        // Store the updated avatar URL in AsyncStorage for consistency
+        try {
+          const userRaw = await AsyncStorage.getItem("user");
+          if (userRaw) {
+            const user = JSON.parse(userRaw);
+            user.avatar = avatarUrl;
+            await AsyncStorage.setItem("user", JSON.stringify(user));
+            console.log("✅ User data updated in AsyncStorage");
+          }
+        } catch (storageError) {
+          console.warn("⚠️ Failed to update user data in AsyncStorage:", storageError);
+        }
+        
         triggerBounceDrop("success");
       } else {
         console.log("❌ Profile update failed:", response.data);
@@ -227,6 +252,24 @@ const AvatarSelection = () => {
         status: error.response?.status,
         data: error.response?.data
       });
+      
+      // Provide more specific error feedback based on error type
+      let errorMessage = "Please select an avatar";
+      
+      if (error.message.includes("Invalid image file")) {
+        errorMessage = "Invalid image format. Please use JPEG, PNG, or GIF.";
+      } else if (error.message.includes("File too large")) {
+        errorMessage = "Image too large. Please choose a smaller file (max 5MB).";
+      } else if (error.message.includes("Unauthorized")) {
+        errorMessage = "Session expired. Please log in again.";
+      } else if (error.message.includes("No user token found")) {
+        errorMessage = "Authentication required. Please log in again.";
+      } else if (error.message.includes("Upload failed")) {
+        errorMessage = "Upload failed. Please check your connection and try again.";
+      }
+      
+      // Update the failure card text with more specific error message
+      setShowFailure(true);
       triggerBounceDrop("failure");
     } finally {
       setIsUploading(false);
@@ -373,7 +416,6 @@ const AvatarSelection = () => {
         isVisible={isModalVisible}
         onConfirm={handleConfirm}
         onCancel={() => setIsModalVisible(false)}
-        isLoading={isUploading}
       />
     </View>
   );

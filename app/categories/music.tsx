@@ -4,7 +4,7 @@ import {
     Ionicons,
     MaterialIcons
 } from "@expo/vector-icons";
-import { Audio, ResizeMode } from "expo-av";
+import { Audio } from "expo-av";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Image,
@@ -27,7 +27,7 @@ import {
     persistStats,
     persistViewedAudio,
 } from "../utils/persistentStorage";
-import { getDisplayName } from "../utils/userValidation";
+import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 interface AudioCard {
   fileUrl: any;
@@ -881,7 +881,7 @@ useEffect(() => {
             {playType === "progress" ? (
               <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-2">
                 <TouchableOpacity
-                 onPress={() => playAudio(audioUri, modalKey, { title: Audio.title, subTitle: getDisplayName(Audio.speaker, Audio.uploadedBy), imageUrl: (() => { const coverSource = Audio?.thumbnailUrl ? { uri: Audio.thumbnailUrl } : (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? { uri: Audio.imageUrl } : Audio.imageUrl) : require("../../assets/images/image (10).png")); return coverSource; })(), audioUrl: audioUri, views: stats.views ?? Audio.views ?? 0, })}
+                 onPress={() => playAudio(audioUri, modalKey, { title: Audio.title, subTitle: getUserDisplayNameFromContent(Audio), imageUrl: (() => { const coverSource = Audio?.thumbnailUrl ? { uri: Audio.thumbnailUrl } : (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? { uri: Audio.imageUrl } : Audio.imageUrl) : require("../../assets/images/image (10).png")); return coverSource; })(), audioUrl: audioUri, views: stats.views ?? Audio.views ?? 0, })}
 
                   className="mr-2"
                 >
@@ -934,7 +934,7 @@ useEffect(() => {
             ) : (
               <View className="absolute inset-0 justify-center items-center">
                 <TouchableOpacity
-                 onPress={() => playAudio(audioUri, modalKey, { title: Audio.title, subTitle: getDisplayName(Audio.speaker, Audio.uploadedBy), imageUrl: (() => { const coverSource = Audio?.thumbnailUrl ? { uri: Audio.thumbnailUrl } : (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? { uri: Audio.imageUrl } : Audio.imageUrl) : require("../../assets/images/image (10).png")); return coverSource; })(), audioUrl: audioUri, views: stats.views ?? Audio.views ?? 0, })}
+                 onPress={() => playAudio(audioUri, modalKey, { title: Audio.title, subTitle: getUserDisplayNameFromContent(Audio), imageUrl: (() => { const coverSource = Audio?.thumbnailUrl ? { uri: Audio.thumbnailUrl } : (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? { uri: Audio.imageUrl } : Audio.imageUrl) : require("../../assets/images/image (10).png")); return coverSource; })(), audioUrl: audioUri, views: stats.views ?? Audio.views ?? 0, })}
 
                   className="bg-white/70 p-2 rounded-full"
                 >
@@ -1017,21 +1017,15 @@ useEffect(() => {
           <View className="flex flex-row items-center">
             <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
               <Image
-                source={
-                  typeof Audio.speakerAvatar === "string" && Audio.speakerAvatar.startsWith("http")
-                    ? { uri: Audio.speakerAvatar.trim() }
-                    : typeof Audio.speakerAvatar === "object" && Audio.speakerAvatar
-                    ? Audio.speakerAvatar
-                    : require("../../assets/images/Avatar-1.png")
-                }
+                source={getUserAvatarFromContent(Audio)}
                 style={{ width: 30, height: 30, borderRadius: 999 }}
-                resizeMode={ResizeMode.COVER}
+                resizeMode="cover"
               />
             </View>
             <View className="ml-3">
               <View className="flex-row items-center">
                 <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getDisplayName(Audio.speaker, Audio.uploadedBy)}
+                  {getUserDisplayNameFromContent(Audio)}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={14} color="#9CA3AF" />

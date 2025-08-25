@@ -29,7 +29,7 @@ export default {
       package: 'com.piuslucky469.jevahapp',
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
-        foregroundImage: './assets/images/adaptive-icon.png',
+        foregroundImage: './assets/images/Jevah.png',
         backgroundColor: '#ffffff',
       },
       permissions: [

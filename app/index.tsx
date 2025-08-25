@@ -1,11 +1,8 @@
 import { useAuth, useOAuth, useUser } from '@clerk/clerk-expo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -14,10 +11,11 @@ import {
   Pressable,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import '../global.css';
 import AnimatedLogoIntro from './components/AnimatedLogoIntro';
+import { authUtils } from './utils/authUtils';
 
 const API_BASE_URL = __DEV__ ? 'http://192.168.100.133:4000' : 'https://jevahapp-backend.onrender.com';
 
@@ -127,6 +125,23 @@ export default function Welcome() {
 
     try {
       setLoading(true);
+      console.log('🔐 Starting authentication flow for:', provider);
+
+      // Debug authentication setup
+      await authUtils.debugAuthSetup();
+
+      // Test backend connectivity first
+      console.log('🔍 Testing backend connectivity...');
+      const backendAvailable = await authUtils.testBackendConnection();
+      if (!backendAvailable) {
+        throw new Error('Backend server is not accessible. Please check your connection.');
+      }
+      console.log('✅ Backend is accessible');
+
+      // Test minimal auth request to identify backend issues
+      console.log('🧪 Testing minimal auth request...');
+      const testResult = await authUtils.testMinimalAuthRequest();
+      console.log('🧪 Minimal auth test result:', testResult);
 
       if (isSignedIn) {
         console.log('🔄 Signing out existing session...');
@@ -147,79 +162,45 @@ export default function Welcome() {
         throw new Error('OAuth flow failed: No session ID or setActive function');
       }
 
+      console.log('✅ OAuth flow completed, setting active session...');
       await setActive({ session: createdSessionId });
+
+      // Wait for user data to be available
+      console.log('⏳ Waiting for user data to be available...');
+      const currentUser = await authUtils.waitForUserData(user);
+      console.log('✅ User data received:', {
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        email: currentUser.primaryEmailAddress?.emailAddress,
+        hasImage: !!currentUser.imageUrl
+      });
 
       const token = await getToken();
       if (!token) throw new Error('Failed to retrieve Clerk token');
+      console.log('✅ Clerk token retrieved:', token.substring(0, 20) + '...');
 
-      if (!user) throw new Error('User data not available');
+      // Prepare user info for backend
+      const userInfo = {
+        firstName: currentUser.firstName || 'Unknown',
+        lastName: currentUser.lastName || 'User',
+        avatar: currentUser.imageUrl || '',
+        email: currentUser.primaryEmailAddress?.emailAddress || '',
+      };
 
-      console.log('✅ User data:', {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.primaryEmailAddress?.emailAddress,
-      });
+      console.log('📤 Sending user info to backend:', userInfo);
 
-      const apiUrl = `${API_BASE_URL}/api/auth/oauth-login`;
-      console.log('🚀 Making request to:', apiUrl);
+      // Send authentication request to backend
+      const result = await authUtils.sendAuthRequest(token, userInfo);
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider,
-          token,
-          userInfo: {
-            firstName: user.firstName || 'Unknown',
-            lastName: user.lastName || 'User',
-            avatar: user.imageUrl || '',
-            email: user.primaryEmailAddress?.emailAddress || '',
-          },
-        }),
-      });
+      // Store authentication data
+      console.log('💾 Storing authentication data...');
+      await authUtils.storeAuthData(result, userInfo);
 
-      const responseText = await response.text();
-      console.log('Backend response:', { status: response.status, text: responseText });
-
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error('Invalid JSON response from backend');
-      }
-
-      if (!response.ok) throw new Error(result.message || 'Login failed');
-
-      await SecureStore.setItemAsync('jwt', result.token);
-      await AsyncStorage.setItem('token', result.token);
-      await AsyncStorage.setItem('userToken', result.token);
-
-      if (result.user) {
-        if (result.user.firstName && result.user.lastName) {
-          await AsyncStorage.setItem('user', JSON.stringify(result.user));
-          console.log('✅ User data saved:', result.user);
-        } else {
-          throw new Error('Incomplete user data from backend');
-        }
-      } else {
-        const userData = {
-          firstName: user.firstName || 'Unknown',
-          lastName: user.lastName || 'User',
-          avatar: user.imageUrl || '',
-          email: user.primaryEmailAddress?.emailAddress || '',
-        };
-        if (userData.firstName && userData.firstName !== 'Unknown') {
-          await AsyncStorage.setItem('user', JSON.stringify(userData));
-          console.log('✅ Fallback user data saved:', userData);
-        } else {
-          throw new Error('Incomplete Clerk user data');
-        }
-      }
-
+      console.log('🎉 Authentication completed successfully!');
       router.replace('/categories/HomeScreen');
     } catch (error) {
-      console.error('OAuth error:', error);
-      Alert.alert('Login Error', error instanceof Error ? error.message : 'An error occurred');
+      console.error('❌ Authentication error:', error);
+      authUtils.handleAuthError(error);
     } finally {
       setLoading(false);
     }

@@ -1,20 +1,21 @@
+import { getResponsiveSpacing } from "@/utils/responsive";
 import { AntDesign, Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    BackHandler,
-    Dimensions,
-    Image,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    PanResponder,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  BackHandler,
+  Dimensions,
+  Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  PanResponder,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import useVideoViewport from "../hooks/useVideoViewport";
 import { useDownloadStore } from "../store/useDownloadStore";
@@ -24,7 +25,7 @@ import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import { getFavoriteState, getPersistedStats, getViewed, persistStats, persistViewed, toggleFavorite } from "../utils/persistentStorage";
-import { getDisplayName } from "../utils/userValidation";
+import { getDisplayName, getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 // Define interface for media items
 interface MediaItem {
@@ -1026,13 +1027,7 @@ export default function AllContent() {
           <View className="flex flex-row items-center">
             <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
               <Image
-                source={
-                  typeof video.speakerAvatar === "string" && video.speakerAvatar.startsWith("http")
-                    ? { uri: video.speakerAvatar.trim() }
-                    : typeof video.speakerAvatar === "object" && video.speakerAvatar
-                    ? video.speakerAvatar
-                    : require("../../assets/images/Avatar-1.png")
-                }
+                source={getUserAvatarFromContent(video)}
                 style={{ width: 30, height: 30, borderRadius: 999 }}
                 resizeMode="cover"
                 onError={(error) => {
@@ -1043,7 +1038,7 @@ export default function AllContent() {
             <View className="ml-3">
               <View className="flex-row items-center">
                 <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getDisplayName(video.speaker, video.uploadedBy)}
+                  {getUserDisplayNameFromContent(video)}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={14} color="#9CA3AF" />
@@ -1193,7 +1188,11 @@ export default function AllContent() {
             </View>
 
             {/* Right side actions */}
-            <View className="flex-col absolute mt-[170px] right-4">
+            <View style={{
+              position: 'absolute',
+              top: getResponsiveSpacing(170, 180, 190, 200),
+              right: getResponsiveSpacing(16, 20, 24, 32),
+            }} className="flex-col">
               <TouchableOpacity onPress={() => handleFavorite(key, audio)} className="flex-col justify-center items-center">
                 <MaterialIcons
                   name={userFavorites[key] ? "favorite" : "favorite-border"}
@@ -1290,11 +1289,7 @@ export default function AllContent() {
           <View className="flex flex-row items-center">
             <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
               <Image
-                source={
-                  typeof audio.speakerAvatar === "string" && (audio.speakerAvatar as string).startsWith("http")
-                    ? { uri: (audio.speakerAvatar as string).trim() }
-                    : (audio.speakerAvatar as any) || require("../../assets/images/Avatar-1.png")
-                }
+                source={getUserAvatarFromContent(audio)}
                 style={{ width: 30, height: 30, borderRadius: 999 }}
                 resizeMode="cover"
               />
@@ -1302,7 +1297,7 @@ export default function AllContent() {
             <View className="ml-3">
               <View className="flex-row items-center">
                 <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getDisplayName(audio.speaker || "", audio.uploadedBy)}
+                  {getUserDisplayNameFromContent(audio)}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={14} color="#9CA3AF" />
@@ -1516,13 +1511,7 @@ export default function AllContent() {
           <View className="flex flex-row items-center">
             <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
               <Image
-                source={
-                  typeof ebook.speakerAvatar === "string" && ebook.speakerAvatar.startsWith("http")
-                    ? { uri: ebook.speakerAvatar.trim() }
-                    : typeof ebook.speakerAvatar === "object" && ebook.speakerAvatar
-                    ? ebook.speakerAvatar
-                    : require("../../assets/images/Avatar-1.png")
-                }
+                source={getUserAvatarFromContent(ebook)}
                 style={{ width: 30, height: 30, borderRadius: 999 }}
                 resizeMode="cover"
               />
@@ -1530,7 +1519,7 @@ export default function AllContent() {
             <View className="ml-3">
               <View className="flex-row items-center">
                 <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getDisplayName(ebook.speaker, ebook.uploadedBy)}
+                  {getUserDisplayNameFromContent(ebook)}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={14} color="#9CA3AF" />

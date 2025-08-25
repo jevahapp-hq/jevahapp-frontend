@@ -209,27 +209,27 @@
 
 
 import {
-  AntDesign,
-  Ionicons,
-  MaterialCommunityIcons,
+    AntDesign,
+    Ionicons,
+    MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  Platform,
-  Text,
-  TouchableOpacity,
-  View
+    Platform,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
 import {
-  getBottomNavHeight,
-  getFabSize,
-  getIconSize,
-  getResponsiveBorderRadius,
-  getResponsiveShadow,
-  getResponsiveSpacing,
-  getResponsiveTextStyle
+    getBottomNavHeight,
+    getFabSize,
+    getIconSize,
+    getResponsiveBorderRadius,
+    getResponsiveShadow,
+    getResponsiveSpacing,
+    getResponsiveTextStyle
 } from "../../utils/responsive";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";

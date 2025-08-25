@@ -1,165 +1,6 @@
-// // import React from 'react';
-// // import { View, Text, Image, TouchableOpacity } from 'react-native';
-
-// // interface LiveCardProps {
-// //   imageUrl: string;
-// //   title: string;
-// //   speaker: string;
-// //   timeAgo: string;
-// //   onPress?: () => void;
-// // }
-
-// // export default function LiveCard({
-// //   imageUrl,
-// //   title,
-// //   speaker,
-// //   timeAgo,
-// //   onPress,
-// // }: LiveCardProps) {
-// //   return (
-// //     <TouchableOpacity onPress={onPress} className="mb-4">
-// //       <Image
-// //         source={{ uri: imageUrl }}
-// //         className="w-full h-44 rounded-xl mb-2"
-// //         resizeMode="cover"
-// //       />
-// //       <Text className="text-base font-semibold">{title}</Text>
-// //       <Text className="text-xs text-gray-600">
-// //         {speaker} • {timeAgo}
-// //       </Text>
-// //     </TouchableOpacity>
-// //   );
-// // }
-
-// // import React from 'react';
-// // import { View, ScrollView, Text, Image, TouchableOpacity } from 'react-native';
-
-// // interface VideoCard {
-// //   imageUrl: string;
-// //   title: string;
-// //   speaker: string;
-// //   timeAgo: string;
-// //   onPress?: () => void;
-// // }
-
-// // export default function LiveCardSlider() {
-// //   const videos: VideoCard[] = [
-// //     {
-// //       imageUrl: 'https://source.unsplash.com/random/300x200?gospel',
-// //       title: 'Worship Night',
-// //       speaker: 'Minister Joseph Eluwa',
-// //       timeAgo: '3HRS AGO',
-// //     },
-// //     {
-// //       imageUrl: 'https://source.unsplash.com/random/300x200?church',
-// //       title: 'Praise & Power',
-// //       speaker: 'Sis. Grace Ali',
-// //       timeAgo: '2HRS AGO',
-// //     },
-// //     {
-// //       imageUrl: 'https://source.unsplash.com/random/300x200?worship',
-// //       title: 'Deep Worship',
-// //       speaker: 'Minister John Mark',
-// //       timeAgo: '1HR AGO',
-// //     },
-// //   ];
-
-// //   return (
-// //     <View className="mt-2 w-[333px]">
-// //       <ScrollView
-// //         horizontal
-// //         showsHorizontalScrollIndicator={false}
-// //         contentContainerStyle={{ paddingHorizontal: 16 }}
-// //       >
-// //         {videos.map((video, index) => (
-// //           <TouchableOpacity
-// //             key={index}
-// //             onPress={video.onPress}
-// //             className="w-[320px] h-[282px] bg-blue-600 "
-// //             activeOpacity={0.9}
-// //           >
-// //             <Image
-// //               source={{ uri: video.imageUrl }}
-// //               className="w-full h-[232px] rounded-[15px] mb-2 bg-black"
-// //               resizeMode="cover"
-// //             />
-// //             <Text className="text-base font-semibold">{video.title}</Text>
-// //             <Text className="text-xs text-gray-600">
-// //               {video.speaker} • {video.timeAgo}
-// //             </Text>
-// //           </TouchableOpacity>
-// //         ))}
-// //       </ScrollView>
-// //     </View>
-// //   );
-// // }
-
-// import React from 'react';
-// import { View, ScrollView, Text, Image, TouchableOpacity } from 'react-native';
-
-// interface VideoCard {
-//   imageUrl: string;
-//   title: string;
-//   speaker: string;
-//   timeAgo: string;
-//   onPress?: () => void;
-// }
-
-// export default function LiveCardSlider() {
-//   const videos: VideoCard[] = [
-//     {
-//       imageUrl: 'https://source.unsplash.com/random/300x200?gospel',
-//       title: 'Worship Night',
-//       speaker: 'Minister Joseph Eluwa',
-//       timeAgo: '3HRS AGO',
-//     },
-//     {
-//       imageUrl: 'https://source.unsplash.com/random/300x200?church',
-//       title: 'Praise & Power',
-//       speaker: 'Sis. Grace Ali',
-//       timeAgo: '2HRS AGO',
-//     },
-//     {
-//       imageUrl: 'https://source.unsplash.com/random/300x200?worship',
-//       title: 'Deep Worship',
-//       speaker: 'Minister John Mark',
-//       timeAgo: '1HR AGO',
-//     },
-//   ];
-
-//   return (
-//     <View className="mt-2">
-//       <ScrollView
-//         horizontal
-//         showsHorizontalScrollIndicator={false}
-//         contentContainerStyle={{ paddingHorizontal: 4 }}
-//       >
-//         {videos.map((video, index) => (
-//           <TouchableOpacity
-//             key={index}
-//             onPress={video.onPress}
-//             className="mr-4 w-[250px]"
-//             activeOpacity={0.9}
-//           >
-//             <Image
-//               source={{ uri: video.imageUrl }}
-//               className="w-full h-[160px] rounded-[15px] mb-2 bg-black"
-//               resizeMode="cover"
-//             />
-//             <Text className="text-base font-semibold">{video.title}</Text>
-//             <Text className="text-xs text-gray-600">
-//               {video.speaker} • {video.timeAgo}
-//             </Text>
-//           </TouchableOpacity>
-//         ))}
-//       </ScrollView>
-//     </View>
-//   );
-// }
-
-import React from "react";
-import { View, ScrollView, Text, Image, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 // import badgeIcon from "../../assets/images/path961.png";
 
@@ -251,7 +92,7 @@ export default function LiveCardSlider() {
               <View className="flex flex-row items-center">
                 <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
                   <Image
-                    source={video.speakerAvatar}
+                    source={getUserAvatarFromContent(video)}
                     style={{
                       width: 80,
                       height: 80,
@@ -261,11 +102,10 @@ export default function LiveCardSlider() {
                     }}
                     resizeMode="cover"
                   />
-      
                 </View>
                 <View className="ml-3">
                   <Text className="text-[13px]  font-rubik-semibold  text-[#344054] mt-1 ">
-                    {video.speaker}
+                    {getUserDisplayNameFromContent(video)}
                   </Text>
                   <View className="flex-row items-center mt-0.5">
                     {/* assets/images/Vector1.png */}

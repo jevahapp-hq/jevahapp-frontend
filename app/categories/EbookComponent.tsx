@@ -10,6 +10,7 @@ import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, Vi
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
+import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 interface EbookItem {
   _id?: string;
@@ -170,21 +171,15 @@ export default function EbookComponent() {
             <View className="flex flex-row items-center">
               <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
                 <Image
-                  source={ebook.speakerAvatar}
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 999,
-                    marginLeft: 26,
-                    marginTop: 15,
-                  }}
+                  source={getUserAvatarFromContent(ebook)}
+                  style={{ width: 30, height: 30, borderRadius: 999 }}
                   resizeMode="cover"
                 />
               </View>
               <View className="ml-3">
-                <View className="flex-row items center">
+                <View className="flex-row items-center">
                   <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                    {ebook.speaker || ebook.uploadedBy || "Unknown Author"}
+                    {getUserDisplayNameFromContent(ebook)}
                   </Text>
                   <View className="flex flex-row mt-2 ml-2">
                     <Ionicons name="time-outline" size={13} color="#9CA3AF" />

@@ -103,3 +103,110 @@ export function logUserDataStatus(user: UserData | null, context: string): void 
     rawData: user ? Object.keys(user) : null,
   });
 }
+
+/**
+ * Get user avatar from content data with fallback logic
+ * @param content - Content item that may have user information
+ * @param fallbackAvatar - Default avatar to use if none found
+ * @returns Avatar source for Image component
+ */
+export function getUserAvatarFromContent(
+  content: any,
+  fallbackAvatar: any = require("../../assets/images/Avatar-1.png")
+): any {
+  // Check if content has uploadedBy object with user profile data
+  if (content.uploadedBy && typeof content.uploadedBy === 'object' && content.uploadedBy.avatar) {
+    const avatarUrl = content.uploadedBy.avatar;
+    if (typeof avatarUrl === 'string' && avatarUrl.startsWith('http')) {
+      return { uri: avatarUrl.trim() };
+    }
+    return avatarUrl;
+  }
+
+  // Check if content has speakerAvatar (legacy format)
+  if (content.speakerAvatar) {
+    if (typeof content.speakerAvatar === 'string' && content.speakerAvatar.startsWith('http')) {
+      return { uri: content.speakerAvatar.trim() };
+    }
+    return content.speakerAvatar;
+  }
+
+  // Check if content has userAvatar (alternative field name)
+  if (content.userAvatar) {
+    if (typeof content.userAvatar === 'string' && content.userAvatar.startsWith('http')) {
+      return { uri: content.userAvatar.trim() };
+    }
+    return content.userAvatar;
+  }
+
+  // Return fallback avatar
+  return fallbackAvatar;
+}
+
+/**
+ * Get user display name from content data with fallback logic
+ * @param content - Content item that may have user information
+ * @param fallback - Default name to use if none found
+ * @returns User's display name
+ */
+export function getUserDisplayNameFromContent(
+  content: any,
+  fallback: string = "Anonymous User"
+): string {
+  // Check if content has uploadedBy object with user profile data
+  if (content.uploadedBy && typeof content.uploadedBy === 'object') {
+    const user = content.uploadedBy;
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`.trim();
+    }
+    if (user.firstName) {
+      return user.firstName;
+    }
+    if (user.lastName) {
+      return user.lastName;
+    }
+    if (user.email) {
+      return user.email.split('@')[0]; // Use email prefix as fallback
+    }
+  }
+
+  // Check legacy fields
+  if (content.speaker) {
+    return content.speaker;
+  }
+
+  if (content.uploadedBy && typeof content.uploadedBy === 'string') {
+    return content.uploadedBy;
+  }
+
+  return fallback;
+}
+
+/**
+ * Get user profile data from content for advanced usage
+ * @param content - Content item that may have user information
+ * @returns User profile object or null
+ */
+export function getUserProfileFromContent(content: any): {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  avatar?: string;
+  fullName?: string;
+} | null {
+  // Check if content has uploadedBy object with user profile data
+  if (content.uploadedBy && typeof content.uploadedBy === 'object') {
+    const user = content.uploadedBy;
+    return {
+      id: user._id || user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      avatar: user.avatar,
+      fullName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}`.trim() : undefined
+    };
+  }
+
+  return null;
+}

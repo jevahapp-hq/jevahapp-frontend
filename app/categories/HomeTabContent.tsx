@@ -3,10 +3,10 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { useLocalSearchParams } from "expo-router";
 import {
-    getResponsiveBorderRadius,
-    getResponsiveShadow,
-    getResponsiveSpacing,
-    getResponsiveTextStyle
+  getResponsiveBorderRadius,
+  getResponsiveShadow,
+  getResponsiveSpacing,
+  getResponsiveTextStyle
 } from "../../utils/responsive";
 import Header from "../components/Header";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
@@ -75,7 +75,7 @@ export default function HomeTabContent() {
       <Header />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        style={{ backgroundColor: '#98a2b318' }}
+        style={{ backgroundColor: '#FCFCFD' }}
       >
         {/* Category Buttons with Padding */}
         <View style={{ paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32) }}>

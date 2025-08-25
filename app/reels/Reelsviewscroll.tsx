@@ -6,8 +6,10 @@ import {
     Dimensions,
     Image,
     PanResponder,
+    Platform,
     ScrollView,
     Share,
+    StatusBar,
     Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
@@ -24,6 +26,7 @@ import {
     persistStats,
     toggleFavorite,
 } from "../utils/persistentStorage";
+import { getUserAvatarFromContent } from "../utils/userValidation";
 
 // ✅ Route Params Type
 type Params = {
@@ -69,6 +72,55 @@ export default function Reelsviewscroll() {
 
   // Use library store for saving content
   const libraryStore = useLibraryStore();
+
+  // Responsive dimensions
+  const screenHeight = Dimensions.get('window').height;
+  const screenWidth = Dimensions.get('window').width;
+  const isSmallScreen = screenHeight < 700;
+  const isMediumScreen = screenHeight >= 700 && screenHeight < 800;
+  const isLargeScreen = screenHeight >= 800;
+  const isIOS = Platform.OS === 'ios';
+  const isAndroid = Platform.OS === 'android';
+
+  // Platform-specific responsive sizing functions
+  const getResponsiveSize = (small: number, medium: number, large: number) => {
+    let baseSize = isSmallScreen ? small : isMediumScreen ? medium : large;
+    // iOS devices typically need slightly larger touch targets
+    if (isIOS) baseSize *= 1.1;
+    // Android devices benefit from slightly different scaling
+    if (isAndroid) baseSize *= 1.05;
+    return Math.round(baseSize);
+  };
+
+  const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+    let baseSpacing = isSmallScreen ? small : isMediumScreen ? medium : large;
+    // iOS devices prefer slightly more spacing
+    if (isIOS) baseSpacing *= 1.15;
+    return Math.round(baseSpacing);
+  };
+
+  const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+    let baseFontSize = isSmallScreen ? small : isMediumScreen ? medium : large;
+    // iOS devices typically have better font rendering, so we can use slightly smaller fonts
+    if (isIOS) baseFontSize *= 0.95;
+    // Android devices benefit from slightly larger fonts for better readability
+    if (isAndroid) baseFontSize *= 1.05;
+    return Math.round(baseFontSize);
+  };
+
+  // Platform-specific touch target sizes (minimum 44px for iOS, 48px for Android)
+  const getTouchTargetSize = () => {
+    return isIOS ? 44 : 48;
+  };
+
+  // Platform-specific haptic feedback
+  const triggerHapticFeedback = () => {
+    if (isIOS) {
+      // iOS haptic feedback would be implemented here
+      // You can use expo-haptics for this
+    }
+    // Android has built-in haptic feedback for touch events
+  };
 
   const {
     title,
@@ -116,8 +168,6 @@ export default function Reelsviewscroll() {
   const lastIndexRef = useRef<number>(currentVideoIndex);
   
   // Animation and scroll state
-  const screenHeight = Dimensions.get('window').height;
-
   // Debug logging
   useEffect(() => {
     console.log(`🎬 ReelsViewScroll loaded with:`);
@@ -327,8 +377,7 @@ export default function Reelsviewscroll() {
   };
 
   // Progress bar dimensions and calculations
-  const screenWidth = Dimensions.get('window').width;
-  const progressBarWidth = screenWidth - 32; // Account for margins
+  const progressBarWidth = screenWidth - getResponsiveSpacing(24, 32, 40); // Responsive margins
   const progressPercentage = videoDuration > 0 ? (videoPosition / videoDuration) * 100 : 0;
 
   // Pan responder for draggable progress bar
@@ -358,18 +407,20 @@ export default function Reelsviewscroll() {
     globalVideoStore.toggleVideoMute(key);
   };
 
-  // Initialize video audio on mount
+  // Initialize video audio on mount with platform-specific optimizations
   useEffect(() => {
     const initializeAudio = async () => {
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
           staysActiveInBackground: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
+          playsInSilentModeIOS: isIOS, // Enable silent mode playback on iOS
+          shouldDuckAndroid: isAndroid, // Enable audio ducking on Android
           playThroughEarpieceAndroid: false,
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         });
-        console.log("✅ ReelsView: Audio session configured");
+        console.log("✅ ReelsView: Audio session configured for", Platform.OS);
       } catch (error) {
         console.error(
           "❌ ReelsView: Failed to initialize audio session:",
@@ -379,7 +430,7 @@ export default function Reelsviewscroll() {
     };
 
     initializeAudio();
-  }, []);
+  }, [isIOS, isAndroid]);
 
   // Auto-play or switch play target immediately when the active key changes
   useEffect(() => {
@@ -420,15 +471,24 @@ export default function Reelsviewscroll() {
           onPress={() => {
             if (isActive) {
               console.log("🎬 Video tap detected");
+              triggerHapticFeedback(); // Add haptic feedback for video tap
               toggleVideoPlay();
             }
           }}
-          onLongPress={() => console.log("🎬 Long press detected")}
+          onLongPress={() => {
+            if (isActive) {
+              console.log("🎬 Long press detected");
+              triggerHapticFeedback(); // Add haptic feedback for long press
+            }
+          }}
         >
           <View 
             className="w-full h-full"
             onTouchStart={(e) => isActive && console.log("🎬 Touch start at:", e.nativeEvent.pageY)}
             onTouchEnd={(e) => isActive && console.log("🎬 Touch end at:", e.nativeEvent.pageY)}
+            accessibilityLabel={`${playingVideos[modalKey] ? 'Pause' : 'Play'} video`}
+            accessibilityRole="button"
+            accessibilityHint="Double tap to like, long press for more options"
           >
             <Video
               ref={(ref) => {
@@ -473,17 +533,41 @@ export default function Reelsviewscroll() {
                 if (status.didJustFinish) {
                   ref?.setPositionAsync(0);
                   globalVideoStore.pauseVideo(modalKey);
+                  // Trigger haptic feedback on video completion
+                  triggerHapticFeedback();
                 }
               }}
+              // Platform-specific video optimizations
+              androidImplementation={isAndroid ? "MediaPlayer" : undefined}
+              shouldCorrectPitch={isIOS}
+              progressUpdateIntervalMillis={isIOS ? 100 : 250}
             />
 
-            {/* Auto-play indicator removed per request */}
-
-            {/* Play/Pause Overlay */}
+            {/* Play/Pause Overlay - Enhanced */}
             {isActive && !playingVideos[modalKey] && (
-              <View className="absolute inset-0 justify-center items-center">
-                <View className="bg-white/20 p-4 rounded-full">
-                  <MaterialIcons name="play-arrow" size={60} color="#FFFFFF" />
+              <View 
+                className="absolute inset-0 justify-center items-center"
+                style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                }}
+              >
+                <View 
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    padding: getResponsiveSpacing(16, 20, 24),
+                    borderRadius: getResponsiveSize(30, 35, 40),
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}
+                >
+                  <MaterialIcons 
+                    name="play-arrow" 
+                    size={getResponsiveSize(50, 60, 70)} 
+                    color="#FEA74E" 
+                  />
                 </View>
               </View>
             )}
@@ -491,28 +575,90 @@ export default function Reelsviewscroll() {
             {/* Only show UI elements for active video */}
             {isActive && (
               <>
-                {/* Action Buttons */}
-                <View className="flex-col absolute top-[370px] right-6">
+                {/* Action Buttons - Enhanced user experience */}
+                <View 
+                  style={{
+                    position: 'absolute',
+                    right: getResponsiveSpacing(16, 20, 24),
+                    top: screenHeight * getResponsiveSize(0.4, 0.45, 0.5),
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: getResponsiveSpacing(16, 20, 24),
+                    zIndex: 20,
+                  }}
+                >
                   <TouchableOpacity
-                    onPress={() => handleFavorite(modalKey)}
-                    className="flex-col justify-center items-center"
+                    onPress={() => {
+                      triggerHapticFeedback();
+                      handleFavorite(modalKey);
+                    }}
+                    style={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: getResponsiveSpacing(8, 10, 12),
+                      minWidth: getTouchTargetSize(),
+                      minHeight: getTouchTargetSize(),
+                      borderRadius: getResponsiveSize(20, 24, 28),
+                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityLabel={`${userFavorites[modalKey] ? 'Unlike' : 'Like'} this video`}
+                    accessibilityRole="button"
                   >
                     <MaterialIcons
                       name={userFavorites[modalKey] ? "favorite" : "favorite-border"}
-                      size={35}
+                      size={getResponsiveSize(28, 32, 36)}
                       color={userFavorites[modalKey] ? "#D22A2A" : "#FFFFFF"}
                     />
-                    <Text className="text-[10px] text-white font-rubik-semibold">
+                    <Text 
+                      style={{
+                        fontSize: getResponsiveFontSize(9, 10, 11),
+                        color: '#FFFFFF',
+                        marginTop: getResponsiveSpacing(2, 4, 5),
+                        fontFamily: 'Rubik-SemiBold',
+                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                        textShadowOffset: { width: 0, height: 1 },
+                        textShadowRadius: 2,
+                      }}
+                    >
                       {globalFavoriteCounts[modalKey] || video.favorite || 0}
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    onPress={() => handleComment(modalKey)}
-                    className="flex-col justify-center items-center mt-6"
+                    onPress={() => {
+                      triggerHapticFeedback();
+                      handleComment(modalKey);
+                    }}
+                    style={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: getResponsiveSpacing(8, 10, 12),
+                      minWidth: getTouchTargetSize(),
+                      minHeight: getTouchTargetSize(),
+                      borderRadius: getResponsiveSize(20, 24, 28),
+                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Add comment to this video"
+                    accessibilityRole="button"
                   >
-                    <Ionicons name="chatbubble-sharp" size={35} color="white" />
-                    <Text className="text-[10px] text-white font-rubik-semibold">
+                    <Ionicons 
+                      name="chatbubble-sharp" 
+                      size={getResponsiveSize(28, 32, 36)} 
+                      color="white" 
+                    />
+                    <Text 
+                      style={{
+                        fontSize: getResponsiveFontSize(9, 10, 11),
+                        color: '#FFFFFF',
+                        marginTop: getResponsiveSpacing(2, 4, 5),
+                        fontFamily: 'Rubik-SemiBold',
+                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                        textShadowOffset: { width: 0, height: 1 },
+                        textShadowRadius: 2,
+                      }}
+                    >
                       {videoStats[modalKey]?.comment === 1
                         ? (video.comment ?? 0) + 1
                         : video.comment ?? 0}
@@ -520,126 +666,385 @@ export default function Reelsviewscroll() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    onPress={() => handleSave(modalKey)}
-                    className="flex-col justify-center items-center mt-6"
+                    onPress={() => {
+                      triggerHapticFeedback();
+                      handleSave(modalKey);
+                    }}
+                    style={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: getResponsiveSpacing(8, 10, 12),
+                      minWidth: getTouchTargetSize(),
+                      minHeight: getTouchTargetSize(),
+                      borderRadius: getResponsiveSize(20, 24, 28),
+                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityLabel={`${libraryStore.isItemSaved(modalKey) ? 'Remove from' : 'Save to'} library`}
+                    accessibilityRole="button"
                   >
                     <MaterialIcons
                       name={libraryStore.isItemSaved(modalKey) ? "bookmark" : "bookmark-border"}
-                      size={35}
+                      size={getResponsiveSize(28, 32, 36)}
                       color={libraryStore.isItemSaved(modalKey) ? "#FEA74E" : "#FFFFFF"}
                     />
-                    <Text className="text-[10px] text-white font-rubik-semibold">
+                    <Text 
+                      style={{
+                        fontSize: getResponsiveFontSize(9, 10, 11),
+                        color: '#FFFFFF',
+                        marginTop: getResponsiveSpacing(2, 4, 5),
+                        fontFamily: 'Rubik-SemiBold',
+                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                        textShadowOffset: { width: 0, height: 1 },
+                        textShadowRadius: 2,
+                      }}
+                    >
                       {videoStats[modalKey]?.totalSaves || video.saved || 0}
                     </Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
-                    onPress={() => handleShare(modalKey)}
-                    className="flex-col justify-center items-center mt-6"
+                    onPress={() => {
+                      triggerHapticFeedback();
+                      handleShare(modalKey);
+                    }}
+                    style={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: getResponsiveSpacing(8, 10, 12),
+                      minWidth: getTouchTargetSize(),
+                      minHeight: getTouchTargetSize(),
+                      borderRadius: getResponsiveSize(20, 24, 28),
+                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Share this video"
+                    accessibilityRole="button"
                   >
-                    <Feather name="send" size={35} color="white" />
-                    <Text className="text-[10px] text-white font-rubik-semibold">
+                    <Feather 
+                      name="send" 
+                      size={getResponsiveSize(28, 32, 36)} 
+                      color="white" 
+                    />
+                    <Text 
+                      style={{
+                        fontSize: getResponsiveFontSize(9, 10, 11),
+                        color: '#FFFFFF',
+                        marginTop: getResponsiveSpacing(2, 4, 5),
+                        fontFamily: 'Rubik-SemiBold',
+                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                        textShadowOffset: { width: 0, height: 1 },
+                        textShadowRadius: 2,
+                      }}
+                    >
                       {videoStats[modalKey]?.sheared || video.sheared || 0}
                     </Text>
                   </TouchableOpacity>
-
-                 
                 </View>
 
-                {/* Speaker Info Section */}
-                <View className="absolute top-[722px] left-3 right-3 flex-row items-center p-3 rounded-lg">
-                  <View className="w-[40px] h-[40px] rounded-full bg-gray-200 items-center justify-center">
-                    <Image
-                      source={
-                        typeof videoData.speakerAvatar === "string" &&
-                        videoData.speakerAvatar.startsWith("http")
-                          ? { uri: videoData.speakerAvatar.trim() }
-                          : typeof videoData.speakerAvatar === "object" && videoData.speakerAvatar
-                          ? videoData.speakerAvatar
-                          : require("../../assets/images/Avatar-1.png")
-                      }
-                      style={{ width: 30, height: 30, borderRadius: 15 }}
-                      resizeMode="cover"
-                    />
-                  </View>
-
-                  <View className="flex-row items-center justify-between w-[320px]">
-                    <View className="flex-row items-center ml-3">
-                      <Text className="text-white text-[14px] font-rubik-semibold">
-                        {videoData.speaker || "No Speaker"}
-                      </Text>
-                      <Text className="text-[#D0D5DD] text-[10px] font-rubik-semibold ml-2">
-                        {videoData.timeAgo || "No Time"}
-                      </Text>
-                    </View>
-
+                {/* Speaker Info Section - Enhanced user experience */}
+                <View 
+                  style={{
+                    position: 'absolute',
+                    bottom: getResponsiveSpacing(100, 120, 140),
+                    left: getResponsiveSpacing(12, 16, 20),
+                    right: getResponsiveSpacing(12, 16, 20),
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    zIndex: 20,
+                  }}
+                >
+                  {/* Avatar and Name Row */}
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center',
+                    flex: 1,
+                  }}>
+                    {/* Avatar */}
                     <TouchableOpacity
-                      onPress={() => setMenuVisible((v) => !v)}
-                      className="w-[40px] h-[40px] rounded-full bg-white items-center justify-center"
+                      style={{
+                        width: getResponsiveSize(36, 40, 44),
+                        height: getResponsiveSize(36, 40, 44),
+                        borderRadius: getResponsiveSize(18, 20, 22),
+                        backgroundColor: '#f3f4f6',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: getResponsiveSpacing(10, 12, 14),
+                        borderWidth: 2,
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                      }}
+                      activeOpacity={0.8}
+                      accessibilityLabel={`${videoData.speaker || 'Unknown'} profile picture`}
+                      accessibilityRole="image"
                     >
-                      <Ionicons name="ellipsis-vertical" size={18} color="#3A3E50" />
+                      <Image
+                        source={getUserAvatarFromContent(videoData)}
+                        style={{ 
+                          width: getResponsiveSize(24, 28, 32), 
+                          height: getResponsiveSize(24, 28, 32), 
+                          borderRadius: getResponsiveSize(12, 14, 16) 
+                        }}
+                        resizeMode="cover"
+                      />
                     </TouchableOpacity>
+
+                    {/* Speaker Name and Time - Now next to avatar */}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}>
+                        <Text 
+                          style={{
+                            fontSize: getResponsiveFontSize(12, 14, 16),
+                            color: '#FFFFFF',
+                            fontWeight: '600',
+                            fontFamily: 'Rubik-SemiBold',
+                            textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                            textShadowOffset: { width: 0, height: 1 },
+                            textShadowRadius: 3,
+                            marginRight: getResponsiveSpacing(6, 8, 10),
+                          }}
+                          numberOfLines={1}
+                          accessibilityLabel={`Posted by ${videoData.speaker || 'Unknown'}`}
+                        >
+                          {videoData.speaker || "No Speaker"}
+                        </Text>
+                        <Text 
+                          style={{
+                            fontSize: getResponsiveFontSize(9, 10, 11),
+                            color: '#D0D5DD',
+                            fontFamily: 'Rubik',
+                            textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                            textShadowOffset: { width: 0, height: 1 },
+                            textShadowRadius: 3,
+                          }}
+                          accessibilityLabel={`Posted ${videoData.timeAgo || 'recently'}`}
+                        >
+                          {videoData.timeAgo || "No Time"}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
+
+                  {/* Menu Button */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      triggerHapticFeedback();
+                      setMenuVisible((v) => !v);
+                    }}
+                    style={{
+                      width: getResponsiveSize(36, 40, 44),
+                      height: getResponsiveSize(36, 40, 44),
+                      borderRadius: getResponsiveSize(18, 20, 22),
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 3,
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityLabel="More options menu"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons 
+                      name="ellipsis-vertical" 
+                      size={getResponsiveSize(16, 18, 20)} 
+                      color="#3A3E50" 
+                    />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Action Menu - exactly like big video card */}
+                {/* Action Menu - Improved positioning */}
                 {menuVisible && (
                   <>
                     <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
                       <View className="absolute inset-0 z-10" />
                     </TouchableWithoutFeedback>
 
-                    <View className="absolute bottom-32 right-16 bg-white shadow-md rounded-lg p-3 z-20 w-[200px] h-[180]">
-                      <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                        <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
+                    <View 
+                      style={{
+                        position: 'absolute',
+                        bottom: 200,
+                        right: 100,
+                        backgroundColor: '#FFFFFF',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 8,
+                        elevation: 5,
+                        borderRadius: 16,
+                        padding: 16,
+                        width: 180,
+                        zIndex: 20,
+                      }}
+                    >
+                      <TouchableOpacity 
+                        style={{
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#f3f4f6',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text style={{ 
+                          color: '#1D2939',
+                          fontSize: 14,
+                          fontFamily: 'Rubik',
+                        }}>
+                          View Details
+                        </Text>
                         <Ionicons name="eye-outline" size={22} color="#1D2939" />
                       </TouchableOpacity>
+                      
                       <TouchableOpacity
                         onPress={() => handleShare(modalKey)}
-                        className="py-2 border-b border-gray-200 flex-row items-center justify-between"
+                        style={{
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#f3f4f6',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
                       >
-                        <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
+                        <Text style={{ 
+                          color: '#1D2939',
+                          fontSize: 14,
+                          fontFamily: 'Rubik',
+                        }}>
+                          Share
+                        </Text>
                         <Feather name="send" size={22} color="#1D2939" />
                       </TouchableOpacity>
+                      
                       <TouchableOpacity
-                        className="flex-row items-center justify-between mt-6"
+                        style={{
+                          paddingVertical: 10,
+                          marginTop: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
                         onPress={() => {
                           handleSave(modalKey);
                           setMenuVisible(false);
                         }}
                       >
-                        <Text className="text-[#1D2939] font-rubik ml-2">{libraryStore.isItemSaved(modalKey) ? "Remove from Library" : "Save to Library"}</Text>
+                        <Text style={{ 
+                          color: '#1D2939',
+                          fontSize: 14,
+                          fontFamily: 'Rubik',
+                        }}>
+                          {libraryStore.isItemSaved(modalKey) ? "Remove from Library" : "Save to Library"}
+                        </Text>
                         <MaterialIcons
                           name={libraryStore.isItemSaved(modalKey) ? "bookmark" : "bookmark-border"}
                           size={22}
                           color="#1D2939"
                         />
                       </TouchableOpacity>
-                      <TouchableOpacity className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2">
-                        <Text className="text-[#1D2939] font-rubik ml-2">Download</Text>
+                      
+                      <TouchableOpacity 
+                        style={{
+                          paddingVertical: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: '#f3f4f6',
+                          marginTop: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text style={{ 
+                          color: '#1D2939',
+                          fontSize: 14,
+                          fontFamily: 'Rubik',
+                        }}>
+                          Download
+                        </Text>
                         <Ionicons name="download-outline" size={24} color="#090E24" />
                       </TouchableOpacity>
                     </View>
                   </>
                 )}
 
-                {/* Draggable Progress Bar */}
-                <View className="absolute top-[790px] left-4 right-4">
+                {/* Draggable Progress Bar - Enhanced user experience */}
+                <View 
+                  style={{
+                    position: 'absolute',
+                    bottom: getResponsiveSpacing(60, 80, 100),
+                    left: getResponsiveSpacing(12, 16, 20),
+                    right: getResponsiveSpacing(12, 16, 20),
+                    zIndex: 15,
+                  }}
+                >
                   <View 
                     {...panResponder.panHandlers}
-                    className="py-3"
-                    style={{ marginTop: -12, marginBottom: -12 }}
+                    style={{
+                      paddingVertical: getResponsiveSpacing(12, 16, 20),
+                      marginTop: -getResponsiveSpacing(12, 16, 20),
+                      marginBottom: -getResponsiveSpacing(12, 16, 20),
+                    }}
+                    accessibilityLabel="Video progress bar"
+                    accessibilityRole="slider"
+                    accessibilityValue={{
+                      min: 0,
+                      max: 100,
+                      now: Math.round(progressPercentage),
+                    }}
                   >
-                    <View className="h-1 bg-white rounded-full relative">
+                    <View 
+                      style={{
+                        height: getResponsiveSize(4, 5, 6),
+                        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                        borderRadius: getResponsiveSize(2, 2.5, 3),
+                        position: 'relative',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }}
+                    >
                       <View 
-                        className="h-full bg-[#FEA74E] rounded-full" 
-                        style={{ width: `${progressPercentage}%` }} 
+                        style={{
+                          height: '100%',
+                          backgroundColor: '#FEA74E',
+                          borderRadius: getResponsiveSize(2, 2.5, 3),
+                          width: `${progressPercentage}%`,
+                          shadowColor: '#FEA74E',
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.5,
+                          shadowRadius: 4,
+                          elevation: 3,
+                        }}
                       />
                       
                       <View
-                        className="absolute top-[-4px] w-3 h-3 bg-[#FFFFFF] rounded-full border-2 border-white"
-                        style={{ 
+                        style={{
+                          position: 'absolute',
+                          top: -getResponsiveSize(6, 8, 10),
+                          width: getResponsiveSize(16, 20, 24),
+                          height: getResponsiveSize(16, 20, 24),
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: getResponsiveSize(8, 10, 12),
+                          borderWidth: 3,
+                          borderColor: '#FEA74E',
                           left: `${Math.max(0, Math.min(progressPercentage, 100))}%`,
-                          transform: [{ translateX: -6 }],
+                          transform: [{ translateX: -getResponsiveSize(8, 10, 12) }],
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.3,
+                          shadowRadius: 4,
+                          elevation: 5,
                         }}
                       />
                     </View>
@@ -683,6 +1088,11 @@ export default function Reelsviewscroll() {
 
   return (
     <>
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="transparent" 
+        translucent={true}
+      />
       <ScrollView
         ref={scrollViewRef}
         style={{ flex: 1 }}
@@ -691,8 +1101,11 @@ export default function Reelsviewscroll() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         snapToInterval={screenHeight}
-        decelerationRate="fast"
-        bounces={false}
+        decelerationRate={isIOS ? "normal" : "fast"}
+        bounces={isIOS}
+        contentContainerStyle={{
+          minHeight: screenHeight * allVideos.length,
+        }}
       >
         {allVideos.map((videoData: { title: any; speaker: any; }, index: number) => {
           const isActive = index === currentIndex_state;
@@ -706,34 +1119,124 @@ export default function Reelsviewscroll() {
         })}
       </ScrollView>
 
-      {/* Fixed overlays that stay on top */}
-      {/* Live Header */}
-      <View className="absolute flex-row items-center justify-between w-[400px] top-10 h-[30px] mt-4 z-50">
+      {/* Fixed overlays that stay on top - Enhanced header */}
+      <View 
+        style={{
+          position: 'absolute',
+          top: getResponsiveSpacing(40, 48, 56) + (isIOS ? 20 : 0), // Extra padding for iOS status bar
+          left: 0,
+          right: 0,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+          zIndex: 50,
+        }}
+      >
+        {/* Live Indicator */}
         {live ? (
-          <View className="absolute bg-red-600 px-2 ml-6 rounded-md z-10 flex flex-row items-center h-[23px] ">
-            <Text className="text-white text-xs font-bold">LIVE</Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#dc2626',
+              paddingHorizontal: getResponsiveSpacing(8, 12, 16),
+              paddingVertical: getResponsiveSpacing(4, 6, 8),
+              borderRadius: getResponsiveSize(4, 6, 8),
+              flexDirection: 'row',
+              alignItems: 'center',
+              zIndex: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+            activeOpacity={0.8}
+            accessibilityLabel="Live stream indicator"
+            accessibilityRole="button"
+          >
+            <Text 
+              style={{
+                fontSize: getResponsiveFontSize(10, 12, 14),
+                color: '#FFFFFF',
+                fontWeight: 'bold',
+                fontFamily: 'Rubik-Bold',
+              }}
+            >
+              LIVE
+            </Text>
             <Image
               source={require("../../assets/images/Vector.png")}
-              className="h-[10px] w-[10px] ml-2"
+              style={{
+                height: getResponsiveSize(8, 10, 12),
+                width: getResponsiveSize(8, 10, 12),
+                marginLeft: getResponsiveSpacing(6, 8, 10),
+              }}
               resizeMode="contain"
             />
-          </View>
+          </TouchableOpacity>
         ) : (
-          <View className="absolute bg-gray-500 px-2 ml-6 rounded-md z-10 flex flex-row items-center h-[23px] ">
-            <Text className="text-white text-xs font-bold">LIVE</Text>
-            <Text className="text-white ml-2 text-xs font-bold">
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#6b7280',
+              paddingHorizontal: getResponsiveSpacing(8, 12, 16),
+              paddingVertical: getResponsiveSpacing(4, 6, 8),
+              borderRadius: getResponsiveSize(4, 6, 8),
+              flexDirection: 'row',
+              alignItems: 'center',
+              zIndex: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+            activeOpacity={0.8}
+            accessibilityLabel={`Video posted ${allVideos[currentIndex_state]?.timeAgo || timeAgo}`}
+            accessibilityRole="button"
+          >
+            <Text 
+              style={{
+                fontSize: getResponsiveFontSize(10, 12, 14),
+                color: '#FFFFFF',
+                fontWeight: 'bold',
+                fontFamily: 'Rubik-Bold',
+              }}
+            >
+              LIVE
+            </Text>
+            <Text 
+              style={{
+                fontSize: getResponsiveFontSize(10, 12, 14),
+                color: '#FFFFFF',
+                fontWeight: 'bold',
+                marginLeft: getResponsiveSpacing(6, 8, 10),
+                fontFamily: 'Rubik-Bold',
+              }}
+            >
               {allVideos[currentIndex_state]?.timeAgo || timeAgo}
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
 
-        <Text className="text-white font-rubik-semibold ml-[160px]">
+        {/* Live Title */}
+        <Text 
+          style={{
+            fontSize: getResponsiveFontSize(16, 18, 20),
+            color: '#FFFFFF',
+            fontWeight: '600',
+            fontFamily: 'Rubik-SemiBold',
+            textShadowColor: 'rgba(0, 0, 0, 0.5)',
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 3,
+          }}
+        >
           Live
         </Text>
 
+        {/* Close Button */}
         <TouchableOpacity
-          className="absolute ml-[300px]"
           onPress={() => {
+            triggerHapticFeedback();
             if (router.canGoBack?.()) {
               router.back();
             } else {
@@ -745,34 +1248,98 @@ export default function Reelsviewscroll() {
               });
             }
           }}
+          style={{
+            padding: getResponsiveSpacing(8, 10, 12),
+            borderRadius: getResponsiveSize(6, 8, 10),
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            minWidth: getTouchTargetSize(),
+            minHeight: getTouchTargetSize(),
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Close video player"
+          accessibilityRole="button"
         >
-          <MaterialIcons name="close" size={24} color="#FFFFFF" />
+          <MaterialIcons 
+            name="close" 
+            size={getResponsiveSize(20, 24, 28)} 
+            color="#FFFFFF" 
+          />
         </TouchableOpacity>
       </View>
 
-      {/* Fixed overlays for current video */}
-      <View className="absolute top-[670px] left-4 right-4 pointer-events-none z-40">
-        <Text className="text-white text-[20px] font-rubik-bold">
+      {/* Video Title - Enhanced user experience */}
+      <View 
+        style={{
+          position: 'absolute',
+          bottom: getResponsiveSpacing(180, 220, 260),
+          left: getResponsiveSpacing(12, 16, 20),
+          right: getResponsiveSpacing(12, 16, 20),
+          pointerEvents: 'none',
+          zIndex: 40,
+        }}
+      >
+        <Text 
+          style={{
+            fontSize: getResponsiveFontSize(16, 20, 24),
+            color: '#FFFFFF',
+            fontWeight: 'bold',
+            fontFamily: 'Rubik-Bold',
+            textShadowColor: 'rgba(0, 0, 0, 0.7)',
+            textShadowOffset: { width: 0, height: 2 },
+            textShadowRadius: 4,
+            lineHeight: getResponsiveFontSize(20, 24, 28),
+          }}
+          numberOfLines={2}
+          accessibilityLabel={`Video title: ${allVideos[currentIndex_state]?.title || currentVideo.title}`}
+        >
           {allVideos[currentIndex_state]?.title || currentVideo.title}
         </Text>
       </View>
 
-     
-    
-
-      {/* Navigation indicators */}
+      {/* Navigation indicators - Enhanced */}
       {parsedVideoList.length > 1 && (
-        <>
-          {/* Video counter */}
-          <View className="absolute top-16 left-4 bg-black/50 rounded-full px-3 py-1 pointer-events-none z-50">
-            <Text className="text-white text-xs">
-              {currentIndex_state + 1} / {parsedVideoList.length}
-            </Text>
-          </View>
-        </>
+        <View 
+          style={{
+            position: 'absolute',
+            top: getResponsiveSpacing(64, 80, 96) + (isIOS ? 20 : 0),
+            left: getResponsiveSpacing(12, 16, 20),
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            borderRadius: getResponsiveSize(16, 20, 24),
+            paddingHorizontal: getResponsiveSpacing(12, 16, 20),
+            paddingVertical: getResponsiveSpacing(6, 8, 10),
+            pointerEvents: 'none',
+            zIndex: 50,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+        >
+          <Text 
+            style={{
+              fontSize: getResponsiveFontSize(10, 12, 14),
+              color: '#FFFFFF',
+              fontFamily: 'Rubik-Medium',
+              textShadowColor: 'rgba(0, 0, 0, 0.5)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }}
+            accessibilityLabel={`Video ${currentIndex_state + 1} of ${parsedVideoList.length}`}
+          >
+            {currentIndex_state + 1} / {parsedVideoList.length}
+          </Text>
+        </View>
       )}
 
-      {/* Bottom Nav - Outside main container for proper absolute positioning */}
+      {/* Bottom Nav - Enhanced for better platform compatibility */}
       <View
         style={{
           position: "absolute",
@@ -781,13 +1348,15 @@ export default function Reelsviewscroll() {
           right: 0,
           zIndex: 100,
           backgroundColor: "transparent",
-          pointerEvents: "box-none", // Allow touch events to pass through to children
+          pointerEvents: "box-none",
+          paddingBottom: isIOS ? 20 : 0, // Extra padding for iOS home indicator
         }}
       >
         <BottomNav
           selectedTab={activeTab}
           setSelectedTab={(tab) => {
             setActiveTab(tab);
+            triggerHapticFeedback(); // Add haptic feedback for tab changes
             switch (tab) {
               case "Home":
                 router.replace({ pathname: "/categories/HomeScreen" });

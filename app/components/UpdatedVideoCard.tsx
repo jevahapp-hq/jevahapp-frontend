@@ -14,6 +14,7 @@ import { useDownloadStore } from '../store/useDownloadStore';
 import { useGlobalVideoStore } from '../store/useGlobalVideoStore';
 import { useInteractionStore } from '../store/useInteractionStore';
 import { convertToDownloadableItem, useDownloadHandler } from '../utils/downloadUtils';
+import { getUserAvatarFromContent, getUserDisplayNameFromContent } from '../utils/userValidation';
 import CommentsModal from './CommentsModal';
 import InteractionButtons from './InteractionButtons';
 
@@ -24,7 +25,13 @@ interface VideoCardProps {
     fileUrl: string;
     title: string;
     speaker: string;
-    uploadedBy?: string;
+    uploadedBy?: string | {
+      _id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      avatar?: string;
+    };
     timeAgo: string;
     speakerAvatar: any;
     imageUrl?: any;
@@ -95,6 +102,10 @@ export default function UpdatedVideoCard({ video, index, isModalView = false }: 
     }
   };
 
+  // Get user avatar and display name from content data
+  const userAvatar = getUserAvatarFromContent(video);
+  const userDisplayName = getUserDisplayNameFromContent(video);
+
   return (
     <View className="mb-6 bg-white rounded-lg overflow-hidden">
       {/* Video Player Section */}
@@ -161,16 +172,12 @@ export default function UpdatedVideoCard({ video, index, isModalView = false }: 
               
               <View className="flex-row items-center mb-2">
                 <Image
-                  source={
-                    typeof video.speakerAvatar === 'string'
-                      ? { uri: video.speakerAvatar }
-                      : video.speakerAvatar
-                  }
+                  source={userAvatar}
                   className="w-6 h-6 rounded-full mr-2"
                   resizeMode="cover"
                 />
                 <Text className="text-gray-600 font-rubik text-sm">
-                  {video.speaker}
+                  {userDisplayName}
                 </Text>
                 <Text className="text-gray-400 font-rubik text-sm ml-2">
                   • {video.timeAgo}

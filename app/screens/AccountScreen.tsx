@@ -1,11 +1,10 @@
 // AccountScreen.tsx
 import { useClerk } from "@clerk/clerk-expo";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import BottomNav from "../components/BottomNav";
+import { authUtils } from "../utils/authUtils";
 import { useOptimizedButton } from "../utils/performance";
 
 export default function AccountScreen() {
@@ -27,11 +26,8 @@ export default function AccountScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Clear all stored tokens and user data
-              await AsyncStorage.removeItem("token");
-              await AsyncStorage.removeItem("userToken");
-              await AsyncStorage.removeItem("user");
-              await SecureStore.deleteItemAsync("jwt");
+              // Clear all stored tokens and user data using authUtils
+              await authUtils.clearAuthData();
               
               // Sign out from Clerk
               await signOut();

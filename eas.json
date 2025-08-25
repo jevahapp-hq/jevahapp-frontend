@@ -18,7 +18,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "debug": {
@@ -27,7 +27,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "test": {
@@ -36,7 +36,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "ios-test": {
@@ -47,7 +47,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "ios-device": {
@@ -58,7 +58,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "testflight": {
@@ -69,7 +69,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "production": {
@@ -79,7 +79,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "playstore": {
@@ -89,7 +89,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     }
   },
