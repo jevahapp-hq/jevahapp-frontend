@@ -6,7 +6,7 @@ const JEVAH_API_BASE_URL = "https://jevahapp-backend.onrender.com/api/auth";
 class AuthService {
   private baseURL: string = JEVAH_API_BASE_URL;
 
-  // Forgot Password - Step 1
+  // Forgot Password - Step 1: Send reset code to email
   async forgotPassword(email: string) {
     try {
       console.log("🔍 Sending forgot password request for:", email);
@@ -37,19 +37,19 @@ class AuthService {
     }
   }
 
-  // Verify Reset Code - Step 2
+  // Verify Reset Code - Step 2: Validate the 6-digit code
   async verifyResetCode(email: string, code: string) {
     try {
-      console.log("🔍 Verifying reset code for:", email, "code:", code);
+      console.log("🔍 Verifying reset code for:", email);
       
       const response = await fetch(`${this.baseURL}/verify-reset-code`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           email: email.trim(),
-          code: code.trim()
+          code: code.trim(),
         }),
       });
 
@@ -71,19 +71,19 @@ class AuthService {
     }
   }
 
-  // Reset Password - Step 3
-  async resetPasswordWithCode(email: string, code: string, newPassword: string) {
+  // Reset Password - Step 3: Reset password with email, token, and new password
+  async resetPassword(email: string, token: string, newPassword: string) {
     try {
       console.log("🔍 Resetting password for:", email);
       
-      const response = await fetch(`${this.baseURL}/reset-password-with-code`, {
+      const response = await fetch(`${this.baseURL}/reset-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email: email.trim(),
-          code: code.trim(),
+          token: token.trim(),
           newPassword: newPassword.trim(),
         }),
       });
@@ -97,7 +97,7 @@ class AuthService {
         status: response.status 
       };
     } catch (error) {
-      console.error("❌ Error in resetPasswordWithCode:", error);
+      console.error("❌ Error in resetPassword:", error);
       return { 
         success: false, 
         error: "Network error occurred",
@@ -117,8 +117,8 @@ class AuthService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password: password.trim(),
+          email: email.trim(),
+          password: password,
         }),
       });
 
@@ -126,13 +126,8 @@ class AuthService {
       console.log("✅ Login response:", data);
 
       if (response.ok && data.token) {
-        // Store token and user data
-        await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('token', data.token);
-        
-        if (data.user) {
-          await AsyncStorage.setItem('user', JSON.stringify(data.user));
-        }
+        await AsyncStorage.setItem("token", data.token);
+        console.log("💾 Token stored in AsyncStorage");
       }
 
       return { 
@@ -151,40 +146,20 @@ class AuthService {
   }
 
   // Register with Jevah backend
-  async register(userData: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-  }) {
+  async register(userData: any) {
     try {
-      console.log("🔍 Registering user:", userData.email);
+      console.log("🔍 Registering new user:", userData.email);
       
       const response = await fetch(`${this.baseURL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email: userData.email.trim().toLowerCase(),
-          password: userData.password.trim(),
-          firstName: userData.firstName.trim(),
-          lastName: userData.lastName.trim(),
-        }),
+        body: JSON.stringify(userData),
       });
 
       const data = await response.json();
       console.log("✅ Register response:", data);
-
-      if (response.ok && data.token) {
-        // Store token and user data
-        await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('token', data.token);
-        
-        if (data.user) {
-          await AsyncStorage.setItem('user', JSON.stringify(data.user));
-        }
-      }
 
       return { 
         success: response.ok, 
@@ -201,33 +176,26 @@ class AuthService {
     }
   }
 
-  // Logout
+  // Logout - Clear stored token
   async logout() {
     try {
-      await AsyncStorage.multiRemove(['userToken', 'token', 'user']);
-      console.log("✅ User logged out successfully");
+      await AsyncStorage.removeItem("token");
+      console.log("🗑️ Token removed from AsyncStorage");
+      return { success: true };
     } catch (error) {
       console.error("❌ Error in logout:", error);
+      return { success: false };
     }
   }
 
-  // Check if user is authenticated
-  async isAuthenticated(): Promise<boolean> {
+  // Get stored token
+  async getToken() {
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      return !!token;
+      const token = await AsyncStorage.getItem("token");
+      console.log("🔑 Retrieved token from AsyncStorage:", token ? "exists" : "not found");
+      return token;
     } catch (error) {
-      return false;
-    }
-  }
-
-  // Get current user data
-  async getCurrentUser(): Promise<any> {
-    try {
-      const userStr = await AsyncStorage.getItem('user');
-      return userStr ? JSON.parse(userStr) : null;
-    } catch (error) {
-      console.error('Error getting current user:', error);
+      console.error("❌ Error getting token:", error);
       return null;
     }
   }

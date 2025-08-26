@@ -2,18 +2,18 @@ import { router } from "expo-router";
 import { useEffect } from "react";
 import { Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import {
-  GestureHandlerRootView,
-  HandlerStateChangeEvent,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
+    Easing,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -150,6 +150,9 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
 
             <TouchableOpacity
               onPress={() => {
+                console.log("Okay, Got It button pressed, navigating to verify-reset with email:", emailAddress);
+                
+                // Close the modal first
                 if (Platform.OS === 'android') {
                   translateY.value = withTiming(SCREEN_HEIGHT, {
                     duration: 400,
@@ -159,6 +162,7 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
                   translateY.value = withSpring(SCREEN_HEIGHT);
                 }
                 runOnJS(onClose)();
+                
                 // Navigate to verify-reset with email parameter
                 router.push({
                   pathname: "/auth/verify-reset",

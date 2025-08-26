@@ -120,7 +120,7 @@ export default function ResetPassword() {
                 }
                 
                 console.log("Sending reset password request for email:", emailAddress);
-                const result = await authService.resetPasswordWithCode(emailAddress, resetToken, password);
+                const result = await authService.resetPassword(emailAddress, resetToken, password);
 
                 if (result.success) {
                   await AsyncStorage.removeItem("resetToken"); // Clean up
