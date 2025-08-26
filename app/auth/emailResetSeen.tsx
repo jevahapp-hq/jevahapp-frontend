@@ -1,20 +1,21 @@
 import { router } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import {
-    GestureHandlerRootView,
-    HandlerStateChangeEvent,
-    PanGestureHandler,
-    PanGestureHandlerGestureEvent,
+  GestureHandlerRootView,
+  HandlerStateChangeEvent,
+  PanGestureHandler,
+  PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-    Easing,
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
+import authService from "../services/authService";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -29,6 +30,7 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
   console.log("EmailResetSeenModal rendered with props:", { isVisible, emailAddress });
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
+  const [isSendingCode, setIsSendingCode] = useState(false);
 
   useEffect(() => {
     if (isVisible) {
@@ -90,6 +92,44 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
     }
   };
 
+  const handleOkayGotIt = async () => {
+    console.log("Okay, Got It button pressed, sending reset code for email:", emailAddress);
+    
+    setIsSendingCode(true);
+    
+    try {
+      // Send the reset code immediately when user clicks "Okay, Got It"
+      const result = await authService.forgotPassword(emailAddress);
+      
+      if (result.success) {
+        console.log("Reset code sent successfully");
+      } else {
+        console.log("Failed to send reset code:", result.data?.message);
+      }
+    } catch (error) {
+      console.error("Error sending reset code:", error);
+    } finally {
+      setIsSendingCode(false);
+    }
+    
+    // Close the modal first
+    if (Platform.OS === 'android') {
+      translateY.value = withTiming(SCREEN_HEIGHT, {
+        duration: 400,
+        easing: Easing.in(Easing.cubic),
+      });
+    } else {
+      translateY.value = withSpring(SCREEN_HEIGHT);
+    }
+    runOnJS(onClose)();
+    
+    // Navigate to verify-reset with email parameter
+    router.push({
+      pathname: "/auth/verify-reset",
+      params: { emailAddress }
+    });
+  };
+
   console.log("Modal visibility check:", isVisible);
   if (!isVisible) {
     console.log("Modal not visible, returning null");
@@ -149,30 +189,14 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
             </Text>
 
             <TouchableOpacity
-              onPress={() => {
-                console.log("Okay, Got It button pressed, navigating to verify-reset with email:", emailAddress);
-                
-                // Close the modal first
-                if (Platform.OS === 'android') {
-                  translateY.value = withTiming(SCREEN_HEIGHT, {
-                    duration: 400,
-                    easing: Easing.in(Easing.cubic),
-                  });
-                } else {
-                  translateY.value = withSpring(SCREEN_HEIGHT);
-                }
-                runOnJS(onClose)();
-                
-                // Navigate to verify-reset with email parameter
-                router.push({
-                  pathname: "/auth/verify-reset",
-                  params: { emailAddress }
-                });
-              }}
-              className="bg-[#090E24] p-2 rounded-full w-full max-w-[333px] h-[45px] sm:h-[50px] md:h-[55px] items-center justify-center"
+              onPress={handleOkayGotIt}
+              disabled={isSendingCode}
+              className={`bg-[#090E24] p-2 rounded-full w-full max-w-[333px] h-[45px] sm:h-[50px] md:h-[55px] items-center justify-center ${
+                isSendingCode ? "opacity-50" : ""
+              }`}
             >
               <Text className="text-white text-center font-rubik text-[14px] sm:text-[16px] font-semibold">
-                Okay, Got It
+                {isSendingCode ? "Sending Code..." : "Okay, Got It"}
               </Text>
             </TouchableOpacity>
     </View>
