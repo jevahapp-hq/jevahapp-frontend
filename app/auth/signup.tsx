@@ -2,21 +2,20 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
+import authService from "../services/authService";
 import VerifyEmail from "./verifyEmail";
-import { AsyncStorage } from "react-native";
-import { API_BASE_URL } from "../utils/api";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp } = useSignUp();
@@ -27,6 +26,9 @@ export default function SignUpScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Debug password visibility
+  console.log('Password visibility state:', showPassword);
 
   const [showModal, setShowModal] = useState(false);
 
@@ -77,30 +79,24 @@ export default function SignUpScreen() {
       isValid = false;
     }
   
-    if (isValid) {
+        if (isValid) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailAddress, password, firstName, lastName }),
+        const result = await authService.register({
+          email: emailAddress,
+          password,
+          firstName,
+          lastName,
         });
-  
-        const data = await response.json();
-  
-        if (data.success) {
-          // 🔐 Save token (if returned from backend)
-          if (data.token) {
-            await AsyncStorage.setItem("token", data.token);
-          }
-  
+
+        if (result.success) {
           setShowModal(true); // Show verify modal
         } else {
-          alert(data.message || "Something went wrong");
+          alert(result.data?.message || "Something went wrong");
         }
       } catch (err) {
         // 🛜 Handle network error by assuming code may still have been sent
         alert("Network issue occurred. Please check your email for the code.");
-  
+
         // Redirect to verification screen regardless
         router.push({
           pathname: "/auth/codeVerification",
@@ -240,8 +236,13 @@ export default function SignUpScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
-                  className="ml-6 flex-1"
-                    placeholderTextColor="#090E24"
+                  className="ml-6 flex-1 text-[#090E24]"
+                  placeholderTextColor="#090E24"
+                  style={{ 
+                    color: '#090E24',
+                    fontSize: 16,
+                    fontWeight: '400'
+                  }}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -249,7 +250,7 @@ export default function SignUpScreen() {
                   <FontAwesome6
                     name={showPassword ? "eye-slash" : "eye"}
                     size={18}
-                    color="gray"
+                    color="#666666"
                   />
                 </TouchableOpacity>
               </View>

@@ -1,30 +1,31 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Animated as RNAnimated,
-  Text,
-  TextInput,
-  TextStyle,
-  TouchableOpacity,
-  View
+    Alert,
+    Animated as RNAnimated,
+    Text,
+    TextInput,
+    TextStyle,
+    TouchableOpacity,
+    View
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming
 } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
-import authService from "../services/authService";
 
-export default function VerifyReset() {
+export default function PasswordResetVerification() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
   const [codeArray, setCodeArray] = useState(['', '', '', '', '', '']);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -159,14 +160,20 @@ export default function VerifyReset() {
     }
 
     try {
-      console.log("Verifying reset code for email:", emailAddress, "code:", code);
-      
-      const result = await authService.verifyResetCode(emailAddress, code);
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-reset-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailAddress,
+          code,
+        }),
+      });
 
-      if (result.success) {
-        // Store the verification code as the reset token for the password reset screen
-        console.log("Storing reset token:", code);
-        await AsyncStorage.setItem("resetToken", code);
+      const data = await response.json();
+
+      if (data.success) {
+        // Store the reset token for the password reset screen
+        await AsyncStorage.setItem("resetToken", data.resetToken);
         triggerBounceDrop("success");
       } else {
         triggerBounceDrop("failure");
@@ -184,13 +191,19 @@ export default function VerifyReset() {
   const handleResend = async () => {
     setIsResending(true);
     try {
-      const result = await authService.forgotPassword(emailAddress);
+      const response = await fetch(`${API_BASE_URL}/api/auth/resend-reset-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailAddress }),
+      });
 
-      if (result.success) {
+      const data = await response.json();
+
+      if (data.success) {
         Alert.alert("Code Resent", "A new password reset code has been sent to your email.");
       } else {
         triggerBounceDrop("failure");
-        Alert.alert("Resend Failed", result.data?.message || "Try again later.");
+        Alert.alert("Resend Failed", data.message || "Try again later.");
       }
     } catch (err) {
       console.error("❌ Error resending reset code:", err);
@@ -239,15 +252,15 @@ export default function VerifyReset() {
       <View className="w-[333px] mt-10 ml-2">
         <Text className="text-4xl font-bold text-[#1D2939]">
           Verify reset code
-              </Text>
+        </Text>
         <Text className="mt-2 text-base text-[#1D2939]">
           Enter the 6-character code we sent to {emailAddress}
-              </Text>
-            </View>
+        </Text>
+      </View>
 
       <View style={{ flexDirection: 'row', marginTop: 30, gap: 12 }}>
         {codeArray.map((char, i) => (
-                <TextInput
+          <TextInput
             key={i}
             ref={(el) => {
               inputsRef.current[i] = el;
@@ -263,9 +276,9 @@ export default function VerifyReset() {
             style={getInputStyle()}
           />
         ))}
-              </View>
+      </View>
 
-              <TouchableOpacity
+      <TouchableOpacity
         onPress={onVerifyPress}
         disabled={isVerifying}
         style={{
@@ -287,16 +300,16 @@ export default function VerifyReset() {
             <Icon name="star" size={16} color="#6663FD" />
           </Animated.View>
         )}
-              </TouchableOpacity>
+      </TouchableOpacity>
 
       <View style={{ flexDirection: 'row', marginTop: 24 }}>
         <Text style={{ fontSize: 16, fontWeight: '600' }}>Didn't get a code? </Text>
         <TouchableOpacity onPress={handleResend} disabled={isResending}>
           <Text style={{ fontSize: 16, fontWeight: '600', color: '#6663FD' }}>
             {isResending ? 'Resending...' : 'Resend'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
-} 
+}

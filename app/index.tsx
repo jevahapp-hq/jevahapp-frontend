@@ -83,8 +83,9 @@ export default function Welcome() {
   }, [showIntro, slides.length]);
 
   const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (event?.nativeEvent?.contentOffset?.x !== undefined) {
-      const index = Math.round(event.nativeEvent.contentOffset.x / width);
+    const contentOffset = event?.nativeEvent?.contentOffset;
+    if (contentOffset && typeof contentOffset.x === 'number') {
+      const index = Math.round(contentOffset.x / width);
       currentIndexRef.current = index;
       setCurrentIndex(index);
     }

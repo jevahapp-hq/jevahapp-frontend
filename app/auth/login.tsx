@@ -1,23 +1,25 @@
 import { router } from "expo-router";
 
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-  Alert,
-  Image,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Image,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
-import { API_BASE_URL } from "../utils/api";
+import authService from "../services/authService";
 
 export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Debug password visibility
+  console.log('Password visibility state:', showPassword);
 
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -53,66 +55,35 @@ export default function LoginScreen() {
 
     if (!isValid) return;
 
-    // `/auth/login`
-
     try {
       // Normalize inputs to avoid subtle auth failures due to whitespace/case
       const normalizedEmail = emailAddress.trim().toLowerCase();
       const normalizedPassword = password.trim();
 
       console.log("🔍 LOGIN DEBUG:", {
-        API_BASE_URL,
-        url: `${API_BASE_URL}/api/auth/login`,
         emailLength: normalizedEmail.length,
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          password: normalizedPassword,
-        }),
-      });
+      const result = await authService.login(normalizedEmail, normalizedPassword);
 
-      let data: any = null;
-      const rawText = await response.text();
-      try {
-        data = rawText ? JSON.parse(rawText) : {};
-      } catch (e) {
-        console.warn("⚠️ Non-JSON login response:", rawText);
-        data = { message: rawText };
-      }
-
-      if (!response.ok) {
-        const message =
-          data?.message ||
-          (response.status === 400 ? "Invalid email or password" : `Request failed (${response.status})`);
+      if (!result.success) {
+        const message = result.data?.message || "Invalid email or password";
         Alert.alert("Login Failed", message);
         return;
       }
 
-      // ✅ Save token and user info to AsyncStorage
-      if (data.token) {
-        await AsyncStorage.setItem("token", data.token);
-        // Store under both keys used in different parts of the app
-        await AsyncStorage.setItem("userToken", data.token);
-      }
-
-      if (data.user) {
-        // 🛡️ Validate user data before saving to prevent "Anonymous User" issue
-        if (data.user.firstName && data.user.lastName) {
-          await AsyncStorage.setItem("user", JSON.stringify(data.user));
+      // ✅ Token and user info are already saved by authService
+      if (result.data?.user) {
+        // 🛡️ Validate user data before proceeding
+        if (result.data.user.firstName && result.data.user.lastName) {
           console.log("✅ Complete user data saved:", {
-            firstName: data.user.firstName,
-            lastName: data.user.lastName,
-            hasAvatar: !!data.user.avatar
+            firstName: result.data.user.firstName,
+            lastName: result.data.user.lastName,
+            hasAvatar: !!result.data.user.avatar
           });
         } else {
           console.error("🚨 BLOCKED: Login API returned incomplete user data!");
-          console.error("   Incomplete data:", data.user);
+          console.error("   Incomplete data:", result.data.user);
           console.error("   This would have caused 'Anonymous User' to appear on uploads.");
           Alert.alert("Login Issue", "Incomplete user profile. Please contact support.");
           return;
@@ -188,14 +159,19 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                className="ml-4 flex-1"
-                 placeholderTextColor="#090E24"
+                className="ml-4 flex-1 text-[#090E24]"
+                placeholderTextColor="#090E24"
+                style={{ 
+                  color: '#090E24',
+                  fontSize: 16,
+                  fontWeight: '400'
+                }}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <FontAwesome6
                   name={showPassword ? "eye-slash" : "eye"}
                   size={18}
-                  color="gray"
+                  color="#666666"
                 />
               </TouchableOpacity>
             </View>

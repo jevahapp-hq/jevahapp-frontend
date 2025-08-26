@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { PerformanceMonitor, PerformanceOptimizer } from './performance';
 
 // API Configuration
-const API_BASE_URL = __DEV__ ? 'http://192.168.100.133:4000' : 'https://jevahapp-backend.onrender.com';
+const API_BASE_URL = __DEV__ ? 'http://localhost:8081' : 'https://jevahapp-backend.onrender.com';
 
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
