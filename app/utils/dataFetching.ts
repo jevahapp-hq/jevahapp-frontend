@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { PerformanceMonitor, PerformanceOptimizer } from './performance';
 
 // API Configuration
-const API_BASE_URL = __DEV__ ? 'http://localhost:8081' : 'https://jevahapp-backend.onrender.com';
+const API_BASE_URL = 'https://jevahapp-backend.onrender.com/api';
 
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -27,12 +27,19 @@ interface FetchOptions {
 
 interface UserData {
   _id?: string;
+  id?: string;
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  avatarUpload?: string;
   email?: string;
   section?: string;
+  role?: string;
+  isProfileComplete?: boolean;
+  isEmailVerified?: boolean;
   isOnline?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Cache management
@@ -188,6 +195,8 @@ export class ApiClient {
 
     const url = `${API_BASE_URL}${endpoint}`;
     const cacheKey = `${method}:${endpoint}:${JSON.stringify(body || {})}`;
+    
+    console.log(`🔍 API: Making ${method} request to: ${url}`);
 
     // Use performance optimizer for caching and request deduplication
     return PerformanceOptimizer.optimizedFetch(cacheKey, async () => {
@@ -201,6 +210,7 @@ export class ApiClient {
 
       // Get authentication token
       const token = await TokenManager.getToken();
+      console.log(`🔑 API: Token found: ${token ? 'Yes' : 'No'}`);
       if (token) {
         headers.Authorization = `Bearer ${token}`;
       }
@@ -214,10 +224,12 @@ export class ApiClient {
         });
 
         if (!response.ok) {
+          console.error(`❌ API: HTTP ${response.status}: ${response.statusText}`);
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const data = await response.json();
+        console.log(`✅ API: Response data:`, data);
 
         // Cache successful GET responses
         if (cache && method === 'GET') {
@@ -237,11 +249,30 @@ export class ApiClient {
 
   // User-related API methods
   async getUserProfile(): Promise<{ user: UserData }> {
-    return this.request('/api/auth/me', { cache: true });
+    console.log("🔍 API: Calling getUserProfile endpoint: /auth/me");
+    try {
+      const result = await this.request('/auth/me', { cache: true });
+      console.log("✅ API: getUserProfile response:", result);
+      
+      // Debug the user data structure
+      if (result && result.user) {
+        console.log("🔍 API: User data structure:", {
+          section: result.user.section,
+          sectionType: typeof result.user.section,
+          userKeys: Object.keys(result.user),
+          fullUserData: result.user
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("❌ API: getUserProfile error:", error);
+      throw error;
+    }
   }
 
   async updateUserProfile(updates: Partial<UserData>): Promise<{ user: UserData }> {
-    return this.request('/api/auth/update-profile', {
+    return this.request('/auth/update-profile', {
       method: 'PUT',
       body: updates,
     });
@@ -258,7 +289,7 @@ export class ApiClient {
       name: 'avatar.jpg',
     } as any);
 
-    const response = await fetch(`${API_BASE_URL}/api/auth/upload-avatar`, {
+    const response = await fetch(`${API_BASE_URL}/auth/upload-avatar`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

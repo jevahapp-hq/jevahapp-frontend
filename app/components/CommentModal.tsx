@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    KeyboardAvoidingView,
+    Dimensions,
+    Keyboard,
     Modal,
-    Platform,
     ScrollView,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import {
     getResponsiveBorderRadius,
@@ -20,6 +20,9 @@ import {
 } from '../../utils/responsive';
 import CommentService, { Comment } from '../services/commentService';
 import { useOptimizedButton } from '../utils/performance';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface CommentModalProps {
   visible: boolean;
@@ -40,6 +43,7 @@ export default function CommentModal({
   const [comments, setComments] = useState<Comment[]>([]);
   const [isPosting, setIsPosting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputRef = useRef<TextInput>(null);
   const commentService = CommentService.getInstance();
 
@@ -49,6 +53,27 @@ export default function CommentModal({
     name: 'John Doe',
     avatar: 'https://example.com/avatar.jpg',
   };
+
+  // Keyboard listeners
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
+  }, []);
 
   // Load comments when modal opens
   useEffect(() => {
@@ -148,10 +173,7 @@ export default function CommentModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <View style={{ flex: 1 }}>
         {/* Header */}
         <View style={{
           flexDirection: 'row',
@@ -227,6 +249,7 @@ export default function CommentModal({
             contentContainerStyle={{
               paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
               paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
+              paddingBottom: keyboardHeight > 0 ? keyboardHeight + 100 : 120,
             }}
           >
             {isLoading ? (
@@ -374,13 +397,18 @@ export default function CommentModal({
             )}
           </ScrollView>
 
-          {/* Comment Input */}
+          {/* Comment Input - Positioned absolutely above keyboard */}
           <View style={{
             backgroundColor: 'white',
             borderTopWidth: 1,
             borderTopColor: '#E5E7EB',
             paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
             paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
+            position: 'absolute',
+            bottom: keyboardHeight > 0 ? keyboardHeight : 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
           }}>
             <View style={{
               flexDirection: 'row',
@@ -452,7 +480,7 @@ export default function CommentModal({
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

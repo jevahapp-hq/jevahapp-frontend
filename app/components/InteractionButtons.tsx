@@ -1,8 +1,8 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { Alert, Share, Text, TouchableOpacity, View } from 'react-native';
+import { useCommentModal } from '../context/CommentModalContext';
 import { useContentCount, useContentStats, useInteractionStore, useUserInteraction } from '../store/useInteractionStore';
-import CommentsModal from './CommentsModal';
 
 interface InteractionButtonsProps {
   contentId: string;
@@ -30,7 +30,10 @@ export default function InteractionButtons({
     toggleSave,
     recordShare,
     loadContentStats,
+    comments,
   } = useInteractionStore();
+
+  const { showCommentModal } = useCommentModal();
 
   // Use selectors for better performance
   const contentStats = useContentStats(contentId);
@@ -46,9 +49,6 @@ export default function InteractionButtons({
     save: false,
     share: false,
   });
-
-  // Local fallback for opening comments when no handler is supplied
-  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
 
   // Load stats when component mounts
   useEffect(() => {
@@ -116,7 +116,21 @@ export default function InteractionButtons({
       onCommentPress();
       return;
     }
-    setIsCommentsOpen(true);
+
+    // Convert existing comments to the format expected by our global modal
+    const currentComments = comments[contentId] || [];
+    const formattedComments = currentComments.map((comment: any) => ({
+      id: comment.id,
+      userName: comment.username || 'Anonymous',
+      avatar: comment.userAvatar || '',
+      timestamp: comment.timestamp,
+      comment: comment.comment,
+      likes: comment.likes || 0,
+      isLiked: comment.isLiked || false,
+    }));
+
+    // Show the global comment modal with contentId
+    showCommentModal(formattedComments, contentId);
   };
 
   const ButtonContainer = layout === 'vertical' ? 
@@ -134,7 +148,6 @@ export default function InteractionButtons({
   const ButtonSpacing = layout === 'vertical' ? 'mt-6' : 'ml-6';
 
   return (
-    <>
     <ButtonContainer>
       {/* Like Button */}
       <TouchableOpacity 
@@ -184,20 +197,7 @@ export default function InteractionButtons({
           </Text>
         )}
       </TouchableOpacity>
-
-
     </ButtonContainer>
-
-    {/* Inline Comments Modal fallback */}
-    {isCommentsOpen && (
-      <CommentsModal
-        isVisible={isCommentsOpen}
-        onClose={() => setIsCommentsOpen(false)}
-        contentId={contentId}
-        contentTitle={contentTitle}
-      />
-    )}
-    </>
   );
 }
 

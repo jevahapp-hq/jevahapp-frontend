@@ -2,16 +2,15 @@ import { useAuth, useOAuth, useUser } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Image,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import '../global.css';
 import AnimatedLogoIntro from './components/AnimatedLogoIntro';
@@ -228,21 +227,33 @@ export default function Welcome() {
           GET STARTED WITH
         </Text>
         <View className="flex-row mt-12 gap-[16px]">
-          <TouchableOpacity onPress={() => handleSignIn(startFacebookAuth, 'facebook')}>
+          <TouchableOpacity 
+            onPress={() => handleSignIn(startFacebookAuth, 'facebook')}
+            activeOpacity={0.7}
+            style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }}
+          >
             <Image
               source={require('../assets/images/Faceboook.png')}
               className="w-12 h-12"
               resizeMode="contain"
             />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleSignIn(startGoogleAuth, 'google')}>
+          <TouchableOpacity 
+            onPress={() => handleSignIn(startGoogleAuth, 'google')}
+            activeOpacity={0.7}
+            style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }}
+          >
             <Image
               source={require('../assets/images/Gooogle.png')}
               className="w-12 h-12"
               resizeMode="contain"
             />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleSignIn(startAppleAuth, 'apple')}>
+          <TouchableOpacity 
+            onPress={() => handleSignIn(startAppleAuth, 'apple')}
+            activeOpacity={0.7}
+            style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }}
+          >
             <Image
               source={require('../assets/images/Apple.png')}
               className="w-12 h-12"
@@ -263,15 +274,29 @@ export default function Welcome() {
             resizeMode="contain"
           />
         </View>
-        <Pressable
+        <TouchableOpacity
           onPress={() => router.push('/auth/signup')}
-          className="w-[90%] max-w-[400px] h-11 rounded-full bg-[#090E24] justify-center items-center mt-9 active:scale-[0.97]"
+          activeOpacity={0.8}
+          style={{
+            width: '90%',
+            maxWidth: 400,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: '#090E24',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: 36
+          }}
         >
           <Text className="text-white font-semibold">Get Started with Email</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/auth/login')} className="mt-9">
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => router.push('/auth/login')} 
+          activeOpacity={0.7}
+          style={{ marginTop: 36, padding: 8 }}
+        >
           <Text className="font-rubik-bold text-[#344054]">Sign In</Text>
-        </Pressable>
+        </TouchableOpacity>
         {loading && <ActivityIndicator className="mt-4" color="#090E24" />}
       </View>
     </View>

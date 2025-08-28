@@ -16,8 +16,11 @@ import {
     TouchableWithoutFeedback,
     View
 } from "react-native";
+import CommentIcon from "../components/CommentIcon";
+import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
+import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
@@ -74,6 +77,10 @@ export default function SermonComponent() {
   const mediaStore = useMediaStore();
   const globalVideoStore = useGlobalVideoStore();
   const libraryStore = useLibraryStore();
+  
+  // ✅ Use global comment modal and interaction store
+  const { showCommentModal } = useCommentModal();
+  const { comments } = useInteractionStore();
   
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
@@ -164,6 +171,26 @@ export default function SermonComponent() {
     } else {
       globalVideoStore.playVideo(key);
     }
+  };
+
+  const handleComment = (key: string, audio: any) => {
+    // Get the content ID for this audio
+    const contentId = audio._id || key;
+    
+    // Get existing comments for this audio
+    const currentComments = comments[contentId] || [];
+    const formattedComments = currentComments.map((comment: any) => ({
+      id: comment.id,
+      userName: comment.username || 'Anonymous',
+      avatar: comment.userAvatar || '',
+      timestamp: comment.timestamp,
+      comment: comment.comment,
+      likes: comment.likes || 0,
+      isLiked: comment.isLiked || false,
+    }));
+
+    // Show the global comment modal
+    showCommentModal(formattedComments, contentId);
   };
 
   const handleShare = async (key: string, item: any) => {
@@ -380,6 +407,53 @@ export default function SermonComponent() {
       ? { uri: audio.speakerAvatar }
       : audio.speakerAvatar || require("../../assets/images/Avatar-1.png");
 
+    // Get existing comments for this audio
+    const contentId = audio._id || modalKey;
+    const currentComments = comments[contentId] || [];
+    
+    // If no comments exist, add some sample comments for testing
+    const sampleComments = [
+      {
+        id: "1",
+        userName: "Joseph Eluwa",
+        avatar: "",
+        timestamp: "3HRS AGO",
+        comment: "Wow!! My Faith has just been renewed.",
+        likes: 193,
+        isLiked: false,
+      },
+      {
+        id: "2",
+        userName: "Liz Elizabeth",
+        avatar: "",
+        timestamp: "24HRS",
+        comment: "This sermon really touched my heart. God is working!",
+        likes: 45,
+        isLiked: false,
+      },
+      {
+        id: "3",
+        userName: "Chris Evans",
+        avatar: "",
+        timestamp: "3 DAYS AGO",
+        comment: "Amazing message! Thank you for sharing this.",
+        likes: 23,
+        isLiked: false,
+      },
+    ];
+    
+    const formattedComments = currentComments.length > 0 
+      ? currentComments.map((comment: any) => ({
+          id: comment.id,
+          userName: comment.username || 'Anonymous',
+          avatar: comment.userAvatar || '',
+          timestamp: comment.timestamp,
+          comment: comment.comment,
+          likes: comment.likes || 0,
+          isLiked: comment.isLiked || false,
+        }))
+      : sampleComments;
+
     return (
       <View className="flex flex-col">
         <View className="w-full h-[393px] overflow-hidden relative">
@@ -412,12 +486,16 @@ export default function SermonComponent() {
                 {globalFavoriteCounts[key] || 0}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-col justify-center items-center mt-6">
-              <Ionicons name="chatbubble-sharp" size={30} color="white" />
-              <Text className="text-[10px] text-white font-rubik-semibold">
-                {stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
-              </Text>
-            </TouchableOpacity>
+            <View className="flex-col justify-center items-center mt-6">
+              <CommentIcon 
+                comments={formattedComments}
+                size={30}
+                color="white"
+                showCount={true}
+                count={stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
+                layout="vertical"
+              />
+            </View>
             <TouchableOpacity onPress={() => handleSave(key, audio)} className="flex-col justify-center items-center mt-6">
               <MaterialIcons
                 name={stats.saved === 1 ? "bookmark" : "bookmark-border"}

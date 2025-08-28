@@ -3,17 +3,17 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
-    Image,
-    PanResponder,
-    Platform,
-    ScrollView,
-    Share,
-    StatusBar,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Image,
+  PanResponder,
+  Platform,
+  ScrollView,
+  Share,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 
 import BottomNav from "../components/BottomNav";
@@ -21,10 +21,10 @@ import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import {
-    getFavoriteState,
-    getPersistedStats,
-    persistStats,
-    toggleFavorite,
+  getFavoriteState,
+  getPersistedStats,
+  persistStats,
+  toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
 
@@ -572,18 +572,18 @@ export default function Reelsviewscroll() {
               </View>
             )}
 
-            {/* Only show UI elements for active video */}
+                        {/* Show UI elements for active video */}
             {isActive && (
               <>
-                {/* Action Buttons - Enhanced user experience */}
+                {/* Action Buttons - Vertical right side like TikTok */}
                 <View 
                   style={{
                     position: 'absolute',
-                    right: getResponsiveSpacing(16, 20, 24),
-                    top: screenHeight * getResponsiveSize(0.4, 0.45, 0.5),
+                    right: getResponsiveSpacing(8, 10, 12),
+                    top: screenHeight * 0.3,
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: getResponsiveSpacing(16, 20, 24),
+                    gap: getResponsiveSpacing(8, 10, 12),
                     zIndex: 20,
                   }}
                 >
@@ -598,8 +598,6 @@ export default function Reelsviewscroll() {
                       padding: getResponsiveSpacing(8, 10, 12),
                       minWidth: getTouchTargetSize(),
                       minHeight: getTouchTargetSize(),
-                      borderRadius: getResponsiveSize(20, 24, 28),
-                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
                     }}
                     activeOpacity={0.7}
                     accessibilityLabel={`${userFavorites[modalKey] ? 'Unlike' : 'Like'} this video`}
@@ -636,8 +634,6 @@ export default function Reelsviewscroll() {
                       padding: getResponsiveSpacing(8, 10, 12),
                       minWidth: getTouchTargetSize(),
                       minHeight: getTouchTargetSize(),
-                      borderRadius: getResponsiveSize(20, 24, 28),
-                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
                     }}
                     activeOpacity={0.7}
                     accessibilityLabel="Add comment to this video"
@@ -676,8 +672,6 @@ export default function Reelsviewscroll() {
                       padding: getResponsiveSpacing(8, 10, 12),
                       minWidth: getTouchTargetSize(),
                       minHeight: getTouchTargetSize(),
-                      borderRadius: getResponsiveSize(20, 24, 28),
-                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
                     }}
                     activeOpacity={0.7}
                     accessibilityLabel={`${libraryStore.isItemSaved(modalKey) ? 'Remove from' : 'Save to'} library`}
@@ -714,8 +708,6 @@ export default function Reelsviewscroll() {
                       padding: getResponsiveSpacing(8, 10, 12),
                       minWidth: getTouchTargetSize(),
                       minHeight: getTouchTargetSize(),
-                      borderRadius: getResponsiveSize(20, 24, 28),
-                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
                     }}
                     activeOpacity={0.7}
                     accessibilityLabel="Share this video"
@@ -1119,11 +1111,11 @@ export default function Reelsviewscroll() {
         })}
       </ScrollView>
 
-      {/* Fixed overlays that stay on top - Enhanced header */}
+      {/* Clean Header - Back, Title, Close */}
       <View 
         style={{
           position: 'absolute',
-          top: getResponsiveSpacing(40, 48, 56) + (isIOS ? 20 : 0), // Extra padding for iOS status bar
+          top: getResponsiveSpacing(40, 48, 56) + (isIOS ? 20 : 0),
           left: 0,
           right: 0,
           flexDirection: 'row',
@@ -1133,107 +1125,7 @@ export default function Reelsviewscroll() {
           zIndex: 50,
         }}
       >
-        {/* Live Indicator */}
-        {live ? (
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#dc2626',
-              paddingHorizontal: getResponsiveSpacing(8, 12, 16),
-              paddingVertical: getResponsiveSpacing(4, 6, 8),
-              borderRadius: getResponsiveSize(4, 6, 8),
-              flexDirection: 'row',
-              alignItems: 'center',
-              zIndex: 10,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
-            }}
-            activeOpacity={0.8}
-            accessibilityLabel="Live stream indicator"
-            accessibilityRole="button"
-          >
-            <Text 
-              style={{
-                fontSize: getResponsiveFontSize(10, 12, 14),
-                color: '#FFFFFF',
-                fontWeight: 'bold',
-                fontFamily: 'Rubik-Bold',
-              }}
-            >
-              LIVE
-            </Text>
-            <Image
-              source={require("../../assets/images/Vector.png")}
-              style={{
-                height: getResponsiveSize(8, 10, 12),
-                width: getResponsiveSize(8, 10, 12),
-                marginLeft: getResponsiveSpacing(6, 8, 10),
-              }}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#6b7280',
-              paddingHorizontal: getResponsiveSpacing(8, 12, 16),
-              paddingVertical: getResponsiveSpacing(4, 6, 8),
-              borderRadius: getResponsiveSize(4, 6, 8),
-              flexDirection: 'row',
-              alignItems: 'center',
-              zIndex: 10,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
-            }}
-            activeOpacity={0.8}
-            accessibilityLabel={`Video posted ${allVideos[currentIndex_state]?.timeAgo || timeAgo}`}
-            accessibilityRole="button"
-          >
-            <Text 
-              style={{
-                fontSize: getResponsiveFontSize(10, 12, 14),
-                color: '#FFFFFF',
-                fontWeight: 'bold',
-                fontFamily: 'Rubik-Bold',
-              }}
-            >
-              LIVE
-            </Text>
-            <Text 
-              style={{
-                fontSize: getResponsiveFontSize(10, 12, 14),
-                color: '#FFFFFF',
-                fontWeight: 'bold',
-                marginLeft: getResponsiveSpacing(6, 8, 10),
-                fontFamily: 'Rubik-Bold',
-              }}
-            >
-              {allVideos[currentIndex_state]?.timeAgo || timeAgo}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Live Title */}
-        <Text 
-          style={{
-            fontSize: getResponsiveFontSize(16, 18, 20),
-            color: '#FFFFFF',
-            fontWeight: '600',
-            fontFamily: 'Rubik-SemiBold',
-            textShadowColor: 'rgba(0, 0, 0, 0.5)',
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 3,
-          }}
-        >
-          Live
-        </Text>
-
-        {/* Close Button */}
+        {/* Back Arrow */}
         <TouchableOpacity
           onPress={() => {
             triggerHapticFeedback();
@@ -1250,17 +1142,58 @@ export default function Reelsviewscroll() {
           }}
           style={{
             padding: getResponsiveSpacing(8, 10, 12),
-            borderRadius: getResponsiveSize(6, 8, 10),
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
             minWidth: getTouchTargetSize(),
             minHeight: getTouchTargetSize(),
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 3,
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
+          <MaterialIcons 
+            name="arrow-back" 
+            size={getResponsiveSize(24, 28, 32)} 
+            color="#FFFFFF" 
+          />
+        </TouchableOpacity>
+
+        {/* Title */}
+        <Text 
+          style={{
+            fontSize: getResponsiveFontSize(18, 20, 22),
+            color: '#FFFFFF',
+            fontWeight: '600',
+            fontFamily: 'Rubik-SemiBold',
+            textShadowColor: 'rgba(0, 0, 0, 0.5)',
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 3,
+          }}
+        >
+          Reels
+        </Text>
+
+        {/* Close Icon */}
+        <TouchableOpacity
+          onPress={() => {
+            triggerHapticFeedback();
+            if (router.canGoBack?.()) {
+              router.back();
+            } else {
+              router.replace({
+                pathname: "/categories/Allcontent",
+                params: {
+                  defaultCategory: category,
+                },
+              });
+            }
+          }}
+          style={{
+            padding: getResponsiveSpacing(8, 10, 12),
+            minWidth: getTouchTargetSize(),
+            minHeight: getTouchTargetSize(),
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           activeOpacity={0.7}
           accessibilityLabel="Close video player"
@@ -1268,76 +1201,11 @@ export default function Reelsviewscroll() {
         >
           <MaterialIcons 
             name="close" 
-            size={getResponsiveSize(20, 24, 28)} 
+            size={getResponsiveSize(24, 28, 32)} 
             color="#FFFFFF" 
           />
         </TouchableOpacity>
       </View>
-
-      {/* Video Title - Enhanced user experience */}
-      <View 
-        style={{
-          position: 'absolute',
-          bottom: getResponsiveSpacing(180, 220, 260),
-          left: getResponsiveSpacing(12, 16, 20),
-          right: getResponsiveSpacing(12, 16, 20),
-          pointerEvents: 'none',
-          zIndex: 40,
-        }}
-      >
-        <Text 
-          style={{
-            fontSize: getResponsiveFontSize(16, 20, 24),
-            color: '#FFFFFF',
-            fontWeight: 'bold',
-            fontFamily: 'Rubik-Bold',
-            textShadowColor: 'rgba(0, 0, 0, 0.7)',
-            textShadowOffset: { width: 0, height: 2 },
-            textShadowRadius: 4,
-            lineHeight: getResponsiveFontSize(20, 24, 28),
-          }}
-          numberOfLines={2}
-          accessibilityLabel={`Video title: ${allVideos[currentIndex_state]?.title || currentVideo.title}`}
-        >
-          {allVideos[currentIndex_state]?.title || currentVideo.title}
-        </Text>
-      </View>
-
-      {/* Navigation indicators - Enhanced */}
-      {parsedVideoList.length > 1 && (
-        <View 
-          style={{
-            position: 'absolute',
-            top: getResponsiveSpacing(64, 80, 96) + (isIOS ? 20 : 0),
-            left: getResponsiveSpacing(12, 16, 20),
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            borderRadius: getResponsiveSize(16, 20, 24),
-            paddingHorizontal: getResponsiveSpacing(12, 16, 20),
-            paddingVertical: getResponsiveSpacing(6, 8, 10),
-            pointerEvents: 'none',
-            zIndex: 50,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 3,
-          }}
-        >
-          <Text 
-            style={{
-              fontSize: getResponsiveFontSize(10, 12, 14),
-              color: '#FFFFFF',
-              fontFamily: 'Rubik-Medium',
-              textShadowColor: 'rgba(0, 0, 0, 0.5)',
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 2,
-            }}
-            accessibilityLabel={`Video ${currentIndex_state + 1} of ${parsedVideoList.length}`}
-          >
-            {currentIndex_state + 1} / {parsedVideoList.length}
-          </Text>
-        </View>
-      )}
 
       {/* Bottom Nav - Enhanced for better platform compatibility */}
       <View

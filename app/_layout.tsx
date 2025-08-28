@@ -8,7 +8,9 @@ import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import CommentReplyModal from './components/CommentReplyModal';
 import ErrorBoundary from './components/ErrorBoundary';
+import { CommentModalProvider } from './context/CommentModalContext';
 import { useDownloadStore } from './store/useDownloadStore';
 import { useMediaStore } from './store/useUploadStore';
 import { PerformanceOptimizer } from './utils/performance';
@@ -155,7 +157,10 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <Slot />
+            <CommentModalProvider>
+              <Slot />
+              <CommentReplyModal />
+            </CommentModalProvider>
           </GestureHandlerRootView>
         </ClerkProvider>
       </SafeAreaProvider>

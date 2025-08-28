@@ -4,22 +4,26 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BackHandler,
-  Dimensions,
-  Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  PanResponder,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    ActivityIndicator,
+    BackHandler,
+    Dimensions,
+    Image,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    PanResponder,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
+import CommentIcon from "../components/CommentIcon";
+import { useCommentModal } from "../context/CommentModalContext";
 import useVideoViewport from "../hooks/useVideoViewport";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
+import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
@@ -62,6 +66,10 @@ export default function AllContent() {
   
   // ✅ Use library store for saving content
   const libraryStore = useLibraryStore();
+  
+  // ✅ Use global comment modal and interaction store
+  const { showCommentModal } = useCommentModal();
+  const { comments } = useInteractionStore();
   
   // 🔧 Fix infinite loop: Use useMemo to memoize filtered arrays
   const allVideos = useMemo(() => 
@@ -140,6 +148,7 @@ export default function AllContent() {
 
   // 🎵 Audio playback state for Music items
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [soundMap, setSoundMap] = useState<Record<string, Audio.Sound>>({});
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [pausedAudioMap, setPausedAudioMap] = useState<Record<string, number>>({});
@@ -667,36 +676,61 @@ export default function AllContent() {
   useEffect(() => {
     const loadAllData = async () => {
       console.log("📱 AllContent: Loading persisted data...");
+      setIsLoadingContent(true);
       
-      // 📚 Load library data first
-      if (!libraryStore.isLoaded) {
-        await libraryStore.loadSavedItems();
+      // Set loading state immediately for better UX
+      setContentStats({});
+      setPreviouslyViewed([]);
+      setUserFavorites({});
+      setGlobalFavoriteCounts({});
+      
+      try {
+        // Load data in parallel for better performance
+        const [stats, viewed, libraryLoaded] = await Promise.all([
+          getPersistedStats(),
+          getViewed(),
+          libraryStore.isLoaded ? Promise.resolve() : libraryStore.loadSavedItems()
+        ]);
+        
+        setContentStats(stats || {});
+        setPreviouslyViewed(viewed || []);
+        
+        // Load favorite states in batches to prevent blocking
+        if (mediaList.length > 0) {
+          const batchSize = 10; // Process 10 items at a time
+          const favoriteStates: Record<string, boolean> = {};
+          const favoriteCounts: Record<string, number> = {};
+          
+          for (let i = 0; i < mediaList.length; i += batchSize) {
+            const batch = mediaList.slice(i, i + batchSize);
+            await Promise.all(batch.map(async (item) => {
+              const key = getContentKey(item);
+              const { isUserFavorite, globalCount } = await getFavoriteState(key);
+              favoriteStates[key] = isUserFavorite;
+              favoriteCounts[key] = globalCount;
+            }));
+            
+            // Update state incrementally for better perceived performance
+            setUserFavorites(prev => ({ ...prev, ...favoriteStates }));
+            setGlobalFavoriteCounts(prev => ({ ...prev, ...favoriteCounts }));
+          }
+        }
+        
+        console.log(`✅ AllContent: Loaded ${mediaList.length} media items and stats for ${Object.keys(stats || {}).length} items`);
+      } catch (error) {
+        console.error("❌ Error loading AllContent data:", error);
+      } finally {
+        setIsLoadingContent(false);
       }
-      
-      // 📊 Load stats and viewed content (media list is already loaded globally)
-      const stats = await getPersistedStats();
-      const viewed = await getViewed();
-      setContentStats(stats || {});
-      setPreviouslyViewed(viewed || []);
-      
-      // 🎯 Load favorite states for all content
-      const favoriteStates: Record<string, boolean> = {};
-      const favoriteCounts: Record<string, number> = {};
-      
-      await Promise.all(mediaList.map(async (item) => {
-        const key = getContentKey(item);
-        const { isUserFavorite, globalCount } = await getFavoriteState(key);
-        favoriteStates[key] = isUserFavorite;
-        favoriteCounts[key] = globalCount;
-      }));
-      
-      setUserFavorites(favoriteStates);
-      setGlobalFavoriteCounts(favoriteCounts);
-      
-      console.log(`✅ AllContent: Loaded ${mediaList.length} media items and stats for ${Object.keys(stats || {}).length} items`);
     };
-    loadAllData();
-  }, [mediaList.length]); // 🎯 Depend on actual media count
+    
+    // Only load if we have media items
+    if (mediaList.length > 0) {
+      loadAllData();
+    } else {
+      setIsLoadingContent(false);
+    }
+  }, [mediaList.length]);
 
   const handleShare = async (key: string, item: any) => {
     console.log("🔄 Share button clicked for:", item.title);
@@ -800,6 +834,26 @@ export default function AllContent() {
     }
   };
 
+  const handleComment = (key: string, item: any) => {
+    // Get the content ID for this item
+    const contentId = item._id || key;
+    
+    // Get existing comments for this item
+    const currentComments = comments[contentId] || [];
+    const formattedComments = currentComments.map((comment: any) => ({
+      id: comment.id,
+      userName: comment.username || 'Anonymous',
+      avatar: comment.userAvatar || '',
+      timestamp: comment.timestamp,
+      comment: comment.comment,
+      likes: comment.likes || 0,
+      isLiked: comment.isLiked || false,
+    }));
+
+    // Show the global comment modal
+    showCommentModal(formattedComments, contentId);
+  };
+
   const incrementView = (key: string, item: any) => {
     const alreadyExists = previouslyViewed.some((v) => v.fileUrl === item.fileUrl);
 
@@ -848,6 +902,53 @@ export default function AllContent() {
     const isSermon = video.contentType === "sermon";
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // Get existing comments for this video
+    const contentId = video._id || modalKey;
+    const currentComments = comments[contentId] || [];
+    
+    // If no comments exist, add some sample comments for testing
+    const sampleComments = [
+      {
+        id: "1",
+        userName: "Joseph Eluwa",
+        avatar: "",
+        timestamp: "3HRS AGO",
+        comment: "Wow!! My Faith has just been renewed.",
+        likes: 193,
+        isLiked: false,
+      },
+      {
+        id: "2",
+        userName: "Liz Elizabeth",
+        avatar: "",
+        timestamp: "24HRS",
+        comment: "This video really touched my heart. God is working!",
+        likes: 45,
+        isLiked: false,
+      },
+      {
+        id: "3",
+        userName: "Chris Evans",
+        avatar: "",
+        timestamp: "3 DAYS AGO",
+        comment: "Amazing message! Thank you for sharing this.",
+        likes: 23,
+        isLiked: false,
+      },
+    ];
+    
+    const formattedComments = currentComments.length > 0 
+      ? currentComments.map((comment: any) => ({
+          id: comment.id,
+          userName: comment.username || 'Anonymous',
+          avatar: comment.userAvatar || '',
+          timestamp: comment.timestamp,
+          comment: comment.comment,
+          likes: comment.likes || 0,
+          isLiked: comment.isLiked || false,
+        }))
+      : sampleComments;
   
     // 🔁 Refresh URL on mount if needed
     useEffect(() => {
@@ -933,12 +1034,16 @@ export default function AllContent() {
                   {globalFavoriteCounts[key] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity className="flex-col justify-center items-center mt-6">
-                <Ionicons name="chatbubble-sharp" size={30} color="white" />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
-                </Text>
-              </TouchableOpacity>
+              <View className="flex-col justify-center items-center mt-6">
+                <CommentIcon 
+                  comments={formattedComments}
+                  size={30}
+                  color="white"
+                  showCount={true}
+                  count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
+                  layout="vertical"
+                />
+              </View>
               <TouchableOpacity onPress={() => handleSave(key, video)} className="flex-col justify-center items-center mt-6">
                 <MaterialIcons
                   name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
@@ -1144,6 +1249,53 @@ export default function AllContent() {
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // Get existing comments for this audio
+    const contentId = audio._id || modalKey;
+    const currentComments = comments[contentId] || [];
+    
+    // If no comments exist, add some sample comments for testing
+    const sampleComments = [
+      {
+        id: "1",
+        userName: "Joseph Eluwa",
+        avatar: "",
+        timestamp: "3HRS AGO",
+        comment: "Wow!! My Faith has just been renewed.",
+        likes: 193,
+        isLiked: false,
+      },
+      {
+        id: "2",
+        userName: "Liz Elizabeth",
+        avatar: "",
+        timestamp: "24HRS",
+        comment: "This music really touched my heart. God is working!",
+        likes: 45,
+        isLiked: false,
+      },
+      {
+        id: "3",
+        userName: "Chris Evans",
+        avatar: "",
+        timestamp: "3 DAYS AGO",
+        comment: "Amazing music! Thank you for sharing this.",
+        likes: 23,
+        isLiked: false,
+      },
+    ];
+    
+    const formattedComments = currentComments.length > 0 
+      ? currentComments.map((comment: any) => ({
+          id: comment.id,
+          userName: comment.username || 'Anonymous',
+          avatar: comment.userAvatar || '',
+          timestamp: comment.timestamp,
+          comment: comment.comment,
+          likes: comment.likes || 0,
+          isLiked: comment.isLiked || false,
+        }))
+      : sampleComments;
+
     // 🔁 Refresh URL on mount if needed
     useEffect(() => {
       const refreshIfNeeded = async () => {
@@ -1203,12 +1355,16 @@ export default function AllContent() {
                   {globalFavoriteCounts[key] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity className="flex-col justify-center items-center mt-6">
-                <Ionicons name="chatbubble-sharp" size={30} color="white" />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
-                </Text>
-              </TouchableOpacity>
+              <View className="flex-col justify-center items-center mt-6">
+                <CommentIcon 
+                  comments={formattedComments}
+                  size={30}
+                  color="white"
+                  showCount={true}
+                  count={stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
+                  layout="vertical"
+                />
+              </View>
               <TouchableOpacity onPress={() => handleSave(key, audio)} className="flex-col justify-center items-center mt-6">
                 <MaterialIcons
                   name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
@@ -1428,6 +1584,53 @@ export default function AllContent() {
     const thumbnailSource = ebook?.imageUrl
       ? (typeof ebook.imageUrl === "string" ? { uri: ebook.imageUrl } : (ebook.imageUrl as any))
       : require("../../assets/images/bilble.png"); // Use bible image as PDF placeholder
+
+    // Get existing comments for this ebook
+    const contentId = ebook._id || modalKey;
+    const currentComments = comments[contentId] || [];
+    
+    // If no comments exist, add some sample comments for testing
+    const sampleComments = [
+      {
+        id: "1",
+        userName: "Joseph Eluwa",
+        avatar: "",
+        timestamp: "3HRS AGO",
+        comment: "Wow!! My Faith has just been renewed.",
+        likes: 193,
+        isLiked: false,
+      },
+      {
+        id: "2",
+        userName: "Liz Elizabeth",
+        avatar: "",
+        timestamp: "24HRS",
+        comment: "This ebook really touched my heart. God is working!",
+        likes: 45,
+        isLiked: false,
+      },
+      {
+        id: "3",
+        userName: "Chris Evans",
+        avatar: "",
+        timestamp: "3 DAYS AGO",
+        comment: "Amazing content! Thank you for sharing this.",
+        likes: 23,
+        isLiked: false,
+      },
+    ];
+    
+    const formattedComments = currentComments.length > 0 
+      ? currentComments.map((comment: any) => ({
+          id: comment.id,
+          userName: comment.username || 'Anonymous',
+          avatar: comment.userAvatar || '',
+          timestamp: comment.timestamp,
+          comment: comment.comment,
+          likes: comment.likes || 0,
+          isLiked: comment.isLiked || false,
+        }))
+      : sampleComments;
     
     return (
       <View key={modalKey} className="mb-6">
@@ -1468,12 +1671,16 @@ export default function AllContent() {
                   {globalFavoriteCounts[key] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity className="flex-col justify-center items-center mt-6">
-                <Ionicons name="chatbubble-sharp" size={30} color="white" />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.comment === 1 ? (ebook.comment ?? 0) + 1 : ebook.comment ?? 0}
-                </Text>
-              </TouchableOpacity>
+              <View className="flex-col justify-center items-center mt-6">
+                <CommentIcon 
+                  comments={formattedComments}
+                  size={30}
+                  color="white"
+                  showCount={true}
+                  count={stats.comment === 1 ? (ebook.comment ?? 0) + 1 : ebook.comment ?? 0}
+                  layout="vertical"
+                />
+              </View>
               <TouchableOpacity onPress={() => handleSave(key, ebook)} className="flex-col justify-center items-center mt-6">
                 <MaterialIcons
                   name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
@@ -2036,7 +2243,16 @@ export default function AllContent() {
         )}
       </View>
 
-      {mediaList.length === 0 && (
+      {isLoadingContent && (
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color="#256E63" />
+          <Text style={{ marginTop: 8, color: '#666', fontSize: 14 }}>
+            Loading content...
+          </Text>
+        </View>
+      )}
+      
+      {mediaList.length === 0 && !isLoadingContent && (
         <Text className="text-center text-gray-500 mt-10">No content uploaded yet.</Text>
       )}
     </ScrollView>

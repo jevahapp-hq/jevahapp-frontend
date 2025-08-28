@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
-import { userProfileAPI } from "../utils/api";
+import { apiClient } from "../utils/dataFetching";
 
 // User type based on the new API response structure
 export type User = {
@@ -55,30 +55,45 @@ export const useUserProfile = () => {
       setLoading(true);
       setError(null);
 
-      const token = await getToken();
-      if (!token) {
-        setError("No authentication token found");
-        setLoading(false);
-        return;
-      }
-
-      const userData = await userProfileAPI.getCurrentUserProfile(token);
-      setUser(userData);
+      console.log("🔍 Fetching user profile...");
+      const userData = await apiClient.getUserProfile();
+      console.log("✅ User profile fetched:", userData);
       
-      // Store the complete user data
-      await AsyncStorage.setItem("user", JSON.stringify(userData));
-      
-      // Refresh any media that was stuck with "Anonymous User"
-      try {
-        const { useMediaStore } = await import("../store/useUploadStore");
-        await useMediaStore.getState().forceRefreshWithCompleteUserData();
-      } catch (error) {
-        console.error("❌ Failed to trigger media refresh:", error);
+      if (userData && userData.user) {
+        console.log("🔍 User section data:", {
+          section: userData.user.section,
+          sectionType: typeof userData.user.section,
+          userKeys: Object.keys(userData.user),
+          fullUserData: userData.user
+        });
+        
+        // Ensure section is set if missing
+        const userWithSection = {
+          ...userData.user,
+          section: userData.user.section || "adult" // Default to adult if section is missing
+        };
+        
+        setUser(userWithSection);
+        
+        // Store the complete user data
+        await AsyncStorage.setItem("user", JSON.stringify(userWithSection));
+        console.log("💾 User data stored in AsyncStorage");
+        
+        // Refresh any media that was stuck with "Anonymous User"
+        try {
+          const { useMediaStore } = await import("../store/useUploadStore");
+          await useMediaStore.getState().forceRefreshWithCompleteUserData();
+        } catch (error) {
+          console.error("❌ Failed to trigger media refresh:", error);
+        }
+      } else {
+        console.warn("⚠️ No user data received from API");
+        setError("No user data received");
       }
     } catch (error: any) {
       console.error("❌ Failed to fetch user profile:", error);
       
-      if (error.message.includes("Unauthorized")) {
+      if (error.message.includes("Unauthorized") || error.message.includes("401")) {
         await clearTokens();
         setError("Session expired. Please login again.");
       } else {
@@ -92,9 +107,11 @@ export const useUserProfile = () => {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
           console.log("📱 Loaded user from AsyncStorage fallback:", parsedUser);
+        } else {
+          console.log("📱 No user data found in AsyncStorage");
         }
       } catch (storageError) {
-        // Silent fallback
+        console.error("❌ Failed to load user from AsyncStorage:", storageError);
       }
     } finally {
       setLoading(false);
@@ -165,6 +182,7 @@ export const useUserProfile = () => {
     getUserRole,
   };
 };
+
 
 
 

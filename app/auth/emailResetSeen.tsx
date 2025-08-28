@@ -2,18 +2,18 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import {
-  GestureHandlerRootView,
-  HandlerStateChangeEvent,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
+    Easing,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
 import authService from "../services/authService";
 

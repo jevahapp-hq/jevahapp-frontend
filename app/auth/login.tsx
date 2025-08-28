@@ -1,17 +1,17 @@
 import { router } from "expo-router";
 
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-    Alert,
-    Image,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Image,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
-import authService from "../services/authService";
+import { useFastLogin } from "../hooks/useFastLogin";
 
 export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState("");
@@ -24,12 +24,14 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
+  const { isLoading, error, login, clearError } = useFastLogin();
+
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
-  const handleLoginValidation = async () => {
+  const handleLoginValidation = useCallback(async () => {
     let isValid = true;
 
     setEmailError("");
@@ -55,54 +57,26 @@ export default function LoginScreen() {
 
     if (!isValid) return;
 
-    try {
-      // Normalize inputs to avoid subtle auth failures due to whitespace/case
-      const normalizedEmail = emailAddress.trim().toLowerCase();
-      const normalizedPassword = password.trim();
-
-      console.log("🔍 LOGIN DEBUG:", {
-        emailLength: normalizedEmail.length,
-      });
-
-      const result = await authService.login(normalizedEmail, normalizedPassword);
-
-      if (!result.success) {
-        const message = result.data?.message || "Invalid email or password";
-        Alert.alert("Login Failed", message);
-        return;
-      }
-
-      // ✅ Token and user info are already saved by authService
-      if (result.data?.user) {
-        // 🛡️ Validate user data before proceeding
-        if (result.data.user.firstName && result.data.user.lastName) {
-          console.log("✅ Complete user data saved:", {
-            firstName: result.data.user.firstName,
-            lastName: result.data.user.lastName,
-            hasAvatar: !!result.data.user.avatar
-          });
-        } else {
-          console.error("🚨 BLOCKED: Login API returned incomplete user data!");
-          console.error("   Incomplete data:", result.data.user);
-          console.error("   This would have caused 'Anonymous User' to appear on uploads.");
-          Alert.alert("Login Issue", "Incomplete user profile. Please contact support.");
-          return;
-        }
-      }
-
-      // Navigate to profile setup
-      router.replace("/categories/HomeScreen");
-    } catch (error) {
-      console.error("Login error:", error);
-      Alert.alert("Login Error", "An unexpected error occurred.");
+    // Use fast login hook which handles timeout, preloading, and navigation
+    const ok = await login({ email: emailAddress.trim().toLowerCase(), password: password.trim() });
+    if (!ok) {
+      const message = error || "Invalid email or password";
+      Alert.alert("Login Failed", message);
     }
-  };
+  }, [emailAddress, password, login, error]);
 
   const validatePassword = (password: string) => {
     return (
       password.length >= 6 && /[A-Za-z]/.test(password) && /\d/.test(password)
     );
   };
+
+  // Clear global error when fields change
+  useEffect(() => {
+    if (error) {
+      clearError();
+    }
+  }, [emailAddress, password]);
 
   return (
     <View className="flex-1 bg-white">
@@ -138,11 +112,15 @@ export default function LoginScreen() {
               <TextInput
                 placeholder="Email"
                 value={emailAddress}
-                onChangeText={setEmailAddress}
+                onChangeText={(t) => { setEmailAddress(t); if (emailError) setEmailError(""); }}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                autoComplete="email"
+                textContentType="emailAddress"
                 className="ml-3 w-full"
                  placeholderTextColor="#090E24"
+                returnKeyType="next"
+                onSubmitEditing={() => {}}
               />
             </View>
             {emailError && (
@@ -157,7 +135,7 @@ export default function LoginScreen() {
               <TextInput
                 placeholder="Password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => { setPassword(t); if (passwordError) setPasswordError(""); }}
                 secureTextEntry={!showPassword}
                 className="ml-4 flex-1 text-[#090E24]"
                 placeholderTextColor="#090E24"
@@ -166,6 +144,10 @@ export default function LoginScreen() {
                   fontSize: 16,
                   fontWeight: '400'
                 }}
+                autoComplete="password"
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={() => {}}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <FontAwesome6
@@ -193,9 +175,10 @@ export default function LoginScreen() {
         <View className="flex flex-col mt-32 justify-center items-center w-full">
           <TouchableOpacity
             onPress={handleLoginValidation}
+            disabled={isLoading}
             className="bg-[#090E24] p-2 rounded-full mt-0 w-[333px] h-[45px]"
           >
-            <Text className="text-white text-center text-base">Sign In</Text>
+            <Text className="text-white text-center text-base">{isLoading ? 'Signing in…' : 'Sign In'}</Text>
           </TouchableOpacity>
 
           <Text className="text-1xl font-semibold mt-6">

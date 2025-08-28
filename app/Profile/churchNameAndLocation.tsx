@@ -34,6 +34,12 @@ function ChurchNameAndLocation() {
   );
   const [selectedItem, setSelectedItem] = useState<Suggestion | null>(null);
   const [loading, setLoading] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Debug log for filtered suggestions
+  useEffect(() => {
+    console.log("Filtered suggestions updated:", filteredSuggestions.length, filteredSuggestions);
+  }, [filteredSuggestions]);
 
   useEffect(() => {
     const fetchLocationAndChurches = async () => {
@@ -47,8 +53,13 @@ function ChurchNameAndLocation() {
         const location = await Location.getCurrentPositionAsync({});
         const lat = location.coords.latitude;
         const lng = location.coords.longitude;
+        setCoords({ lat, lng });
 
-       
+        // Get nearby churches using Mapbox reverse geocoding first
+        const reverseGeoRes = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place&limit=1`
+        );
+        const reverseGeoData = await reverseGeoRes.json();
 
         const res = await fetch(
           `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`
@@ -79,30 +90,35 @@ function ChurchNameAndLocation() {
         }
 
         try {
+          // Mapbox Geocoding API for location search
+          const proximity = coords
+            ? `&proximity=${coords.lng},${coords.lat}&autocomplete=true`
+            : "";
           const locRes = await fetch(
-            `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
               search
-            )}&key=AIzaSyBh0wMTrbudGPQdd-a3GfBZycczoVyyw3M`
+            )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=10${proximity}`
           );
 
           const locData = await locRes.json();
 
-          if (!locData.predictions || !Array.isArray(locData.predictions)) {
-            // console.error("No predictions returned:", locData);
+          if (!locData.features || !Array.isArray(locData.features)) {
+            console.error("No features returned:", locData);
             return;
           }
 
-          const locationSuggestions: Suggestion[] = locData.predictions.map(
-            (prediction: any) => ({
-              id: prediction.place_id,
-              name: prediction.description,
+          const locationSuggestions: Suggestion[] = locData.features.map(
+            (feature: any) => ({
+              id: feature.id,
+              name: feature.place_name,
               type: "location",
             })
           );
 
+          console.log("Setting suggestions:", locationSuggestions);
           setFilteredSuggestions(locationSuggestions);
         } catch (err) {
-          // console.error("Error fetching suggestions:", err);
+          console.error("Error fetching suggestions:", err);
         }
       };
 
@@ -119,17 +135,21 @@ function ChurchNameAndLocation() {
 
     if (item.type === "location") {
       try {
+        // For Mapbox, we can get coordinates directly from the feature
+        // We'll need to make another call to get the full feature details
         const geoRes = await fetch(
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${item.id}&key=AIzaSyBh0wMTrbudGPQdd-a3GfBZycczoVyyw3M`
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+            item.name
+          )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=1`
         );
         const geoData = await geoRes.json();
-        const loc = geoData.result?.geometry?.location;
-
-
         
-        if (loc) {
+        if (geoData.features && geoData.features.length > 0) {
+          const feature = geoData.features[0];
+          const [lng, lat] = feature.center; // Mapbox returns [longitude, latitude]
+
           const res = await fetch(
-            `${API_BASE_URL}/api/churches?lat=${loc.lat}&lng=${loc.lng}`
+            `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`
           );
           const churchData = await res.json();
 
@@ -142,7 +162,7 @@ function ChurchNameAndLocation() {
           setChurches(churchSuggestions);
         }
       } catch (error) {
-        // console.error("Error processing location:", error);
+        console.error("Error processing location:", error);
       }
     }
   };
@@ -228,14 +248,18 @@ function ChurchNameAndLocation() {
               <Ionicons name="search" size={30} color="#6B7280" />
             </View>
 
-            <View className="flex-1">
+            <View className="flex-1 mt-2">
               <FlatList
                 data={filteredSuggestions}
                 keyExtractor={(item) => item.id}
                 keyboardShouldPersistTaps="handled"
+                style={{ maxHeight: 200 }}
                 renderItem={({ item }) => (
-                  <TouchableOpacity onPress={() => selectSuggestion(item)}>
-                    <Text className="p-3 bg-white border-b">
+                  <TouchableOpacity 
+                    onPress={() => selectSuggestion(item)}
+                    className="bg-white border-b border-gray-200"
+                  >
+                    <Text className="p-3 text-gray-800">
                       {item.name}
                       {item.type === "location" ? " (Location)" : ""}
                     </Text>

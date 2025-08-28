@@ -1,13 +1,13 @@
 import { useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import {
-  Image,
-  ImageSourcePropType,
-  Animated as RNAnimated,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    Image,
+    ImageSourcePropType,
+    Animated as RNAnimated,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
@@ -174,7 +174,14 @@ const AvatarSelection = () => {
 
     try {
       // ✅ Use correct token key
-      const token = await AsyncStorage.getItem("userToken");
+      // Try multiple keys to maximize compatibility across flows
+      let token = await AsyncStorage.getItem("userToken");
+      if (!token) {
+        token = await AsyncStorage.getItem("token");
+      }
+      if (!token) {
+        token = await AsyncStorage.getItem("authToken");
+      }
       if (!token) {
         console.log("❌ No user token found");
         triggerBounceDrop("failure");

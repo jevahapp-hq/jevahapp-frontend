@@ -1,12 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { InteractionManager } from 'react-native';
+import { Platform } from 'react-native';
 
-// Performance optimization utilities
 export class PerformanceOptimizer {
   private static instance: PerformanceOptimizer;
-  private requestCache = new Map<string, { data: any; timestamp: number; ttl: number }>();
-  private pendingRequests = new Map<string, Promise<any>>();
-  private debounceTimers = new Map<string, NodeJS.Timeout>();
+  private preloadedData: Map<string, any> = new Map();
+  private isPreloading = false;
 
   static getInstance(): PerformanceOptimizer {
     if (!PerformanceOptimizer.instance) {
@@ -15,185 +13,194 @@ export class PerformanceOptimizer {
     return PerformanceOptimizer.instance;
   }
 
-  // Optimized button press handler with immediate feedback
-  static handleButtonPress(
-    onPress: () => void | Promise<void>,
-    options: {
-      immediateFeedback?: boolean;
-      debounceMs?: number;
-      key?: string;
-    } = {}
-  ): () => void {
-    const { immediateFeedback = true, debounceMs = 300, key = 'default' } = options;
-    const optimizer = PerformanceOptimizer.getInstance();
+  /**
+   * Preload critical data for faster app startup
+   */
+  async preloadCriticalData(): Promise<void> {
+    if (this.isPreloading) return;
+    
+    this.isPreloading = true;
+    
+    try {
+      // Preload user data and token in parallel
+      const [userData, token] = await Promise.allSettled([
+        AsyncStorage.getItem('user'),
+        AsyncStorage.getItem('token')
+      ]);
 
-    return () => {
-      // Provide immediate visual feedback
-      if (immediateFeedback) {
-        // Trigger interaction manager to handle UI updates first
-        InteractionManager.runAfterInteractions(() => {
-          // This ensures UI updates happen before heavy operations
-        });
+      if (userData.status === 'fulfilled' && userData.value) {
+        this.preloadedData.set('user', JSON.parse(userData.value));
       }
 
-      // Debounce to prevent rapid successive calls
-      if (optimizer.debounceTimers.has(key)) {
-        clearTimeout(optimizer.debounceTimers.get(key)!);
+      if (token.status === 'fulfilled' && token.value) {
+        this.preloadedData.set('token', token.value);
       }
 
-      const timer = setTimeout(async () => {
-        try {
-          await onPress();
-        } catch (error) {
-          console.error('Button press error:', error);
+      // Preload other critical data
+      await this.preloadAppSettings();
+      
+    } catch (error) {
+      console.warn('Preloading failed:', error);
+    } finally {
+      this.isPreloading = false;
+    }
+  }
+
+  /**
+   * Preload app settings and configuration
+   */
+  private async preloadAppSettings(): Promise<void> {
+    try {
+      const settings = await AsyncStorage.getItem('appSettings');
+      if (settings) {
+        this.preloadedData.set('settings', JSON.parse(settings));
+      }
+    } catch (error) {
+      // Silent fail for settings
+    }
+  }
+
+  /**
+   * Get preloaded data
+   */
+  getPreloadedData(key: string): any {
+    return this.preloadedData.get(key);
+  }
+
+  /**
+   * Optimize network requests with caching
+   */
+  static async cachedRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    const cacheKey = `cache_${url}_${JSON.stringify(options)}`;
+    
+    try {
+      // Check cache first
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        const now = Date.now();
+        
+        // Cache valid for 5 minutes
+        if (now - timestamp < 5 * 60 * 1000) {
+          return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
-      }, debounceMs);
+      }
+    } catch (error) {
+      // Cache miss, continue with network request
+    }
 
-      optimizer.debounceTimers.set(key, timer);
+    // Make network request
+    const response = await fetch(url, options);
+    
+    if (response.ok) {
+      try {
+        const data = await response.clone().json();
+        await AsyncStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      } catch (error) {
+        // Failed to cache, continue
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Optimize image loading
+   */
+  static preloadImages(images: string[]): Promise<void[]> {
+    return Promise.all(
+      images.map(uri => {
+        return new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = uri;
+        });
+      })
+    );
+  }
+
+  /**
+   * Debounce function calls
+   */
+  static debounce<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout;
+    return (...args: Parameters<T>) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
     };
   }
 
-  // Optimized data fetching with caching and request deduplication
-  static async optimizedFetch<T>(
-    key: string,
-    fetchFn: () => Promise<T>,
-    options: {
-      cacheDuration?: number;
-      forceRefresh?: boolean;
-      background?: boolean;
-    } = {}
-  ): Promise<T> {
-    const { cacheDuration = 5 * 60 * 1000, forceRefresh = false, background = false } = options;
-    const optimizer = PerformanceOptimizer.getInstance();
-
-    // Check cache first
-    if (!forceRefresh) {
-      const cached = optimizer.requestCache.get(key);
-      if (cached && Date.now() - cached.timestamp < cached.ttl) {
-        return cached.data;
+  /**
+   * Throttle function calls
+   */
+  static throttle<T extends (...args: any[]) => any>(
+    func: T,
+    limit: number
+  ): (...args: Parameters<T>) => void {
+    let inThrottle: boolean;
+    return (...args: Parameters<T>) => {
+      if (!inThrottle) {
+        func(...args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
       }
-    }
-
-    // Check if request is already pending
-    if (optimizer.pendingRequests.has(key)) {
-      return optimizer.pendingRequests.get(key)!;
-    }
-
-    // Create new request
-    const requestPromise = (async () => {
-      try {
-        const data = await fetchFn();
-        
-        // Cache the result
-        optimizer.requestCache.set(key, {
-          data,
-          timestamp: Date.now(),
-          ttl: cacheDuration,
-        });
-
-        return data;
-      } finally {
-        // Remove from pending requests
-        optimizer.pendingRequests.delete(key);
-      }
-    })();
-
-    optimizer.pendingRequests.set(key, requestPromise);
-
-    // Run in background if specified
-    if (background) {
-      InteractionManager.runAfterInteractions(() => {
-        // Background processing
-      });
-    }
-
-    return requestPromise;
+    };
   }
 
-  // Preload critical data
-  static async preloadCriticalData(): Promise<void> {
-    const optimizer = PerformanceOptimizer.getInstance();
-    
-    // Preload user data
-    try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        optimizer.requestCache.set('user', {
-          data: JSON.parse(userData),
-          timestamp: Date.now(),
-          ttl: 10 * 60 * 1000, // 10 minutes
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to preload user data:', error);
-    }
-
-    // Preload media list
-    try {
-      const mediaList = await AsyncStorage.getItem('mediaList');
-      if (mediaList) {
-        optimizer.requestCache.set('mediaList', {
-          data: JSON.parse(mediaList),
-          timestamp: Date.now(),
-          ttl: 5 * 60 * 1000, // 5 minutes
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to preload media list:', error);
-    }
-  }
-
-  // Clear cache
-  static clearCache(pattern?: string): void {
-    const optimizer = PerformanceOptimizer.getInstance();
-    
-    if (pattern) {
-      // Clear specific pattern
-      for (const key of optimizer.requestCache.keys()) {
-        if (key.includes(pattern)) {
-          optimizer.requestCache.delete(key);
+  /**
+   * Optimize AsyncStorage operations
+   */
+  static async batchStorageOperations(operations: Array<{ key: string; value: string }>): Promise<void> {
+    if (Platform.OS === 'ios') {
+      // iOS can handle multiple operations better
+      await Promise.all(
+        operations.map(op => AsyncStorage.setItem(op.key, op.value))
+      );
+    } else {
+      // Android: batch operations to avoid blocking
+      const batchSize = 5;
+      for (let i = 0; i < operations.length; i += batchSize) {
+        const batch = operations.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map(op => AsyncStorage.setItem(op.key, op.value))
+        );
+        // Small delay between batches
+        if (i + batchSize < operations.length) {
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
-    } else {
-      // Clear all cache
-      optimizer.requestCache.clear();
     }
   }
 
-  // Optimize image loading
-  static preloadImages(imageUrls: string[]): void {
-    imageUrls.forEach(url => {
-      if (url && url.startsWith('http')) {
-        // Preload image in background
-        InteractionManager.runAfterInteractions(() => {
-          const img = new Image();
-          img.src = url;
-        });
+  /**
+   * Clear performance cache
+   */
+  async clearCache(): Promise<void> {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter(key => key.startsWith('cache_'));
+      if (cacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(cacheKeys);
       }
-    });
-  }
-
-  // Batch operations for better performance
-  static async batchOperations<T>(
-    operations: (() => Promise<T>)[],
-    batchSize: number = 5
-  ): Promise<T[]> {
-    const results: T[] = [];
-    
-    for (let i = 0; i < operations.length; i += batchSize) {
-      const batch = operations.slice(i, i + batchSize);
-      const batchResults = await Promise.all(batch.map(op => op()));
-      results.push(...batchResults);
-      
-      // Small delay between batches to prevent blocking
-      if (i + batchSize < operations.length) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
+      this.preloadedData.clear();
+    } catch (error) {
+      console.warn('Failed to clear cache:', error);
     }
-    
-    return results;
   }
 }
+
+// Export singleton instance
+export const performanceOptimizer = PerformanceOptimizer.getInstance();
 
 // Hook for optimized button handling
 export function useOptimizedButton(
@@ -203,7 +210,9 @@ export function useOptimizedButton(
     key?: string;
   } = {}
 ) {
-  return PerformanceOptimizer.handleButtonPress(onPress, options);
+  const { debounceMs = 0, key = 'default' } = options; // Changed from 300ms to 0 for immediate response
+  
+  return PerformanceOptimizer.debounce(onPress, debounceMs);
 }
 
 // Hook for optimized data fetching
@@ -215,39 +224,9 @@ export function useOptimizedFetch<T>(
     forceRefresh?: boolean;
   } = {}
 ) {
-  return () => PerformanceOptimizer.optimizedFetch(key, fetchFn, options);
-}
-
-// Performance monitoring
-export class PerformanceMonitor {
-  private static metrics: Record<string, { start: number; end?: number }> = {};
-
-  static startTimer(key: string): void {
-    this.metrics[key] = { start: Date.now() };
-  }
-
-  static endTimer(key: string): number {
-    const metric = this.metrics[key];
-    if (metric && !metric.end) {
-      metric.end = Date.now();
-      const duration = metric.end - metric.start;
-      console.log(`⏱️ Performance: ${key} took ${duration}ms`);
-      return duration;
-    }
-    return 0;
-  }
-
-  static getMetrics(): Record<string, number> {
-    const results: Record<string, number> = {};
-    Object.entries(this.metrics).forEach(([key, metric]) => {
-      if (metric.end) {
-        results[key] = metric.end - metric.start;
-      }
-    });
-    return results;
-  }
-
-  static clearMetrics(): void {
-    this.metrics = {};
-  }
+  return async () => {
+    // For now, just return the fetch function directly
+    // In a full implementation, this would use caching
+    return fetchFn();
+  };
 }

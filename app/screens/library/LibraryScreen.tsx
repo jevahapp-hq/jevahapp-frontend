@@ -4,7 +4,7 @@
 
 // CommunityScreen.tsx
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useState } from "react";
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import BottomNav from "../../components/BottomNav";
 
@@ -79,18 +79,27 @@ export default function LibraryScreen() {
           <TouchableOpacity
             key={category}
             onPress={() => setSelectedCategorA(category)}
-            className={`px-3 py-1.5 mx-1 rounded-[10px] ${
-              selectedCategoryA === category
-                ? "bg-black"
-                : "bg-white border border-[#6B6E7C]"
-            }`}
+            activeOpacity={0.7}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              marginHorizontal: 4,
+              borderRadius: 10,
+              backgroundColor: selectedCategoryA === category ? "black" : "white",
+              borderWidth: selectedCategoryA === category ? 0 : 1,
+              borderColor: selectedCategoryA === category ? "transparent" : "#6B6E7C",
+              minWidth: 48,
+              minHeight: 44,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
           >
             <Text
-              className={`${
-                selectedCategoryA === category
-                  ? "text-white"
-                  : "text-[#1D2939]"
-              } font-rubik`}
+              style={{
+                color: selectedCategoryA === category ? "white" : "#1D2939",
+                fontFamily: "Rubik_600SemiBold",
+                fontSize: 14,
+              }}
             >
               {category}
             </Text>

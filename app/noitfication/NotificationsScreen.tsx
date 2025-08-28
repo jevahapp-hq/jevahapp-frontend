@@ -1,8 +1,7 @@
-import React from "react";
-import { View, Text, ScrollView, Image, TouchableOpacity } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import AuthHeader from "../components/AuthHeader";
+import { SafeImage } from "../components/SafeImage";
 
 export default function NotificationsScreen() {
   const notificationsData = [
@@ -106,9 +105,11 @@ export default function NotificationsScreen() {
                 </Text>
 
                 <View className="flex-row items-center mb-2">
-                  <Image
-                    source={{ uri: item.avatar }}
+                  <SafeImage
+                    uri={item.avatar}
                     className="w-6 h-6 rounded-full mr-2"
+                    fallbackText={item.name?.[0]?.toUpperCase() || 'U'}
+                    showFallback={true}
                   />
                   <Text className="font-rubik-semibold text-[#667085] text-[12px]">
                     {item.name}

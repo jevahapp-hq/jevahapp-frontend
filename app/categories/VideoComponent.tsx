@@ -1,27 +1,29 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
-  Image,
-  ImageSourcePropType,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  PanResponder,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    ImageSourcePropType,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    PanResponder,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
+import CommentIcon from "../components/CommentIcon";
+import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
@@ -30,12 +32,12 @@ import { useMediaStore } from "../store/useUploadStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  getViewed,
-  persistStats,
-  persistViewed,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    getViewed,
+    persistStats,
+    persistViewed,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
@@ -117,6 +119,10 @@ export default function VideoComponent() {
   // ✅ Global interaction stats (views, likes, shares, comments)
   const contentStats = useInteractionStore((s) => s.contentStats);
   const loadBatchContentStats = useInteractionStore((s) => s.loadBatchContentStats);
+  const { comments } = useInteractionStore();
+  
+  // ✅ Use global comment modal
+  const { showCommentModal } = useCommentModal();
   
   // ✅ Use global video store for cross-component video management
   const globalVideoStore = useGlobalVideoStore();
@@ -563,6 +569,25 @@ export default function VideoComponent() {
   };
 
   const handleComment = (key: string, video: VideoCard) => {
+    // Get the content ID for this video
+    const contentId = video._id || key;
+    
+    // Get existing comments for this video
+    const currentComments = comments[contentId] || [];
+    const formattedComments = currentComments.map((comment: any) => ({
+      id: comment.id,
+      userName: comment.username || 'Anonymous',
+      avatar: comment.userAvatar || '',
+      timestamp: comment.timestamp,
+      comment: comment.comment,
+      likes: comment.likes || 0,
+      isLiked: comment.isLiked || false,
+    }));
+
+    // Show the global comment modal
+    showCommentModal(formattedComments, contentId);
+    
+    // Update local stats for UI responsiveness
     setVideoStats((prev) => {
       const isCommented = prev[key]?.comment === 1;
       const updatedStats = {
@@ -885,6 +910,53 @@ export default function VideoComponent() {
     const videoRef = videoRefs.current[modalKey];
     const progress = progresses[modalKey] ?? 0;
 
+    // Get existing comments for this video
+    const contentId = (video as any)._id || modalKey;
+    const currentComments = comments[contentId] || [];
+    
+    // If no comments exist, add some sample comments for testing
+    const sampleComments = [
+      {
+        id: "1",
+        userName: "Joseph Eluwa",
+        avatar: "",
+        timestamp: "3HRS AGO",
+        comment: "Wow!! My Faith has just been renewed.",
+        likes: 193,
+        isLiked: false,
+      },
+      {
+        id: "2",
+        userName: "Liz Elizabeth",
+        avatar: "",
+        timestamp: "24HRS",
+        comment: "This video really touched my heart. God is working!",
+        likes: 45,
+        isLiked: false,
+      },
+      {
+        id: "3",
+        userName: "Chris Evans",
+        avatar: "",
+        timestamp: "3 DAYS AGO",
+        comment: "Amazing message! Thank you for sharing this.",
+        likes: 23,
+        isLiked: false,
+      },
+    ];
+    
+    const formattedComments = currentComments.length > 0 
+      ? currentComments.map((comment: any) => ({
+          id: comment.id,
+          userName: comment.username || 'Anonymous',
+          avatar: comment.userAvatar || '',
+          timestamp: comment.timestamp,
+          comment: comment.comment,
+          likes: comment.likes || 0,
+          isLiked: comment.isLiked || false,
+        }))
+      : sampleComments;
+
     const handleVideoCardPress = () => {
       // Prepare the full video list for TikTok-style navigation
       const videoListForNavigation = uploadedVideos.map((v, vIndex) => ({
@@ -1000,12 +1072,16 @@ export default function VideoComponent() {
                   {globalFavoriteCounts[modalKey] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleComment(modalKey, video)} className="flex-col justify-center items-center mt-6">
-                <Ionicons name="chatbubble-sharp" size={30} color="white" />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
-                </Text>
-              </TouchableOpacity>
+              <View className="flex-col justify-center items-center mt-6">
+                <CommentIcon 
+                  comments={formattedComments}
+                  size={30}
+                  color="white"
+                  showCount={true}
+                  count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
+                  layout="vertical"
+                />
+              </View>
               <TouchableOpacity onPress={() => handleSave(modalKey, video)} className="flex-col justify-center items-center mt-6">
                 <MaterialIcons
                   name={isItemSaved ? "bookmark" : "bookmark-border"}

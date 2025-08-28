@@ -2,16 +2,17 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
@@ -26,10 +27,7 @@ export default function SignUpScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  // Debug password visibility
-  console.log('Password visibility state:', showPassword);
-
+  const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   const [emailError, setEmailError] = useState("");
@@ -37,80 +35,8 @@ export default function SignUpScreen() {
   const [firstNameError, setFirstNameError] = useState("");
   const [lastNameError, setLastNameError] = useState("");
 
-
-
-
-
-  const handleSignUpValidation = async () => {
-    let isValid = true;
-  
-    // Clear previous errors
-    setEmailError("");
-    setPasswordError("");
-    setFirstNameError("");
-    setLastNameError("");
-  
-    // Validation logic
-    if (!firstName.trim()) {
-      setFirstNameError("First name is required");
-      isValid = false;
-    }
-  
-    if (!lastName.trim()) {
-      setLastNameError("Last name is required");
-      isValid = false;
-    }
-  
-    if (!emailAddress.trim()) {
-      setEmailError("Email is required");
-      isValid = false;
-    } else if (!validateEmail(emailAddress)) {
-      setEmailError("Invalid email format");
-      isValid = false;
-    }
-  
-    if (!password) {
-      setPasswordError("Password is required");
-      isValid = false;
-    } else if (!validatePassword(password)) {
-      setPasswordError(
-        "Password must be at least 6 characters long and include both letters and numbers"
-      );
-      isValid = false;
-    }
-  
-        if (isValid) {
-      try {
-        const result = await authService.register({
-          email: emailAddress,
-          password,
-          firstName,
-          lastName,
-        });
-
-        if (result.success) {
-          setShowModal(true); // Show verify modal
-        } else {
-          alert(result.data?.message || "Something went wrong");
-        }
-      } catch (err) {
-        // 🛜 Handle network error by assuming code may still have been sent
-        alert("Network issue occurred. Please check your email for the code.");
-
-        // Redirect to verification screen regardless
-        router.push({
-          pathname: "/auth/codeVerification",
-          params: {
-            emailAddress,
-            firstName,
-            lastName,
-          },
-        });
-      }
-    }
-  };
-  
-  
+  // Debug password visibility
+  console.log('Password visibility state:', showPassword);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -123,11 +49,113 @@ export default function SignUpScreen() {
     );
   };
 
+  const clearErrors = useCallback(() => {
+    setEmailError("");
+    setPasswordError("");
+    setFirstNameError("");
+    setLastNameError("");
+  }, []);
+
+  const validateForm = useCallback(() => {
+    let isValid = true;
+    clearErrors();
+
+    // Validation logic
+    if (!firstName.trim()) {
+      setFirstNameError("First name is required");
+      isValid = false;
+    }
+
+    if (!lastName.trim()) {
+      setLastNameError("Last name is required");
+      isValid = false;
+    }
+
+    if (!emailAddress.trim()) {
+      setEmailError("Email is required");
+      isValid = false;
+    } else if (!validateEmail(emailAddress)) {
+      setEmailError("Invalid email format");
+      isValid = false;
+    }
+
+    if (!password) {
+      setPasswordError("Password is required");
+      isValid = false;
+    } else if (!validatePassword(password)) {
+      setPasswordError(
+        "Password must be at least 6 characters long and include both letters and numbers"
+      );
+      isValid = false;
+    }
+
+    return isValid;
+  }, [firstName, lastName, emailAddress, password, clearErrors]);
+
+  const handleSignUpValidation = useCallback(async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      console.log("🔍 Starting registration for:", emailAddress);
+      
+      const result = await authService.register({
+        email: emailAddress,
+        password,
+        firstName,
+        lastName,
+      });
+
+      console.log("✅ Registration result:", result);
+
+      if (result.success) {
+        // Show success modal and proceed to verification
+        setShowModal(true);
+      } else {
+        // Handle API error
+        const errorMessage = result.data?.message || result.error || "Registration failed. Please try again.";
+        alert(errorMessage);
+      }
+    } catch (err: any) {
+      console.error("❌ Registration error:", err);
+      
+      let errorMessage = "Registration failed. Please try again.";
+      if (err.name === 'AbortError') {
+        errorMessage = "Request timeout. Please check your connection and try again.";
+      } else if (err.message?.includes('Network request failed')) {
+        errorMessage = "Network error. Please check your internet connection.";
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [validateForm, emailAddress, password, firstName, lastName]);
+
+  const handleModalClose = useCallback(() => {
+    setShowModal(false);
+    setIsLoading(false);
+  }, []);
+
+  const handleVerifySuccess = useCallback(() => {
+    setShowModal(false);
+    setIsLoading(false);
+    // Navigate to verification screen
+    router.push({
+      pathname: "/auth/codeVerification",
+      params: {
+        emailAddress,
+        firstName,
+        lastName,
+      },
+    });
+  }, [router, emailAddress, firstName, lastName]);
 
   return (
     <View className="flex-1 bg-white">
-     
-
       <View className="px-4 mt-6">
         <AuthHeader title="Sign Up" />
       </View>
@@ -173,7 +201,8 @@ export default function SignUpScreen() {
                   value={firstName}
                   onChangeText={setFirstName}
                   className="ml-3 w-full text-[#090E24]"
-                    placeholderTextColor="#090E24"
+                  placeholderTextColor="#090E24"
+                  editable={!isLoading}
                 />
               </View>
               {firstNameError && (
@@ -195,7 +224,8 @@ export default function SignUpScreen() {
                   value={lastName}
                   onChangeText={setLastName}
                   className="ml-3 w-full text-[#090E24]"
-                    placeholderTextColor="#090E24"
+                  placeholderTextColor="#090E24"
+                  editable={!isLoading}
                 />
               </View>
               {lastNameError && (
@@ -219,7 +249,8 @@ export default function SignUpScreen() {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   className="ml-5 w-full"
-                    placeholderTextColor="#090E24"
+                  placeholderTextColor="#090E24"
+                  editable={!isLoading}
                 />
               </View>
               {emailError && (
@@ -243,9 +274,11 @@ export default function SignUpScreen() {
                     fontSize: 16,
                     fontWeight: '400'
                   }}
+                  editable={!isLoading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
                 >
                   <FontAwesome6
                     name={showPassword ? "eye-slash" : "eye"}
@@ -266,9 +299,19 @@ export default function SignUpScreen() {
           <View className="flex flex-col mt-24 justify-center items-center w-full">
             <TouchableOpacity
               onPress={handleSignUpValidation}
-              className="bg-[#090E24] p-2 rounded-full mt-3 w-[333px] h-[45px]"
+              disabled={isLoading}
+              className={`p-2 rounded-full mt-3 w-[333px] h-[45px] flex-row items-center justify-center ${
+                isLoading ? 'bg-gray-400' : 'bg-[#090E24]'
+              }`}
             >
-              <Text className="text-white text-center font-rubik mt-2">Sign Up</Text>
+              {isLoading ? (
+                <>
+                  <ActivityIndicator size="small" color="white" />
+                  <Text className="text-white text-center font-rubik ml-2">Signing Up...</Text>
+                </>
+              ) : (
+                <Text className="text-white text-center font-rubik">Sign Up</Text>
+              )}
             </TouchableOpacity>
 
             <Text className="text-1xl font-semibold mt-9">
@@ -278,6 +321,7 @@ export default function SignUpScreen() {
             <TouchableOpacity
               onPress={() => router.push("/auth/login")}
               className="mt-9"
+              disabled={isLoading}
             >
               <Text className="text-[#344054] text-sm font-medium">
                 Sign In
@@ -289,8 +333,8 @@ export default function SignUpScreen() {
 
       <VerifyEmail
         visible={showModal}
-        onClose={() => setShowModal(false)}
-        onVerify={() => {}}
+        onClose={handleModalClose}
+        onVerify={handleVerifySuccess}
         emailAddress={emailAddress}
         password={password}
         firstName={firstName}

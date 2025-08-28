@@ -1,29 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
-import PagerView from 'react-native-pager-view';
-import { useLocalSearchParams } from 'expo-router';
 import BottomNav from '@/app/components/BottomNav';
-import HomeTabContent from './HomeTabContent';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
+import AccountScreen from '../screens/AccountScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import LibraryScreen from '../screens/library/LibraryScreen';
-import AccountScreen from '../screens/AccountScreen';
+import HomeTabContent from './HomeTabContent';
 
 const tabList = ['Home', 'Community', 'Library', 'Account'];
 
 export default function HomeScreen() {
   const [selectedTab, setSelectedTab] = useState('Home');
-  const pagerRef = useRef<PagerView>(null);
   const { default: defaultTabParamRaw } = useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
     : defaultTabParamRaw;
 
   function handleTabChange(tab: string) {
-    const tabIndex = tabList.indexOf(tab);
-    if (tabIndex !== -1 && pagerRef.current) {
-      pagerRef.current.setPage(tabIndex);
-      setSelectedTab(tab);
-    }
+    setSelectedTab(tab);
   }
 
   useEffect(() => {
@@ -32,27 +26,24 @@ export default function HomeScreen() {
     }
   }, [defaultTabParam]);
 
+  const renderTabContent = () => {
+    switch (selectedTab) {
+      case 'Home':
+        return <HomeTabContent />;
+      case 'Community':
+        return <CommunityScreen />;
+      case 'Library':
+        return <LibraryScreen />;
+      case 'Account':
+        return <AccountScreen />;
+      default:
+        return <HomeTabContent />;
+    }
+  };
+
   return (
     <View style={{ flex: 1 }} className="w-full">
-      <PagerView
-        style={{ flex: 1 }}
-        initialPage={0}
-        scrollEnabled={false}
-        ref={pagerRef}
-      >
-        <View key="1">
-          <HomeTabContent />
-        </View>
-        <View key="2">
-          <CommunityScreen />
-        </View>
-        <View key="3">
-          <LibraryScreen />
-        </View>
-        <View key="4">
-          <AccountScreen />
-        </View>
-      </PagerView>
+      {renderTabContent()}
       <View
         style={{
           position: 'absolute',

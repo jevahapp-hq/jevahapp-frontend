@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated as RNAnimated,
@@ -21,6 +21,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
+import authService from "../services/authService";
 
 export default function CodeVerification() {
   const router = useRouter();
@@ -157,57 +158,55 @@ export default function CodeVerification() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: emailAddress,
-          code,
-        }),
-      });
+      console.log("🔍 Verifying email code for:", emailAddress, "code:", code);
+      
+      // Use authService for email verification
+      const result = await authService.verifyEmailCode(emailAddress, code);
+      console.log("✅ Verify email result:", result);
 
-      const data = await response.json();
+      if (result.success) {
+        // For email verification, we need to login the user after successful verification
+        const loginResult = await authService.login(emailAddress, password);
 
-      if (data.success) {
-        const loginResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: emailAddress,
-            password: password,
-          }),
-        });
-
-        const loginData = await loginResponse.json();
-
-        if (loginData.success) {
-          await AsyncStorage.setItem("token", loginData.token);
-          
-          // 🛡️ Validate user data before saving to prevent "Anonymous User" issue
-          if (loginData.user && loginData.user.firstName && loginData.user.lastName) {
-            await AsyncStorage.setItem("user", JSON.stringify(loginData.user));
+        if (loginResult.success) {
+          // Validate user data before saving
+          if (loginResult.data?.user && loginResult.data.user.firstName && loginResult.data.user.lastName) {
+            await AsyncStorage.setItem("user", JSON.stringify(loginResult.data.user));
             console.log("✅ Complete user data saved after verification:", {
-              firstName: loginData.user.firstName,
-              lastName: loginData.user.lastName,
-              hasAvatar: !!loginData.user.avatar
+              firstName: loginResult.data.user.firstName,
+              lastName: loginResult.data.user.lastName,
+              hasAvatar: !!loginResult.data.user.avatar
             });
             triggerBounceDrop("success");
           } else {
             console.error("🚨 BLOCKED: Verification login returned incomplete user data!");
-            console.error("   Incomplete data:", loginData.user);
+            console.error("   Incomplete data:", loginResult.data?.user);
             Alert.alert("Login Issue", "Incomplete user profile. Please contact support.");
             triggerBounceDrop("failure");
             return;
           }
         } else {
-          Alert.alert("Login Failed", loginData.message || "Try signing in manually.");
+          Alert.alert("Login Failed", loginResult.data?.message || "Try signing in manually.");
           triggerBounceDrop("failure");
         }
+      } else {
+        // Show specific error message from backend
+        const errorMessage = result.data?.message || "Invalid verification code. Please try again.";
+        Alert.alert("Verification Failed", errorMessage);
+        triggerBounceDrop("failure");
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Error verifying code:", err);
-      Alert.alert("Server Error", "Unable to verify code. Try again later.");
+      
+      let errorMessage = "Unable to verify code. Try again later.";
+      if (err.name === 'AbortError') {
+        errorMessage = "Request timeout. Please check your connection and try again.";
+      } else if (err.message?.includes('Network request failed')) {
+        errorMessage = "Network error. Please check your internet connection.";
+      }
+      
+      Alert.alert("Server Error", errorMessage);
       triggerBounceDrop("failure");
     } finally {
       setIsVerifying(false);
@@ -217,22 +216,29 @@ export default function CodeVerification() {
   const handleResend = async () => {
     setIsResending(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/resend-verification-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddress }),
-      });
+      console.log("🔍 Resending email verification for:", emailAddress);
+      
+      // Use authService for resending email verification
+      const result = await authService.resendEmailVerification(emailAddress);
+      console.log("✅ Resend email verification result:", result);
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (result.success) {
         Alert.alert("Code Resent", "A new verification code has been sent to your email.");
       } else {
         triggerBounceDrop("failure");
-        Alert.alert("Resend Failed", data.message || "Try again later.");
+        Alert.alert("Resend Failed", result.data?.message || "Try again later.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Error resending code:", err);
+      
+      let errorMessage = "Failed to resend code. Try again later.";
+      if (err.name === 'AbortError') {
+        errorMessage = "Request timeout. Please check your connection and try again.";
+      } else if (err.message?.includes('Network request failed')) {
+        errorMessage = "Network error. Please check your internet connection.";
+      }
+      
+      Alert.alert("Resend Failed", errorMessage);
       triggerBounceDrop("failure");
     } finally {
       setIsResending(false);

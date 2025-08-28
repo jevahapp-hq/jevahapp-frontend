@@ -3,10 +3,10 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { useLocalSearchParams } from "expo-router";
 import {
-  getResponsiveBorderRadius,
-  getResponsiveShadow,
-  getResponsiveSpacing,
-  getResponsiveTextStyle
+    getResponsiveBorderRadius,
+    getResponsiveShadow,
+    getResponsiveSpacing,
+    getResponsiveTextStyle
 } from "../../utils/responsive";
 import Header from "../components/Header";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
@@ -25,6 +25,26 @@ export default function HomeTabContent() {
   const [selectedCategory, setSelectedCategory] = useState(
     (defaultCategory as string) || "ALL"
   );
+
+  const handleCategoryPress = (category: string) => {
+    // Provide immediate visual feedback
+    setSelectedCategory(category);
+    
+    // Only stop media if actually switching to a different category
+    if (category !== selectedCategory) {
+      // Stop any active audio and pause all videos when switching categories
+      try {
+        useMediaStore.getState().stopAudioFn?.();
+      } catch (e) {
+        // no-op
+      }
+      try {
+        useGlobalVideoStore.getState().pauseAllVideos();
+      } catch (e) {
+        // no-op
+      }
+    }
+  };
 
   const renderContent = () => {
     switch (selectedCategory) {
@@ -88,33 +108,25 @@ export default function HomeTabContent() {
             }}
           >
             {categories.map((category) => (
-              <TouchableOpacity
-                key={category}
-                onPress={() => {
-                  // Stop any active audio and pause all videos when switching categories
-                  try {
-                    useMediaStore.getState().stopAudioFn?.();
-                  } catch (e) {
-                    // no-op
-                  }
-                  try {
-                    useGlobalVideoStore.getState().pauseAllVideos();
-                  } catch (e) {
-                    // no-op
-                  }
-                  setSelectedCategory(category);
-                }}
-                style={{
-                  paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                  paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                  marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
-                  borderRadius: getResponsiveBorderRadius('medium'),
-                  backgroundColor: selectedCategory === category ? 'black' : 'white',
-                  borderWidth: selectedCategory === category ? 0 : 1,
-                  borderColor: selectedCategory === category ? 'transparent' : '#6B6E7C',
-                  ...getResponsiveShadow(),
-                }}
-              >
+                              <TouchableOpacity
+                  key={category}
+                  onPress={() => handleCategoryPress(category)}
+                  activeOpacity={0.7}
+                  style={{
+                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
+                    borderRadius: getResponsiveBorderRadius('medium'),
+                    backgroundColor: selectedCategory === category ? 'black' : 'white',
+                    borderWidth: selectedCategory === category ? 0 : 1,
+                    borderColor: selectedCategory === category ? 'transparent' : '#6B6E7C',
+                    ...getResponsiveShadow(),
+                    minWidth: 48,
+                    minHeight: 44,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
                 <View style={{ position: 'relative' }}>
                   <Text style={[
                     getResponsiveTextStyle('button'),

@@ -80,6 +80,8 @@ export default function MobileHeader({
   
   const router = useRouter();
   
+  console.log("🔍 MobileHeader: Received user data:", user);
+  
   const handleBackPress = () => {
     if (onBackPress) {
       onBackPress();
@@ -148,7 +150,7 @@ export default function MobileHeader({
       </TouchableOpacity>
 
       {/* Right Side - Action Buttons */}
-      <View className="flex-row items-center space-x-1">
+      <View className="flex-row items-center space-x-3">
         {rightActions.map((action, index) => (
           <TouchableOpacity
             key={index}
@@ -156,7 +158,7 @@ export default function MobileHeader({
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
             activeOpacity={0.7}
           >
-            <Ionicons name={action.icon as any} size={24} color={textColor} />
+            <Ionicons name={action.icon as any} size={20} color={textColor} />
             {action.badge && (
               <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
             )}
@@ -228,7 +230,7 @@ export default function MobileHeader({
               className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
               activeOpacity={0.7}
             >
-              <Ionicons name={leftAction.icon as any} size={24} color={textColor} />
+              <Ionicons name={leftAction.icon as any} size={20} color={textColor} />
               {leftAction.badge && (
                 <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
               )}
@@ -258,7 +260,7 @@ export default function MobileHeader({
       {/* Right Side */}
       <View className="flex-1 items-end">
         {rightComponent || (
-          <View className="flex-row items-center space-x-1">
+          <View className="flex-row items-center space-x-3">
             {rightActions.map((action, index) => (
               <TouchableOpacity
                 key={index}
@@ -266,7 +268,7 @@ export default function MobileHeader({
                 className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
                 activeOpacity={0.7}
               >
-                <Ionicons name={action.icon as any} size={24} color={textColor} />
+                <Ionicons name={action.icon as any} size={20} color={textColor} />
                 {action.badge && (
                   <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
                 )}

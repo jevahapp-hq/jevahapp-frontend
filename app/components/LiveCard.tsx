@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
+import { SafeImage } from "./SafeImage";
 
 // import badgeIcon from "../../assets/images/path961.png";
 
@@ -62,10 +63,11 @@ export default function LiveCardSlider() {
           >
             {/* Video Thumbnail */}
             <View className="w-full h-[232px] rounded-xl overflow-hidden relative bg-blue-300">
-              <Image
-                source={{ uri: video.imageUrl }}
+              <SafeImage
+                uri={video.imageUrl}
                 className="w-full h-full"
                 resizeMode="cover"
+                fallbackText="No Image"
               />
 
               {/* LIVE Badge */}

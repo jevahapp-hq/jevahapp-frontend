@@ -35,6 +35,11 @@ export default function VerifyReset() {
   const dropdownAnim = useRef(new RNAnimated.Value(-200)).current;
   const emailAddress = params.emailAddress as string;
 
+  // Debug logging
+  console.log("🔍 VerifyReset component loaded");
+  console.log("🔍 Params received:", params);
+  console.log("🔍 Email address from params:", emailAddress);
+
   // Refs to control focus across code inputs
   const inputsRef = useRef<Array<TextInput | null>>([]);
 
@@ -149,26 +154,31 @@ export default function VerifyReset() {
   };
 
   const onVerifyPress = async () => {
+    console.log("🔍 Verify button pressed");
     setIsVerifying(true);
     const code = codeArray.join('');
+    console.log("🔍 Code entered:", code);
 
     if (code.length !== 6) {
+      console.log("❌ Code length is not 6 characters");
       triggerBounceDrop("failure");
       setIsVerifying(false);
       return;
     }
 
     try {
-      console.log("Verifying reset code for email:", emailAddress, "code:", code);
+      console.log("🔍 Verifying reset code for email:", emailAddress, "code:", code);
       
       const result = await authService.verifyResetCode(emailAddress, code);
+      console.log("🔍 Verify result:", result);
 
       if (result.success) {
         // Store the verification code as the reset token for the password reset screen
-        console.log("Storing reset token:", code);
+        console.log("✅ Storing reset token:", code);
         await AsyncStorage.setItem("resetToken", code);
         triggerBounceDrop("success");
       } else {
+        console.log("❌ Verification failed:", result.data?.message);
         triggerBounceDrop("failure");
       }
 
@@ -182,13 +192,18 @@ export default function VerifyReset() {
   };
 
   const handleResend = async () => {
+    console.log("🔄 Resend button pressed for email:", emailAddress);
     setIsResending(true);
     try {
+      console.log("🔄 Calling authService.forgotPassword for resend...");
       const result = await authService.forgotPassword(emailAddress);
+      console.log("🔄 Resend result:", result);
 
       if (result.success) {
+        console.log("✅ Resend successful");
         Alert.alert("Code Resent", "A new password reset code has been sent to your email.");
       } else {
+        console.log("❌ Resend failed:", result.data?.message);
         triggerBounceDrop("failure");
         Alert.alert("Resend Failed", result.data?.message || "Try again later.");
       }

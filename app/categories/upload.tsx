@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    Image,
+    KeyboardAvoidingView,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 
 import { Feather } from "@expo/vector-icons";
@@ -18,24 +18,27 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-  getButtonSize,
-  getInputSize,
-  getKeyboardAdjustment,
-  getMediaPickerSize,
-  getOrientation,
-  getResponsiveFontSize,
-  getResponsiveSize,
-  getResponsiveSpacing,
-  getScreenDimensions,
-  getThumbnailSize,
-  getTouchTargetSize,
-  isSmallScreen
+    getButtonSize,
+    getInputSize,
+    getKeyboardAdjustment,
+    getMediaPickerSize,
+    getOrientation,
+    getResponsiveFontSize,
+    getResponsiveSize,
+    getResponsiveSpacing,
+    getScreenDimensions,
+    getThumbnailSize,
+    getTouchTargetSize,
+    isSmallScreen
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { useMediaStore } from "../store/useUploadStore";
-import { API_BASE_URL } from "../utils/api";
+
 import { logUserDataStatus, validateUserForUpload } from "../utils/userValidation";
+
+// Use the correct API base URL for uploads
+const API_BASE_URL = "https://jevahapp-backend.onrender.com";
 
 const categories = [
   "Worship",
@@ -66,6 +69,22 @@ export default function UploadScreen() {
   const [isSermonContent, setIsSermonContent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(getOrientation());
+
+  // Check authentication status on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authStatus = await checkAuthenticationStatus();
+      
+      console.log("🔍 Upload Screen - Auth Check:", {
+        hasToken: authStatus.hasToken,
+        tokenSource: authStatus.tokenSource,
+        hasUser: authStatus.hasUser,
+        userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+      });
+    };
+    
+    checkAuth();
+  }, []);
 
   // Handle orientation changes
   useEffect(() => {
@@ -167,9 +186,73 @@ export default function UploadScreen() {
     return `${days}DAYS AGO`;
   };
 
+  const checkAuthenticationStatus = async () => {
+    // Check for token in multiple locations
+    let token = await AsyncStorage.getItem("userToken");
+    let tokenSource = "userToken";
+    
+    if (!token) {
+      token = await AsyncStorage.getItem("token");
+      tokenSource = "token";
+    }
+    
+    if (!token) {
+      try {
+        const { default: SecureStore } = await import('expo-secure-store');
+        token = await SecureStore.getItemAsync('jwt');
+        tokenSource = "jwt";
+      } catch (secureStoreError) {
+        // Silent fallback
+      }
+    }
+    
+    const userRaw = await AsyncStorage.getItem("user");
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    
+    return {
+      hasToken: !!token,
+      token,
+      tokenSource,
+      hasUser: !!user,
+      user,
+      userRaw
+    };
+  };
+
   const handleUpload = async () => {
     if (!file || !title || !selectedCategory || !selectedType) {
       Alert.alert("Missing fields", "Please complete all required fields.");
+      return;
+    }
+
+    // Check authentication before proceeding
+    const authStatus = await checkAuthenticationStatus();
+    
+    console.log("🔍 Upload Auth Check:", {
+      hasToken: authStatus.hasToken,
+      tokenSource: authStatus.tokenSource,
+      hasUser: authStatus.hasUser,
+      userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+    });
+
+    if (!authStatus.hasToken || !authStatus.hasUser) {
+      let message = "Please log in to upload content.";
+      if (!authStatus.hasToken && !authStatus.hasUser) {
+        message = "Your session has expired. Please log in again.";
+      } else if (!authStatus.hasToken) {
+        message = "Authentication token missing. Please log in again.";
+      } else if (!authStatus.hasUser) {
+        message = "User data missing. Please log in again.";
+      }
+      
+      Alert.alert(
+        "Authentication Required", 
+        message,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Go to Login", onPress: () => router.push("/auth/login") }
+        ]
+      );
       return;
     }
 
@@ -192,32 +275,51 @@ export default function UploadScreen() {
   const proceedWithUpload = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem("token");
-      const userRaw = await AsyncStorage.getItem("user");
-      const user = userRaw ? JSON.parse(userRaw) : null;
-
+      
+      // Check authentication status first
+      const authStatus = await checkAuthenticationStatus();
+      
       console.log("🔍 Upload Debug - Retrieved data:", {
-        hasToken: !!token,
-        hasUser: !!user,
-        userRaw: userRaw,
-        userData: user,
-        userAvatar: user?.avatar,
-        userImageUrl: user?.imageUrl,
-        userProfileImage: user?.profileImage
+        hasToken: authStatus.hasToken,
+        tokenSource: authStatus.tokenSource,
+        tokenLength: authStatus.token?.length,
+        tokenPreview: authStatus.token ? `${authStatus.token.substring(0, 10)}...` : null,
+        hasUser: authStatus.hasUser,
+        userRaw: authStatus.userRaw,
+        userData: authStatus.user,
+        userAvatar: authStatus.user?.avatar,
+        userImageUrl: authStatus.user?.imageUrl,
+        userProfileImage: authStatus.user?.profileImage,
+        userKeys: authStatus.user ? Object.keys(authStatus.user) : null
       });
 
-      if (!token || !user) {
+      if (!authStatus.hasToken || !authStatus.hasUser) {
         setLoading(false);
-        console.error("❌ Upload failed: Missing token or user data");
-        Alert.alert("Unauthorized", "Please log in to upload.");
+        console.error("❌ Upload failed: Missing token or user data", {
+          tokenExists: authStatus.hasToken,
+          userExists: authStatus.hasUser,
+          tokenSource: authStatus.tokenSource,
+          userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+        });
+        
+        let message = "Please log in again to upload content.";
+        if (!authStatus.hasToken && !authStatus.hasUser) {
+          message = "Session expired. Please log in again.";
+        } else if (!authStatus.hasToken) {
+          message = "Authentication token missing. Please log in again.";
+        } else if (!authStatus.hasUser) {
+          message = "User data missing. Please log in again.";
+        }
+        
+        Alert.alert("Authentication Required", message);
         return;
       }
 
       // ✅ Validate and normalize user data
-      const validation = validateUserForUpload(user);
+      const validation = validateUserForUpload(authStatus.user);
       const normalizedUser = validation.normalizedUser;
       
-      logUserDataStatus(user, "Upload");
+      logUserDataStatus(authStatus.user, "Upload");
       
       // Warn about missing data but don't block upload
       if (!validation.isValid) {
@@ -225,9 +327,9 @@ export default function UploadScreen() {
       }
 
       // Ensure user data includes avatar for upload
-      if (!normalizedUser.avatar && user) {
+      if (!normalizedUser.avatar && authStatus.user) {
         // Try to get avatar from various possible fields
-        const avatar = user.avatar || user.imageUrl || user.profileImage || '';
+        const avatar = authStatus.user.avatar || authStatus.user.imageUrl || authStatus.user.profileImage || '';
         if (avatar) {
           normalizedUser.avatar = avatar;
           console.log("✅ Found user avatar for upload:", avatar);
@@ -284,14 +386,29 @@ export default function UploadScreen() {
       );
       formData.append("topics", JSON.stringify([]));
 
+      console.log("🌐 Upload Request Details:", {
+        url: `${API_BASE_URL}/api/media/upload`,
+        hasToken: !!authStatus.token,
+        tokenLength: authStatus.token?.length,
+        fileSize: file?.uri ? "File selected" : "No file",
+        thumbnailSize: thumbnail?.uri ? "Thumbnail selected" : "No thumbnail"
+      });
+
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${authStatus.token}`,
           Accept: "application/json",
         },
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const contentType = res.headers.get("content-type") || "";
       let result: any = null;
@@ -392,7 +509,23 @@ export default function UploadScreen() {
     } catch (error: any) {
       setLoading(false);
       console.error("❌ Upload error:", error?.message ?? error);
-      Alert.alert("Error", error?.message || "Something went wrong.");
+      
+      // Provide more specific error messages
+      let errorMessage = "Something went wrong.";
+      
+      if (error?.name === 'AbortError') {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (error?.message?.includes("Network request failed")) {
+        errorMessage = "Network connection failed. Please check your internet connection and try again.";
+      } else if (error?.message?.includes("timeout")) {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (error?.message?.includes("fetch")) {
+        errorMessage = "Unable to connect to server. Please check your internet connection.";
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Upload Failed", errorMessage);
     }
   };
 
@@ -646,6 +779,8 @@ export default function UploadScreen() {
                 )}
               </View>
             </View>
+
+
 
             {/* Upload Button */}
             <View className="items-center mt-4">
