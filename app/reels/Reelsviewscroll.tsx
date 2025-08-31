@@ -3,17 +3,17 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
-  Image,
-  PanResponder,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    PanResponder,
+    Platform,
+    ScrollView,
+    Share,
+    StatusBar,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 
 import BottomNav from "../components/BottomNav";
@@ -21,10 +21,10 @@ import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  persistStats,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    persistStats,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
 
@@ -494,7 +494,7 @@ export default function Reelsviewscroll() {
               ref={(ref) => {
                 if (ref && isActive) videoRefs.current[modalKey] = ref;
               }}
-              source={{ uri: videoUrl }}
+              source={{ uri: videoUrl || '' }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               isMuted={mutedVideos[modalKey] ?? false}

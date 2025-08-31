@@ -64,7 +64,7 @@ export default function LiveCardSlider() {
             {/* Video Thumbnail */}
             <View className="w-full h-[232px] rounded-xl overflow-hidden relative bg-blue-300">
               <SafeImage
-                uri={video.imageUrl}
+                uri={video.imageUrl || undefined}
                 className="w-full h-full"
                 resizeMode="cover"
                 fallbackText="No Image"

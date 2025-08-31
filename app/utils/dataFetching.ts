@@ -181,7 +181,7 @@ async function enhancedFetch(
 export class ApiClient {
   private cache = CacheManager.getInstance();
 
-  async request<T>(
+  async request<T = any>(
     endpoint: string,
     options: FetchOptions = {}
   ): Promise<T> {
@@ -225,7 +225,18 @@ export class ApiClient {
 
         if (!response.ok) {
           console.error(`❌ API: HTTP ${response.status}: ${response.statusText}`);
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          
+          try {
+            const errorData = await response.json();
+            if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } catch (parseError) {
+            // If we can't parse the error response, use the default message
+          }
+          
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
@@ -254,20 +265,37 @@ export class ApiClient {
       const result = await this.request('/auth/me', { cache: true });
       console.log("✅ API: getUserProfile response:", result);
       
-      // Debug the user data structure
-      if (result && result.user) {
-        console.log("🔍 API: User data structure:", {
-          section: result.user.section,
-          sectionType: typeof result.user.section,
-          userKeys: Object.keys(result.user),
-          fullUserData: result.user
-        });
+      // Validate the response structure
+      if (!result) {
+        throw new Error("No response received from server");
       }
       
+      if (!result.user) {
+        throw new Error("User data not found in response");
+      }
+      
+      // Debug the user data structure
+      console.log("🔍 API: User data structure:", {
+        section: result.user.section,
+        sectionType: typeof result.user.section,
+        userKeys: Object.keys(result.user),
+        fullUserData: result.user
+      });
+      
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ API: getUserProfile error:", error);
-      throw error;
+      
+      // Provide more specific error messages
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        throw new Error("Authentication failed. Please login again.");
+      } else if (error.message?.includes('404')) {
+        throw new Error("User profile not found.");
+      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+        throw new Error("Network error. Please check your connection.");
+      } else {
+        throw new Error(error.message || "Failed to fetch user profile");
+      }
     }
   }
 

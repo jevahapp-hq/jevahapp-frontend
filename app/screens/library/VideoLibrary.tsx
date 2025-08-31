@@ -160,7 +160,7 @@ export default function VideoLibrary () {
                 videoRefs.current[item.id] = ref;
               }
             }}
-            source={{ uri: item.fileUrl }}
+            source={{ uri: item.fileUrl || '' }}
             style={{ width: "100%", height: "100%", position: "absolute" }}
             resizeMode={ResizeMode.COVER}
             shouldPlay={isPlaying}

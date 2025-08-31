@@ -2,28 +2,28 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
-  Image,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import {
-  GestureHandlerRootView,
-  HandlerStateChangeEvent,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import { MagnifyingGlassIcon } from "react-native-heroicons/outline";
 import { PauseIcon, PlayIcon, SpeakerWaveIcon } from "react-native-heroicons/solid";
 import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Ionicons from "react-native-vector-icons/Ionicons";
@@ -168,7 +168,7 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
         {isVideo ? (
           <Video
             ref={videoRef}
-            source={{ uri: item.fileUrl }}
+            source={{ uri: item.fileUrl || '' }}
             style={{ width: "100%", height: "100%" }}
             resizeMode={ResizeMode.COVER}
             useNativeControls={false}

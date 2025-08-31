@@ -81,7 +81,7 @@ export default function UploadMediaGrid({ onSelect }: UploadMediaGridProps) {
         activeOpacity={0.8}
       >
         <Image
-          source={{ uri: item.uri }}
+          source={{ uri: item.uri || '' }}
           className="w-full h-full rounded-lg"
           resizeMode="cover"
         />

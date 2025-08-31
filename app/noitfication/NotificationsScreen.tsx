@@ -1,4 +1,4 @@
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import { SafeImage } from "../components/SafeImage";
@@ -14,7 +14,7 @@ export default function NotificationsScreen() {
           message: "Wow! My Faith has just been renewed.",
           postTitle: "The art of seeing Miracles",
           postDescription: "A powerful teaching on supernatural breakthroughs.",
-          avatar: "https://i.pravatar.cc/100?img=11",
+          avatar: undefined,
           postImage: require("../../assets/images/image (8).png"),
         },
         {
@@ -23,7 +23,7 @@ export default function NotificationsScreen() {
           message: "This blessed me beyond words!",
           postTitle: "Walking in Purpose",
           postDescription: "How to discover your God-given path.",
-          avatar: "https://i.pravatar.cc/100?img=22",
+          avatar: undefined,
           postImage: require("../../assets/images/image (8).png"),
         },
         {
@@ -32,7 +32,7 @@ export default function NotificationsScreen() {
           message: "What a refreshing revelation!",
           postTitle: "Faith over Fear",
           postDescription: "Overcoming anxiety through scripture.",
-          avatar: "https://i.pravatar.cc/100?img=5",
+          avatar: undefined,
           postImage: require("../../assets/images/image (8).png"),
         },
       ],
@@ -46,7 +46,7 @@ export default function NotificationsScreen() {
           message: "Shared this with my group!",
           postTitle: "Divine Acceleration",
           postDescription: "Experiencing rapid transformation through faith.",
-          avatar: "https://i.pravatar.cc/100?img=3",
+          avatar: undefined,
           postImage: require("../../assets/images/image (8).png"),
         },
         {
@@ -56,7 +56,7 @@ export default function NotificationsScreen() {
           postTitle: "Heaven’s Sound",
           postDescription:
             "A session on heavenly worship encounters the reali life of my  family",
-          avatar: "https://i.pravatar.cc/100?img=7",
+          avatar: undefined,
           postImage: require("../../assets/images/image (8).png"),
         },
       ],
@@ -70,7 +70,7 @@ export default function NotificationsScreen() {
           message: "This was exactly what I needed.",
           postTitle: "Healing Streams",
           postDescription: "A deep dive into biblical healing.",
-          avatar: "https://i.pravatar.cc/100?img=15",
+          avatar: undefined,
           postImage: require("../../assets/images/image (8).png"),
         },
       ],
@@ -106,7 +106,7 @@ export default function NotificationsScreen() {
 
                 <View className="flex-row items-center mb-2">
                   <SafeImage
-                    uri={item.avatar}
+                    uri={item.avatar || undefined}
                     className="w-6 h-6 rounded-full mr-2"
                     fallbackText={item.name?.[0]?.toUpperCase() || 'U'}
                     showFallback={true}

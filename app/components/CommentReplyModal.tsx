@@ -185,10 +185,10 @@ export default function CommentReplyModal() {
   };
 
   const renderAvatar = (avatar: string, userName: string) => {
-    if (avatar.startsWith('http')) {
+    if (avatar && avatar.trim() && avatar.startsWith('http')) {
       return (
         <Image
-          source={{ uri: avatar }}
+          source={{ uri: avatar.trim() }}
           style={{
             width: 32,
             height: 32,

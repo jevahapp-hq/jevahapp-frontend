@@ -117,7 +117,7 @@ export default function UpdatedVideoCard({ video, index, isModalView = false }: 
         >
           <Video
             ref={videoRef}
-            source={{ uri: video.fileUrl }}
+            source={{ uri: video.fileUrl || '' }}
             style={{ width: '100%', height: '100%' }}
             resizeMode={ResizeMode.COVER}
             isMuted={false}

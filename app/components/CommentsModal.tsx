@@ -175,9 +175,9 @@ export default function CommentsModal({
     <View className="flex-row px-4 py-3">
       {/* Avatar */}
       <View className="w-8 h-8 rounded-full bg-gray-300 mr-3 overflow-hidden">
-        {item.userAvatar ? (
+        {item.userAvatar && item.userAvatar.trim() ? (
           <Image 
-            source={{ uri: item.userAvatar }} 
+            source={{ uri: item.userAvatar.trim() }} 
             className="w-full h-full"
             resizeMode="cover"
           />

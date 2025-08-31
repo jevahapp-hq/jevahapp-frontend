@@ -602,7 +602,7 @@ export default function UploadScreen() {
               </View>
             ) : file.mimeType.startsWith("video") ? (
               <Video
-                source={{ uri: file.uri }}
+                source={{ uri: file.uri || undefined }}
                 useNativeControls
                 resizeMode={ResizeMode.COVER}
                 style={{ width: "100%", height: "100%", borderRadius: 12 }}
@@ -633,7 +633,7 @@ export default function UploadScreen() {
               </View>
             ) : (
               <Image
-                source={{ uri: thumbnail.uri }}
+                source={{ uri: thumbnail.uri || undefined }}
                 style={{ width: "100%", height: "100%", borderRadius: 8 }}
                 resizeMode="cover"
               />
@@ -665,7 +665,7 @@ export default function UploadScreen() {
             </View>
           ) : file.mimeType.startsWith("video") ? (
             <Video
-              source={{ uri: file.uri }}
+              source={{ uri: file.uri || undefined }}
               useNativeControls
               resizeMode={ResizeMode.COVER}
               style={{ width: "100%", height: "100%", borderRadius: 12 }}
@@ -696,7 +696,7 @@ export default function UploadScreen() {
             </View>
           ) : (
             <Image
-              source={{ uri: thumbnail.uri }}
+              source={{ uri: thumbnail.uri || undefined }}
               style={{ width: "100%", height: "100%", borderRadius: 8 }}
               resizeMode="cover"
             />

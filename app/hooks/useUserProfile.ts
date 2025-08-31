@@ -4,18 +4,20 @@ import { apiClient } from "../utils/dataFetching";
 
 // User type based on the new API response structure
 export type User = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  avatar: string | null;
-  avatarUpload: string | null;
-  section: string;
-  role: string;
-  isProfileComplete: boolean;
-  isEmailVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
+  _id?: string;
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  avatar?: string | null;
+  avatarUpload?: string | null;
+  section?: string;
+  role?: string;
+  isProfileComplete?: boolean;
+  isEmailVerified?: boolean;
+  isOnline?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export const useUserProfile = () => {
@@ -67,10 +69,22 @@ export const useUserProfile = () => {
           fullUserData: userData.user
         });
         
-        // Ensure section is set if missing
+        // Ensure section is set if missing and handle optional fields
         const userWithSection = {
           ...userData.user,
-          section: userData.user.section || "adult" // Default to adult if section is missing
+          id: userData.user.id || userData.user._id || '',
+          firstName: userData.user.firstName || '',
+          lastName: userData.user.lastName || '',
+          email: userData.user.email || '',
+          section: userData.user.section || "adult", // Default to adult if section is missing
+          role: userData.user.role || "learner",
+          isProfileComplete: userData.user.isProfileComplete || false,
+          isEmailVerified: userData.user.isEmailVerified || false,
+          avatar: userData.user.avatar || null,
+          avatarUpload: userData.user.avatarUpload || null,
+          isOnline: userData.user.isOnline || false,
+          createdAt: userData.user.createdAt || '',
+          updatedAt: userData.user.updatedAt || ''
         };
         
         setUser(userWithSection);
@@ -93,9 +107,17 @@ export const useUserProfile = () => {
     } catch (error: any) {
       console.error("❌ Failed to fetch user profile:", error);
       
-      if (error.message.includes("Unauthorized") || error.message.includes("401")) {
+      // Handle specific error types
+      if (error.message?.includes("Unauthorized") || error.message?.includes("401")) {
         await clearTokens();
         setError("Session expired. Please login again.");
+      } else if (error.message?.includes("Network error")) {
+        setError("Network error. Please check your connection and try again.");
+      } else if (error.message?.includes("User profile not found")) {
+        setError("User profile not found. Please contact support.");
+      } else if (error.message?.includes("Authentication failed")) {
+        await clearTokens();
+        setError("Authentication failed. Please login again.");
       } else {
         setError(error.message || "Failed to fetch user profile");
       }
@@ -142,7 +164,7 @@ export const useUserProfile = () => {
   };
 
   const getFullName = (user: User) => {
-    return `${user.firstName} ${user.lastName}`.trim();
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
   };
 
   const isProfileComplete = () => {
@@ -154,7 +176,7 @@ export const useUserProfile = () => {
   };
 
   const getUserSection = () => {
-    return user?.section || "adults";
+    return user?.section || "adult";
   };
 
   const getUserRole = () => {

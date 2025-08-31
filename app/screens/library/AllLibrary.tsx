@@ -1,6 +1,6 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     FlatList,
     Image,
@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
-import { useDownloadHandler, convertToDownloadableItem } from "../../utils/downloadUtils";
+import { convertToDownloadableItem, useDownloadHandler } from "../../utils/downloadUtils";
 
 
 
@@ -182,7 +182,7 @@ export default function AllLibrary () {
                   videoRefs.current[item.id] = ref;
                 }
               }}
-              source={{ uri: item.fileUrl }}
+              source={{ uri: item.fileUrl || '' }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               shouldPlay={isPlaying}
