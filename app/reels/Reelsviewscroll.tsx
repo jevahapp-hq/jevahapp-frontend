@@ -1,5 +1,5 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { Audio, ResizeMode, Video } from "expo-av";
+import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -17,9 +17,12 @@ import {
 } from "react-native";
 
 import BottomNav from "../components/BottomNav";
+import CommentReplyModal from "../components/CommentReplyModal";
+import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import allMediaAPI from "../utils/allMediaAPI";
+import { audioConfig } from "../utils/audioConfig";
 import {
     getFavoriteState,
     getPersistedStats,
@@ -50,6 +53,9 @@ export default function Reelsviewscroll() {
 
   // Global video store for video management
   const globalVideoStore = useGlobalVideoStore();
+
+  // Comment modal hook
+  const { showCommentModal } = useCommentModal();
 
   // Get video states from global store
   const playingVideos = globalVideoStore.playingVideos;
@@ -256,6 +262,41 @@ export default function Reelsviewscroll() {
   const handleComment = async (key: string) => {
     console.log("🔄 Comment button clicked for reel:", title);
 
+    // Create mock comments for the reel (you can replace this with actual comments from your backend)
+    const mockComments = [
+      {
+        id: '1',
+        userName: 'John Doe',
+        avatar: '',
+        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
+        comment: 'Great video! Really enjoyed this content.',
+        likes: 5,
+        isLiked: false,
+      },
+      {
+        id: '2',
+        userName: 'Jane Smith',
+        avatar: '',
+        timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 minutes ago
+        comment: 'Amazing! Thanks for sharing.',
+        likes: 3,
+        isLiked: true,
+      },
+      {
+        id: '3',
+        userName: 'Mike Johnson',
+        avatar: '',
+        timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
+        comment: 'This is exactly what I needed!',
+        likes: 1,
+        isLiked: false,
+      }
+    ];
+
+    // Show the comment modal with the reel's comments
+    showCommentModal(mockComments, key);
+
+    // Update comment count (optional - you might want to do this after actually posting a comment)
     const currentStats = videoStats[key] || {};
     const newCommentCount = (currentStats.comment || video.comment || 0) + 1;
 
@@ -278,7 +319,7 @@ export default function Reelsviewscroll() {
     };
     getAllStats();
 
-    console.log(`💬 Comment toggled for reel: ${title}`);
+    console.log(`💬 Comment modal opened for reel: ${title}`);
   };
 
   const handleSave = async (key: string) => {
@@ -411,15 +452,7 @@ export default function Reelsviewscroll() {
   useEffect(() => {
     const initializeAudio = async () => {
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          playsInSilentModeIOS: isIOS, // Enable silent mode playback on iOS
-          shouldDuckAndroid: isAndroid, // Enable audio ducking on Android
-          playThroughEarpieceAndroid: false,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-        });
+        await audioConfig.configureForVideoPlayback();
         console.log("✅ ReelsView: Audio session configured for", Platform.OS);
       } catch (error) {
         console.error(
@@ -430,7 +463,7 @@ export default function Reelsviewscroll() {
     };
 
     initializeAudio();
-  }, [isIOS, isAndroid]);
+  }, []);
 
   // Auto-play or switch play target immediately when the active key changes
   useEffect(() => {
@@ -543,30 +576,36 @@ export default function Reelsviewscroll() {
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
             />
 
-            {/* Play/Pause Overlay - Enhanced */}
+            {/* Play/Pause Overlay - Glass Effect */}
             {isActive && !playingVideos[modalKey] && (
               <View 
                 className="absolute inset-0 justify-center items-center"
                 style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.1)',
                 }}
               >
-                <View 
+                <View
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    borderRadius: getResponsiveSize(45, 55, 65),
                     padding: getResponsiveSpacing(16, 20, 24),
-                    borderRadius: getResponsiveSize(30, 35, 40),
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
                     shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    elevation: 5,
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 16,
+                    elevation: 8,
+                    // Glass effect with backdrop blur (iOS)
+                    ...(Platform.OS === 'ios' && {
+                      backdropFilter: 'blur(20px)',
+                    }),
                   }}
                 >
                   <MaterialIcons 
                     name="play-arrow" 
                     size={getResponsiveSize(50, 60, 70)} 
-                    color="#FEA74E" 
+                    color="#FFFFFF" 
                   />
                 </View>
               </View>
@@ -1244,6 +1283,9 @@ export default function Reelsviewscroll() {
           }}
         />
       </View>
+
+      {/* Comment Reply Modal */}
+      <CommentReplyModal />
     </>
   );
 }

@@ -37,7 +37,7 @@ Sentry.init({
 
 const API_BASE_URL =
   Constants.expoConfig?.extra?.API_URL ||
-  (__DEV__ ? "http://192.168.100.133:4000" : "https://jevahapp-backend.onrender.com");
+  "https://jevahapp-backend.onrender.com";
 
 const publishableKey = Constants.expoConfig?.extra?.CLERK_KEY ||
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||

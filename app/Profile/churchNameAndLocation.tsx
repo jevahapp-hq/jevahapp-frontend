@@ -1,23 +1,23 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
 import axios from "axios";
-import Constants from "expo-constants";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
+import { environmentManager } from "../utils/environmentManager";
 
 type Suggestion = {
   id: string;
@@ -27,7 +27,7 @@ type Suggestion = {
 
 function ChurchNameAndLocation() {
   const [search, setSearch] = useState("");
-  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
+  const API_BASE_URL = environmentManager.getCurrentUrl();
   const [churches, setChurches] = useState<Suggestion[]>([]);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Suggestion[]>(
     []
@@ -56,25 +56,40 @@ function ChurchNameAndLocation() {
         setCoords({ lat, lng });
 
         // Get nearby churches using Mapbox reverse geocoding first
-        const reverseGeoRes = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place&limit=1`
-        );
-        const reverseGeoData = await reverseGeoRes.json();
+        try {
+          const reverseGeoRes = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place&limit=1`
+          );
+          const reverseGeoData = await reverseGeoRes.json();
+        } catch (error) {
+          console.warn("Mapbox reverse geocoding failed:", error);
+        }
 
-        const res = await fetch(
-          `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`
-        );
-        const data = await res.json();
+        try {
+          console.log("🌐 Fetching churches from:", `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`);
+          const res = await fetch(
+            `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`
+          );
+          
+          if (!res.ok) {
+            console.error("Church API error:", res.status, res.statusText);
+            return;
+          }
+          
+          const data = await res.json();
 
-        const churchSuggestions = data.map((church: any) => ({
-          id: church.id,
-          name: church.name,
-          type: "church" as const,
-        }));
+          const churchSuggestions = data.map((church: any) => ({
+            id: church.id,
+            name: church.name,
+            type: "church" as const,
+          }));
 
-        setChurches(churchSuggestions);
+          setChurches(churchSuggestions);
+        } catch (error) {
+          console.error("Error fetching churches:", error);
+        }
       } catch (error) {
-        // console.error("Error fetching churches:", error);
+        console.error("Error in fetchLocationAndChurches:", error);
       }
     };
 
@@ -94,11 +109,18 @@ function ChurchNameAndLocation() {
           const proximity = coords
             ? `&proximity=${coords.lng},${coords.lat}&autocomplete=true`
             : "";
+          
+          console.log("🌐 Fetching location suggestions for:", search);
           const locRes = await fetch(
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
               search
             )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=10${proximity}`
           );
+
+          if (!locRes.ok) {
+            console.error("Mapbox API error:", locRes.status, locRes.statusText);
+            return;
+          }
 
           const locData = await locRes.json();
 
@@ -119,6 +141,7 @@ function ChurchNameAndLocation() {
           setFilteredSuggestions(locationSuggestions);
         } catch (err) {
           console.error("Error fetching suggestions:", err);
+          setFilteredSuggestions([]);
         }
       };
 
@@ -179,17 +202,19 @@ function ChurchNameAndLocation() {
       const token = await AsyncStorage.getItem("token");
       // Replace with your actual auth token logic
 
+      // Create axios instance with timeout configuration
+      const axiosInstance = axios.create({
+        timeout: 15000, // 15 seconds timeout
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      
-      const response = await axios.post(
+      const response = await axiosInstance.post(
         `${API_BASE_URL}/api/auth/complete-profile`,
         {
           location: selectedItem.name,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 
@@ -200,10 +225,20 @@ function ChurchNameAndLocation() {
       }
     } catch (error: any) {
       // console.error("Location submission error:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Something went wrong"
-      );
+      
+      // Provide more specific error messages
+      let errorMessage = "Something went wrong";
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "Authentication failed. Please login again.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@ import { getResponsiveSpacing } from "@/utils/responsive";
 import { AntDesign, Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     BackHandler,
@@ -50,7 +50,7 @@ interface MediaItem {
   imageUrl?: string | { uri: string };
 }
 
-export default function AllContent() {
+function AllContent() {
   const router = useRouter();
   const screenWidth = Dimensions.get("window").width;
   
@@ -2258,3 +2258,5 @@ export default function AllContent() {
     </ScrollView>
   );
 }
+
+export default React.memo(AllContent);

@@ -1,147 +1,106 @@
+import { useAuth, useOAuth, useUser } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import authService from '../services/authService';
-import { performanceOptimizer } from '../utils/performance';
-
-interface LoginState {
-  isLoading: boolean;
-  error: string | null;
-}
-
-interface LoginCredentials {
-  email: string;
-  password: string;
-}
+import { useCallback, useState } from 'react';
+import { authUtils } from '../utils/authUtils';
 
 export const useFastLogin = () => {
-  const [state, setState] = useState<LoginState>({
-    isLoading: false,
-    error: null
-  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const { isSignedIn, isLoaded: authLoaded, signOut, getToken } = useAuth();
+  const { isLoaded: userLoaded, user } = useUser();
+  const { startOAuthFlow: startGoogleAuth } = useOAuth({ strategy: 'oauth_google' });
+  const { startOAuthFlow: startFacebookAuth } = useOAuth({ strategy: 'oauth_facebook' });
+  const { startOAuthFlow: startAppleAuth } = useOAuth({ strategy: 'oauth_apple' });
 
-  const validateCredentials = useCallback((credentials: LoginCredentials): string | null => {
-    const { email, password } = credentials;
-
-    if (!email.trim()) {
-      return 'Email is required';
+  const login = useCallback(async (provider: 'google' | 'facebook' | 'apple') => {
+    if (!authLoaded || !userLoaded) {
+      setError('Authentication system is loading. Please wait.');
+      return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim().toLowerCase())) {
-      return 'Invalid email format';
-    }
-
-    if (!password) {
-      return 'Password is required';
-    }
-
-    if (password.length < 6 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      return 'Password must be at least 6 characters with letters and numbers';
-    }
-
-    return null;
-  }, []);
-
-  const login = useCallback(async (credentials: LoginCredentials): Promise<boolean> => {
-    // Clear previous error immediately
-    setState(prev => ({ ...prev, error: null }));
-
-    // Quick validation
-    const validationError = validateCredentials(credentials);
-    if (validationError) {
-      setState(prev => ({ ...prev, error: validationError }));
-      return false;
-    }
-
-    // Start loading immediately
-    setState(prev => ({ ...prev, isLoading: true }));
-
-    // Cancel any previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
+    // Immediate feedback
+    setIsLoading(true);
+    setError(null);
 
     try {
-      // Normalize inputs
-      const normalizedEmail = credentials.email.trim().toLowerCase();
-      const normalizedPassword = credentials.password.trim();
-
-      // Set timeout for the request
-      const timeoutId = setTimeout(() => {
-        abortControllerRef.current?.abort();
-      }, 10000); // 10 second timeout
-
-      // Attempt login
-      const result = await authService.login(normalizedEmail, normalizedPassword);
-
-      clearTimeout(timeoutId);
-
-      if (!result.success) {
-        const message = result.data?.message || result.error || 'Invalid email or password';
-        setState(prev => ({ ...prev, error: message }));
-        return false;
+      // Get the appropriate auth function
+      let authFn: () => Promise<any>;
+      switch (provider) {
+        case 'google':
+          authFn = startGoogleAuth;
+          break;
+        case 'facebook':
+          authFn = startFacebookAuth;
+          break;
+        case 'apple':
+          authFn = startAppleAuth;
+          break;
+        default:
+          setError('Invalid authentication provider. Please try again.');
+          setIsLoading(false);
+          return;
       }
 
-      // Quick user data validation
-      if (result.data?.user) {
-        if (!result.data.user.firstName || !result.data.user.lastName) {
-          setState(prev => ({ 
-            ...prev, 
-            error: 'Incomplete user profile. Please contact support.' 
-          }));
-          return false;
+      // Fast authentication flow with immediate feedback
+      // Test backend connectivity first
+      const backendAvailable = await authUtils.testBackendConnection();
+      if (!backendAvailable) {
+        throw new Error('Backend server is not accessible. Please check your connection.');
+      }
+
+      // Sign out if already signed in
+      if (isSignedIn) {
+        await signOut();
+        let retries = 0;
+        const maxRetries = 5; // Reduced retries for faster response
+        while (retries < maxRetries && isSignedIn) {
+          await new Promise(resolve => setTimeout(resolve, 200)); // Reduced wait time
+          retries++;
         }
       }
 
-      // Preload critical data for faster navigation
-      performanceOptimizer.preloadCriticalData().catch(() => {
-        // Silent fail for preloading
-      });
+      // Start OAuth flow
+      const { createdSessionId, setActive } = await authFn();
+      if (!createdSessionId || !setActive) {
+        throw new Error('OAuth flow failed: No session ID or setActive function');
+      }
 
-      // Navigate immediately
-      router.replace("/categories/HomeScreen");
-      return true;
+      await setActive({ session: createdSessionId });
+
+      // Wait for user data
+      const currentUser = await authUtils.waitForUserData(user);
+      const token = await getToken();
+      if (!token) throw new Error('Failed to retrieve Clerk token');
+
+      // Prepare user info
+      const userInfo = {
+        firstName: currentUser.firstName || 'Unknown',
+        lastName: currentUser.lastName || 'User',
+        avatar: currentUser.imageUrl || '',
+        email: currentUser.primaryEmailAddress?.emailAddress || '',
+      };
+
+      // Send auth request to backend
+      const authResult = await authUtils.sendAuthRequest(token, userInfo);
+      await authUtils.storeAuthData(authResult, userInfo);
+
+      // Navigate immediately on success
+      router.replace('/categories/HomeScreen');
 
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        setState(prev => ({ 
-          ...prev, 
-          error: 'Request timeout. Please check your connection and try again.' 
-        }));
-      } else {
-        setState(prev => ({ 
-          ...prev, 
-          error: 'An unexpected error occurred. Please try again.' 
-        }));
-      }
-      return false;
+      console.error('❌ Authentication error:', error);
+      const errorMessage = error?.message || 'Authentication failed. Please try again.';
+      setError(errorMessage);
     } finally {
-      setState(prev => ({ ...prev, isLoading: false }));
-      abortControllerRef.current = null;
+      setIsLoading(false);
     }
-  }, [validateCredentials]);
-
-  const clearError = useCallback(() => {
-    setState(prev => ({ ...prev, error: null }));
-  }, []);
-
-  const reset = useCallback(() => {
-    setState({ isLoading: false, error: null });
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-  }, []);
+  }, [authLoaded, userLoaded, isSignedIn, signOut, getToken, user, startGoogleAuth, startFacebookAuth, startAppleAuth]);
 
   return {
-    ...state,
+    isLoading,
+    error,
     login,
-    clearError,
-    reset
+    clearError: () => setError(null)
   };
 };

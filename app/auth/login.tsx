@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
   Image,
@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
-import { useFastLogin } from "../hooks/useFastLogin";
+import { loginDebugger } from "../utils/loginDebugger";
 
 export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState("");
@@ -23,8 +23,7 @@ export default function LoginScreen() {
 
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-
-  const { isLoading, error, login, clearError } = useFastLogin();
+  const [isLoading, setIsLoading] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -57,13 +56,31 @@ export default function LoginScreen() {
 
     if (!isValid) return;
 
-    // Use fast login hook which handles timeout, preloading, and navigation
-    const ok = await login({ email: emailAddress.trim().toLowerCase(), password: password.trim() });
-    if (!ok) {
-      const message = error || "Invalid email or password";
-      Alert.alert("Login Failed", message);
+    setIsLoading(true);
+    try {
+      // Debug the login attempt
+      console.log("🔍 Starting login debug...");
+      await loginDebugger.validateEmail(emailAddress.trim().toLowerCase());
+      await loginDebugger.validatePassword(password.trim());
+      
+      // Use authService for email/password login
+      const result = await loginDebugger.debugLogin(emailAddress.trim().toLowerCase(), password.trim());
+      
+      if (result.success && 'data' in result && result.data?.token) {
+        console.log("✅ Login successful");
+        router.replace("/categories/HomeScreen");
+      } else {
+        console.log("❌ Login failed:", result);
+        const errorMessage = ('data' in result && result.data?.message) || result.error || "Invalid email or password";
+        Alert.alert("Login Failed", errorMessage);
+      }
+    } catch (error) {
+      console.error("❌ Login error:", error);
+      Alert.alert("Login Failed", "An error occurred during login. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-  }, [emailAddress, password, login, error]);
+  }, [emailAddress, password]);
 
   const validatePassword = (password: string) => {
     return (
@@ -71,12 +88,7 @@ export default function LoginScreen() {
     );
   };
 
-  // Clear global error when fields change
-  useEffect(() => {
-    if (error) {
-      clearError();
-    }
-  }, [emailAddress, password]);
+
 
   return (
     <View className="flex-1 bg-white">

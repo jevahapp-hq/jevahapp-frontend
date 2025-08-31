@@ -1,7 +1,83 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from "expo-constants";
+import axios from 'axios';
+import { environmentManager } from './environmentManager';
 
-export const API_BASE_URL = Constants.expoConfig?.extra?.API_URL || 'http://localhost:8081';
+// Get the initial API URL from environment manager
+let API_BASE_URL = environmentManager.getCurrentUrl();
+
+// Update API URL when environment changes
+environmentManager.addListener((environment) => {
+  API_BASE_URL = environmentManager.getCurrentUrl();
+  console.log('🌐 Environment switched to:', environment, 'URL:', API_BASE_URL);
+  
+  // Update axios base URL
+  apiAxios.defaults.baseURL = API_BASE_URL;
+});
+
+// Log the current API URL for debugging
+console.log('🌐 Auto-detected API Base URL:', API_BASE_URL);
+
+// Configure axios defaults for better timeout handling
+axios.defaults.timeout = 15000; // 15 seconds timeout
+
+// Add retry interceptor with proper typing
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const { config } = error;
+    if (!config) {
+      return Promise.reject(error);
+    }
+    
+    // Add retry configuration to config
+    const retryConfig = config as any;
+    retryConfig.retry = retryConfig.retry || 3;
+    retryConfig.retryDelay = retryConfig.retryDelay || 1000;
+    retryConfig.retryCount = retryConfig.retryCount || 0;
+    
+    if (retryConfig.retryCount >= retryConfig.retry) {
+      return Promise.reject(error);
+    }
+    
+    retryConfig.retryCount += 1;
+    
+    // Wait before retrying
+    await new Promise(resolve => setTimeout(resolve, retryConfig.retryDelay));
+    
+    return axios(config);
+  }
+);
+
+// Create a configured axios instance for API calls
+export const apiAxios = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor to automatically add auth token
+apiAxios.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('token') || 
+                   await AsyncStorage.getItem('userToken') || 
+                   await AsyncStorage.getItem('authToken');
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('Failed to get auth token:', error);
+    }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Enhanced API utility functions
 export class APIClient {

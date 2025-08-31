@@ -5,7 +5,7 @@ import {
 } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
     Platform,
     Text,
@@ -23,6 +23,7 @@ import {
 } from "../../utils/responsive";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
+import { useFastPerformance } from "../utils/fastPerformance";
 
 // Bottom tab config
 interface BottomNavProps {
@@ -57,44 +58,59 @@ export default function BottomNav({
   setSelectedTab,
 }: BottomNavProps) {
   const [showActions, setShowActions] = useState(false);
+  const { fastPress } = useFastPerformance();
 
-  const handleFabToggle = () => {
-    console.log('🔄 FAB clicked! Current showActions:', showActions);
-    console.log('🔄 Will set showActions to:', !showActions);
+  const handleFabToggle = useCallback(() => {
     setShowActions(!showActions);
-  };
+  }, [showActions]);
 
-  const handleUpload = () => {
-    useMediaStore.getState().stopAudioFn?.(); // Stop any active audio
+  const handleUpload = useCallback(() => {
     setShowActions(false);
-    // Remove setTimeout delay for immediate navigation
-    router.push("/categories/upload");
-  };
-
-  const handleGoLive = () => {
-    useMediaStore.getState().stopAudioFn?.();
-    setShowActions(false);
-    // Remove setTimeout delay for immediate navigation
-    router.push("/goLlive/AllowPermissionsScreen");
-  };
-
-  const handleTabPress = (tab: string) => {
-    // Only stop media if actually switching to a different tab
-    if (tab !== selectedTab) {
-      // Stop any active audio and pause all videos when switching tabs
+    // Defer heavy operations to prevent blocking UI
+    requestAnimationFrame(() => {
       try {
         useMediaStore.getState().stopAudioFn?.();
       } catch (e) {
         // no-op
       }
+    });
+    router.push("/categories/upload");
+  }, []);
+
+  const handleGoLive = useCallback(() => {
+    setShowActions(false);
+    // Defer heavy operations to prevent blocking UI
+    requestAnimationFrame(() => {
       try {
-        useGlobalVideoStore.getState().pauseAllVideos();
+        useMediaStore.getState().stopAudioFn?.();
       } catch (e) {
         // no-op
       }
-    }
+    });
+    router.push("/goLlive/AllowPermissionsScreen");
+  }, []);
+
+  const handleTabPress = useCallback((tab: string) => {
+    // Immediate UI update
     setSelectedTab(tab);
-  };
+    
+    // Only stop media if actually switching to a different tab
+    if (tab !== selectedTab) {
+      // Defer heavy operations to prevent blocking UI
+      requestAnimationFrame(() => {
+        try {
+          useMediaStore.getState().stopAudioFn?.();
+        } catch (e) {
+          // no-op
+        }
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos();
+        } catch (e) {
+          // no-op
+        }
+      });
+    }
+  }, [selectedTab, setSelectedTab]);
 
   return (
     <>
@@ -252,7 +268,10 @@ export default function BottomNav({
             return (
               <TouchableOpacity
                 key={tab}
-                onPress={() => handleTabPress(tab)}
+                onPress={fastPress(() => handleTabPress(tab), { 
+                  key: `tab_${tab}`,
+                  priority: 'high'
+                })}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -287,7 +306,10 @@ export default function BottomNav({
             return (
               <TouchableOpacity
                 key={tab}
-                onPress={() => handleTabPress(tab)}
+                onPress={fastPress(() => handleTabPress(tab), { 
+                  key: `tab_${tab}`,
+                  priority: 'high'
+                })}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -340,7 +362,10 @@ export default function BottomNav({
             zIndex: 100,
             elevation: 15,
           }}
-          onPress={handleFabToggle}
+          onPress={fastPress(handleFabToggle, { 
+            key: 'fab_toggle',
+            priority: 'high'
+          })}
           activeOpacity={0.7}
         >
           <AntDesign

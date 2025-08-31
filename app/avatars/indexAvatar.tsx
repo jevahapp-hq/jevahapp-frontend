@@ -22,13 +22,13 @@ import Images from "./ImagesAvatars";
 import SlideUpSetProfileImageModal from "./SetProfileImageModal";
 
 import { Asset } from "expo-asset";
-import Constants from "expo-constants";
+import { environmentManager } from "../utils/environmentManager";
 
 const avatarTabs = ["Cartoon", "Cute Avatars", "Images"];
 
 const AvatarSelection = () => {
   const router = useRouter();
-  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
+  const API_BASE_URL = environmentManager.getCurrentUrl();
   const [activeTab, setActiveTab] = useState("Cartoon");
   const [selectedAvatar, setSelectedAvatar] = useState<
     ImageSourcePropType | string | null
@@ -114,6 +114,7 @@ const AvatarSelection = () => {
 
       console.log("📤 Uploading avatar to:", `${API_BASE_URL}/api/auth/avatar`);
       console.log("📤 FormData:", formData);
+      console.log("🌐 Using environment:", environmentManager.getCurrentEnvironment());
 
       // ✅ CORRECT ENDPOINT - matches your backend API documentation
       const res = await fetch(
@@ -133,6 +134,7 @@ const AvatarSelection = () => {
       if (!res.ok) {
         const errorText = await res.text();
         console.error("❌ Upload failed:", errorText);
+        console.error("🌐 API URL used:", `${API_BASE_URL}/api/auth/avatar`);
         
         // Handle specific error cases based on backend documentation
         if (res.status === 400) {
@@ -141,6 +143,8 @@ const AvatarSelection = () => {
           throw new Error("Unauthorized. Please log in again.");
         } else if (res.status === 413) {
           throw new Error("File too large. Please choose a smaller image (max 5MB).");
+        } else if (res.status === 0 || res.statusText === 'Network Error') {
+          throw new Error("Network error. Please check your internet connection and try again.");
         } else {
           throw new Error(`Upload failed: ${res.status} - ${errorText}`);
         }
@@ -218,14 +222,20 @@ const AvatarSelection = () => {
 
       // Update user profile with the new avatar URL
       console.log("🔄 Updating user profile...");
-      const response = await axios.post(
+      console.log("🌐 Using environment:", environmentManager.getCurrentEnvironment());
+      
+      // Create axios instance with timeout configuration
+      const axiosInstance = axios.create({
+        timeout: 15000, // 15 seconds timeout
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await axiosInstance.post(
         `${API_BASE_URL}/api/auth/complete-profile`,
-        { avatar: avatarUrl }, // ✅ Use 'avatar' field as per backend API
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { avatar: avatarUrl } // ✅ Use 'avatar' field as per backend API
       );
 
       console.log("📤 Profile update response:", response.data);
@@ -254,29 +264,22 @@ const AvatarSelection = () => {
       }
     } catch (error: any) {
       console.error("❌ Avatar submission failed:", error);
-      console.error("❌ Error details:", {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      });
       
-      // Provide more specific error feedback based on error type
-      let errorMessage = "Please select an avatar";
-      
-      if (error.message.includes("Invalid image file")) {
-        errorMessage = "Invalid image format. Please use JPEG, PNG, or GIF.";
-      } else if (error.message.includes("File too large")) {
-        errorMessage = "Image too large. Please choose a smaller file (max 5MB).";
-      } else if (error.message.includes("Unauthorized")) {
-        errorMessage = "Session expired. Please log in again.";
-      } else if (error.message.includes("No user token found")) {
-        errorMessage = "Authentication required. Please log in again.";
-      } else if (error.message.includes("Upload failed")) {
-        errorMessage = "Upload failed. Please check your connection and try again.";
+      // Provide more specific error messages
+      let errorMessage = "Avatar upload failed";
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "Authentication failed. Please login again.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
-      // Update the failure card text with more specific error message
-      setShowFailure(true);
+      console.error("❌ Error details:", errorMessage);
       triggerBounceDrop("failure");
     } finally {
       setIsUploading(false);

@@ -87,7 +87,11 @@ export default function CommentReplyModal() {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
+        // Add platform-specific adjustments for better keyboard handling
+        const adjustedHeight = Platform.OS === 'ios' 
+          ? e.endCoordinates.height 
+          : e.endCoordinates.height + (Platform.OS === 'android' ? 20 : 0);
+        setKeyboardHeight(adjustedHeight);
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
@@ -156,32 +160,173 @@ export default function CommentReplyModal() {
   const handleMainCommentSubmit = useCallback(() => {
     if (mainInputText.trim()) {
       InteractionManager.runAfterInteractions(() => {
-        // Add the new comment to the top of the list
-        const newComment = {
-          id: Date.now().toString(),
-          userName: 'Current User',
-          avatar: '',
-          timestamp: 'Just now',
-          comment: mainInputText.trim(),
-          likes: 0,
-          isLiked: false,
-        };
+        if (replyingTo) {
+          // This is a reply to a specific comment
+          replyToComment(replyingTo, mainInputText.trim());
+        } else {
+          // This is a new top-level comment
+          const newComment = {
+            id: Date.now().toString(),
+            userName: 'Current User',
+            avatar: '',
+            timestamp: new Date().toISOString(),
+            comment: mainInputText.trim(),
+            likes: 0,
+            isLiked: false,
+            replies: [],
+          };
+          
+          // Add the comment to the comments list
+          addComment(newComment);
+        }
         
-        // Add the comment to the comments list
-        addComment(newComment);
-        
-        // Here you would typically add the comment to your backend
-        console.log('Main comment submitted:', mainInputText);
-        
-        // Clear the input but keep the modal open
+        // Clear the input and reset reply state
         setMainInputText('');
         setReplyingTo(null);
       });
     }
-  }, [mainInputText, addComment]);
+  }, [mainInputText, replyingTo, replyToComment, addComment]);
 
   const formatTimestamp = (timestamp: string) => {
-    return timestamp;
+    const now = new Date();
+    const commentTime = new Date(timestamp);
+    const diffMs = now.getTime() - commentTime.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return commentTime.toLocaleDateString();
+  };
+
+  // Recursive component to render comments with their replies
+  const CommentItem = ({ comment, level = 0 }: { comment: any; level?: number }) => {
+    const hasReplies = comment.replies && comment.replies.length > 0;
+    const isReply = level > 0;
+    
+    return (
+      <View
+        key={comment.id}
+        style={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          borderBottomWidth: level === 0 ? 1 : 0,
+          borderBottomColor: '#F9FAFB',
+          marginLeft: level * 20, // Indent replies
+          backgroundColor: isReply ? '#F9FAFB' : 'transparent',
+          borderRadius: isReply ? 8 : 0,
+          marginBottom: isReply ? 8 : 0,
+        }}
+      >
+        <View style={{ flexDirection: 'row' }}>
+          {/* Avatar */}
+          <View style={{ marginRight: 12 }}>
+            {renderAvatar(comment.avatar, comment.userName)}
+          </View>
+
+          {/* Comment content */}
+          <View style={{ flex: 1 }}>
+            {/* User name and timestamp */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+                {comment.userName}
+              </Text>
+              {isReply && (
+                <Text style={{ fontSize: 12, color: '#6B7280', marginLeft: 4 }}>
+                  replying to @{comment.parentUserName || 'user'}
+                </Text>
+              )}
+              <View
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: '#F59E0B',
+                  marginHorizontal: 8,
+                }}
+              />
+              <Text style={{ fontSize: 12, color: '#9CA3AF' }}>
+                {formatTimestamp(comment.timestamp)}
+              </Text>
+            </View>
+
+            {/* Comment text */}
+            <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 8 }}>
+              {comment.comment}
+            </Text>
+
+            {/* Reply button - only show for top-level comments */}
+            {level === 0 && (
+              <TouchableOpacity
+                onPress={PerformanceOptimizer.handleButtonPress(() => {
+                  // Single click response - immediately set username and focus
+                  setMainInputText(`@${comment.userName} `);
+                  setReplyingTo(comment.id);
+                  mainInputRef.current?.focus();
+                }, { debounceMs: 100, key: `reply-${comment.id}` })}
+                style={{ 
+                  alignSelf: 'flex-start',
+                  minHeight: 44, // Ensure minimum touch target
+                  minWidth: 44,
+                  justifyContent: 'center',
+                  paddingVertical: 8,
+                  paddingHorizontal: 12
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#10B981' }}>
+                  REPLY
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Like button */}
+          <View style={{ alignItems: 'center', marginLeft: 12 }}>
+            <TouchableOpacity
+              onPress={PerformanceOptimizer.handleButtonPress(() => likeComment(comment.id), { 
+                debounceMs: 150, 
+                key: `like-${comment.id}` 
+              })}
+              style={{ 
+                alignItems: 'center',
+                minHeight: 44, // Ensure minimum touch target
+                minWidth: 44,
+                justifyContent: 'center',
+                paddingVertical: 8,
+                paddingHorizontal: 8
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={comment.isLiked ? 'heart' : 'heart-outline'}
+                size={20}
+                color={comment.isLiked ? '#EF4444' : '#6B7280'}
+              />
+              <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                {comment.likes}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Render replies */}
+        {hasReplies && (
+          <View style={{ marginTop: 12 }}>
+            {comment.replies.map((reply: any) => (
+              <CommentItem 
+                key={reply.id} 
+                comment={reply} 
+                level={level + 1} 
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   const renderAvatar = (avatar: string, userName: string) => {
@@ -291,124 +436,76 @@ export default function CommentReplyModal() {
           <ScrollView
             style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: (keyboardHeight > 0 ? keyboardHeight + INPUT_BAR_HEIGHT + 24 : INPUT_BAR_HEIGHT + 24) }}
+            contentContainerStyle={{ 
+              paddingBottom: (keyboardHeight > 0 ? keyboardHeight + (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 24 : (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 24) 
+            }}
           >
             {comments.map((comment) => (
-              <View
-                key={comment.id}
-                style={{
-                  paddingHorizontal: 20,
-                  paddingVertical: 16,
-                  borderBottomWidth: 1,
-                  borderBottomColor: '#F9FAFB',
-                }}
-              >
-                <View style={{ flexDirection: 'row' }}>
-                  {/* Avatar */}
-                  <View style={{ marginRight: 12 }}>
-                    {renderAvatar(comment.avatar, comment.userName)}
-                  </View>
-
-                  {/* Comment content */}
-                  <View style={{ flex: 1 }}>
-                    {/* User name and timestamp */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
-                        {comment.userName}
-                      </Text>
-                      <View
-                        style={{
-                          width: 4,
-                          height: 4,
-                          borderRadius: 2,
-                          backgroundColor: '#F59E0B',
-                          marginHorizontal: 8,
-                        }}
-                      />
-                      <Text style={{ fontSize: 12, color: '#9CA3AF' }}>
-                        {formatTimestamp(comment.timestamp)}
-                      </Text>
-                    </View>
-
-                    {/* Comment text */}
-                    <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 8 }}>
-                      {comment.comment}
-                    </Text>
-
-                    {/* Reply button */}
-                    <TouchableOpacity
-                      onPress={PerformanceOptimizer.handleButtonPress(() => {
-                        // Single click response - immediately set username and focus
-                        setMainInputText(`@${comment.userName} `);
-                        setReplyingTo(comment.id);
-                        mainInputRef.current?.focus();
-                      }, { debounceMs: 100, key: `reply-${comment.id}` })}
-                      style={{ 
-                        alignSelf: 'flex-start',
-                        minHeight: 44, // Ensure minimum touch target
-                        minWidth: 44,
-                        justifyContent: 'center',
-                        paddingVertical: 8,
-                        paddingHorizontal: 12
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#10B981' }}>
-                        REPLY
-                      </Text>
-                    </TouchableOpacity>
-
-
-                  </View>
-
-                  {/* Like button */}
-                  <View style={{ alignItems: 'center', marginLeft: 12 }}>
-                    <TouchableOpacity
-                      onPress={PerformanceOptimizer.handleButtonPress(() => likeComment(comment.id), { 
-                        debounceMs: 150, 
-                        key: `like-${comment.id}` 
-                      })}
-                      style={{ 
-                        alignItems: 'center',
-                        minHeight: 44, // Ensure minimum touch target
-                        minWidth: 44,
-                        justifyContent: 'center',
-                        paddingVertical: 8,
-                        paddingHorizontal: 8
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={comment.isLiked ? 'heart' : 'heart-outline'}
-                        size={20}
-                        color={comment.isLiked ? '#EF4444' : '#6B7280'}
-                      />
-                      <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                        {comment.likes}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+              <CommentItem 
+                key={comment.id} 
+                comment={comment} 
+                level={0} 
+              />
             ))}
           </ScrollView>
 
-          {/* Floating composer bar positioned at bottom of modal */}
+          {/* Input Modal - Always visible when comment modal is open */}
           {showInputModal && (
             <View
               style={{
                 position: 'absolute',
                 left: 0,
                 right: 0,
-                bottom: 0,
+                bottom: keyboardHeight > 0 ? keyboardHeight : 0,
                 backgroundColor: 'white',
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 paddingHorizontal: 12,
                 paddingVertical: 10,
-                height: INPUT_BAR_HEIGHT + (keyboardHeight > 0 ? keyboardHeight + 20 : 20),
+                height: replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT,
+                zIndex: 1000,
+                // Add shadow for better visual separation
+                shadowColor: '#000',
+                shadowOffset: {
+                  width: 0,
+                  height: -2,
+                },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 5,
               }}
             >
+              {/* Reply indicator */}
+              {replyingTo && (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingBottom: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#F3F4F6',
+                }}>
+                  <Text style={{
+                    fontSize: 12,
+                    color: '#6B7280',
+                    fontWeight: '500',
+                  }}>
+                    Replying to {mainInputText.split('@')[1]?.split(' ')[0] || 'user'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setReplyingTo(null);
+                      setMainInputText('');
+                    }}
+                    style={{
+                      padding: 4,
+                    }}
+                  >
+                    <Ionicons name="close" size={16} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              
               <View
                 style={{
                   flex: 1,
@@ -455,7 +552,7 @@ export default function CommentReplyModal() {
                     ref={mainInputRef}
                     value={mainInputText}
                     onChangeText={setMainInputText}
-                    placeholder={replyingTo ? "" : "Reply to @Joseph Eluwa"}
+                    placeholder={replyingTo ? `Replying to ${mainInputText.split('@')[1]?.split(' ')[0] || 'user'}` : "Add a comment..."}
                     placeholderTextColor="#6B7280"
                     style={{ 
                       fontSize: 14, 

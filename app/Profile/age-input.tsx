@@ -1,23 +1,22 @@
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { Platform, Text, TouchableOpacity, View, Alert } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
 import DateTimePicker from "@react-native-community/datetimepicker";
+import Constants from "expo-constants";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Alert, Platform, Text, TouchableOpacity, View } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
-import { API_BASE_URL } from "../utils/api";
-import Constants from "expo-constants";
+import { apiAxios } from "../utils/api";
 
 export default function AgeInputScreen() {
   const router = useRouter();
   const [date, setDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
   const calculateAge = (dob: Date): number => {
     const today = new Date();
-    const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
     let age = today.getFullYear() - dob.getFullYear();
     const monthDiff = today.getMonth() - dob.getMonth();
 
@@ -42,14 +41,9 @@ export default function AgeInputScreen() {
       const token = await AsyncStorage.getItem("token");
       // Replace with real token logic
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/auth/complete-profile`,
-        { age },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const response = await apiAxios.post(
+        `/api/auth/complete-profile`,
+        { age }
       );
 
       if (response.data.success) {
@@ -59,10 +53,20 @@ export default function AgeInputScreen() {
       }
     } catch (error: any) {
       console.error("Age submission failed:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Something went wrong"
-      );
+      
+      // Provide more specific error messages
+      let errorMessage = "Something went wrong";
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "Authentication failed. Please login again.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }

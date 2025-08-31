@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { useLocalSearchParams } from "expo-router";
@@ -11,6 +11,7 @@ import {
 import Header from "../components/Header";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
+import { useFastPerformance } from "../utils/fastPerformance";
 import AllContent from "./Allcontent";
 import EbookComponent from "./EbookComponent";
 import LiveComponent from "./LiveComponent";
@@ -26,25 +27,29 @@ export default function HomeTabContent() {
     (defaultCategory as string) || "ALL"
   );
 
-  const handleCategoryPress = (category: string) => {
-    // Provide immediate visual feedback
+  const { fastPress } = useFastPerformance();
+
+  const handleCategoryPress = useCallback((category: string) => {
+    // Immediate visual feedback
     setSelectedCategory(category);
     
     // Only stop media if actually switching to a different category
     if (category !== selectedCategory) {
-      // Stop any active audio and pause all videos when switching categories
-      try {
-        useMediaStore.getState().stopAudioFn?.();
-      } catch (e) {
-        // no-op
-      }
-      try {
-        useGlobalVideoStore.getState().pauseAllVideos();
-      } catch (e) {
-        // no-op
-      }
+      // Defer heavy operations to prevent blocking UI
+      requestAnimationFrame(() => {
+        try {
+          useMediaStore.getState().stopAudioFn?.();
+        } catch (e) {
+          // no-op
+        }
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos();
+        } catch (e) {
+          // no-op
+        }
+      });
     }
-  };
+  }, [selectedCategory, fastPress]);
 
   const renderContent = () => {
     switch (selectedCategory) {
@@ -108,25 +113,28 @@ export default function HomeTabContent() {
             }}
           >
             {categories.map((category) => (
-                              <TouchableOpacity
-                  key={category}
-                  onPress={() => handleCategoryPress(category)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                    marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
-                    borderRadius: getResponsiveBorderRadius('medium'),
-                    backgroundColor: selectedCategory === category ? 'black' : 'white',
-                    borderWidth: selectedCategory === category ? 0 : 1,
-                    borderColor: selectedCategory === category ? 'transparent' : '#6B6E7C',
-                    ...getResponsiveShadow(),
-                    minWidth: 48,
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
+              <TouchableOpacity
+                key={category}
+                onPress={fastPress(() => handleCategoryPress(category), { 
+                  key: `category_${category}`,
+                  priority: 'high'
+                })}
+                activeOpacity={0.7}
+                style={{
+                  paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                  paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                  marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
+                  borderRadius: getResponsiveBorderRadius('medium'),
+                  backgroundColor: selectedCategory === category ? 'black' : 'white',
+                  borderWidth: selectedCategory === category ? 0 : 1,
+                  borderColor: selectedCategory === category ? 'transparent' : '#6B6E7C',
+                  ...getResponsiveShadow(),
+                  minWidth: 48,
+                  minHeight: 44,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
                 <View style={{ position: 'relative' }}>
                   <Text style={[
                     getResponsiveTextStyle('button'),

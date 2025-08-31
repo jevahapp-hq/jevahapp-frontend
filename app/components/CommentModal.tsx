@@ -5,7 +5,9 @@ import {
     Alert,
     Dimensions,
     Keyboard,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     Text,
     TextInput,
@@ -173,6 +175,12 @@ export default function CommentModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        enabled={true}
+    >
       <View style={{ flex: 1 }}>
         {/* Header */}
         <View style={{
@@ -249,7 +257,7 @@ export default function CommentModal({
             contentContainerStyle={{
               paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
               paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-              paddingBottom: keyboardHeight > 0 ? keyboardHeight + 100 : 120,
+                paddingBottom: keyboardHeight > 0 ? keyboardHeight + 140 : 140,
             }}
           >
             {isLoading ? (
@@ -397,7 +405,7 @@ export default function CommentModal({
             )}
           </ScrollView>
 
-          {/* Comment Input - Positioned absolutely above keyboard */}
+            {/* Comment Input - Now positioned at bottom with KeyboardAvoidingView */}
           <View style={{
             backgroundColor: 'white',
             borderTopWidth: 1,
@@ -405,7 +413,7 @@ export default function CommentModal({
             paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
             paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
             position: 'absolute',
-            bottom: keyboardHeight > 0 ? keyboardHeight : 0,
+              bottom: 0,
             left: 0,
             right: 0,
             zIndex: 1000,
@@ -481,6 +489,7 @@ export default function CommentModal({
           </View>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

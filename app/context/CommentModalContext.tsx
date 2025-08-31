@@ -9,6 +9,8 @@ interface Comment {
   comment: string;
   likes: number;
   isLiked: boolean;
+  replies?: Comment[];
+  parentId?: string; // ID of the parent comment if this is a reply
 }
 
 interface CommentModalContextType {
@@ -107,24 +109,33 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({ chil
 
   const replyToComment = async (commentId: string, replyText: string) => {
     try {
-      // Add the reply to the store if we have a contentId
+      // Create the new reply comment
+      const newReply: Comment = {
+        id: Date.now().toString(), // Temporary ID
+        userName: 'Current User', // This should come from user context
+        avatar: '',
+        timestamp: new Date().toISOString(),
+        comment: replyText,
+        likes: 0,
+        isLiked: false,
+        parentId: commentId,
+      };
+      
+      // Add the reply to the specific comment's replies array
+      setComments(prev =>
+        prev.map(comment =>
+          comment.id === commentId
+            ? {
+                ...comment,
+                replies: [...(comment.replies || []), newReply]
+              }
+            : comment
+        )
+      );
+
+      // Add the comment to the store if we have a contentId
       if (currentContentId) {
         await addCommentToStore(currentContentId, replyText);
-        
-        // Refresh comments from the store
-        // This would typically be handled by the store's loadComments function
-        // For now, we'll just add it to our local state
-        const newComment: Comment = {
-          id: Date.now().toString(), // Temporary ID
-          userName: 'Current User', // This should come from user context
-          avatar: '',
-          timestamp: new Date().toISOString(),
-          comment: replyText,
-          likes: 0,
-          isLiked: false,
-        };
-        
-        addComment(newComment);
       }
     } catch (error) {
       console.error('Error adding reply:', error);

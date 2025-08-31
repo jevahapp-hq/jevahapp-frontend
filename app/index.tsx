@@ -14,9 +14,8 @@ import {
 } from 'react-native';
 import '../global.css';
 import AnimatedLogoIntro from './components/AnimatedLogoIntro';
-import { authUtils } from './utils/authUtils';
-
-const API_BASE_URL = __DEV__ ? 'http://192.168.100.133:4000' : 'https://jevahapp-backend.onrender.com';
+import { useFastLogin } from './hooks/useFastLogin';
+import { useFastPerformance } from './utils/fastPerformance';
 
 const { width } = Dimensions.get('window');
 
@@ -52,8 +51,8 @@ const slides = [
 ];
 
 export default function Welcome() {
-  const flatListRef = useRef<FlatList<any>>(null);
-  const currentIndexRef = useRef(0);
+  const flatListRef = useRef<FlatList<any> | null>(null);
+  const currentIndexRef = useRef<number>(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
@@ -117,94 +116,12 @@ export default function Welcome() {
 
   const handleIntroFinished = useCallback(() => setShowIntro(false), []);
 
-  const handleSignIn = async (authFn: () => Promise<any>, provider: 'google' | 'facebook' | 'apple') => {
-    if (!authLoaded || !userLoaded) {
-      console.log('Waiting for auth or user to load', { authLoaded, userLoaded });
-      return;
-    }
+  const { isLoading: loginLoading, error: loginError, login } = useFastLogin();
+  const { fastPress } = useFastPerformance();
 
-    try {
-      setLoading(true);
-      console.log('🔐 Starting authentication flow for:', provider);
-
-      // Debug authentication setup
-      await authUtils.debugAuthSetup();
-
-      // Test backend connectivity first
-      console.log('🔍 Testing backend connectivity...');
-      const backendAvailable = await authUtils.testBackendConnection();
-      if (!backendAvailable) {
-        throw new Error('Backend server is not accessible. Please check your connection.');
-      }
-      console.log('✅ Backend is accessible');
-
-      // Test minimal auth request to identify backend issues
-      console.log('🧪 Testing minimal auth request...');
-      const testResult = await authUtils.testMinimalAuthRequest();
-      console.log('🧪 Minimal auth test result:', testResult);
-
-      if (isSignedIn) {
-        console.log('🔄 Signing out existing session...');
-        await signOut();
-        let retries = 0;
-        const maxRetries = 10;
-        while (retries < maxRetries && isSignedIn) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-          retries++;
-          console.log(`⏳ Sign out retry ${retries}/${maxRetries}`, { isSignedIn });
-        }
-        if (isSignedIn) console.warn('⚠️ Still signed in after signOut attempts');
-      }
-
-      console.log('🚀 Starting OAuth flow for', provider);
-      const { createdSessionId, setActive } = await authFn();
-      if (!createdSessionId || !setActive) {
-        throw new Error('OAuth flow failed: No session ID or setActive function');
-      }
-
-      console.log('✅ OAuth flow completed, setting active session...');
-      await setActive({ session: createdSessionId });
-
-      // Wait for user data to be available
-      console.log('⏳ Waiting for user data to be available...');
-      const currentUser = await authUtils.waitForUserData(user);
-      console.log('✅ User data received:', {
-        firstName: currentUser.firstName,
-        lastName: currentUser.lastName,
-        email: currentUser.primaryEmailAddress?.emailAddress,
-        hasImage: !!currentUser.imageUrl
-      });
-
-      const token = await getToken();
-      if (!token) throw new Error('Failed to retrieve Clerk token');
-      console.log('✅ Clerk token retrieved:', token.substring(0, 20) + '...');
-
-      // Prepare user info for backend
-      const userInfo = {
-        firstName: currentUser.firstName || 'Unknown',
-        lastName: currentUser.lastName || 'User',
-        avatar: currentUser.imageUrl || '',
-        email: currentUser.primaryEmailAddress?.emailAddress || '',
-      };
-
-      console.log('📤 Sending user info to backend:', userInfo);
-
-      // Send authentication request to backend
-      const result = await authUtils.sendAuthRequest(token, userInfo);
-
-      // Store authentication data
-      console.log('💾 Storing authentication data...');
-      await authUtils.storeAuthData(result, userInfo);
-
-      console.log('🎉 Authentication completed successfully!');
-      router.replace('/categories/HomeScreen');
-    } catch (error) {
-      console.error('❌ Authentication error:', error);
-      authUtils.handleAuthError(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleSignIn = useCallback((provider: 'google' | 'facebook' | 'apple') => {
+    login(provider);
+  }, [login]);
 
   if (showIntro) {
     return <AnimatedLogoIntro onFinished={handleIntroFinished} backgroundColor="#0A332D" scale={1} letterStaggerMs={100} />;
@@ -228,7 +145,10 @@ export default function Welcome() {
         </Text>
         <View className="flex-row mt-12 gap-[16px]">
           <TouchableOpacity 
-            onPress={() => handleSignIn(startFacebookAuth, 'facebook')}
+            onPress={fastPress(() => handleSignIn('facebook'), { 
+              key: 'facebook_login',
+              priority: 'high'
+            })}
             activeOpacity={0.7}
             style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }}
           >
@@ -239,7 +159,10 @@ export default function Welcome() {
             />
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={() => handleSignIn(startGoogleAuth, 'google')}
+            onPress={fastPress(() => handleSignIn('google'), { 
+              key: 'google_login',
+              priority: 'high'
+            })}
             activeOpacity={0.7}
             style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }}
           >
@@ -250,7 +173,10 @@ export default function Welcome() {
             />
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={() => handleSignIn(startAppleAuth, 'apple')}
+            onPress={fastPress(() => handleSignIn('apple'), { 
+              key: 'apple_login',
+              priority: 'high'
+            })}
             activeOpacity={0.7}
             style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }}
           >
@@ -275,7 +201,10 @@ export default function Welcome() {
           />
         </View>
         <TouchableOpacity
-          onPress={() => router.push('/auth/signup')}
+          onPress={fastPress(() => router.push('/auth/signup'), { 
+            key: 'signup_button',
+            priority: 'high'
+          })}
           activeOpacity={0.8}
           style={{
             width: '90%',
@@ -291,13 +220,21 @@ export default function Welcome() {
           <Text className="text-white font-semibold">Get Started with Email</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          onPress={() => router.push('/auth/login')} 
+          onPress={fastPress(() => router.push('/auth/login'), { 
+            key: 'login_button',
+            priority: 'high'
+          })} 
           activeOpacity={0.7}
           style={{ marginTop: 36, padding: 8 }}
         >
           <Text className="font-rubik-bold text-[#344054]">Sign In</Text>
         </TouchableOpacity>
-        {loading && <ActivityIndicator className="mt-4" color="#090E24" />}
+        {loginLoading && <ActivityIndicator className="mt-4" color="#090E24" />}
+        {loginError && (
+          <Text className="text-red-500 text-center mt-2 px-4">
+            {loginError}
+          </Text>
+        )}
       </View>
     </View>
   );

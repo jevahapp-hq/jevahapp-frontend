@@ -183,6 +183,64 @@ export class PerformanceOptimizer {
   }
 
   /**
+   * Optimized data fetching with caching and request deduplication
+   */
+  static async optimizedFetch<T>(
+    key: string,
+    fetchFn: () => Promise<T>,
+    options: {
+      cacheDuration?: number;
+      forceRefresh?: boolean;
+      background?: boolean;
+      priority?: 'high' | 'low';
+      timeout?: number;
+    } = {}
+  ): Promise<T> {
+    const { 
+      cacheDuration = 5 * 60 * 1000, 
+      forceRefresh = false, 
+      background = false,
+      priority = 'high',
+      timeout = 10000
+    } = options;
+    
+    const optimizer = PerformanceOptimizer.getInstance();
+
+    // Check cache first for instant response
+    if (!forceRefresh) {
+      const cached = optimizer.preloadedData.get(key);
+      if (cached && Date.now() - cached.timestamp < cacheDuration) {
+        return cached.data;
+      }
+    }
+
+    // Create new request with timeout
+    const requestPromise = new Promise<T>(async (resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`Request timeout for ${key}`));
+      }, timeout);
+
+      try {
+        const data = await fetchFn();
+        clearTimeout(timeoutId);
+        
+        // Cache the result
+        optimizer.preloadedData.set(key, {
+          data,
+          timestamp: Date.now()
+        });
+        
+        resolve(data);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    });
+
+    return requestPromise;
+  }
+
+  /**
    * Clear performance cache
    */
   async clearCache(): Promise<void> {

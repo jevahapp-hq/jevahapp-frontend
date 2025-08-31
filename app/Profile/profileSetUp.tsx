@@ -1,26 +1,23 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
 import { router, useFocusEffect } from "expo-router";
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
+  Alert,
   BackHandler,
   Pressable,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
-import { API_BASE_URL } from "../utils/api";
-import Constants from "expo-constants";
+import { apiAxios } from "../utils/api";
 
 export default function ProfileSetUp() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
   useFocusEffect(
     useCallback(() => {
@@ -94,16 +91,13 @@ export default function ProfileSetUp() {
 
       // 👇 Add this log before sending the request
       console.log("🚀 Sending interests:", selectedInterests);
+      console.log("🌐 API Base URL:", apiAxios.defaults.baseURL);
+      console.log("🔑 Token present:", !!token);
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/auth/complete-profile`,
+      const response = await apiAxios.post(
+        `/api/auth/complete-profile`,
         {
           interests: selectedInterests,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 
@@ -114,10 +108,29 @@ export default function ProfileSetUp() {
       }
     } catch (error: any) {
       console.error("Profile update failed:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Something went wrong"
-      );
+      console.error("🌐 Full error details:", {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        method: error.config?.method,
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = "Something went wrong";
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "Authentication failed. Please login again.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }
