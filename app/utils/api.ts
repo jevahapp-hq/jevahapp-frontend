@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from "expo-constants";
 
-export const API_BASE_URL = Constants.expoConfig?.extra?.API_URL || 'http://localhost:8081';
+// Use environment variable from .env files
+export const API_BASE_URL = Constants.expoConfig?.extra?.API_URL || 'https://jevahapp-backend.onrender.com';
 
 // Enhanced API utility functions
 export class APIClient {

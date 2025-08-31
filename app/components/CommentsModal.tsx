@@ -8,7 +8,9 @@ import {
     FlatList,
     Image,
     Keyboard,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     Text,
     TextInput,
     TouchableOpacity,
@@ -262,109 +264,109 @@ export default function CommentsModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-white">
-        {/* Header */}
-        <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-          <TouchableOpacity 
-            onPress={onClose}
-            className="p-1"
-          >
-            <Ionicons name="close" size={24} color="#6B7280" />
-          </TouchableOpacity>
-          <Text className="text-lg font-rubik-semibold text-gray-900">
-            Comments
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        {/* Content Title */}
-        <View className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <Text className="text-sm text-gray-600 font-rubik" numberOfLines={2}>
-            {contentTitle}
-          </Text>
-        </View>
-
-        {/* Comments List */}
-        {isLoading && currentComments.length === 0 ? (
-          renderLoadingState()
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={currentComments as any}
-            renderItem={renderComment as any}
-            keyExtractor={(item: any) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ 
-              flexGrow: 1,
-              paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 100
-            }}
-            ListEmptyComponent={renderEmptyState}
-            onEndReachedThreshold={0.1}
-            onEndReached={() => {
-              // Load more comments if available
-              if (currentComments.length > 0) {
-                loadComments(contentId, Math.floor(currentComments.length / 20) + 1);
-              }
-            }}
-            keyboardShouldPersistTaps="handled"
-          />
-        )}
-
-        {/* Comment Input - Positioned absolutely above keyboard */}
-        <View 
-          className="border-t border-gray-200 bg-white px-4 py-3"
-          style={{
-            position: 'absolute',
-            bottom: keyboardHeight > 0 ? keyboardHeight : 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-          }}
-        >
-          <View className="flex-row items-end space-x-3">
-            <View className="flex-1">
-              <TextInput
-                ref={inputRef}
-                value={newComment}
-                onChangeText={setNewComment}
-                placeholder="Add a comment..."
-                multiline
-                maxLength={500}
-                className="border border-gray-300 rounded-2xl px-4 py-3 max-h-20 font-rubik text-sm bg-gray-50"
-                style={{ textAlignVertical: 'top' }}
-                returnKeyType="send"
-                onSubmitEditing={handleSubmitComment}
-                blurOnSubmit={false}
-              />
-              {newComment.length > 0 && (
-              <Text className="text-right text-xs text-gray-400 mt-1 font-rubik">
-                {newComment.length}/500
-              </Text>
-              )}
-            </View>
-            
-            <TouchableOpacity
-              onPress={handleSubmitComment}
-              disabled={!newComment.trim() || isSubmitting}
-              className={`px-4 py-3 rounded-full ${
-                newComment.trim() && !isSubmitting
-                  ? 'bg-[#FEA74E]'
-                  : 'bg-gray-300'
-              }`}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        enabled={true}
+      >
+        <View className="flex-1 bg-white">
+          {/* Header */}
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <TouchableOpacity 
+              onPress={onClose}
+              className="p-1"
             >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons 
-                  name="send" 
-                  size={18} 
-                  color={newComment.trim() ? "white" : "#9CA3AF"} 
-                />
-              )}
+              <Ionicons name="close" size={24} color="#6B7280" />
             </TouchableOpacity>
+            <Text className="text-lg font-rubik-semibold text-gray-900">
+              Comments
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {/* Content Title */}
+          <View className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <Text className="text-sm text-gray-600 font-rubik" numberOfLines={2}>
+              {contentTitle}
+            </Text>
+          </View>
+
+          {/* Comments List */}
+          {isLoading && currentComments.length === 0 ? (
+            renderLoadingState()
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={currentComments as any}
+              renderItem={renderComment as any}
+              keyExtractor={(item: any) => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ 
+                flexGrow: 1,
+                paddingBottom: 20
+              }}
+              ListEmptyComponent={renderEmptyState}
+              onEndReachedThreshold={0.1}
+              onEndReached={() => {
+                // Load more comments if available
+                if (currentComments.length > 0) {
+                  loadComments(contentId, Math.floor(currentComments.length / 20) + 1);
+                }
+              }}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
+
+          {/* Comment Input - Now positioned at bottom of KeyboardAvoidingView */}
+          <View 
+            className="border-t border-gray-200 bg-white px-4 py-3"
+          >
+            <View className="flex-row items-end space-x-3">
+              <View className="flex-1">
+                <TextInput
+                  ref={inputRef}
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  placeholder="Add a comment..."
+                  multiline
+                  maxLength={500}
+                  className="border border-gray-300 rounded-2xl px-4 py-3 max-h-20 font-rubik text-sm bg-gray-50"
+                  style={{ textAlignVertical: 'top' }}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSubmitComment}
+                  blurOnSubmit={false}
+                />
+                {newComment.length > 0 && (
+                <Text className="text-right text-xs text-gray-400 mt-1 font-rubik">
+                  {newComment.length}/500
+                </Text>
+                )}
+              </View>
+              
+              <TouchableOpacity
+                onPress={handleSubmitComment}
+                disabled={!newComment.trim() || isSubmitting}
+                className={`px-4 py-3 rounded-full ${
+                  newComment.trim() && !isSubmitting
+                    ? 'bg-[#FEA74E]'
+                    : 'bg-gray-300'
+                }`}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons 
+                    name="send" 
+                    size={18} 
+                    color={newComment.trim() ? "white" : "#9CA3AF"} 
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

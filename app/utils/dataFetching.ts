@@ -155,22 +155,47 @@ async function enhancedFetch(
   
   for (let attempt = 1; attempt <= retryCount; attempt++) {
     try {
+      console.log(`🔍 Fetch attempt ${attempt}/${retryCount} for ${method} ${url}`);
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
       PerformanceMonitor.endTimer(`fetch-${method}-${url}`);
+      
+      console.log(`✅ Fetch successful: ${response.status} ${response.statusText}`);
       return response;
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Fetch attempt ${attempt} failed:`, error);
+      console.warn(`❌ Fetch attempt ${attempt} failed:`, {
+        error: error,
+        message: (error as Error).message,
+        name: (error as Error).name,
+        url: url,
+        method: method
+      });
       
       if (attempt === retryCount) {
         clearTimeout(timeoutId);
         PerformanceMonitor.endTimer(`fetch-${method}-${url}`);
+        
+        // Provide more specific error information
+        if ((error as Error).name === 'AbortError') {
+          throw new Error(`Request timeout after ${timeout}ms`);
+        }
+        
+        if ((error as Error).message?.includes('Network')) {
+          throw new Error('Network connection failed. Please check your internet connection.');
+        }
+        
+        if ((error as Error).message?.includes('fetch')) {
+          throw new Error('Network request failed. Please check your connection and try again.');
+        }
+        
         throw lastError;
       }
       
       // Reduced wait time for faster retry
-      await new Promise(resolve => setTimeout(resolve, Math.pow(1.5, attempt) * 500));
+      const waitTime = Math.pow(1.5, attempt) * 500;
+      console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
 
@@ -262,11 +287,34 @@ export class ApiClient {
           userKeys: Object.keys(result.user),
           fullUserData: result.user
         });
+      } else {
+        console.warn("⚠️ API: getUserProfile returned no user data");
+        throw new Error("No user data received from server");
       }
       
       return result;
     } catch (error) {
       console.error("❌ API: getUserProfile error:", error);
+      
+      // Provide more specific error information
+      if (error instanceof Error) {
+        if (error.message.includes('Network') || error.message.includes('fetch')) {
+          throw new Error('Network connection failed. Please check your internet connection.');
+        }
+        if (error.message.includes('timeout')) {
+          throw new Error('Request timeout. Please check your connection and try again.');
+        }
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          throw new Error('Authentication failed. Please login again.');
+        }
+        if (error.message.includes('404')) {
+          throw new Error('User profile not found. Please contact support.');
+        }
+        if (error.message.includes('500')) {
+          throw new Error('Server error. Please try again later.');
+        }
+      }
+      
       throw error;
     }
   }

@@ -4,12 +4,15 @@
 
 // CommunityScreen.tsx
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import BottomNav from "../../components/BottomNav";
 
 
 import { Ionicons } from "@expo/vector-icons";
+import OptimizedTouchableOpacity from "../../components/OptimizedTouchableOpacity";
+import { useFastButton } from "../../hooks/useFastButton";
+import { usePerformanceMonitor } from "../../hooks/usePerformanceMonitor";
 import AllLibrary from "./AllLibrary";
 import EbooksLibrary from "./EbooksLibrary";
 import LiveLibrary from "./LiveLibrary";
@@ -20,30 +23,178 @@ import VideoLibrary from "./VideoLibrary";
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
+// Memoized category button component for better performance
+const LibraryCategoryButton = memo(({ 
+  category, 
+  isSelected, 
+  onPress 
+}: { 
+  category: string; 
+  isSelected: boolean; 
+  onPress: () => void; 
+}) => {
+  const buttonHandler = useFastButton(onPress, {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50, // Faster response
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  return (
+    <OptimizedTouchableOpacity
+      onPress={buttonHandler.handlePress}
+      activeOpacity={0.7}
+      preventRapidClicks={true}
+      rapidClickThreshold={50}
+      hapticFeedback={true}
+      hapticType="light"
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        marginHorizontal: 4,
+        borderRadius: 10,
+        backgroundColor: isSelected ? "black" : "white",
+        borderWidth: isSelected ? 0 : 1,
+        borderColor: isSelected ? "transparent" : "#6B6E7C",
+        minWidth: 48,
+        minHeight: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <Text
+        style={{
+          color: isSelected ? "white" : "#1D2939",
+          fontFamily: "Rubik_600SemiBold",
+          fontSize: 14,
+        }}
+      >
+        {category}
+      </Text>
+    </OptimizedTouchableOpacity>
+  );
+});
+
+LibraryCategoryButton.displayName = 'LibraryCategoryButton';
+
+// Memoized content components for lazy loading
+const LazyAllLibrary = memo(() => <AllLibrary />);
+const LazyLiveLibrary = memo(() => <LiveLibrary />);
+const LazySermonLibrary = memo(() => <SermonLibrary />);
+const LazyMusicLibrary = memo(() => <MusicLibrary />);
+const LazyEbooksLibrary = memo(() => <EbooksLibrary />);
+const LazyVideoLibrary = memo(() => <VideoLibrary />);
+
+LazyAllLibrary.displayName = 'LazyAllLibrary';
+LazyLiveLibrary.displayName = 'LazyLiveLibrary';
+LazySermonLibrary.displayName = 'LazySermonLibrary';
+LazyMusicLibrary.displayName = 'LazyMusicLibrary';
+LazyEbooksLibrary.displayName = 'LazyEbooksLibrary';
+LazyVideoLibrary.displayName = 'LazyVideoLibrary';
+
 export default function LibraryScreen() {
   const [selectedCategoryA, setSelectedCategorA] = useState("ALL");
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("Library");
   const router = useRouter();
 
-  const renderContent = () => {
+  // Performance monitoring
+  const performance = usePerformanceMonitor({
+    componentName: 'LibraryScreen',
+    trackRenders: true,
+    trackButtonClicks: true,
+    slowButtonThreshold: 50, // Expect faster response
+  });
+
+  // Optimized category press handler
+  const handleCategoryPress = useCallback((category: string) => {
+    setSelectedCategorA(category);
+  }, []);
+
+  // Create individual fast button handlers for each category
+  const allButtonHandler = useFastButton(() => handleCategoryPress("ALL"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const liveButtonHandler = useFastButton(() => handleCategoryPress("LIVE"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const sermonButtonHandler = useFastButton(() => handleCategoryPress("SERMON"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const musicButtonHandler = useFastButton(() => handleCategoryPress("MUSIC"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const ebookButtonHandler = useFastButton(() => handleCategoryPress("E-BOOKS"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const videoButtonHandler = useFastButton(() => handleCategoryPress("VIDEO"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  // Memoized category button handlers mapping
+  const categoryButtonHandlers = useMemo(() => ({
+    "ALL": allButtonHandler.handlePress,
+    "LIVE": liveButtonHandler.handlePress,
+    "SERMON": sermonButtonHandler.handlePress,
+    "MUSIC": musicButtonHandler.handlePress,
+    "E-BOOKS": ebookButtonHandler.handlePress,
+    "VIDEO": videoButtonHandler.handlePress,
+  } as Record<string, () => void>), [allButtonHandler, liveButtonHandler, sermonButtonHandler, musicButtonHandler, ebookButtonHandler, videoButtonHandler]);
+
+  // Memoized content renderer
+  const renderContent = useMemo(() => {
     switch (selectedCategoryA) {
       case "ALL":
-        return <AllLibrary />;
+        return <LazyAllLibrary />;
       case "LIVE":
-        return <LiveLibrary />;
+        return <LazyLiveLibrary />;
       case "SERMON":
-        return <SermonLibrary />;
+        return <LazySermonLibrary />;
       case "MUSIC":
-        return <MusicLibrary />;
+        return <LazyMusicLibrary />;
       case "E-BOOKS":
-        return <EbooksLibrary />;
+        return <LazyEbooksLibrary />;
       case "VIDEO":
-        return <VideoLibrary />;
+        return <LazyVideoLibrary />;
       default:
-        return null;
+        return <LazyAllLibrary />;
     }
-  };
+  }, [selectedCategoryA]);
+
+  // Memoized category buttons
+  const categoryButtons = useMemo(() => (
+    categories.map((category) => (
+      <LibraryCategoryButton
+        key={category}
+        category={category}
+        isSelected={selectedCategoryA === category}
+        onPress={categoryButtonHandlers[category]}
+      />
+    ))
+  ), [selectedCategoryA, categoryButtonHandlers]);
 
   return (
     <View className="flex-col bg-white flex-1">
@@ -75,39 +226,10 @@ export default function LibraryScreen() {
         showsHorizontalScrollIndicator={false}
         className="px-2 py-2 mt-6 "
       >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            onPress={() => setSelectedCategorA(category)}
-            activeOpacity={0.7}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              marginHorizontal: 4,
-              borderRadius: 10,
-              backgroundColor: selectedCategoryA === category ? "black" : "white",
-              borderWidth: selectedCategoryA === category ? 0 : 1,
-              borderColor: selectedCategoryA === category ? "transparent" : "#6B6E7C",
-              minWidth: 48,
-              minHeight: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Text
-              style={{
-                color: selectedCategoryA === category ? "white" : "#1D2939",
-                fontFamily: "Rubik_600SemiBold",
-                fontSize: 14,
-              }}
-            >
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {categoryButtons}
       </ScrollView>
 
-     <View className="flex-1 mb-24">{renderContent()}</View>
+     <View className="flex-1 mb-24">{renderContent}</View>
  
     </ScrollView>
       {/* Bottom Nav overlay */}

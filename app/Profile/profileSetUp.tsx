@@ -1,26 +1,24 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { router, useFocusEffect } from "expo-router";
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
+  Alert,
   BackHandler,
   Pressable,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
 import { API_BASE_URL } from "../utils/api";
-import Constants from "expo-constants";
 
 export default function ProfileSetUp() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
   useFocusEffect(
     useCallback(() => {
@@ -32,6 +30,71 @@ export default function ProfileSetUp() {
       return () => backHandler.remove();
     }, [])
   );
+
+  const handleNext = async () => {
+    try {
+      setLoading(true);
+
+      // Try to get token from both possible keys
+      let token = await AsyncStorage.getItem("userToken");
+      if (!token) {
+        token = await AsyncStorage.getItem("token");
+      }
+
+      if (!token) {
+        Alert.alert("Error", "Authentication token not found. Please login again.");
+        return;
+      }
+
+      console.log("🚀 Sending interests:", selectedInterests);
+      console.log("🔗 API URL:", API_BASE_URL);
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/auth/complete-profile`,
+        {
+          interests: selectedInterests,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000, // 30 second timeout
+        }
+      );
+
+      console.log("✅ Profile update response:", response.data);
+
+      if (response.data.success) {
+        router.push("/Profile/age-input");
+      } else {
+        Alert.alert("Error", response.data.message || "An error occurred");
+      }
+    } catch (error: any) {
+      console.error("Profile update failed:", error);
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        Alert.alert(
+          "Connection Timeout",
+          "The request took too long to complete. Please check your internet connection and try again."
+        );
+      } else if (error.response?.status === 401) {
+        Alert.alert(
+          "Authentication Error",
+          "Your session has expired. Please login again."
+        );
+      } else {
+        Alert.alert(
+          "Error",
+          error.response?.data?.message || "Something went wrong. Please try again."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   const interests = [
     "Gospel playlists",
@@ -53,75 +116,7 @@ export default function ProfileSetUp() {
     );
   };
 
-  //   const handleNext = async () => {
 
-  //     try {
-  //       setLoading(true);
-
-  //       const token = await AsyncStorage.getItem("token");
-  //  // replace with real token retrieval
-
-  //       const response = await axios.post(
-  //         "http://192.168.43.62:4000/api/auth/complete-profile",
-  //         {
-  //           interests: selectedInterests,
-  //         },
-  //         {
-  //           headers: {
-  //             Authorization: `Bearer ${token}`,
-  //           },
-  //         }
-  //       );
-
-  //       if (response.data.success) {
-  //         router.push("/Profile/age-input");
-  //       } else {
-  //         Alert.alert("Error", response.data.message || "An error occurred");
-  //       }
-  //     } catch (error: any) {
-  //       console.error("Profile update failed:", error);
-  //       Alert.alert("Error", error.response?.data?.message || "Something went wrong");
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  const handleNext = async () => {
-    try {
-      setLoading(true);
-
-      const token = await AsyncStorage.getItem("token");
-
-      // 👇 Add this log before sending the request
-      console.log("🚀 Sending interests:", selectedInterests);
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/auth/complete-profile`,
-        {
-          interests: selectedInterests,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.data.success) {
-        router.push("/Profile/age-input");
-      } else {
-        Alert.alert("Error", response.data.message || "An error occurred");
-      }
-    } catch (error: any) {
-      console.error("Profile update failed:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Something went wrong"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <View className="flex-1 bg-[#FCFCFD]">

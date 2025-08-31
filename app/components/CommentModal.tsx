@@ -5,7 +5,9 @@ import {
     Alert,
     Dimensions,
     Keyboard,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     Text,
     TextInput,
@@ -173,314 +175,316 @@ export default function CommentModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
-          paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-          borderBottomWidth: 1,
-          borderBottomColor: '#E5E7EB',
-          backgroundColor: 'white',
-        }}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{
-              padding: getResponsiveSpacing(4, 6, 8, 10),
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="close"
-              size={24}
-              color="#6B7280"
-            />
-          </TouchableOpacity>
-          
-          <Text style={[
-            getResponsiveTextStyle('subtitle'),
-            {
-              fontWeight: '600',
-              color: '#374151',
-            }
-          ]}>
-            Comments
-          </Text>
-          
-          <View style={{ width: 32 }} />
-        </View>
-
-        {/* Content */}
-        <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-          {/* Content Title */}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        enabled={true}
+      >
+        <View style={{ flex: 1 }}>
+          {/* Header */}
           <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
             paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-            backgroundColor: 'white',
             borderBottomWidth: 1,
             borderBottomColor: '#E5E7EB',
+            backgroundColor: 'white',
           }}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{
+                padding: getResponsiveSpacing(4, 6, 8, 10),
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="close"
+                size={24}
+                color="#6B7280"
+              />
+            </TouchableOpacity>
+            
             <Text style={[
-              getResponsiveTextStyle('caption'),
-              {
-                color: '#6B7280',
-                marginBottom: getResponsiveSpacing(4, 6, 8, 10),
-              }
-            ]}>
-              Commenting on
-            </Text>
-            <Text style={[
-              getResponsiveTextStyle('body'),
+              getResponsiveTextStyle('subtitle'),
               {
                 fontWeight: '600',
                 color: '#374151',
               }
             ]}>
-              {contentTitle}
+              Comments
             </Text>
+            
+            <View style={{ width: 32 }} />
           </View>
 
-          {/* Comments List */}
-          <ScrollView
-            style={{ flex: 1 }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
+          {/* Content */}
+          <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+            {/* Content Title */}
+            <View style={{
               paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
               paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-              paddingBottom: keyboardHeight > 0 ? keyboardHeight + 100 : 120,
-            }}
-          >
-            {isLoading ? (
-              <View style={{
-                alignItems: 'center',
-                paddingVertical: getResponsiveSpacing(40, 44, 48, 52),
-              }}>
-                <ActivityIndicator size="large" color="#6366F1" />
-                <Text style={[
-                  getResponsiveTextStyle('caption'),
-                  {
-                    color: '#6B7280',
-                    marginTop: getResponsiveSpacing(12, 16, 20, 24),
-                  }
-                ]}>
-                  Loading comments...
-                </Text>
-              </View>
-            ) : comments.length === 0 ? (
-              <View style={{
-                alignItems: 'center',
-                paddingVertical: getResponsiveSpacing(40, 44, 48, 52),
-              }}>
-                <Ionicons
-                  name="chatbubble-outline"
-                  size={48}
-                  color="#D1D5DB"
-                />
-                <Text style={[
-                  getResponsiveTextStyle('body'),
-                  {
-                    color: '#6B7280',
-                    marginTop: getResponsiveSpacing(12, 16, 20, 24),
-                    textAlign: 'center',
-                  }
-                ]}>
-                  No comments yet.{'\n'}Be the first to comment!
-                </Text>
-              </View>
-            ) : (
-              comments.map((comment) => (
-                <View
-                  key={comment.id}
-                  style={{
-                    backgroundColor: 'white',
-                    padding: getResponsiveSpacing(12, 16, 20, 24),
-                    marginBottom: getResponsiveSpacing(12, 16, 20, 24),
-                    borderRadius: getResponsiveBorderRadius('medium'),
-                    ...getResponsiveShadow(),
-                  }}
-                >
-                  {/* Comment Header */}
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: getResponsiveSpacing(8, 12, 16, 20),
-                  }}>
-                    <View style={{
-                      width: getResponsiveSpacing(32, 36, 40, 44),
-                      height: getResponsiveSpacing(32, 36, 40, 44),
-                      borderRadius: getResponsiveBorderRadius('round'),
-                      backgroundColor: '#E5E7EB',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: getResponsiveSpacing(8, 12, 16, 20),
-                    }}>
-                      <Text style={[
-                        getResponsiveTextStyle('caption'),
-                        {
-                          fontWeight: '600',
-                          color: '#6B7280',
-                        }
-                      ]}>
-                        {comment.userName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    
-                    <View style={{ flex: 1 }}>
-                      <Text style={[
-                        getResponsiveTextStyle('caption'),
-                        {
-                          fontWeight: '600',
-                          color: '#374151',
-                        }
-                      ]}>
-                        {comment.userName}
-                      </Text>
-                      <Text style={[
-                        getResponsiveTextStyle('caption'),
-                        {
-                          color: '#6B7280',
-                          fontSize: 12,
-                        }
-                      ]}>
-                        {formatTimestamp(comment.timestamp)}
-                      </Text>
-                    </View>
-                  </View>
+              backgroundColor: 'white',
+              borderBottomWidth: 1,
+              borderBottomColor: '#E5E7EB',
+            }}>
+              <Text style={[
+                getResponsiveTextStyle('caption'),
+                {
+                  color: '#6B7280',
+                  marginBottom: getResponsiveSpacing(4, 6, 8, 10),
+                }
+              ]}>
+                Commenting on
+              </Text>
+              <Text style={[
+                getResponsiveTextStyle('body'),
+                {
+                  fontWeight: '600',
+                  color: '#374151',
+                }
+              ]}>
+                {contentTitle}
+              </Text>
+            </View>
 
-                  {/* Comment Text */}
+            {/* Comments List */}
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+                paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
+                paddingBottom: 20,
+              }}
+            >
+              {isLoading ? (
+                <View style={{
+                  alignItems: 'center',
+                  paddingVertical: getResponsiveSpacing(40, 44, 48, 52),
+                }}>
+                  <ActivityIndicator size="large" color="#6366F1" />
+                  <Text style={[
+                    getResponsiveTextStyle('caption'),
+                    {
+                      color: '#6B7280',
+                      marginTop: getResponsiveSpacing(12, 16, 20, 24),
+                    }
+                  ]}>
+                    Loading comments...
+                  </Text>
+                </View>
+              ) : comments.length === 0 ? (
+                <View style={{
+                  alignItems: 'center',
+                  paddingVertical: getResponsiveSpacing(40, 44, 48, 52),
+                }}>
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={48}
+                    color="#D1D5DB"
+                  />
                   <Text style={[
                     getResponsiveTextStyle('body'),
                     {
-                      color: '#374151',
-                      lineHeight: 20,
-                      marginBottom: getResponsiveSpacing(8, 12, 16, 20),
+                      color: '#6B7280',
+                      marginTop: getResponsiveSpacing(12, 16, 20, 24),
+                      textAlign: 'center',
                     }
                   ]}>
-                    {comment.text}
+                    No comments yet.{'\n'}Be the first to comment!
                   </Text>
-
-                  {/* Comment Actions */}
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  }}>
-                    <TouchableOpacity
-                      onPress={() => handleLikeComment(comment.id)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingVertical: getResponsiveSpacing(4, 6, 8, 10),
-                        paddingHorizontal: getResponsiveSpacing(8, 12, 16, 20),
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="heart-outline"
-                        size={16}
-                        color="#6B7280"
-                        style={{ marginRight: getResponsiveSpacing(4, 6, 8, 10) }}
-                      />
-                      <Text style={[
-                        getResponsiveTextStyle('caption'),
-                        {
-                          color: '#6B7280',
-                        }
-                      ]}>
-                        {comment.likes}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
-              ))
-            )}
-          </ScrollView>
+              ) : (
+                comments.map((comment) => (
+                  <View
+                    key={comment.id}
+                    style={{
+                      backgroundColor: 'white',
+                      padding: getResponsiveSpacing(12, 16, 20, 24),
+                      marginBottom: getResponsiveSpacing(12, 16, 20, 24),
+                      borderRadius: getResponsiveBorderRadius('medium'),
+                      ...getResponsiveShadow(),
+                    }}
+                  >
+                    {/* Comment Header */}
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      marginBottom: getResponsiveSpacing(8, 12, 16, 20),
+                    }}>
+                      <View style={{
+                        width: getResponsiveSpacing(32, 36, 40, 44),
+                        height: getResponsiveSpacing(32, 36, 40, 44),
+                        borderRadius: getResponsiveBorderRadius('round'),
+                        backgroundColor: '#E5E7EB',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: getResponsiveSpacing(8, 12, 16, 20),
+                      }}>
+                        <Text style={[
+                          getResponsiveTextStyle('caption'),
+                          {
+                            fontWeight: '600',
+                            color: '#6B7280',
+                          }
+                        ]}>
+                          {comment.userName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      
+                      <View style={{ flex: 1 }}>
+                        <Text style={[
+                          getResponsiveTextStyle('caption'),
+                          {
+                            fontWeight: '600',
+                            color: '#374151',
+                          }
+                        ]}>
+                          {comment.userName}
+                        </Text>
+                        <Text style={[
+                          getResponsiveTextStyle('caption'),
+                          {
+                            color: '#6B7280',
+                            fontSize: 12,
+                          }
+                        ]}>
+                          {formatTimestamp(comment.timestamp)}
+                        </Text>
+                      </View>
+                    </View>
 
-          {/* Comment Input - Positioned absolutely above keyboard */}
-          <View style={{
-            backgroundColor: 'white',
-            borderTopWidth: 1,
-            borderTopColor: '#E5E7EB',
-            paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
-            paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-            position: 'absolute',
-            bottom: keyboardHeight > 0 ? keyboardHeight : 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-          }}>
+                    {/* Comment Text */}
+                    <Text style={[
+                      getResponsiveTextStyle('body'),
+                      {
+                        color: '#374151',
+                        lineHeight: 20,
+                        marginBottom: getResponsiveSpacing(8, 12, 16, 20),
+                      }
+                    ]}>
+                      {comment.text}
+                    </Text>
+
+                    {/* Comment Actions */}
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}>
+                      <TouchableOpacity
+                        onPress={() => handleLikeComment(comment.id)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: getResponsiveSpacing(4, 6, 8, 10),
+                          paddingHorizontal: getResponsiveSpacing(8, 12, 16, 20),
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="heart-outline"
+                          size={16}
+                          color="#6B7280"
+                          style={{ marginRight: getResponsiveSpacing(4, 6, 8, 10) }}
+                        />
+                        <Text style={[
+                          getResponsiveTextStyle('caption'),
+                          {
+                            color: '#6B7280',
+                          }
+                        ]}>
+                          {comment.likes}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {/* Comment Input - Now positioned at bottom of KeyboardAvoidingView */}
             <View style={{
-              flexDirection: 'row',
-              alignItems: 'flex-end',
+              backgroundColor: 'white',
+              borderTopWidth: 1,
+              borderTopColor: '#E5E7EB',
+              paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+              paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
             }}>
               <View style={{
-                flex: 1,
-                marginRight: getResponsiveSpacing(8, 12, 16, 20),
+                flexDirection: 'row',
+                alignItems: 'flex-end',
               }}>
-                <TextInput
-                  ref={inputRef}
-                  value={comment}
-                  onChangeText={setComment}
-                  placeholder="Write a comment..."
-                  placeholderTextColor="#9CA3AF"
-                  multiline
-                  maxLength={500}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#D1D5DB',
-                    borderRadius: getResponsiveBorderRadius('medium'),
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(8, 12, 16, 20),
-                    minHeight: getResponsiveSpacing(40, 44, 48, 52),
-                    maxHeight: getResponsiveSpacing(100, 120, 140, 160),
-                    ...getResponsiveTextStyle('body'),
-                    color: '#374151',
-                  }}
-                />
-                <Text style={[
-                  getResponsiveTextStyle('caption'),
-                  {
-                    color: '#9CA3AF',
-                    textAlign: 'right',
-                    marginTop: getResponsiveSpacing(4, 6, 8, 10),
-                  }
-                ]}>
-                  {comment.length}/500
-                </Text>
-              </View>
-              
-              <TouchableOpacity
-                onPress={optimizedPostHandler}
-                disabled={isPosting || !comment.trim()}
-                style={{
-                  backgroundColor: comment.trim() ? '#6366F1' : '#D1D5DB',
-                  paddingHorizontal: getResponsiveSpacing(16, 20, 24, 28),
-                  paddingVertical: getResponsiveSpacing(8, 12, 16, 20),
-                  borderRadius: getResponsiveBorderRadius('medium'),
-                  minWidth: getResponsiveSpacing(60, 70, 80, 90),
-                  alignItems: 'center',
-                }}
-                activeOpacity={0.8}
-              >
-                {isPosting ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
+                <View style={{
+                  flex: 1,
+                  marginRight: getResponsiveSpacing(8, 12, 16, 20),
+                }}>
+                  <TextInput
+                    ref={inputRef}
+                    value={comment}
+                    onChangeText={setComment}
+                    placeholder="Write a comment..."
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    maxLength={500}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: getResponsiveBorderRadius('medium'),
+                      paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                      paddingVertical: getResponsiveSpacing(8, 12, 16, 20),
+                      minHeight: getResponsiveSpacing(40, 44, 48, 52),
+                      maxHeight: getResponsiveSpacing(100, 120, 140, 160),
+                      ...getResponsiveTextStyle('body'),
+                      color: '#374151',
+                    }}
+                  />
                   <Text style={[
-                    getResponsiveTextStyle('button'),
+                    getResponsiveTextStyle('caption'),
                     {
-                      color: 'white',
-                      fontWeight: '600',
+                      color: '#9CA3AF',
+                      textAlign: 'right',
+                      marginTop: getResponsiveSpacing(4, 6, 8, 10),
                     }
                   ]}>
-                    Post
+                    {comment.length}/500
                   </Text>
-                )}
-              </TouchableOpacity>
+                </View>
+                
+                <TouchableOpacity
+                  onPress={optimizedPostHandler}
+                  disabled={isPosting || !comment.trim()}
+                  style={{
+                    backgroundColor: comment.trim() ? '#6366F1' : '#D1D5DB',
+                    paddingHorizontal: getResponsiveSpacing(16, 20, 24, 28),
+                    paddingVertical: getResponsiveSpacing(8, 12, 16, 20),
+                    borderRadius: getResponsiveBorderRadius('medium'),
+                    minWidth: getResponsiveSpacing(60, 70, 80, 90),
+                    alignItems: 'center',
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {isPosting ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={[
+                      getResponsiveTextStyle('button'),
+                      {
+                        color: 'white',
+                        fontWeight: '600',
+                      }
+                    ]}>
+                      Post
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

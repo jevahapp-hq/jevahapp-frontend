@@ -1,10 +1,50 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Jevah Backend API Base URL
-const JEVAH_API_BASE_URL = "https://jevahapp-backend.onrender.com/api/auth";
+import { getAuthApiUrl } from '../utils/apiConfig';
+import { NetworkUtils, logErrorDetails } from '../utils/networkUtils';
 
 class AuthService {
-  private baseURL: string = JEVAH_API_BASE_URL;
+  private baseURL: string = getAuthApiUrl();
+
+  // Enhanced fetch with better error handling
+  private async enhancedFetch(url: string, options: RequestInit = {}) {
+    let timeoutId: number | null = null;
+    
+    try {
+      console.log(`🔍 Making request to: ${url}`);
+      
+      // Check network connectivity first
+      const networkStatus = await NetworkUtils.checkConnectivity();
+      if (!networkStatus.isConnected) {
+        throw new Error("No internet connection. Please check your network settings.");
+      }
+
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      console.log(`✅ Request successful: ${response.status} ${response.statusText}`);
+      return response;
+    } catch (error) {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      logErrorDetails(error, `authService request to ${url}`);
+      
+      if (NetworkUtils.isNetworkError(error)) {
+        throw new Error(NetworkUtils.getNetworkErrorMessage(error));
+      }
+      
+      throw error;
+    }
+  }
 
   // Forgot Password - Step 1: Send reset code to email
   async forgotPassword(email: string) {
@@ -12,7 +52,7 @@ class AuthService {
       console.log("🔍 Sending forgot password request for:", email);
       console.log("🔍 API URL:", `${this.baseURL}/forgot-password`);
       
-      const response = await fetch(`${this.baseURL}/forgot-password`, {
+      const response = await this.enhancedFetch(`${this.baseURL}/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -34,7 +74,7 @@ class AuthService {
       console.error("❌ Error in forgotPassword:", error);
       return { 
         success: false, 
-        error: "Network error occurred",
+        error: NetworkUtils.getNetworkErrorMessage(error),
         status: 0 
       };
     }
@@ -45,7 +85,7 @@ class AuthService {
     try {
       console.log("🔍 Verifying reset code for:", email);
       
-      const response = await fetch(`${this.baseURL}/verify-reset-code`, {
+      const response = await this.enhancedFetch(`${this.baseURL}/verify-reset-code`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -68,7 +108,7 @@ class AuthService {
       console.error("❌ Error in verifyResetCode:", error);
       return { 
         success: false, 
-        error: "Network error occurred",
+        error: NetworkUtils.getNetworkErrorMessage(error),
         status: 0 
       };
     }
@@ -79,7 +119,7 @@ class AuthService {
     try {
       console.log("🔍 Resetting password for:", email);
       
-      const response = await fetch(`${this.baseURL}/reset-password`, {
+      const response = await this.enhancedFetch(`${this.baseURL}/reset-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,7 +143,7 @@ class AuthService {
       console.error("❌ Error in resetPassword:", error);
       return { 
         success: false, 
-        error: "Network error occurred",
+        error: NetworkUtils.getNetworkErrorMessage(error),
         status: 0 
       };
     }
@@ -113,8 +153,9 @@ class AuthService {
   async login(email: string, password: string) {
     try {
       console.log("🔍 Logging in user:", email);
+      console.log("🔍 API URL:", `${this.baseURL}/login`);
       
-      const response = await fetch(`${this.baseURL}/login`, {
+      const response = await this.enhancedFetch(`${this.baseURL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -152,9 +193,10 @@ class AuthService {
       };
     } catch (error) {
       console.error("❌ Error in login:", error);
+      logErrorDetails(error, 'authService login');
       return { 
         success: false, 
-        error: "Network error occurred",
+        error: NetworkUtils.getNetworkErrorMessage(error),
         status: 0 
       };
     }

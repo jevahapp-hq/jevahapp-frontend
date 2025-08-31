@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import authService from '../services/authService';
+import { NetworkUtils, logErrorDetails } from '../utils/networkUtils';
 import { performanceOptimizer } from '../utils/performance';
 
 interface LoginState {
@@ -67,22 +68,29 @@ export const useFastLogin = () => {
     abortControllerRef.current = new AbortController();
 
     try {
+      // Check network connectivity before attempting login
+      console.log("🔍 Checking network connectivity before login...");
+      const networkStatus = await NetworkUtils.checkConnectivity();
+      if (!networkStatus.isConnected) {
+        setState(prev => ({ 
+          ...prev, 
+          error: "No internet connection. Please check your network settings and try again." 
+        }));
+        return false;
+      }
+
       // Normalize inputs
       const normalizedEmail = credentials.email.trim().toLowerCase();
       const normalizedPassword = credentials.password.trim();
 
-      // Set timeout for the request
-      const timeoutId = setTimeout(() => {
-        abortControllerRef.current?.abort();
-      }, 10000); // 10 second timeout
+      console.log("🔍 Attempting login with network connectivity confirmed...");
 
       // Attempt login
       const result = await authService.login(normalizedEmail, normalizedPassword);
 
-      clearTimeout(timeoutId);
-
       if (!result.success) {
         const message = result.data?.message || result.error || 'Invalid email or password';
+        console.log("❌ Login failed:", message);
         setState(prev => ({ ...prev, error: message }));
         return false;
       }
@@ -98,6 +106,8 @@ export const useFastLogin = () => {
         }
       }
 
+      console.log("✅ Login successful, preloading critical data...");
+
       // Preload critical data for faster navigation
       performanceOptimizer.preloadCriticalData().catch(() => {
         // Silent fail for preloading
@@ -108,21 +118,28 @@ export const useFastLogin = () => {
       return true;
 
     } catch (error: any) {
+      console.error("❌ Login error:", error);
+      logErrorDetails(error, 'useFastLogin');
+      
       if (error.name === 'AbortError') {
         setState(prev => ({ 
           ...prev, 
-          error: 'Request timeout. Please check your connection and try again.' 
+          error: "Login request timed out. Please check your connection and try again." 
+        }));
+      } else if (NetworkUtils.isNetworkError(error)) {
+        setState(prev => ({ 
+          ...prev, 
+          error: NetworkUtils.getNetworkErrorMessage(error)
         }));
       } else {
         setState(prev => ({ 
           ...prev, 
-          error: 'An unexpected error occurred. Please try again.' 
+          error: error.message || "Login failed. Please try again." 
         }));
       }
       return false;
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
-      abortControllerRef.current = null;
     }
   }, [validateCredentials]);
 

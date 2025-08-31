@@ -1,29 +1,30 @@
 import {
-  AntDesign,
-  Ionicons,
-  MaterialCommunityIcons,
+    AntDesign,
+    Ionicons,
+    MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { memo, useCallback, useState } from "react";
 import {
-  InteractionManager,
-  Platform,
-  Text,
-  TouchableOpacity,
-  View
+    Platform,
+    Text,
+    View
 } from "react-native";
 import {
-  getBottomNavHeight,
-  getFabSize,
-  getIconSize,
-  getResponsiveBorderRadius,
-  getResponsiveShadow,
-  getResponsiveSpacing,
-  getResponsiveTextStyle
+    getBottomNavHeight,
+    getFabSize,
+    getIconSize,
+    getResponsiveBorderRadius,
+    getResponsiveShadow,
+    getResponsiveSpacing,
+    getResponsiveTextStyle
 } from "../../utils/responsive";
+import { useFastButton } from "../hooks/useFastButton";
+import { usePerformanceMonitor } from "../hooks/usePerformanceMonitor";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
+import OptimizedTouchableOpacity from "./OptimizedTouchableOpacity";
 
 // Bottom tab config
 interface BottomNavProps {
@@ -53,81 +54,110 @@ const tabConfig: Record<
   },
 };
 
-export default function BottomNav({
+const OptimizedBottomNav = memo<BottomNavProps>(({
   selectedTab,
   setSelectedTab,
-}: BottomNavProps) {
+}) => {
   const [showActions, setShowActions] = useState(false);
-  const lastTabPressTime = useRef<number>(0);
-  const isProcessingTab = useRef<boolean>(false);
 
-  const handleFabToggle = () => {
+  // Performance monitoring
+  const performance = usePerformanceMonitor({
+    componentName: 'OptimizedBottomNav',
+    trackRenders: true,
+    trackButtonClicks: true,
+  });
+
+  // Optimized button handlers
+  const fabButton = useFastButton(() => {
     console.log('🔄 FAB clicked! Current showActions:', showActions);
     console.log('🔄 Will set showActions to:', !showActions);
     setShowActions(!showActions);
-  };
+  }, {
+    hapticType: 'medium',
+    preventRapidClicks: true,
+    rapidClickThreshold: 100,
+  });
 
-  const handleUpload = () => {
+  const uploadButton = useFastButton(() => {
     useMediaStore.getState().stopAudioFn?.(); // Stop any active audio
     setShowActions(false);
-    // Remove setTimeout delay for immediate navigation
     router.push("/categories/upload");
-  };
+  }, {
+    hapticType: 'success',
+    preventRapidClicks: true,
+    rapidClickThreshold: 100,
+  });
 
-  const handleGoLive = () => {
+  const goLiveButton = useFastButton(() => {
     useMediaStore.getState().stopAudioFn?.();
     setShowActions(false);
-    // Remove setTimeout delay for immediate navigation
     router.push("/goLlive/AllowPermissionsScreen");
-  };
+  }, {
+    hapticType: 'success',
+    preventRapidClicks: true,
+    rapidClickThreshold: 100,
+  });
 
   const handleTabPress = useCallback((tab: string) => {
-    const now = Date.now();
-    
-    // Prevent rapid successive clicks (debounce)
-    if (now - lastTabPressTime.current < 100) {
-      console.log('🚫 Tab press blocked - too rapid');
-      return;
-    }
-    
-    // Prevent multiple simultaneous executions
-    if (isProcessingTab.current) {
-      console.log('🚫 Tab press blocked - already processing');
-      return;
-    }
-    
-    lastTabPressTime.current = now;
-    isProcessingTab.current = true;
-
-    console.log(`⚡ Tab switching to: ${tab} (immediate feedback)`);
-
-    // Provide immediate visual feedback first
-    setSelectedTab(tab);
-    
     // Only stop media if actually switching to a different tab
     if (tab !== selectedTab) {
-      console.log(`🔄 Stopping media for tab switch to: ${tab}`);
-      // Use InteractionManager for non-blocking media operations
-      InteractionManager.runAfterInteractions(() => {
-        try {
-          useMediaStore.getState().stopAudioFn?.();
-        } catch (e) {
-          // no-op
-        }
-        try {
-          useGlobalVideoStore.getState().pauseAllVideos();
-        } catch (e) {
-          // no-op
-        }
-        console.log(`✅ Media stopped for tab: ${tab}`);
-      });
+      // Stop any active audio and pause all videos when switching tabs
+      try {
+        useMediaStore.getState().stopAudioFn?.();
+      } catch (e) {
+        // no-op
+      }
+      try {
+        useGlobalVideoStore.getState().pauseAllVideos();
+      } catch (e) {
+        // no-op
+      }
     }
-    
-    // Reset processing flag after a short delay
-    setTimeout(() => {
-      isProcessingTab.current = false;
-    }, 50);
+    setSelectedTab(tab);
   }, [selectedTab, setSelectedTab]);
+
+  // Memoized tab button component
+  const TabButton = useCallback(({ tab, IconComponent, name, label }: {
+    tab: string;
+    IconComponent: React.ComponentType<any>;
+    name: string;
+    label: string;
+  }) => {
+    const isActive = selectedTab === tab;
+    
+    return (
+      <OptimizedTouchableOpacity
+        onPress={() => handleTabPress(tab)}
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 48,
+          minHeight: 48,
+        }}
+        variant="ghost"
+        size="small"
+        hapticFeedback={true}
+        hapticType="light"
+        preventRapidClicks={true}
+        rapidClickThreshold={50}
+      >
+        <IconComponent
+          name={name}
+          size={getIconSize('medium')}
+          color={isActive ? "#256E63" : "#000"}
+        />
+        <Text style={[
+          getResponsiveTextStyle('caption'),
+          {
+            marginTop: getResponsiveSpacing(2, 3, 4, 5),
+            color: isActive ? "#256E63" : "#000",
+          }
+        ]}>
+          {label}
+        </Text>
+      </OptimizedTouchableOpacity>
+    );
+  }, [selectedTab, handleTabPress]);
 
   return (
     <>
@@ -166,7 +196,7 @@ export default function BottomNav({
                   backgroundColor: 'rgba(255, 255, 255, 0.2)',
                 }}
               >
-                <TouchableOpacity
+                <OptimizedTouchableOpacity
                   style={{
                     backgroundColor: '#256E63',
                     paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
@@ -175,8 +205,11 @@ export default function BottomNav({
                     borderWidth: 4,
                     borderColor: 'white',
                   }}
-                  onPress={handleUpload}
-                  activeOpacity={0.8}
+                  onPress={uploadButton.handlePress}
+                  variant="primary"
+                  size="medium"
+                  hapticFeedback={true}
+                  hapticType="success"
                 >
                   <Text style={[
                     getResponsiveTextStyle('button'),
@@ -184,9 +217,9 @@ export default function BottomNav({
                   ]}>
                     Upload
                   </Text>
-                </TouchableOpacity>
+                </OptimizedTouchableOpacity>
 
-                <TouchableOpacity
+                <OptimizedTouchableOpacity
                   style={{
                     backgroundColor: 'black',
                     paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
@@ -195,8 +228,11 @@ export default function BottomNav({
                     borderWidth: 4,
                     borderColor: 'white',
                   }}
-                  onPress={handleGoLive}
-                  activeOpacity={0.8}
+                  onPress={goLiveButton.handlePress}
+                  variant="primary"
+                  size="medium"
+                  hapticFeedback={true}
+                  hapticType="success"
                 >
                   <Text style={[
                     getResponsiveTextStyle('button'),
@@ -204,7 +240,7 @@ export default function BottomNav({
                   ]}>
                     Go Live
                   </Text>
-                </TouchableOpacity>
+                </OptimizedTouchableOpacity>
               </BlurView>
             ) : (
               <View style={{
@@ -218,7 +254,7 @@ export default function BottomNav({
                 paddingHorizontal: getResponsiveSpacing(8, 10, 12, 14),
                 borderRadius: getResponsiveBorderRadius('large'),
               }}>
-                <TouchableOpacity
+                <OptimizedTouchableOpacity
                   style={{
                     backgroundColor: '#256E63',
                     paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
@@ -227,8 +263,11 @@ export default function BottomNav({
                     borderWidth: 4,
                     borderColor: 'white',
                   }}
-                  onPress={handleUpload}
-                  activeOpacity={0.8}
+                  onPress={uploadButton.handlePress}
+                  variant="primary"
+                  size="medium"
+                  hapticFeedback={true}
+                  hapticType="success"
                 >
                   <Text style={[
                     getResponsiveTextStyle('button'),
@@ -236,9 +275,9 @@ export default function BottomNav({
                   ]}>
                     Upload
                   </Text>
-                </TouchableOpacity>
+                </OptimizedTouchableOpacity>
 
-                <TouchableOpacity
+                <OptimizedTouchableOpacity
                   style={{
                     backgroundColor: 'black',
                     paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
@@ -247,8 +286,11 @@ export default function BottomNav({
                     borderWidth: 4,
                     borderColor: 'white',
                   }}
-                  onPress={handleGoLive}
-                  activeOpacity={0.8}
+                  onPress={goLiveButton.handlePress}
+                  variant="primary"
+                  size="medium"
+                  hapticFeedback={true}
+                  hapticType="success"
                 >
                   <Text style={[
                     getResponsiveTextStyle('button'),
@@ -256,7 +298,7 @@ export default function BottomNav({
                   ]}>
                     Go Live
                   </Text>
-                </TouchableOpacity>
+                </OptimizedTouchableOpacity>
               </View>
             )}
           </View>
@@ -284,72 +326,28 @@ export default function BottomNav({
         {/* First half of tabs */}
         {Object.entries(tabConfig)
           .slice(0, 2)
-          .map(([tab, { IconComponent, name, label }]) => {
-            const isActive = selectedTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={() => handleTabPress(tab)}
-                style={{
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: 48,
-                  minHeight: 48,
-                }}
-                activeOpacity={0.7}
-              >
-                <IconComponent
-                  name={name}
-                  size={getIconSize('medium')}
-                  color={isActive ? "#256E63" : "#000"}
-                />
-                <Text style={[
-                  getResponsiveTextStyle('caption'),
-                  {
-                    marginTop: getResponsiveSpacing(2, 3, 4, 5),
-                    color: isActive ? "#256E63" : "#000",
-                  }
-                ]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          .map(([tab, { IconComponent, name, label }]) => (
+            <TabButton
+              key={tab}
+              tab={tab}
+              IconComponent={IconComponent}
+              name={name}
+              label={label}
+            />
+          ))}
 
         {/* Second half of tabs */}
         {Object.entries(tabConfig)
           .slice(2)
-          .map(([tab, { IconComponent, name, label }]) => {
-            const isActive = selectedTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={() => handleTabPress(tab)}
-                style={{
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: 48,
-                  minHeight: 48,
-                }}
-                activeOpacity={0.7}
-              >
-                <IconComponent
-                  name={name}
-                  size={getIconSize('medium')}
-                  color={isActive ? "#256E63" : "#000"}
-                />
-                <Text style={[
-                  getResponsiveTextStyle('caption'),
-                  {
-                    marginTop: getResponsiveSpacing(2, 3, 4, 5),
-                    color: isActive ? "#256E63" : "#000",
-                  }
-                ]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          .map(([tab, { IconComponent, name, label }]) => (
+            <TabButton
+              key={tab}
+              tab={tab}
+              IconComponent={IconComponent}
+              name={name}
+              label={label}
+            />
+          ))}
       </View>
 
       {/* Floating Action Button - Positioned at middle of Community and Library tabs */}
@@ -366,7 +364,7 @@ export default function BottomNav({
           zIndex: 100,
         }}
       >
-        <TouchableOpacity
+        <OptimizedTouchableOpacity
           style={{
             width: getFabSize().size,
             height: getFabSize().size,
@@ -377,17 +375,23 @@ export default function BottomNav({
             zIndex: 100,
             elevation: 15,
           }}
-          onPress={handleFabToggle}
-          activeOpacity={0.7}
+          onPress={fabButton.handlePress}
+          variant="ghost"
+          size="medium"
+          hapticFeedback={true}
+          hapticType="medium"
         >
           <AntDesign
             name={showActions ? "close" : "plus"}
             size={getFabSize().iconSize}
             color="#256E63"
           />
-        </TouchableOpacity>
+        </OptimizedTouchableOpacity>
       </View>
     </>
   );
-}
+});
 
+OptimizedBottomNav.displayName = 'OptimizedBottomNav';
+
+export default OptimizedBottomNav;

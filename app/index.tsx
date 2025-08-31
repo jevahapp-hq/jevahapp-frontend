@@ -16,7 +16,9 @@ import '../global.css';
 import AnimatedLogoIntro from './components/AnimatedLogoIntro';
 import { authUtils } from './utils/authUtils';
 
-const API_BASE_URL = __DEV__ ? 'http://192.168.100.133:4000' : 'https://jevahapp-backend.onrender.com';
+import { getApiBaseUrl } from './utils/apiConfig';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const { width } = Dimensions.get('window');
 

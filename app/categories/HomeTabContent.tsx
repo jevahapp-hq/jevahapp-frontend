@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 
 import { useLocalSearchParams } from "expo-router";
 import {
@@ -9,6 +9,9 @@ import {
     getResponsiveTextStyle
 } from "../../utils/responsive";
 import Header from "../components/Header";
+import OptimizedTouchableOpacity from "../components/OptimizedTouchableOpacity";
+import { useFastButton } from "../hooks/useFastButton";
+import { usePerformanceMonitor } from "../hooks/usePerformanceMonitor";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import AllContent from "./Allcontent";
@@ -20,75 +23,212 @@ import VideoComponent from "./VideoComponent";
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
+// Memoized category button component for better performance
+const CategoryButton = memo(({ 
+  category, 
+  isSelected, 
+  onPress 
+}: { 
+  category: string; 
+  isSelected: boolean; 
+  onPress: () => void; 
+}) => {
+  const buttonHandler = useFastButton(onPress, {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50, // Faster response
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  return (
+    <OptimizedTouchableOpacity
+      onPress={buttonHandler.handlePress}
+      activeOpacity={0.7}
+      preventRapidClicks={true}
+      rapidClickThreshold={50}
+      hapticFeedback={true}
+      hapticType="light"
+      style={{
+        paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+        paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+        marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
+        borderRadius: getResponsiveBorderRadius('medium'),
+        backgroundColor: isSelected ? 'black' : 'white',
+        borderWidth: isSelected ? 0 : 1,
+        borderColor: isSelected ? 'transparent' : '#6B6E7C',
+        ...getResponsiveShadow(),
+        minWidth: 48,
+        minHeight: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <View style={{ position: 'relative' }}>
+        <Text style={[
+          getResponsiveTextStyle('button'),
+          {
+            color: isSelected ? 'white' : '#1D2939',
+          }
+        ]}>
+          {category}
+        </Text>
+        {category === "LIVE" && (
+          <View
+            style={{
+              position: "absolute",
+              top: -getResponsiveSpacing(4, 6, 8, 10),
+              right: getResponsiveSpacing(4, 6, 8, 10),
+              width: getResponsiveSpacing(4, 5, 6, 7),
+              height: getResponsiveSpacing(4, 5, 6, 7),
+              borderRadius: getResponsiveSpacing(2, 3, 4, 5),
+              backgroundColor: "red",
+            }}
+          />
+        )}
+      </View>
+    </OptimizedTouchableOpacity>
+  );
+});
+
+CategoryButton.displayName = 'CategoryButton';
+
+// Memoized content components for lazy loading
+const LazyAllContent = memo(() => <AllContent />);
+const LazyLiveComponent = memo(() => <LiveComponent />);
+const LazySermonComponent = memo(() => <SermonComponent />);
+const LazyMusic = memo(() => <Music />);
+const LazyEbookComponent = memo(() => <EbookComponent />);
+const LazyVideoComponent = memo(() => <VideoComponent />);
+
+LazyAllContent.displayName = 'LazyAllContent';
+LazyLiveComponent.displayName = 'LazyLiveComponent';
+LazySermonComponent.displayName = 'LazySermonComponent';
+LazyMusic.displayName = 'LazyMusic';
+LazyEbookComponent.displayName = 'LazyEbookComponent';
+LazyVideoComponent.displayName = 'LazyVideoComponent';
+
 export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
   const [selectedCategory, setSelectedCategory] = useState(
     (defaultCategory as string) || "ALL"
   );
 
-  const handleCategoryPress = (category: string) => {
+  // Performance monitoring
+  const performance = usePerformanceMonitor({
+    componentName: 'HomeTabContent',
+    trackRenders: true,
+    trackButtonClicks: true,
+    slowButtonThreshold: 50, // Expect faster response
+  });
+
+  // Optimized category press handler
+  const handleCategoryPress = useCallback((category: string) => {
     // Provide immediate visual feedback
     setSelectedCategory(category);
     
     // Only stop media if actually switching to a different category
     if (category !== selectedCategory) {
-      // Stop any active audio and pause all videos when switching categories
-      try {
-        useMediaStore.getState().stopAudioFn?.();
-      } catch (e) {
-        // no-op
-      }
-      try {
-        useGlobalVideoStore.getState().pauseAllVideos();
-      } catch (e) {
-        // no-op
-      }
+      // Use InteractionManager for non-blocking media operations
+      const { InteractionManager } = require('react-native');
+      InteractionManager.runAfterInteractions(() => {
+        try {
+          useMediaStore.getState().stopAudioFn?.();
+        } catch (e) {
+          // no-op
+        }
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos();
+        } catch (e) {
+          // no-op
+        }
+      });
     }
-  };
+  }, [selectedCategory]);
 
-  const renderContent = () => {
+  // Create individual fast button handlers for each category
+  const allButtonHandler = useFastButton(() => handleCategoryPress("ALL"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const liveButtonHandler = useFastButton(() => handleCategoryPress("LIVE"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const sermonButtonHandler = useFastButton(() => handleCategoryPress("SERMON"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const musicButtonHandler = useFastButton(() => handleCategoryPress("MUSIC"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const ebookButtonHandler = useFastButton(() => handleCategoryPress("E-BOOKS"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  const videoButtonHandler = useFastButton(() => handleCategoryPress("VIDEO"), {
+    preventRapidClicks: true,
+    rapidClickThreshold: 50,
+    hapticFeedback: true,
+    hapticType: 'light',
+  });
+
+  // Memoized category button handlers mapping
+  const categoryButtonHandlers = useMemo(() => ({
+    "ALL": allButtonHandler.handlePress,
+    "LIVE": liveButtonHandler.handlePress,
+    "SERMON": sermonButtonHandler.handlePress,
+    "MUSIC": musicButtonHandler.handlePress,
+    "E-BOOKS": ebookButtonHandler.handlePress,
+    "VIDEO": videoButtonHandler.handlePress,
+  } as Record<string, () => void>), [allButtonHandler, liveButtonHandler, sermonButtonHandler, musicButtonHandler, ebookButtonHandler, videoButtonHandler]);
+
+  // Memoized content renderer
+  const renderContent = useMemo(() => {
     switch (selectedCategory) {
       case "ALL":
-        return <AllContent />;
+        return <LazyAllContent />;
       case "LIVE":
-        return <LiveComponent />;
+        return <LazyLiveComponent />;
       case "SERMON":
-        return <SermonComponent />;
+        return <LazySermonComponent />;
       case "MUSIC":
-        return <Music />;
-
-      //
+        return <LazyMusic />;
       case "E-BOOKS":
-        return <EbookComponent />;
+        return <LazyEbookComponent />;
       case "VIDEO":
-        return <VideoComponent />;
+        return <LazyVideoComponent />;
       default:
-        return null;
+        return <LazyAllContent />;
     }
+  }, [selectedCategory]);
 
-    // switch (selectedCategory) {
-    //   case "ALL":
-    //     return <FilteredMediaList tag="All" />;
-    //   case "LIVE":
-    //     return <FilteredMediaList tag="Live" />;
-    //   case "SERMON":
-    //     return <FilteredMediaList tag="Sermons" />;
-    //   case "MUSIC":
-    //     return <FilteredMediaList tag="Music" />;
-    //   case "E-BOOKS":
-    //     return <FilteredMediaList tag="Books" />;
-    //   case "VIDEO":
-    //     return <FilteredMediaList tag="Videos" />;
-    //   default:
-    //     return null;
-    // }
-  };
-
-
-  // const renderContent = () => {
-   
-  // };
-
+  // Memoized category buttons
+  const categoryButtons = useMemo(() => (
+    categories.map((category) => (
+      <CategoryButton
+        key={category}
+        category={category}
+        isSelected={selectedCategory === category}
+        onPress={categoryButtonHandlers[category]}
+      />
+    ))
+  ), [selectedCategory, categoryButtonHandlers]);
 
   return (
     <View style={{ flex: 1, width: '100%' }}>
@@ -107,56 +247,12 @@ export default function HomeTabContent() {
               marginTop: getResponsiveSpacing(20, 24, 28, 32),
             }}
           >
-            {categories.map((category) => (
-                              <TouchableOpacity
-                  key={category}
-                  onPress={() => handleCategoryPress(category)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                    marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
-                    borderRadius: getResponsiveBorderRadius('medium'),
-                    backgroundColor: selectedCategory === category ? 'black' : 'white',
-                    borderWidth: selectedCategory === category ? 0 : 1,
-                    borderColor: selectedCategory === category ? 'transparent' : '#6B6E7C',
-                    ...getResponsiveShadow(),
-                    minWidth: 48,
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                <View style={{ position: 'relative' }}>
-                  <Text style={[
-                    getResponsiveTextStyle('button'),
-                    {
-                      color: selectedCategory === category ? 'white' : '#1D2939',
-                    }
-                  ]}>
-                    {category}
-                  </Text>
-                  {category === "LIVE" && (
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: -getResponsiveSpacing(4, 6, 8, 10),
-                        right: getResponsiveSpacing(4, 6, 8, 10),
-                        width: getResponsiveSpacing(4, 5, 6, 7),
-                        height: getResponsiveSpacing(4, 5, 6, 7),
-                        borderRadius: getResponsiveSpacing(2, 3, 4, 5),
-                        backgroundColor: "red",
-                      }}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+            {categoryButtons}
           </ScrollView>
         </View>
         {/* Content without Padding */}
         <View style={{ flex: 1, width: '100%', paddingBottom: 100 }}>
-          {renderContent()}
+          {renderContent}
         </View>
       </ScrollView>
     </View>

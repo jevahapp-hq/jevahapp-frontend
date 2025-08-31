@@ -1,14 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Dimensions, InteractionManager, Platform } from 'react-native';
 
-// Performance optimization utilities for better app responsiveness
 export class PerformanceOptimizer {
   private static instance: PerformanceOptimizer;
-  private requestCache = new Map<string, { data: any; timestamp: number; ttl: number }>();
-  private pendingRequests = new Map<string, Promise<any>>();
-  private debounceTimers = new Map<string, number>(); // Changed to number for timestamp
-  private imageCache = new Set<string>();
-  private touchTargets = new Map<string, { x: number; y: number; timestamp: number }>();
+  private preloadedData: Map<string, any> = new Map();
+  private isPreloading = false;
+  private debounceTimers: Map<string, number> = new Map();
+  private cache: Map<string, { data: any; timestamp: number; ttl: number }> = new Map();
+  private performanceMetrics: Map<string, number[]> = new Map();
 
   static getInstance(): PerformanceOptimizer {
     if (!PerformanceOptimizer.instance) {
@@ -17,7 +16,56 @@ export class PerformanceOptimizer {
     return PerformanceOptimizer.instance;
   }
 
-  // Optimized button press handler with immediate feedback and touch target optimization
+  /**
+   * Get platform-specific optimizations
+   */
+  static getPlatformOptimizations() {
+    const { width, height } = Dimensions.get('window');
+    const isTablet = width > 768;
+    const isLowEndDevice = Platform.OS === 'android' && height < 600;
+
+    return {
+      ios: {
+        touchTargetSize: 44,
+        debounceMs: 0,
+        hapticFeedback: true,
+        animationDuration: 300,
+        batchSize: 10,
+      },
+      android: {
+        touchTargetSize: 48,
+        debounceMs: 0,
+        hapticFeedback: true,
+        animationDuration: 250,
+        batchSize: 5,
+      },
+      web: {
+        touchTargetSize: 40,
+        debounceMs: 0,
+        hapticFeedback: false,
+        animationDuration: 200,
+        batchSize: 20,
+      },
+      tablet: {
+        touchTargetSize: isTablet ? 56 : 44,
+        debounceMs: 0,
+        hapticFeedback: true,
+        animationDuration: 350,
+        batchSize: 15,
+      },
+      lowEnd: {
+        touchTargetSize: 48,
+        debounceMs: 50, // Slight delay for low-end devices
+        hapticFeedback: false, // Disable haptics for better performance
+        animationDuration: 150,
+        batchSize: 3,
+      },
+    };
+  }
+
+  /**
+   * Optimized button press handler with immediate feedback
+   */
   static handleButtonPress(
     onPress: () => void | Promise<void>,
     options: {
@@ -25,35 +73,43 @@ export class PerformanceOptimizer {
       debounceMs?: number;
       key?: string;
       hapticFeedback?: boolean;
+      hapticType?: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error';
       touchTargetSize?: number;
     } = {}
   ): () => void {
+    const platformOpts = PerformanceOptimizer.getPlatformOptimizations();
+    const platform = Platform.OS;
+    const { width, height } = Dimensions.get('window');
+    const isTablet = width > 768;
+    const isLowEndDevice = Platform.OS === 'android' && height < 600;
+
     const { 
       immediateFeedback = true, 
-      debounceMs = 0, // Changed from 150ms to 0 for immediate response
+      debounceMs = isLowEndDevice ? platformOpts.lowEnd.debounceMs : 0,
       key = 'default',
-      hapticFeedback = true,
-      touchTargetSize = 44
+      hapticFeedback = isLowEndDevice ? false : platformOpts[platform]?.hapticFeedback ?? true,
+      hapticType = 'light',
+      touchTargetSize = platformOpts[platform]?.touchTargetSize ?? 44,
     } = options;
     
     const optimizer = PerformanceOptimizer.getInstance();
 
     return () => {
+      const now = Date.now();
+
       // Check if this button was recently pressed to prevent rapid successive calls
       if (optimizer.debounceTimers.has(key)) {
         const lastPress = optimizer.debounceTimers.get(key)!;
-        const now = Date.now();
-        if (now - lastPress < 100) { // Only prevent if pressed within 100ms
+        if (now - lastPress < 100) {
           return; // Ignore rapid successive presses
         }
       }
 
       // Mark this button as recently pressed
-      optimizer.debounceTimers.set(key, Date.now());
+      optimizer.debounceTimers.set(key, now);
 
       // Provide immediate visual feedback
       if (immediateFeedback) {
-        // Trigger interaction manager to handle UI updates first
         InteractionManager.runAfterInteractions(() => {
           // This ensures UI updates happen before heavy operations
         });
@@ -79,7 +135,9 @@ export class PerformanceOptimizer {
     };
   }
 
-  // Optimized data fetching with caching and request deduplication
+  /**
+   * Optimized data fetching with caching and request deduplication
+   */
   static async optimizedFetch<T>(
     key: string,
     fetchFn: () => Promise<T>,
@@ -91,250 +149,292 @@ export class PerformanceOptimizer {
     } = {}
   ): Promise<T> {
     const { 
-      cacheDuration = 5 * 60 * 1000, 
+      cacheDuration = 5 * 60 * 1000, // 5 minutes
       forceRefresh = false, 
       background = false,
-      priority = 'high'
+      priority = 'high',
     } = options;
     
     const optimizer = PerformanceOptimizer.getInstance();
 
     // Check cache first
     if (!forceRefresh) {
-      const cached = optimizer.requestCache.get(key);
+      const cached = optimizer.cache.get(key);
       if (cached && Date.now() - cached.timestamp < cached.ttl) {
         return cached.data;
       }
     }
 
-    // Check if request is already pending
-    if (optimizer.pendingRequests.has(key)) {
-      return optimizer.pendingRequests.get(key)!;
-    }
-
-    // Create new request
-    const requestPromise = (async () => {
+    // Execute fetch
+    const startTime = Date.now();
       try {
         const data = await fetchFn();
         
         // Cache the result
-        optimizer.requestCache.set(key, {
+      optimizer.cache.set(key, {
           data,
           timestamp: Date.now(),
           ttl: cacheDuration,
         });
 
+      // Record performance metric
+      const duration = Date.now() - startTime;
+      optimizer.recordMetric(`fetch_${key}`, duration);
+
         return data;
-      } finally {
-        // Remove from pending requests
-        optimizer.pendingRequests.delete(key);
-      }
-    })();
-
-    optimizer.pendingRequests.set(key, requestPromise);
-
-    // Run in background if specified
-    if (background) {
-      InteractionManager.runAfterInteractions(() => {
-        // Background processing
-      });
-    }
-
-    return requestPromise;
-  }
-
-  // Preload critical data
-  static async preloadCriticalData(): Promise<void> {
-    const optimizer = PerformanceOptimizer.getInstance();
-    
-    // Preload user data
-    try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        optimizer.requestCache.set('user', {
-          data: JSON.parse(userData),
-          timestamp: Date.now(),
-          ttl: 10 * 60 * 1000, // 10 minutes
-        });
-      }
     } catch (error) {
-      console.warn('Failed to preload user data:', error);
-    }
-
-    // Preload media list
-    try {
-      const mediaList = await AsyncStorage.getItem('mediaList');
-      if (mediaList) {
-        optimizer.requestCache.set('mediaList', {
-          data: JSON.parse(mediaList),
-          timestamp: Date.now(),
-          ttl: 5 * 60 * 1000, // 5 minutes
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to preload media list:', error);
+      // Record error metric
+      optimizer.recordMetric(`fetch_error_${key}`, Date.now() - startTime);
+      throw error;
     }
   }
 
-  // Clear cache
-  static clearCache(pattern?: string): void {
-    const optimizer = PerformanceOptimizer.getInstance();
+  /**
+   * Preload critical data for faster app startup
+   */
+  async preloadCriticalData(): Promise<void> {
+    if (this.isPreloading) return;
     
-    if (pattern) {
-      // Clear specific pattern
-      for (const key of optimizer.requestCache.keys()) {
-        if (key.includes(pattern)) {
-          optimizer.requestCache.delete(key);
+    this.isPreloading = true;
+    
+    try {
+      // Preload user data and token in parallel
+      const [userData, token, settings] = await Promise.allSettled([
+        AsyncStorage.getItem('user'),
+        AsyncStorage.getItem('token'),
+        AsyncStorage.getItem('appSettings'),
+      ]);
+
+      if (userData.status === 'fulfilled' && userData.value) {
+        this.preloadedData.set('user', JSON.parse(userData.value));
+      }
+
+      if (token.status === 'fulfilled' && token.value) {
+        this.preloadedData.set('token', token.value);
+      }
+
+      if (settings.status === 'fulfilled' && settings.value) {
+        this.preloadedData.set('settings', JSON.parse(settings.value));
+      }
+
+      // Preload other critical data
+      await this.preloadAppSettings();
+      
+    } catch (error) {
+      console.warn('Preloading failed:', error);
+    } finally {
+      this.isPreloading = false;
+    }
+  }
+
+  /**
+   * Preload app settings and configuration
+   */
+  private async preloadAppSettings(): Promise<void> {
+    try {
+      const settings = await AsyncStorage.getItem('appSettings');
+      if (settings) {
+        this.preloadedData.set('settings', JSON.parse(settings));
+      }
+    } catch (error) {
+      // Silent fail for settings
+    }
+  }
+
+  /**
+   * Get preloaded data
+   */
+  getPreloadedData(key: string): any {
+    return this.preloadedData.get(key);
+  }
+
+  /**
+   * Optimize network requests with caching
+   */
+  static async cachedRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    const cacheKey = `cache_${url}_${JSON.stringify(options)}`;
+    
+    try {
+      // Check cache first
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        const now = Date.now();
+        
+        // Cache valid for 5 minutes
+        if (now - timestamp < 5 * 60 * 1000) {
+          return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
       }
-    } else {
-      // Clear all cache
-      optimizer.requestCache.clear();
+    } catch (error) {
+      // Cache miss, continue with network request
     }
-  }
 
-  // Optimize image loading with preloading
-  static preloadImages(imageUrls: string[]): void {
-    const optimizer = PerformanceOptimizer.getInstance();
+    // Make network request
+    const response = await fetch(url, options);
     
-    imageUrls.forEach(url => {
-      if (url && url.startsWith('http') && !optimizer.imageCache.has(url)) {
-        optimizer.imageCache.add(url);
-        // Preload image in background
-        InteractionManager.runAfterInteractions(() => {
-          const img = new Image();
-          img.src = url;
-        });
+    if (response.ok) {
+      try {
+        const data = await response.clone().json();
+        await AsyncStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      } catch (error) {
+        // Failed to cache, continue
       }
-    });
+    }
+
+    return response;
   }
 
-  // Batch operations for better performance
-  static async batchOperations<T>(
-    operations: (() => Promise<T>)[],
-    batchSize: number = 3 // Reduced batch size for better responsiveness
-  ): Promise<T[]> {
-    const results: T[] = [];
-    
+  /**
+   * Optimize image loading
+   */
+  static preloadImages(images: string[]): Promise<void[]> {
+    return Promise.all(
+      images.map(uri => {
+        return new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = uri;
+        });
+      })
+    );
+  }
+
+  /**
+   * Debounce function calls
+   */
+  static debounce<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout;
+    return (...args: Parameters<T>) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  }
+
+  /**
+   * Throttle function calls
+   */
+  static throttle<T extends (...args: any[]) => any>(
+    func: T,
+    limit: number
+  ): (...args: Parameters<T>) => void {
+    let inThrottle: boolean;
+    return (...args: Parameters<T>) => {
+      if (!inThrottle) {
+        func(...args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
+  }
+
+  /**
+   * Optimize AsyncStorage operations
+   */
+  static async batchStorageOperations(operations: Array<{ key: string; value: string }>): Promise<void> {
+    const platformOpts = PerformanceOptimizer.getPlatformOptimizations();
+    const batchSize = platformOpts[Platform.OS]?.batchSize ?? 10;
+
+    if (Platform.OS === 'ios') {
+      // iOS can handle multiple operations better
+      await Promise.all(
+        operations.map(op => AsyncStorage.setItem(op.key, op.value))
+      );
+    } else {
+      // Android: batch operations to avoid blocking
     for (let i = 0; i < operations.length; i += batchSize) {
       const batch = operations.slice(i, i + batchSize);
-      const batchResults = await Promise.all(batch.map(op => op()));
-      results.push(...batchResults);
-      
-      // Smaller delay between batches to prevent blocking
+        await Promise.all(
+          batch.map(op => AsyncStorage.setItem(op.key, op.value))
+        );
+        // Small delay between batches
       if (i + batchSize < operations.length) {
-        await new Promise(resolve => setTimeout(resolve, 5)); // Reduced from 10ms
-      }
-    }
-    
-    return results;
-  }
-
-  // Memory management
-  static optimizeMemory(): void {
-    const optimizer = PerformanceOptimizer.getInstance();
-    
-    // Clear old cache entries
-    const now = Date.now();
-    for (const [key, value] of optimizer.requestCache.entries()) {
-      if (now - value.timestamp > value.ttl) {
-        optimizer.requestCache.delete(key);
-      }
-    }
-
-    // Clear old touch targets
-    for (const [key, value] of optimizer.touchTargets.entries()) {
-      if (now - value.timestamp > 5000) { // 5 seconds
-        optimizer.touchTargets.delete(key);
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
       }
     }
   }
 
-  // Touch target optimization
-  static optimizeTouchTarget(
-    key: string,
-    x: number,
-    y: number,
-    minSize: number = 44
-  ): { x: number; y: number; width: number; height: number } {
-    const optimizer = PerformanceOptimizer.getInstance();
-    
-    // Store touch target info
-    optimizer.touchTargets.set(key, { x, y, timestamp: Date.now() });
-    
-    // Ensure minimum touch target size
+  /**
+   * Record performance metrics
+   */
+  recordMetric(key: string, value: number): void {
+    if (!this.performanceMetrics.has(key)) {
+      this.performanceMetrics.set(key, []);
+    }
+    this.performanceMetrics.get(key)!.push(value);
+
+    // Keep only last 100 metrics
+    const metrics = this.performanceMetrics.get(key)!;
+    if (metrics.length > 100) {
+      metrics.splice(0, metrics.length - 100);
+    }
+  }
+
+  /**
+   * Get performance metrics
+   */
+  getMetrics(key: string): { avg: number; min: number; max: number; count: number } | null {
+    const metrics = this.performanceMetrics.get(key);
+    if (!metrics || metrics.length === 0) return null;
+
+    const sum = metrics.reduce((a, b) => a + b, 0);
     return {
-      x: Math.max(0, x - minSize / 2),
-      y: Math.max(0, y - minSize / 2),
-      width: minSize,
-      height: minSize
+      avg: sum / metrics.length,
+      min: Math.min(...metrics),
+      max: Math.max(...metrics),
+      count: metrics.length,
     };
   }
 
-  // Platform-specific optimizations
-  static getPlatformOptimizations() {
-    const isIOS = Platform.OS === 'ios';
-    const isAndroid = Platform.OS === 'android';
-    
-    return {
-      // iOS-specific optimizations
-      ios: {
-        animationDuration: 300,
-        debounceMs: 0, // No debounce for immediate response
-        touchTargetSize: 44,
-        hapticFeedback: true
-      },
-      // Android-specific optimizations
-      android: {
-        animationDuration: 250,
-        debounceMs: 0, // No debounce for immediate response
-        touchTargetSize: 48,
-        hapticFeedback: false
-      },
-      // Web-specific optimizations
-      web: {
-        animationDuration: 200,
-        debounceMs: 0, // No debounce for immediate response
-        touchTargetSize: 40,
-        hapticFeedback: false
+  /**
+   * Clear performance cache
+   */
+  async clearCache(): Promise<void> {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter(key => key.startsWith('cache_'));
+      if (cacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(cacheKeys);
       }
-    };
+      this.preloadedData.clear();
+      this.cache.clear();
+    } catch (error) {
+      console.warn('Failed to clear cache:', error);
+    }
   }
 
-  // Responsive performance settings based on device capabilities
-  static getResponsivePerformanceSettings() {
-    const { width, height } = Dimensions.get('window');
-    const isLowEndDevice = width < 375 || height < 667; // iPhone SE or smaller
-    const isHighEndDevice = width >= 414 && height >= 896; // iPhone 11 Pro Max or larger
+  /**
+   * Get performance report
+   */
+  getPerformanceReport(): Record<string, any> {
+    const report: Record<string, any> = {};
+    
+    for (const [key, metrics] of this.performanceMetrics.entries()) {
+      report[key] = this.getMetrics(key);
+    }
     
     return {
-      // Low-end device optimizations
-      lowEnd: {
-        debounceMs: 0, // No debounce for immediate response
-        batchSize: 2,
-        cacheDuration: 2 * 60 * 1000, // 2 minutes
-        preloadImages: false,
-        animationDuration: 400
-      },
-      // High-end device optimizations
-      highEnd: {
-        debounceMs: 0, // No debounce for immediate response
-        batchSize: 5,
-        cacheDuration: 10 * 60 * 1000, // 10 minutes
-        preloadImages: true,
-        animationDuration: 200
-      },
-      // Default optimizations
-      default: {
-        debounceMs: 0, // No debounce for immediate response
-        batchSize: 3,
-        cacheDuration: 5 * 60 * 1000, // 5 minutes
-        preloadImages: true,
-        animationDuration: 300
-      }
+      metrics: report,
+      cacheSize: this.cache.size,
+      preloadedDataSize: this.preloadedData.size,
+      debounceTimersSize: this.debounceTimers.size,
     };
   }
 }
+
+// Export singleton instance
+export const performanceOptimizer = PerformanceOptimizer.getInstance();
 
 // Hook for optimized button handling
 export function useOptimizedButton(
@@ -342,10 +442,11 @@ export function useOptimizedButton(
   options: {
     debounceMs?: number;
     key?: string;
-    hapticFeedback?: boolean;
   } = {}
 ) {
-  return PerformanceOptimizer.handleButtonPress(onPress, options);
+  const { debounceMs = 0, key = 'default' } = options;
+  
+  return PerformanceOptimizer.debounce(onPress, debounceMs);
 }
 
 // Hook for optimized data fetching
@@ -355,94 +456,9 @@ export function useOptimizedFetch<T>(
   options: {
     cacheDuration?: number;
     forceRefresh?: boolean;
-    priority?: 'high' | 'low';
   } = {}
 ) {
-  return () => PerformanceOptimizer.optimizedFetch(key, fetchFn, options);
+  return async () => {
+    return PerformanceOptimizer.optimizedFetch(key, fetchFn, options);
+  };
 }
-
-// Performance monitoring
-export class PerformanceMonitor {
-  private static metrics: Record<string, { start: number; end?: number }> = {};
-  private static memoryUsage: Record<string, number> = {};
-
-  static startTimer(key: string): void {
-    this.metrics[key] = { start: Date.now() };
-  }
-
-  static endTimer(key: string): number {
-    const metric = this.metrics[key];
-    if (metric && !metric.end) {
-      metric.end = Date.now();
-      const duration = metric.end - metric.start;
-      console.log(`⏱️ Performance: ${key} took ${duration}ms`);
-      return duration;
-    }
-    return 0;
-  }
-
-  static getMetrics(): Record<string, number> {
-    const results: Record<string, number> = {};
-    Object.entries(this.metrics).forEach(([key, metric]) => {
-      if (metric.end) {
-        results[key] = metric.end - metric.start;
-      }
-    });
-    return results;
-  }
-
-  static clearMetrics(): void {
-    this.metrics = {};
-  }
-
-  static trackMemoryUsage(key: string, size: number): void {
-    this.memoryUsage[key] = size;
-  }
-
-  static getMemoryUsage(): Record<string, number> {
-    return { ...this.memoryUsage };
-  }
-}
-
-// Responsive touch handling
-export class ResponsiveTouchHandler {
-  private static touchHistory: Array<{ x: number; y: number; timestamp: number }> = [];
-  private static readonly MAX_TOUCH_HISTORY = 10;
-
-  static handleTouch(x: number, y: number): boolean {
-    const now = Date.now();
-    
-    // Add to touch history
-    this.touchHistory.push({ x, y, timestamp: now });
-    
-    // Keep only recent touches
-    if (this.touchHistory.length > this.MAX_TOUCH_HISTORY) {
-      this.touchHistory.shift();
-    }
-    
-    // Check for rapid touches (potential double-tap)
-    const recentTouches = this.touchHistory.filter(
-      touch => now - touch.timestamp < 300
-    );
-    
-    if (recentTouches.length > 1) {
-      // Prevent rapid successive touches
-      return false;
-    }
-    
-    return true;
-  }
-
-  static clearTouchHistory(): void {
-    this.touchHistory = [];
-  }
-}
-
-// Export all utilities
-export default {
-  PerformanceOptimizer,
-  PerformanceMonitor,
-  ResponsiveTouchHandler,
-  useOptimizedButton,
-  useOptimizedFetch
-};
