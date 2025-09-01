@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
+import { Pause, Play, Search, Volume2 } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
     Dimensions,
@@ -17,8 +18,6 @@ import {
     PanGestureHandler,
     PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
-import { MagnifyingGlassIcon } from "react-native-heroicons/outline";
-import { PauseIcon, PlayIcon, SpeakerWaveIcon } from "react-native-heroicons/solid";
 import Animated, {
     runOnJS,
     useAnimatedStyle,
@@ -203,9 +202,9 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
         <View className="flex-row items-center mt-3">
           <TouchableOpacity className="mr-3" onPress={togglePlay}>
             {isPlaying ? (
-              <PauseIcon size={18} color="black" />
+                              <Pause size={18} color="black" />
             ) : (
-              <PlayIcon size={18} color="black" />
+                              <Play size={18} color="black" />
             )}
           </TouchableOpacity>
 
@@ -240,7 +239,7 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
           </View>
           
           <TouchableOpacity onPress={toggleMute}>
-            <SpeakerWaveIcon 
+                            <Volume2 
               size={18} 
               color={isMuted ? "gray" : "black"} 
             />
@@ -373,7 +372,7 @@ const DownloadScreen: React.FC = () => {
 
       {/* Search Bar */}
         <View className="flex-row items-center bg-[#E5E5EA] w-[362px] rounded-xl mx-4 mt-4 px-2 py-3 border border-[rgb(229,229,234)]">
-        <MagnifyingGlassIcon size={22} color="#8E8E93" />
+                        <Search size={22} color="#8E8E93" />
           <TextInput
             className="ml-2 flex-1 font-rubik-regular text-[#090E24]"
             placeholder="Search for downloads..."

@@ -1,49 +1,48 @@
-import React from 'react';
+import React, { Component, ReactNode } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-interface ErrorBoundaryState {
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface State {
   hasError: boolean;
   error?: Error;
 }
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-  fallback?: React.ComponentType<{ error?: Error; resetError: () => void }>;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
+class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error('❌ ErrorBoundary caught an error:', error, errorInfo);
   }
 
-  resetError = () => {
+  handleRetry = () => {
     this.setState({ hasError: false, error: undefined });
   };
 
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
-        const FallbackComponent = this.props.fallback;
-        return <FallbackComponent error={this.state.error} resetError={this.resetError} />;
+        return this.props.fallback;
       }
 
       return (
-        <View style={styles.container}>
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.message}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>
             {this.state.error?.message || 'An unexpected error occurred'}
           </Text>
-          <TouchableOpacity style={styles.button} onPress={this.resetError}>
-            <Text style={styles.buttonText}>Try Again</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={this.handleRetry}>
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       );
@@ -54,32 +53,33 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 const styles = StyleSheet.create({
-  container: {
+  errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
     padding: 20,
-    backgroundColor: '#fff',
   },
-  title: {
-    fontSize: 24,
+  errorTitle: {
+    color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#333',
+    textAlign: 'center',
   },
-  message: {
+  errorMessage: {
+    color: '#ccc',
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 20,
-    color: '#666',
+    marginBottom: 30,
   },
-  button: {
-    backgroundColor: '#090E24',
+  retryButton: {
+    backgroundColor: '#FEA74E',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 8,
   },
-  buttonText: {
+  retryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

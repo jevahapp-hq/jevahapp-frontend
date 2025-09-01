@@ -11,22 +11,22 @@ export default {
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
     extra: {
-      API_URL: process.env.EXPO_PUBLIC_API_URL,
+      API_URL: process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http:/10.156.136.168:4000/api" : "https://jevahapp-backend.onrender.com/api"),
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
-        projectId: 'dcbafd4e-7087-4d44-982f-481637a0b516',
+        projectId: '5cb1aa56-fa50-4d01-b2e6-366405946e71',
       },
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.piuslucky469.jevahapp',
+      bundleIdentifier: 'com.judecowart1.jevahapp',
       infoPlist: {
         NSPhotoLibraryUsageDescription: 'This app needs access to your photo and video library.',
         NSCameraUsageDescription: 'This app needs access to your camera for media upload.',
       },
     },
     android: {
-      package: 'com.piuslucky469.jevahapp',
+      package: 'com.judecowart1.jevahapp',
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
         foregroundImage: './assets/images/Jevah.png',

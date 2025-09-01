@@ -13,11 +13,12 @@ import {
     Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    View,
+    View
 } from "react-native";
 
 import BottomNav from "../components/BottomNav";
 import CommentReplyModal from "../components/CommentReplyModal";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
@@ -50,6 +51,8 @@ type Params = {
 
 export default function Reelsviewscroll() {
   const videoRefs = useRef<Record<string, Video>>({});
+  const [hasError, setHasError] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Global video store for video management
   const globalVideoStore = useGlobalVideoStore();
@@ -152,55 +155,107 @@ export default function Reelsviewscroll() {
   // 🔁 Helper: try to refresh stale media URL from backend
   const tryRefreshMediaUrl = async (item: any): Promise<string | null> => {
     try {
+      if (!item || !item.title) {
+        console.warn("⚠️ Invalid item for URL refresh:", item);
+        return null;
+      }
+
       const response = await allMediaAPI.getAllMedia({
         search: item.title,
         contentType: (item.contentType as any),
         limit: 1,
       });
-      const fresh = (response as any)?.media?.[0];
-      if (fresh?.fileUrl) {
-        return fresh.fileUrl as string;
+      
+      if (!response || !response.media || !Array.isArray(response.media)) {
+        console.warn("⚠️ Invalid response from API:", response);
+        return null;
       }
+
+      const fresh = response.media[0];
+      if (fresh?.fileUrl && typeof fresh.fileUrl === 'string' && fresh.fileUrl.trim() !== '') {
+        return fresh.fileUrl.trim();
+      }
+      
+      return null;
     } catch (e) {
       console.log("🔁 Refresh media URL failed in reels:", e);
+      return null;
     }
-    return null;
   };
 
   // Parse video list and current index for TikTok-style navigation
-  const parsedVideoList = videoList ? JSON.parse(videoList) : [];
-  const currentVideoIndex = parseInt(currentIndex);
+  const parsedVideoList = videoList ? (() => {
+    try {
+      return JSON.parse(videoList);
+    } catch (error) {
+      console.error("❌ Failed to parse video list:", error);
+      return [];
+    }
+  })() : [];
+  
+  const currentVideoIndex = parseInt(currentIndex) || 0;
   const [currentIndex_state, setCurrentIndex_state] = useState(currentVideoIndex);
   const lastIndexRef = useRef<number>(currentVideoIndex);
   
   // Animation and scroll state
   // Debug logging
   useEffect(() => {
-    console.log(`🎬 ReelsViewScroll loaded with:`);
-    console.log(`   - Video list length: ${parsedVideoList.length}`);
-    console.log(`   - Current index: ${currentIndex_state}`);
-    console.log(`   - VideoList param exists: ${!!videoList}`);
-    if (parsedVideoList.length > 0) {
-      console.log(`   - First video: ${parsedVideoList[0]?.title}`);
-      console.log(`   - Current video: ${parsedVideoList[currentIndex_state]?.title}`);
+    try {
+      console.log(`🎬 ReelsViewScroll loaded with:`);
+      console.log(`   - Video list length: ${parsedVideoList.length}`);
+      console.log(`   - Current index: ${currentIndex_state}`);
+      console.log(`   - VideoList param exists: ${!!videoList}`);
+      if (parsedVideoList.length > 0) {
+        console.log(`   - First video: ${parsedVideoList[0]?.title}`);
+        console.log(`   - Current video: ${parsedVideoList[currentIndex_state]?.title}`);
+      }
+    } catch (error) {
+      console.error("❌ Error in debug logging:", error);
+      setHasError(true);
+      setErrorMessage("Failed to initialize video data");
     }
   }, []);
 
   // Get current video from the list or use passed parameters
-  const currentVideo = parsedVideoList.length > 0 && currentIndex_state < parsedVideoList.length 
-    ? parsedVideoList[currentIndex_state] 
-    : {
-        title,
-        speaker,
-        timeAgo,
+  const currentVideo = (() => {
+    try {
+      if (parsedVideoList.length > 0 && currentIndex_state < parsedVideoList.length) {
+        const video = parsedVideoList[currentIndex_state];
+        if (video && video.title) {
+          return video;
+        }
+      }
+      
+      // Fallback to passed parameters
+      return {
+        title: title || 'Untitled Video',
+        speaker: speaker || 'Unknown Speaker',
+        timeAgo: timeAgo || 'Recently',
         views: parseInt(views) || 0,
         sheared: parseInt(sheared) || 0,
         saved: parseInt(saved) || 0,
         favorite: parseInt(favorite) || 0,
-        imageUrl,
-        speakerAvatar,
-        fileUrl: imageUrl,
+        imageUrl: imageUrl || '',
+        speakerAvatar: speakerAvatar || '',
+        fileUrl: imageUrl || '',
       };
+    } catch (error) {
+      console.error("❌ Error creating current video object:", error);
+      // Return safe fallback
+      return {
+        title: 'Untitled Video',
+        speaker: 'Unknown Speaker',
+        timeAgo: 'Recently',
+        views: 0,
+        sheared: 0,
+        saved: 0,
+        favorite: 0,
+        imageUrl: '',
+        speakerAvatar: '',
+        fileUrl: '',
+      };
+    }
+  })();
 
   // Create a unique key for this reel content
   const reelKey = `reel-${currentVideo.title}-${currentVideo.speaker}`;
@@ -236,11 +291,67 @@ export default function Reelsviewscroll() {
         console.log(`✅ ReelsView: Loaded stats for ${title} - favorite: ${globalCount}`);
       } catch (error) {
         console.error("❌ ReelsView: Failed to load persisted data:", error);
+        // Don't crash the app, just log the error
       }
     };
 
     initializeData();
   }, [modalKey, title]);
+
+  // Cleanup function for video refs
+  useEffect(() => {
+    return () => {
+      // Clean up video refs when component unmounts
+      Object.values(videoRefs.current).forEach(ref => {
+        if (ref) {
+          try {
+            ref.unloadAsync();
+          } catch (error) {
+            console.log("Error unloading video ref:", error);
+          }
+        }
+      });
+      videoRefs.current = {};
+    };
+  }, []);
+
+  // Error boundary - if there's an error, show a fallback UI
+  if (hasError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+        <Text style={{ color: '#fff', fontSize: 18, marginBottom: 20 }}>Something went wrong</Text>
+        <Text style={{ color: '#ccc', fontSize: 14, marginBottom: 30 }}>{errorMessage}</Text>
+        <TouchableOpacity
+          onPress={() => {
+            setHasError(false);
+            setErrorMessage('');
+          }}
+          style={{
+            backgroundColor: '#FEA74E',
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 8,
+          }}
+        >
+          <Text style={{ color: '#fff', fontSize: 16 }}>Try Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            backgroundColor: 'transparent',
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 8,
+            marginTop: 10,
+            borderWidth: 1,
+            borderColor: '#FEA74E',
+          }}
+        >
+          <Text style={{ color: '#FEA74E', fontSize: 16 }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const handleFavorite = async (key: string) => {
     console.log("🔄 Favorite button clicked for reel:", title);
@@ -479,6 +590,16 @@ export default function Reelsviewscroll() {
 
   // Function to render a single video item
   const renderVideoItem = (videoData: any, index: number, isActive: boolean = false) => {
+    // Validate video data first
+    if (!videoData || !videoData.title) {
+      console.warn("⚠️ Invalid video data:", videoData);
+      return (
+        <View key={`error-${index}`} style={{ height: screenHeight, width: '100%', justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontSize: 16 }}>Invalid video data</Text>
+        </View>
+      );
+    }
+
     const videoKey = `reel-${videoData.title}-${videoData.speaker}-${index}`;
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -486,10 +607,15 @@ export default function Reelsviewscroll() {
     // 🔁 Refresh URL on mount if needed
     useEffect(() => {
       const refreshIfNeeded = async () => {
-        if (!videoData.fileUrl || String(videoData.fileUrl).trim() === "") {
-          setIsRefreshing(true);
-          const fresh = await tryRefreshMediaUrl(videoData);
-          setRefreshedUrl(fresh);
+        try {
+          if (!videoData.fileUrl || String(videoData.fileUrl).trim() === "") {
+            setIsRefreshing(true);
+            const fresh = await tryRefreshMediaUrl(videoData);
+            setRefreshedUrl(fresh);
+            setIsRefreshing(false);
+          }
+        } catch (error) {
+          console.error("❌ Error refreshing video URL:", error);
           setIsRefreshing(false);
         }
       };
@@ -497,6 +623,16 @@ export default function Reelsviewscroll() {
     }, [videoData.fileUrl]);
 
     const videoUrl = refreshedUrl || videoData.fileUrl || videoData.imageUrl;
+    
+    // Validate video URL
+    if (!videoUrl || String(videoUrl).trim() === "") {
+      console.warn("⚠️ No valid video URL for:", videoData.title);
+      return (
+        <View key={videoKey} style={{ height: screenHeight, width: '100%', justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontSize: 16 }}>Video not available</Text>
+        </View>
+      );
+    }
     
     return (
       <View key={videoKey} style={{ height: screenHeight, width: '100%' }}>
@@ -537,12 +673,20 @@ export default function Reelsviewscroll() {
               isLooping={true}
               onError={async (error) => {
                 console.log(`❌ Video loading error in reels for ${videoData.title}:`, error);
-                // Try to refresh URL on error
-                if (!refreshedUrl) {
-                  setIsRefreshing(true);
-                  const fresh = await tryRefreshMediaUrl(videoData);
-                  setRefreshedUrl(fresh);
+                try {
+                  // Try to refresh URL on error
+                  if (!refreshedUrl) {
+                    setIsRefreshing(true);
+                    const fresh = await tryRefreshMediaUrl(videoData);
+                    setRefreshedUrl(fresh);
+                    setIsRefreshing(false);
+                  }
+                } catch (refreshError) {
+                  console.error("❌ Failed to refresh video URL:", refreshError);
                   setIsRefreshing(false);
+                  // Show error state to user
+                  setErrorMessage("Failed to load video");
+                  setHasError(true);
                 }
               }}
               onPlaybackStatusUpdate={(status) => {
@@ -571,7 +715,6 @@ export default function Reelsviewscroll() {
                 }
               }}
               // Platform-specific video optimizations
-              androidImplementation={isAndroid ? "MediaPlayer" : undefined}
               shouldCorrectPitch={isIOS}
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
             />
@@ -1025,7 +1168,7 @@ export default function Reelsviewscroll() {
                       marginBottom: -getResponsiveSpacing(12, 16, 20),
                     }}
                     accessibilityLabel="Video progress bar"
-                    accessibilityRole="slider"
+                    accessibilityRole="adjustable"
                     accessibilityValue={{
                       min: 0,
                       max: 100,
@@ -1118,7 +1261,7 @@ export default function Reelsviewscroll() {
   }, []);
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar 
         barStyle="light-content" 
         backgroundColor="transparent" 
@@ -1139,16 +1282,25 @@ export default function Reelsviewscroll() {
         }}
       >
         {allVideos.map((videoData: { title: any; speaker: any; }, index: number) => {
-          const isActive = index === currentIndex_state;
-          const videoKey = `reel-${videoData.title}-${videoData.speaker || 'unknown'}-${index}`;
-          
-          return (
-            <View key={videoKey} style={{ height: screenHeight, width: '100%' }}>
-              {renderVideoItem(videoData, index, isActive)}
-            </View>
-          );
-        })}
-      </ScrollView>
+          try {
+            const isActive = index === currentIndex_state;
+            const videoKey = `reel-${videoData.title}-${videoData.speaker || 'unknown'}-${index}`;
+            
+            return (
+              <View key={videoKey} style={{ height: screenHeight, width: '100%' }}>
+                {renderVideoItem(videoData, index, isActive)}
+              </View>
+            );
+          } catch (error) {
+            console.error("❌ Error rendering video in map:", error);
+            return (
+              <View key={`error-${index}`} style={{ height: screenHeight, width: '100%', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontSize: 16 }}>Failed to load video</Text>
+              </View>
+              );
+            }
+          })}
+        </ScrollView>
 
       {/* Clean Header - Back, Title, Close */}
       <View 
@@ -1284,8 +1436,8 @@ export default function Reelsviewscroll() {
         />
       </View>
 
-      {/* Comment Reply Modal */}
+            {/* Comment Reply Modal */}
       <CommentReplyModal />
-    </>
+    </ErrorBoundary>
   );
 }

@@ -2,6 +2,21 @@
   "name": "tevahapp1",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-heroicons",
+          "@hugeicons/react-native",
+          "cocoapods",
+          "dotenv",
+          "react-native-vector-icons",
+          "uuid"
+        ],
+        "listUnknownPackages": false
+      }
+    }
+  },
   "scripts": {
     "start": "expo start --dev-client",
     "reset-project": "node ./scripts/reset-project.js",
@@ -85,7 +100,6 @@
     "react-native-date-picker": "^5.0.12",
     "react-native-dotenv": "^3.4.11",
     "react-native-gesture-handler": "~2.24.0",
-    "react-native-heroicons": "^4.0.0",
     "react-native-pager-view": "6.7.1",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
