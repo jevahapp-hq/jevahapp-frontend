@@ -14,7 +14,7 @@ interface EnvironmentConfig {
 
 const ENVIRONMENT_CONFIG: EnvironmentConfig = {
   local: {
-    url: 'http://10.156.136.168:4000',
+    url: process.env.EXPO_PUBLIC_API_URL || 'http://10.156.136.168:4000',
     name: 'Local Development'
   },
   production: {
@@ -32,16 +32,20 @@ class EnvironmentManager {
   }
 
   private detectEnvironment(): void {
-    // Check if we're in development mode
-    if (__DEV__) {
-      // In development, try to use local environment
+    // Always prioritize the environment variable if it's set
+    if (process.env.EXPO_PUBLIC_API_URL) {
       this.currentEnvironment = 'local';
+      console.log('🌐 Using EXPO_PUBLIC_API_URL from environment:', process.env.EXPO_PUBLIC_API_URL);
+    } else if (__DEV__) {
+      // Only fall back to auto-detection if no environment variable is set
+      this.currentEnvironment = 'local';
+      console.log('🌐 No environment variable set, auto-detecting local environment');
     } else {
       // In production builds (APK, hosted), use production
       this.currentEnvironment = 'production';
     }
     
-    console.log('🌐 Auto-detected environment:', this.currentEnvironment);
+    console.log('🌐 Final environment:', this.currentEnvironment);
   }
 
   private async loadSavedEnvironment() {

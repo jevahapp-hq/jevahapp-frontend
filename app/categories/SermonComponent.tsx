@@ -128,7 +128,7 @@ export default function SermonComponent() {
       title: item.title,
       imageUrl: item.imageUrl || { uri: item.fileUrl },
       subTitle: getDisplayName(item.speaker, item.uploadedBy),
-      views: item.views || 0,
+      views: (item as any).views || 0,
       onPress: () => console.log("Viewing", item.title),
     })),
     [sermonContent]
@@ -644,7 +644,8 @@ export default function SermonComponent() {
   // Function to determine if content is video or audio and render appropriately
   const renderSermonCard = (item: any, index: number, sectionId: string, playType: "progress" | "center" = "center") => {
     // Check if it's a video based on file extension or mime type
-    const isVideo = item.fileUrl.includes(".mp4") || item.fileUrl.includes(".mov") || item.fileUrl.includes(".avi");
+    const fileUrlString = typeof item.fileUrl === 'string' ? item.fileUrl : '';
+    const isVideo = fileUrlString.includes(".mp4") || fileUrlString.includes(".mov") || fileUrlString.includes(".avi");
     
     if (isVideo) {
       return renderVideoCard(item, index, sectionId, playType);
@@ -669,6 +670,11 @@ export default function SermonComponent() {
     const stats = contentStats[key] || {};
     const isItemSaved = libraryStore.isItemSaved(key);
 
+    const isValidUri = (u: any) => typeof u === 'string' && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
+    const safeVideoUri = isValidUri(video.fileUrl)
+      ? String(video.fileUrl).trim()
+      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
     return (
       <View className="flex flex-col">
         <TouchableOpacity
@@ -686,17 +692,17 @@ export default function SermonComponent() {
                   delete videoRefs.current[modalKey];
                 }
               }}
-              source={{ 
-                uri: video.fileUrl && video.fileUrl.trim() && video.fileUrl.trim() !== 'https://example.com/placeholder.mp4' 
-                  ? video.fileUrl.trim() 
-                  : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-              }}
+              source={{ uri: safeVideoUri }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               isMuted={globalVideoStore.mutedVideos[modalKey] ?? false}
               volume={globalVideoStore.mutedVideos[modalKey] ? 0.0 : videoVolume}
               shouldPlay={globalVideoStore.playingVideos[modalKey] ?? false}
               useNativeControls={false}
+              onError={(e) => {
+                console.warn('Video failed to load in SermonComponent:', video?.title, e);
+                globalVideoStore.pauseVideo(modalKey);
+              }}
               onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
                 const pct = status.durationMillis
@@ -959,12 +965,12 @@ export default function SermonComponent() {
                     }}
                   >
                     <Text className="text-[#1D2939] font-rubik ml-2">
-                      {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
+                      {checkIfDownloaded((item as any)._id || item.fileUrl) ? "Downloaded" : "Download"}
                     </Text>
                     <Ionicons 
-                      name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                      name={checkIfDownloaded((item as any)._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
                       size={16} 
-                      color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
+                      color={checkIfDownloaded((item as any)._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
                     />
                   </TouchableOpacity>
                 </View>
@@ -1031,7 +1037,7 @@ export default function SermonComponent() {
           </Text>
           {recentSermons.map((item, index) => renderSermonCard({
             ...item,
-            views: item.views || 0,
+            views: (item as any).views || 0,
             favorite: item.favorite || 0,
             saved: item.saved || 0,
             sheared: item.sheared || 0,
@@ -1071,12 +1077,12 @@ export default function SermonComponent() {
         renderMiniCards(
           "Trending Now",
           trendingSermons.map((item, index) => ({
-            key: `trending-sermon-${item._id || index}`,
+            key: `trending-sermon-${(item as any)._id || index}`,
             fileUrl: item.fileUrl,
             title: item.title,
             imageUrl: item.imageUrl || { uri: item.fileUrl },
             subTitle: getDisplayName(item.speaker, item.uploadedBy),
-            views: item.views || 0,
+            views: (item as any).views || 0,
             onPress: () => console.log("Viewing", item.title),
           })),
           trendingModalIndex,
@@ -1105,12 +1111,12 @@ export default function SermonComponent() {
         renderMiniCards(
           "Recommended for you",
           recommendedSermons.map((item, index) => ({
-            key: `recommended-sermon-${item._id || index}`,
+            key: `recommended-sermon-${(item as any)._id || index}`,
             fileUrl: item.fileUrl,
             title: item.title,
             imageUrl: item.imageUrl || { uri: item.fileUrl },
             subTitle: getDisplayName(item.speaker, item.uploadedBy),
-            views: item.views || 0,
+            views: (item as any).views || 0,
             onPress: () => console.log("Viewing", item.title),
           })),
           recommendedModalIndex,

@@ -11,7 +11,7 @@ export default {
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
     extra: {
-      API_URL: process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http:/10.156.136.168:4000/api" : "https://jevahapp-backend.onrender.com/api"),
+      API_URL: process.env.EXPO_PUBLIC_API_URL || "https://jevahapp-backend.onrender.com",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
         projectId: '5cb1aa56-fa50-4d01-b2e6-366405946e71',

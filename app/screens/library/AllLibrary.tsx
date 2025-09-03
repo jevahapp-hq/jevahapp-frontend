@@ -167,6 +167,10 @@ export default function AllLibrary () {
     const isVideo = item.contentType === "videos";
     const isPlaying = playingVideos[item.id] ?? false;
     const showVideoOverlay = showOverlay[item.id] ?? true;
+    const isValidUri = (u: any) => typeof u === 'string' && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
+    const safeVideoUri = isValidUri(item.fileUrl)
+      ? String(item.fileUrl).trim()
+      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
     return (
       <View className="w-[48%] mb-6 h-[232px] rounded-xl overflow-hidden bg-[#E5E5EA]">
@@ -182,13 +186,18 @@ export default function AllLibrary () {
                   videoRefs.current[item.id] = ref;
                 }
               }}
-              source={{ uri: item.fileUrl || '' }}
+              source={{ uri: safeVideoUri }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               shouldPlay={isPlaying}
               isLooping={false}
               isMuted={false}
               useNativeControls={false}
+              onError={(e) => {
+                console.warn('Video failed to load in AllLibrary:', item?.title, e);
+                setPlayingVideos(prev => ({ ...prev, [item.id]: false }));
+                setShowOverlay(prev => ({ ...prev, [item.id]: true }));
+              }}
               onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
                 if (status.didJustFinish) {
