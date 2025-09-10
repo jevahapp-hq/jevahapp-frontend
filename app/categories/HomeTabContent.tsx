@@ -13,6 +13,7 @@ import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
 import AllContent from "./Allcontent";
+import AllContentNew from "./AllcontentNew";
 import EbookComponent from "./EbookComponent";
 import LiveComponent from "./LiveComponent";
 import Music from "./music";
@@ -54,7 +55,7 @@ export default function HomeTabContent() {
   const renderContent = () => {
     switch (selectedCategory) {
       case "ALL":
-        return <AllContent />;
+        return <AllContentNew />;
       case "LIVE":
         return <LiveComponent />;
       case "SERMON":
