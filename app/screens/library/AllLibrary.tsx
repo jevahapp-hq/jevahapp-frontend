@@ -1,6 +1,6 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
@@ -76,7 +76,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   const libraryStore = useLibraryStore();
   const globalVideoStore = useGlobalVideoStore();
   const [savedItems, setSavedItems] = useState<any[]>([]);
-  const [filteredItems, setFilteredItems] = useState<any[]>([]);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -152,9 +151,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
 
           if (Array.isArray(userBookmarks) && userBookmarks.length > 0) {
             setSavedItems(userBookmarks);
-            // Filter items based on contentType prop
-            const filtered = filterItemsByType(userBookmarks, contentType);
-            setFilteredItems(filtered);
 
             // Initialize overlay state for video items
             const overlayState: Record<string, boolean> = {};
@@ -205,13 +201,10 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
         }
         const localItems = libraryStore.getAllSavedItems();
         setSavedItems(localItems);
-        const filtered = filterItemsByType(localItems, contentType);
-        setFilteredItems(filtered);
         setError(null);
       } catch (localError) {
         console.error("Error loading from local storage:", localError);
         setSavedItems([]);
-        setFilteredItems([]);
         setError("Failed to load library content from local storage.");
       }
     };
@@ -219,11 +212,30 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     loadSavedItems();
   }, [contentType]);
 
+  // Filter items based on contentType
+  const filterItemsByType = useCallback((items: any[], type?: string) => {
+    if (!type || type === "ALL") return items;
+
+    const typeMap: Record<string, string[]> = {
+      LIVE: ["live"],
+      SERMON: ["sermon", "teachings"],
+      MUSIC: ["music", "audio"],
+      "E-BOOKS": ["e-books", "ebook"],
+      VIDEO: ["videos", "video"],
+    };
+
+    const allowedTypes = typeMap[type] || [type.toLowerCase()];
+    return items.filter((item) =>
+      allowedTypes.some((allowedType) =>
+        item.contentType?.toLowerCase().includes(allowedType.toLowerCase())
+      )
+    );
+  }, []);
+
   // Update filtered items when contentType changes
-  useEffect(() => {
-    const filtered = filterItemsByType(savedItems, contentType);
-    setFilteredItems(filtered);
-  }, [contentType, savedItems]);
+  const filteredItems = useMemo(() => {
+    return filterItemsByType(savedItems, contentType);
+  }, [savedItems, contentType, filterItemsByType]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -255,8 +267,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
 
         if (Array.isArray(userBookmarks) && userBookmarks.length > 0) {
           setSavedItems(userBookmarks);
-          const filtered = filterItemsByType(userBookmarks, contentType);
-          setFilteredItems(filtered);
 
           // Initialize overlay state for video items
           const overlayState: Record<string, boolean> = {};
@@ -295,12 +305,9 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       }
       const localItems = libraryStore.getAllSavedItems();
       setSavedItems(localItems);
-      const filtered = filterItemsByType(localItems, contentType);
-      setFilteredItems(filtered);
     } catch (localError) {
       console.error("Error loading from local storage:", localError);
       setSavedItems([]);
-      setFilteredItems([]);
     }
   };
 
@@ -317,21 +324,13 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           // Remove from local storage
           await libraryStore.removeFromLibrary(itemId);
 
-          // Update local state
-          setSavedItems((prev) =>
-            prev.filter((savedItem) => {
-              const savedItemId = savedItem._id || savedItem.id;
-              return savedItemId !== itemId;
-            })
-          );
-
-          // Update filtered items
-          setFilteredItems((prev) =>
-            prev.filter((savedItem) => {
-              const savedItemId = savedItem._id || savedItem.id;
-              return savedItemId !== itemId;
-            })
-          );
+        // Update local state
+        setSavedItems((prev) =>
+          prev.filter((savedItem) => {
+            const savedItemId = savedItem._id || savedItem.id;
+            return savedItemId !== itemId;
+          })
+        );
 
           console.log(`🗑️ Removed ${itemTitle} from library (API + local)`);
         } else {
@@ -347,12 +346,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
               return savedItemId !== itemId;
             })
           );
-          setFilteredItems((prev) =>
-            prev.filter((savedItem) => {
-              const savedItemId = savedItem._id || savedItem.id;
-              return savedItemId !== itemId;
-            })
-          );
         }
       } catch (error) {
         console.error(`🗑️ Error removing ${itemTitle} from library:`, error);
@@ -360,12 +353,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
         try {
           await libraryStore.removeFromLibrary(itemId);
           setSavedItems((prev) =>
-            prev.filter((savedItem) => {
-              const savedItemId = savedItem._id || savedItem.id;
-              return savedItemId !== itemId;
-            })
-          );
-          setFilteredItems((prev) =>
             prev.filter((savedItem) => {
               const savedItemId = savedItem._id || savedItem.id;
               return savedItemId !== itemId;
@@ -604,26 +591,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       default:
         return "#95A5A6"; // Gray for default
     }
-  }, []);
-
-  // Filter items based on contentType
-  const filterItemsByType = useCallback((items: any[], type?: string) => {
-    if (!type || type === "ALL") return items;
-
-    const typeMap: Record<string, string[]> = {
-      LIVE: ["live"],
-      SERMON: ["sermon", "teachings"],
-      MUSIC: ["music", "audio"],
-      "E-BOOKS": ["e-books", "ebook"],
-      VIDEO: ["videos", "video"],
-    };
-
-    const allowedTypes = typeMap[type] || [type.toLowerCase()];
-    return items.filter((item) =>
-      allowedTypes.some((allowedType) =>
-        item.contentType?.toLowerCase().includes(allowedType.toLowerCase())
-      )
-    );
   }, []);
 
   const renderMediaCard = useCallback(
