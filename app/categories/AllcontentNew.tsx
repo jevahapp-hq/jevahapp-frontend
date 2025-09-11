@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import ContentCard from "../components/ContentCard";
 import { useNotification } from "../context/NotificationContext";
+import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
 
@@ -22,6 +23,9 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     loadMoreDefaultContent,
     refreshDefaultContent,
   } = useMediaStore();
+
+  // Library store for tracking saved items
+  const { loadSavedItems } = useLibraryStore();
 
   // Filter content based on contentType
   const filteredContent = useMemo(() => {
@@ -54,7 +58,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
       console.warn("Notification system not available");
     });
 
-  // Load default content on mount
+  // Load default content and library store on mount
   useEffect(() => {
     console.log("🚀 AllContentNew: Loading default content from backend...");
     console.log(
@@ -65,9 +69,12 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     // Test available endpoints first
     allMediaAPI.testAvailableEndpoints();
 
+    // Load library store to track saved items
+    loadSavedItems();
+
     // Then fetch content
     fetchDefaultContent({ page: 1, limit: 10 });
-  }, [fetchDefaultContent]);
+  }, [fetchDefaultContent, loadSavedItems]);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {

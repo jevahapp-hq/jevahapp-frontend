@@ -139,6 +139,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const { comments } = useInteractionStore();
   const { showCommentModal } = useCommentModal();
 
+  // Check if item is saved in library store
+  const isItemInLibrary = libraryStore.isItemSaved(content._id);
+
   // Refs
   const videoRef = useRef<Video>(null);
   const modalKey = `content-${content._id}`;
@@ -519,7 +522,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const handleSaveToLibrary = async () => {
     console.log("🔍 DEBUG: handleSaveToLibrary called");
     console.log("🔍 DEBUG: onSaveToLibrary exists:", !!onSaveToLibrary);
-    console.log("🔍 DEBUG: Current isBookmarked state:", isBookmarked);
+    console.log("🔍 DEBUG: Current isItemInLibrary state:", isItemInLibrary);
     console.log("🔍 DEBUG: Content ID:", content._id);
     console.log("🔍 DEBUG: Content title:", content.title);
 
@@ -528,7 +531,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         console.log("🔍 DEBUG: Starting bookmark process...");
 
         // Update local state optimistically for instant UI feedback
-        const newBookmarkState = !isBookmarked;
+        const newBookmarkState = !isItemInLibrary;
         console.log("🔍 DEBUG: New bookmark state:", newBookmarkState);
 
         setIsBookmarked(newBookmarkState);
@@ -548,9 +551,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
         console.log(
           "🔍 DEBUG: Calling onSaveToLibrary with:",
           content._id,
-          isBookmarked
+          isItemInLibrary
         );
-        await onSaveToLibrary(content._id, isBookmarked);
+        await onSaveToLibrary(content._id, isItemInLibrary);
 
         console.log("✅ DEBUG: Bookmark API call successful");
         console.log("✅ DEBUG: Final bookmark state:", newBookmarkState);
@@ -558,7 +561,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         console.log("❌ DEBUG: Bookmark API call failed:", error);
 
         // Rollback on error - revert to previous state
-        const previousBookmarkState = isBookmarked; // Revert to original state
+        const previousBookmarkState = isItemInLibrary; // Revert to original state
         setIsBookmarked(previousBookmarkState);
         setContentStats((prev) => ({
           ...prev,
@@ -881,12 +884,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={isBookmarked ? "bookmark" : "bookmark-border"}
+                  name={isItemInLibrary ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
+                  color={isItemInLibrary ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
-                  {isBookmarked ? 1 : 0}
+                  {isItemInLibrary ? 1 : 0}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1081,12 +1084,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={isBookmarked ? "bookmark" : "bookmark-border"}
+                  name={isItemInLibrary ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
+                  color={isItemInLibrary ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
-                  {isBookmarked ? 1 : 0}
+                  {isItemInLibrary ? 1 : 0}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1206,12 +1209,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={isBookmarked ? "bookmark" : "bookmark-border"}
+                  name={isItemInLibrary ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
+                  color={isItemInLibrary ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
-                  {isBookmarked ? 1 : 0}
+                  {isItemInLibrary ? 1 : 0}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1352,13 +1355,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
               onPress={handleSaveToLibrary}
             >
               <Text className="text-[#1D2939] font-rubik ml-2">
-                {contentStats[key]?.saved === 1
+                {isItemInLibrary
                   ? "Remove from Library"
                   : "Save to Library"}
               </Text>
               <MaterialIcons
                 name={
-                  contentStats[key]?.saved === 1
+                  isItemInLibrary
                     ? "bookmark"
                     : "bookmark-border"
                 }
