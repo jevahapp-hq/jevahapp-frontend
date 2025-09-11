@@ -25,7 +25,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
   } = useMediaStore();
 
   // Library store for tracking saved items
-  const { loadSavedItems } = useLibraryStore();
+  const { loadSavedItems, isLoaded } = useLibraryStore();
 
   // Filter content based on contentType
   const filteredContent = useMemo(() => {
@@ -299,7 +299,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     [contentType]
   );
 
-  if (defaultContentLoading && filteredContent.length === 0) {
+  if ((defaultContentLoading && filteredContent.length === 0) || !isLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#666" />

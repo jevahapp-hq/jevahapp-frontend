@@ -139,8 +139,15 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const { comments } = useInteractionStore();
   const { showCommentModal } = useCommentModal();
 
-  // Check if item is saved in library store
-  const isItemInLibrary = libraryStore.isItemSaved(content._id);
+  // Check if item is saved in library store with error handling
+  const isItemInLibrary = React.useMemo(() => {
+    try {
+      return libraryStore?.isItemSaved ? libraryStore.isItemSaved(content._id) : false;
+    } catch (error) {
+      console.warn("⚠️ Library store not available:", error);
+      return false;
+    }
+  }, [libraryStore, content._id]);
 
   // Refs
   const videoRef = useRef<Video>(null);
@@ -1355,16 +1362,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
               onPress={handleSaveToLibrary}
             >
               <Text className="text-[#1D2939] font-rubik ml-2">
-                {isItemInLibrary
-                  ? "Remove from Library"
-                  : "Save to Library"}
+                {isItemInLibrary ? "Remove from Library" : "Save to Library"}
               </Text>
               <MaterialIcons
-                name={
-                  isItemInLibrary
-                    ? "bookmark"
-                    : "bookmark-border"
-                }
+                name={isItemInLibrary ? "bookmark" : "bookmark-border"}
                 size={22}
                 color="#1D2939"
               />
