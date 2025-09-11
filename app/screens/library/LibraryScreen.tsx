@@ -1,22 +1,19 @@
-// 
-
-
+//
 
 // CommunityScreen.tsx
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import BottomNav from "../../components/BottomNav";
-
 
 import { Ionicons } from "@expo/vector-icons";
 import AllLibrary from "./AllLibrary";
-import EbooksLibrary from "./EbooksLibrary";
-import LiveLibrary from "./LiveLibrary";
-import MusicLibrary from "./MusicLibrary";
-import SermonLibrary from "./SermonLibrary";
-import VideoLibrary from "./VideoLibrary";
-
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
@@ -29,17 +26,17 @@ export default function LibraryScreen() {
   const renderContent = () => {
     switch (selectedCategoryA) {
       case "ALL":
-        return <AllLibrary />;
+        return <AllLibrary contentType="ALL" />;
       case "LIVE":
-        return <LiveLibrary />;
+        return <AllLibrary contentType="LIVE" />;
       case "SERMON":
-        return <SermonLibrary />;
+        return <AllLibrary contentType="SERMON" />;
       case "MUSIC":
-        return <MusicLibrary />;
+        return <AllLibrary contentType="MUSIC" />;
       case "E-BOOKS":
-        return <EbooksLibrary />;
+        return <AllLibrary contentType="E-BOOKS" />;
       case "VIDEO":
-        return <VideoLibrary />;
+        return <AllLibrary contentType="VIDEO" />;
       default:
         return null;
     }
@@ -47,69 +44,70 @@ export default function LibraryScreen() {
 
   return (
     <View className="flex-col bg-white flex-1">
+      <Text className="mt-12 text-[24px] font-rubik-semibold ml-7 text-[#344054]">
+        My Library
+      </Text>
+      <View className="flex-row items-center  mx-auto px-2 bg-[#E5E5EA] w-[360px] rounded-xl  h-[42px] mt-3">
+        <View className="ml-2 ">
+          <Ionicons name="search" size={20} color="#666" />
+        </View>
+        <TextInput
+          placeholder="Search for anything..."
+          className="ml-3 flex-1 text-base font-rubik items-center"
+          value={query}
+          onChangeText={setQuery}
+        />
+      </View>
 
-      <Text className="mt-12 text-[24px] font-rubik-semibold ml-7 text-[#344054]">My Library</Text>
-       <View className="flex-row items-center  mx-auto px-2 bg-[#E5E5EA] w-[360px] rounded-xl  h-[42px] mt-3">
-           <View className="ml-2 ">
-           <Ionicons name="search" size={20} color="#666" />
-           </View>
-            <TextInput
-              placeholder="Search for anything..."
-              className="ml-3 flex-1 text-base font-rubik items-center"
-              value={query}
-              onChangeText={setQuery}
-            />
-          </View>
-
-          <ScrollView
-      contentContainerStyle={{
-        paddingHorizontal: 16,
-        paddingBottom: 50,
-      
-      }}
-      showsVerticalScrollIndicator={false}
-    className="bg-[#98a2b318] mt-6"
-    >
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="px-2 py-2 mt-6 "
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 50,
+        }}
+        showsVerticalScrollIndicator={false}
+        className="bg-[#98a2b318] mt-6"
       >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            onPress={() => setSelectedCategorA(category)}
-            activeOpacity={0.7}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              marginHorizontal: 4,
-              borderRadius: 10,
-              backgroundColor: selectedCategoryA === category ? "black" : "white",
-              borderWidth: selectedCategoryA === category ? 0 : 1,
-              borderColor: selectedCategoryA === category ? "transparent" : "#6B6E7C",
-              minWidth: 48,
-              minHeight: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Text
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="px-2 py-2 mt-6 "
+        >
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              onPress={() => setSelectedCategorA(category)}
+              activeOpacity={0.7}
               style={{
-                color: selectedCategoryA === category ? "white" : "#1D2939",
-                fontFamily: "Rubik_600SemiBold",
-                fontSize: 14,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                marginHorizontal: 4,
+                borderRadius: 10,
+                backgroundColor:
+                  selectedCategoryA === category ? "black" : "white",
+                borderWidth: selectedCategoryA === category ? 0 : 1,
+                borderColor:
+                  selectedCategoryA === category ? "transparent" : "#6B6E7C",
+                minWidth: 48,
+                minHeight: 44,
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+              <Text
+                style={{
+                  color: selectedCategoryA === category ? "white" : "#1D2939",
+                  fontFamily: "Rubik_600SemiBold",
+                  fontSize: 14,
+                }}
+              >
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-     <View className="flex-1 mb-24">{renderContent()}</View>
- 
-    </ScrollView>
+        <View className="flex-1 mb-24">{renderContent()}</View>
+      </ScrollView>
       {/* Bottom Nav overlay */}
       <View
         style={{
@@ -145,6 +143,5 @@ export default function LibraryScreen() {
         />
       </View>
     </View>
-    
   );
 }

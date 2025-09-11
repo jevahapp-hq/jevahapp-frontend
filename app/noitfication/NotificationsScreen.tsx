@@ -1,161 +1,277 @@
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import { SafeImage } from "../components/SafeImage";
+import { useNotifications } from "../context/PersistentNotificationContext";
 
 export default function NotificationsScreen() {
-  const notificationsData = [
-    {
-      category: "New",
-      items: [
+  const {
+    notifications,
+    unreadNotifications,
+    badge,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAllNotifications,
+    formatTime,
+    getIcon,
+    getColor,
+  } = useNotifications();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Simulate refresh delay
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+      Alert.alert("Success", "All notifications marked as read");
+    } catch (error) {
+      Alert.alert("Error", "Failed to mark notifications as read");
+    }
+  };
+
+  const handleClearAll = async () => {
+    Alert.alert(
+      "Clear All Notifications",
+      "Are you sure you want to clear all notifications?",
+      [
+        { text: "Cancel", style: "cancel" },
         {
-          name: "Joseph Eluwa",
-          time: "3HRS AGO",
-          message: "Wow! My Faith has just been renewed.",
-          postTitle: "The art of seeing Miracles",
-          postDescription: "A powerful teaching on supernatural breakthroughs.",
-          avatar: undefined,
-          postImage: require("../../assets/images/image (8).png"),
+          text: "Clear All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearAllNotifications();
+              Alert.alert("Success", "All notifications cleared");
+            } catch (error) {
+              Alert.alert("Error", "Failed to clear notifications");
+            }
+          },
         },
+      ]
+    );
+  };
+
+  const handleNotificationPress = async (notification: any) => {
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+    // TODO: Navigate to relevant content or user profile
+  };
+
+  const handleDeleteNotification = async (notificationId: string) => {
+    Alert.alert(
+      "Delete Notification",
+      "Are you sure you want to delete this notification?",
+      [
+        { text: "Cancel", style: "cancel" },
         {
-          name: "Grace Okafor",
-          time: "2HRS AGO",
-          message: "This blessed me beyond words!",
-          postTitle: "Walking in Purpose",
-          postDescription: "How to discover your God-given path.",
-          avatar: undefined,
-          postImage: require("../../assets/images/image (8).png"),
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteNotification(notificationId);
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete notification");
+            }
+          },
         },
-        {
-          name: "David King",
-          time: "1HR AGO",
-          message: "What a refreshing revelation!",
-          postTitle: "Faith over Fear",
-          postDescription: "Overcoming anxiety through scripture.",
-          avatar: undefined,
-          postImage: require("../../assets/images/image (8).png"),
-        },
-      ],
-    },
-    {
-      category: "Last 7 days",
-      items: [
-        {
-          name: "Ruth Allen",
-          time: "2 DAYS AGO",
-          message: "Shared this with my group!",
-          postTitle: "Divine Acceleration",
-          postDescription: "Experiencing rapid transformation through faith.",
-          avatar: undefined,
-          postImage: require("../../assets/images/image (8).png"),
-        },
-        {
-          name: "Daniel Obi",
-          time: "5 DAYS AGO",
-          message: "The worship clip was 🔥",
-          postTitle: "Heaven’s Sound",
-          postDescription:
-            "A session on heavenly worship encounters the reali life of my  family",
-          avatar: undefined,
-          postImage: require("../../assets/images/image (8).png"),
-        },
-      ],
-    },
-    {
-      category: "Last 30 days",
-      items: [
-        {
-          name: "Blessing Uche",
-          time: "10 DAYS AGO",
-          message: "This was exactly what I needed.",
-          postTitle: "Healing Streams",
-          postDescription: "A deep dive into biblical healing.",
-          avatar: undefined,
-          postImage: require("../../assets/images/image (8).png"),
-        },
-      ],
-    },
-  ];
+      ]
+    );
+  };
+
+  const renderNotificationItem = (notification: any) => (
+    <View
+      key={notification.id}
+      className={`bg-white rounded-[10px] shadow-sm p-3 mb-4 ${
+        !notification.read ? "border-l-4 border-blue-500" : ""
+      }`}
+    >
+      <TouchableOpacity
+        onPress={() => handleNotificationPress(notification)}
+        onLongPress={() => handleDeleteNotification(notification.id)}
+        activeOpacity={0.7}
+      >
+        <View className="flex-row items-start">
+          {/* Notification Icon */}
+          <View
+            className="w-8 h-8 rounded-full items-center justify-center mr-3"
+            style={{ backgroundColor: `${getColor(notification.type)}20` }}
+          >
+            <Ionicons
+              name={getIcon(notification.type) as any}
+              size={16}
+              color={getColor(notification.type)}
+            />
+          </View>
+
+          {/* Notification Content */}
+          <View className="flex-1">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="font-rubik-semibold text-[#1D2939] text-sm">
+                {notification.title}
+              </Text>
+              <Text className="text-xs text-[#667085] font-rubik">
+                {formatTime(notification.timestamp)}
+              </Text>
+            </View>
+
+            <Text className="text-[#475467] text-sm font-rubik mb-2">
+              {notification.message}
+            </Text>
+
+            {/* User Info */}
+            {notification.userName && (
+              <View className="flex-row items-center">
+                <SafeImage
+                  uri={notification.avatar}
+                  className="w-5 h-5 rounded-full mr-2"
+                  fallbackText={
+                    notification.userName?.[0]?.toUpperCase() || "U"
+                  }
+                  showFallback={true}
+                />
+                <Text className="font-rubik-medium text-[#667085] text-xs">
+                  {notification.userName}
+                </Text>
+              </View>
+            )}
+
+            {/* Unread Indicator */}
+            {!notification.read && (
+              <View className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full" />
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderEmptyState = () => (
+    <View className="flex-1 items-center justify-center py-20">
+      <Ionicons name="notifications-outline" size={64} color="#D1D5DB" />
+      <Text className="text-[#6B7280] text-lg font-rubik-semibold mt-4">
+        No Notifications
+      </Text>
+      <Text className="text-[#9CA3AF] text-sm font-rubik text-center mt-2 px-8">
+        You'll see notifications here when someone likes, comments, or shares
+        your content.
+      </Text>
+    </View>
+  );
+
+  const renderLoadingState = () => (
+    <View className="flex-1 items-center justify-center py-20">
+      <ActivityIndicator size="large" color="#6366F1" />
+      <Text className="text-[#6B7280] text-sm font-rubik mt-4">
+        Loading notifications...
+      </Text>
+    </View>
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-
       <View className="px-4">
-        <AuthHeader title="Notifications" />
+        <View className="flex-row items-center justify-between">
+          <AuthHeader title="Notifications" />
+
+          {/* Action Buttons */}
+          <View className="flex-row items-center space-x-2">
+            {badge.hasUnread && (
+              <TouchableOpacity
+                onPress={handleMarkAllAsRead}
+                className="bg-blue-500 px-3 py-1 rounded-full"
+              >
+                <Text className="text-white text-xs font-rubik-semibold">
+                  Mark All Read
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                onPress={handleClearAll}
+                className="bg-gray-500 px-3 py-1 rounded-full"
+              >
+                <Text className="text-white text-xs font-rubik-semibold">
+                  Clear All
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
       </View>
 
-      {/* Scrollable Body */}
+      {/* Badge Info */}
+      {badge.hasUnread && (
+        <View className="mx-4 mb-4 bg-blue-50 p-3 rounded-lg">
+          <Text className="text-blue-800 text-sm font-rubik-semibold">
+            {badge.count} unread notification{badge.count !== 1 ? "s" : ""}
+          </Text>
+        </View>
+      )}
+
+      {/* Notifications List */}
       <ScrollView
-        className="px-7 bg-[#F3F3F4]"
+        className="px-4 bg-[#F3F3F4]"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={["#6366F1"]}
+            tintColor="#6366F1"
+          />
+        }
       >
-        {notificationsData.map((section, idx) => (
-          <View key={idx} className="mt-5">
-            <Text className="text-[#1D2939] font-rubik-semibold mb-2">
-              {section.category}
-            </Text>
-            {section.items.map((item, i) => (
-              <View
-                key={i}
-                className="bg-white rounded-[10px] shadow-sm p-3 h-[215px] mb-4 "
-              >
-                <Text className="text-[#475467] mb-1 font-medium">
-                  Activity:
+        {loading ? (
+          renderLoadingState()
+        ) : notifications.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <View className="mt-2">
+            {/* Recent Notifications */}
+            {unreadNotifications.length > 0 && (
+              <View className="mb-4">
+                <Text className="text-[#1D2939] font-rubik-semibold mb-2">
+                  Recent ({unreadNotifications.length})
                 </Text>
-
-                <View className="flex-row items-center mb-2">
-                  <SafeImage
-                    uri={item.avatar || undefined}
-                    className="w-6 h-6 rounded-full mr-2"
-                    fallbackText={item.name?.[0]?.toUpperCase() || 'U'}
-                    showFallback={true}
-                  />
-                  <Text className="font-rubik-semibold text-[#667085] text-[12px]">
-                    {item.name}
-                  </Text>
-                  <View className="flex-row items-center ml-3">
-                    <Text className="text-[#FFD9B3] text-[18px] text-xs font-rubik">
-                      •
-                    </Text>
-                    <Text className="text-xs text-[#667085] font-rubik ml-1">
-                      {item.time}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text className="mb-2 ml-8 text-[#1D2939] font-rubik">
-                  {item.message}
-                </Text>
-
-                <TouchableOpacity>
-                  <Text className="text-[#256E63] font-bold text-xs ml-8">
-                    REPLY
-                  </Text>
-                </TouchableOpacity>
-
-                <View className="mt-3 flex-row items-start space-x-3 bg-[#F3F3F4] rounded-md p-3">
-                  <Image
-                    source={item.postImage}
-                    className="w-14 h-14 rounded-md"
-                  />
-                  <View className="flex-1 ml-3">
-                    <Text className="font-rubik-semibold text-[#1D2939]">
-                      {item.postTitle}
-                    </Text>
-                    <Text
-                      className="text-[#667085] font-rubik text-sm"
-                      numberOfLines={2}
-                      ellipsizeMode="tail"
-                    >
-                      {item.postDescription}
-                    </Text>
-                  </View>
-                </View>
+                {unreadNotifications.map(renderNotificationItem)}
               </View>
-            ))}
+            )}
+
+            {/* Older Notifications */}
+            {notifications.filter((n) => n.read).length > 0 && (
+              <View>
+                <Text className="text-[#1D2939] font-rubik-semibold mb-2">
+                  Earlier
+                </Text>
+                {notifications
+                  .filter((n) => n.read)
+                  .map(renderNotificationItem)}
+              </View>
+            )}
           </View>
-        ))}
+        )}
       </ScrollView>
     </SafeAreaView>
   );

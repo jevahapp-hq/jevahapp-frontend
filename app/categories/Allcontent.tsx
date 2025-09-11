@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -7,12 +8,17 @@ import {
   Text,
   View,
 } from "react-native";
-import CommentModal from "../components/CommentModal";
+// import CommentModal from "../components/CommentModal";
 import ContentCard from "../components/ContentCard";
+import SocketManager from "../services/SocketManager";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
 
 const AllContent = () => {
+  console.log("🔍 DEBUG: AllContent component rendering");
+  console.log("🔍 DEBUG: AllContent component is DEFINITELY rendering!");
+  console.log("🔍 DEBUG: AllContent component STARTED!");
+
   const {
     defaultContent,
     defaultContentLoading,
@@ -27,6 +33,97 @@ const AllContent = () => {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedContentId, setSelectedContentId] = useState<string>("");
   const [selectedContentTitle, setSelectedContentTitle] = useState<string>("");
+
+  // Real-time state
+  const [socketManager, setSocketManager] = useState<SocketManager | null>(
+    null
+  );
+  const [realTimeCounts, setRealTimeCounts] = useState<Record<string, any>>({});
+  const [viewerCounts, setViewerCounts] = useState<Record<string, number>>({});
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Initialize Socket.IO connection
+  useEffect(() => {
+    const initializeSocket = async () => {
+      try {
+        const authToken = await AsyncStorage.getItem("auth_token");
+        if (!authToken) {
+          console.log("No auth token found, skipping Socket.IO connection");
+          return;
+        }
+
+        const manager = new SocketManager({
+          serverUrl: "https://jevahapp-backend.onrender.com",
+          authToken,
+        });
+
+        // Set up event handlers
+        manager.setEventHandlers({
+          onContentReaction: (data) => {
+            console.log("Real-time like received:", data);
+            // Update local state if needed
+          },
+          onContentComment: (data) => {
+            console.log("Real-time comment received:", data);
+            // Update local state if needed
+          },
+          onCountUpdate: (data) => {
+            console.log("Real-time count update:", data);
+            setRealTimeCounts((prev) => ({
+              ...prev,
+              [data.contentId]: data,
+            }));
+          },
+          onViewerCountUpdate: (data) => {
+            console.log("Real-time viewer count:", data);
+            setViewerCounts((prev) => ({
+              ...prev,
+              [data.contentId]: data.viewerCount,
+            }));
+          },
+          onLikeNotification: (data) => {
+            console.log("New like notification:", data);
+            setNotifications((prev) => [
+              ...prev,
+              {
+                id: Date.now(),
+                type: "like",
+                data,
+                timestamp: new Date(),
+              },
+            ]);
+          },
+          onCommentNotification: (data) => {
+            console.log("New comment notification:", data);
+            setNotifications((prev) => [
+              ...prev,
+              {
+                id: Date.now(),
+                type: "comment",
+                data,
+                timestamp: new Date(),
+              },
+            ]);
+          },
+        });
+
+        await manager.connect();
+        setSocketManager(manager);
+        console.log("✅ Socket.IO initialized successfully");
+      } catch (error) {
+        console.error("❌ Failed to initialize Socket.IO:", error);
+      }
+    };
+
+    initializeSocket();
+
+    // Cleanup on unmount
+    return () => {
+      if (socketManager) {
+        socketManager.disconnect();
+      }
+    };
+  }, []);
 
   // Load default content on mount
   useEffect(() => {
@@ -49,36 +146,44 @@ const AllContent = () => {
     loadMoreDefaultContent();
   }, [loadMoreDefaultContent]);
 
-  // Handle like
-  const handleLike = useCallback(async (contentId: string, liked: boolean) => {
-    try {
-      console.log("Like action:", contentId, liked);
+  // Enhanced like handler with real-time updates
+  const handleLike = useCallback(
+    async (contentId: string, liked: boolean) => {
+      try {
+        console.log("Like action:", contentId, liked);
 
-      const response = await allMediaAPI.toggleLike("media", contentId);
+        // Send real-time like first for instant feedback
+        if (socketManager) {
+          socketManager.sendLike(contentId, "media");
+        }
 
-      if (response.success) {
-        console.log("✅ Like successful:", response.data);
-        // The UI will update automatically through the ContentCard component
-        // You can add additional state management here if needed
-      } else {
-        console.error("❌ Like failed:", response.error);
+        // Then call API
+        const response = await allMediaAPI.toggleLike("media", contentId);
+
+        if (response.success) {
+          console.log("✅ Like successful:", response.data);
+          // Real-time updates will handle UI updates
+        } else {
+          console.error("❌ Like failed:", response.error);
+          Alert.alert("Error", "Failed to update like");
+        }
+      } catch (error) {
+        console.error("Like error:", error);
         Alert.alert("Error", "Failed to update like");
       }
-    } catch (error) {
-      console.error("Like error:", error);
-      Alert.alert("Error", "Failed to update like");
-    }
-  }, []);
+    },
+    [socketManager]
+  );
 
-  // Handle comment
+  // Enhanced comment handler
   const handleComment = useCallback(
     (contentId: string) => {
       console.log("🎯 Opening comment modal for:", contentId);
-      console.log("📊 Available content items:", defaultContent.length);
-      console.log(
-        "🔍 Content item found:",
-        defaultContent.find((item) => item._id === contentId)
-      );
+
+      // Join content room for real-time updates
+      if (socketManager) {
+        socketManager.joinContentRoom(contentId, "media");
+      }
 
       // Find the content item to get the title
       const contentItem = defaultContent.find((item) => item._id === contentId);
@@ -93,7 +198,7 @@ const AllContent = () => {
         modalVisible: true,
       });
     },
-    [defaultContent]
+    [defaultContent, socketManager]
   );
 
   // Handle share
@@ -128,54 +233,97 @@ const AllContent = () => {
     // Example: router.push('/profile', { userId: authorId });
   }, []);
 
-  // Handle save to library
-  const handleSaveToLibrary = useCallback(
-    async (contentId: string, isBookmarked: boolean) => {
-      try {
-        console.log("Save to library action:", contentId, isBookmarked);
+  // Handle save to library - ACTUAL IMPLEMENTATION
+  console.log("🔍 DEBUG: About to create handleSaveToLibrary function");
+  console.log("🔍 DEBUG: Creating handleSaveToLibrary function NOW!");
+  const handleSaveToLibrary = async (
+    contentId: string,
+    isBookmarked: boolean
+  ) => {
+    console.log("🔍 DEBUG: handleSaveToLibrary function called!");
+    console.log("🔍 DEBUG: Content ID:", contentId);
+    console.log("🔍 DEBUG: Is bookmarked:", isBookmarked);
 
-        const response = isBookmarked
-          ? await allMediaAPI.unbookmarkContent(contentId)
-          : await allMediaAPI.bookmarkContent(contentId);
-
-        if (response.success) {
-          console.log("✅ Bookmark successful:", response.data);
-          Alert.alert(
-            "Success",
-            isBookmarked ? "Removed from library" : "Saved to library"
-          );
-        } else {
-          console.error("❌ Bookmark failed:", response.error);
-          Alert.alert("Error", "Failed to update library");
-        }
-      } catch (error) {
-        console.error("Bookmark error:", error);
-        Alert.alert("Error", "Failed to update library");
+    try {
+      let response;
+      if (isBookmarked) {
+        // Unbookmark content
+        console.log("🔍 DEBUG: Calling unbookmarkContent API");
+        response = await allMediaAPI.unbookmarkContent(contentId);
+      } else {
+        // Bookmark content
+        console.log("🔍 DEBUG: Calling bookmarkContent API");
+        response = await allMediaAPI.bookmarkContent(contentId);
       }
-    },
-    []
-  );
 
-  // Render content item
-  const renderContentItem = useCallback(
-    ({ item }: { item: any }) => (
+      console.log("🔍 DEBUG: API Response:", response);
+
+      if (response.success) {
+        Alert.alert(
+          "Success",
+          isBookmarked ? "Removed from library" : "Saved to library"
+        );
+      } else {
+        Alert.alert("Error", response.error || "Failed to update library");
+      }
+    } catch (error) {
+      console.error("🔍 DEBUG: Bookmark error:", error);
+      Alert.alert("Error", "Failed to update library");
+    }
+  };
+  console.log(
+    "🔍 DEBUG: handleSaveToLibrary function created:",
+    !!handleSaveToLibrary
+  );
+  console.log(
+    "🔍 DEBUG: handleSaveToLibrary function type:",
+    typeof handleSaveToLibrary
+  );
+  console.log("🔍 DEBUG: handleSaveToLibrary function:", handleSaveToLibrary);
+
+  // Enhanced render content item with real-time data
+  const renderContentItem = ({ item }: { item: any }) => {
+    // Get real-time data for this content
+    const realTimeData = realTimeCounts[item._id] || {};
+    const viewerCount = viewerCounts[item._id] || 0;
+
+    // Merge real-time data with content
+    const enhancedItem = {
+      ...item,
+      likeCount: realTimeData.likeCount ?? item.likeCount,
+      commentCount: realTimeData.commentCount ?? item.commentCount,
+      shareCount: realTimeData.shareCount ?? item.shareCount,
+      viewCount: realTimeData.viewCount ?? item.viewCount,
+      liveViewers: viewerCount,
+    };
+
+    console.log(
+      "🔍 DEBUG: renderContentItem - handleSaveToLibrary:",
+      !!handleSaveToLibrary
+    );
+    console.log("🔍 DEBUG: About to render ContentCard with props:");
+    console.log(
+      "🔍 DEBUG: - onSaveToLibrary:",
+      !!handleSaveToLibrary,
+      typeof handleSaveToLibrary
+    );
+    console.log("🔍 DEBUG: - handleLike:", !!handleLike);
+    console.log("🔍 DEBUG: - handleComment:", !!handleComment);
+    console.log("🔍 DEBUG: - handleShare:", !!handleShare);
+    console.log("🔍 DEBUG: - handleAuthorPress:", !!handleAuthorPress);
+
+    return (
       <ContentCard
-        content={item}
+        content={enhancedItem}
         onLike={handleLike}
         onComment={handleComment}
         onShare={handleShare}
         onAuthorPress={handleAuthorPress}
         onSaveToLibrary={handleSaveToLibrary}
+        socketManager={socketManager}
       />
-    ),
-    [
-      handleLike,
-      handleComment,
-      handleShare,
-      handleAuthorPress,
-      handleSaveToLibrary,
-    ]
-  );
+    );
+  };
 
   // Render loading indicator
   const renderFooter = useCallback(() => {
@@ -209,6 +357,25 @@ const AllContent = () => {
     ),
     []
   );
+
+  // Render connection status
+  const renderConnectionStatus = useCallback(() => {
+    if (!socketManager) return null;
+
+    return (
+      <View
+        style={{
+          padding: 8,
+          backgroundColor: socketManager.isConnected() ? "#4CAF50" : "#f44336",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "white", fontSize: 12 }}>
+          {socketManager.isConnected() ? "🟢 Connected" : "🔴 Disconnected"}
+        </Text>
+      </View>
+    );
+  }, [socketManager]);
 
   if (defaultContentLoading && defaultContent.length === 0) {
     return (
@@ -250,6 +417,8 @@ const AllContent = () => {
 
   return (
     <>
+      {renderConnectionStatus()}
+
       <FlatList
         data={defaultContent}
         renderItem={renderContentItem}
@@ -274,16 +443,26 @@ const AllContent = () => {
       />
 
       {/* Comment Modal */}
-      <CommentModal
+      {/* <CommentModal
         visible={commentModalVisible}
-        onClose={() => setCommentModalVisible(false)}
+        onClose={() => {
+          setCommentModalVisible(false);
+          // Leave content room when closing modal
+          if (socketManager && selectedContentId) {
+            socketManager.leaveContentRoom(selectedContentId, "media");
+          }
+        }}
         contentId={selectedContentId}
         contentTitle={selectedContentTitle}
         onCommentPosted={(comment) => {
           console.log("New comment posted:", comment);
-          // You can add additional logic here if needed
+          // Send real-time comment
+          if (socketManager) {
+            socketManager.sendComment(selectedContentId, "media", comment.text);
+          }
         }}
-      />
+        socketManager={socketManager}
+      /> */}
     </>
   );
 };

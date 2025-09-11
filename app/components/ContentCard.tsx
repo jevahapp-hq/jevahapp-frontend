@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   Image,
   PanResponder,
@@ -18,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
+import SocketManager from "../services/SocketManager";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
@@ -48,12 +50,15 @@ interface ContentCardProps {
     createdAt: string;
     isLiked?: boolean;
     isBookmarked?: boolean;
+    isLive?: boolean;
+    liveViewers?: number;
   };
   onLike: (contentId: string, liked: boolean) => Promise<void>;
   onComment: (contentId: string) => void;
   onShare: (contentId: string) => Promise<void>;
   onAuthorPress: (authorId: string) => void;
   onSaveToLibrary?: (contentId: string, isBookmarked: boolean) => Promise<void>;
+  socketManager?: SocketManager | null;
 }
 
 const ContentCard: React.FC<ContentCardProps> = ({
@@ -63,7 +68,21 @@ const ContentCard: React.FC<ContentCardProps> = ({
   onShare,
   onAuthorPress,
   onSaveToLibrary,
+  socketManager,
 }) => {
+  console.log("🔍 DEBUG: ContentCard rendered with props:");
+  console.log("🔍 DEBUG: onSaveToLibrary prop:", !!onSaveToLibrary);
+  console.log("🔍 DEBUG: onSaveToLibrary function:", typeof onSaveToLibrary);
+  console.log("🔍 DEBUG: All props:", {
+    onLike: !!onLike,
+    onComment: !!onComment,
+    onShare: !!onShare,
+    onAuthorPress: !!onAuthorPress,
+    onSaveToLibrary: !!onSaveToLibrary,
+  });
+  console.log("🔍 DEBUG: Content ID:", content._id);
+  console.log("🔍 DEBUG: Content title:", content.title);
+  console.log("🔍 DEBUG: ContentCard component is rendering");
   // State management
   const [isPlaying, setIsPlaying] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
@@ -81,6 +100,25 @@ const ContentCard: React.FC<ContentCardProps> = ({
     Record<string, number>
   >({});
   const [contentStats, setContentStats] = useState<Record<string, any>>({});
+
+  // Real-time state
+  const [isLiked, setIsLiked] = useState(content.isLiked || false);
+  const [likeCount, setLikeCount] = useState(content.likeCount || 0);
+  const [commentCount, setCommentCount] = useState(content.commentCount || 0);
+  const [shareCount, setShareCount] = useState(content.shareCount || 0);
+  const [viewerCount, setViewerCount] = useState(content.liveViewers || 0);
+  const [isBookmarked, setIsBookmarked] = useState(
+    content.isBookmarked || false
+  );
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [isLive, setIsLive] = useState(content.isLive || false);
+
+  // Animation values
+  const likeAnimation = useRef(new Animated.Value(1)).current;
+  const heartAnimation = useRef(new Animated.Value(0)).current;
+  const commentAnimation = useRef(new Animated.Value(1)).current;
+  const livePulseAnimation = useRef(new Animated.Value(1)).current;
 
   // Video URL management
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string>(
@@ -105,6 +143,53 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const videoRef = useRef<Video>(null);
   const modalKey = `content-${content._id}`;
   const key = `content-${content._id}`;
+
+  // Socket.IO integration
+  useEffect(() => {
+    if (socketManager) {
+      // Join content room for real-time updates
+      socketManager.joinContentRoom(content._id, "media");
+
+      // Set up real-time event handlers for this specific content
+      const originalHandlers = {
+        onContentReaction: socketManager.handleContentReaction,
+        onCountUpdate: socketManager.handleCountUpdate,
+        onViewerCountUpdate: socketManager.handleViewerCountUpdate,
+      };
+
+      socketManager.setEventHandlers({
+        ...originalHandlers,
+        onContentReaction: (data: any) => {
+          if (data.contentId === content._id) {
+            setIsLiked(data.liked);
+            setLikeCount(data.count);
+            animateLike();
+          }
+          originalHandlers.onContentReaction?.(data);
+        },
+        onCountUpdate: (data: any) => {
+          if (data.contentId === content._id) {
+            setLikeCount(data.likeCount);
+            setCommentCount(data.commentCount);
+            setShareCount(data.shareCount);
+          }
+          originalHandlers.onCountUpdate?.(data);
+        },
+        onViewerCountUpdate: (data: any) => {
+          if (data.contentId === content._id) {
+            setViewerCount(data.viewerCount);
+          }
+          originalHandlers.onViewerCountUpdate?.(data);
+        },
+      });
+    }
+
+    return () => {
+      if (socketManager) {
+        socketManager.leaveContentRoom(content._id, "media");
+      }
+    };
+  }, [content._id, socketManager]);
 
   // Get existing comments for this content
   const contentId = content._id;
@@ -144,6 +229,74 @@ const ContentCard: React.FC<ContentCardProps> = ({
           isLiked: comment.isLiked || false,
         }))
       : sampleComments;
+
+  // Animation functions
+  const animateLike = () => {
+    Animated.sequence([
+      Animated.timing(likeAnimation, {
+        toValue: 1.2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(likeAnimation, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Heart animation
+    Animated.sequence([
+      Animated.timing(heartAnimation, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(heartAnimation, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const animateComment = () => {
+    Animated.sequence([
+      Animated.timing(commentAnimation, {
+        toValue: 1.1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(commentAnimation, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Live stream pulse animation
+  useEffect(() => {
+    if (isLive) {
+      const pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(livePulseAnimation, {
+            toValue: 1.3,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(livePulseAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseAnimation.start();
+
+      return () => pulseAnimation.stop();
+    }
+  }, [isLive, livePulseAnimation]);
 
   // Helper functions
   const getTimeAgo = (createdAt: string): string => {
@@ -307,13 +460,25 @@ const ContentCard: React.FC<ContentCardProps> = ({
   // Interaction handlers
   const handleFavorite = async () => {
     try {
-      await onLike(content._id, !content.isLiked);
-      setUserFavorites((prev) => ({ ...prev, [key]: !content.isLiked }));
-      setGlobalFavoriteCounts((prev) => ({
-        ...prev,
-        [key]: content.isLiked ? content.likeCount - 1 : content.likeCount + 1,
-      }));
+      // Optimistic update
+      const newLikedState = !isLiked;
+      const newLikeCount = newLikedState ? likeCount + 1 : likeCount - 1;
+
+      setIsLiked(newLikedState);
+      setLikeCount(newLikeCount);
+      animateLike();
+
+      // Send real-time like
+      if (socketManager) {
+        socketManager.sendLike(content._id, "media");
+      }
+
+      // Call API
+      await onLike(content._id, newLikedState);
     } catch (error) {
+      // Revert optimistic update on error
+      setIsLiked(!isLiked);
+      setLikeCount(likeCount);
       Alert.alert("Error", "Failed to update like");
     }
   };
@@ -326,42 +491,105 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const handleShare = async () => {
     try {
       await onShare(content._id);
-      setContentStats((prev) => ({
-        ...prev,
-        [key]: {
-          ...prev[key],
-          sheared: (prev[key]?.sheared || content.shareCount) + 1,
-        },
-      }));
+      setShareCount(shareCount + 1);
     } catch (error) {
       Alert.alert("Error", "Failed to share content");
     }
   };
 
+  const handleDoubleTap = () => {
+    if (!isLiked) {
+      handleFavorite();
+    }
+  };
+
+  const handleLongPress = () => {
+    // Show content options menu
+    Alert.alert("Content Options", "What would you like to do?", [
+      { text: "Share", onPress: handleShare },
+      {
+        text: "Save to Library",
+        onPress: () => setIsBookmarked(!isBookmarked),
+      },
+      { text: "Report", onPress: () => console.log("Report content") },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const handleSaveToLibrary = async () => {
+    console.log("🔍 DEBUG: handleSaveToLibrary called");
+    console.log("🔍 DEBUG: onSaveToLibrary exists:", !!onSaveToLibrary);
+    console.log("🔍 DEBUG: Current isBookmarked state:", isBookmarked);
+    console.log("🔍 DEBUG: Content ID:", content._id);
+    console.log("🔍 DEBUG: Content title:", content.title);
+
     if (onSaveToLibrary) {
       try {
-        await onSaveToLibrary(content._id, content.isBookmarked || false);
-        // Update local state to reflect the change
+        console.log("🔍 DEBUG: Starting bookmark process...");
+
+        // Update local state optimistically for instant UI feedback
+        const newBookmarkState = !isBookmarked;
+        console.log("🔍 DEBUG: New bookmark state:", newBookmarkState);
+
+        setIsBookmarked(newBookmarkState);
+        console.log("🔍 DEBUG: Local state updated to:", newBookmarkState);
+
+        // Update content stats
         setContentStats((prev) => ({
           ...prev,
           [key]: {
             ...prev[key],
-            saved: content.isBookmarked ? 0 : 1,
+            saved: newBookmarkState ? 1 : 0,
           },
         }));
+        console.log("🔍 DEBUG: Content stats updated");
+
+        // Call the API
+        console.log(
+          "🔍 DEBUG: Calling onSaveToLibrary with:",
+          content._id,
+          isBookmarked
+        );
+        await onSaveToLibrary(content._id, isBookmarked);
+
+        console.log("✅ DEBUG: Bookmark API call successful");
+        console.log("✅ DEBUG: Final bookmark state:", newBookmarkState);
       } catch (error) {
-        Alert.alert("Error", "Failed to update library");
+        console.log("❌ DEBUG: Bookmark API call failed:", error);
+
+        // Rollback on error - revert to previous state
+        const previousBookmarkState = isBookmarked; // Revert to original state
+        setIsBookmarked(previousBookmarkState);
+        setContentStats((prev) => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            saved: previousBookmarkState ? 1 : 0,
+          },
+        }));
+        console.log(
+          "❌ DEBUG: Rolled back to previous state:",
+          previousBookmarkState
+        );
       }
+    } else {
+      console.log("❌ DEBUG: onSaveToLibrary is not available!");
     }
   };
 
   const handleSave = async () => {
+    console.log("🔍 DEBUG: handleSave called (bookmark icon clicked)");
+    console.log("🔍 DEBUG: onSaveToLibrary available:", !!onSaveToLibrary);
+    console.log("🔍 DEBUG: handleSave function executed successfully");
+
     // Use the new save to library handler if available
     if (onSaveToLibrary) {
+      console.log("🔍 DEBUG: Using onSaveToLibrary handler");
       await handleSaveToLibrary();
       return;
     }
+
+    console.log("🔍 DEBUG: Using fallback library store");
 
     // Fallback to local library store
     const isSaved = contentStats[key]?.saved === 1;
@@ -490,7 +718,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const renderMediaContent = () => {
     if (content.contentType === "video") {
       return (
-        <TouchableWithoutFeedback onPress={handleVideoTap}>
+        <TouchableWithoutFeedback
+          onPress={handleVideoTap}
+          onLongPress={handleLongPress}
+        >
           <View
             className="w-full h-[400px] overflow-hidden relative"
             onTouchStart={handleVideoHover}
@@ -616,46 +847,46 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
             {/* Right side actions */}
             <View className="flex-col absolute mt-[170px] ml-[360px]">
-              <TouchableOpacity
-                onPress={handleFavorite}
-                className="flex-col justify-center items-center"
+              <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
+                <TouchableOpacity
+                  onPress={handleFavorite}
+                  className="flex-col justify-center items-center"
+                >
+                  <MaterialIcons
+                    name={isLiked ? "favorite" : "favorite-border"}
+                    size={30}
+                    color={isLiked ? "#D22A2A" : "#FFFFFF"}
+                  />
+                  <Text className="text-[10px] text-white font-rubik-semibold">
+                    {likeCount}
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View
+                style={{ transform: [{ scale: commentAnimation }] }}
               >
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || content.likeCount}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={contentStats[key]?.comment || content.commentCount}
-                  layout="vertical"
-                />
-              </View>
+                <View className="flex-col justify-center items-center mt-6">
+                  <CommentIcon
+                    comments={formattedComments}
+                    size={30}
+                    color="white"
+                    showCount={true}
+                    count={commentCount}
+                    layout="vertical"
+                  />
+                </View>
+              </Animated.View>
               <TouchableOpacity
-                onPress={handleSave}
+                onPress={handleSaveToLibrary}
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={
-                    contentStats[key]?.saved === 1
-                      ? "bookmark"
-                      : "bookmark-border"
-                  }
+                  name={isBookmarked ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={contentStats[key]?.saved === 1 ? "#FEA74E" : "#FFFFFF"}
+                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
-                  {contentStats[key]?.saved === 1
-                    ? (contentStats[key]?.saved || 0) + 1
-                    : contentStats[key]?.saved || 0}
+                  {isBookmarked ? 1 : 0}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -688,6 +919,33 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 </View>
               </View>
             )}
+
+            {/* Double-tap heart animation */}
+            <Animated.View
+              style={[
+                {
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  marginTop: -40,
+                  marginLeft: -40,
+                  zIndex: 1000,
+                },
+                {
+                  opacity: heartAnimation,
+                  transform: [
+                    {
+                      scale: heartAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, 1.5],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <MaterialIcons name="favorite" size={80} color="#e91e63" />
+            </Animated.View>
 
             {/* Content Type Icon */}
             <View className="absolute top-4 left-4">
@@ -789,46 +1047,46 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
             {/* Right side actions */}
             <View className="flex-col absolute mt-[170px] ml-[360px]">
-              <TouchableOpacity
-                onPress={handleFavorite}
-                className="flex-col justify-center items-center"
+              <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
+                <TouchableOpacity
+                  onPress={handleFavorite}
+                  className="flex-col justify-center items-center"
+                >
+                  <MaterialIcons
+                    name={isLiked ? "favorite" : "favorite-border"}
+                    size={30}
+                    color={isLiked ? "#D22A2A" : "#FFFFFF"}
+                  />
+                  <Text className="text-[10px] text-white font-rubik-semibold">
+                    {likeCount}
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View
+                style={{ transform: [{ scale: commentAnimation }] }}
               >
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || content.likeCount}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={contentStats[key]?.comment || content.commentCount}
-                  layout="vertical"
-                />
-              </View>
+                <View className="flex-col justify-center items-center mt-6">
+                  <CommentIcon
+                    comments={formattedComments}
+                    size={30}
+                    color="white"
+                    showCount={true}
+                    count={commentCount}
+                    layout="vertical"
+                  />
+                </View>
+              </Animated.View>
               <TouchableOpacity
-                onPress={handleSave}
+                onPress={handleSaveToLibrary}
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={
-                    contentStats[key]?.saved === 1
-                      ? "bookmark"
-                      : "bookmark-border"
-                  }
+                  name={isBookmarked ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={contentStats[key]?.saved === 1 ? "#FEA74E" : "#FFFFFF"}
+                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
-                  {contentStats[key]?.saved === 1
-                    ? (contentStats[key]?.saved || 0) + 1
-                    : contentStats[key]?.saved || 0}
+                  {isBookmarked ? 1 : 0}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -914,46 +1172,46 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
             {/* Right side actions */}
             <View className="flex-col absolute mt-[170px] ml-[360px]">
-              <TouchableOpacity
-                onPress={handleFavorite}
-                className="flex-col justify-center items-center"
+              <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
+                <TouchableOpacity
+                  onPress={handleFavorite}
+                  className="flex-col justify-center items-center"
+                >
+                  <MaterialIcons
+                    name={isLiked ? "favorite" : "favorite-border"}
+                    size={30}
+                    color={isLiked ? "#D22A2A" : "#FFFFFF"}
+                  />
+                  <Text className="text-[10px] text-white font-rubik-semibold">
+                    {likeCount}
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View
+                style={{ transform: [{ scale: commentAnimation }] }}
               >
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || content.likeCount}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={contentStats[key]?.comment || content.commentCount}
-                  layout="vertical"
-                />
-              </View>
+                <View className="flex-col justify-center items-center mt-6">
+                  <CommentIcon
+                    comments={formattedComments}
+                    size={30}
+                    color="white"
+                    showCount={true}
+                    count={commentCount}
+                    layout="vertical"
+                  />
+                </View>
+              </Animated.View>
               <TouchableOpacity
-                onPress={handleSave}
+                onPress={handleSaveToLibrary}
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={
-                    contentStats[key]?.saved === 1
-                      ? "bookmark"
-                      : "bookmark-border"
-                  }
+                  name={isBookmarked ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={contentStats[key]?.saved === 1 ? "#FEA74E" : "#FFFFFF"}
+                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
-                  {contentStats[key]?.saved === 1
-                    ? (contentStats[key]?.saved || 0) + 1
-                    : contentStats[key]?.saved || 0}
+                  {isBookmarked ? 1 : 0}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1005,6 +1263,25 @@ const ContentCard: React.FC<ContentCardProps> = ({
               <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
                 {getUserDisplayNameFromContent(content)}
               </Text>
+
+              {/* Live Stream Indicator */}
+              {isLive && (
+                <Animated.View
+                  style={{
+                    transform: [{ scale: livePulseAnimation }],
+                    marginLeft: 8,
+                    marginTop: 2,
+                  }}
+                >
+                  <View className="flex-row items-center bg-red-500 px-2 py-1 rounded-full">
+                    <View className="w-2 h-2 bg-white rounded-full mr-1" />
+                    <Text className="text-white text-[10px] font-rubik-semibold">
+                      LIVE
+                    </Text>
+                  </View>
+                </Animated.View>
+              )}
+
               <View className="flex flex-row mt-2 ml-2">
                 <Ionicons name="time-outline" size={14} color="#9CA3AF" />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
@@ -1019,6 +1296,16 @@ const ContentCard: React.FC<ContentCardProps> = ({
                   {contentStats[key]?.views ?? content.viewCount ?? 0}
                 </Text>
               </View>
+
+              {/* Live Viewer Count */}
+              {isLive && viewerCount > 0 && (
+                <View className="flex-row items-center ml-4">
+                  <Ionicons name="people" size={16} color="#ef4444" />
+                  <Text className="text-[10px] text-red-500 ml-1 font-rubik-semibold">
+                    {viewerCount} watching
+                  </Text>
+                </View>
+              )}
               <TouchableOpacity
                 onPress={handleShare}
                 className="flex-row items-center ml-4"
@@ -1062,7 +1349,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
             </TouchableOpacity>
             <TouchableOpacity
               className="flex-row items-center justify-between mt-6"
-              onPress={handleSave}
+              onPress={handleSaveToLibrary}
             >
               <Text className="text-[#1D2939] font-rubik ml-2">
                 {contentStats[key]?.saved === 1
@@ -1086,4 +1373,4 @@ const ContentCard: React.FC<ContentCardProps> = ({
   );
 };
 
-export default React.memo(ContentCard);
+export default ContentCard;

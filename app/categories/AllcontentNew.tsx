@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -7,10 +8,11 @@ import {
   View,
 } from "react-native";
 import ContentCard from "../components/ContentCard";
+import { useNotification } from "../context/NotificationContext";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
 
-const AllContentNew = () => {
+const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
   const {
     defaultContent,
     defaultContentLoading,
@@ -20,6 +22,37 @@ const AllContentNew = () => {
     loadMoreDefaultContent,
     refreshDefaultContent,
   } = useMediaStore();
+
+  // Filter content based on contentType
+  const filteredContent = useMemo(() => {
+    if (!defaultContent || !Array.isArray(defaultContent)) return [];
+    if (contentType === "ALL") return defaultContent;
+
+    const typeMap: Record<string, string[]> = {
+      LIVE: ["live"],
+      SERMON: ["sermon", "teachings"],
+      MUSIC: ["music", "audio"],
+      "E-BOOKS": ["e-books", "ebook"],
+      VIDEO: ["videos", "video"],
+    };
+
+    const allowedTypes = typeMap[contentType] || [contentType.toLowerCase()];
+    return defaultContent.filter((item: any) =>
+      allowedTypes.some((allowedType) =>
+        item.contentType?.toLowerCase().includes(allowedType.toLowerCase())
+      )
+    );
+  }, [defaultContent, contentType]);
+
+  const notificationContext = useNotification();
+  const router = useRouter();
+
+  // Safety check for notification system
+  const showNotification =
+    notificationContext?.showNotification ||
+    (() => {
+      console.warn("Notification system not available");
+    });
 
   // Load default content on mount
   useEffect(() => {
@@ -47,18 +80,43 @@ const AllContentNew = () => {
   }, [loadMoreDefaultContent]);
 
   // Handle like
-  const handleLike = useCallback(async (contentId: string, liked: boolean) => {
-    try {
-      // TODO: Call your like API
-      console.log("Like action:", contentId, liked);
-      // const response = await toggleLike('media', contentId);
-      // if (response.success) {
-      //   // Update local state
-      // }
-    } catch (error) {
-      console.error("Like error:", error);
-    }
-  }, []);
+  const handleLike = useCallback(
+    async (contentId: string, liked: boolean) => {
+      try {
+        console.log("🔄 Like action:", contentId, liked);
+
+        // Call the like API
+        const response = await allMediaAPI.toggleLike("media", contentId);
+
+        if (response.success) {
+          console.log("✅ Like successful:", response.data);
+          // The ContentCard component will handle the UI update
+          // based on the response from the API
+        } else {
+          console.error("❌ Like failed:", response.error);
+          // Show error notification
+          showNotification({
+            type: "error",
+            title: "Like Failed",
+            message: response.error || "Failed to update like",
+            icon: "heart",
+            duration: 3000,
+          });
+        }
+      } catch (error) {
+        console.error("❌ Like error:", error);
+        // Show error notification
+        showNotification({
+          type: "error",
+          title: "Connection Error",
+          message: "Unable to update like. Please check your connection.",
+          icon: "wifi-off",
+          duration: 3000,
+        });
+      }
+    },
+    [showNotification]
+  );
 
   // Handle comment
   const handleComment = useCallback((contentId: string) => {
@@ -86,6 +144,98 @@ const AllContentNew = () => {
     console.log("Navigate to author profile:", authorId);
   }, []);
 
+  // Handle save to library
+  const handleSaveToLibrary = async (
+    contentId: string,
+    isBookmarked: boolean
+  ) => {
+    console.log("🔍 DEBUG: handleSaveToLibrary function called!");
+    console.log("🔍 DEBUG: Content ID:", contentId);
+    console.log("🔍 DEBUG: Is bookmarked:", isBookmarked);
+
+    try {
+      let response;
+      if (isBookmarked) {
+        // Unbookmark content
+        console.log("🔍 DEBUG: Calling unbookmarkContent API");
+        response = await allMediaAPI.unbookmarkContent(contentId);
+      } else {
+        // Bookmark content
+        console.log("🔍 DEBUG: Calling bookmarkContent API");
+        response = await allMediaAPI.bookmarkContent(contentId);
+      }
+
+      console.log("🔍 DEBUG: API Response:", response);
+
+      if (response.success) {
+        // Success notification
+        showNotification({
+          type: "success",
+          title: isBookmarked ? "Removed from Library" : "Saved to Library",
+          message: isBookmarked
+            ? "Content has been removed from your library"
+            : "Content has been saved to your library",
+          icon: isBookmarked ? "bookmark-remove" : "bookmark",
+          actionText: isBookmarked ? undefined : "View Library",
+          onAction: isBookmarked
+            ? undefined
+            : () => {
+                // Navigate to library page
+                router.push("/screens/library" as any);
+              },
+          duration: 4000,
+        });
+      } else {
+        // Handle specific error cases
+        const errorMessage = response.error || "Failed to update library";
+
+        if (errorMessage.includes("Media already saved")) {
+          // Already saved - show info notification with option to view library
+          showNotification({
+            type: "info",
+            title: "Already in Library",
+            message: "This content is already saved in your library",
+            icon: "bookmark",
+            actionText: "View Library",
+            onAction: () => {
+              router.push("/screens/library" as any);
+            },
+            duration: 5000,
+          });
+        } else if (errorMessage.includes("Media not found")) {
+          // Not found error
+          showNotification({
+            type: "error",
+            title: "Content Not Found",
+            message: "This content could not be found",
+            icon: "error",
+            duration: 3000,
+          });
+        } else {
+          // Generic error
+          showNotification({
+            type: "error",
+            title: "Save Failed",
+            message: errorMessage,
+            icon: "error",
+            duration: 4000,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("🔍 DEBUG: Bookmark error:", error);
+
+      // Network or other errors
+      showNotification({
+        type: "error",
+        title: "Connection Error",
+        message: "Unable to save to library. Please check your connection.",
+        icon: "wifi-off",
+        duration: 4000,
+      });
+    }
+  };
+
   // Render content item
   const renderContentItem = useCallback(
     ({ item }: { item: any }) => (
@@ -95,9 +245,16 @@ const AllContentNew = () => {
         onComment={handleComment}
         onShare={handleShare}
         onAuthorPress={handleAuthorPress}
+        onSaveToLibrary={handleSaveToLibrary}
       />
     ),
-    [handleLike, handleComment, handleShare, handleAuthorPress]
+    [
+      handleLike,
+      handleComment,
+      handleShare,
+      handleAuthorPress,
+      handleSaveToLibrary,
+    ]
   );
 
   // Render loading indicator
@@ -123,22 +280,28 @@ const AllContentNew = () => {
         }}
       >
         <Text style={{ fontSize: 18, color: "#666" }}>
-          No content available
+          {contentType === "ALL"
+            ? "No content available"
+            : `No ${contentType.toLowerCase()} content available`}
         </Text>
         <Text style={{ fontSize: 14, color: "#999", marginTop: 8 }}>
           Pull down to refresh
         </Text>
       </View>
     ),
-    []
+    [contentType]
   );
 
-  if (defaultContentLoading && defaultContent.length === 0) {
+  if (defaultContentLoading && filteredContent.length === 0) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#666" />
         <Text style={{ marginTop: 12, fontSize: 16, color: "#666" }}>
-          Loading content...
+          Loading{" "}
+          {contentType === "ALL"
+            ? "content"
+            : `${contentType.toLowerCase()} content`}
+          ...
         </Text>
       </View>
     );
@@ -173,12 +336,12 @@ const AllContentNew = () => {
 
   return (
     <FlatList
-      data={defaultContent}
+      data={filteredContent}
       renderItem={renderContentItem}
       keyExtractor={(item) => item._id}
       refreshControl={
         <RefreshControl
-          refreshing={defaultContentLoading && defaultContent.length > 0}
+          refreshing={defaultContentLoading && filteredContent.length > 0}
           onRefresh={handleRefresh}
           colors={["#666"]}
           tintColor="#666"
