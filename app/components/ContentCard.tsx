@@ -142,7 +142,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
   // Check if item is saved in library store with error handling
   const isItemInLibrary = React.useMemo(() => {
     try {
-      return libraryStore?.isItemSaved ? libraryStore.isItemSaved(content._id) : false;
+      if (!libraryStore || typeof libraryStore.isItemSaved !== 'function') {
+        console.log("🔍 Library store not ready, defaulting to false");
+        return false;
+      }
+      const result = libraryStore.isItemSaved(content._id);
+      console.log(`🔍 Item ${content._id} saved status:`, result);
+      return result;
     } catch (error) {
       console.warn("⚠️ Library store not available:", error);
       return false;

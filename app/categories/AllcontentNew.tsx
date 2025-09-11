@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -26,6 +26,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
 
   // Library store for tracking saved items
   const { loadSavedItems, isLoaded } = useLibraryStore();
+  const [libraryStoreReady, setLibraryStoreReady] = useState(false);
 
   // Filter content based on contentType
   const filteredContent = useMemo(() => {
@@ -70,7 +71,19 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     allMediaAPI.testAvailableEndpoints();
 
     // Load library store to track saved items
-    loadSavedItems();
+    const initializeLibrary = async () => {
+      try {
+        await loadSavedItems();
+        console.log("✅ Library store initialized");
+        setLibraryStoreReady(true);
+      } catch (error) {
+        console.warn("⚠️ Failed to initialize library store:", error);
+        // Still set ready to true to prevent infinite loading
+        setLibraryStoreReady(true);
+      }
+    };
+    
+    initializeLibrary();
 
     // Then fetch content
     fetchDefaultContent({ page: 1, limit: 10 });
@@ -299,7 +312,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     [contentType]
   );
 
-  if ((defaultContentLoading && filteredContent.length === 0) || !isLoaded) {
+  if ((defaultContentLoading && filteredContent.length === 0) || !isLoaded || !libraryStoreReady) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#666" />
