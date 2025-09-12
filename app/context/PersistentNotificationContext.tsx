@@ -135,3 +135,4 @@ export const PersistentNotificationProvider: React.FC<
     </PersistentNotificationContext.Provider>
   );
 };
+

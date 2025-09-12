@@ -324,13 +324,13 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           // Remove from local storage
           await libraryStore.removeFromLibrary(itemId);
 
-        // Update local state
-        setSavedItems((prev) =>
-          prev.filter((savedItem) => {
-            const savedItemId = savedItem._id || savedItem.id;
-            return savedItemId !== itemId;
-          })
-        );
+          // Update local state
+          setSavedItems((prev) =>
+            prev.filter((savedItem) => {
+              const savedItemId = savedItem._id || savedItem.id;
+              return savedItemId !== itemId;
+            })
+          );
 
           console.log(`🗑️ Removed ${itemTitle} from library (API + local)`);
         } else {

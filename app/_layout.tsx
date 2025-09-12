@@ -19,6 +19,7 @@ import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
 import { useDownloadStore } from "./store/useDownloadStore";
+import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { PerformanceOptimizer } from "./utils/performance";
 
@@ -85,6 +86,7 @@ export default function RootLayout() {
   const loadDownloadedItems = useDownloadStore(
     (state) => state.loadDownloadedItems
   );
+  const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -116,6 +118,17 @@ export default function RootLayout() {
           );
         }
 
+        // Try to load saved library items
+        try {
+          await loadSavedItems();
+          console.log("✅ Library items loaded successfully");
+        } catch (libraryErr) {
+          console.warn(
+            "⚠️ Library items loading failed (continuing anyway):",
+            libraryErr
+          );
+        }
+
         // Preload critical data for better performance
         try {
           await PerformanceOptimizer.preloadCriticalData();
@@ -139,7 +152,13 @@ export default function RootLayout() {
     if (fontsLoaded && !isInitialized) {
       initializeApp();
     }
-  }, [fontsLoaded, loadPersistedMedia, loadDownloadedItems, isInitialized]);
+  }, [
+    fontsLoaded,
+    loadPersistedMedia,
+    loadDownloadedItems,
+    loadSavedItems,
+    isInitialized,
+  ]);
 
   // ✅ Fonts not loaded
   if (!fontsLoaded) {

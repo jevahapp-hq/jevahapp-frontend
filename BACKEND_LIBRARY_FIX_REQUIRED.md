@@ -276,3 +276,4 @@ CREATE TABLE bookmarks (
 ---
 
 **Note**: The frontend is ready and will work immediately once these backend changes are implemented.
+

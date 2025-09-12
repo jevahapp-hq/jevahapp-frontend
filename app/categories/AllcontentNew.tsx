@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import ContentCard from "../components/ContentCard";
 import { useNotification } from "../context/NotificationContext";
-import { useLibraryStore } from "../store/useLibraryStore";
+import { useSafeLibraryStore } from "../hooks/useSafeLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
 
@@ -24,9 +24,8 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     refreshDefaultContent,
   } = useMediaStore();
 
-  // Library store for tracking saved items
-  const { loadSavedItems, isLoaded } = useLibraryStore();
-  const [libraryStoreReady, setLibraryStoreReady] = useState(false);
+  // SAFE Library store for tracking saved items - never fails
+  const safeLibraryStore = useSafeLibraryStore();
 
   // Filter content based on contentType
   const filteredContent = useMemo(() => {
@@ -59,7 +58,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
       console.warn("Notification system not available");
     });
 
-  // Load default content and library store on mount
+  // Load default content on mount
   useEffect(() => {
     console.log("🚀 AllContentNew: Loading default content from backend...");
     console.log(
@@ -70,24 +69,9 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     // Test available endpoints first
     allMediaAPI.testAvailableEndpoints();
 
-    // Load library store to track saved items
-    const initializeLibrary = async () => {
-      try {
-        await loadSavedItems();
-        console.log("✅ Library store initialized");
-        setLibraryStoreReady(true);
-      } catch (error) {
-        console.warn("⚠️ Failed to initialize library store:", error);
-        // Still set ready to true to prevent infinite loading
-        setLibraryStoreReady(true);
-      }
-    };
-    
-    initializeLibrary();
-
-    // Then fetch content
+    // Fetch content
     fetchDefaultContent({ page: 1, limit: 10 });
-  }, [fetchDefaultContent, loadSavedItems]);
+  }, [fetchDefaultContent]);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
@@ -312,7 +296,7 @@ const AllContentNew = ({ contentType = "ALL" }: { contentType?: string }) => {
     [contentType]
   );
 
-  if ((defaultContentLoading && filteredContent.length === 0) || !isLoaded || !libraryStoreReady) {
+  if (defaultContentLoading && filteredContent.length === 0) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#666" />

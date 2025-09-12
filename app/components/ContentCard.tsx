@@ -19,11 +19,10 @@ import {
   View,
 } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
+import { useSafeLibraryStore } from "../hooks/useSafeLibraryStore";
 import SocketManager from "../services/SocketManager";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
-import { useLibraryStore } from "../store/useLibraryStore";
-import { getSafeVideoUrl } from "../utils/videoUrlUtils";
 import CommentIcon from "./CommentIcon";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -101,18 +100,44 @@ const ContentCard: React.FC<ContentCardProps> = ({
   >({});
   const [contentStats, setContentStats] = useState<Record<string, any>>({});
 
+  // Map API response structure to expected structure
+  // API returns fileUrl, but ContentCard expects mediaUrl
+  const mappedContent = {
+    ...content,
+    mediaUrl: content.mediaUrl || (content as any).fileUrl,
+    // Map other fields that might be different
+    likeCount: content.likeCount || (content as any).favoriteCount || 0,
+    commentCount: content.commentCount || 0,
+    shareCount: content.shareCount || 0,
+    viewCount: content.viewCount || 0,
+    // Map author structure
+    author: content.author || {
+      _id:
+        (content as any).uploadedBy?._id ||
+        (content as any).uploadedBy ||
+        "unknown",
+      firstName: (content as any).uploadedBy?.firstName || "Unknown",
+      lastName: (content as any).uploadedBy?.lastName || "User",
+      avatar: (content as any).uploadedBy?.avatar,
+    },
+  };
+
   // Real-time state
-  const [isLiked, setIsLiked] = useState(content.isLiked || false);
-  const [likeCount, setLikeCount] = useState(content.likeCount || 0);
-  const [commentCount, setCommentCount] = useState(content.commentCount || 0);
-  const [shareCount, setShareCount] = useState(content.shareCount || 0);
-  const [viewerCount, setViewerCount] = useState(content.liveViewers || 0);
+  const [isLiked, setIsLiked] = useState(mappedContent.isLiked || false);
+  const [likeCount, setLikeCount] = useState(mappedContent.likeCount || 0);
+  const [commentCount, setCommentCount] = useState(
+    mappedContent.commentCount || 0
+  );
+  const [shareCount, setShareCount] = useState(mappedContent.shareCount || 0);
+  const [viewerCount, setViewerCount] = useState(
+    mappedContent.liveViewers || 0
+  );
   const [isBookmarked, setIsBookmarked] = useState(
-    content.isBookmarked || false
+    mappedContent.isBookmarked || false
   );
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [isLive, setIsLive] = useState(content.isLive || false);
+  const [isLive, setIsLive] = useState(mappedContent.isLive || false);
 
   // Animation values
   const likeAnimation = useRef(new Animated.Value(1)).current;
@@ -120,40 +145,71 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const commentAnimation = useRef(new Animated.Value(1)).current;
   const livePulseAnimation = useRef(new Animated.Value(1)).current;
 
-  // Video URL management
-  const [currentVideoUrl, setCurrentVideoUrl] = useState<string>(
-    content.mediaUrl
-  );
+  // Video URL management - use the same approach as library
   const [isRefreshingUrl, setIsRefreshingUrl] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
 
-  // Advanced video behavior states
-  const [isHovered, setIsHovered] = useState(false);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  const [isFullVideoPlaying, setIsFullVideoPlaying] = useState(false);
-  const [showVideoControls, setShowVideoControls] = useState(false);
+  // Use the same URL validation and fallback as library
+  const isValidUri = (u: any) =>
+    typeof u === "string" &&
+    u.trim().length > 0 &&
+    /^https?:\/\//.test(u.trim());
+
+  // Log the content to see what URLs are available
+  console.log(`🔍 ContentCard ${content.title} URLs:`, {
+    mediaUrl: content.mediaUrl,
+    fileUrl: (content as any).fileUrl,
+    thumbnailUrl: content.thumbnailUrl,
+    contentType: content.contentType,
+    mappedMediaUrl: mappedContent.mediaUrl,
+  });
+
+  // Use the mapped content for video URL
+  const videoUrl = mappedContent.mediaUrl;
+
+  // Check if URL is expired or invalid
+  const isExpiredUrl = (url: string) => {
+    if (!url) return true;
+    // Check for common cloud storage expiration patterns
+    return url.includes("X-Amz-Expires=") && url.includes("X-Amz-Date=");
+  };
+
+  const safeVideoUri =
+    isValidUri(videoUrl) && !isExpiredUrl(videoUrl)
+      ? String(videoUrl).trim()
+      : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+  console.log(`🎬 Using video URL for ${content.title}:`, safeVideoUri);
+  console.log(`🎬 Video URL validation:`, {
+    originalUrl: videoUrl,
+    isValid: isValidUri(videoUrl),
+    isExpired: isExpiredUrl(videoUrl),
+    finalUrl: safeVideoUri,
+  });
+
+  // Use the same simple video states as library
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [showVideoOverlay, setShowVideoOverlay] = useState(true);
 
   // Store hooks
   const globalVideoStore = useGlobalVideoStore();
-  const libraryStore = useLibraryStore();
   const { comments } = useInteractionStore();
   const { showCommentModal } = useCommentModal();
 
-  // Check if item is saved in library store with error handling
+  // SAFE LIBRARY STORE - Never fails, always returns a valid store
+  const safeLibraryStore = useSafeLibraryStore();
+
+  // Check if item is saved - this will NEVER crash
   const isItemInLibrary = React.useMemo(() => {
     try {
-      if (!libraryStore || typeof libraryStore.isItemSaved !== 'function') {
-        console.log("🔍 Library store not ready, defaulting to false");
-        return false;
-      }
-      const result = libraryStore.isItemSaved(content._id);
+      const result = safeLibraryStore.isItemSaved(content._id);
       console.log(`🔍 Item ${content._id} saved status:`, result);
       return result;
     } catch (error) {
-      console.warn("⚠️ Library store not available:", error);
+      console.warn("⚠️ Error calling isItemSaved:", error);
       return false;
     }
-  }, [libraryStore, content._id]);
+  }, [safeLibraryStore, content._id]);
 
   // Refs
   const videoRef = useRef<Video>(null);
@@ -329,11 +385,14 @@ const ContentCard: React.FC<ContentCardProps> = ({
   };
 
   const getUserAvatarFromContent = (content: any) => {
+    // Use mappedContent for consistent data structure
+    const author = mappedContent.author;
+
     // Check if author has avatar
-    if (content.author?.avatar) {
-      return typeof content.author.avatar === "string"
-        ? { uri: content.author.avatar }
-        : content.author.avatar;
+    if (author?.avatar) {
+      return typeof author.avatar === "string"
+        ? { uri: author.avatar }
+        : author.avatar;
     }
 
     // Use Cloudinary default avatar like Jentezen Franklin
@@ -343,26 +402,26 @@ const ContentCard: React.FC<ContentCardProps> = ({
   };
 
   const getUserDisplayNameFromContent = (content: any) => {
+    // Use mappedContent for consistent data structure
+    const author = mappedContent.author;
+
     // Check if author has complete name
-    if (content.author?.firstName && content.author?.lastName) {
-      return `${content.author.firstName} ${content.author.lastName}`;
+    if (author?.firstName && author?.lastName) {
+      return `${author.firstName} ${author.lastName}`;
     }
 
     // Check if author has firstName only
-    if (content.author?.firstName) {
-      return content.author.firstName;
+    if (author?.firstName) {
+      return author.firstName;
     }
 
     // Check if author has lastName only
-    if (content.author?.lastName) {
-      return content.author.lastName;
+    if (author?.lastName) {
+      return author.lastName;
     }
 
     // Check if author exists but no name
-    if (
-      content.author &&
-      (content.author._id === null || !content.author.firstName)
-    ) {
+    if (author && (author._id === null || !author.firstName)) {
       return "Jevah HQ";
     }
 
@@ -372,8 +431,11 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
   // Audio playback functions
   const playAudio = async () => {
-    if (!content.mediaUrl) return;
+    const audioUrl = mappedContent.mediaUrl;
+    if (!audioUrl) return;
     if (isAudioLoading) return;
+
+    console.log(`🎵 Playing audio for ${content.title}:`, audioUrl);
 
     setIsAudioLoading(true);
     try {
@@ -390,7 +452,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         }
       } else {
         const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: content.mediaUrl },
+          { uri: audioUrl },
           {
             shouldPlay: true,
             isMuted: isMuted,
@@ -421,50 +483,25 @@ const ContentCard: React.FC<ContentCardProps> = ({
     }
   };
 
-  // Advanced video behavior functions
-  const handleVideoHover = () => {
+  // Use the same simple toggle function as library
+  const toggleVideoPlay = () => {
     if (content.contentType === "video") {
-      setIsHovered(true);
-      setIsPreviewPlaying(true);
-      // Start muted preview
-      globalVideoStore.playVideo(modalKey);
-      // Ensure video is muted for preview
-      if (!globalVideoStore.mutedVideos[modalKey]) {
-        globalVideoStore.toggleVideoMute(modalKey);
-      }
-    }
-  };
+      // Pause all other videos first
+      globalVideoStore.pauseAllVideos();
 
-  const handleVideoLeave = () => {
-    if (content.contentType === "video") {
-      setIsHovered(false);
-      setIsPreviewPlaying(false);
-      // Stop preview
-      globalVideoStore.pauseVideo(modalKey);
-    }
-  };
+      // Toggle current video
+      const newPlayingState = !isVideoPlaying;
+      setIsVideoPlaying(newPlayingState);
+      setShowVideoOverlay(!newPlayingState);
 
-  const handleVideoTap = () => {
-    if (content.contentType === "video") {
-      if (isFullVideoPlaying) {
-        // Pause full video
-        globalVideoStore.pauseVideo(modalKey);
-        setIsFullVideoPlaying(false);
-        setShowVideoControls(false);
-      } else {
-        // Start full video with sound
+      if (newPlayingState) {
         globalVideoStore.playVideo(modalKey);
-        // Ensure video is unmuted for full play
-        if (globalVideoStore.mutedVideos[modalKey]) {
-          globalVideoStore.toggleVideoMute(modalKey);
-        }
-        setIsFullVideoPlaying(true);
-        setShowVideoControls(true);
-
-        // Increment view count when user actively plays video
+        // Increment view count when user plays video
         if (!viewCounted) {
           incrementView();
         }
+      } else {
+        globalVideoStore.pauseVideo(modalKey);
       }
     }
   };
@@ -632,9 +669,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
         originalKey: key,
       };
 
-      await libraryStore.addToLibrary(libraryItem);
+      await safeLibraryStore.addToLibrary(libraryItem);
     } else {
-      await libraryStore.removeFromLibrary(key);
+      await safeLibraryStore.removeFromLibrary(key);
     }
 
     setContentStats((prev) => ({
@@ -659,7 +696,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     }
   };
 
-  // Handle video URL refresh
+  // Handle video URL refresh - try to get fresh URL from API
   const handleVideoUrlRefresh = async () => {
     if (isRefreshingUrl) return;
 
@@ -667,13 +704,23 @@ const ContentCard: React.FC<ContentCardProps> = ({
     setVideoLoadError(null);
 
     try {
-      console.log(`🔄 Refreshing video URL for: ${content.title}`);
-      const safeUrl = await getSafeVideoUrl(content.mediaUrl, content._id);
-      setCurrentVideoUrl(safeUrl);
-      console.log(`✅ Updated video URL: ${safeUrl}`);
+      console.log(`🔄 Retrying video for: ${content.title}`);
+
+      // Try to refresh the content data from the parent component
+      // This would ideally call the API again to get fresh URLs
+      console.log(`🔄 Original URL: ${videoUrl}`);
+      console.log(`🔄 Current safe URL: ${safeVideoUri}`);
+
+      // For now, just clear the error and let the component re-render
+      // In a real implementation, you'd want to call the API to get fresh URLs
+      setVideoLoadError(null);
+
+      // Force a re-render by updating the video state
+      setIsVideoPlaying(false);
+      setShowVideoOverlay(true);
     } catch (error) {
       console.error(`❌ Failed to refresh video URL:`, error);
-      setVideoLoadError("Failed to load video");
+      setVideoLoadError("Failed to refresh video URL");
     } finally {
       setIsRefreshingUrl(false);
     }
@@ -713,150 +760,93 @@ const ContentCard: React.FC<ContentCardProps> = ({
     };
   }, [sound]);
 
-  // Initialize video URL on mount
+  // Simple debug - same as library
   useEffect(() => {
-    const initializeVideoUrl = async () => {
-      if (content.contentType === "video" && content.mediaUrl) {
-        try {
-          const safeUrl = await getSafeVideoUrl(content.mediaUrl, content._id);
-          setCurrentVideoUrl(safeUrl);
-        } catch (error) {
-          console.error("❌ Failed to initialize video URL:", error);
-          setCurrentVideoUrl(content.mediaUrl); // Fallback to original
-        }
-      }
-    };
+    console.log(
+      `🔍 Video States for ${content.title}: isPlaying=${isVideoPlaying}, showOverlay=${showVideoOverlay}`
+    );
+  }, [isVideoPlaying, showVideoOverlay, content.title]);
 
-    initializeVideoUrl();
-  }, [content.mediaUrl, content._id, content.contentType]);
+  // Force video to play/pause when states change
+  useEffect(() => {
+    if (content.contentType === "video") {
+      const shouldPlay = isVideoPlaying;
+      console.log(`🎬 Video state changed - shouldPlay: ${shouldPlay}`);
+
+      // Add a small delay to ensure video ref is ready
+      const timeoutId = setTimeout(() => {
+        if (videoRef.current) {
+          if (shouldPlay) {
+            console.log(`▶️ Forcing video to play: ${content.title}`);
+            videoRef.current.playAsync().catch((error) => {
+              console.warn(`⚠️ Failed to play video: ${error}`);
+            });
+          } else {
+            console.log(`⏸️ Forcing video to pause: ${content.title}`);
+            videoRef.current.pauseAsync().catch((error) => {
+              console.warn(`⚠️ Failed to pause video: ${error}`);
+            });
+          }
+        } else {
+          console.warn(`⚠️ Video ref not available for: ${content.title}`);
+        }
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isVideoPlaying, content.contentType, content.title]);
 
   // Render based on content type
   const renderMediaContent = () => {
     if (content.contentType === "video") {
       return (
         <TouchableWithoutFeedback
-          onPress={handleVideoTap}
+          onPress={toggleVideoPlay}
           onLongPress={handleLongPress}
         >
-          <View
-            className="w-full h-[400px] overflow-hidden relative"
-            onTouchStart={handleVideoHover}
-            onTouchEnd={handleVideoLeave}
-          >
-            {/* Static thumbnail overlay - shown when not playing (only for non-video content) */}
-            {content.contentType !== "video" &&
-              !isPreviewPlaying &&
-              !isFullVideoPlaying && (
-                <Image
-                  source={{ uri: content.thumbnailUrl || content.mediaUrl }}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    position: "absolute",
-                  }}
-                  resizeMode="cover"
-                  onError={(error) => {
-                    console.warn(
-                      `❌ Thumbnail load error for ${content.title}:`,
-                      error
-                    );
-                  }}
-                />
-              )}
-
-            {/* Video loading indicator */}
-            {isVideoLoading && (isPreviewPlaying || isFullVideoPlaying) && (
-              <View className="absolute inset-0 justify-center items-center bg-black/20">
-                <ActivityIndicator size="large" color="#FEA74E" />
-                <Text className="text-white text-sm mt-2 font-rubik">
-                  {isRefreshingUrl ? "Refreshing video..." : "Loading video..."}
-                </Text>
-              </View>
-            )}
-
-            {/* Video error indicator */}
-            {videoLoadError && !isVideoLoading && (
-              <View className="absolute inset-0 justify-center items-center bg-black/50">
-                <View className="bg-white/90 p-4 rounded-lg mx-4">
-                  <Text className="text-red-600 text-center font-rubik-semibold mb-2">
-                    Video Unavailable
-                  </Text>
-                  <Text className="text-gray-700 text-center text-sm font-rubik mb-3">
-                    {videoLoadError}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleVideoUrlRefresh}
-                    disabled={isRefreshingUrl}
-                    className="bg-[#FEA74E] px-4 py-2 rounded-lg"
-                  >
-                    <Text className="text-white text-center font-rubik-semibold">
-                      {isRefreshingUrl ? "Retrying..." : "Retry"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* Video player - always visible for videos */}
+          <View className="w-full h-[400px] overflow-hidden relative">
+            {/* Video player - EXACT same as library */}
             <Video
               ref={videoRef}
-              source={{ uri: currentVideoUrl }}
+              source={{ uri: safeVideoUri }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
-              isMuted={globalVideoStore.mutedVideos[modalKey] ?? true} // Default muted
-              volume={globalVideoStore.mutedVideos[modalKey] ? 0.0 : 1.0}
-              shouldPlay={isPreviewPlaying || isFullVideoPlaying}
+              shouldPlay={isVideoPlaying}
+              isLooping={false}
+              isMuted={false}
               useNativeControls={false}
-              onLoadStart={() => {
-                console.log(`🔄 Loading video: ${content.title}`);
-                console.log(`🔗 Video URL: ${currentVideoUrl}`);
-                setVideoLoadError(null);
-              }}
               onLoad={() => {
-                console.log(`✅ Video loaded successfully: ${content.title}`);
-                setIsVideoLoading(false);
-                setVideoLoadError(null);
-              }}
-              onError={(error: any) => {
-                console.error(
-                  `❌ Video loading error for ${content.title}:`,
-                  error
+                console.log(
+                  `✅ Video loaded successfully: ${content.title}`,
+                  safeVideoUri
                 );
-                console.error(`🔗 Failed URL: ${currentVideoUrl}`);
-                setIsVideoLoading(false);
-                setVideoLoadError("Video failed to load");
-
-                // Auto-retry with URL refresh if this is the first failure
-                if (!videoLoadError) {
-                  console.log(`🔄 Auto-retrying with URL refresh...`);
-                  setTimeout(() => {
-                    handleVideoUrlRefresh();
-                  }, 1000);
-                } else {
-                  // Show user-friendly error message for persistent failures
-                  Alert.alert(
-                    "Video Unavailable",
-                    `The video "${content.title}" is currently unavailable. Please try again later.`,
-                    [
-                      { text: "Retry", onPress: handleVideoUrlRefresh },
-                      { text: "OK" },
-                    ]
-                  );
-                }
               }}
-              onPlaybackStatusUpdate={(status: any) => {
+              onError={(e) => {
+                console.warn(
+                  "Video failed to load in ContentCard:",
+                  content.title,
+                  safeVideoUri,
+                  e
+                );
+                console.warn("Error details:", {
+                  error: e.nativeEvent?.error,
+                  code: e.nativeEvent?.code,
+                  message: e.nativeEvent?.message,
+                });
+                setIsVideoPlaying(false);
+                setShowVideoOverlay(true);
+                setVideoLoadError(
+                  `Failed to load video: ${
+                    e.nativeEvent?.message || "Unknown error"
+                  }`
+                );
+              }}
+              onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
-                const pct = status.durationMillis
-                  ? (status.positionMillis / status.durationMillis) * 100
-                  : 0;
-                globalVideoStore.setVideoProgress(modalKey, pct);
-
                 if (status.didJustFinish) {
-                  videoRef.current?.setPositionAsync(0);
-                  globalVideoStore.pauseVideo(modalKey);
-                  globalVideoStore.setVideoCompleted(modalKey, true);
-                  setIsFullVideoPlaying(false);
-                  setShowVideoControls(false);
+                  setIsVideoPlaying(false);
+                  setShowVideoOverlay(true);
+                  console.log(`🎬 Video completed: ${content.title}`);
                 }
               }}
             />
@@ -907,31 +897,46 @@ const ContentCard: React.FC<ContentCardProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* Centered Play/Pause Button - only show when not in preview mode */}
-            {!isPreviewPlaying && (
-              <View className="absolute inset-0 justify-center items-center">
-                <TouchableOpacity onPress={handleVideoTap}>
-                  <View
-                    className={`${
-                      isFullVideoPlaying ? "bg-black/30" : "bg-white/70"
-                    } p-3 rounded-full`}
-                  >
-                    <Ionicons
-                      name={isFullVideoPlaying ? "pause" : "play"}
-                      size={32}
-                      color={isFullVideoPlaying ? "#FFFFFF" : "#FEA74E"}
-                    />
+            {/* Play/Pause Overlay - EXACT same as library */}
+            {!isVideoPlaying && showVideoOverlay && (
+              <>
+                <View className="absolute inset-0 justify-center items-center">
+                  <View className="bg-white/70 p-3 rounded-full">
+                    <Ionicons name="play" size={32} color="#FEA74E" />
                   </View>
-                </TouchableOpacity>
-              </View>
+                </View>
+
+                <View className="absolute bottom-4 left-4 right-4">
+                  <Text
+                    className="text-white font-rubik-bold text-sm"
+                    numberOfLines={2}
+                  >
+                    {content.title}
+                  </Text>
+                </View>
+              </>
             )}
 
-            {/* Preview indicator - show when hovering/previewing */}
-            {isPreviewPlaying && !isFullVideoPlaying && (
-              <View className="absolute top-4 right-4">
-                <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">
-                  <View className="w-2 h-2 bg-red-500 rounded-full mr-2" />
-                  <Text className="text-white text-xs font-rubik">Preview</Text>
+            {/* Video Load Error Overlay */}
+            {videoLoadError && (
+              <View className="absolute inset-0 justify-center items-center bg-black/50">
+                <View className="bg-white/90 p-4 rounded-lg mx-4 items-center">
+                  <Ionicons name="warning" size={32} color="#FF6B6B" />
+                  <Text className="text-red-600 font-rubik-bold text-sm mt-2 text-center">
+                    Video Unavailable
+                  </Text>
+                  <Text className="text-gray-600 font-rubik text-xs mt-1 text-center">
+                    {videoLoadError}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleVideoUrlRefresh}
+                    className="bg-[#FEA74E] px-4 py-2 rounded-lg mt-2"
+                    disabled={isRefreshingUrl}
+                  >
+                    <Text className="text-white font-rubik-bold text-xs">
+                      {isRefreshingUrl ? "Retrying..." : "Retry"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -982,8 +987,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
               </View>
             )}
 
-            {/* Bottom Controls - only show when in full play mode */}
-            {showVideoControls && isFullVideoPlaying && (
+            {/* Bottom Controls - only show when playing */}
+            {isVideoPlaying && (
               <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
                 <View
                   className="flex-1 h-1 bg-white/30 rounded-full relative"
@@ -1031,7 +1036,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
         <TouchableWithoutFeedback onPress={() => {}}>
           <View className="w-full h-[400px] overflow-hidden relative">
             <Image
-              source={{ uri: content.thumbnailUrl || content.mediaUrl }}
+              source={{
+                uri: mappedContent.thumbnailUrl || mappedContent.mediaUrl,
+              }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode="cover"
               onError={(error) => {
@@ -1175,7 +1182,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
         >
           <View className="w-full h-[400px] overflow-hidden relative">
             <Image
-              source={{ uri: content.thumbnailUrl || content.mediaUrl }}
+              source={{
+                uri: mappedContent.thumbnailUrl || mappedContent.mediaUrl,
+              }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode="cover"
               onError={(error) => {
@@ -1309,7 +1318,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
               <View className="flex-row items-center">
                 <AntDesign name="eyeo" size={24} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
-                  {contentStats[key]?.views ?? content.viewCount ?? 0}
+                  {contentStats[key]?.views ?? mappedContent.viewCount ?? 0}
                 </Text>
               </View>
 
@@ -1328,7 +1337,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
               >
                 <Feather name="send" size={24} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {contentStats[key]?.sheared ?? content.shareCount ?? 0}
+                  {contentStats[key]?.sheared ?? mappedContent.shareCount ?? 0}
                 </Text>
               </TouchableOpacity>
             </View>
