@@ -123,6 +123,16 @@ export default function Welcome() {
     login(provider);
   }, [login]);
 
+  // Show loading while auth is initializing
+  if (!authLoaded || !userLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#090E24" />
+        <Text style={{ marginTop: 10, fontSize: 16 }}>Loading...</Text>
+      </View>
+    );
+  }
+
   if (showIntro) {
     return <AnimatedLogoIntro onFinished={handleIntroFinished} backgroundColor="#0A332D" scale={1} letterStaggerMs={100} />;
   }

@@ -155,7 +155,12 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <ClerkProvider 
+          publishableKey={publishableKey} 
+          tokenCache={tokenCache}
+          afterSignInUrl="/categories/HomeScreen"
+          afterSignUpUrl="/categories/HomeScreen"
+        >
           <GestureHandlerRootView style={{ flex: 1 }}>
             <CommentModalProvider>
               <Slot />
