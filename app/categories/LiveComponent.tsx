@@ -285,7 +285,7 @@ const renderMiniCards = (
                   <Text className="text-[#1D2939] font-rubik ml-2">
                     View Details
                   </Text>
-                  <Ionicons name="eye-outline" size={16} color="#3A3E50" />
+                  <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                   <Text className="text-sm text-[#1D2939] font-rubik ml-2">
@@ -321,12 +321,8 @@ const renderMiniCards = (
                 </TouchableOpacity>
               </View>
               <View className="flex-row items-center">
-                <Image
-                  source={require("../../assets/images/Vector1.png")}
-                  className="h-[16px] w-[16px] ml-1"
-                  resizeMode="contain"
-                />
-                <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
+                <MaterialIcons name="visibility" size={16} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {item.views}
                 </Text>
               </View>
@@ -450,12 +446,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
               </View>
               <View className="flex flex-row mt-2">
                 <View className="flex-row items-center">
-                  <Image
-                    source={require("../../assets/images/Vector1.png")}
-                    className="h-[16px] w-[16px] ml-1"
-                    resizeMode="contain"
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+                  <MaterialIcons name="visibility" size={16} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {video.views}
                   </Text>
                 </View>
@@ -505,7 +497,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
             <View className="absolute top-[300px] right-6 bg-white shadow-md rounded-lg p-3 z-50 w-56">
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row justify-between">
               <Text className="text-[#1D2939] ml-2">View Details</Text>
-              <Ionicons name="eye-outline" size={16} color="#3A3E50" />
+              <MaterialIcons name="visibility" size={16} color="#3A3E50" />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row justify-between">
               <Text className="text-sm text-[#1D2939] ml-2">Share</Text>
@@ -626,7 +618,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                     <Text className="text-[#1D2939] font-rubik ml-2">
                       View Details
                     </Text>
-                    <Ionicons name="eye-outline" size={16} color="#3A3E50" />
+                    <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                     <Text className="text-sm text-[#1D2939] font-rubik ml-2">
@@ -660,12 +652,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                 </View>
                 <View className="flex flex-row">
                   <View className="flex-row items-center">
-                    <Image
-                      source={require("../../assets/images/Vector1.png")}
-                      className="h-[16px] w-[16px] ml-1"
-                      resizeMode="contain"
-                    />
-                    <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+                    <MaterialIcons name="visibility" size={16} color="#98A2B3" />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                       {item.views}
                     </Text>
                   </View>

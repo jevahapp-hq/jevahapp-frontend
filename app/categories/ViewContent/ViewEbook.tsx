@@ -1,4 +1,4 @@
-import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Share from 'expo-sharing';
 import { useCallback, useState } from 'react';
@@ -187,7 +187,7 @@ export default function ViewEbook() {
                       className="py-2 border-b border-gray-200 flex-row items-center justify-between"
                     >
                       <Text className="text-[#1D2939] font-rubik-medium ml-2">View Details</Text>
-                      <Ionicons name="eye-outline" size={22} color="#1D2939" />
+                      <MaterialIcons name="visibility" size={22} color="#1D2939" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleShare(item)}
@@ -240,7 +240,7 @@ export default function ViewEbook() {
                   </TouchableOpacity>
                 </View>
                 <View className="flex-row items-center mt-1">
-                  <AntDesign name="eyeo" size={16} color="#98A2B3" />
+                  <MaterialIcons name="visibility" size={16} color="#98A2B3" />
                   <Text className="text-[10px] text-[#98A2B3] ml-2 font-rubik">
                     {item.views || 0} views
                   </Text>

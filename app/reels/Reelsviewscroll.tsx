@@ -1075,7 +1075,7 @@ export default function Reelsviewscroll() {
                         }}>
                           View Details
                         </Text>
-                        <Ionicons name="eye-outline" size={22} color="#1D2939" />
+                        <MaterialIcons name="visibility" size={22} color="#1D2939" />
                       </TouchableOpacity>
                       
                       <TouchableOpacity

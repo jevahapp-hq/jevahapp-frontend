@@ -15,12 +15,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import {
-    GestureHandlerRootView,
-    HandlerStateChangeEvent,
-    PanGestureHandler,
-    PanGestureHandlerGestureEvent,
-} from 'react-native-gesture-handler';
+// Removed gesture handler imports - using simpler approach
 import Animated, {
     Easing,
     runOnJS,
@@ -47,17 +42,20 @@ export default function CommentReplyModal() {
   const replyInputRef = useRef<TextInput>(null);
 
   const translateY = useSharedValue(SCREEN_HEIGHT);
-  const lastTranslateY = useSharedValue(0);
 
   useEffect(() => {
     if (isVisible) {
+      setShowInputModal(true);
+      // Calculate the target position accounting for keyboard height
+      const targetPosition = keyboardHeight > 0 ? keyboardHeight : 0;
+      
       if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
+        translateY.value = withTiming(targetPosition, {
           duration: 500,
           easing: Easing.out(Easing.cubic),
         });
       } else {
-        translateY.value = withSpring(0, { damping: 25, stiffness: 100 });
+        translateY.value = withSpring(targetPosition, { damping: 25, stiffness: 100 });
       }
       // Show input modal immediately when comment modal opens
       setShowInputModal(true);
@@ -66,13 +64,15 @@ export default function CommentReplyModal() {
         mainInputRef.current?.focus();
       }, 50);
     } else {
+      const targetPosition = SCREEN_HEIGHT + (keyboardHeight > 0 ? keyboardHeight : 0);
+      
       if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
+        translateY.value = withTiming(targetPosition, {
           duration: 400,
           easing: Easing.in(Easing.cubic),
         });
       } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
+        translateY.value = withSpring(targetPosition);
       }
       // Clear inputs when modal closes
       setMainInputText('');
@@ -111,40 +111,19 @@ export default function CommentReplyModal() {
     transform: [{ translateY: translateY.value }],
   }));
 
-  const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
-    const { translationY } = event.nativeEvent;
-    // Only allow downward swipe to close, and require a significant drag
-    if (translationY > 0 && translationY > 50) {
-      translateY.value = translationY;
-      lastTranslateY.value = translationY;
-    }
-  };
-
-  const onGestureEnd = (
-    _event: HandlerStateChangeEvent<Record<string, unknown>>
-  ) => {
-    // Require a much larger drag distance to close the modal
-    if (lastTranslateY.value > 200) {
+  // Simplified close function without gesture handling
+  const handleClose = () => {
+    const targetPosition = SCREEN_HEIGHT + (keyboardHeight > 0 ? keyboardHeight : 0);
+    
       if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
+      translateY.value = withTiming(targetPosition, {
           duration: 400,
           easing: Easing.in(Easing.cubic),
         });
       } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
+      translateY.value = withSpring(targetPosition);
       }
       runOnJS(hideCommentModal)();
-    } else {
-      // Always snap back to original position if not dragged enough
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 25, stiffness: 100 });
-      }
-    }
   };
 
   const handleReply = useCallback((commentId: string) => {
@@ -367,24 +346,20 @@ export default function CommentReplyModal() {
   }
 
   return (
-    <GestureHandlerRootView style={{ position: 'absolute', inset: 0, zIndex: 9999, alignItems: 'center', justifyContent: 'flex-end' }}>
+    <View style={{ position: 'absolute', inset: 0, zIndex: 9999, alignItems: 'center', justifyContent: 'flex-end' }}>
       {/* Background overlay - disabled touch to close */}
       <View
         style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
       />
 
-      <PanGestureHandler
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onGestureEnd}
-      >
         <Animated.View
           style={[
             animatedStyle,
             {
               position: 'absolute',
-              bottom: 0,
+            bottom: keyboardHeight > 0 ? keyboardHeight : 0,
               width: SCREEN_WIDTH,
-              height: SCREEN_HEIGHT * 0.7,
+              height: keyboardHeight > 0 ? SCREEN_HEIGHT * 0.5 : SCREEN_HEIGHT * 0.7,
               backgroundColor: 'white',
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,
@@ -394,9 +369,9 @@ export default function CommentReplyModal() {
         >
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            enabled={true}
+            behavior="height"
+            keyboardVerticalOffset={0}
+            enabled={false}
           >
           {/* Header */}
           <View
@@ -434,10 +409,13 @@ export default function CommentReplyModal() {
 
           {/* Comments list */}
           <ScrollView
-            style={{ flex: 1 }}
+            style={{ 
+              flex: 1,
+              marginBottom: keyboardHeight > 0 ? (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 20 : 0
+            }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ 
-              paddingBottom: (keyboardHeight > 0 ? keyboardHeight + (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 24 : (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 24) 
+              paddingBottom: (keyboardHeight > 0 ? (SCREEN_HEIGHT * 0.5) / 2 + 20 + (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 24 : (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) + 24) 
             }}
           >
             {comments.map((comment) => (
@@ -451,13 +429,27 @@ export default function CommentReplyModal() {
 
           {/* Input Modal - Always visible when comment modal is open */}
           {showInputModal && (
-            <View
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: keyboardHeight > 0 ? keyboardHeight : 0,
-                backgroundColor: 'white',
+            <>
+              {/* Semi-transparent overlay behind input */}
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: keyboardHeight > 0 ? keyboardHeight - (SCREEN_HEIGHT * 0.5) / 2 - 20 : 0,
+                  height: replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT,
+                  backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                  zIndex: 999,
+                }}
+              />
+              {/* Input container */}
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: keyboardHeight > 0 ? keyboardHeight - (SCREEN_HEIGHT * 0.5) / 2 - 20 : 0,
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 paddingHorizontal: 12,
@@ -473,6 +465,8 @@ export default function CommentReplyModal() {
                 shadowOpacity: 0.1,
                 shadowRadius: 4,
                 elevation: 5,
+                  // Add backdrop blur effect
+                  backdropFilter: 'blur(10px)',
               }}
             >
               {/* Reply indicator */}
@@ -535,7 +529,7 @@ export default function CommentReplyModal() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <AntDesign name="back" size={15} color="black" />
+                  <AntDesign name="arrow-left" size={15} color="black" />
                 </TouchableOpacity>
 
                 {/* Text input bubble */}
@@ -598,10 +592,10 @@ export default function CommentReplyModal() {
                 </TouchableOpacity>
               </View>
             </View>
+            </>
           )}
           </KeyboardAvoidingView>
         </Animated.View>
-      </PanGestureHandler>
-    </GestureHandlerRootView>
+    </View>
   );
 }

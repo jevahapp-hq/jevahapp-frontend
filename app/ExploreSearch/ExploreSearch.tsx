@@ -412,7 +412,7 @@ export default function ExploreSearch() {
           <View className="absolute top-2 right-2 bg-white shadow-md rounded-lg p-2 z-50 w-32">
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
               <Text className="text-[#1D2939] font-rubik text-sm">View Details</Text>
-              <Ionicons name="eye-outline" size={16} color="#3A3E50" />
+              <MaterialIcons name="visibility" size={16} color="#3A3E50" />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
               <Text className="text-sm text-[#1D2939] font-rubik">Share</Text>

@@ -7,9 +7,14 @@ import {
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import CommentIcon from "../components/CommentIcon";
+import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
+import { useInteractionStore } from "../store/useInteractionStore";
+import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
+import { getPersistedStats, toggleFavorite } from "../utils/persistentStorage";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 interface EbookItem {
@@ -39,6 +44,11 @@ export default function EbookComponent() {
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   const { loadDownloadedItems } = useDownloadStore();
+  
+  // Interaction functionality
+  const { showCommentModal } = useCommentModal();
+  const { userFavorites, globalFavoriteCounts, comments } = useInteractionStore();
+  const { addToLibrary, removeFromLibrary, isInLibrary } = useLibraryStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -46,6 +56,53 @@ export default function EbookComponent() {
       loadDownloadedItems();
     }, [])
   );
+
+  // Helper functions
+  const getContentKey = (item: EbookItem) => item._id || item.fileUrl || item.title;
+  
+  const handleFavorite = async (key: string, item: EbookItem) => {
+    await toggleFavorite(key, item);
+  };
+
+  const handleComment = (key: string, item: EbookItem) => {
+    const contentId = item._id || key;
+    const currentComments = comments[contentId] || [];
+    const formattedComments = currentComments.map((comment: any) => ({
+      id: comment.id,
+      userName: comment.username || 'Anonymous',
+      avatar: comment.userAvatar || '',
+      timestamp: comment.timestamp,
+      comment: comment.comment,
+      likes: comment.likes || 0,
+      isLiked: comment.isLiked || false,
+    }));
+    showCommentModal(formattedComments, contentId);
+  };
+
+  const handleSave = async (key: string, item: EbookItem) => {
+    const contentKey = getContentKey(item);
+    if (isInLibrary(contentKey)) {
+      removeFromLibrary(contentKey);
+    } else {
+      addToLibrary({
+        id: contentKey,
+        title: item.title,
+        type: 'ebook',
+        fileUrl: item.fileUrl || '',
+        imageUrl: item.imageUrl,
+        speaker: item.speaker || item.uploadedBy || 'Unknown',
+        createdAt: item.createdAt,
+      });
+    }
+  };
+
+  const handleDownloadPress = async (item: EbookItem) => {
+    const downloadableItem = convertToDownloadableItem(item, 'ebook');
+    const result = await handleDownload(downloadableItem);
+    if (result.success) {
+      await loadDownloadedItems();
+    }
+  };
 
   // Filter ebooks from media store
   const ebookItems = mediaStore.mediaList.filter(item => 
@@ -127,7 +184,7 @@ export default function EbookComponent() {
                   <Text className="text-[#1D2939] font-rubik ml-2">
                     View Details
                   </Text>
-                  <Ionicons name="eye-outline" size={16} color="#3A3E50" />
+                  <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                   <Text className="text-sm text-[#1D2939] font-rubik ml-2">
@@ -190,12 +247,8 @@ export default function EbookComponent() {
                 </View>
                 <View className="flex flex-row mt-2">
                   <View className="flex-row items-center">
-                    <Image
-                      source={require("../../assets/images/Vector1.png")}
-                      className="h-[16px] w-[16px] ml-1"
-                      resizeMode="contain"
-                    />
-                    <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+                    <MaterialIcons name="visibility" size={16} color="#98A2B3" />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                       {ebook.views || 0}
                     </Text>
                   </View>
@@ -284,7 +337,7 @@ export default function EbookComponent() {
                   <Text className="text-[#1D2939] font-rubik ml-2">
                     View Details
                   </Text>
-                  <Ionicons name="eye-outline" size={16} color="##3A3E50" />
+                  <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                   <Text className="text-sm text-[#1D2939] font-rubik ml-2">
@@ -343,16 +396,74 @@ export default function EbookComponent() {
                   />
                 </TouchableOpacity>
               </View>
-              <View className="flex-row items-center">
-                <Image
-                  source={require("../../assets/images/Vector1.png")}
-                  className="h-[16px] w-[16px] ml-1"
-                  resizeMode="contain"
-                />
-                <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
+              {(() => {
+                const key = getContentKey(item);
+                const stats = getPersistedStats(key) || {};
+                const contentId = item._id || key;
+                const currentComments = comments[contentId] || [];
+                const formattedComments = currentComments.map((comment: any) => ({
+                  id: comment.id,
+                  userName: comment.username || 'Anonymous',
+                  avatar: comment.userAvatar || '',
+                  timestamp: comment.timestamp,
+                  comment: comment.comment,
+                  likes: comment.likes || 0,
+                  isLiked: comment.isLiked || false,
+                }));
+                return (
+                  <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
+                <View className="flex-row items-center mr-6">
+                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {item.views || 0}
                 </Text>
               </View>
+                <TouchableOpacity onPress={() => handleFavorite(key, item)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    size={28}
+                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {globalFavoriteCounts[key] || 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center mr-6"
+                  onPress={() => handleComment(key, item)}
+                >
+                  <CommentIcon 
+                    comments={formattedComments}
+                    size={28}
+                    color="#98A2B3"
+                    showCount={true}
+                    count={stats.comment === 1 ? (item.comment ?? 0) + 1 : item.comment ?? 0}
+                    layout="horizontal"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleSave(key, item)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={isInLibrary(getContentKey(item)) ? "bookmark" : "bookmark-border"}
+                    size={28}
+                    color={isInLibrary(getContentKey(item)) ? "#FEA74E" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {(stats as any)?.totalSaves || item.saved || 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center"
+                  onPress={() => handleDownloadPress(item)}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={28} 
+                    color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#98A2B3"} 
+                  />
+                </TouchableOpacity>
+                  </View>
+                );
+              })()}
             </View>
           </View>
         ))}
@@ -388,60 +499,113 @@ export default function EbookComponent() {
         setRsModalIndex(null);
       }}
     >
-      {/* Recent */}
+      {/* 1. Most Recent */}
       {recentEbooks.length > 0 && (
-      <View className="mt-4">
-        <Text className="text-[#344054] text-[16px] font-rubik-semibold mb-4">
-            Recent
-        </Text>
-          {recentEbooks.map((ebook, index) => (
+        <>
+          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+            Most Recent
+          </Text>
+          {recentEbooks.slice(0, 1).map((ebook, index) => (
             <View key={`recent-${ebook._id}-${index}`}>
               {renderEbookCard(ebook, index, "recent")}
-          </View>
-        ))}
-      </View>
+            </View>
+          ))}
+        </>
       )}
 
-      {/* Previously Viewed */}
-      {previouslyViewed.length > 0 && 
-        renderMiniCards(
+      {/* 2. Previously Viewed */}
+      {renderMiniCards(
         "Previously Viewed",
         previouslyViewed,
         pvModalIndex,
         setPvModalIndex
-        )
-      }
-
-      {/* Explore More Ebook */}
-      {exploreMoreEbooks.length > 0 && 
-        renderMiniCards(
-          "Explore More Ebook",
-          exploreMoreEbooks,
-        rsModalIndex,
-        setRsModalIndex
-        )
-      }
-
-      {/* Trending */}
-      {trendingEbooks.length > 0 && (
-      <View className="mt-9 gap-12">
-          {trendingEbooks.map((ebook, index) => (
-            <View key={`trending-${ebook._id}-${index}`}>
-              {renderEbookCard(ebook, index, "trending")}
-          </View>
-        ))}
-      </View>
       )}
 
-      {/* Recommended for Explore More Ebook */}
-      {recommendedEbooks.length > 0 && 
+      {/* 3. Explore More Ebooks */}
+      {recentEbooks.length > 1 && (
+        <>
+          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
+            Explore More Ebooks
+          </Text>
+          <View className="gap-8">
+            {recentEbooks.slice(1, 5).map((ebook, index) => (
+              <View key={`explore-${ebook._id}-${index}`}>
+                {renderEbookCard(ebook, index, "explore")}
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* 4. Trending Now */}
+      {trendingEbooks.length > 0 ? (
         renderMiniCards(
-          "Recommended for Explore More Ebook",
+          `Trending Now • ${trendingEbooks.length} ebooks`,
+          trendingEbooks,
+          rsModalIndex,
+          setRsModalIndex
+        )
+      ) : (
+        <View className="mt-5 mb-4">
+          <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+            Trending Now
+          </Text>
+          <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
+            <Text className="text-[32px] mb-2">📈</Text>
+            <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
+              No trending ebooks yet
+            </Text>
+            <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
+              Keep engaging with content to see trending ebooks here
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* 5. Exploring More */}
+      {recentEbooks.length > 5 && (
+        <>
+          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+            Exploring More
+          </Text>
+          <View className="gap-8">
+            {recentEbooks.slice(5, 9).map((ebook, index) => (
+              <View key={`explore-more-${ebook._id}-${index}`}>
+                {renderEbookCard(ebook, index, "explore-more")}
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* 6. Recommended for You */}
+      {recommendedEbooks.length > 0 && (
+        renderMiniCards(
+          `Recommended for You • ${recommendedEbooks.length} ebooks`,
           recommendedEbooks,
           rsModalIndex,
           setRsModalIndex
         )
-      }
+      )}
+
+      {/* 7. More Ebooks */}
+      {recentEbooks.length > 9 && (
+        <>
+          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+            More Ebooks
+          </Text>
+          <View className="gap-8">
+            {recentEbooks.slice(9).map((ebook, index) => (
+              <View key={`more-${ebook._id}-${index}`}>
+                {renderEbookCard(ebook, index, "more")}
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* Bottom spacing to ensure last card footer is fully visible */}
+      <View className="h-20" />
     </ScrollView>
   );
 }

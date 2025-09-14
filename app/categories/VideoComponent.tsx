@@ -1,5 +1,4 @@
 import {
-    AntDesign,
     Feather,
     Ionicons,
     MaterialIcons
@@ -83,9 +82,29 @@ export default function VideoComponent() {
   const [videoVolume, setVideoVolume] = useState<number>(1.0); // 🔊 Add volume control
   const getVideoKey = (fileUrl: string): string => `video-${fileUrl}`;
   
+  // Helper functions
+  // Removed duplicate handleFavorite function - using the more comprehensive implementation below
+
+  // Removed duplicate handleComment function - using the more comprehensive implementation below
+
+  // Removed duplicate handleSave function - using the more comprehensive implementation below
+
+  const handleDownloadPress = async (item: VideoCard) => {
+    const downloadableItem = convertToDownloadableItem(item, 'video');
+    const result = await handleDownload(downloadableItem);
+    if (result.success) {
+      await loadDownloadedItems();
+    }
+  };
+  
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   const { loadDownloadedItems } = useDownloadStore();
+  
+  // Interaction functionality
+  const { showCommentModal } = useCommentModal();
+  const { comments } = useInteractionStore();
+  const { addToLibrary, removeFromLibrary, isInLibrary } = useLibraryStore();
   
   // 📱 Viewport detection for auto-play
   const { calculateVideoVisibility } = useVideoViewport();
@@ -108,7 +127,7 @@ export default function VideoComponent() {
   const [videoStats, setVideoStats] = useState<Record<string, Partial<VideoCard>>>({});
   const [previouslyViewedState, setPreviouslyViewedState] = useState<RecommendedItem[]>([]);
   
-  // 🎯 New favorite system state
+  // 🎯 New favorite system state - local state for favorites
   const [userFavorites, setUserFavorites] = useState<Record<string, boolean>>({});
   const [globalFavoriteCounts, setGlobalFavoriteCounts] = useState<Record<string, number>>({});
 
@@ -119,10 +138,6 @@ export default function VideoComponent() {
   // ✅ Global interaction stats (views, likes, shares, comments)
   const contentStats = useInteractionStore((s) => s.contentStats);
   const loadBatchContentStats = useInteractionStore((s) => s.loadBatchContentStats);
-  const { comments } = useInteractionStore();
-  
-  // ✅ Use global comment modal
-  const { showCommentModal } = useCommentModal();
   
   // ✅ Use global video store for cross-component video management
   const globalVideoStore = useGlobalVideoStore();
@@ -1061,38 +1076,6 @@ export default function VideoComponent() {
               </View>
             )}
             
-            <View className="flex-col absolute mt-[170px] right-4" style={{ zIndex: 20 }}>
-              <TouchableOpacity onPress={() => handleFavorite(modalKey, video)} className="flex-col justify-center items-center">
-                <MaterialIcons
-                  name={userFavorites[modalKey] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[modalKey] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[modalKey] || 0}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon 
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
-                  layout="vertical"
-                />
-              </View>
-              <TouchableOpacity onPress={() => handleSave(modalKey, video)} className="flex-col justify-center items-center mt-6">
-                <MaterialIcons
-                  name={isItemSaved ? "bookmark" : "bookmark-border"}
-                  size={30}
-                  color={isItemSaved ? "#FEA74E" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {(videoStats[modalKey] as any)?.totalSaves || video.saved || 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
             {/* Video title - show when paused */}
             {!playingVideos[modalKey] && (
               <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
@@ -1178,10 +1161,10 @@ export default function VideoComponent() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row mt-2">
-                <View className="flex-row items-center">
-                  <AntDesign name="eyeo" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+              <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
+                <View className="flex-row items-center mr-6">
+                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {(() => {
                       const displayViews = stats.views ?? video.views ?? 0;
                       console.log(`👁️ Displaying views for ${video.title}:`, {
@@ -1195,11 +1178,48 @@ export default function VideoComponent() {
                     })()}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleShare(modalKey, video)} className="flex-row items-center ml-4">
-                  <Feather name="send" size={24} color="#98A2B3" />
+                <TouchableOpacity onPress={() => handleFavorite(modalKey, video)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={userFavorites[modalKey] ? "favorite" : "favorite-border"}
+                    size={28}
+                    color={userFavorites[modalKey] ? "#D22A2A" : "#98A2B3"}
+                  />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.sheared ?? video.sheared ?? 0}
+                    {globalFavoriteCounts[modalKey] || 0}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center mr-6"
+                  onPress={() => handleComment(modalKey, video)}
+                >
+                  <CommentIcon 
+                    comments={formattedComments}
+                    size={28}
+                    color="#98A2B3"
+                    showCount={true}
+                    count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
+                    layout="horizontal"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleSave(modalKey, video)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={isItemSaved ? "bookmark" : "bookmark-border"}
+                    size={28}
+                    color={isItemSaved ? "#FEA74E" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {(videoStats[modalKey] as any)?.totalSaves || video.saved || 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center"
+                  onPress={() => handleDownloadPress(video)}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={28} 
+                    color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#98A2B3"} 
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1486,8 +1506,8 @@ export default function VideoComponent() {
                   </TouchableOpacity>
                 </View>
                 <View className="flex-row items-center">
-                <AntDesign name="eyeo" size={20} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
+                  <MaterialIcons name="visibility" size={16} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {views}
                   </Text>
                 </View>

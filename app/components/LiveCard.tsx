@@ -110,14 +110,7 @@ export default function LiveCardSlider() {
                     {getUserDisplayNameFromContent(video)}
                   </Text>
                   <View className="flex-row items-center mt-0.5">
-                    {/* assets/images/Vector1.png */}
-
-                    <Image
-                      source={require("../../assets/images/Vector1.png")}
-                      className="h-[10px] w-[10px]  ml-2"
-                      resizeMode="contain"
-                    />
-
+                    <MaterialIcons name="visibility" size={10} color="#98A2B3" />
                     <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                       {video.views}
                     </Text>

@@ -214,7 +214,7 @@ export default function UpdatedVideoCard({ video, index, isModalView = false }: 
               
               <View className="absolute top-12 right-4 bg-white shadow-lg rounded-lg p-3 z-20 w-40">
                 <TouchableOpacity className="py-2 flex-row items-center">
-                  <Ionicons name="eye-outline" size={20} color="#374151" />
+                  <MaterialIcons name="visibility" size={20} color="#374151" />
                   <Text className="text-gray-700 font-rubik ml-3">View Details</Text>
                 </TouchableOpacity>
                 

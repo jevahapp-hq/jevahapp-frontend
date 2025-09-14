@@ -173,11 +173,11 @@ export default function SermonComponent() {
     }
   };
 
-  const handleComment = (key: string, audio: any) => {
-    // Get the content ID for this audio
-    const contentId = audio._id || key;
+  const handleComment = (key: string, item: any) => {
+    // Get the content ID for this item
+    const contentId = item._id || key;
     
-    // Get existing comments for this audio
+    // Get existing comments for this item
     const currentComments = comments[contentId] || [];
     const formattedComments = currentComments.map((comment: any) => ({
       id: comment.id,
@@ -191,6 +191,27 @@ export default function SermonComponent() {
 
     // Show the global comment modal
     showCommentModal(formattedComments, contentId);
+  };
+
+  const handleDownloadPress = async (item: any) => {
+    console.log("🔄 Download button clicked for:", item.title);
+    try {
+      const contentType = item.contentType === 'music' ? 'audio' : 
+                        item.contentType === 'videos' ? 'video' : 
+                        item.contentType === 'books' ? 'ebook' : 
+                        item.contentType === 'live' ? 'live' : 'video';
+      
+      const downloadableItem = convertToDownloadableItem(item, contentType as any);
+      const result = await handleDownload(downloadableItem);
+      
+      if (result.success) {
+        console.log("✅ Download successful:", result.message);
+      } else {
+        console.log("ℹ️ Download info:", result.message);
+      }
+    } catch (error) {
+      console.error("❌ Download failed:", error);
+    }
   };
 
   const handleShare = async (key: string, item: any) => {
@@ -456,7 +477,7 @@ export default function SermonComponent() {
 
     return (
       <View className="flex flex-col">
-        <View className="w-full h-[393px] overflow-hidden relative">
+        <View className="w-full h-[400px] overflow-hidden relative">
           <Image
             source={thumbnailSource}
             className="w-full h-full absolute"
@@ -474,39 +495,6 @@ export default function SermonComponent() {
             </TouchableOpacity>
           </View>
 
-          {/* Right side actions */}
-          <View className="flex-col absolute mt-[170px] right-4">
-            <TouchableOpacity onPress={() => handleFavorite(key, audio)} className="flex-col justify-center items-center">
-              <MaterialIcons
-                name={userFavorites[key] ? "favorite" : "favorite-border"}
-                size={30}
-                color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-              />
-              <Text className="text-[10px] text-white font-rubik-semibold">
-                {globalFavoriteCounts[key] || 0}
-              </Text>
-            </TouchableOpacity>
-            <View className="flex-col justify-center items-center mt-6">
-              <CommentIcon 
-                comments={formattedComments}
-                size={30}
-                color="white"
-                showCount={true}
-                count={stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
-                layout="vertical"
-              />
-            </View>
-            <TouchableOpacity onPress={() => handleSave(key, audio)} className="flex-col justify-center items-center mt-6">
-              <MaterialIcons
-                name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                size={30}
-                color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
-              />
-              <Text className="text-[10px] text-white font-rubik-semibold">
-                {stats.saved === 1 ? (audio.saved ?? 0) + 1 : audio.saved ?? 0}
-              </Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Bottom Controls: progress and mute, styled similar to video */}
           <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
@@ -560,7 +548,7 @@ export default function SermonComponent() {
         
         {/* Footer under the card: avatar, time and share */}
         <View className="flex-row items-center justify-between mt-1 px-3 mb-4">
-          <View className="flex flex-row items-center">
+          <View className="flex flex-row items-center mr-6">
             <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
               <Image
                 source={getUserAvatarFromContent(audio)}
@@ -569,7 +557,7 @@ export default function SermonComponent() {
               />
             </View>
             <View className="ml-3">
-              <View className="flex-row items-center">
+              <View className="flex-row items-center mr-6">
                 <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
                   {getUserDisplayNameFromContent(audio)}
                 </Text>
@@ -580,18 +568,55 @@ export default function SermonComponent() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row mt-2">
-                <View className="flex-row items-center">
-                  <AntDesign name="eyeo" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+              <View className="flex-row mt-2 items-center justify-between">
+                <View className="flex-row items-center mr-6">
+                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {stats.views ?? audio.views ?? 0}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleShare(key, audio)} className="flex-row items-center ml-4">
-                  <Feather name="send" size={24} color="#98A2B3" />
+                <TouchableOpacity onPress={() => handleFavorite(key, audio)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    size={28}
+                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                  />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.sheared ?? audio.sheared ?? 0}
+                    {globalFavoriteCounts[key] || 0}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center mr-6"
+                  onPress={() => handleComment(key, audio)}
+                >
+                  <CommentIcon 
+                    comments={formattedComments}
+                    size={28}
+                    color="#98A2B3"
+                    showCount={true}
+                    count={stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
+                    layout="horizontal"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleSave(key, audio)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                    size={28}
+                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {stats.saved === 1 ? (audio.saved ?? 0) + 1 : audio.saved ?? 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center"
+                  onPress={() => handleDownloadPress(audio)}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(audio._id || audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={28} 
+                    color={checkIfDownloaded(audio._id || audio.fileUrl) ? "#256E63" : "#98A2B3"} 
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -613,7 +638,7 @@ export default function SermonComponent() {
             <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
               <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                 <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                <Ionicons name="eye-outline" size={22} color="#1D2939" />
+                <MaterialIcons name="visibility" size={22} color="#1D2939" />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleShare(key, audio)}
@@ -675,15 +700,62 @@ export default function SermonComponent() {
       ? String(video.fileUrl).trim()
       : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
+    // Get existing comments for this video
+    const contentId = video._id || modalKey;
+    const currentComments = comments[contentId] || [];
+    
+    // If no comments exist, add some sample comments for testing
+    const sampleComments = [
+      {
+        id: "1",
+        userName: "Joseph Eluwa",
+        avatar: "",
+        timestamp: "3HRS AGO",
+        comment: "Wow!! My Faith has just been renewed.",
+        likes: 193,
+        isLiked: false,
+      },
+      {
+        id: "2",
+        userName: "Liz Elizabeth",
+        avatar: "",
+        timestamp: "24HRS",
+        comment: "This sermon really touched my heart. God is working!",
+        likes: 45,
+        isLiked: false,
+      },
+      {
+        id: "3",
+        userName: "Chris Evans",
+        avatar: "",
+        timestamp: "3 DAYS AGO",
+        comment: "Amazing message! Thank you for sharing this.",
+        likes: 23,
+        isLiked: false,
+      },
+    ];
+    
+    const formattedComments = currentComments.length > 0 
+      ? currentComments.map((comment: any) => ({
+          id: comment.id,
+          userName: comment.username || 'Anonymous',
+          avatar: comment.userAvatar || '',
+          timestamp: comment.timestamp,
+          comment: comment.comment,
+          likes: comment.likes || 0,
+          isLiked: comment.isLiked || false,
+        }))
+      : sampleComments;
+
     return (
       <View className="flex flex-col">
         <TouchableOpacity
           key={modalKey}
           onPress={video.onPress}
-          className="mr-4 w-full h-[436px]"
+          className="mr-6 w-full h-[436px]"
           activeOpacity={0.9}
         >
-          <View className="w-full h-[393px] overflow-hidden relative">
+          <View className="w-full h-[400px] overflow-hidden relative">
             <Video
               ref={(ref) => {
                 if (ref) {
@@ -722,35 +794,6 @@ export default function SermonComponent() {
               }}
             />
 
-            {/* Right side interaction buttons */}
-            <View className="flex-col absolute mt-[170px] right-4">
-              <TouchableOpacity onPress={() => handleFavorite(key, video)} className="flex-col justify-center items-center">
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || 0}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-col justify-center items-center mt-6">
-                <Ionicons name="chatbubble-sharp" size={30} color="white" />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleSave(key, video)} className="flex-col justify-center items-center mt-6">
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={30}
-                  color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.saved === 1 ? (video.saved ?? 0) + 1 : video.saved ?? 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
 
             {/* Centered Play/Pause Button */}
             <View className="absolute inset-0 justify-center items-center">
@@ -805,7 +848,7 @@ export default function SermonComponent() {
 
           {/* Footer */}
           <View className="flex-row items-center justify-between mt-1 px-3 mb-4">
-            <View className="flex flex-row items-center">
+            <View className="flex flex-row items-center mr-6">
               <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
                 <Image
                   source={getUserAvatarFromContent(video)}
@@ -814,7 +857,7 @@ export default function SermonComponent() {
                 />
               </View>
               <View className="ml-3">
-                <View className="flex-row items-center">
+                <View className="flex-row items-center mr-6">
                   <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
                     {getUserDisplayNameFromContent(video)}
                   </Text>
@@ -825,18 +868,55 @@ export default function SermonComponent() {
                     </Text>
                   </View>
                 </View>
-                <View className="flex-row mt-2">
-                  <View className="flex-row items-center">
-                    <AntDesign name="eyeo" size={24} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+                <View className="flex-row mt-2 items-center justify-between">
+                  <View className="flex-row items-center mr-6">
+                    <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                       {stats.views ?? video.views ?? 0}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleShare(key, video)} className="flex-row items-center ml-4">
-                    <Feather name="send" size={24} color="#98A2B3" />
+                  <TouchableOpacity onPress={() => handleFavorite(key, video)} className="flex-row items-center mr-6">
+                    <MaterialIcons
+                      name={userFavorites[key] ? "favorite" : "favorite-border"}
+                      size={28}
+                      color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                    />
                     <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                      {stats.sheared ?? video.sheared ?? 0}
+                      {globalFavoriteCounts[key] || 0}
                     </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="flex-row items-center mr-6"
+                    onPress={() => handleComment(key, video)}
+                  >
+                    <CommentIcon 
+                      comments={formattedComments}
+                      size={28}
+                      color="#98A2B3"
+                      showCount={true}
+                      count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
+                      layout="horizontal"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleSave(key, video)} className="flex-row items-center mr-6">
+                    <MaterialIcons
+                      name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                      size={28}
+                      color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                    />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                      {stats.saved === 1 ? (video.saved ?? 0) + 1 : video.saved ?? 0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="flex-row items-center mr-6"
+                    onPress={() => handleDownloadPress(video)}
+                  >
+                    <Ionicons 
+                      name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                      size={28} 
+                      color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#98A2B3"} 
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -858,7 +938,7 @@ export default function SermonComponent() {
               <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[170px] h-[140]">
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                   <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                  <Ionicons name="eye-outline" size={22} color="#1D2939" />
+                  <MaterialIcons name="visibility" size={22} color="#1D2939" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleShare(modalKey, video)}
@@ -901,7 +981,7 @@ export default function SermonComponent() {
         {items.map((item, index) => (
           <View
             key={`${title}-${item.title}-${index}`}
-            className="mr-4 w-[154px] flex-col items-center"
+            className="mr-6 w-[154px] flex-col items-center"
           >
             <TouchableOpacity
               onPress={item.onPress}
@@ -937,7 +1017,7 @@ export default function SermonComponent() {
                     <Text className="text-[#1D2939] font-rubik ml-2">
                       View Details
                     </Text>
-                    <Ionicons name="eye-outline" size={16} color="##3A3E50" />
+                    <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                     <Text className="text-sm text-[#1D2939] font-rubik ml-2">
@@ -998,8 +1078,8 @@ export default function SermonComponent() {
                   />
                 </TouchableOpacity>
               </View>
-              <View className="flex-row items-center">
-                <Feather name="eye" size={24} color="#98A2B3" />
+              <View className="flex-row items-center mr-6">
+                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
                   {item.views}
                 </Text>

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import CommentReplyModal from './components/CommentReplyModal';
+import CommentsModalWrapper from './components/CommentsModalWrapper';
 import ErrorBoundary from './components/ErrorBoundary';
 import { CommentModalProvider } from './context/CommentModalContext';
 import { useDownloadStore } from './store/useDownloadStore';
@@ -164,7 +164,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <CommentModalProvider>
               <Slot />
-              <CommentReplyModal />
+              <CommentsModalWrapper />
             </CommentModalProvider>
           </GestureHandlerRootView>
         </ClerkProvider>

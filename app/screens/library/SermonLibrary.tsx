@@ -150,7 +150,7 @@ export default function SermonLibrary () {
               onPress={() => setMenuOpenId(null)}
             >
               <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-              <Ionicons name="eye-outline" size={20} color="#1D2939" />
+              <MaterialIcons name="visibility" size={20} color="#1D2939" />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between"
               onPress={() => handleShare(item)}

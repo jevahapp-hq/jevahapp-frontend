@@ -1,22 +1,21 @@
-import { getResponsiveSpacing } from "@/utils/responsive";
 import { AntDesign, Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    BackHandler,
-    Dimensions,
-    Image,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    PanResponder,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  ActivityIndicator,
+  BackHandler,
+  Dimensions,
+  Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  PanResponder,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
 import { useCommentModal } from "../context/CommentModalContext";
@@ -1023,38 +1022,6 @@ function AllContent() {
                 }
               }}
             />
-            <View className="flex-col absolute mt-[170px] ml-[360px]">
-              <TouchableOpacity onPress={() => handleFavorite(key, video)} className="flex-col justify-center items-center">
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || 0}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon 
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
-                  layout="vertical"
-                />
-              </View>
-              <TouchableOpacity onPress={() => handleSave(key, video)} className="flex-col justify-center items-center mt-6">
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={30}
-                  color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.saved === 1 ? (video.saved ?? 0) + 1 : video.saved ?? 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
             {/* ✅ Centered Play/Pause Button - always visible */}
             <View className="absolute inset-0 justify-center items-center">
               <TouchableOpacity onPress={() => handleVideoTap(modalKey, video, index)}>
@@ -1152,18 +1119,55 @@ function AllContent() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row mt-2">
-                <View className="flex-row items-center">
-                  <AntDesign name="eyeo" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+              <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
+                <View className="flex-row items-center mr-6">
+                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {stats.views ?? video.views ?? 0}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleShare(key, video)} className="flex-row items-center ml-4">
-                  <Feather name="send" size={24} color="#98A2B3" />
+                <TouchableOpacity onPress={() => handleFavorite(key, video)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    size={28}
+                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                  />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.sheared ?? video.sheared ?? 0}
+                    {globalFavoriteCounts[key] || 0}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center mr-6"
+                  onPress={() => handleComment(key, video)}
+                >
+                  <CommentIcon 
+                    comments={formattedComments}
+                    size={28}
+                    color="#98A2B3"
+                    showCount={true}
+                    count={stats.comment === 1 ? (video.comment ?? 0) + 1 : video.comment ?? 0}
+                    layout="horizontal"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleSave(key, video)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                    size={28}
+                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {stats.saved === 1 ? (video.saved ?? 0) + 1 : video.saved ?? 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center"
+                  onPress={() => handleDownloadPress(video)}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={28} 
+                    color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#98A2B3"} 
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1339,43 +1343,6 @@ function AllContent() {
               </TouchableOpacity>
             </View>
 
-            {/* Right side actions */}
-            <View style={{
-              position: 'absolute',
-              top: getResponsiveSpacing(170, 180, 190, 200),
-              right: getResponsiveSpacing(16, 20, 24, 32),
-            }} className="flex-col">
-              <TouchableOpacity onPress={() => handleFavorite(key, audio)} className="flex-col justify-center items-center">
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || 0}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon 
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
-                  layout="vertical"
-                />
-              </View>
-              <TouchableOpacity onPress={() => handleSave(key, audio)} className="flex-col justify-center items-center mt-6">
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={30}
-                  color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.saved === 1 ? (audio.saved ?? 0) + 1 : audio.saved ?? 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
 
             {/* Content Type Icon - Top Left */}
             <View className="absolute top-4 left-4">
@@ -1462,18 +1429,55 @@ function AllContent() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row mt-2">
-                <View className="flex-row items-center">
-                  <AntDesign name="eyeo" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+              <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
+                <View className="flex-row items-center mr-6">
+                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {stats.views ?? audio.views ?? 0}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleShare(key, audio)} className="flex-row items-center ml-4">
-                  <Feather name="send" size={24} color="#98A2B3" />
+                <TouchableOpacity onPress={() => handleFavorite(key, audio)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    size={28}
+                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                  />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.sheared ?? audio.sheared ?? 0}
+                    {globalFavoriteCounts[key] || 0}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center mr-6"
+                  onPress={() => handleComment(key, audio)}
+                >
+                  <CommentIcon 
+                    comments={formattedComments}
+                    size={28}
+                    color="#98A2B3"
+                    showCount={true}
+                    count={stats.comment === 1 ? (audio.comment ?? 0) + 1 : audio.comment ?? 0}
+                    layout="horizontal"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleSave(key, audio)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                    size={28}
+                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {stats.saved === 1 ? (audio.saved ?? 0) + 1 : audio.saved ?? 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center"
+                  onPress={() => handleDownloadPress(audio)}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(audio._id || audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={28} 
+                    color={checkIfDownloaded(audio._id || audio.fileUrl) ? "#256E63" : "#98A2B3"} 
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1659,39 +1663,6 @@ function AllContent() {
               </View>
             </View>
 
-            {/* Right side icons - matching video layout */}
-            <View className="flex-col absolute mt-[170px] ml-[360px]">
-              <TouchableOpacity onPress={() => handleFavorite(key, ebook)} className="flex-col justify-center items-center">
-                <MaterialIcons
-                  name={userFavorites[key] ? "favorite" : "favorite-border"}
-                  size={30}
-                  color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[key] || 0}
-                </Text>
-              </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
-                <CommentIcon 
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={stats.comment === 1 ? (ebook.comment ?? 0) + 1 : ebook.comment ?? 0}
-                  layout="vertical"
-                />
-              </View>
-              <TouchableOpacity onPress={() => handleSave(key, ebook)} className="flex-col justify-center items-center mt-6">
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={30}
-                  color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {stats.saved === 1 ? (ebook.saved ?? 0) + 1 : ebook.saved ?? 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
 
             {/* Content Type Icon - Top Left */}
             <View className="absolute top-4 left-4">
@@ -1735,18 +1706,55 @@ function AllContent() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row mt-2">
-                <View className="flex-row items-center">
-                  <AntDesign name="eyeo" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+              <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
+                <View className="flex-row items-center mr-6">
+                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {stats.views ?? ebook.views ?? 0}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleShare(key, ebook)} className="flex-row items-center ml-4">
-                  <Feather name="send" size={24} color="#98A2B3" />
+                <TouchableOpacity onPress={() => handleFavorite(key, ebook)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    size={28}
+                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                  />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.sheared ?? ebook.sheared ?? 0}
+                    {globalFavoriteCounts[key] || 0}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center mr-6"
+                  onPress={() => handleComment(key, ebook)}
+                >
+                  <CommentIcon 
+                    comments={formattedComments}
+                    size={28}
+                    color="#98A2B3"
+                    showCount={true}
+                    count={stats.comment === 1 ? (ebook.comment ?? 0) + 1 : ebook.comment ?? 0}
+                    layout="horizontal"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleSave(key, ebook)} className="flex-row items-center mr-6">
+                  <MaterialIcons
+                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                    size={28}
+                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                  />
+                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    {stats.saved === 1 ? (ebook.saved ?? 0) + 1 : ebook.saved ?? 0}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-row items-center"
+                  onPress={() => handleDownloadPress(ebook)}
+                >
+                  <Ionicons 
+                    name={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    size={28} 
+                    color={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "#256E63" : "#98A2B3"} 
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1830,13 +1838,7 @@ function AllContent() {
                     handleVideoTap(`mini-${item._id || index}`, item, index);
                   } else if (item.contentType === "music") {
                     const id = getAudioKey(item.fileUrl);
-                    playAudio(item.fileUrl, id, {
-                      title: item.title,
-                      subTitle: item.speaker || item.uploadedBy,
-                      imageUrl: item.imageUrl,
-                      audioUrl: item.fileUrl,
-                      views: item.viewCount || 0,
-                    });
+                    playAudio(item.fileUrl, id);
                   } else if (item.contentType === "sermon") {
                     // Handle sermon based on whether it's video or audio
                     const isVideo = item.fileUrl.includes(".mp4") || item.fileUrl.includes(".mov");
@@ -1844,13 +1846,7 @@ function AllContent() {
                       handleVideoTap(`mini-${item._id || index}`, item, index);
                     } else {
                       const id = getAudioKey(item.fileUrl);
-                      playAudio(item.fileUrl, id, {
-                        title: item.title,
-                        subTitle: item.speaker || item.uploadedBy,
-                        imageUrl: item.imageUrl,
-                        audioUrl: item.fileUrl,
-                        views: item.viewCount || 0,
-                      });
+                      playAudio(item.fileUrl, id);
                     }
                   } else {
                     console.log("Open mini card:", item.title);
@@ -2031,7 +2027,7 @@ function AllContent() {
                   </TouchableOpacity>
                 </View>
                 <View className="flex-row items-center mt-1">
-                  <AntDesign name="eyeo" size={16} color="#98A2B3" />
+                  <AntDesign name="eye" size={16} color="#98A2B3" />
                   <Text className="text-[10px] text-[#98A2B3] ml-2 font-rubik">
                     {stats.views ?? item.views ?? 0} views
                   </Text>
@@ -2052,6 +2048,14 @@ function AllContent() {
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   const { loadDownloadedItems } = useDownloadStore();
+
+  const handleDownloadPress = async (item: MediaItem) => {
+    const downloadableItem = convertToDownloadableItem(item, item.contentType as 'video' | 'audio' | 'ebook');
+    const result = await handleDownload(downloadableItem);
+    if (result.success) {
+      await loadDownloadedItems();
+    }
+  };
 
   // Close all open menus/popovers across the component
   const closeAllMenus = () => {
