@@ -5,6 +5,7 @@ import {
     MaterialIcons
 } from "@expo/vector-icons";
 import { Audio } from "expo-av";
+import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Image,
@@ -855,6 +856,31 @@ useEffect(() => {
     // Use stable content id for interactions
     const interactionContentId = Audio.contentId || modalKey;
 
+    // Navigate to detail screen
+    const navigateToDetail = () => {
+      const detailParams = {
+        title: Audio.title,
+        speaker: Audio.speaker,
+        description: Audio.description || 'No description available',
+        audioUrl: audioUri,
+        imageUrl: Audio?.thumbnailUrl || (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? Audio.imageUrl : Audio.imageUrl.uri) : ''),
+        thumbnailUrl: Audio?.thumbnailUrl,
+        speakerAvatar: Audio?.speakerAvatar ? (typeof Audio.speakerAvatar === "string" ? Audio.speakerAvatar : Audio.speakerAvatar.uri) : '',
+        views: (stats.views ?? Audio.views ?? 0).toString(),
+        favorites: (stats.favorite ?? Audio.favorite ?? 0).toString(),
+        shares: (stats.sheared ?? Audio.sheared ?? 0).toString(),
+        comments: (Audio.comment ?? 0).toString(),
+        saved: (stats.saved ?? Audio.saved ?? 0).toString(),
+        timeAgo: Audio.timeAgo,
+        contentId: interactionContentId,
+      };
+      
+      router.push({
+        pathname: '/categories/MusicDetailScreen',
+        params: detailParams,
+      });
+    };
+
     const handleSeek = async (newProgress: number) => {
       const pos = newProgress * currentDuration;
       const currentSound = soundMap[modalKey];
@@ -884,7 +910,7 @@ useEffect(() => {
       <View className="flex flex-col">
         <TouchableOpacity
           key={modalKey}
-          onPress={Audio.onPress}
+          onPress={navigateToDetail}
           className="mr-4 w-full h-[436px]"
           activeOpacity={0.9}
         >
@@ -1000,8 +1026,37 @@ useEffect(() => {
             </TouchableWithoutFeedback>
             
             {/* ✅ Modal content positioned over the video area */}
-            <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
-              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
+              <TouchableOpacity 
+                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
+                onPress={() => {
+                  setModalVisible(null); // Close modal first
+                  
+                  // Navigate to detail screen with same logic
+                  const detailParams = {
+                    title: Audio.title,
+                    speaker: Audio.speaker,
+                    description: Audio.description || 'No description available',
+                    audioUrl: audioUri,
+                    imageUrl: Audio?.thumbnailUrl || (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? Audio.imageUrl : Audio.imageUrl.uri) : ''),
+                    thumbnailUrl: Audio?.thumbnailUrl,
+                    speakerAvatar: Audio?.speakerAvatar ? (typeof Audio.speakerAvatar === "string" ? Audio.speakerAvatar : Audio.speakerAvatar.uri) : '',
+                    views: (stats.views ?? Audio.views ?? 0).toString(),
+                    favorites: (stats.favorite ?? Audio.favorite ?? 0).toString(),
+                    shares: (stats.sheared ?? Audio.sheared ?? 0).toString(),
+                    comments: (Audio.comment ?? 0).toString(),
+                    saved: (stats.saved ?? Audio.saved ?? 0).toString(),
+                    timeAgo: Audio.timeAgo,
+                    contentId: interactionContentId,
+                  };
+                  
+                  router.push({
+                    pathname: '/categories/MusicDetailScreen',
+                    params: detailParams,
+                  });
+                }}
+              >
                 <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
                 <MaterialIcons name="visibility" size={22} color="#1D2939" />
               </TouchableOpacity>
@@ -1039,7 +1094,8 @@ useEffect(() => {
                   color={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "#256E63" : "#090E24"} 
                 />
               </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableWithoutFeedback>
           </>
         )}
           </View>
@@ -1162,18 +1218,25 @@ useEffect(() => {
           >
             <TouchableOpacity
               onPress={() => {
-                const id = getAudioKey(item.audioUrl);
-                if (item.audioUrl) {
-                  playAudio(item.audioUrl, id, {
-                    title: item.title,
-                    subTitle: item.subTitle,
-                    imageUrl: item.imageUrl,
-                    audioUrl: item.audioUrl,
-                    views: item.views,
-                  });
-                } else if (item.onPress) {
-                  item.onPress();
-                }
+                const detailParams = {
+                  title: item.title,
+                  speaker: item.subTitle,
+                  description: item.description || 'No description available',
+                  audioUrl: item.audioUrl,
+                  imageUrl: typeof item.imageUrl === "string" ? item.imageUrl : item.imageUrl.uri,
+                  views: item.views.toString(),
+                  favorites: '1200',
+                  shares: '1200',
+                  comments: '1200',
+                  saved: '1200',
+                  timeAgo: '3HRS AGO',
+                  contentId: getAudioKey(item.audioUrl),
+                };
+                
+                router.push({
+                  pathname: '/categories/MusicDetailScreen',
+                  params: detailParams,
+                });
               }}
               className="w-full h-[232px] rounded-2xl overflow-hidden relative"
               activeOpacity={0.9}
