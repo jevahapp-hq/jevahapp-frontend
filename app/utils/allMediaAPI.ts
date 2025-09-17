@@ -352,33 +352,105 @@ class AllMediaAPI {
     console.log("🌐 Base URL:", this.baseURL);
 
     try {
-      // Test 1: Default content endpoint
-      console.log("🔍 Testing /api/media/default...");
-      const response1 = await fetch(
-        `${this.baseURL}/api/media/default?page=1&limit=1`
-      );
-      console.log("📡 Default content status:", response1.status);
+      const endpoints = [
+        "/api/media/public/all-content",
+        "/api/media/all-content", 
+        "/api/media/default",
+        "/api/media"
+      ];
 
-      if (response1.ok) {
-        const data1 = await response1.json();
-        console.log("✅ Default content response:", data1);
-      } else {
-        const error1 = await response1.text();
-        console.log("❌ Default content error:", error1);
+      for (const endpoint of endpoints) {
+        console.log(`🔍 Testing ${endpoint}...`);
+        const response = await fetch(`${this.baseURL}${endpoint}?page=1&limit=1`);
+        console.log(`📡 ${endpoint} status:`, response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ ${endpoint} response:`, data);
+        } else {
+          const error = await response.text();
+          console.log(`❌ ${endpoint} error:`, error);
+        }
       }
-
-      // Test 2: Regular media endpoint
-      console.log("🔍 Testing /api/media...");
-      const response2 = await fetch(`${this.baseURL}/api/media?page=1&limit=1`);
-      console.log("📡 Regular media status:", response2.status);
-
-      // Test 3: Try getAllMedia method
-      console.log("🔍 Testing getAllMedia method...");
-      const response3 = await this.getAllMedia({ page: 1, limit: 1 });
-      console.log("📡 getAllMedia success:", response3.success);
-      console.log("📡 getAllMedia media count:", response3.media?.length || 0);
     } catch (error) {
       console.error("❌ Endpoint test failed:", error);
+    }
+  }
+
+  // ===== NEW TIKTOK-STYLE ENDPOINTS =====
+
+  // Get all content (public - no authentication required)
+  async getAllContentPublic(): Promise<{
+    success: boolean;
+    media?: any[];
+    total?: number;
+    error?: string;
+  }> {
+    try {
+      console.log("🌐 Fetching public all content...");
+      const response = await fetch(`${this.baseURL}/api/media/public/all-content`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ Public all content response:", data);
+      
+      return {
+        success: true,
+        media: data.media || data.data?.media || [],
+        total: data.total || data.data?.total || 0,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching public all content:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        media: [],
+        total: 0,
+      };
+    }
+  }
+
+  // Get all content with authentication (for logged-in users)
+  async getAllContentWithAuth(): Promise<{
+    success: boolean;
+    media?: any[];
+    total?: number;
+    error?: string;
+  }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      console.log("🌐 Fetching authenticated all content...");
+      
+      const response = await fetch(`${this.baseURL}/api/media/all-content`, {
+        method: "GET",
+        headers,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ Authenticated all content response:", data);
+      
+      return {
+        success: true,
+        media: data.media || data.data?.media || [],
+        total: data.total || data.data?.total || 0,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching authenticated all content:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        media: [],
+        total: 0,
+      };
     }
   }
 

@@ -42,9 +42,12 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   addToLibrary: async (item: LibraryItem) => {
     const { savedItems } = get();
+    const currentSavedItems = Array.isArray(savedItems) ? savedItems : [];
 
     // Check if item already exists
-    const existingItem = savedItems.find((saved) => saved.id === item.id);
+    const existingItem = currentSavedItems.find(
+      (saved) => saved.id === item.id
+    );
     if (existingItem) {
       console.log(`📚 Item already in library: ${item.title}`);
       return;
@@ -56,7 +59,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
       savedAt: new Date().toISOString(),
     };
 
-    const updatedItems = [itemWithSaveTime, ...savedItems];
+    const updatedItems = [itemWithSaveTime, ...currentSavedItems];
 
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
@@ -70,7 +73,8 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   removeFromLibrary: async (itemId: string) => {
     const { savedItems } = get();
-    const updatedItems = savedItems.filter((item) => item.id !== itemId);
+    const currentSavedItems = Array.isArray(savedItems) ? savedItems : [];
+    const updatedItems = currentSavedItems.filter((item) => item.id !== itemId);
 
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
@@ -84,7 +88,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   isItemSaved: (itemId: string) => {
     const { savedItems } = get();
-    return savedItems.some((item) => item.id === itemId);
+    return (
+      Array.isArray(savedItems) && savedItems.some((item) => item.id === itemId)
+    );
   },
 
   loadSavedItems: async () => {
@@ -106,14 +112,16 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   getSavedItemsByType: (contentType: string) => {
     const { savedItems } = get();
-    return savedItems.filter(
-      (item) => item.contentType.toLowerCase() === contentType.toLowerCase()
-    );
+    return Array.isArray(savedItems)
+      ? savedItems.filter(
+          (item) => item.contentType.toLowerCase() === contentType.toLowerCase()
+        )
+      : [];
   },
 
   getAllSavedItems: () => {
     const { savedItems } = get();
-    return savedItems;
+    return Array.isArray(savedItems) ? savedItems : [];
   },
 }));
 

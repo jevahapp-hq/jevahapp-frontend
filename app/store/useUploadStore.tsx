@@ -147,6 +147,14 @@ interface MediaState {
   }) => Promise<void>;
   loadMoreDefaultContent: () => Promise<void>;
   refreshDefaultContent: () => Promise<void>;
+
+  // TikTok-style all content state and methods
+  allContent: any[];
+  allContentLoading: boolean;
+  allContentError: string | null;
+  allContentTotal: number;
+  fetchAllContent: (useAuth?: boolean) => Promise<void>;
+  refreshAllContent: () => Promise<void>;
 }
 
 export const useMediaStore = create<MediaState>((set, get) => ({
@@ -163,6 +171,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     total: 0,
     pages: 0,
   },
+
+  // TikTok-style all content state
+  allContent: [],
+  allContentLoading: false,
+  allContentError: null,
+  allContentTotal: 0,
 
   // 🎬 Load persisted media on app startup and refresh user data
   loadPersistedMedia: async () => {
@@ -494,6 +508,58 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
   refreshDefaultContent: async () => {
     await get().fetchDefaultContent({ page: 1, limit: 10 });
+  },
+
+  // TikTok-style all content methods
+  fetchAllContent: async (useAuth = false) => {
+    set({ allContentLoading: true, allContentError: null });
+
+    try {
+      console.log("🚀 Store: Fetching all content (useAuth:", useAuth, ")");
+
+      let response;
+      if (useAuth) {
+        response = await allMediaAPI.getAllContentWithAuth();
+      } else {
+        response = await allMediaAPI.getAllContentPublic();
+      }
+
+      if (response.success) {
+        console.log(
+          "✅ Store: Successfully fetched all content:",
+          response.media?.length || 0,
+          "items"
+        );
+        set({
+          allContent: response.media || [],
+          allContentTotal: response.total || 0,
+          allContentLoading: false,
+        });
+      } else {
+        console.error("❌ Store: Failed to fetch all content:", response.error);
+        set({
+          allContentError: response.error || "Failed to fetch all content",
+          allContentLoading: false,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Store: Exception while fetching all content:", error);
+      set({
+        allContentError:
+          error instanceof Error ? error.message : "Unknown error",
+        allContentLoading: false,
+      });
+    }
+  },
+
+  refreshAllContent: async () => {
+    // Try authenticated first, fallback to public
+    try {
+      await get().fetchAllContent(true);
+    } catch (error) {
+      console.log("🔄 Auth failed, trying public endpoint...");
+      await get().fetchAllContent(false);
+    }
   },
 }));
 

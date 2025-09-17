@@ -68,17 +68,38 @@ export default function Welcome() {
   const [loading, setLoading] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
 
-  const { isSignedIn, isLoaded: authLoaded, signOut, getToken } = useAuth();
-  const { isLoaded: userLoaded, user } = useUser();
-  const { startOAuthFlow: startGoogleAuth } = useOAuth({
-    strategy: "oauth_google",
-  });
-  const { startOAuthFlow: startFacebookAuth } = useOAuth({
-    strategy: "oauth_facebook",
-  });
-  const { startOAuthFlow: startAppleAuth } = useOAuth({
-    strategy: "oauth_apple",
-  });
+  // Safely get Clerk hooks with error handling
+  let isSignedIn = false;
+  let authLoaded = false;
+  let signOut: any = () => {};
+  let getToken: any = () => {};
+  let userLoaded = false;
+  let user: any = null;
+  let startGoogleAuth: any = () => {};
+  // Facebook OAuth temporarily disabled
+  // let startFacebookAuth: any = () => {};
+  let startAppleAuth: any = () => {};
+
+  try {
+    const auth = useAuth();
+    const userData = useUser();
+    const googleOAuth = useOAuth({ strategy: "oauth_google" });
+    // Facebook OAuth temporarily disabled
+    // const facebookOAuth = useOAuth({ strategy: "oauth_facebook" });
+    const appleOAuth = useOAuth({ strategy: "oauth_apple" });
+
+    isSignedIn = auth.isSignedIn || false;
+    authLoaded = auth.isLoaded || false;
+    signOut = auth.signOut;
+    getToken = auth.getToken;
+    userLoaded = userData.isLoaded || false;
+    user = userData.user;
+    startGoogleAuth = googleOAuth.startOAuthFlow;
+    startFacebookAuth = facebookOAuth.startOAuthFlow;
+    startAppleAuth = appleOAuth.startOAuthFlow;
+  } catch (error) {
+    console.warn("Clerk hooks not available:", error);
+  }
 
   useEffect(() => {
     if (showIntro) return;

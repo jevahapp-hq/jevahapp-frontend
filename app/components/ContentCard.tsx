@@ -21,6 +21,7 @@ import {
 import { useCommentModal } from "../context/CommentModalContext";
 import { useSafeLibraryStore } from "../hooks/useSafeLibraryStore";
 import SocketManager from "../services/SocketManager";
+import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import CommentIcon from "./CommentIcon";
@@ -193,6 +194,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
   // Store hooks
   const globalVideoStore = useGlobalVideoStore();
+  const globalMediaStore = useGlobalMediaStore();
   const { comments } = useInteractionStore();
   const { showCommentModal } = useCommentModal();
 
@@ -429,7 +431,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return "Jevah HQ";
   };
 
-  // Audio playback functions
+  // Audio playback functions - using global media store
   const playAudio = async () => {
     const audioUrl = mappedContent.mediaUrl;
     if (!audioUrl) return;
@@ -445,12 +447,18 @@ const ContentCard: React.FC<ContentCardProps> = ({
           if (status.isPlaying) {
             await sound.pauseAsync();
             setIsPlaying(false);
+            globalMediaStore.pauseAudio(modalKey);
           } else {
+            // Pause all other media and play this audio
+            globalMediaStore.playMediaGlobally(modalKey, "audio");
             await sound.playAsync();
             setIsPlaying(true);
           }
         }
       } else {
+        // Pause all other media before playing new audio
+        globalMediaStore.playMediaGlobally(modalKey, "audio");
+
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: audioUrl },
           {
@@ -468,10 +476,20 @@ const ContentCard: React.FC<ContentCardProps> = ({
               setAudioProgress(
                 (status.positionMillis || 0) / status.durationMillis
               );
+              globalMediaStore.setAudioDuration(
+                modalKey,
+                status.durationMillis
+              );
+            }
+            if (status.positionMillis) {
+              const progress =
+                status.positionMillis / (status.durationMillis || 1);
+              globalMediaStore.setAudioProgress(modalKey, progress);
             }
             if (status.didJustFinish) {
               setIsPlaying(false);
               setAudioProgress(0);
+              globalMediaStore.pauseAudio(modalKey);
             }
           }
         });
@@ -483,25 +501,22 @@ const ContentCard: React.FC<ContentCardProps> = ({
     }
   };
 
-  // Use the same simple toggle function as library
+  // Video toggle function using global media store
   const toggleVideoPlay = () => {
     if (content.contentType === "video") {
-      // Pause all other videos first
-      globalVideoStore.pauseAllVideos();
+      // Use global media store to ensure only one media plays at a time
+      globalMediaStore.playMediaGlobally(modalKey, "video");
 
-      // Toggle current video
+      // Toggle current video state
       const newPlayingState = !isVideoPlaying;
       setIsVideoPlaying(newPlayingState);
       setShowVideoOverlay(!newPlayingState);
 
       if (newPlayingState) {
-        globalVideoStore.playVideo(modalKey);
         // Increment view count when user plays video
         if (!viewCounted) {
           incrementView();
         }
-      } else {
-        globalVideoStore.pauseVideo(modalKey);
       }
     }
   };
@@ -829,15 +844,15 @@ const ContentCard: React.FC<ContentCardProps> = ({
                   e
                 );
                 console.warn("Error details:", {
-                  error: e.nativeEvent?.error,
-                  code: e.nativeEvent?.code,
-                  message: e.nativeEvent?.message,
+                  error: (e as any)?.nativeEvent?.error,
+                  code: (e as any)?.nativeEvent?.code,
+                  message: (e as any)?.nativeEvent?.message,
                 });
                 setIsVideoPlaying(false);
                 setShowVideoOverlay(true);
                 setVideoLoadError(
                   `Failed to load video: ${
-                    e.nativeEvent?.message || "Unknown error"
+                    (e as any)?.nativeEvent?.message || "Unknown error"
                   }`
                 );
               }}
@@ -1316,7 +1331,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
             </View>
             <View className="flex-row mt-2">
               <View className="flex-row items-center">
-                <AntDesign name="eyeo" size={24} color="#98A2B3" />
+                <AntDesign name="eye" size={24} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
                   {contentStats[key]?.views ?? mappedContent.viewCount ?? 0}
                 </Text>

@@ -13,6 +13,7 @@ import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
 import AllContentNew from "./AllcontentNew";
+import AllContentTikTok from "./AllContentTikTok";
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
@@ -52,7 +53,7 @@ export default function HomeTabContent() {
   const renderContent = () => {
     switch (selectedCategory) {
       case "ALL":
-        return <AllContentNew contentType="ALL" />;
+        return <AllContentTikTok />;
       case "LIVE":
         return <AllContentNew contentType="LIVE" />;
       case "SERMON":
@@ -64,7 +65,7 @@ export default function HomeTabContent() {
       case "VIDEO":
         return <AllContentNew contentType="VIDEO" />;
       default:
-        return <AllContentNew contentType="ALL" />;
+        return <AllContentTikTok />;
     }
 
     // switch (selectedCategory) {

@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { subscribeWithSelector } from 'zustand/middleware';
+import { create } from "zustand";
+import { subscribeWithSelector } from "zustand/middleware";
 
 interface VideoPlayerState {
   // Global video state - only one video can play at a time
@@ -9,11 +9,11 @@ interface VideoPlayerState {
   mutedVideos: Record<string, boolean>;
   progresses: Record<string, number>;
   hasCompleted: Record<string, boolean>;
-  
+
   // Auto-play state
   isAutoPlayEnabled: boolean;
   currentlyVisibleVideo: string | null;
-  
+
   // Actions
   playVideo: (videoKey: string) => void;
   pauseVideo: (videoKey: string) => void;
@@ -22,10 +22,10 @@ interface VideoPlayerState {
   setVideoProgress: (videoKey: string, progress: number) => void;
   setVideoCompleted: (videoKey: string, completed: boolean) => void;
   setOverlayVisible: (videoKey: string, visible: boolean) => void;
-  
+
   // Global play function - pauses all others and plays selected video
   playVideoGlobally: (videoKey: string) => void;
-  
+
   // Auto-play functions
   enableAutoPlay: () => void;
   disableAutoPlay: () => void;
@@ -41,9 +41,9 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     mutedVideos: {},
     progresses: {},
     hasCompleted: {},
-    
-    // Auto-play initial state (enabled globally for Twitter-like experience)
-    isAutoPlayEnabled: true,
+
+    // Auto-play initial state (disabled by default - user must click to play)
+    isAutoPlayEnabled: false,
     currentlyVisibleVideo: null,
 
     // Individual video actions
@@ -51,15 +51,18 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       set((state) => ({
         currentlyPlayingVideo: videoKey,
         playingVideos: { ...state.playingVideos, [videoKey]: true },
-        showOverlay: { ...state.showOverlay, [videoKey]: false }
+        showOverlay: { ...state.showOverlay, [videoKey]: false },
       }));
     },
 
     pauseVideo: (videoKey: string) => {
       set((state) => ({
-        currentlyPlayingVideo: state.currentlyPlayingVideo === videoKey ? null : state.currentlyPlayingVideo,
+        currentlyPlayingVideo:
+          state.currentlyPlayingVideo === videoKey
+            ? null
+            : state.currentlyPlayingVideo,
         playingVideos: { ...state.playingVideos, [videoKey]: false },
-        showOverlay: { ...state.showOverlay, [videoKey]: true }
+        showOverlay: { ...state.showOverlay, [videoKey]: true },
       }));
     },
 
@@ -67,8 +70,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
-        
-        Object.keys(state.playingVideos).forEach(key => {
+
+        Object.keys(state.playingVideos).forEach((key) => {
           newPlayingVideos[key] = false;
           newShowOverlay[key] = true;
         });
@@ -76,35 +79,35 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         return {
           currentlyPlayingVideo: null,
           playingVideos: newPlayingVideos,
-          showOverlay: newShowOverlay
+          showOverlay: newShowOverlay,
         };
       });
     },
 
     toggleVideoMute: (videoKey: string) => {
       set((state) => ({
-        mutedVideos: { 
-          ...state.mutedVideos, 
-          [videoKey]: !state.mutedVideos[videoKey] 
-        }
+        mutedVideos: {
+          ...state.mutedVideos,
+          [videoKey]: !state.mutedVideos[videoKey],
+        },
       }));
     },
 
     setVideoProgress: (videoKey: string, progress: number) => {
       set((state) => ({
-        progresses: { ...state.progresses, [videoKey]: progress }
+        progresses: { ...state.progresses, [videoKey]: progress },
       }));
     },
 
     setVideoCompleted: (videoKey: string, completed: boolean) => {
       set((state) => ({
-        hasCompleted: { ...state.hasCompleted, [videoKey]: completed }
+        hasCompleted: { ...state.hasCompleted, [videoKey]: completed },
       }));
     },
 
     setOverlayVisible: (videoKey: string, visible: boolean) => {
       set((state) => ({
-        showOverlay: { ...state.showOverlay, [videoKey]: visible }
+        showOverlay: { ...state.showOverlay, [videoKey]: visible },
       }));
     },
 
@@ -112,35 +115,37 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     playVideoGlobally: (videoKey: string) => {
       set((state) => {
         const isCurrentlyPlaying = state.playingVideos[videoKey] ?? false;
-        
+
         if (isCurrentlyPlaying) {
           // If video is already playing, pause it
           return {
             currentlyPlayingVideo: null,
             playingVideos: { ...state.playingVideos, [videoKey]: false },
-            showOverlay: { ...state.showOverlay, [videoKey]: true }
+            showOverlay: { ...state.showOverlay, [videoKey]: true },
           };
         } else {
           // Pause all other videos and play this one
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
-          
+
           // Pause all other videos
-          Object.keys(state.playingVideos).forEach(key => {
+          Object.keys(state.playingVideos).forEach((key) => {
             newPlayingVideos[key] = false;
             newShowOverlay[key] = true;
           });
-          
+
           // Play the selected video
           newPlayingVideos[videoKey] = true;
           newShowOverlay[videoKey] = false;
 
-          console.log(`🌍 Global video control: Playing ${videoKey}, paused all others`);
+          console.log(
+            `🌍 Global video control: Playing ${videoKey}, paused all others`
+          );
 
           return {
             currentlyPlayingVideo: videoKey,
             playingVideos: newPlayingVideos,
-            showOverlay: newShowOverlay
+            showOverlay: newShowOverlay,
           };
         }
       });
@@ -149,7 +154,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     // Auto-play functions
     enableAutoPlay: () => {
       set({ isAutoPlayEnabled: true });
-      console.log('📱 Auto-play enabled');
+      console.log("📱 Auto-play enabled");
     },
 
     disableAutoPlay: () => {
@@ -158,12 +163,15 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         currentlyVisibleVideo: null,
         currentlyPlayingVideo: null,
         playingVideos: {},
-        showOverlay: Object.keys(state.playingVideos).reduce((acc, key) => ({
-          ...acc,
-          [key]: true
-        }), {})
+        showOverlay: Object.keys(state.playingVideos).reduce(
+          (acc, key) => ({
+            ...acc,
+            [key]: true,
+          }),
+          {}
+        ),
       }));
-      console.log('📱 Auto-play disabled, all videos paused');
+      console.log("📱 Auto-play disabled, all videos paused");
     },
 
     handleVideoVisibilityChange: (visibleVideoKey: string | null) => {
@@ -177,14 +185,16 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           return state;
         }
 
-        console.log(`📱 Video visibility changed: ${state.currentlyVisibleVideo} → ${visibleVideoKey}`);
+        console.log(
+          `📱 Video visibility changed: ${state.currentlyVisibleVideo} → ${visibleVideoKey}`
+        );
 
         if (!visibleVideoKey) {
           // No video is visible, pause all
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
-          
-          Object.keys(state.playingVideos).forEach(key => {
+
+          Object.keys(state.playingVideos).forEach((key) => {
             newPlayingVideos[key] = false;
             newShowOverlay[key] = true;
           });
@@ -194,19 +204,19 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             currentlyPlayingVideo: null,
             currentlyVisibleVideo: null,
             playingVideos: newPlayingVideos,
-            showOverlay: newShowOverlay
+            showOverlay: newShowOverlay,
           };
         } else {
           // A new video is visible, pause all others and play this one
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
-          
+
           // Pause all other videos
-          Object.keys(state.playingVideos).forEach(key => {
+          Object.keys(state.playingVideos).forEach((key) => {
             newPlayingVideos[key] = false;
             newShowOverlay[key] = true;
           });
-          
+
           // Play the visible video
           newPlayingVideos[visibleVideoKey] = true;
           newShowOverlay[visibleVideoKey] = false;
@@ -218,11 +228,11 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             currentlyPlayingVideo: visibleVideoKey,
             currentlyVisibleVideo: visibleVideoKey,
             playingVideos: newPlayingVideos,
-            showOverlay: newShowOverlay
+            showOverlay: newShowOverlay,
           };
         }
       });
-    }
+    },
   }))
 );
 
