@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { Audio, ResizeMode, Video } from "expo-av";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,21 +17,21 @@ import AuthHeader from "../components/AuthHeader";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { MediaItem, useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
+import {
+  addToSearchHistory,
+  getSearchHistory,
+  getTrendingSearches,
+  removeFromSearchHistory
+} from "../utils/searchHistoryUtils";
 import { getDisplayName } from "../utils/userValidation";
-
-const pastSearchesInitial = [
-  "Miracles",
-  "Spiritual growth",
-  "Mega worship",
-  "Soaking worship",
-  "Love and Light",
-];
 
 export default function ExploreSearch() {
   const [query, setQuery] = useState("");
-  const [pastSearches, setPastSearches] = useState(pastSearchesInitial);
+  const [pastSearches, setPastSearches] = useState<string[]>([]);
+  const [trendingSearches, setTrendingSearches] = useState<Array<{query: string, count: number, category?: string}>>([]);
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   
   // Audio playback state
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -40,6 +40,11 @@ export default function ExploreSearch() {
   const [audioPosition, setAudioPosition] = useState<Record<string, number>>({});
   const audioRefs = useRef<Record<string, Audio.Sound>>({});
   
+  // Video playback state
+  const [playingVideos, setPlayingVideos] = useState<Record<string, boolean>>({});
+  const [showVideoOverlay, setShowVideoOverlay] = useState<Record<string, boolean>>({});
+  const videoRefs = useRef<Record<string, Video>>({});
+  
   // Get all media from store
   const { mediaList } = useMediaStore();
   
@@ -47,17 +52,39 @@ export default function ExploreSearch() {
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   const { loadDownloadedItems } = useDownloadStore();
   
-  // Load downloaded items on component mount
+  // Load downloaded items and search history on component mount
   useEffect(() => {
     loadDownloadedItems();
+    loadSearchHistory();
   }, [loadDownloadedItems]);
 
-  // Cleanup audio on unmount
+  // Load search history from storage
+  const loadSearchHistory = async () => {
+    try {
+      setIsLoadingHistory(true);
+      const [history, trending] = await Promise.all([
+        getSearchHistory(),
+        getTrendingSearches()
+      ]);
+      
+      setPastSearches(history.map(item => item.query));
+      setTrendingSearches(trending);
+    } catch (error) {
+      console.error("Failed to load search history:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Cleanup audio and video on unmount
   useEffect(() => {
     return () => {
       Object.values(audioRefs.current).forEach(sound => {
         sound.unloadAsync();
       });
+      // Video refs don't need explicit cleanup, but we can clear the state
+      setPlayingVideos({});
+      setShowVideoOverlay({});
     };
   }, []);
 
@@ -114,35 +141,15 @@ export default function ExploreSearch() {
     );
   }, [query, mediaList]);
 
-  // Test download function for debugging
-  const testDownloadFromSearch = async () => {
-    if (displayResults.length > 0) {
-      const testItem = displayResults[0];
-      console.log('🧪 Testing download with first search result:', testItem);
-      
-      const contentType = testItem.contentType === 'music' ? 'audio' : 
-                        testItem.contentType === 'videos' ? 'video' : 
-                        testItem.contentType === 'books' ? 'ebook' : 
-                        testItem.contentType === 'live' ? 'live' : 'video';
-      
-      const downloadableItem = convertToDownloadableItem(testItem, contentType as any);
-      console.log('🧪 Converted test item:', downloadableItem);
-      
-      const result = await handleDownload(downloadableItem);
-      console.log('🧪 Test download result:', result);
-      
-      if (result.success) {
-        Alert.alert('Test Success', 'Test download successful!');
-      } else {
-        Alert.alert('Test Failed', result.message || 'Test download failed');
-      }
-    } else {
-      Alert.alert('No Items', 'No search results to test with');
-    }
-  };
 
-  const removePastSearch = (item: string) => {
-    setPastSearches(pastSearches.filter((keyword) => keyword !== item));
+  const removePastSearch = async (item: string) => {
+    try {
+      await removeFromSearchHistory(item);
+      // Reload search history to show updated list
+      await loadSearchHistory();
+    } catch (error) {
+      console.error("Failed to remove search from history:", error);
+    }
   };
 
   const closeModal = () => {
@@ -153,18 +160,48 @@ export default function ExploreSearch() {
   useEffect(() => {
     if (query.trim()) {
       setHasSearched(true);
-      // Add to past searches if not already there
-      if (!pastSearches.includes(query)) {
-        setPastSearches([query, ...pastSearches.slice(0, 4)]);
-      }
     } else {
       setHasSearched(false);
     }
-  }, [query, pastSearches]);
+  }, [query]);
+
+  // Save search to history when user performs a search
+  const handleSearch = async (searchQuery: string) => {
+    if (searchQuery.trim()) {
+      try {
+        await addToSearchHistory(searchQuery.trim());
+        // Reload search history to show updated list
+        await loadSearchHistory();
+      } catch (error) {
+        console.error("Failed to save search to history:", error);
+      }
+    }
+  };
 
   // Handle past search selection
-  const handlePastSearchSelect = (keyword: string) => {
+  const handlePastSearchSelect = async (keyword: string) => {
     setQuery(keyword);
+    // Also save this selection to history
+    await handleSearch(keyword);
+  };
+
+  // Video playback functions
+  const toggleVideoPlayback = async (itemId: string) => {
+    try {
+      const isCurrentlyPlaying = playingVideos[itemId] ?? false;
+      
+      if (isCurrentlyPlaying) {
+        // Pause current video
+        setPlayingVideos(prev => ({ ...prev, [itemId]: false }));
+        setShowVideoOverlay(prev => ({ ...prev, [itemId]: true }));
+      } else {
+        // Pause all other videos first
+        setPlayingVideos({ [itemId]: true });
+        setShowVideoOverlay({ [itemId]: false });
+      }
+    } catch (error) {
+      console.error('Error toggling video playback:', error);
+    }
   };
 
   // Audio playback functions
@@ -254,12 +291,21 @@ export default function ExploreSearch() {
   };
 
   const getThumbnailSource = (item: MediaItem) => {
+    // First try thumbnailUrl
     if (item.thumbnailUrl) {
       return { uri: item.thumbnailUrl };
     }
+    
+    // Then try imageUrl
     if (item.imageUrl && typeof item.imageUrl === 'object' && item.imageUrl.uri) {
       return item.imageUrl;
     }
+    
+    // For videos, try using the fileUrl as a last resort (some video URLs might work as thumbnails)
+    if (item.contentType === 'videos' && item.fileUrl) {
+      return { uri: item.fileUrl };
+    }
+    
     // Fallback to default image based on content type
     switch (item.contentType) {
       case 'videos':
@@ -302,28 +348,60 @@ export default function ExploreSearch() {
     const isMusic = item.contentType === 'music';
     const itemId = item._id || item.fileUrl || `item-${index}`;
     const isAudioPlaying = playingAudio === itemId;
+    const isVideoPlaying = playingVideos[itemId] ?? false;
+    const showVideoOverlayState = showVideoOverlay[itemId] ?? true;
+    
+    // Safe video URI validation
+    const isValidUri = (uri: any) => typeof uri === 'string' && uri.trim().length > 0 && /^https?:\/\//.test(uri.trim());
+    const safeVideoUri = isValidUri(item.fileUrl) 
+      ? String(item.fileUrl).trim() 
+      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
     return (
       <View className="w-[48%] mb-4 h-[232px] rounded-xl overflow-hidden bg-gray-100">
         {isVideo ? (
-          // Video content - show video thumbnail with play overlay
+          // Video content - show actual video with play controls
           <TouchableOpacity
-            onPress={() => navigateToReels(item, index)}
+            onPress={() => toggleVideoPlayback(itemId)}
             className="w-full h-full"
             activeOpacity={0.9}
           >
-            <Image
-              source={getThumbnailSource(item)}
-              className="h-full w-full rounded-xl"
-              resizeMode="cover"
+            <Video
+              ref={(ref) => {
+                if (ref) {
+                  videoRefs.current[itemId] = ref;
+                }
+              }}
+              source={{ uri: safeVideoUri }}
+              style={{ width: "100%", height: "100%", position: "absolute" }}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={isVideoPlaying}
+              isLooping={false}
+              isMuted={true} // Muted by default for better UX in search
+              useNativeControls={false}
+              onError={(e) => {
+                console.warn('Video failed to load in ExploreSearch:', item?.title, e);
+                setPlayingVideos(prev => ({ ...prev, [itemId]: false }));
+                setShowVideoOverlay(prev => ({ ...prev, [itemId]: true }));
+              }}
+              onPlaybackStatusUpdate={(status) => {
+                if (!status.isLoaded) return;
+                if (status.didJustFinish) {
+                  setPlayingVideos(prev => ({ ...prev, [itemId]: false }));
+                  setShowVideoOverlay(prev => ({ ...prev, [itemId]: true }));
+                  console.log(`🎬 Search video completed: ${item.title}`);
+                }
+              }}
             />
             
-            {/* Play overlay for videos */}
+            {/* Play/Pause overlay for videos */}
+            {!isVideoPlaying && showVideoOverlayState && (
             <View className="absolute inset-0 justify-center items-center">
               <View className="bg-black/50 rounded-full p-3">
                 <Ionicons name="play" size={24} color="white" />
               </View>
             </View>
+            )}
           </TouchableOpacity>
         ) : (
           // Non-video content (music, books, etc.) - show thumbnail
@@ -346,7 +424,7 @@ export default function ExploreSearch() {
         {/* Audio controls for music */}
         {isMusic && (
           <View className="absolute bottom-2 left-2 right-2">
-            <View className="bg-black/70 rounded-lg p-2">
+            <View className="p-2">
               <View className="flex-row items-center justify-between mb-1">
                 <TouchableOpacity
                   onPress={() => toggleAudioPlayback(itemId, item.fileUrl)}
@@ -541,6 +619,8 @@ export default function ExploreSearch() {
               className="ml-3 flex-1 text-base font-rubik items-center"
               value={query}
               onChangeText={setQuery}
+              onSubmitEditing={() => handleSearch(query)}
+              returnKeyType="search"
             />
           </View>
 
@@ -552,24 +632,17 @@ export default function ExploreSearch() {
           </TouchableOpacity>
         </View>
 
-        {/* Test Download Button */}
-        {displayResults.length > 0 && (
-          <TouchableOpacity 
-            onPress={testDownloadFromSearch}
-            className="bg-green-500 px-4 py-2 rounded-lg mb-4"
-          >
-            <Text className="text-white font-rubik">Test Download First Result</Text>
-          </TouchableOpacity>
-        )}
 
 
-        {/* Past Search Keywords - only show when no search is active */}
-        {!hasSearched && pastSearches.length > 0 && (
+        {/* Search Suggestions - only show when no search is active */}
+        {!hasSearched && !isLoadingHistory && (
           <View className="mb-4">
+            {pastSearches.length > 0 ? (
+              <>
             <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
               Recent Searches
             </Text>
-            {pastSearches.map((keyword, index) => (
+                {pastSearches.slice(0, 5).map((keyword, index) => (
               <TouchableOpacity
                 key={index}
                 onPress={() => handlePastSearchSelect(keyword)}
@@ -581,6 +654,40 @@ export default function ExploreSearch() {
                 </TouchableOpacity>
               </TouchableOpacity>
             ))}
+              </>
+            ) : trendingSearches.length > 0 ? (
+              <>
+                <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
+                  Popular Searches
+                </Text>
+                {trendingSearches.slice(0, 5).map((trendingItem: { query: string; }, index: any) => (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => handlePastSearchSelect(trendingItem.query)}
+                    className="flex-row items-center justify-between px-2 py-2 bg-gray-50 rounded-lg mb-1"
+                  >
+                    <Text className="text-gray-700 text-base">{trendingItem.query}</Text>
+                    <Ionicons name="trending-up" size={18} color="#256E63" />
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <>
+                <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
+                  Suggested Searches
+                </Text>
+                {["Worship", "Prayer", "Faith", "Healing", "Grace"].map((keyword, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => handlePastSearchSelect(keyword)}
+                    className="flex-row items-center justify-between px-2 py-2 bg-gray-50 rounded-lg mb-1"
+                  >
+                    <Text className="text-gray-700 text-base">{keyword}</Text>
+                    <Ionicons name="search" size={18} color="#256E63" />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </View>
         )}
 
