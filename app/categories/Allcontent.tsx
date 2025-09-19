@@ -1,7 +1,7 @@
 import { AntDesign, Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -183,6 +183,7 @@ function AllContent() {
   // Try to refresh a stale/expired media URL from backend by title and type
   const tryRefreshMediaUrl = useCallback(async (item: MediaItem): Promise<string | null> => {
     try {
+      console.log(`🔁 Attempting to refresh URL for: ${item.title}`);
       const response = await allMediaAPI.getAllMedia({
         search: item.title,
         contentType: (item.contentType as any),
@@ -190,6 +191,7 @@ function AllContent() {
       });
       const fresh = (response as any)?.media?.[0];
       if (fresh?.fileUrl) {
+        console.log(`✅ Found fresh URL for ${item.title}: ${fresh.fileUrl}`);
         const updated = mediaStore.mediaList.map((m: any) => {
           const sameId = m._id && item._id && m._id === item._id;
           const sameTitleAndType = m.title === item.title && m.contentType === item.contentType;
@@ -199,12 +201,52 @@ function AllContent() {
         });
         mediaStore.setMediaList(updated as any);
         return fresh.fileUrl as string;
+      } else {
+        console.log(`⚠️ No fresh URL found for: ${item.title}`);
       }
     } catch (e) {
       console.log("🔁 Refresh media URL failed:", e);
     }
     return null;
   }, [mediaStore.mediaList]);
+
+  // Enhanced function to validate and refresh URLs for older content
+  const validateAndRefreshUrl = useCallback(async (item: MediaItem): Promise<string> => {
+    const uri = item.fileUrl;
+    
+    // If URL is empty, try to refresh
+    if (!uri || String(uri).trim() === "") {
+      console.log(`🔄 Empty URL detected for ${item.title}, attempting refresh...`);
+      const fresh = await tryRefreshMediaUrl(item);
+      return fresh || uri;
+    }
+    
+    // For older content (more than 1 day old), proactively validate URL
+    const contentAge = Date.now() - new Date(item.createdAt).getTime();
+    const isOldContent = contentAge > 24 * 60 * 60 * 1000; // 24 hours
+    
+    if (isOldContent) {
+      console.log(`🕐 Old content detected (${Math.round(contentAge / (24 * 60 * 60 * 1000))} days old): ${item.title}`);
+      
+      // Try to validate URL by making a HEAD request
+      try {
+        const response = await fetch(uri, { method: 'HEAD' });
+        if (!response.ok) {
+          console.log(`❌ URL validation failed for ${item.title} (${response.status}), attempting refresh...`);
+          const fresh = await tryRefreshMediaUrl(item);
+          return fresh || uri;
+        } else {
+          console.log(`✅ URL validation passed for ${item.title}`);
+        }
+      } catch (error) {
+        console.log(`❌ URL validation error for ${item.title}, attempting refresh...`, error);
+        const fresh = await tryRefreshMediaUrl(item);
+        return fresh || uri;
+      }
+    }
+    
+    return uri;
+  }, [tryRefreshMediaUrl]);
 
   // 🛑 Stop audio when component loses focus (switching tabs/categories)
   useFocusEffect(
@@ -381,26 +423,20 @@ function AllContent() {
 
   // 🔁 Helper: try to refresh stale media URL then play audio
   const playMusicWithRefresh = useCallback(async (item: MediaItem, id: string) => {
-    const uri = item.fileUrl;
-    if (!uri || String(uri).trim() === "") {
-      const fresh = await tryRefreshMediaUrl(item);
-      if (fresh) {
-        playAudio(fresh, id);
-      }
-    } else {
-      playAudio(uri, id);
+    try {
+      const validatedUrl = await validateAndRefreshUrl(item);
+      playAudio(validatedUrl, id);
+    } catch (error) {
+      console.log(`❌ Failed to validate URL for audio ${item.title}:`, error);
+      // Fallback to original URL
+      playAudio(item.fileUrl, id);
     }
-  }, [playAudio]);
+  }, [playAudio, validateAndRefreshUrl]);
 
   // 🔁 Helper: try to refresh stale media URL for video/sermon cards
   const getRefreshedVideoUrl = useCallback(async (item: MediaItem): Promise<string> => {
-    const uri = item.fileUrl;
-    if (!uri || String(uri).trim() === "") {
-      const fresh = await tryRefreshMediaUrl(item);
-      return fresh || uri;
-    }
-    return uri;
-  }, [tryRefreshMediaUrl]);
+    return await validateAndRefreshUrl(item);
+  }, [validateAndRefreshUrl]);
 
   const getTimeAgo = (createdAt: string): string => {
     const now = new Date();
@@ -949,18 +985,24 @@ function AllContent() {
         }))
       : sampleComments;
   
-    // 🔁 Refresh URL on mount if needed
+    // 🔁 Refresh URL on mount if needed (enhanced for older content)
     useEffect(() => {
       const refreshIfNeeded = async () => {
-        if (!video.fileUrl || String(video.fileUrl).trim() === "") {
-          setIsRefreshing(true);
+        setIsRefreshing(true);
+        try {
           const fresh = await getRefreshedVideoUrl(video);
-          setRefreshedUrl(fresh);
+          if (fresh !== video.fileUrl) {
+            console.log(`🔄 URL refreshed for ${video.title}: ${fresh}`);
+            setRefreshedUrl(fresh);
+          }
+        } catch (error) {
+          console.log(`❌ Failed to refresh URL for ${video.title}:`, error);
+        } finally {
           setIsRefreshing(false);
         }
       };
       refreshIfNeeded();
-    }, [video.fileUrl]);
+    }, [video.fileUrl, getRefreshedVideoUrl]);
   
     const videoUrl = refreshedUrl || video.fileUrl;
   
@@ -1555,18 +1597,24 @@ function AllContent() {
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // 🔁 Refresh URL on mount if needed
+    // 🔁 Refresh URL on mount if needed (enhanced for older content)
     useEffect(() => {
       const refreshIfNeeded = async () => {
-        if (!sermon.fileUrl || String(sermon.fileUrl).trim() === "") {
-          setIsRefreshing(true);
-          const fresh = await tryRefreshMediaUrl(sermon);
-          setRefreshedUrl(fresh);
+        setIsRefreshing(true);
+        try {
+          const fresh = await validateAndRefreshUrl(sermon);
+          if (fresh !== sermon.fileUrl) {
+            console.log(`🔄 URL refreshed for sermon ${sermon.title}: ${fresh}`);
+            setRefreshedUrl(fresh);
+          }
+        } catch (error) {
+          console.log(`❌ Failed to refresh URL for sermon ${sermon.title}:`, error);
+        } finally {
           setIsRefreshing(false);
         }
       };
       refreshIfNeeded();
-    }, [sermon.fileUrl]);
+    }, [sermon.fileUrl, validateAndRefreshUrl]);
 
     const sermonUrl = refreshedUrl || sermon.fileUrl;
     const isVideoSermon = sermonUrl.includes(".mp4") || sermonUrl.includes(".mov");
@@ -1867,9 +1915,28 @@ function AllContent() {
                     shouldPlay={false}
                     isMuted={true}
                     useNativeControls={false}
-                    onError={(error) => {
+                    onError={async (error) => {
                       console.log(`❌ Video loading error for ${item.title}:`, error);
                       console.log(`🔗 Failed URL: ${item.fileUrl}`);
+                      
+                      // Try to refresh the URL and retry once
+                      try {
+                        console.log(`🔄 Attempting to refresh URL for failed video: ${item.title}`);
+                        const freshUrl = await tryRefreshMediaUrl(item);
+                        if (freshUrl && freshUrl !== item.fileUrl) {
+                          console.log(`✅ Got fresh URL for ${item.title}: ${freshUrl}`);
+                          // Remove from failed loads to retry with new URL
+                          setFailedVideoLoads(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(item._id || item.fileUrl);
+                            return newSet;
+                          });
+                          return; // Don't add to failed loads, let it retry
+                        }
+                      } catch (refreshError) {
+                        console.log(`❌ Failed to refresh URL for ${item.title}:`, refreshError);
+                      }
+                      
                       // Add to failed loads set to show thumbnail instead
                       setFailedVideoLoads(prev => new Set([...prev, item._id || item.fileUrl]));
                     }}

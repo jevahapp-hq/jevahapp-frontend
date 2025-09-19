@@ -160,6 +160,7 @@ export default function Reelsviewscroll() {
         return null;
       }
 
+      console.log(`🔁 Attempting to refresh URL for reels: ${item.title}`);
       const response = await allMediaAPI.getAllMedia({
         search: item.title,
         contentType: (item.contentType as any),
@@ -173,14 +174,54 @@ export default function Reelsviewscroll() {
 
       const fresh = response.media[0];
       if (fresh?.fileUrl && typeof fresh.fileUrl === 'string' && fresh.fileUrl.trim() !== '') {
+        console.log(`✅ Found fresh URL for reels ${item.title}: ${fresh.fileUrl}`);
         return fresh.fileUrl.trim();
       }
       
+      console.log(`⚠️ No fresh URL found for reels: ${item.title}`);
       return null;
     } catch (e) {
       console.log("🔁 Refresh media URL failed in reels:", e);
       return null;
     }
+  };
+
+  // Enhanced function to validate and refresh URLs for older content in reels
+  const validateAndRefreshUrl = async (item: any): Promise<string> => {
+    const uri = item.fileUrl;
+    
+    // If URL is empty, try to refresh
+    if (!uri || String(uri).trim() === "") {
+      console.log(`🔄 Empty URL detected in reels for ${item.title}, attempting refresh...`);
+      const fresh = await tryRefreshMediaUrl(item);
+      return fresh || uri;
+    }
+    
+    // For older content (more than 1 day old), proactively validate URL
+    const contentAge = Date.now() - new Date(item.createdAt).getTime();
+    const isOldContent = contentAge > 24 * 60 * 60 * 1000; // 24 hours
+    
+    if (isOldContent) {
+      console.log(`🕐 Old content detected in reels (${Math.round(contentAge / (24 * 60 * 60 * 1000))} days old): ${item.title}`);
+      
+      // Try to validate URL by making a HEAD request
+      try {
+        const response = await fetch(uri, { method: 'HEAD' });
+        if (!response.ok) {
+          console.log(`❌ URL validation failed in reels for ${item.title} (${response.status}), attempting refresh...`);
+          const fresh = await tryRefreshMediaUrl(item);
+          return fresh || uri;
+        } else {
+          console.log(`✅ URL validation passed in reels for ${item.title}`);
+        }
+      } catch (error) {
+        console.log(`❌ URL validation error in reels for ${item.title}, attempting refresh...`, error);
+        const fresh = await tryRefreshMediaUrl(item);
+        return fresh || uri;
+      }
+    }
+    
+    return uri;
   };
 
   // Parse video list and current index for TikTok-style navigation
