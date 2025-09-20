@@ -1,4 +1,5 @@
 import io, { Socket } from "socket.io-client";
+import TokenUtils from "../utils/tokenUtils";
 import NotificationService from "./NotificationService";
 
 interface AuthenticatedUser {
@@ -23,23 +24,85 @@ class SocketManager {
   constructor(config: SocketManagerConfig) {
     this.serverUrl = config.serverUrl;
     this.authToken = config.authToken;
+
+    // Validate configuration
+    if (!this.serverUrl || !this.authToken) {
+      console.warn("⚠️ SocketManager: Invalid configuration", {
+        hasServerUrl: !!this.serverUrl,
+        hasAuthToken: !!this.authToken,
+        serverUrl: this.serverUrl,
+        tokenLength: this.authToken?.length || 0,
+      });
+    }
   }
 
   async connect(): Promise<void> {
     try {
+      // Validate token before attempting connection
+      if (!this.authToken || this.authToken.trim() === "") {
+        console.warn(
+          "⚠️ SocketManager: No valid auth token, skipping connection"
+        );
+        return;
+      }
+
+      // Validate token format (should be a JWT)
+      if (!TokenUtils.isValidJWTFormat(this.authToken)) {
+        console.warn(
+          "⚠️ SocketManager: Invalid token format, skipping connection",
+          { tokenPreview: TokenUtils.getTokenPreview(this.authToken) }
+        );
+        return;
+      }
+
+      console.log("🔌 SocketManager: Attempting to connect...", {
+        serverUrl: this.serverUrl,
+        hasToken: !!this.authToken,
+        tokenLength: this.authToken?.length || 0,
+        tokenPreview: TokenUtils.getTokenPreview(this.authToken),
+      });
+
+      // Test backend connectivity first
+      try {
+        const response = await fetch(`${this.serverUrl}/health`, {
+          method: "GET",
+          timeout: 5000,
+        });
+        if (!response.ok) {
+          console.warn(
+            "⚠️ Backend health check failed, skipping socket connection"
+          );
+          return;
+        }
+      } catch (healthError) {
+        console.warn(
+          "⚠️ Backend not reachable, skipping socket connection:",
+          healthError
+        );
+        return;
+      }
+
       this.socket = io(this.serverUrl, {
         auth: {
           token: this.authToken,
         },
         transports: ["websocket", "polling"],
         timeout: 20000,
+        forceNew: true, // Force new connection
+        autoConnect: false, // Don't auto-connect, we'll do it manually
+        reconnection: false, // Disable automatic reconnection
       });
 
       this.setupEventHandlers();
-      console.log("✅ Connected to real-time server");
+
+      // Connect manually after setting up handlers
+      this.socket.connect();
+
+      console.log("✅ SocketManager: Connection initiated");
     } catch (error) {
-      console.error("❌ Failed to connect to real-time server:", error);
-      throw error;
+      console.error("❌ SocketManager: Failed to initiate connection:", error);
+      // Don't throw error, just log it and continue without socket
+      console.log("⚠️ Continuing without real-time features...");
     }
   }
 
@@ -58,7 +121,61 @@ class SocketManager {
     });
 
     this.socket.on("connect_error", (error) => {
-      console.error("❌ Socket connection error:", error);
+      // Check if it's an authentication error first
+      const isAuthError =
+        error.message?.includes("Authentication failed") ||
+        error.message?.includes("Unauthorized") ||
+        error.message?.includes("Invalid token") ||
+        error.message?.includes("Token expired") ||
+        error.message?.includes("Forbidden") ||
+        error.message?.includes("401") ||
+        error.message?.includes("403") ||
+        error.code === "UNAUTHORIZED" ||
+        error.code === "FORBIDDEN";
+
+      if (isAuthError) {
+        console.log("🔐 Authentication required - please log in to connect");
+        console.log("💡 App will continue without real-time features");
+
+        // Show user-friendly notification (optional)
+        // You can integrate with your notification system here
+        console.log(
+          "📱 User notification: Please log in again to enable real-time features"
+        );
+        this.reconnectAttempts = this.maxReconnectAttempts;
+        this.socket?.disconnect();
+        this.socket = null;
+        return;
+      }
+
+      // Log other connection errors (non-authentication)
+      console.error("❌ Socket connection error:", error.message);
+      console.error("❌ Error details:", {
+        message: error.message,
+        type: error.type,
+        description: error.description,
+        context: error.context,
+        code: error.code,
+        data: error.data,
+      });
+
+      // Don't reconnect on network errors that are likely permanent
+      if (
+        error.message?.includes("Network Error") ||
+        error.message?.includes("timeout") ||
+        error.message?.includes("ECONNREFUSED") ||
+        error.code === "NETWORK_ERROR"
+      ) {
+        console.log(
+          "🌐 Network error detected, stopping reconnection attempts"
+        );
+        console.log("⚠️ App will continue without real-time features");
+        this.reconnectAttempts = this.maxReconnectAttempts;
+        this.socket?.disconnect();
+        this.socket = null;
+        return;
+      }
+
       this.handleReconnect();
     });
 
@@ -244,6 +361,55 @@ class SocketManager {
 
   isConnected(): boolean {
     return this.socket?.connected || false;
+  }
+
+  // Method to refresh authentication token
+  async refreshAuthToken(newToken: string): Promise<void> {
+    if (!newToken || newToken.trim() === "") {
+      console.warn("⚠️ SocketManager: Invalid new token provided");
+      return;
+    }
+
+    // Validate token format
+    if (!TokenUtils.isValidJWTFormat(newToken)) {
+      console.warn("⚠️ SocketManager: Invalid token format");
+      return;
+    }
+
+    this.authToken = newToken;
+
+    // If socket exists, disconnect and reconnect with new token
+    if (this.socket) {
+      console.log("🔄 SocketManager: Refreshing connection with new token");
+      this.socket.disconnect();
+      this.socket = null;
+      this.reconnectAttempts = 0;
+      await this.connect();
+    }
+  }
+
+  // Method to validate current token
+  async validateToken(): Promise<boolean> {
+    try {
+      if (!this.authToken || this.authToken.trim() === "") {
+        return false;
+      }
+
+      // Test token with a simple API call
+      const response = await fetch(`${this.serverUrl}/api/auth/validate`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.authToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error("❌ Token validation failed:", error);
+      return false;
+    }
   }
 }
 

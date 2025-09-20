@@ -1,18 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Image, StatusBar, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from "@expo/vector-icons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Image, StatusBar, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface MobileHeaderProps {
   // Header type
-  type?: 'main' | 'auth' | 'search' | 'profile' | 'custom';
-  
+  type?: "main" | "auth" | "search" | "profile" | "custom";
+
   // Title and subtitle
   title?: string;
   subtitle?: string;
-  
+
   // User info for main header
   user?: {
     firstName: string;
@@ -21,13 +21,13 @@ interface MobileHeaderProps {
     section?: string;
     isOnline?: boolean;
   };
-  
+
   // Navigation
   showBack?: boolean;
   showCancel?: boolean;
   onBackPress?: () => void;
   onCancelPress?: () => void;
-  
+
   // Action buttons
   leftAction?: {
     icon: string;
@@ -40,24 +40,24 @@ interface MobileHeaderProps {
     badge?: boolean;
     badgeCount?: number;
   }>;
-  
+
   // Custom components
   leftComponent?: React.ReactNode;
   centerComponent?: React.ReactNode;
   rightComponent?: React.ReactNode;
-  
+
   // Styling
   backgroundColor?: string;
   textColor?: string;
   borderBottom?: boolean;
-  
+
   // Status bar
-  statusBarStyle?: 'light-content' | 'dark-content';
+  statusBarStyle?: "light-content" | "dark-content";
   statusBarBackgroundColor?: string;
 }
 
 export default function MobileHeader({
-  type = 'main',
+  type = "main",
   title,
   subtitle,
   user,
@@ -70,18 +70,18 @@ export default function MobileHeader({
   leftComponent,
   centerComponent,
   rightComponent,
-  backgroundColor = 'white',
-  textColor = '#3B3B3B',
+  backgroundColor = "white",
+  textColor = "#3B3B3B",
   borderBottom = true,
-  statusBarStyle = 'dark-content',
-  statusBarBackgroundColor = 'transparent'
+  statusBarStyle = "dark-content",
+  statusBarBackgroundColor = "transparent",
 }: MobileHeaderProps) {
   const [avatarError, setAvatarError] = useState(false);
-  
+
   const router = useRouter();
-  
+
   console.log("🔍 MobileHeader: Received user data:", user);
-  
+
   const handleBackPress = () => {
     if (onBackPress) {
       onBackPress();
@@ -101,36 +101,47 @@ export default function MobileHeader({
   const renderMainHeader = () => (
     <View className="flex-row items-center justify-between w-full px-4 py-3">
       {/* Left Side - User Profile */}
-      <TouchableOpacity 
+      <TouchableOpacity
         onPress={() => router.push("/Profile/ProfileSwitch")}
         className="flex-row items-center flex-1"
         activeOpacity={0.7}
       >
         <View className="relative">
-          {user?.avatar && user.avatar.trim() && user.avatar.startsWith("http") && !avatarError ? (
+          {user?.avatar &&
+          user.avatar.trim() &&
+          user.avatar.startsWith("http") &&
+          !avatarError ? (
             <Image
               source={{ uri: user.avatar.trim() }}
               className="w-10 h-10 rounded-lg"
-              style={{ borderWidth: 1, borderColor: '#E5E7EB' }}
+              style={{ borderWidth: 1, borderColor: "#E5E7EB" }}
               onError={(error) => {
-                console.warn("❌ Failed to load avatar image:", error.nativeEvent.error);
+                console.warn(
+                  "❌ Failed to load avatar image:",
+                  error.nativeEvent.error
+                );
                 setAvatarError(true);
               }}
               onLoad={() => {
-                console.log("✅ Avatar image loaded successfully:", user?.avatar);
+                console.log(
+                  "✅ Avatar image loaded successfully:",
+                  user?.avatar
+                );
               }}
             />
           ) : (
-            <View 
+            <View
               className="w-10 h-10 rounded-lg justify-center items-center"
-              style={{ 
-                borderWidth: 1, 
-                borderColor: '#E5E7EB',
-                backgroundColor: '#F3F4F6'
+              style={{
+                borderWidth: 1,
+                borderColor: "#E5E7EB",
+                backgroundColor: "#F3F4F6",
               }}
             >
               <Text className="text-gray-600 font-rubik-semibold text-sm">
-                {user?.firstName?.[0]?.toUpperCase() || user?.lastName?.[0]?.toUpperCase() || 'U'}
+                {user?.firstName?.[0]?.toUpperCase() ||
+                  user?.lastName?.[0]?.toUpperCase() ||
+                  "U"}
               </Text>
             </View>
           )}
@@ -158,14 +169,18 @@ export default function MobileHeader({
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
             activeOpacity={0.7}
           >
-            <Ionicons name={action.icon as any} size={20} color={textColor} />
+            <Ionicons
+              name={(action.icon as any) || "help-outline"}
+              size={20}
+              color={textColor}
+            />
             {action.badge && (
               <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
             )}
             {action.badgeCount && action.badgeCount > 0 && (
               <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full items-center justify-center">
                 <Text className="text-white text-[10px] font-rubik font-bold">
-                  {action.badgeCount > 99 ? '99+' : action.badgeCount}
+                  {action.badgeCount > 99 ? "99+" : String(action.badgeCount)}
                 </Text>
               </View>
             )}
@@ -180,7 +195,7 @@ export default function MobileHeader({
       {/* Left Side - Back Button */}
       <View className="w-10 h-10 items-center justify-center">
         {showBack ? (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleBackPress}
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50"
             activeOpacity={0.7}
@@ -207,7 +222,7 @@ export default function MobileHeader({
         {rightComponent ? (
           rightComponent
         ) : showCancel ? (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleCancelPress}
             className="w-10 h-10 items-center justify-center rounded-full bg-gray-50"
             activeOpacity={0.7}
@@ -223,26 +238,29 @@ export default function MobileHeader({
     <View className="flex-row items-center justify-between w-full px-4 py-3">
       {/* Left Side */}
       <View className="flex-1">
-        {leftComponent || (
-          leftAction ? (
+        {leftComponent ||
+          (leftAction ? (
             <TouchableOpacity
               onPress={leftAction.onPress}
               className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
               activeOpacity={0.7}
             >
-              <Ionicons name={leftAction.icon as any} size={20} color={textColor} />
+              <Ionicons
+                name={leftAction.icon as any}
+                size={20}
+                color={textColor}
+              />
               {leftAction.badge && (
                 <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
               )}
             </TouchableOpacity>
-          ) : null
-        )}
+          ) : null)}
       </View>
 
       {/* Center */}
       <View className="flex-1 items-center">
-        {centerComponent || (
-          title ? (
+        {centerComponent ||
+          (title ? (
             <View>
               <Text className="text-[17px] font-rubik font-semibold text-[#3B3B3B] text-center">
                 {title}
@@ -253,8 +271,7 @@ export default function MobileHeader({
                 </Text>
               )}
             </View>
-          ) : null
-        )}
+          ) : null)}
       </View>
 
       {/* Right Side */}
@@ -268,14 +285,20 @@ export default function MobileHeader({
                 className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
                 activeOpacity={0.7}
               >
-                <Ionicons name={action.icon as any} size={20} color={textColor} />
+                <Ionicons
+                  name={(action.icon as any) || "help-outline"}
+                  size={20}
+                  color={textColor}
+                />
                 {action.badge && (
                   <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
                 )}
                 {action.badgeCount && action.badgeCount > 0 && (
                   <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full items-center justify-center">
                     <Text className="text-white text-[10px] font-rubik font-bold">
-                      {action.badgeCount > 99 ? '99+' : action.badgeCount}
+                      {action.badgeCount > 99
+                        ? "99+"
+                        : String(action.badgeCount)}
                     </Text>
                   </View>
                 )}
@@ -289,11 +312,11 @@ export default function MobileHeader({
 
   const renderHeaderContent = () => {
     switch (type) {
-      case 'main':
+      case "main":
         return renderMainHeader();
-      case 'auth':
+      case "auth":
         return renderAuthHeader();
-      case 'custom':
+      case "custom":
         return renderCustomHeader();
       default:
         return renderCustomHeader();
@@ -301,21 +324,21 @@ export default function MobileHeader({
   };
 
   return (
-    <SafeAreaView 
-      className="w-full" 
-      edges={['top']}
+    <SafeAreaView
+      className="w-full"
+      edges={["top"]}
       style={{ backgroundColor }}
     >
       {/* Status Bar Configuration */}
-      <StatusBar 
-        barStyle={statusBarStyle} 
-        backgroundColor={statusBarBackgroundColor} 
+      <StatusBar
+        barStyle={statusBarStyle}
+        backgroundColor={statusBarBackgroundColor}
         translucent={true}
       />
-      
+
       {/* Header Container */}
-      <View 
-        className={`w-full ${borderBottom ? 'border-b border-gray-100' : ''}`}
+      <View
+        className={`w-full ${borderBottom ? "border-b border-gray-100" : ""}`}
         style={{ backgroundColor }}
       >
         {renderHeaderContent()}
@@ -323,4 +346,3 @@ export default function MobileHeader({
     </SafeAreaView>
   );
 }
-

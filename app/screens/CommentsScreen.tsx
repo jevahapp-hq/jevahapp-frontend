@@ -178,12 +178,13 @@ const CommentsScreen = () => {
         <View style={styles.authorInfo}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {item.author.firstName.charAt(0).toUpperCase()}
+              {item.author?.firstName?.charAt(0).toUpperCase() || "U"}
             </Text>
           </View>
           <View style={styles.authorDetails}>
             <Text style={styles.commentAuthor}>
-              {item.author.firstName} {item.author.lastName}
+              {item.author?.firstName || "Unknown"}{" "}
+              {item.author?.lastName || "User"}
             </Text>
             <Text style={styles.commentDate}>{getTimeAgo(item.createdAt)}</Text>
           </View>
@@ -205,12 +206,13 @@ const CommentsScreen = () => {
               <View style={styles.replyHeader}>
                 <View style={styles.replyAvatar}>
                   <Text style={styles.avatarText}>
-                    {reply.author.firstName.charAt(0).toUpperCase()}
+                    {reply.author?.firstName?.charAt(0).toUpperCase() || "U"}
                   </Text>
                 </View>
                 <View style={styles.replyAuthorDetails}>
                   <Text style={styles.replyAuthor}>
-                    {reply.author.firstName} {reply.author.lastName}
+                    {reply.author?.firstName || "Unknown"}{" "}
+                    {reply.author?.lastName || "User"}
                   </Text>
                   <Text style={styles.replyDate}>
                     {getTimeAgo(reply.createdAt)}

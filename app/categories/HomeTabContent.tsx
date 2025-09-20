@@ -12,7 +12,6 @@ import Header from "../components/Header";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
-import AllContentNew from "./AllcontentNew";
 import AllContentTikTok from "./AllContentTikTok";
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
@@ -51,22 +50,7 @@ export default function HomeTabContent() {
   );
 
   const renderContent = () => {
-    switch (selectedCategory) {
-      case "ALL":
-        return <AllContentTikTok />;
-      case "LIVE":
-        return <AllContentNew contentType="LIVE" />;
-      case "SERMON":
-        return <AllContentNew contentType="SERMON" />;
-      case "MUSIC":
-        return <AllContentNew contentType="MUSIC" />;
-      case "E-BOOKS":
-        return <AllContentNew contentType="E-BOOKS" />;
-      case "VIDEO":
-        return <AllContentNew contentType="VIDEO" />;
-      default:
-        return <AllContentTikTok />;
-    }
+    return <AllContentTikTok contentType={selectedCategory} />;
 
     // switch (selectedCategory) {
     //   case "ALL":

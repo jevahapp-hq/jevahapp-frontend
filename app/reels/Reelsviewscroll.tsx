@@ -22,6 +22,7 @@ import ErrorBoundary from "../components/ErrorBoundary";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
+import { useReelsStore } from "../store/useReelsStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
 import {
@@ -56,6 +57,7 @@ export default function Reelsviewscroll() {
 
   // Global video store for video management
   const globalVideoStore = useGlobalVideoStore();
+  const reelsStore = useReelsStore();
 
   // Comment modal hook
   const { showCommentModal } = useCommentModal();
@@ -195,19 +197,27 @@ export default function Reelsviewscroll() {
     }
   };
 
-  // Parse video list and current index for TikTok-style navigation
-  const parsedVideoList = videoList
-    ? (() => {
-        try {
-          return JSON.parse(videoList);
-        } catch (error) {
-          console.error("❌ Failed to parse video list:", error);
-          return [];
-        }
-      })()
-    : [];
+  // Get video list from global store or parse from URL params
+  const parsedVideoList =
+    reelsStore.videoList.length > 0
+      ? reelsStore.videoList
+      : videoList
+      ? (() => {
+          try {
+            console.log("🔍 Raw videoList param:", videoList);
+            const parsed = JSON.parse(videoList);
+            console.log("🔍 Parsed video list:", parsed);
+            console.log("🔍 Parsed video list length:", parsed.length);
+            return parsed;
+          } catch (error) {
+            console.error("❌ Failed to parse video list:", error);
+            return [];
+          }
+        })()
+      : [];
 
-  const currentVideoIndex = parseInt(currentIndex) || 0;
+  const currentVideoIndex =
+    reelsStore.currentIndex || parseInt(currentIndex) || 0;
   const [currentIndex_state, setCurrentIndex_state] =
     useState(currentVideoIndex);
   const lastIndexRef = useRef<number>(currentVideoIndex);
@@ -220,6 +230,10 @@ export default function Reelsviewscroll() {
       console.log(`   - Video list length: ${parsedVideoList.length}`);
       console.log(`   - Current index: ${currentIndex_state}`);
       console.log(`   - VideoList param exists: ${!!videoList}`);
+      console.log(
+        `   - Reels store video list length: ${reelsStore.videoList.length}`
+      );
+      console.log(`   - Reels store current index: ${reelsStore.currentIndex}`);
       if (parsedVideoList.length > 0) {
         console.log(`   - First video: ${parsedVideoList[0]?.title}`);
         console.log(
@@ -231,7 +245,13 @@ export default function Reelsviewscroll() {
       setHasError(true);
       setErrorMessage("Failed to initialize video data");
     }
-  }, []);
+  }, [
+    parsedVideoList,
+    currentIndex_state,
+    videoList,
+    reelsStore.videoList,
+    reelsStore.currentIndex,
+  ]);
 
   // Get current video from the list or use passed parameters
   const currentVideo = (() => {
@@ -666,7 +686,8 @@ export default function Reelsviewscroll() {
   const renderVideoItem = (
     videoData: any,
     index: number,
-    isActive: boolean = false
+    isActive: boolean = false,
+    passedVideoKey?: string
   ) => {
     // Validate video data first
     if (!videoData || !videoData.title) {
@@ -688,7 +709,8 @@ export default function Reelsviewscroll() {
       );
     }
 
-    const videoKey = `reel-${videoData.title}-${videoData.speaker}-${index}`;
+    const videoKey =
+      passedVideoKey || `reel-${videoData.title}-${videoData.speaker}`;
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -733,7 +755,14 @@ export default function Reelsviewscroll() {
     }
 
     return (
-      <View key={videoKey} style={{ height: screenHeight, width: "100%" }}>
+      <View
+        key={videoKey}
+        style={{
+          height: screenHeight,
+          width: "100%",
+          backgroundColor: "#000000", // Ensure black background for full screen
+        }}
+      >
         <TouchableWithoutFeedback
           onPress={() => {
             if (isActive) {
@@ -758,7 +787,7 @@ export default function Reelsviewscroll() {
               isActive && console.log("🎬 Touch end at:", e.nativeEvent.pageY)
             }
             accessibilityLabel={`${
-              playingVideos[modalKey] ? "Pause" : "Play"
+              playingVideos[videoKey] ? "Pause" : "Play"
             } video`}
             accessibilityRole="button"
             accessibilityHint="Double tap to like, long press for more options"
@@ -767,22 +796,30 @@ export default function Reelsviewscroll() {
             {isActive &&
               (() => {
                 console.log(
-                  `🎬 Reels: Rendering video ${modalKey} - shouldPlay: ${
-                    isActive && (playingVideos[modalKey] ?? false)
+                  `🎬 Reels: Rendering video ${videoKey} - shouldPlay: ${
+                    isActive && (playingVideos[videoKey] ?? false)
                   }, isActive: ${isActive}`
                 );
                 return null;
               })()}
             <Video
               ref={(ref) => {
-                if (ref && isActive) videoRefs.current[modalKey] = ref;
+                if (ref && isActive) videoRefs.current[videoKey] = ref;
               }}
               source={{ uri: videoUrl || "" }}
-              style={{ width: "100%", height: "100%", position: "absolute" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+              }}
               resizeMode={ResizeMode.COVER}
-              isMuted={mutedVideos[modalKey] ?? false}
-              volume={mutedVideos[modalKey] ? 0.0 : videoVolume}
-              shouldPlay={isActive && (playingVideos[modalKey] ?? false)}
+              isMuted={mutedVideos[videoKey] ?? false}
+              volume={mutedVideos[videoKey] ? 0.0 : videoVolume}
+              shouldPlay={isActive && (playingVideos[videoKey] ?? false)}
               useNativeControls={false}
               isLooping={true}
               onError={async (error) => {
@@ -815,7 +852,7 @@ export default function Reelsviewscroll() {
                 // Debug logging for video status
                 if (status.isPlaying !== undefined) {
                   console.log(
-                    `🎬 Reels: Video ${modalKey} status - isPlaying: ${status.isPlaying}, isLoaded: ${status.isLoaded}, position: ${status.positionMillis}`
+                    `🎬 Reels: Video ${videoKey} status - isPlaying: ${status.isPlaying}, isLoaded: ${status.isLoaded}, position: ${status.positionMillis}`
                   );
                 }
 
@@ -823,16 +860,16 @@ export default function Reelsviewscroll() {
                 if (status.durationMillis && videoDuration === 0) {
                   setVideoDuration(status.durationMillis);
                   console.log(
-                    `🎬 Reels: Video ${modalKey} duration set to ${status.durationMillis}ms`
+                    `🎬 Reels: Video ${videoKey} duration set to ${status.durationMillis}ms`
                   );
 
                   // Ensure video starts playing when first loaded
-                  if (!status.isPlaying && !playingVideos[modalKey]) {
+                  if (!status.isPlaying && !playingVideos[videoKey]) {
                     console.log(
-                      `🎬 Reels: Video ${modalKey} loaded but not playing, starting playback`
+                      `🎬 Reels: Video ${videoKey} loaded but not playing, starting playback`
                     );
                     setTimeout(() => {
-                      globalVideoStore.playVideoGlobally(modalKey);
+                      globalVideoStore.playVideoGlobally(videoKey);
                     }, 100);
                   }
                 }
@@ -845,11 +882,11 @@ export default function Reelsviewscroll() {
                 const pct = status.durationMillis
                   ? (status.positionMillis / status.durationMillis) * 100
                   : 0;
-                globalVideoStore.setVideoProgress(modalKey, pct);
-                const ref = videoRefs.current[modalKey];
+                globalVideoStore.setVideoProgress(videoKey, pct);
+                const ref = videoRefs.current[videoKey];
                 if (status.didJustFinish) {
                   ref?.setPositionAsync(0);
-                  globalVideoStore.pauseVideo(modalKey);
+                  globalVideoStore.pauseVideo(videoKey);
                   // Trigger haptic feedback on video completion
                   triggerHapticFeedback();
                 }
@@ -860,7 +897,7 @@ export default function Reelsviewscroll() {
             />
 
             {/* Play/Pause Overlay - Glass Effect */}
-            {isActive && !playingVideos[modalKey] && (
+            {isActive && !playingVideos[videoKey] && (
               <View
                 className="absolute inset-0 justify-center items-center"
                 style={{
@@ -912,7 +949,7 @@ export default function Reelsviewscroll() {
                   <TouchableOpacity
                     onPress={() => {
                       triggerHapticFeedback();
-                      handleFavorite(modalKey);
+                      handleFavorite(videoKey);
                     }}
                     style={{
                       alignItems: "center",
@@ -923,16 +960,16 @@ export default function Reelsviewscroll() {
                     }}
                     activeOpacity={0.7}
                     accessibilityLabel={`${
-                      userFavorites[modalKey] ? "Unlike" : "Like"
+                      userFavorites[videoKey] ? "Unlike" : "Like"
                     } this video`}
                     accessibilityRole="button"
                   >
                     <MaterialIcons
                       name={
-                        userFavorites[modalKey] ? "favorite" : "favorite-border"
+                        userFavorites[videoKey] ? "favorite" : "favorite-border"
                       }
                       size={getResponsiveSize(28, 32, 36)}
-                      color={userFavorites[modalKey] ? "#D22A2A" : "#FFFFFF"}
+                      color={userFavorites[videoKey] ? "#D22A2A" : "#FFFFFF"}
                     />
                     <Text
                       style={{
@@ -945,14 +982,14 @@ export default function Reelsviewscroll() {
                         textShadowRadius: 2,
                       }}
                     >
-                      {globalFavoriteCounts[modalKey] || video.favorite || 0}
+                      {globalFavoriteCounts[videoKey] || video.favorite || 0}
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={() => {
                       triggerHapticFeedback();
-                      handleComment(modalKey);
+                      handleComment(videoKey);
                     }}
                     style={{
                       alignItems: "center",
@@ -981,7 +1018,7 @@ export default function Reelsviewscroll() {
                         textShadowRadius: 2,
                       }}
                     >
-                      {videoStats[modalKey]?.comment === 1
+                      {videoStats[videoKey]?.comment === 1
                         ? (video.comment ?? 0) + 1
                         : video.comment ?? 0}
                     </Text>
@@ -990,7 +1027,7 @@ export default function Reelsviewscroll() {
                   <TouchableOpacity
                     onPress={() => {
                       triggerHapticFeedback();
-                      handleSave(modalKey);
+                      handleSave(videoKey);
                     }}
                     style={{
                       alignItems: "center",
@@ -1009,13 +1046,13 @@ export default function Reelsviewscroll() {
                   >
                     <MaterialIcons
                       name={
-                        libraryStore.isItemSaved(modalKey)
+                        libraryStore.isItemSaved(videoKey)
                           ? "bookmark"
                           : "bookmark-border"
                       }
                       size={getResponsiveSize(28, 32, 36)}
                       color={
-                        libraryStore.isItemSaved(modalKey)
+                        libraryStore.isItemSaved(videoKey)
                           ? "#FEA74E"
                           : "#FFFFFF"
                       }
@@ -1031,14 +1068,14 @@ export default function Reelsviewscroll() {
                         textShadowRadius: 2,
                       }}
                     >
-                      {videoStats[modalKey]?.totalSaves || video.saved || 0}
+                      {videoStats[videoKey]?.totalSaves || video.saved || 0}
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={() => {
                       triggerHapticFeedback();
-                      handleShare(modalKey);
+                      handleShare(videoKey);
                     }}
                     style={{
                       alignItems: "center",
@@ -1067,7 +1104,7 @@ export default function Reelsviewscroll() {
                         textShadowRadius: 2,
                       }}
                     >
-                      {videoStats[modalKey]?.sheared || video.sheared || 0}
+                      {videoStats[videoKey]?.sheared || video.sheared || 0}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1253,7 +1290,7 @@ export default function Reelsviewscroll() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        onPress={() => handleShare(modalKey)}
+                        onPress={() => handleShare(videoKey)}
                         style={{
                           paddingVertical: 10,
                           borderBottomWidth: 1,
@@ -1284,7 +1321,7 @@ export default function Reelsviewscroll() {
                           justifyContent: "space-between",
                         }}
                         onPress={() => {
-                          handleSave(modalKey);
+                          handleSave(videoKey);
                           setMenuVisible(false);
                         }}
                       >
@@ -1295,13 +1332,13 @@ export default function Reelsviewscroll() {
                             fontFamily: "Rubik",
                           }}
                         >
-                          {libraryStore.isItemSaved(modalKey)
+                          {libraryStore.isItemSaved(videoKey)
                             ? "Remove from Library"
                             : "Save to Library"}
                         </Text>
                         <MaterialIcons
                           name={
-                            libraryStore.isItemSaved(modalKey)
+                            libraryStore.isItemSaved(videoKey)
                               ? "bookmark"
                               : "bookmark-border"
                           }
@@ -1430,21 +1467,48 @@ export default function Reelsviewscroll() {
   // Create array of all videos for smooth scrolling
   const allVideos =
     parsedVideoList.length > 0 ? parsedVideoList : [currentVideo];
+
+  console.log("🔍 AllVideos array:", allVideos);
+  console.log("🔍 AllVideos length:", allVideos.length);
+  console.log("🔍 Current video:", currentVideo);
+  console.log("🔍 Current index state:", currentIndex_state);
+  console.log("🔍 Parsed video list length:", parsedVideoList.length);
+  console.log("🔍 Reels store video list length:", reelsStore.videoList.length);
+  console.log("🔍 Reels store current index:", reelsStore.currentIndex);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Handle scroll-based navigation (update active index immediately while scrolling)
   const handleScroll = (event: any) => {
     const { contentOffset } = event.nativeEvent;
-    const index = Math.round(contentOffset.y / screenHeight);
+    const scrollY = contentOffset.y;
+    const index = Math.round(scrollY / screenHeight);
+
+    // Ensure index is within bounds
+    const clampedIndex = Math.max(0, Math.min(index, allVideos.length - 1));
+
     if (
-      index !== lastIndexRef.current &&
-      index >= 0 &&
-      index < allVideos.length
+      clampedIndex !== lastIndexRef.current &&
+      clampedIndex >= 0 &&
+      clampedIndex < allVideos.length
     ) {
-      lastIndexRef.current = index;
-      setCurrentIndex_state(index);
+      lastIndexRef.current = clampedIndex;
+      setCurrentIndex_state(clampedIndex);
+
+      // Pause all videos except the current one
+      Object.keys(playingVideos).forEach((key) => {
+        if (key !== `video-${clampedIndex}`) {
+          globalVideoStore.pauseVideo(key);
+        }
+      });
+
+      // Play the current video
+      const currentVideoKey = `video-${clampedIndex}`;
+      if (!playingVideos[currentVideoKey]) {
+        globalVideoStore.playVideo(currentVideoKey);
+      }
+
       console.log(
-        `🎬 Active index while scrolling: ${index}: ${allVideos[index]?.title}`
+        `🎬 Active index while scrolling: ${clampedIndex}: ${allVideos[clampedIndex]?.title}`
       );
     }
   };
@@ -1458,9 +1522,19 @@ export default function Reelsviewscroll() {
           y: initialOffset,
           animated: false,
         });
+
+        // Auto-play the initial video
+        const initialVideoKey = `video-${currentIndex_state}`;
+        globalVideoStore.playVideo(initialVideoKey);
       }, 100);
     }
   }, []);
+
+  // Handle scroll end to ensure proper video playback
+  const handleScrollEnd = () => {
+    const currentVideoKey = `video-${currentIndex_state}`;
+    globalVideoStore.playVideo(currentVideoKey);
+  };
 
   return (
     <ErrorBoundary>
@@ -1472,53 +1546,64 @@ export default function Reelsviewscroll() {
       <ScrollView
         ref={scrollViewRef}
         style={{ flex: 1 }}
-        pagingEnabled
+        pagingEnabled={true}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
+        onScrollEndDrag={handleScrollEnd}
+        onMomentumScrollEnd={handleScrollEnd}
         scrollEventThrottle={16}
         snapToInterval={screenHeight}
+        snapToAlignment="start"
         decelerationRate={isIOS ? "normal" : "fast"}
         bounces={isIOS}
+        scrollEnabled={true}
+        nestedScrollEnabled={false}
         contentContainerStyle={{
-          minHeight: screenHeight * allVideos.length,
+          height: screenHeight * allVideos.length,
         }}
       >
-        {allVideos.map(
-          (videoData: { title: any; speaker: any }, index: number) => {
-            try {
-              const isActive = index === currentIndex_state;
-              const videoKey = `reel-${videoData.title}-${
-                videoData.speaker || "unknown"
-              }-${index}`;
+        {allVideos.map((videoData: any, index: number) => {
+          try {
+            console.log(`🔍 Rendering video ${index}:`, videoData);
+            console.log(`🔍 Video ${index} has title:`, !!videoData.title);
+            console.log(`🔍 Video ${index} has speaker:`, !!videoData.speaker);
+            console.log(`🔍 Video ${index} has fileUrl:`, !!videoData.fileUrl);
+            const isActive = index === currentIndex_state;
+            const videoKey = `reel-${videoData.title}-${
+              videoData.speaker || "unknown"
+            }`;
 
-              return (
-                <View
-                  key={videoKey}
-                  style={{ height: screenHeight, width: "100%" }}
-                >
-                  {renderVideoItem(videoData, index, isActive)}
-                </View>
-              );
-            } catch (error) {
-              console.error("❌ Error rendering video in map:", error);
-              return (
-                <View
-                  key={`error-${index}`}
-                  style={{
-                    height: screenHeight,
-                    width: "100%",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 16 }}>
-                    Failed to load video
-                  </Text>
-                </View>
-              );
-            }
+            return (
+              <View
+                key={videoKey}
+                style={{
+                  height: screenHeight,
+                  width: "100%",
+                  backgroundColor: "#000000", // Ensure black background
+                }}
+              >
+                {renderVideoItem(videoData, index, isActive, videoKey)}
+              </View>
+            );
+          } catch (error) {
+            console.error("❌ Error rendering video in map:", error);
+            return (
+              <View
+                key={`error-${index}`}
+                style={{
+                  height: screenHeight,
+                  width: "100%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 16 }}>
+                  Failed to load video
+                </Text>
+              </View>
+            );
           }
-        )}
+        })}
       </ScrollView>
 
       {/* Clean Header - Back, Title, Close */}
@@ -1543,7 +1628,7 @@ export default function Reelsviewscroll() {
               router.back();
             } else {
               router.replace({
-                pathname: "/categories/Allcontent",
+                pathname: "/categories/AllContentTikTok",
                 params: {
                   defaultCategory: category,
                 },
@@ -1591,7 +1676,7 @@ export default function Reelsviewscroll() {
               router.back();
             } else {
               router.replace({
-                pathname: "/categories/Allcontent",
+                pathname: "/categories/AllContentTikTok",
                 params: {
                   defaultCategory: category,
                 },

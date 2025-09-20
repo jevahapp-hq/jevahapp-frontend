@@ -1,5 +1,5 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { Audio, ResizeMode, Video } from "expo-av";
+import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
   useCallback,
@@ -13,6 +13,7 @@ import {
   BackHandler,
   Dimensions,
   Image,
+  InteractionManager,
   NativeScrollEvent,
   NativeSyntheticEvent,
   PanResponder,
@@ -25,8 +26,12 @@ import {
   View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import { CompactAudioControls } from "../components/CompactAudioControls";
+import VideoCard from "../components/VideoCard";
 import { useCommentModal } from "../context/CommentModalContext";
+import { useVideoNavigation } from "../hooks/useVideoNavigation";
 import useVideoViewport from "../hooks/useVideoViewport";
+import SocketManager from "../services/SocketManager";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
@@ -34,6 +39,7 @@ import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
+import { contentInteractionAPI } from "../utils/contentInteractionAPI";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -46,6 +52,7 @@ import {
   persistViewed,
   toggleFavorite,
 } from "../utils/persistentStorage";
+import TokenUtils from "../utils/tokenUtils";
 import {
   getDisplayName,
   getUserAvatarFromContent,
@@ -71,9 +78,15 @@ interface MediaItem {
   imageUrl?: string | { uri: string };
 }
 
-function AllContentTikTok() {
+function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
+  console.log("🚨 DEBUG: AllContentTikTok component INITIALIZED");
+  console.log("🚨 DEBUG: Component mount time:", new Date().toISOString());
+  console.log("🚨 DEBUG: Content type filter:", contentType);
+
   const router = useRouter();
   const screenWidth = Dimensions.get("window").width;
+
+  console.log("🚨 DEBUG: Router and screenWidth initialized");
 
   // 📱 Viewport detection for auto-play
   const { calculateVideoVisibility } = useVideoViewport();
@@ -96,12 +109,35 @@ function AllContentTikTok() {
     refreshDefaultContent,
   } = useMediaStore();
 
+  console.log("🚨 DEBUG: useMediaStore data:");
+  console.log("🚨 DEBUG: - allContent length:", allContent?.length || 0);
+  console.log("🚨 DEBUG: - allContentLoading:", allContentLoading);
+  console.log("🚨 DEBUG: - allContentError:", allContentError);
+  console.log(
+    "🚨 DEBUG: - defaultContent length:",
+    defaultContent?.length || 0
+  );
+  console.log("🚨 DEBUG: - defaultContentLoading:", defaultContentLoading);
+  console.log("🚨 DEBUG: - defaultContentError:", defaultContentError);
+
   // Function to convert signed URLs to public URLs
+  // TODO: Remove this function once backend provides clean URLs
   const convertToPublicUrl = (signedUrl: string): string => {
     if (!signedUrl) return signedUrl;
 
     try {
       const url = new URL(signedUrl);
+
+      // Check if it's a signed URL (has AWS signature parameters)
+      const isSignedUrl =
+        url.searchParams.has("X-Amz-Signature") ||
+        url.searchParams.has("X-Amz-Algorithm");
+
+      if (!isSignedUrl) {
+        // Already a clean URL, return as-is
+        return signedUrl;
+      }
+
       // Remove AWS signature parameters
       const paramsToRemove = [
         "X-Amz-Algorithm",
@@ -122,7 +158,7 @@ function AllContentTikTok() {
       // Convert to public URL format
       const publicUrl = url.toString();
       console.log(
-        `🔗 Converted URL: ${signedUrl.substring(
+        `🔗 Converted signed URL: ${signedUrl.substring(
           0,
           100
         )}... → ${publicUrl.substring(0, 100)}...`
@@ -137,25 +173,61 @@ function AllContentTikTok() {
 
   // Transform API response to match our MediaItem interface
   const mediaList: MediaItem[] = useMemo(() => {
+    console.log("🚨 DEBUG: mediaList useMemo triggered");
+    console.log("🚨 DEBUG: - allContent:", allContent);
+    console.log("🚨 DEBUG: - defaultContent:", defaultContent);
+    console.log("🚨 DEBUG: - allContent.length:", allContent?.length || 0);
+    console.log(
+      "🚨 DEBUG: - defaultContent.length:",
+      defaultContent?.length || 0
+    );
+
     // Prioritize allContent over defaultContent
     const sourceData = allContent.length > 0 ? allContent : defaultContent;
 
-    if (!sourceData || !Array.isArray(sourceData)) return [];
+    console.log("🚨 DEBUG: - sourceData:", sourceData);
+    console.log("🚨 DEBUG: - sourceData is array:", Array.isArray(sourceData));
+    console.log("🚨 DEBUG: - sourceData length:", sourceData?.length || 0);
+
+    if (!sourceData || !Array.isArray(sourceData)) {
+      console.log("🚨 DEBUG: Returning empty array - no valid source data");
+      return [];
+    }
 
     const transformed = sourceData.map((item: any) => {
-      // Convert signed URL to public URL for videos
-      const publicUrl =
-        item.contentType === "video"
-          ? convertToPublicUrl(item.mediaUrl || item.fileUrl)
-          : item.mediaUrl || item.fileUrl;
+      // Check if URLs are Cloudinary or missing, and provide fallbacks
+      const hasValidFileUrl =
+        item.fileUrl &&
+        !item.fileUrl.includes("cloudinary") &&
+        !item.fileUrl.includes("PLACEHOLDER") &&
+        item.fileUrl.trim() !== "";
+
+      const hasValidMediaUrl =
+        item.mediaUrl &&
+        !item.mediaUrl.includes("cloudinary") &&
+        !item.mediaUrl.includes("PLACEHOLDER") &&
+        item.mediaUrl.trim() !== "";
+
+      const hasValidThumbnailUrl =
+        item.thumbnailUrl &&
+        !item.thumbnailUrl.includes("cloudinary") &&
+        !item.thumbnailUrl.includes("PLACEHOLDER") &&
+        item.thumbnailUrl.trim() !== "";
+
+      // Convert signed URL to public URL for all content types (not just videos)
+      const publicUrl = hasValidMediaUrl
+        ? convertToPublicUrl(item.mediaUrl || item.fileUrl)
+        : hasValidFileUrl
+        ? convertToPublicUrl(item.fileUrl)
+        : null;
 
       const transformedItem = {
         _id: item._id,
         title: item.title,
         description: item.description,
         contentType: item.contentType,
-        fileUrl: publicUrl, // Use converted public URL
-        thumbnailUrl: item.thumbnailUrl,
+        fileUrl: publicUrl || "https://example.com/placeholder.mp4", // Fallback URL
+        thumbnailUrl: hasValidThumbnailUrl ? item.thumbnailUrl : null,
         speaker:
           item.authorInfo?.firstName || item.author?.firstName
             ? `${item.authorInfo?.firstName || item.author?.firstName} ${
@@ -170,26 +242,51 @@ function AllContentTikTok() {
         saved: 0, // Default value
         comment: item.commentCount || 0,
         favorite: item.likeCount || item.totalLikes || 0,
-        imageUrl: item.thumbnailUrl,
+        imageUrl: hasValidThumbnailUrl ? item.thumbnailUrl : null,
         speakerAvatar: item.authorInfo?.avatar || item.author?.avatar,
       };
 
       // Debug logging for URL mapping
-      if (item.contentType === "video") {
-        console.log(`🔄 Mapping video "${item.title}":`, {
-          originalMediaUrl: item.mediaUrl || item.fileUrl,
-          convertedPublicUrl: publicUrl,
-          mappedFileUrl: transformedItem.fileUrl,
-          contentType: item.contentType,
-          _id: item._id,
-        });
-      }
+      console.log(`🔄 Mapping ${item.contentType} "${item.title}":`, {
+        originalMediaUrl: item.mediaUrl,
+        originalFileUrl: item.fileUrl,
+        convertedPublicUrl: publicUrl,
+        mappedFileUrl: transformedItem.fileUrl,
+        contentType: item.contentType,
+        _id: item._id,
+        hasValidFileUrl,
+        hasValidMediaUrl,
+        hasValidThumbnailUrl,
+        isSignedUrl: (item.mediaUrl || item.fileUrl)?.includes(
+          "X-Amz-Signature"
+        ),
+      });
 
       return transformedItem;
     });
 
     return transformed;
   }, [allContent, defaultContent]);
+
+  // Filter content based on contentType prop
+  const filteredMediaList = useMemo(() => {
+    if (contentType === "ALL") return mediaList;
+
+    const typeMap: Record<string, string[]> = {
+      LIVE: ["live"],
+      SERMON: ["sermon", "teachings"],
+      MUSIC: ["music", "audio"],
+      "E-BOOKS": ["e-books", "ebook", "image", "books"],
+      VIDEO: ["videos", "video"],
+    };
+
+    const allowedTypes = typeMap[contentType] || [contentType.toLowerCase()];
+    return mediaList.filter((item) =>
+      allowedTypes.some((allowedType) =>
+        item.contentType?.toLowerCase().includes(allowedType.toLowerCase())
+      )
+    );
+  }, [mediaList, contentType]);
 
   // ✅ Use global video store for cross-component video management
   const globalVideoStore = useGlobalVideoStore();
@@ -204,30 +301,30 @@ function AllContentTikTok() {
 
   // 🔧 Fix infinite loop: Use useMemo to memoize filtered arrays
   const allVideos = useMemo(
-    () => mediaList.filter((item) => item.contentType === "video"),
-    [mediaList]
+    () => filteredMediaList.filter((item) => item.contentType === "video"),
+    [filteredMediaList]
   );
 
   const otherContent = useMemo(
-    () => mediaList.filter((item) => item.contentType !== "video"),
-    [mediaList]
+    () => filteredMediaList.filter((item) => item.contentType !== "video"),
+    [filteredMediaList]
   );
 
   // 🎵 Music items (audio with thumbnails)
   const allMusic = useMemo(
-    () => mediaList.filter((item) => item.contentType === "audio"),
-    [mediaList]
+    () => filteredMediaList.filter((item) => item.contentType === "audio"),
+    [filteredMediaList]
   );
 
   // 📖 Sermon items (can be either audio or video)
   const allSermons = useMemo(
-    () => mediaList.filter((item) => item.contentType === "sermon"),
-    [mediaList]
+    () => filteredMediaList.filter((item) => item.contentType === "sermon"),
+    [filteredMediaList]
   );
 
   // 📚 Ebook items (PDF and EPUB files) - API returns "image" for PDFs
   const allEbooks = useMemo(() => {
-    const ebooks = mediaList.filter(
+    const ebooks = filteredMediaList.filter(
       (item) =>
         item.contentType === "image" ||
         item.contentType === "ebook" ||
@@ -239,17 +336,41 @@ function AllContentTikTok() {
       ebooks.map((e) => ({ title: e.title, contentType: e.contentType }))
     );
     return ebooks;
-  }, [mediaList]);
+  }, [filteredMediaList]);
 
   // Debug: Log all media items to help identify URL issues
   useEffect(() => {
-    console.log("🔍 Debug: Raw API data:", defaultContent);
+    console.log(
+      "🔍 Debug: Raw API data (allContent):",
+      allContent?.length || 0,
+      "items"
+    );
+    console.log(
+      "🔍 Debug: Raw API data (defaultContent):",
+      defaultContent?.length || 0,
+      "items"
+    );
+    console.log(
+      "🔍 Debug: Source data being used:",
+      allContent.length > 0 ? "allContent" : "defaultContent"
+    );
     console.log("🔍 Debug: Transformed media items:", mediaList.length);
+    console.log("🔍 Debug: Filtered media items:", filteredMediaList.length);
     console.log("🔍 Debug: Videos:", allVideos.length);
     console.log("🔍 Debug: Music:", allMusic.length);
+    console.log("🔍 Debug: Sermons:", allSermons.length);
     console.log("🔍 Debug: Ebooks:", allEbooks.length);
 
-    mediaList.forEach((item, index) => {
+    // Log content type distribution
+    const contentTypeCounts: Record<string, number> = {};
+    filteredMediaList.forEach((item) => {
+      contentTypeCounts[item.contentType] =
+        (contentTypeCounts[item.contentType] || 0) + 1;
+    });
+    console.log("🔍 Debug: Content type distribution:", contentTypeCounts);
+
+    // Log first few items for debugging
+    filteredMediaList.slice(0, 5).forEach((item, index) => {
       console.log(`📱 Item ${index + 1}:`, {
         title: item.title,
         contentType: item.contentType,
@@ -257,13 +378,34 @@ function AllContentTikTok() {
         imageUrl: item.imageUrl,
         createdAt: item.createdAt,
         _id: item._id,
+        hasValidFileUrl: item.fileUrl && item.fileUrl.startsWith("http"),
+        fileUrlLength: item.fileUrl?.length || 0,
+      });
+    });
+
+    // Log audio-specific items
+    const audioItems = filteredMediaList.filter(
+      (item) => item.contentType === "audio" || item.contentType === "music"
+    );
+    console.log(`🎵 Audio items found: ${audioItems.length}`);
+    audioItems.forEach((item, index) => {
+      console.log(`🎵 Audio ${index + 1}:`, {
+        title: item.title,
+        fileUrl: item.fileUrl?.substring(0, 100) + "...",
+        isValidUrl: item.fileUrl?.startsWith("http"),
+        contentType: item.contentType,
+        isSignedUrl: item.fileUrl?.includes("X-Amz-Signature"),
+        urlLength: item.fileUrl?.length || 0,
       });
     });
   }, [
     mediaList,
+    filteredMediaList,
+    allContent,
     defaultContent,
     allVideos.length,
     allMusic.length,
+    allSermons.length,
     allEbooks.length,
   ]);
 
@@ -341,20 +483,129 @@ function AllContentTikTok() {
     soundMapRef.current = soundMap;
   }, [soundMap]);
 
+  // Initialize SocketManager for real-time features
+  useEffect(() => {
+    const initializeSocket = async () => {
+      try {
+        console.log("🔌 AllContentTikTok: Initializing Socket.IO...");
+
+        // Get auth token using centralized utility
+        const authToken = await TokenUtils.getAuthToken();
+        const tokenInfo = await TokenUtils.getTokenInfo();
+
+        console.log("🔑 Token retrieval:", {
+          ...tokenInfo,
+          tokenPreview: authToken
+            ? TokenUtils.getTokenPreview(authToken)
+            : "null",
+        });
+
+        if (!authToken || authToken.trim() === "") {
+          console.log(
+            "⚠️ No valid auth token found, skipping Socket.IO initialization"
+          );
+          return;
+        }
+
+        // Validate token format before proceeding
+        if (!TokenUtils.isValidJWTFormat(authToken)) {
+          console.warn(
+            "⚠️ Invalid token format detected, skipping Socket.IO initialization",
+            { tokenPreview: TokenUtils.getTokenPreview(authToken) }
+          );
+          return;
+        }
+
+        const manager = new SocketManager({
+          serverUrl: "https://jevahapp-backend.onrender.com",
+          authToken,
+        });
+
+        // Set up event listeners using the socket directly
+        const socket = (manager as any).socket;
+        if (socket) {
+          socket.on("content-reaction", (data: any) => {
+            console.log("📡 Real-time like update:", data);
+            setRealTimeCounts((prev) => ({
+              ...prev,
+              [data.contentId]: {
+                ...prev[data.contentId],
+                likes: data.totalLikes,
+                liked: data.liked,
+              },
+            }));
+          });
+
+          socket.on("content-comment", (data: any) => {
+            console.log("📡 Real-time comment update:", data);
+            setRealTimeCounts((prev) => ({
+              ...prev,
+              [data.contentId]: {
+                ...prev[data.contentId],
+                comments: data.totalComments,
+              },
+            }));
+          });
+        }
+
+        // Try to connect, but don't fail if it doesn't work
+        try {
+          await manager.connect();
+          setSocketManager(manager);
+          console.log("✅ Socket.IO initialized successfully");
+        } catch (connectError) {
+          console.warn(
+            "⚠️ Socket connection failed, continuing without real-time features:",
+            connectError
+          );
+          // Don't set socketManager, app will work without real-time features
+        }
+      } catch (error) {
+        console.error("❌ Failed to initialize Socket.IO:", error);
+        console.log("⚠️ Continuing without real-time features...");
+        // Don't set socketManager to null, just log the error
+        // The app should work without real-time features
+      }
+    };
+
+    initializeSocket();
+
+    // Cleanup on unmount
+    return () => {
+      if (socketManager) {
+        socketManager.disconnect();
+      }
+    };
+  }, []);
+
   // Load content on mount - prioritize TikTok-style endpoints
   useEffect(() => {
+    console.log("🚨 DEBUG: useEffect triggered for content loading");
+    console.log(
+      "🚨 DEBUG: - refreshAllContent function:",
+      typeof refreshAllContent
+    );
+    console.log("🚨 DEBUG: - allMediaAPI:", typeof allMediaAPI);
+
     console.log("🚀 AllContentTikTok: Loading content from backend...");
     console.log(
       "🌐 API Base URL:",
       process.env.EXPO_PUBLIC_API_URL || "https://jevahapp-backend.onrender.com"
     );
 
-    // Test available endpoints first
-    allMediaAPI.testAvailableEndpoints();
+    try {
+      // Test available endpoints first
+      console.log("🚨 DEBUG: Testing available endpoints...");
+      allMediaAPI.testAvailableEndpoints();
 
-    // Try TikTok-style all content endpoints first
-    refreshAllContent();
-  }, [refreshAllContent]);
+      // Try TikTok-style all content endpoints first
+      console.log("🚨 DEBUG: Calling refreshAllContent...");
+      refreshAllContent();
+      console.log("🚨 DEBUG: refreshAllContent called successfully");
+    } catch (error) {
+      console.error("🚨 DEBUG: Error in useEffect:", error);
+    }
+  }, []); // Remove refreshAllContent dependency to prevent re-mounting
 
   // Try to refresh a stale/expired media URL from backend by title and type
   const tryRefreshMediaUrl = useCallback(
@@ -413,13 +664,27 @@ function AllContentTikTok() {
   );
 
   const playAudio = async (uri: string, id: string) => {
-    if (!uri) return;
-    if (isLoadingAudio) return;
+    if (!uri || uri.trim() === "") {
+      console.warn("🚨 Audio URI is empty or invalid:", { uri, id });
+      return;
+    }
+    if (isLoadingAudio) {
+      console.log("🚨 Audio is already loading, skipping...");
+      return;
+    }
+
+    // Validate URL format
+    if (!uri.startsWith("http://") && !uri.startsWith("https://")) {
+      console.warn("🚨 Audio URI is not a valid HTTP/HTTPS URL:", { uri, id });
+      return;
+    }
 
     // Debug logging for audio URLs
     console.log(`🎵 Playing audio "${id}":`, {
       audioUri: uri,
       id: id,
+      uriLength: uri.length,
+      isValidUrl: uri.startsWith("http"),
     });
 
     setIsLoadingAudio(true);
@@ -507,6 +772,11 @@ function AllContentTikTok() {
 
       // Create new sound instance
       const resumePos = pausedAudioMap[id] ?? 0;
+      console.log(
+        `🎵 Creating audio sound for "${id}" with URI:`,
+        uri.substring(0, 100) + "..."
+      );
+
       const { sound } = await Audio.Sound.createAsync(
         { uri },
         {
@@ -515,6 +785,8 @@ function AllContentTikTok() {
           positionMillis: resumePos,
         }
       );
+
+      console.log(`✅ Audio sound created successfully for "${id}"`);
 
       setSoundMap((prev) => ({ ...prev, [id]: sound }));
       setPlayingAudioId(id);
@@ -554,6 +826,13 @@ function AllContentTikTok() {
       });
     } catch (err) {
       console.error("❌ Audio playback error:", err);
+      console.error("❌ Error details:", {
+        message: (err as Error).message,
+        code: (err as any).code,
+        uri: uri.substring(0, 100) + "...",
+        id: id,
+      });
+
       // Clean up any partial state
       setPlayingAudioId(null);
       setSoundMap((prev) => {
@@ -561,6 +840,13 @@ function AllContentTikTok() {
         delete updated[id];
         return updated;
       });
+
+      // Show user-friendly error message
+      console.log("🚨 Audio playback failed - this might be due to:");
+      console.log("   - Invalid audio URL");
+      console.log("   - Network connectivity issues");
+      console.log("   - Unsupported audio format");
+      console.log("   - Server-side audio file issues");
     } finally {
       setIsLoadingAudio(false);
     }
@@ -614,9 +900,16 @@ function AllContentTikTok() {
 
   // Video control state
   const videoRefs = useRef<Record<string, any>>({});
+  const isMountedRef = useRef(true);
   const [videoVolume, setVideoVolume] = useState<number>(1.0); // 🔊 Add volume control
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [viewCounted, setViewCounted] = useState<Record<string, boolean>>({});
+
+  // Real-time state
+  const [socketManager, setSocketManager] = useState<SocketManager | null>(
+    null
+  );
+  const [realTimeCounts, setRealTimeCounts] = useState<Record<string, any>>({});
 
   // 📱 Scroll-based auto-play state
   const scrollViewRef = useRef<ScrollView>(null);
@@ -631,29 +924,67 @@ function AllContentTikTok() {
   >({});
   const lastScrollYRef = useRef<number>(0);
 
-  // ✅ Get video state from global store
-  const playingVideos = globalVideoStore.playingVideos;
-  const mutedVideos = globalVideoStore.mutedVideos;
-  const progresses = globalVideoStore.progresses;
-  const showOverlay = globalVideoStore.showOverlay;
-  const hasCompleted = globalVideoStore.hasCompleted;
-  const isAutoPlayEnabled = globalVideoStore.isAutoPlayEnabled;
-  const handleVideoVisibilityChange =
-    globalVideoStore.handleVideoVisibilityChange;
+  // ✅ Get video state from global store - using hook to ensure reactivity
+  const playingVideos = useGlobalVideoStore((state) => state.playingVideos);
+  const mutedVideos = useGlobalVideoStore((state) => state.mutedVideos);
+  const progresses = useGlobalVideoStore((state) => state.progresses);
+  const showOverlay = useGlobalVideoStore((state) => state.showOverlay);
+
+  // Debug: Log the global store state
+  const currentlyPlayingVideo = useGlobalVideoStore(
+    (state) => state.currentlyPlayingVideo
+  );
+  console.log("🏪 Global store state:", {
+    playingVideos,
+    mutedVideos,
+    progresses,
+    showOverlay,
+    currentlyPlayingVideo,
+  });
+  const hasCompleted = useGlobalVideoStore((state) => state.hasCompleted);
+  const isAutoPlayEnabled = useGlobalVideoStore(
+    (state) => state.isAutoPlayEnabled
+  );
+  const handleVideoVisibilityChange = useGlobalVideoStore(
+    (state) => state.handleVideoVisibilityChange
+  );
   // Note: Using contentStats for all statistics instead of separate videoStats
 
   const toggleMute = (key: string) => globalVideoStore.toggleVideoMute(key);
+  const togglePlay = (key: string) => {
+    console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
+    console.log("🎮 Current playingVideos state:", playingVideos);
+    globalVideoStore.playVideoGlobally(key);
+    console.log("🎮 After calling playVideoGlobally");
+  };
 
   // 🔁 Helper: try to refresh stale media URL then play audio
   const playMusicWithRefresh = useCallback(
     async (item: MediaItem, id: string) => {
       const uri = item.fileUrl;
-      if (!uri || String(uri).trim() === "") {
+      console.log(`🎵 playMusicWithRefresh called for "${item.title}":`, {
+        originalUri: uri,
+        uriLength: uri?.length || 0,
+        isValidUrl: uri?.startsWith("http"),
+      });
+
+      if (!uri || String(uri).trim() === "" || !uri.startsWith("http")) {
+        console.log("🔄 Attempting to refresh media URL...");
         const fresh = await tryRefreshMediaUrl(item);
-        if (fresh) {
+        if (fresh && fresh.startsWith("http")) {
+          console.log(
+            "✅ Got fresh URL, attempting to play:",
+            fresh.substring(0, 100) + "..."
+          );
           playAudio(fresh, id);
+        } else {
+          console.warn(
+            "❌ No valid URL available for audio playback:",
+            item.title
+          );
         }
       } else {
+        console.log("✅ Using original URL for playback");
         playAudio(uri, id);
       }
     },
@@ -686,65 +1017,22 @@ function AllContentTikTok() {
     return `${days}DAYS AGO`;
   };
 
+  const { navigateToReels } = useVideoNavigation();
+
   const handleVideoTap = (key: string, video?: MediaItem, index?: number) => {
     // Navigate to reels view with the video list for swipeable navigation
     if (video && index !== undefined) {
       console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
 
-      // Pause all videos before navigation
-      globalVideoStore.pauseAllVideos();
-      setCurrentlyVisibleVideo(null);
-
-      // Prepare the full video list for TikTok-style navigation
-      const videoListForNavigation = allVideos.map((v, idx) => ({
-        title: v.title,
-        speaker: getDisplayName(v.speaker, v.uploadedBy),
-        timeAgo: getTimeAgo(v.createdAt),
-        views: contentStats[getContentKey(v)]?.views || v.views || 0,
-        sheared: contentStats[getContentKey(v)]?.sheared || v.sheared || 0,
-        saved: contentStats[getContentKey(v)]?.saved || v.saved || 0,
-        favorite: globalFavoriteCounts[getContentKey(v)] || v.favorite || 0,
-        fileUrl: v.fileUrl || "", // Will be refreshed in reels if empty
-        imageUrl: v.fileUrl,
-        speakerAvatar:
-          typeof v.speakerAvatar === "string"
-            ? v.speakerAvatar
-            : v.speakerAvatar || require("../../assets/images/Avatar-1.png"),
-        _id: v._id,
-        contentType: v.contentType,
-        description: v.description,
-        createdAt: v.createdAt,
-        uploadedBy: v.uploadedBy,
-      }));
-
-      router.push({
-        pathname: "/reels/Reelsviewscroll",
-        params: {
-          title: video.title,
-          speaker: getDisplayName(video.speaker, video.uploadedBy),
-          timeAgo: getTimeAgo(video.createdAt),
-          views: String(
-            contentStats[getContentKey(video)]?.views || video.views || 0
-          ),
-          sheared: String(
-            contentStats[getContentKey(video)]?.sheared || video.sheared || 0
-          ),
-          saved: String(
-            contentStats[getContentKey(video)]?.saved || video.saved || 0
-          ),
-          favorite: String(
-            globalFavoriteCounts[getContentKey(video)] || video.favorite || 0
-          ),
-          imageUrl: video.fileUrl || "",
-          speakerAvatar:
-            typeof video.speakerAvatar === "string"
-              ? video.speakerAvatar
-              : video.speakerAvatar ||
-                require("../../assets/images/Avatar-1.png").toString(),
-          category: "videos",
-          videoList: JSON.stringify(videoListForNavigation),
-          currentIndex: String(index),
-        },
+      navigateToReels({
+        video,
+        index,
+        allVideos,
+        contentStats,
+        globalFavoriteCounts,
+        getContentKey,
+        getTimeAgo,
+        getDisplayName,
       });
     }
   };
@@ -760,15 +1048,30 @@ function AllContentTikTok() {
       );
       if (activeKey) {
         const ref = videoRefs.current[activeKey];
-        if (ref?.getStatusAsync && ref?.setPositionAsync) {
-          ref
-            .getStatusAsync()
-            .then((status: { isLoaded: any; durationMillis: number }) => {
-              if (status.isLoaded && status.durationMillis) {
-                ref.setPositionAsync((pct / 100) * status.durationMillis);
-              }
-            });
-        }
+
+        // Ensure video operations happen on main thread
+        InteractionManager.runAfterInteractions(() => {
+          if (
+            ref?.getStatusAsync &&
+            ref?.setPositionAsync &&
+            isMountedRef.current
+          ) {
+            ref
+              .getStatusAsync()
+              .then((status: { isLoaded: any; durationMillis: number }) => {
+                if (
+                  status.isLoaded &&
+                  status.durationMillis &&
+                  isMountedRef.current
+                ) {
+                  ref.setPositionAsync((pct / 100) * status.durationMillis);
+                }
+              })
+              .catch((error: any) => {
+                console.warn("Video seek error:", error);
+              });
+          }
+        });
 
         globalVideoStore.setVideoProgress(activeKey, pct);
       }
@@ -824,6 +1127,31 @@ function AllContentTikTok() {
 
     initializeAudio();
   }, [allVideos]);
+
+  // Proper cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+
+      // Safely cleanup all video refs on main thread
+      InteractionManager.runAfterInteractions(() => {
+        // Cleanup global video store
+        globalVideoStore.cleanupAllVideos();
+
+        // Cleanup local video refs
+        Object.keys(videoRefs.current).forEach((key) => {
+          try {
+            if (videoRefs.current[key]) {
+              videoRefs.current[key] = null;
+            }
+          } catch (error) {
+            console.warn(`Video cleanup error for ${key}:`, error);
+          }
+        });
+        videoRefs.current = {};
+      });
+    };
+  }, []); // Remove globalVideoStore dependency to prevent re-mounting
 
   useEffect(() => {
     allVideos.forEach((v, index) => {
@@ -1004,7 +1332,7 @@ function AllContentTikTok() {
   // Handle refresh - prioritize TikTok-style endpoints
   const handleRefresh = useCallback(() => {
     refreshAllContent();
-  }, [refreshAllContent]);
+  }, []); // Remove refreshAllContent dependency to prevent re-mounting
 
   // Handle load more - TikTok-style endpoints don't support pagination, so this is a no-op
   const handleLoadMore = useCallback(() => {
@@ -1014,26 +1342,50 @@ function AllContentTikTok() {
     );
   }, []);
 
-  // Handle like - same pattern as AllContentNew
-  const handleLike = useCallback(async (contentId: string, liked: boolean) => {
-    try {
-      console.log("🔄 Like action:", contentId, liked);
+  // Handle like - using contentInteractionAPI for proper endpoint
+  const handleLike = useCallback(
+    async (contentId: string, liked: boolean) => {
+      console.log("🚨 DEBUG: handleLike called");
+      console.log("🚨 DEBUG: - contentId:", contentId);
+      console.log("🚨 DEBUG: - liked:", liked);
+      console.log(
+        "🚨 DEBUG: - contentInteractionAPI:",
+        typeof contentInteractionAPI
+      );
 
-      // Call the like API using the same pattern as AllContentNew
-      const response = await allMediaAPI.toggleLike("media", contentId);
+      try {
+        console.log("🔄 Like action:", contentId, liked);
 
-      if (response.success) {
-        console.log("✅ Like successful:", response.data);
+        // Send real-time like first for instant feedback (only if socket is connected)
+        if (socketManager && socketManager.isConnected()) {
+          try {
+            socketManager.sendLike(contentId, "media");
+          } catch (socketError) {
+            console.warn(
+              "⚠️ Real-time like failed, continuing with API call:",
+              socketError
+            );
+          }
+        }
+
+        // Use the correct contentInteractionAPI for like functionality
+        console.log("🚨 DEBUG: Calling contentInteractionAPI.toggleLike...");
+        const response = await contentInteractionAPI.toggleLike(
+          contentId,
+          "video"
+        );
+        console.log("🚨 DEBUG: toggleLike response:", response);
+
+        console.log("✅ Like successful:", response);
         // The UI will be updated through the store's state management
-      } else {
-        console.error("❌ Like failed:", response.error);
+      } catch (error) {
+        console.error("🚨 DEBUG: Like error details:", error);
+        console.error("❌ Like error:", error);
         // You can add notification here if needed
       }
-    } catch (error) {
-      console.error("❌ Like error:", error);
-      // You can add notification here if needed
-    }
-  }, []);
+    },
+    [socketManager]
+  );
 
   const handleShare = async (key: string, item: any) => {
     console.log("🔄 Share button clicked for:", item.title);
@@ -1414,7 +1766,7 @@ function AllContentTikTok() {
             {/* Center Play/Pause button */}
             <View className="absolute inset-0 justify-center items-center">
               <TouchableOpacity
-                onPress={() => playAudio(audio.fileUrl, modalKey)}
+                onPress={() => playMusicWithRefresh(audio, modalKey)}
                 className="bg-white/70 p-3 rounded-full"
                 activeOpacity={0.9}
               >
@@ -1437,63 +1789,13 @@ function AllContentTikTok() {
               </View>
             </View>
 
-            {/* Bottom Controls: progress and mute, styled similar to video */}
-            <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-              <TouchableOpacity
-                onPress={() => playAudio(audio.fileUrl, modalKey)}
-              >
-                <Ionicons
-                  name={isPlaying ? "pause" : "play"}
-                  size={24}
-                  color="#FEA74E"
-                />
-              </TouchableOpacity>
-              <View className="flex-1 h-1 bg-white/30 rounded-full relative">
-                <View
-                  className="h-full bg-[#FEA74E] rounded-full"
-                  style={{ width: `${currentProgress * 100}%` }}
-                />
-                <View
-                  style={{
-                    position: "absolute",
-                    left: `${currentProgress * 100}%`,
-                    transform: [{ translateX: -6 }],
-                    top: -5,
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    backgroundColor: "#FFFFFF",
-                    borderWidth: 1,
-                    borderColor: "#FEA74E",
-                  }}
-                />
-              </View>
-              <TouchableOpacity
-                onPress={async () => {
-                  const currentMuted = audioMuteMap[modalKey] ?? false;
-                  const newMuted = !currentMuted;
-                  setAudioMuteMap((prev) => ({
-                    ...prev,
-                    [modalKey]: newMuted,
-                  }));
-                  const snd = soundMap[modalKey];
-                  if (snd) {
-                    try {
-                      await snd.setIsMutedAsync(newMuted);
-                    } catch {}
-                  }
-                }}
-              >
-                <Ionicons
-                  name={
-                    audioMuteMap[modalKey] ?? false
-                      ? "volume-mute"
-                      : "volume-high"
-                  }
-                  size={20}
-                  color="#FEA74E"
-                />
-              </TouchableOpacity>
+            {/* Compact Audio Controls - Using Advanced Audio System */}
+            <View className="absolute bottom-3 left-3 right-3">
+              <CompactAudioControls
+                audioUrl={audio.fileUrl || ""}
+                audioKey={audio._id || audio.fileUrl || "unknown"}
+                className="bg-black/50 rounded-lg"
+              />
             </View>
 
             {/* Title overlay above controls */}
@@ -1617,282 +1919,59 @@ function AllContentTikTok() {
     );
   };
 
-  // 📹 Render video card with TikTok-style interface
+  // 📹 Render video card with proper navigation system
   const renderVideoCard = (video: MediaItem, index: number) => {
     const modalKey = `video-${video._id || video.fileUrl || index}`;
-    const progress = progresses[modalKey] ?? 0;
     const key = getContentKey(video);
     const stats = contentStats[key] || {};
-    const isSermon = video.contentType === "sermon";
 
     return (
-      <View
+      <VideoCard
         key={modalKey}
-        className="flex flex-col mb-10"
-        onLayout={(e) => {
-          const { y, height } = e.nativeEvent.layout;
-          contentLayoutsRef.current[modalKey] = { y, height, type: "video" };
-        }}
-      >
-        <TouchableWithoutFeedback
-          onPress={() => {
-            // Navigate to reels (Instagram/TikTok-style) full screen mode when tapping video area
-            handleVideoTap(modalKey, video, index);
-          }}
-        >
-          <View className="w-full h-[400px] overflow-hidden relative">
-            <Video
-              ref={(ref) => {
-                if (ref) videoRefs.current[modalKey] = ref;
-              }}
-              source={{
-                uri: (() => {
-                  const videoUrl =
-                    video.fileUrl &&
-                    video.fileUrl.trim() &&
-                    video.fileUrl.trim() !==
-                      "https://example.com/placeholder.mp4"
-                      ? video.fileUrl.trim()
-                      : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
-                  // Debug logging for video URLs
-                  console.log(`🎥 Video URL for "${video.title}":`, {
-                    originalFileUrl: video.fileUrl,
-                    finalVideoUrl: videoUrl,
-                    contentType: video.contentType,
-                    _id: video._id,
-                    isUsingFallback: videoUrl.includes("BigBuckBunny"),
-                    urlLength: video.fileUrl?.length || 0,
-                  });
-
-                  return videoUrl;
-                })(),
-              }}
-              style={{ width: "100%", height: "100%", position: "absolute" }}
-              resizeMode={ResizeMode.COVER}
-              isMuted={mutedVideos[modalKey] ?? false}
-              volume={mutedVideos[modalKey] ? 0.0 : videoVolume}
-              shouldPlay={playingVideos[modalKey] ?? false}
-              useNativeControls={false}
-              onPlaybackStatusUpdate={(status) => {
-                if (!status.isLoaded) return;
-                const pct = status.durationMillis
-                  ? (status.positionMillis / status.durationMillis) * 100
-                  : 0;
-                globalVideoStore.setVideoProgress(modalKey, pct);
-                const ref = videoRefs.current[modalKey];
-                if (status.didJustFinish) {
-                  const contentKey = getContentKey(video);
-                  if (!viewCounted[modalKey]) {
-                    incrementView(contentKey, video);
-                    setViewCounted((prev) => ({ ...prev, [modalKey]: true }));
-                    console.log(
-                      `✅ Video completed, view counted for: ${video.title}`
-                    );
-                  }
-                  ref?.setPositionAsync(0);
-                  globalVideoStore.pauseVideo(modalKey);
-                  globalVideoStore.setVideoCompleted(modalKey, true);
-                }
-              }}
-            />
-
-            {/* ✅ Centered Play/Pause Button - always visible */}
-            <View className="absolute inset-0 justify-center items-center">
-              <TouchableOpacity
-                onPress={(e) => {
-                  // Stop event propagation to prevent going to full screen
-                  e.stopPropagation();
-                  // Use global media store to ensure only one media plays at a time
-                  globalMediaStore.playMediaGlobally(modalKey, "video");
-                }}
-              >
-                <View
-                  className={`${
-                    playingVideos[modalKey] ? "bg-black/30" : "bg-white/70"
-                  } p-3 rounded-full`}
-                >
-                  <Ionicons
-                    name={playingVideos[modalKey] ? "pause" : "play"}
-                    size={32}
-                    color={playingVideos[modalKey] ? "#FFFFFF" : "#FEA74E"}
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Content Type Icon - Top Left */}
-            <View className="absolute top-4 left-4">
-              <View className="bg-black/50 p-1 rounded-full">
-                <Ionicons
-                  name={isSermon ? "person" : "videocam"}
-                  size={16}
-                  color="#FFFFFF"
-                />
-              </View>
-            </View>
-
-            {/* Video Title - show when paused */}
-            {!playingVideos[modalKey] && (
-              <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
-                <Text
-                  className="text-white font-semibold text-[14px]"
-                  numberOfLines={2}
-                >
-                  {video.title}
-                </Text>
-              </View>
-            )}
-
-            {/* Bottom Controls (Progress bar and Mute button) - always visible */}
-            <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-              <View className="flex-1 h-1 bg-white/30 rounded-full relative">
-                <View
-                  className="h-full bg-[#FEA74E] rounded-full"
-                  style={{ width: `${progress}%` }}
-                />
-                <View
-                  style={{
-                    position: "absolute",
-                    left: `${progress}%`,
-                    transform: [{ translateX: -6 }],
-                    top: -5,
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    backgroundColor: "#FFFFFF",
-                    borderWidth: 1,
-                    borderColor: "#FEA74E",
-                  }}
-                />
-              </View>
-              <TouchableOpacity onPress={() => toggleMute(modalKey)}>
-                <Ionicons
-                  name={mutedVideos[modalKey] ? "volume-mute" : "volume-high"}
-                  size={20}
-                  color="#FEA74E"
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
-
-        {/* Footer */}
-        <View className="flex-row items-center justify-between mt-1 px-3">
-          <View className="flex flex-row items-center">
-            <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
-              <Image
-                source={getUserAvatarFromContent(video)}
-                style={{ width: 30, height: 30, borderRadius: 999 }}
-                resizeMode="cover"
-                onError={(error) => {
-                  console.warn(
-                    "❌ Failed to load video speaker avatar:",
-                    error.nativeEvent.error
-                  );
-                }}
-              />
-            </View>
-            <View className="ml-3">
-              <View className="flex-row items-center">
-                <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getUserDisplayNameFromContent(video)}
-                </Text>
-                <View className="flex flex-row mt-2 ml-2">
-                  <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {getTimeAgo(video.createdAt)}
-                  </Text>
-                </View>
-              </View>
-              <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
-                <View className="flex-row items-center mr-6">
-                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.views ?? video.views ?? 0}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleFavorite(key, video)}
-                  className="flex-row items-center mr-6"
-                >
-                  <MaterialIcons
-                    name={userFavorites[key] ? "favorite" : "favorite-border"}
-                    size={28}
-                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {globalFavoriteCounts[key] || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-row items-center mr-6"
-                  onPress={() => handleComment(key, video)}
-                >
-                  <CommentIcon
-                    comments={[]}
-                    size={28}
-                    color="#98A2B3"
-                    showCount={true}
-                    count={
-                      stats.comment === 1
-                        ? (video.comment ?? 0) + 1
-                        : video.comment ?? 0
-                    }
-                    layout="horizontal"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleSave(key, video)}
-                  className="flex-row items-center mr-6"
-                >
-                  <MaterialIcons
-                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                    size={28}
-                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.saved === 1
-                      ? (video.saved ?? 0) + 1
-                      : video.saved ?? 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-row items-center"
-                  onPress={() => handleDownloadPress(video)}
-                >
-                  <Ionicons
-                    name={
-                      checkIfDownloaded(video._id || video.fileUrl)
-                        ? "checkmark-circle"
-                        : "download-outline"
-                    }
-                    size={28}
-                    color={
-                      checkIfDownloaded(video._id || video.fileUrl)
-                        ? "#256E63"
-                        : "#98A2B3"
-                    }
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              closeAllMenus();
-              setModalVisible(modalVisible === modalKey ? null : modalKey);
-            }}
-            className="mr-2"
-          >
-            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+        video={video}
+        index={index}
+        modalKey={modalKey}
+        contentStats={contentStats}
+        userFavorites={userFavorites}
+        globalFavoriteCounts={globalFavoriteCounts}
+        playingVideos={playingVideos}
+        mutedVideos={mutedVideos}
+        progresses={progresses}
+        videoVolume={videoVolume}
+        currentlyVisibleVideo={currentlyVisibleVideo}
+        onVideoTap={handleVideoTap}
+        onTogglePlay={togglePlay}
+        onToggleMute={toggleMute}
+        onFavorite={handleFavorite}
+        onComment={handleComment}
+        onSave={handleSave}
+        onDownload={handleDownloadPress}
+        onShare={handleShare}
+        onModalToggle={setModalVisible}
+        modalVisible={modalVisible}
+        comments={comments}
+        checkIfDownloaded={checkIfDownloaded}
+        getContentKey={getContentKey}
+        getTimeAgo={getTimeAgo}
+        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+        getUserAvatarFromContent={getUserAvatarFromContent}
+      />
     );
   };
 
   // For now, let's create a simple placeholder that shows we're implementing the new interface
+  console.log("🚨 DEBUG: About to render AllContentTikTok");
+  console.log("🚨 DEBUG: - mediaList length:", mediaList?.length || 0);
+  console.log(
+    "🚨 DEBUG: - filteredMediaList length:",
+    filteredMediaList?.length || 0
+  );
+  console.log("🚨 DEBUG: - contentType filter:", contentType);
+  console.log("🚨 DEBUG: - allContentLoading:", allContentLoading);
+  console.log("🚨 DEBUG: - defaultContentLoading:", defaultContentLoading);
+  console.log("🚨 DEBUG: - allContentError:", allContentError);
+  console.log("🚨 DEBUG: - defaultContentError:", defaultContentError);
+
   return (
     <ScrollView
       ref={scrollViewRef}
@@ -1915,7 +1994,8 @@ function AllContentTikTok() {
       refreshControl={
         <RefreshControl
           refreshing={
-            (allContentLoading || defaultContentLoading) && mediaList.length > 0
+            (allContentLoading || defaultContentLoading) &&
+            filteredMediaList.length > 0
           }
           onRefresh={handleRefresh}
           colors={["#666"]}
@@ -1930,6 +2010,63 @@ function AllContentTikTok() {
             Most Recent
           </Text>
           {renderVideoCard(mostRecentItem, 0)}
+        </View>
+      )}
+
+      {/* 🔍 DEBUG: Show ALL Content Section */}
+      {filteredMediaList.length > 0 && (
+        <View className="mt-5">
+          <Text className="text-[16px] font-rubik-semibold px-4 mb-3">
+            {contentType === "ALL" ? "All Content" : `${contentType} Content`} (
+            {filteredMediaList.length} items)
+          </Text>
+          {filteredMediaList.map((item, index) => {
+            console.log(`🚨 DEBUG: Rendering item ${index}:`, {
+              _id: item._id,
+              title: item.title,
+              contentType: item.contentType,
+              fileUrl: item.fileUrl?.substring(0, 50) + "...",
+            });
+
+            // Render based on content type
+            if (item.contentType === "video" || item.contentType === "videos") {
+              console.log(`🚨 DEBUG: Rendering video card for item ${index}`);
+              return renderVideoCard(item, index);
+            } else if (
+              item.contentType === "audio" ||
+              item.contentType === "music"
+            ) {
+              return renderMusicCard(item, index);
+            } else if (
+              item.contentType === "image" ||
+              item.contentType === "ebook" ||
+              item.contentType === "books"
+            ) {
+              return renderEbookCard(item, index);
+            } else {
+              // Fallback for unknown content types
+              return (
+                <View
+                  key={`unknown-${item._id || index}`}
+                  className="flex flex-col mb-10"
+                >
+                  <View className="w-full h-[200px] bg-gray-200 rounded-lg items-center justify-center">
+                    <Text className="text-gray-600 font-semibold text-center">
+                      {item.title}
+                    </Text>
+                    <Text className="text-gray-500 text-sm mt-2">
+                      Type: {item.contentType}
+                    </Text>
+                  </View>
+                  <View className="px-3 mt-2">
+                    <Text className="text-sm text-gray-600">
+                      Unknown content type: {item.contentType}
+                    </Text>
+                  </View>
+                </View>
+              );
+            }
+          })}
         </View>
       )}
 
@@ -2008,6 +2145,28 @@ function AllContentTikTok() {
         </View>
       )}
 
+      {/* Connection Status */}
+      <View
+        className="mx-4 mt-5 p-2 rounded-lg"
+        style={{
+          backgroundColor:
+            socketManager && socketManager.isConnected()
+              ? "#4CAF50"
+              : socketManager
+              ? "#f44336"
+              : "#FF9800",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "white", fontSize: 12 }}>
+          {socketManager && socketManager.isConnected()
+            ? "🟢 Real-time Connected"
+            : socketManager
+            ? "🔴 Real-time Disconnected"
+            : "🟡 Real-time Unavailable"}
+        </Text>
+      </View>
+
       {/* Debug info */}
       <View className="mt-5 p-4 bg-blue-100 mx-4 rounded-lg">
         <Text className="text-blue-800 font-bold mb-2">Debug Info:</Text>
@@ -2018,10 +2177,17 @@ function AllContentTikTok() {
           Default Content: {defaultContent?.length || 0} items
         </Text>
         <Text className="text-blue-700">
+          Source Data: {allContent.length > 0 ? "allContent" : "defaultContent"}
+        </Text>
+        <Text className="text-blue-700">
           Transformed Data: {mediaList.length} items
+        </Text>
+        <Text className="text-blue-700">
+          Filtered Data: {filteredMediaList.length} items ({contentType})
         </Text>
         <Text className="text-blue-700">Videos: {allVideos.length}</Text>
         <Text className="text-blue-700">Music: {allMusic.length}</Text>
+        <Text className="text-blue-700">Sermons: {allSermons.length}</Text>
         <Text className="text-blue-700">Ebooks: {allEbooks.length}</Text>
         <Text className="text-blue-700">
           All Content Loading: {allContentLoading ? "Yes" : "No"}
@@ -2035,16 +2201,35 @@ function AllContentTikTok() {
         <Text className="text-blue-700">
           Default Error: {defaultContentError || "None"}
         </Text>
+
+        {/* Content Type Distribution */}
+        {filteredMediaList.length > 0 && (
+          <View className="mt-2">
+            <Text className="text-blue-800 font-bold mb-1">Content Types:</Text>
+            {Object.entries(
+              filteredMediaList.reduce((acc, item) => {
+                acc[item.contentType] = (acc[item.contentType] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>)
+            ).map(([type, count]) => (
+              <Text key={type} className="text-blue-700 text-xs">
+                {type}: {count} items
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Empty state */}
-      {mediaList.length === 0 &&
+      {filteredMediaList.length === 0 &&
         !allContentLoading &&
         !defaultContentLoading &&
         !allContentError &&
         !defaultContentError && (
           <Text className="text-center text-gray-500 mt-10">
-            No content available yet.
+            {contentType === "ALL"
+              ? "No content available yet."
+              : `No ${contentType.toLowerCase()} content available yet.`}
           </Text>
         )}
     </ScrollView>

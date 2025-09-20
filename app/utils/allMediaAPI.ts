@@ -354,16 +354,18 @@ class AllMediaAPI {
     try {
       const endpoints = [
         "/api/media/public/all-content",
-        "/api/media/all-content", 
+        "/api/media/all-content",
         "/api/media/default",
-        "/api/media"
+        "/api/media",
       ];
 
       for (const endpoint of endpoints) {
         console.log(`🔍 Testing ${endpoint}...`);
-        const response = await fetch(`${this.baseURL}${endpoint}?page=1&limit=1`);
+        const response = await fetch(
+          `${this.baseURL}${endpoint}?page=1&limit=1`
+        );
         console.log(`📡 ${endpoint} status:`, response.status);
-        
+
         if (response.ok) {
           const data = await response.json();
           console.log(`✅ ${endpoint} response:`, data);
@@ -388,16 +390,20 @@ class AllMediaAPI {
   }> {
     try {
       console.log("🌐 Fetching public all content...");
-      const response = await fetch(`${this.baseURL}/api/media/public/all-content`);
-      
+      const response = await fetch(
+        `${this.baseURL}/api/media/public/all-content`
+      );
+
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        throw new Error(
+          `HTTP error! status: ${response.status} - ${errorText}`
+        );
       }
 
       const data = await response.json();
       console.log("✅ Public all content response:", data);
-      
+
       return {
         success: true,
         media: data.media || data.data?.media || [],
@@ -424,20 +430,22 @@ class AllMediaAPI {
     try {
       const headers = await this.getAuthHeaders();
       console.log("🌐 Fetching authenticated all content...");
-      
+
       const response = await fetch(`${this.baseURL}/api/media/all-content`, {
         method: "GET",
         headers,
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        throw new Error(
+          `HTTP error! status: ${response.status} - ${errorText}`
+        );
       }
 
       const data = await response.json();
       console.log("✅ Authenticated all content response:", data);
-      
+
       return {
         success: true,
         media: data.media || data.data?.media || [],

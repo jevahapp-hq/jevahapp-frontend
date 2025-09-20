@@ -4,15 +4,13 @@ import {
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
-import { Audio, ResizeMode, Video } from "expo-av";
+import { ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
   Image,
-  PanResponder,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -25,6 +23,7 @@ import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import CommentIcon from "./CommentIcon";
+import { CompactAudioControls } from "./CompactAudioControls";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -38,6 +37,12 @@ interface ContentCardProps {
     contentType: "video" | "audio" | "image";
     duration?: number;
     author: {
+      _id: string;
+      firstName: string;
+      lastName: string;
+      avatar?: string;
+    };
+    authorInfo?: {
       _id: string;
       firstName: string;
       lastName: string;
@@ -86,11 +91,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
   // State management
   const [isPlaying, setIsPlaying] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
-  const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [viewCounted, setViewCounted] = useState(false);
   const [userFavorites, setUserFavorites] = useState<Record<string, boolean>>(
@@ -111,16 +113,17 @@ const ContentCard: React.FC<ContentCardProps> = ({
     commentCount: content.commentCount || 0,
     shareCount: content.shareCount || 0,
     viewCount: content.viewCount || 0,
-    // Map author structure
-    author: content.author || {
-      _id:
-        (content as any).uploadedBy?._id ||
-        (content as any).uploadedBy ||
-        "unknown",
-      firstName: (content as any).uploadedBy?.firstName || "Unknown",
-      lastName: (content as any).uploadedBy?.lastName || "User",
-      avatar: (content as any).uploadedBy?.avatar,
-    },
+    // Map author structure with proper fallbacks
+    author: content.author ||
+      content.authorInfo || {
+        _id:
+          (content as any).uploadedBy?._id ||
+          (content as any).uploadedBy ||
+          "unknown",
+        firstName: (content as any).uploadedBy?.firstName || "Unknown",
+        lastName: (content as any).uploadedBy?.lastName || "User",
+        avatar: (content as any).uploadedBy?.avatar,
+      },
   };
 
   // Real-time state
@@ -150,6 +153,45 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const [isRefreshingUrl, setIsRefreshingUrl] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
 
+  // Function to convert signed URLs to public URLs (same as AllContentTikTok)
+  const convertToPublicUrl = (signedUrl: string): string => {
+    if (!signedUrl) return signedUrl;
+
+    try {
+      const url = new URL(signedUrl);
+      // Remove AWS signature parameters
+      const paramsToRemove = [
+        "X-Amz-Algorithm",
+        "X-Amz-Content-Sha256",
+        "X-Amz-Credential",
+        "X-Amz-Date",
+        "X-Amz-Expires",
+        "X-Amz-Signature",
+        "X-Amz-SignedHeaders",
+        "x-amz-checksum-mode",
+        "x-id",
+      ];
+
+      paramsToRemove.forEach((param) => {
+        url.searchParams.delete(param);
+      });
+
+      // Convert to public URL format
+      const publicUrl = url.toString();
+      console.log(
+        `🔗 ContentCard Converted URL: ${signedUrl.substring(
+          0,
+          100
+        )}... → ${publicUrl.substring(0, 100)}...`
+      );
+
+      return publicUrl;
+    } catch (error) {
+      console.warn("⚠️ ContentCard Error converting URL:", error);
+      return signedUrl; // Return original if conversion fails
+    }
+  };
+
   // Use the same URL validation and fallback as library
   const isValidUri = (u: any) =>
     typeof u === "string" &&
@@ -166,26 +208,34 @@ const ContentCard: React.FC<ContentCardProps> = ({
   });
 
   // Use the mapped content for video URL
-  const videoUrl = mappedContent.mediaUrl;
+  const rawVideoUrl = mappedContent.mediaUrl;
 
-  // Check if URL is expired or invalid
-  const isExpiredUrl = (url: string) => {
-    if (!url) return true;
-    // Check for common cloud storage expiration patterns
-    return url.includes("X-Amz-Expires=") && url.includes("X-Amz-Date=");
-  };
+  // Convert signed URL to public URL for videos (same logic as AllContentTikTok)
+  const videoUrl =
+    content.contentType === "video" && rawVideoUrl
+      ? convertToPublicUrl(rawVideoUrl)
+      : rawVideoUrl;
 
+  // For videos, always use the mediaUrl (actual video file), not thumbnail
   const safeVideoUri =
-    isValidUri(videoUrl) && !isExpiredUrl(videoUrl)
-      ? String(videoUrl).trim()
-      : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+    content.contentType === "video"
+      ? isValidUri(videoUrl)
+        ? String(videoUrl).trim()
+        : rawVideoUrl ||
+          "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+      : mappedContent.thumbnailUrl ||
+        mappedContent.mediaUrl ||
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
-  console.log(`🎬 Using video URL for ${content.title}:`, safeVideoUri);
-  console.log(`🎬 Video URL validation:`, {
-    originalUrl: videoUrl,
+  console.log(`🎬 ContentCard Video URL for "${content.title}":`, {
+    contentType: content.contentType,
+    rawMediaUrl: rawVideoUrl,
+    convertedVideoUrl: videoUrl,
+    finalSafeUrl: safeVideoUri,
+    thumbnailUrl: mappedContent.thumbnailUrl,
     isValid: isValidUri(videoUrl),
-    isExpired: isExpiredUrl(videoUrl),
-    finalUrl: safeVideoUri,
+    isUsingFallback: safeVideoUri.includes("BigBuckBunny"),
+    isVideoContent: content.contentType === "video",
   });
 
   // Use the same simple video states as library
@@ -273,8 +323,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const sampleComments = [
     {
       id: "1",
-      userName: content.author.firstName || "User",
-      avatar: content.author.avatar || "",
+      userName:
+        content.author?.firstName || content.authorInfo?.firstName || "User",
+      avatar: content.author?.avatar || content.authorInfo?.avatar || "",
       timestamp: "3HRS AGO",
       comment: "Amazing content! God is working!",
       likes: 45,
@@ -429,76 +480,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
     // Final fallback
     return "Jevah HQ";
-  };
-
-  // Audio playback functions - using global media store
-  const playAudio = async () => {
-    const audioUrl = mappedContent.mediaUrl;
-    if (!audioUrl) return;
-    if (isAudioLoading) return;
-
-    console.log(`🎵 Playing audio for ${content.title}:`, audioUrl);
-
-    setIsAudioLoading(true);
-    try {
-      if (sound) {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          if (status.isPlaying) {
-            await sound.pauseAsync();
-            setIsPlaying(false);
-            globalMediaStore.pauseAudio(modalKey);
-          } else {
-            // Pause all other media and play this audio
-            globalMediaStore.playMediaGlobally(modalKey, "audio");
-            await sound.playAsync();
-            setIsPlaying(true);
-          }
-        }
-      } else {
-        // Pause all other media before playing new audio
-        globalMediaStore.playMediaGlobally(modalKey, "audio");
-
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: audioUrl },
-          {
-            shouldPlay: true,
-            isMuted: isMuted,
-          }
-        );
-        setSound(newSound);
-        setIsPlaying(true);
-
-        newSound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded) {
-            if (status.durationMillis) {
-              setAudioDuration(status.durationMillis);
-              setAudioProgress(
-                (status.positionMillis || 0) / status.durationMillis
-              );
-              globalMediaStore.setAudioDuration(
-                modalKey,
-                status.durationMillis
-              );
-            }
-            if (status.positionMillis) {
-              const progress =
-                status.positionMillis / (status.durationMillis || 1);
-              globalMediaStore.setAudioProgress(modalKey, progress);
-            }
-            if (status.didJustFinish) {
-              setIsPlaying(false);
-              setAudioProgress(0);
-              globalMediaStore.pauseAudio(modalKey);
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Audio playback error:", error);
-    } finally {
-      setIsAudioLoading(false);
-    }
   };
 
   // Video toggle function using global media store
@@ -670,10 +651,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
         fileUrl: content.mediaUrl,
         title: content.title,
         speaker: getUserDisplayNameFromContent(content),
-        uploadedBy: content.author._id,
+        uploadedBy: content.author?._id || content.authorInfo?._id,
         description: content.description,
         createdAt: content.createdAt,
-        speakerAvatar: content.author.avatar,
+        speakerAvatar: content.author?.avatar || content.authorInfo?.avatar,
         views: contentStats[key]?.views || content.viewCount,
         sheared: contentStats[key]?.sheared || content.shareCount,
         favorite: contentStats[key]?.favorite || content.likeCount,
@@ -740,40 +721,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
       setIsRefreshingUrl(false);
     }
   };
-
-  // Pan responder for progress bar
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderMove: (evt, gestureState) => {
-      const x = Math.max(0, Math.min(gestureState.moveX - 50, 260));
-      const pct = (x / 260) * 100;
-
-      if (content.contentType === "video" && videoRef.current) {
-        videoRef.current.getStatusAsync().then((status: any) => {
-          if (status.isLoaded && status.durationMillis) {
-            videoRef.current?.setPositionAsync(
-              (pct / 100) * status.durationMillis
-            );
-          }
-        });
-      } else if (content.contentType === "audio" && sound) {
-        sound.getStatusAsync().then((status: any) => {
-          if (status.isLoaded && status.durationMillis) {
-            sound.setPositionAsync((pct / 100) * status.durationMillis);
-          }
-        });
-      }
-    },
-  });
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
 
   // Simple debug - same as library
   useEffect(() => {
@@ -1005,10 +952,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
             {/* Bottom Controls - only show when playing */}
             {isVideoPlaying && (
               <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-                <View
-                  className="flex-1 h-1 bg-white/30 rounded-full relative"
-                  {...panResponder.panHandlers}
-                >
+                <View className="flex-1 h-1 bg-white/30 rounded-full relative">
                   <View
                     className="h-full bg-[#FEA74E] rounded-full"
                     style={{
@@ -1064,25 +1008,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
               }}
             />
 
-            {/* Center Play/Pause button */}
-            <View className="absolute inset-0 justify-center items-center">
-              <TouchableOpacity
-                onPress={playAudio}
-                className="bg-white/70 p-3 rounded-full"
-                activeOpacity={0.9}
-              >
-                {isAudioLoading ? (
-                  <ActivityIndicator size="small" color="#FEA74E" />
-                ) : (
-                  <Ionicons
-                    name={isPlaying ? "pause" : "play"}
-                    size={32}
-                    color="#FEA74E"
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
-
             {/* Right side actions */}
             <View className="flex-col absolute mt-[170px] ml-[360px]">
               <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
@@ -1136,45 +1061,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
               </View>
             </View>
 
-            {/* Bottom Controls */}
-            <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-              <TouchableOpacity onPress={playAudio}>
-                <Ionicons
-                  name={isPlaying ? "pause" : "play"}
-                  size={24}
-                  color="#FEA74E"
-                />
-              </TouchableOpacity>
-              <View
-                className="flex-1 h-1 bg-white/30 rounded-full relative"
-                {...panResponder.panHandlers}
-              >
-                <View
-                  className="h-full bg-[#FEA74E] rounded-full"
-                  style={{ width: `${audioProgress * 100}%` }}
-                />
-                <View
-                  style={{
-                    position: "absolute",
-                    left: `${audioProgress * 100}%`,
-                    transform: [{ translateX: -6 }],
-                    top: -5,
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    backgroundColor: "#FFFFFF",
-                    borderWidth: 1,
-                    borderColor: "#FEA74E",
-                  }}
-                />
-              </View>
-              <TouchableOpacity onPress={() => setIsMuted(!isMuted)}>
-                <Ionicons
-                  name={isMuted ? "volume-mute" : "volume-high"}
-                  size={20}
-                  color="#FEA74E"
-                />
-              </TouchableOpacity>
+            {/* Compact Audio Controls - Using Advanced Audio System */}
+            <View className="absolute bottom-3 left-3 right-3">
+              <CompactAudioControls
+                audioUrl={mappedContent.mediaUrl}
+                audioKey={content._id}
+                className="bg-black/50 rounded-lg"
+              />
             </View>
 
             {/* Title overlay */}

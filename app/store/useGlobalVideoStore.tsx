@@ -18,6 +18,7 @@ interface VideoPlayerState {
   playVideo: (videoKey: string) => void;
   pauseVideo: (videoKey: string) => void;
   pauseAllVideos: () => void;
+  cleanupAllVideos: () => void;
   toggleVideoMute: (videoKey: string) => void;
   setVideoProgress: (videoKey: string, progress: number) => void;
   setVideoCompleted: (videoKey: string, completed: boolean) => void;
@@ -84,6 +85,19 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       });
     },
 
+    // Thread-safe cleanup function
+    cleanupAllVideos: () => {
+      set(() => ({
+        currentlyPlayingVideo: null,
+        playingVideos: {},
+        showOverlay: {},
+        mutedVideos: {},
+        progresses: {},
+        hasCompleted: {},
+        currentlyVisibleVideo: null,
+      }));
+    },
+
     toggleVideoMute: (videoKey: string) => {
       set((state) => ({
         mutedVideos: {
@@ -113,11 +127,19 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
     // ✅ Global play function - the main function for playing videos
     playVideoGlobally: (videoKey: string) => {
+      console.log("🌍 playVideoGlobally called with:", videoKey);
       set((state) => {
         const isCurrentlyPlaying = state.playingVideos[videoKey] ?? false;
+        console.log("🌍 Current state:", {
+          videoKey,
+          isCurrentlyPlaying,
+          allPlayingVideos: state.playingVideos,
+          currentlyPlayingVideo: state.currentlyPlayingVideo,
+        });
 
         if (isCurrentlyPlaying) {
           // If video is already playing, pause it
+          console.log("🌍 Pausing video:", videoKey);
           return {
             currentlyPlayingVideo: null,
             playingVideos: { ...state.playingVideos, [videoKey]: false },
@@ -138,9 +160,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           newPlayingVideos[videoKey] = true;
           newShowOverlay[videoKey] = false;
 
-          console.log(
-            `🌍 Global video control: Playing ${videoKey}, paused all others`
-          );
+          console.log("🌍 Playing video:", videoKey);
+          console.log("🌍 New playing videos:", newPlayingVideos);
 
           return {
             currentlyPlayingVideo: videoKey,
