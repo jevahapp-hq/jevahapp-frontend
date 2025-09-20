@@ -186,11 +186,13 @@ function AllContent() {
   const tryRefreshMediaUrl = useCallback(async (item: MediaItem): Promise<string | null> => {
     try {
       console.log(`🔁 Attempting to refresh URL for: ${item.title}`);
+      
       const response = await allMediaAPI.getAllMedia({
         search: item.title,
         contentType: (item.contentType as any),
         limit: 1,
       });
+      
       const fresh = (response as any)?.media?.[0];
       if (fresh?.fileUrl) {
         console.log(`✅ Found fresh URL for ${item.title}: ${fresh.fileUrl}`);
@@ -207,7 +209,8 @@ function AllContent() {
         console.log(`⚠️ No fresh URL found for: ${item.title}`);
       }
     } catch (e) {
-      console.log("🔁 Refresh media URL failed:", e);
+      console.log("🔁 Refresh media URL failed (API unavailable):", e);
+      // Don't throw error - just return null to use original URL
     }
     return null;
   }, [mediaStore.mediaList]);
@@ -1223,12 +1226,12 @@ function AllContent() {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   className="flex-row items-center"
-                  onPress={() => handleDownloadPress(video)}
+                  onPress={() => handleShare(getContentKey(video), video)}
                 >
-                  <Ionicons 
-                    name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                  <Feather 
+                    name="send" 
                     size={28} 
-                    color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#98A2B3"} 
+                    color="#98A2B3" 
                   />
                 </TouchableOpacity>
               </View>
@@ -1479,12 +1482,12 @@ function AllContent() {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   className="flex-row items-center"
-                  onPress={() => handleDownloadPress(audio)}
+                  onPress={() => handleShare(getContentKey(audio), audio)}
                 >
-                  <Ionicons 
-                    name={checkIfDownloaded(audio._id || audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                  <Feather 
+                    name="send" 
                     size={28} 
-                    color={checkIfDownloaded(audio._id || audio.fileUrl) ? "#256E63" : "#98A2B3"} 
+                    color="#98A2B3" 
                   />
                 </TouchableOpacity>
               </View>
@@ -1706,12 +1709,12 @@ function AllContent() {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   className="flex-row items-center"
-                  onPress={() => handleDownloadPress(ebook)}
+                  onPress={() => handleShare(getContentKey(ebook), ebook)}
                 >
-                  <Ionicons 
-                    name={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                  <Feather 
+                    name="send" 
                     size={28} 
-                    color={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "#256E63" : "#98A2B3"} 
+                    color="#98A2B3" 
                   />
                 </TouchableOpacity>
               </View>
@@ -1899,62 +1902,6 @@ function AllContent() {
                 </View>
               </TouchableOpacity>
               
-              {/* Modal for mini card actions */}
-              {modalIndex === index && (
-                <>
-                  <TouchableWithoutFeedback onPress={closeAllMenus}>
-                    <View className="absolute inset-0 z-40" />
-                  </TouchableWithoutFeedback>
-                  <View className="absolute bottom-14 right-3 bg-white shadow-lg rounded-lg p-3 z-50 w-[160px] h-[180px] border border-gray-100">
-                    <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">View Details</Text>
-                      <Ionicons name="eye-outline" size={22} color="#1D2939" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleShare(key, item)}
-                      className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-                    >
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">Share</Text>
-                      <Feather name="send" size={22} color="#1D2939" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      className="flex-row items-center justify-between mt-6" 
-                      onPress={() => handleSave(key, item)}
-                    >
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">
-                        {stats.saved === 1 ? "Remove from Library" : "Save to Library"}
-                      </Text>
-                      <MaterialIcons
-                        name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                        size={22}
-                        color="#1D2939"
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
-                      onPress={async () => {
-                        const contentType = item.contentType === 'music' ? 'audio' : 
-                                          item.contentType === 'sermon' ? (item.fileUrl?.includes('.mp4') ? 'video' : 'audio') : 
-                                          item.contentType;
-                        const downloadableItem = convertToDownloadableItem(item, contentType as any);
-                        const result = await handleDownload(downloadableItem);
-                        if (result.success) {
-                          closeAllMenus();
-                        }
-                      }}
-                    >
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">
-                        {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
-                      </Text>
-                      <Ionicons 
-                        name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                        size={24} 
-                        color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#090E24"} 
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
               
               <View className="mt-2 flex flex-col w-full">
                 <View className="flex flex-row justify-between items-center">
@@ -1966,7 +1913,11 @@ function AllContent() {
                     {getDisplayName(item.speaker, item.uploadedBy)}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => { closeAllMenus(); setModalIndex(modalIndex === index ? null : index); }}
+                    onPress={() => { 
+                      closeAllMenus(); 
+                      setSelectedContent(item);
+                      setModalVisible(modalKey);
+                    }}
                     className="ml-2"
                   >
                     <Ionicons name="ellipsis-vertical" size={14} color="#9CA3AF" />
@@ -2143,6 +2094,8 @@ function AllContent() {
           <Text className="text-[16px] font-rubik-semibold px-4 mt-5 mb-3">Most Recent</Text>
           {mostRecentItem.contentType === 'videos'
             ? renderVideoCard(mostRecentItem as any, 0)
+            : mostRecentItem.contentType === 'music'
+            ? renderMusicCard(mostRecentItem as any, 0)
             : mostRecentItem.contentType === 'ebook' || mostRecentItem.contentType === 'books'
             ? renderEbookCard(mostRecentItem as any, 0)
             : renderSermonCard(mostRecentItem as any, 0)}
