@@ -499,9 +499,19 @@ const AutomaticDownloadsModal: React.FC<{
 
   useEffect(() => {
     if (isVisible) {
-      translateY.value = withSpring(0, { damping: 30 });
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     } else {
-      translateY.value = withSpring(SCREEN_HEIGHT);
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     }
   }, [isVisible]);
 
@@ -521,10 +531,20 @@ const AutomaticDownloadsModal: React.FC<{
     _event: HandlerStateChangeEvent<Record<string, unknown>>
   ) => {
     if (lastTranslateY.value > 150) {
-      translateY.value = withSpring(SCREEN_HEIGHT);
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
       runOnJS(onClose)();
     } else {
-      translateY.value = withSpring(0, { damping: 30 });
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     }
   };
 
@@ -562,7 +582,12 @@ const AutomaticDownloadsModal: React.FC<{
             </Text>
             <TouchableOpacity
               onPress={() => {
-                translateY.value = withSpring(SCREEN_HEIGHT);
+                translateY.value = withSpring(SCREEN_HEIGHT, { 
+                  damping: 20, 
+                  stiffness: 100,
+                  mass: 1,
+                  overshootClamping: true
+                });
                 runOnJS(onClose)();
               }}
               className="w-8 h-8 bg-gray-200 rounded-full justify-center items-center"

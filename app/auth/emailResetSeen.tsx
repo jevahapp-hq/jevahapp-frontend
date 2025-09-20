@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, Text, TouchableOpacity, View } from "react-native";
 import {
     GestureHandlerRootView,
     HandlerStateChangeEvent,
@@ -8,12 +8,10 @@ import {
     PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-    Easing,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
-    withSpring,
-    withTiming,
+    withSpring
 } from "react-native-reanimated";
 import authService from "../services/authService";
 
@@ -34,24 +32,19 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
 
   useEffect(() => {
     if (isVisible) {
-      // Use slower animation for smooth slide-up effect
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 25, stiffness: 100 });
-      }
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     } else {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 400,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
-      }
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     }
   }, [isVisible]);
 
@@ -71,24 +64,20 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
     _event: HandlerStateChangeEvent<Record<string, unknown>>
   ) => {
     if (lastTranslateY.value > 150) {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 400,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
-      }
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
       runOnJS(onClose)();
     } else {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 25, stiffness: 100 });
-      }
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     }
   };
 
@@ -113,14 +102,12 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
     }
     
     // Close the modal first
-    if (Platform.OS === 'android') {
-      translateY.value = withTiming(SCREEN_HEIGHT, {
-        duration: 400,
-        easing: Easing.in(Easing.cubic),
-      });
-    } else {
-      translateY.value = withSpring(SCREEN_HEIGHT);
-    }
+    translateY.value = withSpring(SCREEN_HEIGHT, { 
+      damping: 20, 
+      stiffness: 100,
+      mass: 1,
+      overshootClamping: true
+    });
     runOnJS(onClose)();
     
     // Navigate to verify-reset with email parameter
@@ -143,14 +130,12 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
         className="absolute inset-0 bg-black/30" 
         activeOpacity={1}
         onPress={() => {
-          if (Platform.OS === 'android') {
-            translateY.value = withTiming(SCREEN_HEIGHT, {
-              duration: 400,
-              easing: Easing.in(Easing.cubic),
-            });
-          } else {
-            translateY.value = withSpring(SCREEN_HEIGHT);
-          }
+          translateY.value = withSpring(SCREEN_HEIGHT, { 
+            damping: 20, 
+            stiffness: 100,
+            mass: 1,
+            overshootClamping: true
+          });
           runOnJS(onClose)();
         }}
       />

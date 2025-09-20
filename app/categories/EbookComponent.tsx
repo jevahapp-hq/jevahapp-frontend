@@ -2,7 +2,7 @@ import {
     AntDesign,
     Fontisto,
     Ionicons,
-    MaterialIcons,
+    MaterialIcons
 } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";

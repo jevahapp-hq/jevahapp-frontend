@@ -1,9 +1,10 @@
-import { AntDesign, Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { AntDesign, Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   Dimensions,
   Image,
@@ -18,6 +19,7 @@ import {
   View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import ContentActionModal from "../components/ContentActionModal";
 import { useCommentModal } from "../context/CommentModalContext";
 import useVideoViewport from "../hooks/useVideoViewport";
 import { useDownloadStore } from "../store/useDownloadStore";
@@ -400,6 +402,7 @@ function AllContent() {
   const videoRefs = useRef<Record<string, any>>({});
   const [videoVolume, setVideoVolume] = useState<number>(1.0); // 🔊 Add volume control
   const [modalVisible, setModalVisible] = useState<string | null>(null);
+  const [selectedContent, setSelectedContent] = useState<MediaItem | null>(null);
   const [viewCounted, setViewCounted] = useState<Record<string, boolean>>({});
   
   // 📱 Scroll-based auto-play state
@@ -768,16 +771,21 @@ function AllContent() {
   }, [mediaList.length]);
 
   const handleShare = async (key: string, item: any) => {
-    console.log("🔄 Share button clicked for:", item.title);
+    console.log("🔄 Share function called with:", { key, item });
+    
     try {
-      const result = await Share.share({
-        title: item.title,
-        message: `Check this out: ${item.title}\n${item.fileUrl}`,
-        url: item.fileUrl,
-      });
-
-      if (result.action === Share.sharedAction) {
-        console.log("✅ Share completed successfully");
+      // Test with minimal options first
+      const shareOptions = {
+        message: `Check out this ${item.contentType}: ${item.title}`,
+      };
+      
+      console.log("🔄 Share options:", shareOptions);
+      console.log("🔄 About to call Share.share()");
+      
+      const result = await Share.share(shareOptions);
+      console.log("🔄 Share result:", result);
+      
+      // Update share count
         setContentStats((prev) => {
           const updated = {
             ...prev,
@@ -789,14 +797,14 @@ function AllContent() {
           persistStats(updated);
           return updated;
         });
-      }
       
-      // ✅ Close modal after share action
-      setModalVisible(null);
-    } catch (err) {
-      console.warn("❌ Share error:", err);
-      // ✅ Close modal even if share failed
-      setModalVisible(null);
+      // Don't close modal automatically - let user close it manually
+      console.log("✅ Share completed successfully");
+    } catch (error) {
+      console.error("❌ Share error:", error);
+      console.error("❌ Share error details:", JSON.stringify(error, null, 2));
+      Alert.alert("Share Error", `Failed to share: ${(error as Error).message || 'Unknown error'}`);
+      // Don't close modal on error - let user see the error and decide what to do
     }
   };
 
@@ -805,6 +813,7 @@ function AllContent() {
     
     const isSaved = contentStats[key]?.saved === 1;
     
+    try {
     if (!isSaved) {
       // Save to library
       const libraryItem = {
@@ -830,11 +839,14 @@ function AllContent() {
       };
       
       await libraryStore.addToLibrary(libraryItem);
+        Alert.alert("Saved!", `${item.title} has been added to your library.`);
     } else {
       // Remove from library
       await libraryStore.removeFromLibrary(key);
+        Alert.alert("Removed!", `${item.title} has been removed from your library.`);
     }
     
+      // Update local stats immediately for UI responsiveness
     setContentStats((prev) => {
       const updated = {
         ...prev,
@@ -848,8 +860,16 @@ function AllContent() {
       return updated;
     });
     
-    // ✅ Close modal after save action
-    setModalVisible(null);
+      // Force library store to reload to update library section
+      await libraryStore.loadSavedItems();
+      
+      // Close modal after successful operation
+      closeAllMenus();
+      
+    } catch (error) {
+      console.error("Error saving to library:", error);
+      Alert.alert("Error", "Failed to update library. Please try again.");
+    }
   };
 
   const handleFavorite = async (key: string, item: any) => {
@@ -1215,66 +1235,12 @@ function AllContent() {
             </View>
           </View>
           <TouchableOpacity
-            onPress={() => { closeAllMenus(); setModalVisible(modalVisible === modalKey ? null : modalKey); }}
+            onPress={() => handleOpenContentModal(video, modalKey)}
             className="mr-2"
           >
             <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-        
-        {/* ✅ Modal with touch-outside-to-close functionality */}
-        {modalVisible === modalKey && (
-          <>
-            {/* ✅ Full-screen overlay to close modal when touching outside */}
-            <TouchableWithoutFeedback onPress={closeAllMenus}>
-              <View className="absolute inset-0 z-40" />
-            </TouchableWithoutFeedback>
-            
-            {/* ✅ Modal content - removed TouchableWithoutFeedback to allow button interactions */}
-            <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[170px] h-[180]">
-              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                <Ionicons name="eye-outline" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleShare(modalKey, video)}
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
-                <Feather name="send" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-row items-center justify-between mt-6" onPress={() => handleSave(modalKey, video)}>
-                <Text className="text-[#1D2939] font-rubik ml-2">{stats.saved === 1 ? "Remove from Library" : "Save to Library"}</Text>
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color="#1D2939"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
-                onPress={async () => {
-                  const downloadableItem = convertToDownloadableItem(video, 'video');
-                  const result = await handleDownload(downloadableItem);
-                  if (result.success) {
-                    closeAllMenus();
-                    // Force re-render to update download status
-                    await loadDownloadedItems();
-                  }
-                }}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  {checkIfDownloaded(video._id || video.fileUrl) ? "Downloaded" : "Download"}
-                </Text>
-                <Ionicons 
-                  name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                  size={24} 
-                  color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#090E24"} 
-                />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
       </View>
     );
   };
@@ -1525,62 +1491,12 @@ function AllContent() {
             </View>
           </View>
           <TouchableOpacity
-            onPress={() => { closeAllMenus(); setModalVisible(modalVisible === modalKey ? null : modalKey); }}
+            onPress={() => handleOpenContentModal(audio, modalKey)}
             className="mr-2"
           >
             <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-
-        {/* Vertical pop modal, same behavior as video cards */}
-        {modalVisible === modalKey && (
-          <>
-            <TouchableWithoutFeedback onPress={closeAllMenus}>
-              <View className="absolute inset-0 z-40" />
-            </TouchableWithoutFeedback>
-            <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
-              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                <Ionicons name="eye-outline" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleShare(key, audio)}
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
-                <Feather name="send" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-row items-center justify-between mt-6" onPress={() => handleSave(key, audio)}>
-                <Text className="text-[#1D2939] font-rubik ml-2">{stats.saved === 1 ? "Remove from Library" : "Save to Library"}</Text>
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color="#1D2939"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
-                onPress={async () => {
-                  const contentType = audio.contentType === 'music' ? 'audio' : audio.contentType;
-                  const downloadableItem = convertToDownloadableItem(audio, contentType as any);
-                  const result = await handleDownload(downloadableItem);
-                  if (result.success) {
-                    closeAllMenus();
-                  }
-                }}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  {checkIfDownloaded(audio._id || audio.fileUrl) ? "Downloaded" : "Download"}
-                </Text>
-                <Ionicons 
-                  name={checkIfDownloaded(audio._id || audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                  size={24} 
-                  color={checkIfDownloaded(audio._id || audio.fileUrl) ? "#256E63" : "#090E24"} 
-                />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
       </View>
     );
   };
@@ -1694,20 +1610,14 @@ function AllContent() {
               resizeMode="cover"
             />
             
-            {/* PDF overlay to make it look more like a document */}
-            <View className="absolute inset-0 bg-black bg-opacity-20" />
-            
             {/* Large PDF icon overlay */}
             <View className="absolute inset-0 justify-center items-center">
-              <View className="bg-white bg-opacity-90 rounded-lg p-4">
-                <Ionicons 
-                  name="document-text" 
+              <View className="bg-white bg-opacity-90 rounded-full p-4">
+                <MaterialCommunityIcons 
+                  name="book-open-blank-variant-outline" 
                   size={48} 
-                  color="#1D2939" 
+                  color="#FEA74E" 
                 />
-                <Text className="text-[#1D2939] font-rubik-semibold text-center mt-2">
-                  PDF Document
-                </Text>
               </View>
             </View>
 
@@ -1715,8 +1625,8 @@ function AllContent() {
             {/* Content Type Icon - Top Left */}
             <View className="absolute top-4 left-4">
               <View className="bg-black/50 p-1 rounded-full">
-                <Ionicons 
-                  name="document-text-outline" 
+                <MaterialCommunityIcons 
+                  name="book-open-blank-variant-outline" 
                   size={16} 
                   color="#FFFFFF" 
                 />
@@ -1808,42 +1718,12 @@ function AllContent() {
             </View>
           </View>
           <TouchableOpacity
-            onPress={() => { closeAllMenus(); setModalVisible(modalVisible === modalKey ? null : modalKey); }}
+            onPress={() => handleOpenContentModal(ebook, modalKey)}
             className="mr-2"
           >
             <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-        
-        {/* Modal - matching video layout */}
-        {modalVisible === modalKey && (
-          <>
-            <TouchableWithoutFeedback onPress={closeAllMenus}>
-              <View className="absolute inset-0 z-40" />
-            </TouchableWithoutFeedback>
-            <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[170px] h-[140]">
-              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                <Ionicons name="eye-outline" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleShare(modalKey, ebook)}
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
-                <Feather name="send" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-row items-center justify-between mt-6" onPress={() => handleSave(modalKey, ebook)}>
-                <Text className="text-[#1D2939] font-rubik ml-2">{stats.saved === 1 ? "Remove from Library" : "Save to Library"}</Text>
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color="#1D2939"
-                />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
       </View>
     );
   };
@@ -1864,7 +1744,6 @@ function AllContent() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 12 }}
         onScrollBeginDrag={closeAllMenus}
-        onTouchStart={closeAllMenus}
       >
         {items.map((item, index) => {
           const modalKey = `mini-${item._id || index}`;
@@ -1960,12 +1839,12 @@ function AllContent() {
                 
                 {/* Content type indicator */}
                 <View className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
-                  <Ionicons 
+                  <MaterialCommunityIcons 
                     name={
-                      item.contentType === "videos" ? "videocam" :
-                      item.contentType === "music" ? "musical-notes" :
-                      item.contentType === "sermon" ? "person" :
-                      "document-text-outline"
+                      item.contentType === "videos" ? "video" :
+                      item.contentType === "music" ? "music" :
+                      item.contentType === "sermon" ? "account" :
+                      "book-open-blank-variant-outline"
                     }
                     size={16} 
                     color="#FFFFFF" 
@@ -2117,19 +1996,128 @@ function AllContent() {
   const { loadDownloadedItems } = useDownloadStore();
 
   const handleDownloadPress = async (item: MediaItem) => {
+    try {
+      console.log("🔄 Download button clicked for:", item.title);
+      
+      const itemId = item._id || item.fileUrl;
+      const isAlreadyDownloaded = checkIfDownloaded(itemId);
+      
+      if (isAlreadyDownloaded) {
+        // If already downloaded, show option to remove
+        Alert.alert(
+          "Remove Download",
+          `${item.title} is already downloaded. Do you want to remove it from downloads?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            { 
+              text: "Remove", 
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  // Remove from downloads
+                  await useDownloadStore.getState().removeDownload(itemId);
+                  await loadDownloadedItems();
+                  Alert.alert("Removed!", `${item.title} has been removed from downloads.`);
+                  closeAllMenus();
+                } catch (error) {
+                  console.error("Remove download error:", error);
+                  Alert.alert("Error", "Failed to remove download. Please try again.");
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        // Download the content
     const downloadableItem = convertToDownloadableItem(item, item.contentType as 'video' | 'audio' | 'ebook');
     const result = await handleDownload(downloadableItem);
+        
     if (result.success) {
+          Alert.alert("Downloaded!", `${item.title} has been downloaded successfully!`);
       await loadDownloadedItems();
+          closeAllMenus();
+        } else {
+          Alert.alert("Error", result.error || "Failed to download content. Please try again.");
+        }
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      Alert.alert("Error", "Failed to download content. Please try again.");
     }
   };
 
   // Close all open menus/popovers across the component
   const closeAllMenus = () => {
     setModalVisible(null);
+    setSelectedContent(null);
     setPreviouslyViewedModalIndex(null);
     setTrendingModalIndex(null);
     setRecommendedModalIndex(null);
+  };
+
+  // Handle opening the content action modal
+  const handleOpenContentModal = (item: MediaItem, modalKey: string) => {
+    setSelectedContent(item);
+    setModalVisible(modalKey);
+  };
+
+  // Handle view details action
+  const handleViewDetails = () => {
+    if (selectedContent) {
+      console.log("View details for:", selectedContent.title);
+      
+      // For videos, navigate to reels view
+      if (selectedContent.contentType === "videos") {
+        const videoListForNavigation = allVideos.map((v, idx) => ({
+          title: v.title,
+          speaker: getDisplayName(v.speaker, v.uploadedBy),
+          timeAgo: getTimeAgo(v.createdAt),
+          views: contentStats[getContentKey(v)]?.views || v.views || 0,
+          sheared: contentStats[getContentKey(v)]?.sheared || v.sheared || 0,
+          saved: contentStats[getContentKey(v)]?.saved || v.saved || 0,
+          favorite: globalFavoriteCounts[getContentKey(v)] || v.favorite || 0,
+          fileUrl: v.fileUrl || "",
+          imageUrl: v.fileUrl,
+          speakerAvatar: typeof v.speakerAvatar === "string" 
+            ? v.speakerAvatar 
+            : v.speakerAvatar || require("../../assets/images/Avatar-1.png"),
+          _id: v._id,
+          contentType: v.contentType,
+          description: v.description,
+          createdAt: v.createdAt,
+          uploadedBy: v.uploadedBy,
+        }));
+
+        const currentIndex = allVideos.findIndex(v => v._id === selectedContent._id);
+        
+        router.push({
+          pathname: "/reels/Reelsviewscroll",
+          params: {
+            title: selectedContent.title,
+            speaker: getDisplayName(selectedContent.speaker, selectedContent.uploadedBy),
+            timeAgo: getTimeAgo(selectedContent.createdAt),
+            views: String(contentStats[getContentKey(selectedContent)]?.views || selectedContent.views || 0),
+            sheared: String(contentStats[getContentKey(selectedContent)]?.sheared || selectedContent.sheared || 0),
+            saved: String(contentStats[getContentKey(selectedContent)]?.saved || selectedContent.saved || 0),
+            favorite: String(globalFavoriteCounts[getContentKey(selectedContent)] || selectedContent.favorite || 0),
+            imageUrl: selectedContent.fileUrl || "",
+            speakerAvatar: typeof selectedContent.speakerAvatar === "string" 
+              ? selectedContent.speakerAvatar 
+              : selectedContent.speakerAvatar || require("../../assets/images/Avatar-1.png").toString(),
+            category: selectedContent.contentType,
+            videoList: JSON.stringify(videoListForNavigation),
+            currentIndex: String(Math.max(0, currentIndex)),
+          },
+        });
+      } else {
+        // For other content types, show an alert with details
+        Alert.alert(
+          "Content Details",
+          `Title: ${selectedContent.title}\nSpeaker: ${getDisplayName(selectedContent.speaker, selectedContent.uploadedBy)}\nType: ${selectedContent.contentType}\nCreated: ${getTimeAgo(selectedContent.createdAt)}`,
+          [{ text: "OK" }]
+        );
+      }
+    }
   };
 
   return (
@@ -2137,7 +2125,6 @@ function AllContent() {
       ref={scrollViewRef}
       className="flex-1"
       onScrollBeginDrag={closeAllMenus}
-      onTouchStart={closeAllMenus}
       onScroll={handleScroll}
       onScrollEndDrag={() => {
         // Recompute at drag end to ensure correct active video when user stops scrolling
@@ -2326,8 +2313,46 @@ function AllContent() {
       {mediaList.length === 0 && !isLoadingContent && (
         <Text className="text-center text-gray-500 mt-10">No content uploaded yet.</Text>
       )}
+
+      {/* Content Action Modal */}
+      {selectedContent && (
+        <ContentActionModal
+          isVisible={modalVisible !== null}
+          onClose={closeAllMenus}
+          onViewDetails={handleViewDetails}
+          onSaveToLibrary={() => {
+            if (selectedContent) {
+              const key = getContentKey(selectedContent);
+              handleSave(key, selectedContent);
+            }
+          }}
+          onShare={() => {
+            console.log("🔄 Modal Share button pressed");
+            if (selectedContent) {
+              const key = getContentKey(selectedContent);
+              console.log("🔄 Calling handleShare with:", { key, selectedContent });
+              handleShare(key, selectedContent);
+            } else {
+              console.log("❌ No selectedContent available for sharing");
+            }
+          }}
+          onDownload={() => {
+            if (selectedContent) {
+              handleDownloadPress(selectedContent);
+            }
+          }}
+          isSaved={selectedContent ? (contentStats[getContentKey(selectedContent)]?.saved === 1) : false}
+          isDownloaded={selectedContent ? (() => {
+            const itemId = selectedContent._id || selectedContent.fileUrl;
+            const isDownloaded = checkIfDownloaded(itemId);
+            console.log("🔄 Download status for modal:", { itemId, isDownloaded, selectedContent: selectedContent.title });
+            return isDownloaded;
+          })() : false}
+          contentTitle={selectedContent?.title}
+        />
+      )}
     </ScrollView>
   );
 }
 
-export default React.memo(AllContent);
+export default AllContent;

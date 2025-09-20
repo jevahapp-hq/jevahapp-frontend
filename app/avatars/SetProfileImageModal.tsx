@@ -7,12 +7,10 @@ import {
     PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-    Easing,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
-    withSpring,
-    withTiming,
+    withSpring
 } from "react-native-reanimated";
 import {
     getResponsiveBorderRadius,
@@ -41,24 +39,19 @@ export default function SlideUpSetProfileImageModal({
 
   useEffect(() => {
     if (isVisible) {
-      // Use slower animation for Android to ensure smooth sliding
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 30 });
-      }
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     } else {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 300,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
-      }
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     }
   }, [isVisible]);
 
@@ -78,24 +71,20 @@ export default function SlideUpSetProfileImageModal({
     _event: HandlerStateChangeEvent<Record<string, unknown>>
   ) => {
     if (lastTranslateY.value > 150) {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 300,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
-      }
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
       runOnJS(onCancel)();
     } else {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 30 });
-      }
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
     }
   };
 
@@ -108,14 +97,12 @@ export default function SlideUpSetProfileImageModal({
         className="absolute inset-0 bg-black/30" 
         activeOpacity={1}
         onPress={() => {
-          if (Platform.OS === 'android') {
-            translateY.value = withTiming(SCREEN_HEIGHT, {
-              duration: 300,
-              easing: Easing.in(Easing.cubic),
-            });
-          } else {
-            translateY.value = withSpring(SCREEN_HEIGHT);
-          }
+          translateY.value = withSpring(SCREEN_HEIGHT, { 
+            damping: 20, 
+            stiffness: 100,
+            mass: 1,
+            overshootClamping: true
+          });
           runOnJS(onCancel)();
         }}
       />
@@ -186,14 +173,12 @@ export default function SlideUpSetProfileImageModal({
             }}>
               <TouchableOpacity
                 onPress={() => {
-                  if (Platform.OS === 'android') {
-                    translateY.value = withTiming(SCREEN_HEIGHT, {
-                      duration: 300,
-                      easing: Easing.in(Easing.cubic),
-                    });
-                  } else {
-                    translateY.value = withSpring(SCREEN_HEIGHT);
-                  }
+                  translateY.value = withSpring(SCREEN_HEIGHT, { 
+                    damping: 20, 
+                    stiffness: 100,
+                    mass: 1,
+                    overshootClamping: true
+                  });
                   runOnJS(onCancel)();
                 }}
                 style={{
@@ -219,14 +204,12 @@ export default function SlideUpSetProfileImageModal({
 
               <TouchableOpacity
                 onPress={() => {
-                  if (Platform.OS === 'android') {
-                    translateY.value = withTiming(SCREEN_HEIGHT, {
-                      duration: 300,
-                      easing: Easing.in(Easing.cubic),
-                    });
-                  } else {
-                    translateY.value = withSpring(SCREEN_HEIGHT);
-                  }
+                  translateY.value = withSpring(SCREEN_HEIGHT, { 
+                    damping: 20, 
+                    stiffness: 100,
+                    mass: 1,
+                    overshootClamping: true
+                  });
                   runOnJS(onConfirm)();
                 }}
                 style={{

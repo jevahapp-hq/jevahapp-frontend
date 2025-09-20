@@ -17,12 +17,10 @@ import {
 } from 'react-native';
 // Removed gesture handler imports - using simpler approach
 import Animated, {
-    Easing,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
-    withSpring,
-    withTiming,
+    withSpring
 } from 'react-native-reanimated';
 import { useCommentModal } from '../context/CommentModalContext';
 import { PerformanceOptimizer } from '../utils/performanceOptimization';
@@ -49,14 +47,12 @@ export default function CommentReplyModal() {
       // Calculate the target position accounting for keyboard height
       const targetPosition = keyboardHeight > 0 ? keyboardHeight : 0;
       
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(targetPosition, {
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(targetPosition, { damping: 25, stiffness: 100 });
-      }
+      translateY.value = withSpring(targetPosition, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
       // Show input modal immediately when comment modal opens
       setShowInputModal(true);
       // Focus the main input so keyboard opens without extra tap
@@ -66,14 +62,12 @@ export default function CommentReplyModal() {
     } else {
       const targetPosition = SCREEN_HEIGHT + (keyboardHeight > 0 ? keyboardHeight : 0);
       
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(targetPosition, {
-          duration: 400,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(targetPosition);
-      }
+      translateY.value = withSpring(targetPosition, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
       // Clear inputs when modal closes
       setMainInputText('');
       setReplyText('');
@@ -115,15 +109,13 @@ export default function CommentReplyModal() {
   const handleClose = () => {
     const targetPosition = SCREEN_HEIGHT + (keyboardHeight > 0 ? keyboardHeight : 0);
     
-      if (Platform.OS === 'android') {
-      translateY.value = withTiming(targetPosition, {
-          duration: 400,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-      translateY.value = withSpring(targetPosition);
-      }
-      runOnJS(hideCommentModal)();
+    translateY.value = withSpring(targetPosition, { 
+      damping: 20, 
+      stiffness: 100,
+      mass: 1,
+      overshootClamping: true
+    });
+    runOnJS(hideCommentModal)();
   };
 
   const handleReply = useCallback((commentId: string) => {

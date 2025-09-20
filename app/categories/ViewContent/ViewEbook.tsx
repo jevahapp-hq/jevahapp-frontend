@@ -1,4 +1,4 @@
-import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Share from 'expo-sharing';
 import { useCallback, useState } from 'react';
@@ -152,10 +152,10 @@ export default function ViewEbook() {
                 
                 {/* Content type indicator */}
                 <View className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
-                  <Ionicons 
-                    name="document-text-outline"
+                  <MaterialCommunityIcons 
+                    name="book-open-blank-variant-outline"
                     size={16} 
-                    color="#FFFFFF" 
+                    color="#FEA74E" 
                   />
                 </View>
 

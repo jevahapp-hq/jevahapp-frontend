@@ -6,14 +6,26 @@ import {
     Dimensions,
     Keyboard,
     KeyboardAvoidingView,
-    Modal,
     Platform,
     ScrollView,
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View
 } from 'react-native';
+import {
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
+} from 'react-native-gesture-handler';
+import Animated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from 'react-native-reanimated';
 import {
     getResponsiveBorderRadius,
     getResponsiveShadow,
@@ -49,6 +61,10 @@ export default function CommentModal({
   const inputRef = useRef<TextInput>(null);
   const commentService = CommentService.getInstance();
 
+  // Animation values
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const lastTranslateY = useSharedValue(0);
+
   // Mock user data (replace with actual user data)
   const currentUser = {
     id: 'user123',
@@ -76,6 +92,25 @@ export default function CommentModal({
       keyboardDidHideListener?.remove();
     };
   }, []);
+
+  // Animation effect
+  useEffect(() => {
+    if (visible) {
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+    } else {
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+    }
+  }, [visible]);
 
   // Load comments when modal opens
   useEffect(() => {
@@ -168,12 +203,75 @@ export default function CommentModal({
     key: 'post-comment',
   });
 
+  // Animation style
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  // Gesture handlers
+  const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
+    const { translationY } = event.nativeEvent;
+    if (translationY > 0) {
+      translateY.value = translationY;
+      lastTranslateY.value = translationY;
+    }
+  };
+
+  const onGestureEnd = (
+    _event: HandlerStateChangeEvent<Record<string, unknown>>
+  ) => {
+    if (lastTranslateY.value > 150) {
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+      runOnJS(onClose)();
+    } else {
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+    }
+  };
+
+  const handleClose = () => {
+    translateY.value = withSpring(SCREEN_HEIGHT, { 
+      damping: 20, 
+      stiffness: 100,
+      mass: 1,
+      overshootClamping: true
+    });
+    runOnJS(onClose)();
+  };
+
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+    <GestureHandlerRootView className="absolute inset-0 z-50 items-center justify-end">
+      {/* Background overlay */}
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <View className="absolute inset-0 bg-black/30" />
+      </TouchableWithoutFeedback>
+
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onGestureEnd}
+      >
+        <Animated.View
+          style={[
+            animatedStyle,
+            {
+              position: "absolute",
+              bottom: 0,
+              width: SCREEN_WIDTH,
+              height: SCREEN_HEIGHT,
+            },
+          ]}
+          className="bg-white rounded-t-3xl"
     >
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
@@ -182,6 +280,9 @@ export default function CommentModal({
         enabled={true}
     >
       <View style={{ flex: 1 }}>
+              {/* Handle */}
+              <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-4" />
+              
         {/* Header */}
         <View style={{
           flexDirection: 'row',
@@ -194,7 +295,7 @@ export default function CommentModal({
           backgroundColor: 'white',
         }}>
           <TouchableOpacity
-            onPress={onClose}
+                  onPress={handleClose}
             style={{
               padding: getResponsiveSpacing(4, 6, 8, 10),
             }}
@@ -490,6 +591,8 @@ export default function CommentModal({
         </View>
       </View>
       </KeyboardAvoidingView>
-    </Modal>
+        </Animated.View>
+      </PanGestureHandler>
+    </GestureHandlerRootView>
   );
 }
