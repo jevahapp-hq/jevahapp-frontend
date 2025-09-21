@@ -154,3 +154,4 @@ The video scrolling now works exactly like TikTok:
 5. **Smooth transitions** → Videos snap to full screen
 
 The implementation maintains all existing functionality while providing a smooth, responsive video scrolling experience!
+

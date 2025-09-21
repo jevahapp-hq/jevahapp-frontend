@@ -277,15 +277,49 @@ class SocketManager {
 
   // Event handlers (to be implemented by components)
   public handleContentReaction(data: any): void {
-    // Override in component
+    // Update interaction store with real-time data
+    try {
+      const { useInteractionStore } = require("../store/useInteractionStore");
+      const store = useInteractionStore.getState();
+
+      if (data.contentId && data.actionType === "like") {
+        // Update like count in real-time
+        store.refreshContentStats(data.contentId);
+      }
+    } catch (error) {
+      console.error("Error updating store from socket:", error);
+    }
   }
 
   public handleContentComment(data: any): void {
-    // Override in component
+    // Update interaction store with real-time comment data
+    try {
+      const { useInteractionStore } = require("../store/useInteractionStore");
+      const store = useInteractionStore.getState();
+
+      if (data.contentId) {
+        // Refresh comments and stats for this content
+        store.loadComments(data.contentId);
+        store.refreshContentStats(data.contentId);
+      }
+    } catch (error) {
+      console.error("Error updating store from socket comment:", error);
+    }
   }
 
   public handleCountUpdate(data: any): void {
-    // Override in component
+    // Update interaction store with real-time count updates
+    try {
+      const { useInteractionStore } = require("../store/useInteractionStore");
+      const store = useInteractionStore.getState();
+
+      if (data.contentId) {
+        // Refresh all stats for this content
+        store.refreshContentStats(data.contentId);
+      }
+    } catch (error) {
+      console.error("Error updating store from socket count update:", error);
+    }
   }
 
   public handleViewerCountUpdate(data: any): void {

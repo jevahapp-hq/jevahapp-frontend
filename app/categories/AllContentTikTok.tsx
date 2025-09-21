@@ -1654,7 +1654,14 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   <MaterialIcons
                     name={userFavorites[key] ? "favorite" : "favorite-border"}
                     size={28}
-                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                    color={userFavorites[key] ? "#FF1744" : "#98A2B3"}
+                    style={{
+                      textShadowColor: userFavorites[key]
+                        ? "rgba(255, 23, 68, 0.6)"
+                        : "transparent",
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: userFavorites[key] ? 10 : 0,
+                    }}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {globalFavoriteCounts[key] || 0}

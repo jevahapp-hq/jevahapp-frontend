@@ -679,12 +679,13 @@ class AllMediaAPI {
       const headers = await this.getAuthHeaders();
       console.log("🔍 DEBUG: Auth headers:", headers);
 
-      const url = `${this.baseURL}/api/bookmarks/${mediaId}`;
+      const url = `${this.baseURL}/api/interactions/media/${mediaId}/save`;
       console.log("🔍 DEBUG: Full URL:", url);
 
       const response = await fetch(url, {
         method: "POST",
         headers,
+        body: JSON.stringify({ contentType: "video" }),
       });
 
       console.log("🔍 DEBUG: Response status:", response.status);
@@ -722,13 +723,14 @@ class AllMediaAPI {
       const headers = await this.getAuthHeaders();
       console.log("🔍 DEBUG: Auth headers:", headers);
 
-      // Use the correct endpoint with /api prefix
-      const url = `${this.baseURL}/api/bookmarks/${mediaId}`;
+      // Use the correct endpoint that matches contentInteractionAPI
+      const url = `${this.baseURL}/api/interactions/media/${mediaId}/save`;
       console.log("🔍 DEBUG: Full URL:", url);
 
       const response = await fetch(url, {
-        method: "DELETE",
+        method: "POST",
         headers,
+        body: JSON.stringify({ contentType: "video" }),
       });
 
       console.log("🔍 DEBUG: Response status:", response.status);
@@ -764,9 +766,14 @@ class AllMediaAPI {
     try {
       const headers = await this.getAuthHeaders();
 
-      // Use the correct endpoint with /api prefix
+      // Use the correct endpoint that matches contentInteractionAPI
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
       const response = await fetch(
-        `${this.baseURL}/api/bookmarks/get-bookmarked-media?page=${page}&limit=${limit}`,
+        `${this.baseURL}/api/user/saved-content?${queryParams}`,
         {
           method: "GET",
           headers,
@@ -787,12 +794,19 @@ class AllMediaAPI {
 
       // Try alternative endpoint
       try {
-        console.log("🔄 Trying alternative endpoint: /api/bookmarks");
+        console.log("🔄 Trying alternative endpoint: /api/user/saved-content");
         const altHeaders = await this.getAuthHeaders();
-        const altResponse = await fetch(`${this.baseURL}/api/bookmarks`, {
-          method: "GET",
-          headers: altHeaders,
+        const queryParams = new URLSearchParams({
+          page: page.toString(),
+          limit: limit.toString(),
         });
+        const altResponse = await fetch(
+          `${this.baseURL}/api/user/saved-content?${queryParams}`,
+          {
+            method: "GET",
+            headers: altHeaders,
+          }
+        );
 
         if (altResponse.ok) {
           const altData = await altResponse.json();

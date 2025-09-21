@@ -33,3 +33,4 @@ export const useReelsStore = create<ReelsState>((set) => ({
   setCurrentIndex: (index) => set({ currentIndex: index }),
   clearReelsData: () => set({ videoList: [], currentIndex: 0 }),
 }));
+
