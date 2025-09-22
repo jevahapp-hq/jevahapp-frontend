@@ -60,6 +60,7 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
 
   const isVideo = item.contentType === 'video' || item.contentType === 'videos';
   const isAudio = item.contentType === 'audio' || item.contentType === 'music';
+  const isEbook = item.contentType === 'ebook';
 
   useEffect(() => {
     return () => {
@@ -198,53 +199,55 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
           {item.description}
         </Text>
 
-        {/* Playback Controls */}
-        <View className="flex-row items-center mt-3">
-          <TouchableOpacity className="mr-3" onPress={togglePlay}>
-            {isPlaying ? (
-                              <Pause size={18} color="black" />
-            ) : (
-                              <Play size={18} color="black" />
-            )}
-          </TouchableOpacity>
-
-          {/* Progress Bar */}
-          <View className="flex-1 mr-3">
-            <TouchableOpacity
-              onPress={(event) => {
-                const { locationX } = event.nativeEvent;
-                const progressBarWidth = 200; // Approximate width
-                const seekRatio = locationX / progressBarWidth;
-                const seekPosition = seekRatio * duration;
-                seekTo(seekPosition);
-              }}
-            >
-              <View className="w-[200px] h-1 bg-gray-300 rounded-full">
-                <View 
-                  className="h-1 bg-black rounded-full" 
-                  style={{ width: `${progress * 100}%` }}
-                />
-              </View>
+        {/* Playback Controls - Only for video and audio content */}
+        {!isEbook && (
+          <View className="flex-row items-center mt-3">
+            <TouchableOpacity className="mr-3" onPress={togglePlay}>
+              {isPlaying ? (
+                                <Pause size={18} color="black" />
+              ) : (
+                                <Play size={18} color="black" />
+              )}
             </TouchableOpacity>
-            {duration > 0 && (
-              <View className="flex-row justify-between mt-1">
-                <Text className="text-xs text-gray-500 font-rubik">
-                  {formatTime(position)}
-                </Text>
-                <Text className="text-xs text-gray-500 font-rubik">
-                  {formatTime(duration)}
-                </Text>
-              </View>
-            )}
+
+            {/* Progress Bar */}
+            <View className="flex-1 mr-3">
+              <TouchableOpacity
+                onPress={(event) => {
+                  const { locationX } = event.nativeEvent;
+                  const progressBarWidth = 200; // Approximate width
+                  const seekRatio = locationX / progressBarWidth;
+                  const seekPosition = seekRatio * duration;
+                  seekTo(seekPosition);
+                }}
+              >
+                <View className="w-[200px] h-1 bg-gray-300 rounded-full">
+                  <View 
+                    className="h-1 bg-black rounded-full" 
+                    style={{ width: `${progress * 100}%` }}
+                  />
+                </View>
+              </TouchableOpacity>
+              {duration > 0 && (
+                <View className="flex-row justify-between mt-1">
+                  <Text className="text-xs text-gray-500 font-rubik">
+                    {formatTime(position)}
+                  </Text>
+                  <Text className="text-xs text-gray-500 font-rubik">
+                    {formatTime(duration)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            
+            <TouchableOpacity onPress={toggleMute}>
+                              <Volume2 
+                size={18} 
+                color={isMuted ? "gray" : "black"} 
+              />
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity onPress={toggleMute}>
-                            <Volume2 
-              size={18} 
-              color={isMuted ? "gray" : "black"} 
-            />
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* Author & Metadata */}
         <View className="flex-row items-center justify-between mt-3">
@@ -367,8 +370,8 @@ const DownloadScreen: React.FC = () => {
       </View>
 
 
-      <View className="flex-col justify-between bg-[#F3F3F4] w-full ">
-        <View className="flex-col justify-between w-full items-center">
+      <View className="flex-1 bg-[#F3F3F4] w-full ">
+        <View className="flex-1 w-full items-center">
 
       {/* Search Bar */}
         <View className="flex-row items-center bg-[#E5E5EA] w-[362px] rounded-xl mx-4 mt-4 px-2 py-3 border border-[rgb(229,229,234)]">
@@ -387,7 +390,7 @@ const DownloadScreen: React.FC = () => {
           )}
       </View>
 
-      {/* Profile */}
+      {/* Profile - moved directly under search */}
       <View className="flex-row items-center px-4 mt-4 self-start ml-3">
           <Image
             source={
@@ -436,7 +439,11 @@ const DownloadScreen: React.FC = () => {
       </View>
 
       {/* Downloads */}
-        <ScrollView className="mt-9 px-4" showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          className="flex-1 mt-9 px-4" 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
+        >
         {/* All downloads */}
           <Text className="text-[14px] font-rubik-semibold text-[#1D2939] mb-3">
             All Downloads ({downloadedItems.length})

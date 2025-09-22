@@ -42,7 +42,7 @@ class ContentInteractionService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = API_BASE_URL || 'http://localhost:3000'; // Fallback for development
+    this.baseURL = API_BASE_URL || 'http://localhost:8081'; // Fallback for development
   }
 
   private isValidObjectId(id?: string): boolean {

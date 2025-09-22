@@ -112,17 +112,29 @@ export default function ContentActionModal({
   };
 
   const handleAction = (action: () => void) => {
-    handleClose();
-    // Small delay to allow modal to close before executing action
-    setTimeout(() => {
+    console.log("🔄 ContentActionModal: handleAction called");
+    // Execute action immediately, then close modal
+    try {
       action();
-    }, 200);
+      console.log("✅ ContentActionModal: Action executed successfully");
+    } catch (error) {
+      console.error("❌ ContentActionModal: Action failed:", error);
+    }
+    // Close modal after action
+    handleClose();
   };
 
   const handleShareAction = () => {
-    // Execute share without closing modal automatically
-    // Let user close modal manually after sharing
-    onShare();
+    console.log("🔄 ContentActionModal: handleShareAction called");
+    // Execute share action immediately, then close modal
+    try {
+      onShare();
+      console.log("✅ ContentActionModal: Share action executed successfully");
+    } catch (error) {
+      console.error("❌ ContentActionModal: Share action failed:", error);
+    }
+    // Close modal after action
+    handleClose();
   };
 
   if (!isVisible) return null;
@@ -227,7 +239,10 @@ export default function ContentActionModal({
           <View style={{ gap: 8 }}>
             {/* View Details */}
             <TouchableOpacity
-              onPress={() => handleAction(onViewDetails)}
+              onPress={() => {
+                console.log("🔄 View Details button pressed");
+                handleAction(onViewDetails);
+              }}
                 style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center', 
@@ -264,7 +279,10 @@ export default function ContentActionModal({
 
             {/* Save to Library */}
             <TouchableOpacity
-              onPress={() => handleAction(onSaveToLibrary)}
+              onPress={() => {
+                console.log("🔄 Save to Library button pressed");
+                handleAction(onSaveToLibrary);
+              }}
                 style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center', 
@@ -305,7 +323,10 @@ export default function ContentActionModal({
 
             {/* Share */}
             <TouchableOpacity
-              onPress={handleShareAction}
+              onPress={() => {
+                console.log("🔄 Share button pressed");
+                handleShareAction();
+              }}
                 style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center', 
@@ -342,7 +363,10 @@ export default function ContentActionModal({
 
             {/* Download */}
             <TouchableOpacity
-              onPress={() => handleAction(onDownload)}
+              onPress={() => {
+                console.log("🔄 Download button pressed");
+                handleAction(onDownload);
+              }}
                 style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center', 

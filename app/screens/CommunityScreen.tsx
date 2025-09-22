@@ -1,112 +1,159 @@
 // CommunityScreen.tsx
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { SafeAreaView, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import BottomNav from "../components/BottomNav";
-import CommentExample from "../components/CommentExample";
-import CommentIcon from "../components/CommentIcon";
 
-interface Comment {
+interface CommunityCard {
   id: string;
-  userName: string;
-  avatar: string;
-  timestamp: string;
-  comment: string;
-  likes: number;
-  isLiked: boolean;
+  title: string;
+  color: string;
+  route?: string;
 }
 
 export default function CommunityScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const router = useRouter();
 
-  // Sample comments data matching the image
-  const sampleComments: Comment[] = [
+  const communityCards: CommunityCard[] = [
     {
       id: "1",
-      userName: "Joseph Eluwa",
-      avatar: "https://example.com/joseph.jpg", // Replace with actual avatar URL
-      timestamp: "3HRS AGO",
-      comment: "Wow!! My Faith has just been renewed.",
-      likes: 193,
-      isLiked: false,
+      title: "Prayer Wall",
+      color: "#279CCA",
     },
     {
       id: "2",
-      userName: "Liz Elizabeth",
-      avatar: "https://example.com/liz.jpg", // Replace with actual avatar URL
-      timestamp: "24HRS",
-      comment: "Wow!! My Faith has just been renewed.",
-      likes: 193,
-      isLiked: false,
+      title: "Forum",
+      color: "#CC1CC0",
     },
     {
       id: "3",
-      userName: "Chris Evans",
-      avatar: "", // Will show initials "CE"
-      timestamp: "3 DAYS AGO",
-      comment: "Wow!! My Faith has just been renewed.",
-      likes: 193,
-      isLiked: false,
+      title: "Polls/surveys", 
+      color: "#DF930E",
     },
     {
       id: "4",
-      userName: "Grace God",
-      avatar: "", // Will show initials "GG"
-      timestamp: "1W",
-      comment: "Wow!! My Faith has just been renewed.",
-      likes: 193,
-      isLiked: false,
+      title: "Groups",
+      color: "#666AF6",
     },
   ];
 
+  const handleCardPress = (card: CommunityCard) => {
+    console.log(`Pressed ${card.title}`);
+    // Add navigation logic here for each card
+    switch (card.title) {
+      case "Prayer Wall":
+        router.push("/screens/PrayerWallScreen");
+        break;
+      case "Forum":
+        // router.push("/screens/ForumScreen");
+        console.log("Forum navigation - to be implemented");
+        break;
+      case "Polls/surveys":
+        // router.push("/screens/PollsScreen");
+        console.log("Polls navigation - to be implemented");
+        break;
+      case "Groups":
+        // router.push("/screens/GroupsScreen");
+        console.log("Groups navigation - to be implemented");
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleAddPress = () => {
+    console.log("Add button pressed");
+    // Add navigation logic here for the plus button
+  };
+
   return (
-    <View style={{ flex: 1 }} className="bg-[#FCFCFD]">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 20 }}>
-        <View style={{ alignItems: "center", marginBottom: 30 }}>
-          <Text style={{ fontSize: 18, marginBottom: 20 }}>Community Screen</Text>
-          
-          {/* Example comment icons that can be used anywhere */}
-          <View style={{ flexDirection: 'row', gap: 20, marginBottom: 20 }}>
-            <CommentIcon 
-              comments={sampleComments}
-              size={24}
-              color="#10B981"
-              showCount={true}
-            />
-            
-            <CommentIcon 
-              comments={sampleComments}
-              size={20}
-              color="#6B7280"
-              showCount={false}
-            />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FCFCFD" />
+      
+      {/* Header */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        paddingBottom: 20,
+      }}>
+        <Text style={{
+          fontSize: 28,
+          fontWeight: 'bold',
+          color: '#000',
+          fontFamily: 'Rubik-Bold',
+        }}>
+          Community
+        </Text>
+        
+        <TouchableOpacity
+          onPress={handleAddPress}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: '#6663FD',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={24} color="white" />
+        </TouchableOpacity>
           </View>
 
-          <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 20 }}>
-            Click any comment icon above to open the global comment modal
+      {/* Community Cards Grid */}
+      <View style={{
+        flex: 1,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          gap: 15,
+        }}>
+          {communityCards.map((card) => (
+            <TouchableOpacity
+              key={card.id}
+              onPress={() => handleCardPress(card)}
+              style={{
+                width: 173,
+                height: 194,
+                backgroundColor: card.color,
+                borderRadius: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: {
+                  width: 0,
+                  height: 2,
+                },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 3,
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{
+                color: 'white',
+                fontSize: 18,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                fontFamily: 'Rubik-Bold',
+                paddingHorizontal: 10,
+              }}>
+                {card.title}
           </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-
-        {/* Example posts with comment icons */}
-        <CommentExample 
-          comments={sampleComments}
-          title="Amazing Sermon Today!"
-          content="The message today really touched my heart. God is truly working in our lives."
-        />
-
-        <CommentExample 
-          comments={sampleComments}
-          title="Community Prayer Request"
-          content="Let's pray together for our community. God hears our prayers."
-        />
-
-        <CommentExample 
-          comments={sampleComments}
-          title="Bible Study Notes"
-          content="Here are my notes from today's Bible study. Feel free to share your insights!"
-        />
-      </ScrollView>
+      </View>
 
       {/* Bottom Nav overlay */}
       <View
@@ -142,6 +189,6 @@ export default function CommunityScreen() {
           }}
         />
       </View>
-    </View>
+    </SafeAreaView>
   );
 }

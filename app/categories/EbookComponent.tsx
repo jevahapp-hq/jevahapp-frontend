@@ -1,23 +1,31 @@
 import {
-    AntDesign,
-    Fontisto,
+    Feather,
     Ionicons,
     MaterialIcons
 } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+    Alert,
+    Image,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View
+} from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import ContentActionModal from "../components/ContentActionModal";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
-import { getPersistedStats, toggleFavorite } from "../utils/persistentStorage";
+import { getPersistedStats, getViewed, persistStats, toggleFavorite } from "../utils/persistentStorage";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
-interface EbookItem {
+interface EbookCard {
   _id?: string;
   title: string;
   description?: string;
@@ -35,36 +43,80 @@ interface EbookItem {
   onPress?: () => void;
 }
 
+interface RecommendedItem {
+  _id?: string;
+  title: string;
+  subTitle: string;
+  views: number;
+  imageUrl: any;
+  onPress?: () => void;
+  isHot?: boolean;
+  isRising?: boolean;
+  trendingScore?: number;
+}
+
 export default function EbookComponent() {
   const mediaStore = useMediaStore();
-  const [modalVisible, setModalVisible] = useState<string | null>(null);
-  const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
-  const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
+  const libraryStore = useLibraryStore();
+  
+  // ✅ Use global comment modal and interaction store
+  const { showCommentModal } = useCommentModal();
+  const { comments } = useInteractionStore();
   
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   const { loadDownloadedItems } = useDownloadStore();
   
-  // Interaction functionality
-  const { showCommentModal } = useCommentModal();
-  const { userFavorites, globalFavoriteCounts, comments } = useInteractionStore();
-  const { addToLibrary, removeFromLibrary, isInLibrary } = useLibraryStore();
-
-  useFocusEffect(
-    useCallback(() => {
-      mediaStore.refreshUserDataForExistingMedia();
-      loadDownloadedItems();
-    }, [])
-  );
-
-  // Helper functions
-  const getContentKey = (item: EbookItem) => item._id || item.fileUrl || item.title;
+  const [modalVisible, setModalVisible] = useState<string | null>(null);
+  const [selectedContent, setSelectedContent] = useState<any>(null);
   
-  const handleFavorite = async (key: string, item: EbookItem) => {
-    await toggleFavorite(key, item);
+  // 🎯 New favorite system state - local state for favorites
+  const [userFavorites, setUserFavorites] = useState<Record<string, boolean>>({});
+  const [globalFavoriteCounts, setGlobalFavoriteCounts] = useState<Record<string, number>>({});
+  
+  const [ebookStats, setEbookStats] = useState<Record<string, Partial<EbookCard>>>({});
+  const [previouslyViewedState, setPreviouslyViewedState] = useState<RecommendedItem[]>([]);
+
+  const getEbookKey = (fileUrl: string): string => `ebook-${fileUrl}`;
+
+  // Close all open menus/popovers across the component
+  const closeAllMenus = () => {
+    setModalVisible(null);
+    setSelectedContent(null);
   };
 
-  const handleComment = (key: string, item: EbookItem) => {
+  // ContentActionModal handlers
+  const handleOpenContentModal = (item: any, modalKey: string) => {
+    console.log("🔧 Opening modal for:", item.title, "with key:", modalKey);
+    setSelectedContent(item);
+    setModalVisible(modalKey);
+    console.log("🔧 Modal state set - selectedContent:", !!item, "modalVisible:", modalKey);
+  };
+
+  const handleViewDetails = () => {
+    if (selectedContent) {
+      console.log("View details for:", selectedContent.title);
+      // For now, just show an alert since EbookDetailScreen might not exist
+      // You can implement navigation to a proper ebook detail screen later
+      Alert.alert("View Details", `Viewing details for: ${selectedContent.title}`);
+      closeAllMenus();
+    }
+  };
+
+  // Helper functions
+  const getContentKey = (item: EbookCard) => item._id || item.fileUrl || item.title;
+  
+  const handleFavorite = async (key: string, item: EbookCard) => {
+    try {
+      const { isUserFavorite, globalCount } = await toggleFavorite(key);
+      setUserFavorites(prev => ({ ...prev, [key]: isUserFavorite }));
+      setGlobalFavoriteCounts(prev => ({ ...prev, [key]: globalCount }));
+    } catch (error) {
+      console.error(`❌ Failed to toggle favorite for ${item.title}:`, error);
+    }
+  };
+
+  const handleComment = (key: string, item: EbookCard) => {
     const contentId = item._id || key;
     const currentComments = comments[contentId] || [];
     const formattedComments = currentComments.map((comment: any) => ({
@@ -79,24 +131,88 @@ export default function EbookComponent() {
     showCommentModal(formattedComments, contentId);
   };
 
-  const handleSave = async (key: string, item: EbookItem) => {
-    const contentKey = getContentKey(item);
-    if (isInLibrary(contentKey)) {
-      removeFromLibrary(contentKey);
-    } else {
-      addToLibrary({
-        id: contentKey,
-        title: item.title,
-        type: 'ebook',
-        fileUrl: item.fileUrl || '',
-        imageUrl: item.imageUrl,
-        speaker: item.speaker || item.uploadedBy || 'Unknown',
-        createdAt: item.createdAt,
+  const handleSave = async (key: string, item: EbookCard) => {
+    try {
+      const isCurrentlyUserSaved = libraryStore.isItemSaved(key);
+
+      if (!isCurrentlyUserSaved) {
+        const libraryItem = {
+          id: key,
+          contentType: "ebook",
+          fileUrl: item.fileUrl || '',
+          title: item.title,
+          speaker: item.speaker || item.uploadedBy || "Unknown",
+          uploadedBy: item.uploadedBy,
+          createdAt: item.createdAt || new Date().toISOString(),
+          speakerAvatar: item.speakerAvatar,
+          views: ebookStats[key]?.views || 0,
+          sheared: ebookStats[key]?.sheared || item.sheared || 0,
+          favorite: ebookStats[key]?.favorite || item.favorite || 0,
+          saved: 1,
+          imageUrl: item.imageUrl,
+          originalKey: key
+        } as const;
+
+        await libraryStore.addToLibrary(libraryItem as any);
+
+        setEbookStats((prev) => {
+          const updated = {
+            ...prev,
+            [key]: {
+              ...prev[key],
+              saved: 1,
+            },
+          };
+          persistStats(updated);
+          return updated;
+        });
+      } else {
+        await libraryStore.removeFromLibrary(key);
+        setEbookStats((prev) => {
+          const updated = {
+            ...prev,
+            [key]: {
+              ...prev[key],
+              saved: 0,
+            },
+          };
+          persistStats(updated);
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error("❌ Save operation failed for ebook:", error);
+    }
+    setModalVisible(null);
+  };
+
+  const handleShare = async (key: string, ebook: EbookCard) => {
+    try {
+      const result = await Share.share({
+        title: ebook.title,
+        message: `Check out this Ebook: ${ebook.title}\n${ebook.fileUrl}`,
+        url: ebook.fileUrl,
       });
+
+      if (result.action === Share.sharedAction) {
+        setEbookStats((prev) => {
+          const updatedStats = {
+            ...prev,
+            [key]: {
+              ...prev[key],
+              sheared: (prev[key]?.sheared || ebook.sheared || 0) + 1,
+            },
+          };
+          persistStats(updatedStats);
+          return updatedStats;
+        });
+      }
+    } catch (error) {
+      console.warn("❌ Share error:", error);
     }
   };
 
-  const handleDownloadPress = async (item: EbookItem) => {
+  const handleDownloadPress = async (item: EbookCard) => {
     const downloadableItem = convertToDownloadableItem(item, 'ebook');
     const result = await handleDownload(downloadableItem);
     if (result.success) {
@@ -108,10 +224,175 @@ export default function EbookComponent() {
   const ebookItems = mediaStore.mediaList.filter(item => 
     item.contentType === "ebook" || item.contentType === "books"
   );
-  
-  console.log("📚 EbookComponent - Total media items:", mediaStore.mediaList.length);
-  console.log("📚 EbookComponent - Ebook items found:", ebookItems.length);
-  console.log("📚 EbookComponent - Ebook items:", ebookItems.map(e => ({ title: e.title, contentType: e.contentType })));
+
+  // 🔧 Fix infinite loop: Memoize allIndexedEbooks calculation
+  const allIndexedEbooks = useMemo(() => 
+    ebookItems.map((ebook: any) => {
+      const key = getEbookKey(ebook.fileUrl);
+
+      const stats = ebookStats[key] || {};
+      const isItemSaved = libraryStore.isItemSaved(key);
+      const views = Math.max(stats.views ?? 0, ebook.viewCount ?? 0);
+      const shares = Math.max(stats.sheared ?? 0, ebook.sheared ?? 0);
+      const favorites = Math.max(stats.favorite ?? 0, ebook.favorite ?? 0);
+      const saves = Math.max((stats as any).totalSaves ?? stats.saved ?? 0, ebook.saved ?? 0);
+      const score = views + shares + favorites + saves;
+
+      return {
+        key,
+        fileUrl: ebook.fileUrl,
+        title: ebook.title,
+        subTitle: ebook.speaker || "Unknown",
+        views,
+        shares,
+        favorites,
+        saves,
+        score,
+        isItemSaved,
+        imageUrl: ebook.imageUrl || require("../../assets/images/image (12).png"),
+      };
+    }), [ebookItems, ebookStats, libraryStore.savedItems]
+  );
+
+  // ✅ Trending score using velocity + exponential time-decay
+  const calculateTrendingScore = (ebook: any, ebookData: any) => {
+    const now = Date.now();
+    const createdAt = new Date(ebookData?.createdAt || now).getTime();
+    const ageInHours = Math.max(1, (now - createdAt) / (1000 * 60 * 60));
+
+    const views = ebook.views ?? 0;
+    const shares = ebook.shares ?? 0;
+    const favorites = ebook.favorites ?? 0;
+    const saves = ebook.saves ?? 0;
+
+    const viewsPerHour = views / ageInHours;
+    const favoritesPerHour = favorites / ageInHours;
+    const sharesPerHour = shares / ageInHours;
+    const savesPerHour = saves / ageInHours;
+
+    const weightedVelocity =
+      1 * Math.sqrt(Math.max(0, viewsPerHour)) +
+      2 * Math.log1p(Math.max(0, savesPerHour)) +
+      3 * Math.log1p(Math.max(0, favoritesPerHour)) +
+      5 * Math.log1p(Math.max(0, sharesPerHour));
+
+    const halfLifeHours = 24;
+    const decay = Math.exp(-ageInHours / halfLifeHours);
+
+    const earlyBoost = ageInHours < 6 && (shares + favorites) >= 10 ? 1.25 : 1.0;
+    const score = weightedVelocity * decay * earlyBoost * 300;
+    const recency = 1 / ageInHours;
+
+    return { score, recency };
+  };
+
+  // 🔧 Fix infinite loop: Memoize trendingItems calculation
+  const trendingItems: RecommendedItem[] = useMemo(() => {
+    const scored = allIndexedEbooks
+      .map(ebook => {
+        const originalEbook = ebookItems.find(e => e.fileUrl === ebook.fileUrl);
+        const { score, recency } = calculateTrendingScore(ebook, originalEbook || {});
+        return {
+          ...ebook,
+          trendingScore: score,
+          recency,
+          createdAt: originalEbook?.createdAt,
+        } as any;
+      })
+      .filter(e => (e as any).trendingScore > 0);
+
+    const takeTop = (list: any[]) => list
+      .sort((a: any, b: any) => {
+        if ((b.trendingScore ?? 0) !== (a.trendingScore ?? 0)) return (b.trendingScore ?? 0) - (a.trendingScore ?? 0);
+        const av = a.views ?? 0;
+        const bv = b.views ?? 0;
+        if (bv !== av) return bv - av;
+        return (b.recency ?? 0) - (a.recency ?? 0);
+      })
+      .slice(0, 20)
+      .map(({ fileUrl, title, subTitle, imageUrl, trendingScore, views }: any) => {
+        const scoreNum = Number(trendingScore || 0);
+        const isHot = scoreNum > 1200;
+        const isRising = scoreNum > 600 && scoreNum <= 1200;
+        return {
+          fileUrl,
+          title,
+          subTitle,
+          views: views ?? 0,
+          imageUrl,
+          isHot,
+          isRising,
+          trendingScore: scoreNum,
+        } as RecommendedItem;
+      });
+
+    if (scored.length > 0) return takeTop(scored);
+
+    const fallback = allIndexedEbooks
+      .map(ebook => {
+        const originalEbook = ebookItems.find(e => e.fileUrl === ebook.fileUrl);
+        const createdAt = new Date(originalEbook?.createdAt || Date.now()).getTime();
+        return { ...ebook, createdAt } as any;
+      })
+      .sort((a: any, b: any) => {
+        const bv = b.views ?? 0;
+        const av = a.views ?? 0;
+        if (bv !== av) return bv - av;
+        return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      })
+      .slice(0, 20)
+      .map(({ fileUrl, title, subTitle, imageUrl, views }: any) => ({
+        fileUrl,
+        title,
+        subTitle,
+        views: views ?? 0,
+        imageUrl,
+        isHot: false,
+        isRising: false,
+        trendingScore: 0,
+      } as RecommendedItem));
+
+    return fallback;
+  }, [allIndexedEbooks, ebookItems]);
+
+  useEffect(() => {
+    const loadPersistedData = async () => {
+      console.log("📚 EbookComponent: Loading persisted data...");
+      
+      // 📚 Load library data first
+      if (!libraryStore.isLoaded) {
+        await libraryStore.loadSavedItems();
+      }
+      
+      // 📥 Load downloaded items
+      await loadDownloadedItems();
+      
+      // 📊 Load ebook stats and viewed ebooks
+      const stats = await getPersistedStats();
+      const viewed = await getViewed();
+
+      setEbookStats(stats);
+      setPreviouslyViewedState(viewed);
+
+      // 🎯 Load favorite states for all ebooks
+      const favoriteStates: Record<string, boolean> = {};
+      const favoriteCounts: Record<string, number> = {};
+      
+      await Promise.all(ebookItems.map(async (ebook) => {
+        const key = getEbookKey(ebook.fileUrl);
+        const { isUserFavorite, globalCount } = await toggleFavorite(key);
+        favoriteStates[key] = isUserFavorite;
+        favoriteCounts[key] = globalCount;
+      }));
+      
+      setUserFavorites(favoriteStates);
+      setGlobalFavoriteCounts(favoriteCounts);
+      
+      console.log(`✅ EbookComponent: Loaded ${ebookItems.length} ebooks and stats for ${Object.keys(stats).length} items`);
+    };
+
+    loadPersistedData();
+  }, [ebookItems.length]);
 
   // Get time ago for items
   const getTimeAgo = (timestamp: string) => {
@@ -129,32 +410,93 @@ export default function EbookComponent() {
     return `${days}DAYS AGO`;
   };
 
-  // Process ebook items with time ago
-  const processedEbooks = ebookItems.map(item => ({
-    ...item,
-    timeAgo: getTimeAgo(item.createdAt),
-    speakerAvatar: item.speakerAvatar || require("../../assets/images/Avatar-1.png"),
-    imageUrl: item.imageUrl || require("../../assets/images/image (12).png"),
-  }));
+  // 🔧 Fix infinite loop: Memoize explore ebook arrays
+  const firstExploreEbooks = useMemo(() => ebookItems.slice(1, 5), [ebookItems]);
+  const middleExploreEbooks = useMemo(() => ebookItems.slice(5, 9), [ebookItems]);
+  const remainingExploreEbooks = useMemo(() => ebookItems.slice(9), [ebookItems]);
 
-  // Categorize ebooks
-  const recentEbooks = processedEbooks.slice(0, 1);
-  const previouslyViewed = processedEbooks.slice(1, 4);
-  const exploreMoreEbooks = processedEbooks.slice(4, 8);
-  const trendingEbooks = processedEbooks.slice(8, 12);
-  const recommendedEbooks = processedEbooks.slice(12, 16);
+  // 🎯 Enhanced Recommendation Logic
+  const enhancedRecommendedForYou = useMemo((): RecommendedItem[] => {
+    if (!ebookItems.length) return [];
+
+    const watchedSpeakers = previouslyViewedState.length > 0 
+      ? [...new Set(previouslyViewedState.map(v => (v.subTitle || '').toLowerCase()))]
+      : [];
+
+    const likedKeys = Object.keys(userFavorites || {}).filter(k => userFavorites[k]);
+    const likedSpeakers = new Set<string>();
+    likedKeys.forEach((k) => {
+      const ebook = allIndexedEbooks.find(v => v.key === k);
+      if (ebook?.subTitle) likedSpeakers.add(String(ebook.subTitle).toLowerCase());
+    });
+
+    const scoreEbook = (ebook: any) => {
+      const originalEbook = ebookItems.find(e => e.fileUrl === ebook.fileUrl);
+      let recommendationScore = 1;
+
+      const titleLower = (ebook.title || '').toLowerCase();
+      const speakerLower = (ebook.subTitle || '').toLowerCase();
+
+      const fromLikedSpeaker = likedSpeakers.has(speakerLower);
+      if (fromLikedSpeaker) recommendationScore *= 3.0;
+
+      const fromWatchedSpeaker = watchedSpeakers.includes(speakerLower);
+      if (fromWatchedSpeaker) recommendationScore *= 1.8;
+
+      const now = new Date().getTime();
+      const createdAt = new Date(originalEbook?.createdAt || Date.now()).getTime();
+      const ageInDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+      const recencyBoost = Math.max(0.75, 1 - (ageInDays / 45));
+      recommendationScore *= recencyBoost;
+
+      const globalTieBreaker = (ebook.views || 0) * 0.001 + (ebook.favorites || 0) * 0.01 + (ebook.shares || 0) * 0.02;
+      recommendationScore += globalTieBreaker;
+
+      return {
+        ...ebook,
+        recommendationScore,
+        isFromFavoriteSpeaker: fromLikedSpeaker || fromWatchedSpeaker
+      };
+    };
+
+    const scoredFiltered = allIndexedEbooks
+      .filter(ebook => !previouslyViewedState.some(v => v.fileUrl === ebook.fileUrl))
+      .map(scoreEbook)
+      .sort((a, b) => b.recommendationScore - a.recommendationScore);
+
+    const source = scoredFiltered.length > 0
+      ? scoredFiltered
+      : allIndexedEbooks.map(scoreEbook).sort((a, b) => b.recommendationScore - a.recommendationScore);
+
+    const combinedRecommendations = source
+      .slice(0, 12)
+      .map(({ fileUrl, title, subTitle, views, imageUrl }) => ({
+        fileUrl,
+        title,
+        subTitle,
+        views,
+        imageUrl
+      }));
+
+    return combinedRecommendations;
+  }, [ebookItems, previouslyViewedState, allIndexedEbooks, trendingItems, ebookStats, userFavorites]);
 
   const renderEbookCard = (
-    ebook: EbookItem,
+    ebook: EbookCard,
     index: number,
     sectionId: string
   ) => {
-    const modalKey = `${sectionId}-${index}`;
+    const modalKey = getEbookKey(ebook.fileUrl);
+    const stats = ebookStats[modalKey] || {};
+    const isItemSaved = libraryStore.isItemSaved(modalKey);
+
     return (
-      <View className="flex flex-col">
+      <View key={modalKey} className="flex flex-col mb-6">
         <TouchableOpacity
-          key={modalKey}
-          onPress={ebook.onPress}
+          onPress={() => {
+            // For now, just show an alert since EbookDetailScreen might not exist
+            Alert.alert("View Details", `Viewing details for: ${ebook.title}`);
+          }}
           className="mr-4 w-full h-[436px]"
           activeOpacity={0.9}
         >
@@ -173,58 +515,9 @@ export default function EbookComponent() {
                 {ebook.title}
               </Text>
             </View>
-
-            {modalVisible === modalKey && (
-              <>
-                <TouchableWithoutFeedback onPress={() => setModalVisible(null)}>
-                  <View className="absolute inset-0 z-40" />
-                </TouchableWithoutFeedback>
-                <View className="absolute mt-[260px] right-4 bg-white shadow-md rounded-lg p-3 z-50 w-56 h-[180px]">
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    View Details
-                  </Text>
-                  <MaterialIcons name="visibility" size={16} color="#3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-sm text-[#1D2939] font-rubik ml-2">
-                    Share
-                  </Text>
-                  <AntDesign name="sharealt" size={16} color="#3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity className="py-2 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    Save to Library
-                  </Text>
-                  <MaterialIcons name="library-add" size={18} color="#3A3E50" />
-                </TouchableOpacity>
-                <View className="h-px bg-gray-200 my-1" />
-                <TouchableOpacity 
-                  className="py-2 flex-row items-center justify-between"
-                  onPress={async () => {
-                    const downloadableItem = convertToDownloadableItem(ebook, 'ebook');
-                    const result = await handleDownload(downloadableItem);
-                    if (result.success) {
-                      setModalVisible(null);
-                    }
-                  }}
-                >
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    {checkIfDownloaded(ebook._id || ebook.fileUrl) ? "Downloaded" : "Download"}
-                  </Text>
-                  <Ionicons 
-                    name={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                    size={24} 
-                    color={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "#256E63" : "#090E24"} 
-                  />
-                </TouchableOpacity>
-                </View>
-              </>
-            )}
           </View>
 
-          {/* Speaker info and stats */}
-          <View className="flex-row items-center justify-between mt-1">
+          <View className="flex-row items-center justify-between mt-1 px-3 mb-4">
             <View className="flex flex-row items-center">
               <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
                 <Image
@@ -239,48 +532,67 @@ export default function EbookComponent() {
                     {getUserDisplayNameFromContent(ebook)}
                   </Text>
                   <View className="flex flex-row mt-2 ml-2">
-                    <Ionicons name="time-outline" size={13} color="#9CA3AF" />
+                    <Ionicons name="time-outline" size={14} color="#9CA3AF" />
                     <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                      {ebook.timeAgo}
+                      {ebook.timeAgo || getTimeAgo(ebook.createdAt)}
                     </Text>
                   </View>
                 </View>
-                <View className="flex flex-row mt-2">
-                  <View className="flex-row items-center">
-                    <MaterialIcons name="visibility" size={16} color="#98A2B3" />
+                <View className="flex-row mt-2 items-center justify-between">
+                  <View className="flex-row items-center mr-6">
+                    <MaterialIcons name="visibility" size={28} color="#98A2B3" />
                     <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                      {ebook.views || 0}
+                      {stats.views ?? ebook.views ?? 0}
                     </Text>
                   </View>
-                  <View className="flex-row items-center ml-4">
-                    <AntDesign name="sharealt" size={16} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                      {ebook.sheared || 0}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center ml-6">
-                    <Fontisto name="favorite" size={14} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                      {ebook.saved || 0}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center ml-6">
+                  <TouchableOpacity onPress={() => handleFavorite(modalKey, ebook)} className="flex-row items-center mr-6">
                     <MaterialIcons
-                      name="favorite-border"
-                      size={16}
-                      color="#98A2B3"
+                      name={userFavorites[modalKey] ? "favorite" : "favorite-border"}
+                      size={28}
+                      color={userFavorites[modalKey] ? "#D22A2A" : "#98A2B3"}
                     />
                     <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                      {ebook.favorite || 0}
+                      {globalFavoriteCounts[modalKey] || 0}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="flex-row items-center mr-6"
+                    onPress={() => handleComment(modalKey, ebook)}
+                  >
+                    <CommentIcon 
+                      comments={[]}
+                      size={28}
+                      color="#98A2B3"
+                      showCount={true}
+                      count={stats.comment === 1 ? (ebook.comment ?? 0) + 1 : ebook.comment ?? 0}
+                      layout="horizontal"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleSave(modalKey, ebook)} className="flex-row items-center mr-6">
+                    <MaterialIcons
+                      name={isItemSaved ? "bookmark" : "bookmark-border"}
+                      size={28}
+                      color={isItemSaved ? "#FEA74E" : "#98A2B3"}
+                    />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                      {(ebookStats[modalKey] as any)?.totalSaves || ebook.saved || 0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="flex-row items-center"
+                    onPress={() => handleShare(modalKey, ebook)}
+                  >
+                    <Feather 
+                      name="send" 
+                      size={28} 
+                      color="#98A2B3" 
+                    />
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
             <TouchableOpacity
-              onPress={() =>
-                setModalVisible(modalVisible === modalKey ? null : modalKey)
-              }
+              onPress={() => handleOpenContentModal(ebook, modalKey)}
               className="mr-2"
             >
               <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
@@ -293,12 +605,10 @@ export default function EbookComponent() {
 
   const renderMiniCards = (
     title: string,
-    items: EbookItem[],
-    modalIndex: number | null,
-    setModalIndex: any
+    items: RecommendedItem[]
   ) => (
-    <View className="mt-5">
-      <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+    <View className="mb-6">
+      <Text className="text-[16px] mb-3 font-rubik-semibold text-[#344054] mt-4">
         {title}
       </Text>
       <ScrollView
@@ -307,12 +617,12 @@ export default function EbookComponent() {
         contentContainerStyle={{ paddingHorizontal: 12 }}
       >
         {items.map((item, index) => (
-          <View
-            key={`${title}-${item.title}-${index}`}
-            className="mr-4 w-[154px] flex-col items-center"
-          >
+          <View key={`${title}-${item.title}-${index}`} className="mr-4 w-[154px] flex-col items-center">
             <TouchableOpacity
-              onPress={item.onPress}
+              onPress={() => {
+                // For now, just show an alert since EbookDetailScreen might not exist
+                Alert.alert("View Details", `Viewing details for: ${item.title}`);
+              }}
               className="w-full h-[232px] rounded-2xl overflow-hidden relative"
               activeOpacity={0.9}
             >
@@ -331,62 +641,17 @@ export default function EbookComponent() {
                 </Text>
               </View>
             </TouchableOpacity>
-            {modalIndex === index && (
-              <View className="absolute mt-[26px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-30">
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    View Details
-                  </Text>
-                  <MaterialIcons name="visibility" size={16} color="#3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-sm text-[#1D2939] font-rubik ml-2">
-                    Share
-                  </Text>
-                  <AntDesign name="sharealt" size={16} color="##3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik mr-2">
-                    Save to Library
-                  </Text>
-                  <MaterialIcons name="library-add" size={18} color="#3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="py-2 flex-row items-center justify-between"
-                  onPress={async () => {
-                    const downloadableItem = convertToDownloadableItem(item, 'ebook');
-                    const result = await handleDownload(downloadableItem);
-                    if (result.success) {
-                      setModalIndex(null);
-                      // Force re-render to update download status
-                      await loadDownloadedItems();
-                    }
-                  }}
-                >
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
-                  </Text>
-                  <Ionicons 
-                    name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                    size={16} 
-                    color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
             <View className="mt-2 flex flex-col w-full">
               <View className="flex flex-row justify-between items-center">
                 <Text
-                  className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                  className="text-[12px] text-[#98A2B3] font-rubik font-medium"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
-                  {item.speaker || item.uploadedBy || "Unknown Author"}
+                  {item.subTitle?.split(" ").slice(0, 4).join(" ") + " ..."}
                 </Text>
                 <TouchableOpacity
-                  onPress={() =>
-                    setModalIndex(modalIndex === index ? null : index)
-                  }
+                  onPress={() => handleOpenContentModal(item, `mini-${title}-${index}`)}
                   className="mr-2"
                 >
                   <Ionicons
@@ -396,74 +661,12 @@ export default function EbookComponent() {
                   />
                 </TouchableOpacity>
               </View>
-              {(() => {
-                const key = getContentKey(item);
-                const stats = getPersistedStats(key) || {};
-                const contentId = item._id || key;
-                const currentComments = comments[contentId] || [];
-                const formattedComments = currentComments.map((comment: any) => ({
-                  id: comment.id,
-                  userName: comment.username || 'Anonymous',
-                  avatar: comment.userAvatar || '',
-                  timestamp: comment.timestamp,
-                  comment: comment.comment,
-                  likes: comment.likes || 0,
-                  isLiked: comment.isLiked || false,
-                }));
-                return (
-                  <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
-                <View className="flex-row items-center mr-6">
-                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+              <View className="flex-row items-center">
+                <MaterialIcons name="visibility" size={16} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {item.views || 0}
+                  {item.views}
                 </Text>
               </View>
-                <TouchableOpacity onPress={() => handleFavorite(key, item)} className="flex-row items-center mr-6">
-                  <MaterialIcons
-                    name={userFavorites[key] ? "favorite" : "favorite-border"}
-                    size={28}
-                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {globalFavoriteCounts[key] || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="flex-row items-center mr-6"
-                  onPress={() => handleComment(key, item)}
-                >
-                  <CommentIcon 
-                    comments={formattedComments}
-                    size={28}
-                    color="#98A2B3"
-                    showCount={true}
-                    count={stats.comment === 1 ? (item.comment ?? 0) + 1 : item.comment ?? 0}
-                    layout="horizontal"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleSave(key, item)} className="flex-row items-center mr-6">
-                  <MaterialIcons
-                    name={isInLibrary(getContentKey(item)) ? "bookmark" : "bookmark-border"}
-                    size={28}
-                    color={isInLibrary(getContentKey(item)) ? "#FEA74E" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {(stats as any)?.totalSaves || item.saved || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="flex-row items-center"
-                  onPress={() => handleDownloadPress(item)}
-                >
-                  <Ionicons 
-                    name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                    size={28} 
-                    color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#98A2B3"} 
-                  />
-                </TouchableOpacity>
-                  </View>
-                );
-              })()}
             </View>
           </View>
         ))}
@@ -471,84 +674,96 @@ export default function EbookComponent() {
     </View>
   );
 
-  // Show empty state if no ebooks
-  if (processedEbooks.length === 0) {
-    return (
-      <View className="flex-1 justify-center items-center">
-        <Text className="text-[#344054] text-lg font-rubik-semibold mb-2">
-          No Ebooks Available
-        </Text>
-        <Text className="text-[#667085] text-sm font-rubik text-center px-8">
-          Upload PDF ebooks through the upload section to see them here.
-        </Text>
-      </View>
-    );
-  }
+  useFocusEffect(
+    useCallback(() => {
+      mediaStore.refreshUserDataForExistingMedia();
+      loadDownloadedItems();
+    }, [])
+  );
 
   return (
     <ScrollView
-      className="flex-1"
-      onScrollBeginDrag={() => {
-        setModalVisible(null);
-        setPvModalIndex(null);
-        setRsModalIndex(null);
-      }}
-      onTouchStart={() => {
-        setModalVisible(null);
-        setPvModalIndex(null);
-        setRsModalIndex(null);
-      }}
+      className="flex-1 px-3 w-full"
+      onScrollBeginDrag={closeAllMenus}
+      onTouchStart={closeAllMenus}
     >
-      {/* 1. Most Recent */}
-      {recentEbooks.length > 0 && (
+      {ebookItems.length > 0 && (
         <>
           <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
             Most Recent
           </Text>
-          {recentEbooks.slice(0, 1).map((ebook, index) => (
-            <View key={`recent-${ebook._id}-${index}`}>
-              {renderEbookCard(ebook, index, "recent")}
-            </View>
-          ))}
+          {renderEbookCard(
+            {
+              fileUrl: ebookItems[0].fileUrl,
+              title: ebookItems[0].title,
+              speaker: ebookItems[0].speaker || "Unknown",
+              timeAgo: getTimeAgo(ebookItems[0].createdAt),
+              speakerAvatar:
+                typeof ebookItems[0].speakerAvatar === "string"
+                  ? ebookItems[0].speakerAvatar.trim()
+                  : require("../../assets/images/Avatar-1.png"),
+              views: ebookItems[0].viewCount || 0,
+              favorite: ebookItems[0].favorite || 0,
+              saved: ebookItems[0].saved || 0,
+              sheared: ebookItems[0].sheared || 0,
+              comment: ebookItems[0].comment || 0,
+              createdAt: ebookItems[0].createdAt,
+              imageUrl: ebookItems[0].imageUrl || require("../../assets/images/image (12).png"),
+            },
+            0,
+            "uploaded"
+          )}
         </>
       )}
 
-      {/* 2. Previously Viewed */}
       {renderMiniCards(
-        "Previously Viewed",
-        previouslyViewed,
-        pvModalIndex,
-        setPvModalIndex
+        "Previously Read",
+        previouslyViewedState
       )}
 
-      {/* 3. Explore More Ebooks */}
-      {recentEbooks.length > 1 && (
+      {firstExploreEbooks.length > 0 && (
         <>
           <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
-            Explore More Ebooks
+            Explore More
           </Text>
           <View className="gap-8">
-            {recentEbooks.slice(1, 5).map((ebook, index) => (
-              <View key={`explore-${ebook._id}-${index}`}>
-                {renderEbookCard(ebook, index, "explore")}
-              </View>
-            ))}
+            {firstExploreEbooks.map((ebook, index) =>
+              renderEbookCard(
+                {
+                  fileUrl: ebook.fileUrl,
+                  title: ebook.title,
+                  speaker: ebook.speaker || "Unknown",
+                  timeAgo: getTimeAgo(ebook.createdAt),
+                  speakerAvatar:
+                    typeof ebook.speakerAvatar === "string"
+                      ? ebook.speakerAvatar.trim()
+                      : require("../../assets/images/Avatar-1.png"),
+                  views: ebook.viewCount || 0,
+                  favorite: ebook.favorite || 0,
+                  saved: ebook.saved || 0,
+                  sheared: ebook.sheared || 0,
+                  comment: ebook.comment || 0,
+                  createdAt: ebook.createdAt,
+                  imageUrl: ebook.imageUrl || require("../../assets/images/image (12).png"),
+                },
+                index + 1,
+                "explore-early"
+              )
+            )}
           </View>
         </>
       )}
 
-      {/* 4. Trending Now */}
-      {trendingEbooks.length > 0 ? (
+      {/* 🔥 Trending Section */}
+      {trendingItems.length > 0 ? (
         renderMiniCards(
-          `Trending Now • ${trendingEbooks.length} ebooks`,
-          trendingEbooks,
-          rsModalIndex,
-          setRsModalIndex
+          `Trending • ${trendingItems.length} ebooks`,
+          trendingItems
         )
       ) : (
         <View className="mt-5 mb-4">
           <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
-            Trending Now
+            Trending
           </Text>
           <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
             <Text className="text-[32px] mb-2">📈</Text>
@@ -562,50 +777,78 @@ export default function EbookComponent() {
         </View>
       )}
 
-      {/* 5. Exploring More */}
-      {recentEbooks.length > 5 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            Exploring More
-          </Text>
-          <View className="gap-8">
-            {recentEbooks.slice(5, 9).map((ebook, index) => (
-              <View key={`explore-more-${ebook._id}-${index}`}>
-                {renderEbookCard(ebook, index, "explore-more")}
-              </View>
-            ))}
-          </View>
-        </>
-      )}
-
-      {/* 6. Recommended for You */}
-      {recommendedEbooks.length > 0 && (
+      {/* 🎯 Enhanced Recommendation Sections */}
+      {enhancedRecommendedForYou.length > 0 && (
         renderMiniCards(
-          `Recommended for You • ${recommendedEbooks.length} ebooks`,
-          recommendedEbooks,
-          rsModalIndex,
-          setRsModalIndex
+          `Recommended for You • ${enhancedRecommendedForYou.length} ebooks`,
+          enhancedRecommendedForYou
         )
       )}
 
-      {/* 7. More Ebooks */}
-      {recentEbooks.length > 9 && (
+      {remainingExploreEbooks.length > 0 && (
         <>
           <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
             More Ebooks
           </Text>
           <View className="gap-8">
-            {recentEbooks.slice(9).map((ebook, index) => (
-              <View key={`more-${ebook._id}-${index}`}>
-                {renderEbookCard(ebook, index, "more")}
-              </View>
-            ))}
+            {remainingExploreEbooks.map((ebook, index) =>
+              renderEbookCard(
+                {
+                  fileUrl: ebook.fileUrl,
+                  title: ebook.title,
+                  speaker: ebook.speaker || "Unknown",
+                  timeAgo: getTimeAgo(ebook.createdAt),
+                  speakerAvatar:
+                    typeof ebook.speakerAvatar === "string"
+                      ? ebook.speakerAvatar.trim()
+                      : require("../../assets/images/Avatar-1.png"),
+                  views: ebook.viewCount || 0,
+                  favorite: ebook.favorite || 0,
+                  saved: ebook.saved || 0,
+                  sheared: ebook.sheared || 0,
+                  comment: ebook.comment || 0,
+                  createdAt: ebook.createdAt,
+                  imageUrl: ebook.imageUrl || require("../../assets/images/image (12).png"),
+                },
+                index + 100,
+                "explore-remaining"
+              )
+            )}
           </View>
         </>
       )}
 
-      {/* Bottom spacing to ensure last card footer is fully visible */}
-      <View className="h-20" />
+      {/* Content Action Modal */}
+      {selectedContent && (
+        <>
+          {console.log("🔧 Rendering modal - selectedContent:", !!selectedContent, "modalVisible:", modalVisible)}
+          <ContentActionModal
+            isVisible={modalVisible !== null}
+            onClose={() => {
+              console.log("🔧 Closing modal");
+              closeAllMenus();
+            }}
+            onViewDetails={handleViewDetails}
+            onSaveToLibrary={() => {
+              if (selectedContent) {
+                const key = getEbookKey(selectedContent.fileUrl);
+                handleSave(key, selectedContent);
+              }
+            }}
+            onShare={() => {
+              if (selectedContent) {
+                const key = getEbookKey(selectedContent.fileUrl);
+                handleShare(key, selectedContent);
+              }
+            }}
+            onDownload={() => {
+              if (selectedContent) {
+                handleDownloadPress(selectedContent);
+              }
+            }}
+          />
+        </>
+      )}
     </ScrollView>
   );
 }

@@ -1,5 +1,4 @@
 import {
-    AntDesign,
     Feather,
     Ionicons,
     MaterialIcons
@@ -14,10 +13,10 @@ import {
     Share,
     Text,
     TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+    View
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import ContentActionModal from "../components/ContentActionModal";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useInteractionStore } from "../store/useInteractionStore";
@@ -241,6 +240,7 @@ export default function Music() {
   const [audioProgressMap, setAudioProgressMap] = useState<Record<string, number>>({});
   const [audioMuteMap, setAudioMuteMap] = useState<Record<string, boolean>>({});
   const [modalVisible, setModalVisible] = useState<string | null>(null);
+  const [selectedContent, setSelectedContent] = useState<any>(null);
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
   const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
   const [recModalIndex, setRecModalIndex] = useState<number | null>(null);
@@ -374,8 +374,44 @@ export default function Music() {
   // Close all open menus/popovers across the component
   const closeAllMenus = () => {
     setModalVisible(null);
+    setSelectedContent(null);
     setPvModalIndex(null);
     setRsModalIndex(null);
+    setRecModalIndex(null);
+  };
+
+  // ContentActionModal handlers
+  const handleOpenContentModal = (item: any, modalKey: string) => {
+    setSelectedContent(item);
+    setModalVisible(modalKey);
+  };
+
+  const handleViewDetails = () => {
+    if (selectedContent) {
+      console.log("View details for:", selectedContent.title);
+      // Navigate to music detail screen
+      const detailParams = {
+        title: selectedContent.title,
+        speaker: selectedContent.speaker || selectedContent.subTitle || "Unknown",
+        description: selectedContent.description || 'No description available',
+        audioUrl: selectedContent.fileUrl || selectedContent.audioUrl,
+        imageUrl: selectedContent?.thumbnailUrl || (selectedContent?.imageUrl ? (typeof selectedContent.imageUrl === "string" ? selectedContent.imageUrl : selectedContent.imageUrl.uri) : ''),
+        thumbnailUrl: selectedContent?.thumbnailUrl,
+        speakerAvatar: selectedContent?.speakerAvatar ? (typeof selectedContent.speakerAvatar === "string" ? selectedContent.speakerAvatar : selectedContent.speakerAvatar.uri) : '',
+        views: (selectedContent.views || 0).toString(),
+        favorites: (selectedContent.favorite || 0).toString(),
+        shares: (selectedContent.sheared || 0).toString(),
+        comments: (selectedContent.comment || 0).toString(),
+        saved: (selectedContent.saved || 0).toString(),
+        timeAgo: selectedContent.timeAgo || "Recent",
+        contentId: selectedContent.contentId || modalKey,
+      };
+      
+      router.push({
+        pathname: '/categories/MusicDetailScreen',
+        params: detailParams,
+      });
+    }
   };
 
   const handleShare = async (key: string, Audio: AudioCard) => {
@@ -1019,85 +1055,7 @@ useEffect(() => {
        
 
           
-{modalVisible === modalKey && (
-          <>
-            <TouchableWithoutFeedback onPress={closeAllMenus}>
-              <View className="absolute inset-0 z-40" />
-            </TouchableWithoutFeedback>
-            
-            {/* ✅ Modal content positioned over the video area */}
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
-              <TouchableOpacity 
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-                onPress={() => {
-                  setModalVisible(null); // Close modal first
-                  
-                  // Navigate to detail screen with same logic
-                  const detailParams = {
-                    title: Audio.title,
-                    speaker: Audio.speaker,
-                    description: Audio.description || 'No description available',
-                    audioUrl: audioUri,
-                    imageUrl: Audio?.thumbnailUrl || (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? Audio.imageUrl : Audio.imageUrl.uri) : ''),
-                    thumbnailUrl: Audio?.thumbnailUrl,
-                    speakerAvatar: Audio?.speakerAvatar ? (typeof Audio.speakerAvatar === "string" ? Audio.speakerAvatar : Audio.speakerAvatar.uri) : '',
-                    views: (stats.views ?? Audio.views ?? 0).toString(),
-                    favorites: (stats.favorite ?? Audio.favorite ?? 0).toString(),
-                    shares: (stats.sheared ?? Audio.sheared ?? 0).toString(),
-                    comments: (Audio.comment ?? 0).toString(),
-                    saved: (stats.saved ?? Audio.saved ?? 0).toString(),
-                    timeAgo: Audio.timeAgo,
-                    contentId: interactionContentId,
-                  };
-                  
-                  router.push({
-                    pathname: '/categories/MusicDetailScreen',
-                    params: detailParams,
-                  });
-                }}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                <MaterialIcons name="visibility" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleShare(modalKey, Audio)}
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
-                <Feather name="send" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-row items-center justify-between mt-6" onPress={() => handleSave(modalKey, Audio)}>
-                <Text className="text-[#1D2939] font-rubik ml-2">{isItemSaved ? "Remove from Library" : "Save to Library"}</Text>
-                <MaterialIcons
-                  name={isItemSaved ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color="#1D2939"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
-                onPress={async () => {
-                  const downloadableItem = convertToDownloadableItem(Audio, 'audio');
-                  const result = await handleDownload(downloadableItem);
-                  if (result.success) {
-                    setModalVisible(null);
-                  }
-                }}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  {checkIfDownloaded(Audio._id || Audio.fileUrl) ? "Downloaded" : "Download"}
-                </Text>
-                <Ionicons 
-                  name={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                  size={24} 
-                  color={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "#256E63" : "#090E24"} 
-                />
-              </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </>
-        )}
+{/* ContentActionModal will be rendered at the bottom */}
           </View>
 
           <View className="flex-row items-center justify-between mt-1 px-3 mb-4">
@@ -1173,19 +1131,19 @@ useEffect(() => {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   className="flex-row items-center"
-                  onPress={() => handleDownloadPress(Audio)}
+                  onPress={() => handleShare(modalKey, Audio)}
                 >
-                  <Ionicons 
-                    name={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                  <Feather 
+                    name="send" 
                     size={28} 
-                    color={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "#256E63" : "#98A2B3"} 
+                    color="#98A2B3" 
                   />
                 </TouchableOpacity>
               </View>
             </View>
           </View>
           <TouchableOpacity
-            onPress={() => { closeAllMenus(); setModalVisible(modalVisible === modalKey ? null : modalKey); }}
+            onPress={() => handleOpenContentModal(Audio, modalKey)}
             className="mr-2"
           >
             <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
@@ -1260,49 +1218,7 @@ useEffect(() => {
                 </Text>
               </View>
             </TouchableOpacity>
-            {modalIndex === index && (
-              <View className="absolute mt-[26px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-30">
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    View Details
-                  </Text>
-                  <MaterialIcons name="visibility" size={16} color="#3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-sm text-[#1D2939] font-rubik ml-2">
-                    Share
-                  </Text>
-                  <AntDesign name="sharealt" size={16} color="##3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik mr-2">
-                    Save to Library
-                  </Text>
-                  <MaterialIcons name="library-add" size={18} color="#3A3E50" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="py-2 flex-row items-center justify-between"
-                  onPress={async () => {
-                    const downloadableItem = convertToDownloadableItem(item, 'audio');
-                    const result = await handleDownload(downloadableItem);
-                    if (result.success) {
-                      setModalIndex(null);
-                      // Force re-render to update download status
-                      await loadDownloadedItems();
-                    }
-                  }}
-                >
-                  <Text className="text-[#1D2939] font-rubik ml-2">
-                    {checkIfDownloaded(item._id || item.audioUrl) ? "Downloaded" : "Download"}
-                  </Text>
-                  <Ionicons 
-                    name={checkIfDownloaded(item._id || item.audioUrl) ? "checkmark-circle" : "download-outline"} 
-                    size={16} 
-                    color={checkIfDownloaded(item._id || item.audioUrl) ? "#256E63" : "#3A3E50"} 
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
+{/* ContentActionModal will be rendered at the bottom */}
             <View className="mt-2 flex flex-col w-full">
               <View className="flex flex-row justify-between items-center">
                 <Text
@@ -1313,9 +1229,7 @@ useEffect(() => {
                   {item.subTitle?.split(" ").slice(0, 4).join(" ") + " ..."}
                 </Text>
                 <TouchableOpacity
-                  onPress={() =>
-                    setModalIndex(modalIndex === index ? null : index)
-                  }
+                  onPress={() => handleOpenContentModal(item, `mini-${index}`)}
                   className="mr-2"
                 >
                   <Ionicons
@@ -1341,8 +1255,8 @@ useEffect(() => {
   return (
     <ScrollView
       className="flex-1"
-      onScrollBeginDrag={() => setModalVisible(null)}
-      onTouchStart={() => setModalVisible(null)}
+      onScrollBeginDrag={closeAllMenus}
+      onTouchStart={closeAllMenus}
     >
       {/* 1. Most Recent */}
       {musicItems.length > 0 && (
@@ -1554,6 +1468,32 @@ useEffect(() => {
 
       {/* Bottom spacing to ensure last card footer is fully visible */}
       <View className="h-20" />
+
+      {/* Content Action Modal */}
+      {selectedContent && (
+        <ContentActionModal
+          isVisible={modalVisible !== null}
+          onClose={closeAllMenus}
+          onViewDetails={handleViewDetails}
+          onSaveToLibrary={() => {
+            if (selectedContent) {
+              const key = getAudioKey(selectedContent.fileUrl || selectedContent.audioUrl);
+              handleSave(key, selectedContent);
+            }
+          }}
+          onShare={() => {
+            if (selectedContent) {
+              const key = getAudioKey(selectedContent.fileUrl || selectedContent.audioUrl);
+              handleShare(key, selectedContent);
+            }
+          }}
+          onDownload={() => {
+            if (selectedContent) {
+              handleDownloadPress(selectedContent);
+            }
+          }}
+        />
+      )}
     </ScrollView>
   );
 }
