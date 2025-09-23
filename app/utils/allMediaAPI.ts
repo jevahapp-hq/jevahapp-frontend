@@ -410,8 +410,8 @@ class AllMediaAPI {
 
       return {
         success: true,
-        media: data.media || data.data?.media || [],
-        total: data.total || data.data?.total || 0,
+        media: data.media || [],
+        total: data.total || 0,
       };
     } catch (error) {
       console.error("❌ Error fetching public all content:", error);
@@ -452,8 +452,8 @@ class AllMediaAPI {
 
       return {
         success: true,
-        media: data.media || data.data?.media || [],
-        total: data.total || data.data?.total || 0,
+        media: data.media || [],
+        total: data.total || 0,
       };
     } catch (error) {
       console.error("❌ Error fetching authenticated all content:", error);

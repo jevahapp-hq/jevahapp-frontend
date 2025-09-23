@@ -9,6 +9,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { VideoCardProps } from "../types/media";
 import { useThreadSafeVideo } from "../utils/videoPlayerUtils";
 import AIDescriptionBox from "./AIDescriptionBox";
@@ -43,18 +44,56 @@ export default function VideoCard({
   getUserDisplayNameFromContent,
   getUserAvatarFromContent,
 }: VideoCardProps) {
-  const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Using direct URLs from API - no refresh needed
   const [viewCounted, setViewCounted] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false); // Track if user has clicked play
   const videoRef = useRef<Video>(null);
   const isMountedRef = useRef(true);
 
   // Thread-safe video operations
   const threadSafeVideo = useThreadSafeVideo(videoRef);
 
+  // Global media store for unified media control
+  const globalMediaStore = useGlobalMediaStore();
+
   const key = getContentKey(video);
   const stats = contentStats[key] || {};
   const isSermon = video.contentType === "sermon";
+
+  // Helper function to validate URI (same as AllLibrary)
+  const isValidUri = (u: any) =>
+    typeof u === "string" &&
+    u.trim().length > 0 &&
+    /^https?:\/\//.test(u.trim());
+
+  // Use URL with validation (same pattern as AllLibrary)
+  const rawVideoUrl = video.fileUrl;
+  const videoUrl = isValidUri(rawVideoUrl)
+    ? String(rawVideoUrl).trim()
+    : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+  // Force video to load on mount to show first frame
+  useEffect(() => {
+    const forceVideoLoad = async () => {
+      if (videoRef.current && isMountedRef.current) {
+        try {
+          console.log(`🔄 Force loading video: ${video.title}`);
+          // Force the video to load by calling loadAsync
+          await videoRef.current.loadAsync(
+            { uri: videoUrl },
+            { shouldPlay: false }
+          );
+          console.log(`✅ Video force loaded: ${video.title}`);
+        } catch (error) {
+          console.warn(`⚠️ Failed to force load video: ${video.title}`, error);
+        }
+      }
+    };
+
+    // Add a small delay to ensure the video ref is ready
+    const timeoutId = setTimeout(forceVideoLoad, 100);
+    return () => clearTimeout(timeoutId);
+  }, [videoUrl, video.title]);
 
   // Proper cleanup on unmount
   useEffect(() => {
@@ -116,18 +155,28 @@ export default function VideoCard({
         }))
       : sampleComments;
 
-  const videoUrl = refreshedUrl || video.fileUrl;
+  // Debug: Log the video URL being used
+  console.log(`🎬 VideoCard URL for "${video.title}":`, {
+    rawFileUrl: rawVideoUrl,
+    finalVideoUrl: videoUrl,
+    isValidUrl: isValidUri(rawVideoUrl),
+    modalKey,
+  });
 
   // Debug: Log video URL and shouldPlay value
   const shouldPlayValue = playingVideos[modalKey] ?? false;
   console.log(`🎥 VideoCard ${modalKey} debug:`, {
     title: video.title,
     contentType: video.contentType,
+    modalKey,
+    contentKey: key,
     originalFileUrl: video.fileUrl,
-    refreshedUrl,
     finalVideoUrl: videoUrl,
     shouldPlay: shouldPlayValue,
     playingVideos: playingVideos,
+    allPlayingVideoKeys: Object.keys(playingVideos),
+    globalCurrentlyPlaying: globalMediaStore.currentlyPlayingMedia,
+    globalCurrentlyPlayingType: globalMediaStore.currentlyPlayingType,
   });
 
   // Handle play/pause button click (local playback)
@@ -207,32 +256,50 @@ export default function VideoCard({
     <View key={modalKey} className="flex flex-col mb-10">
       <TouchableWithoutFeedback onPress={handleVideoAreaPress}>
         <View className="w-full h-[400px] overflow-hidden relative">
+          {/* Always show video - use as its own thumbnail in preview mode */}
           <Video
             ref={videoRef}
-            source={{
-              uri: (() => {
-                const finalUri =
-                  videoUrl &&
-                  videoUrl.trim() &&
-                  videoUrl.trim() !== "https://example.com/placeholder.mp4"
-                    ? videoUrl.trim()
-                    : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
-                console.log(`🎬 Video source URI for "${video.title}":`, {
-                  originalVideoUrl: videoUrl,
-                  finalUri,
-                  isUsingFallback: finalUri.includes("BigBuckBunny"),
-                });
-
-                return finalUri;
-              })(),
-            }}
+            source={{ uri: videoUrl }}
             style={{ width: "100%", height: "100%", position: "absolute" }}
             resizeMode={ResizeMode.COVER}
             isMuted={mutedVideos[modalKey] ?? false}
             volume={mutedVideos[modalKey] ? 0.0 : videoVolume}
-            shouldPlay={shouldPlayValue}
+            shouldPlay={playingVideos[modalKey] ?? false}
+            isLooping={false}
+            // Force video to load even when not playing to show first frame
+            shouldCorrectPitch={true}
+            progressUpdateIntervalMillis={1000}
+            posterSource={
+              video.imageUrl
+                ? typeof video.imageUrl === "string"
+                  ? { uri: video.imageUrl }
+                  : video.imageUrl
+                : undefined
+            }
+            onLoad={(status) => {
+              // Video loaded successfully - let shouldPlay prop handle playback state
+              if (status.isLoaded) {
+                console.log(`✅ Video loaded successfully: ${video.title}`, {
+                  videoUrl,
+                  shouldPlay: playingVideos[modalKey] ?? false,
+                  isLoaded: status.isLoaded,
+                  duration: status.durationMillis,
+                });
+              } else {
+                console.warn(`❌ Video failed to load: ${video.title}`, {
+                  videoUrl,
+                  status,
+                });
+              }
+            }}
             useNativeControls={false}
+            onError={(e) => {
+              console.error(`❌ Video error in VideoCard: ${video.title}`, {
+                videoUrl,
+                error: e,
+                modalKey,
+              });
+            }}
             onPlaybackStatusUpdate={(status) => {
               if (!status.isLoaded || !isMountedRef.current) return;
 
@@ -266,7 +333,10 @@ export default function VideoCard({
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation(); // Prevent event bubbling to parent
-                handlePlayButtonPress();
+
+                // Mark that user has interacted and toggle play state
+                setHasUserInteracted(true);
+                onTogglePlay(modalKey);
               }}
             >
               <View
