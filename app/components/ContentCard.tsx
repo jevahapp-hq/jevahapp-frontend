@@ -22,6 +22,7 @@ import SocketManager from "../services/SocketManager";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
+import { useLibraryStore } from "../store/useLibraryStore";
 import CommentIcon from "./CommentIcon";
 import { CompactAudioControls } from "./CompactAudioControls";
 
@@ -116,30 +117,60 @@ const ContentCard: React.FC<ContentCardProps> = ({
     // Map author structure with proper fallbacks
     author: content.author ||
       content.authorInfo || {
-      _id:
-        (content as any).uploadedBy?._id ||
-        (content as any).uploadedBy ||
-        "unknown",
-      firstName: (content as any).uploadedBy?.firstName || "Unknown",
-      lastName: (content as any).uploadedBy?.lastName || "User",
-      avatar: (content as any).uploadedBy?.avatar,
-    },
+        _id:
+          (content as any).uploadedBy?._id ||
+          (content as any).uploadedBy ||
+          "unknown",
+        firstName: (content as any).uploadedBy?.firstName || "Unknown",
+        lastName: (content as any).uploadedBy?.lastName || "User",
+        avatar: (content as any).uploadedBy?.avatar,
+      },
   };
 
   // SAFE LIBRARY STORE - Never fails, always returns a valid store
   const safeLibraryStore = useSafeLibraryStore();
 
+  // Direct store reference as backup
+  const directLibraryStore = useLibraryStore();
+
   // Check if item is saved - this will NEVER crash
   const isItemInLibrary = React.useMemo(() => {
     try {
-      const result = safeLibraryStore.isItemSaved(content._id);
-      console.log(`🔍 Item ${content._id} saved status:`, result);
+      // Try safe store first
+      let result = safeLibraryStore.isItemSaved(content._id);
+      let storeSource = "safe";
+
+      // If safe store returns false and direct store is loaded, try direct store
+      if (!result && directLibraryStore.isLoaded) {
+        result = directLibraryStore.isItemSaved(content._id);
+        storeSource = "direct";
+      }
+
+      console.log(
+        `🔍 Item ${content._id} saved status:`,
+        result,
+        `(from ${storeSource} store)`
+      );
+      console.log(`🔍 Safe store loaded:`, safeLibraryStore.isLoaded);
+      console.log(`🔍 Direct store loaded:`, directLibraryStore.isLoaded);
+      console.log(
+        `🔍 Safe store items count:`,
+        safeLibraryStore.savedItems?.length || 0
+      );
+      console.log(
+        `🔍 Direct store items count:`,
+        directLibraryStore.savedItems?.length || 0
+      );
+      console.log(
+        `🔍 Direct store items:`,
+        directLibraryStore.savedItems?.map((item) => item.id) || []
+      );
       return result;
     } catch (error) {
       console.warn("⚠️ Error calling isItemSaved:", error);
       return false;
     }
-  }, [safeLibraryStore, content._id]);
+  }, [safeLibraryStore, directLibraryStore, content._id]);
 
   // Real-time state
   const [isLiked, setIsLiked] = useState(mappedContent.isLiked || false);
@@ -154,12 +185,24 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const [isBookmarked, setIsBookmarked] = useState(
     mappedContent.isBookmarked || isItemInLibrary || false
   );
-  
+
+  // Ensure store is loaded
+  React.useEffect(() => {
+    if (!directLibraryStore.isLoaded) {
+      console.log("🔄 Loading library store...");
+      directLibraryStore.loadSavedItems();
+    }
+  }, [directLibraryStore]);
+
   // Sync local bookmark state with store state
   React.useEffect(() => {
+    console.log(
+      `🔄 Syncing bookmark state for ${content._id}:`,
+      isItemInLibrary
+    );
     setIsBookmarked(isItemInLibrary);
   }, [isItemInLibrary]);
-  
+
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [isLive, setIsLive] = useState(mappedContent.isLive || false);
@@ -241,7 +284,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const safeVideoUri =
     content.contentType === "video"
       ? isValidUri(videoUrl)
-      ? String(videoUrl).trim()
+        ? String(videoUrl).trim()
         : rawVideoUrl ||
           "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
       : mappedContent.thumbnailUrl ||
@@ -957,41 +1000,41 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
             {/* Bottom Controls - only show when playing */}
             {isVideoPlaying && (
-            <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
+              <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
                 <View className="flex-1 h-1 bg-white/30 rounded-full relative">
-                <View
-                  className="h-full bg-[#FEA74E] rounded-full"
-                  style={{
-                    width: `${globalVideoStore.progresses[modalKey] || 0}%`,
-                  }}
-                />
-                <View
-                  style={{
-                    position: "absolute",
-                    left: `${globalVideoStore.progresses[modalKey] || 0}%`,
-                    transform: [{ translateX: -6 }],
-                    top: -5,
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    backgroundColor: "#FFFFFF",
-                    borderWidth: 1,
-                    borderColor: "#FEA74E",
-                  }}
-                />
+                  <View
+                    className="h-full bg-[#FEA74E] rounded-full"
+                    style={{
+                      width: `${globalVideoStore.progresses[modalKey] || 0}%`,
+                    }}
+                  />
+                  <View
+                    style={{
+                      position: "absolute",
+                      left: `${globalVideoStore.progresses[modalKey] || 0}%`,
+                      transform: [{ translateX: -6 }],
+                      top: -5,
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: "#FFFFFF",
+                      borderWidth: 1,
+                      borderColor: "#FEA74E",
+                    }}
+                  />
+                </View>
+                <TouchableOpacity onPress={toggleMute}>
+                  <Ionicons
+                    name={
+                      globalVideoStore.mutedVideos[modalKey]
+                        ? "volume-mute"
+                        : "volume-high"
+                    }
+                    size={20}
+                    color="#FEA74E"
+                  />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={toggleMute}>
-                <Ionicons
-                  name={
-                    globalVideoStore.mutedVideos[modalKey]
-                      ? "volume-mute"
-                      : "volume-high"
-                  }
-                  size={20}
-                  color="#FEA74E"
-                />
-              </TouchableOpacity>
-            </View>
             )}
           </View>
         </TouchableWithoutFeedback>

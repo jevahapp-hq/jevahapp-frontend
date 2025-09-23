@@ -39,7 +39,6 @@ import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import allMediaAPI from "../utils/allMediaAPI";
-import { contentInteractionAPI } from "../utils/contentInteractionAPI";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -47,7 +46,6 @@ import {
 import {
   getPersistedStats,
   getViewed,
-  persistStats,
   persistViewed,
 } from "../utils/persistentStorage";
 import TokenUtils from "../utils/tokenUtils";
@@ -77,14 +75,8 @@ interface MediaItem {
 }
 
 function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
-  console.log("🚨 DEBUG: AllContentTikTok component INITIALIZED");
-  console.log("🚨 DEBUG: Component mount time:", new Date().toISOString());
-  console.log("🚨 DEBUG: Content type filter:", contentType);
-
   const router = useRouter();
   const screenWidth = Dimensions.get("window").width;
-
-  console.log("🚨 DEBUG: Router and screenWidth initialized");
 
   // 📱 Viewport detection for auto-play
   const { calculateVideoVisibility } = useVideoViewport();
@@ -106,17 +98,6 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
     loadMoreDefaultContent,
     refreshDefaultContent,
   } = useMediaStore();
-
-  console.log("🚨 DEBUG: useMediaStore data:");
-  console.log("🚨 DEBUG: - allContent length:", allContent?.length || 0);
-  console.log("🚨 DEBUG: - allContentLoading:", allContentLoading);
-  console.log("🚨 DEBUG: - allContentError:", allContentError);
-  console.log(
-    "🚨 DEBUG: - defaultContent length:",
-    defaultContent?.length || 0
-  );
-  console.log("🚨 DEBUG: - defaultContentLoading:", defaultContentLoading);
-  console.log("🚨 DEBUG: - defaultContentError:", defaultContentError);
 
   // Function to convert signed URLs to public URLs
   // TODO: Remove this function once backend provides clean URLs
@@ -171,53 +152,47 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
 
   // Transform API response to match our MediaItem interface
   const mediaList: MediaItem[] = useMemo(() => {
-    console.log("🚨 DEBUG: mediaList useMemo triggered");
-    console.log("🚨 DEBUG: - allContent:", allContent);
-    console.log("🚨 DEBUG: - defaultContent:", defaultContent);
-    console.log("🚨 DEBUG: - allContent.length:", allContent?.length || 0);
-    console.log(
-      "🚨 DEBUG: - defaultContent.length:",
-      defaultContent?.length || 0
-    );
-
     // Prioritize allContent over defaultContent
     const sourceData = allContent.length > 0 ? allContent : defaultContent;
 
-    console.log("🚨 DEBUG: - sourceData:", sourceData);
-    console.log("🚨 DEBUG: - sourceData is array:", Array.isArray(sourceData));
-    console.log("🚨 DEBUG: - sourceData length:", sourceData?.length || 0);
+    console.log("🔍 Raw API data:", {
+      allContentLength: allContent.length,
+      defaultContentLength: defaultContent.length,
+      sourceDataLength: sourceData?.length || 0,
+      sourceData: sourceData?.slice(0, 2), // Show first 2 items
+    });
 
     if (!sourceData || !Array.isArray(sourceData)) {
-      console.log("🚨 DEBUG: Returning empty array - no valid source data");
+      console.log("❌ No source data available");
       return [];
     }
 
     const transformed = sourceData.map((item: any) => {
-      // Check if URLs are Cloudinary or missing, and provide fallbacks
-      const hasValidFileUrl =
-        item.fileUrl &&
-        !item.fileUrl.includes("cloudinary") &&
-        !item.fileUrl.includes("PLACEHOLDER") &&
-        item.fileUrl.trim() !== "";
+      // Simple URL validation like AllLibrary
+      const isValidUri = (u: any) =>
+        typeof u === "string" &&
+        u.trim().length > 0 &&
+        /^https?:\/\//.test(u.trim());
 
-      const hasValidMediaUrl =
-        item.mediaUrl &&
-        !item.mediaUrl.includes("cloudinary") &&
-        !item.mediaUrl.includes("PLACEHOLDER") &&
-        item.mediaUrl.trim() !== "";
+      // Use mediaUrl if available, otherwise fall back to fileUrl (same as AllLibrary)
+      const videoUrl = item.mediaUrl || item.fileUrl;
+      const audioUrl = item.mediaUrl || item.fileUrl;
+      const thumbnailUrl = item.thumbnailUrl;
 
-      const hasValidThumbnailUrl =
-        item.thumbnailUrl &&
-        !item.thumbnailUrl.includes("cloudinary") &&
-        !item.thumbnailUrl.includes("PLACEHOLDER") &&
-        item.thumbnailUrl.trim() !== "";
+      // Use the URL from backend - no hardcoded overrides (same as AllLibrary)
+      const publicUrl = isValidUri(videoUrl) ? String(videoUrl).trim() : null;
 
-      // Convert signed URL to public URL for all content types (not just videos)
-      const publicUrl = hasValidMediaUrl
-        ? convertToPublicUrl(item.mediaUrl || item.fileUrl)
-        : hasValidFileUrl
-        ? convertToPublicUrl(item.fileUrl)
-        : null;
+      // Debug logging for video URLs
+      if (item.contentType === "videos" || item.contentType === "video") {
+        console.log(`🎥 Video URL processing for "${item.title}":`, {
+          originalFileUrl: item.fileUrl,
+          originalMediaUrl: item.mediaUrl,
+          videoUrl,
+          publicUrl,
+          isValid: isValidUri(videoUrl),
+          contentType: item.contentType,
+        });
+      }
 
       const transformedItem = {
         _id: item._id,
@@ -225,7 +200,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
         description: item.description,
         contentType: item.contentType,
         fileUrl: publicUrl || "https://example.com/placeholder.mp4", // Fallback URL
-        thumbnailUrl: hasValidThumbnailUrl ? item.thumbnailUrl : null,
+        thumbnailUrl: isValidUri(thumbnailUrl) ? thumbnailUrl : null,
         speaker:
           item.authorInfo?.firstName || item.author?.firstName
             ? `${item.authorInfo?.firstName || item.author?.firstName} ${
@@ -240,27 +215,23 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
         saves: 0, // Default value
         comments: item.commentCount || 0,
         likes: item.likeCount || item.totalLikes || 0,
-        imageUrl: hasValidThumbnailUrl ? item.thumbnailUrl : null,
+        imageUrl: isValidUri(thumbnailUrl) ? thumbnailUrl : null,
         speakerAvatar: item.authorInfo?.avatar || item.author?.avatar,
       };
 
-      // Debug logging for URL mapping
-      console.log(`🔄 Mapping ${item.contentType} "${item.title}":`, {
-        originalMediaUrl: item.mediaUrl,
-        originalFileUrl: item.fileUrl,
-        convertedPublicUrl: publicUrl,
-        mappedFileUrl: transformedItem.fileUrl,
-        contentType: item.contentType,
-        _id: item._id,
-        hasValidFileUrl,
-        hasValidMediaUrl,
-        hasValidThumbnailUrl,
-        isSignedUrl: (item.mediaUrl || item.fileUrl)?.includes(
-          "X-Amz-Signature"
-        ),
-      });
-
       return transformedItem;
+    });
+
+    console.log("🔍 Transformed media list:", {
+      totalItems: transformed.length,
+      videoItems: transformed.filter(
+        (item) => item.contentType === "video" || item.contentType === "videos"
+      ),
+      allItems: transformed.map((item) => ({
+        title: item.title,
+        contentType: item.contentType,
+        fileUrl: item.fileUrl?.substring(0, 50) + "...",
+      })),
     });
 
     return transformed;
@@ -290,21 +261,33 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const globalVideoStore = useGlobalVideoStore();
   const globalMediaStore = useGlobalMediaStore();
 
-  // ✅ Use library store for saving content
-  const libraryStore = useLibraryStore();
+  // ✅ Use library store for saving content (declared later)
 
   // ✅ Use global comment modal and interaction store
   const { showCommentModal } = useCommentModal();
   const { comments } = useInteractionStore();
 
   // 🔧 Fix infinite loop: Use useMemo to memoize filtered arrays
-  const allVideos = useMemo(
-    () => filteredMediaList.filter((item) => item.contentType === "video"),
-    [filteredMediaList]
-  );
+  const allVideos = useMemo(() => {
+    const videos = filteredMediaList.filter(
+      (item) => item.contentType === "video" || item.contentType === "videos"
+    );
+    console.log("🎥 Video filtering result:", {
+      totalFilteredMedia: filteredMediaList.length,
+      videoCount: videos.length,
+      videoTitles: videos.map((v) => ({
+        title: v.title,
+        contentType: v.contentType,
+      })),
+    });
+    return videos;
+  }, [filteredMediaList]);
 
   const otherContent = useMemo(
-    () => filteredMediaList.filter((item) => item.contentType !== "video"),
+    () =>
+      filteredMediaList.filter(
+        (item) => item.contentType !== "video" && item.contentType !== "videos"
+      ),
     [filteredMediaList]
   );
 
@@ -335,77 +318,6 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
     );
     return ebooks;
   }, [filteredMediaList]);
-
-  // Debug: Log all media items to help identify URL issues
-  useEffect(() => {
-    console.log(
-      "🔍 Debug: Raw API data (allContent):",
-      allContent?.length || 0,
-      "items"
-    );
-    console.log(
-      "🔍 Debug: Raw API data (defaultContent):",
-      defaultContent?.length || 0,
-      "items"
-    );
-    console.log(
-      "🔍 Debug: Source data being used:",
-      allContent.length > 0 ? "allContent" : "defaultContent"
-    );
-    console.log("🔍 Debug: Transformed media items:", mediaList.length);
-    console.log("🔍 Debug: Filtered media items:", filteredMediaList.length);
-    console.log("🔍 Debug: Videos:", allVideos.length);
-    console.log("🔍 Debug: Music:", allMusic.length);
-    console.log("🔍 Debug: Sermons:", allSermons.length);
-    console.log("🔍 Debug: Ebooks:", allEbooks.length);
-
-    // Log content type distribution
-    const contentTypeCounts: Record<string, number> = {};
-    filteredMediaList.forEach((item) => {
-      contentTypeCounts[item.contentType] =
-        (contentTypeCounts[item.contentType] || 0) + 1;
-    });
-    console.log("🔍 Debug: Content type distribution:", contentTypeCounts);
-
-    // Log first few items for debugging
-    filteredMediaList.slice(0, 5).forEach((item, index) => {
-      console.log(`📱 Item ${index + 1}:`, {
-        title: item.title,
-        contentType: item.contentType,
-        fileUrl: item.fileUrl,
-        imageUrl: item.imageUrl,
-        createdAt: item.createdAt,
-        _id: item._id,
-        hasValidFileUrl: item.fileUrl && item.fileUrl.startsWith("http"),
-        fileUrlLength: item.fileUrl?.length || 0,
-      });
-    });
-
-    // Log audio-specific items
-    const audioItems = filteredMediaList.filter(
-      (item) => item.contentType === "audio" || item.contentType === "music"
-    );
-    console.log(`🎵 Audio items found: ${audioItems.length}`);
-    audioItems.forEach((item, index) => {
-      console.log(`🎵 Audio ${index + 1}:`, {
-        title: item.title,
-        fileUrl: item.fileUrl?.substring(0, 100) + "...",
-        isValidUrl: item.fileUrl?.startsWith("http"),
-        contentType: item.contentType,
-        isSignedUrl: item.fileUrl?.includes("X-Amz-Signature"),
-        urlLength: item.fileUrl?.length || 0,
-      });
-    });
-  }, [
-    mediaList,
-    filteredMediaList,
-    allContent,
-    defaultContent,
-    allVideos.length,
-    allMusic.length,
-    allSermons.length,
-    allEbooks.length,
-  ]);
 
   // 🕘 Most Recent item (videos, music, sermons, or ebooks) to appear on top
   const mostRecentItem = useMemo(() => {
@@ -578,30 +490,14 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
 
   // Load content on mount - prioritize TikTok-style endpoints
   useEffect(() => {
-    console.log("🚨 DEBUG: useEffect triggered for content loading");
-    console.log(
-      "🚨 DEBUG: - refreshAllContent function:",
-      typeof refreshAllContent
-    );
-    console.log("🚨 DEBUG: - allMediaAPI:", typeof allMediaAPI);
-
-    console.log("🚀 AllContentTikTok: Loading content from backend...");
-    console.log(
-      "🌐 API Base URL:",
-      process.env.EXPO_PUBLIC_API_URL || "https://jevahapp-backend.onrender.com"
-    );
-
     try {
       // Test available endpoints first
-      console.log("🚨 DEBUG: Testing available endpoints...");
       allMediaAPI.testAvailableEndpoints();
 
       // Try TikTok-style all content endpoints first
-      console.log("🚨 DEBUG: Calling refreshAllContent...");
       refreshAllContent();
-      console.log("🚨 DEBUG: refreshAllContent called successfully");
     } catch (error) {
-      console.error("🚨 DEBUG: Error in useEffect:", error);
+      console.error("Error loading content:", error);
     }
   }, []); // Remove refreshAllContent dependency to prevent re-mounting
 
@@ -887,11 +783,56 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const getAudioKey = (fileUrl: string): string => `Audio-${fileUrl}`;
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
 
-  // 🎯 Use interaction store for backend-managed likes
-  const { contentStats, toggleLike, loadingInteraction } =
-    useInteractionStore();
+  // 🎯 Use interaction store for backend-managed interactions
+  const {
+    contentStats,
+    toggleLike,
+    toggleSave,
+    loadContentStats,
+    loadingInteraction,
+  } = useInteractionStore();
 
-  // Helper functions to get like state from backend
+  // 📚 Library store for saved items
+  const libraryStore = useLibraryStore();
+
+  // Load content stats for all media items on mount
+  useEffect(() => {
+    const loadStatsForAllContent = async () => {
+      const contentIds = filteredMediaList
+        .map((item) => item._id)
+        .filter(Boolean);
+      if (contentIds.length > 0) {
+        // Load stats for each content type
+        const contentTypes = [
+          ...new Set(filteredMediaList.map((item) => item.contentType)),
+        ];
+        for (const contentType of contentTypes) {
+          const idsForType = filteredMediaList
+            .filter((item) => item.contentType === contentType)
+            .map((item) => item._id)
+            .filter(Boolean);
+
+          if (idsForType.length > 0 && idsForType[0]) {
+            try {
+              await loadContentStats(idsForType[0], contentType);
+            } catch (error) {
+              console.warn(
+                `⚠️ Failed to load stats for ${contentType}:`,
+                error
+              );
+              // Continue with other content types even if one fails
+            }
+          }
+        }
+      }
+    };
+
+    if (filteredMediaList.length > 0) {
+      loadStatsForAllContent();
+    }
+  }, [filteredMediaList, loadContentStats]);
+
+  // Helper functions to get interaction state from backend
   const getUserLikeState = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.userInteractions?.liked || false;
@@ -900,6 +841,21 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const getLikeCount = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.likes || 0;
+  };
+
+  const getUserSaveState = (contentId: string) => {
+    const stats = contentStats[contentId];
+    return stats?.userInteractions?.saved || false;
+  };
+
+  const getSaveCount = (contentId: string) => {
+    const stats = contentStats[contentId];
+    return stats?.saves || 0;
+  };
+
+  const getCommentCount = (contentId: string) => {
+    const stats = contentStats[contentId];
+    return stats?.comments || 0;
   };
 
   // Video control state
@@ -1319,20 +1275,10 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
     );
   }, []);
 
-  // Handle like - using contentInteractionAPI for proper endpoint
+  // Handle like with optimistic UI updates
   const handleLike = useCallback(
-    async (contentId: string, liked: boolean) => {
-      console.log("🚨 DEBUG: handleLike called");
-      console.log("🚨 DEBUG: - contentId:", contentId);
-      console.log("🚨 DEBUG: - liked:", liked);
-      console.log(
-        "🚨 DEBUG: - contentInteractionAPI:",
-        typeof contentInteractionAPI
-      );
-
+    async (contentId: string, contentType: string) => {
       try {
-        console.log("🔄 Like action:", contentId, liked);
-
         // Send real-time like first for instant feedback (only if socket is connected)
         if (socketManager && socketManager.isConnected()) {
           try {
@@ -1345,23 +1291,13 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
           }
         }
 
-        // Use the correct contentInteractionAPI for like functionality
-        console.log("🚨 DEBUG: Calling contentInteractionAPI.toggleLike...");
-        const response = await contentInteractionAPI.toggleLike(
-          contentId,
-          "video"
-        );
-        console.log("🚨 DEBUG: toggleLike response:", response);
-
-        console.log("✅ Like successful:", response);
-        // The UI will be updated through the store's state management
+        // Use the interaction store for like functionality
+        await toggleLike(contentId, contentType);
       } catch (error) {
-        console.error("🚨 DEBUG: Like error details:", error);
         console.error("❌ Like error:", error);
-        // You can add notification here if needed
       }
     },
-    [socketManager]
+    [socketManager, toggleLike]
   );
 
   const handleShare = async (key: string, item: any) => {
@@ -1388,55 +1324,60 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   };
 
   const handleSave = async (key: string, item: any) => {
-    console.log("🔄 Save button clicked for:", item.title);
+    try {
+      const contentId = item._id || key;
+      const contentType = item.contentType || "media";
 
-    const isSaved = contentStats[key]?.saves === 1;
+      // Use the interaction store for save functionality
+      await toggleSave(contentId, contentType);
 
-    if (!isSaved) {
-      // Save to library
-      const libraryItem = {
-        id: key,
-        contentType: item.contentType || "content",
-        fileUrl: item.fileUrl,
-        title: item.title,
-        speaker: item.speaker,
-        uploadedBy: item.uploadedBy,
-        description: item.description,
-        createdAt: item.createdAt || new Date().toISOString(),
-        speakerAvatar: item.speakerAvatar,
-        views: contentStats[key]?.views || item.views || 0,
-        shares: contentStats[key]?.shares || item.shares || 0,
-        likes: contentStats[key]?.likes || item.likes || 0,
-        comments: contentStats[key]?.comments || item.comments || 0,
-        saved: 1,
-        imageUrl: item.imageUrl,
-        thumbnailUrl:
-          item.contentType === "videos"
-            ? item.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg"
-            : item.imageUrl || item.fileUrl,
-        originalKey: key,
-      };
+      // Also update local library store for offline access
+      const isSaved = getUserSaveState(contentId);
 
-      await libraryStore.addToLibrary(libraryItem);
-    } else {
-      // Remove from library
-      await libraryStore.removeFromLibrary(key);
+      if (!isSaved) {
+        // Save to library
+        const libraryItem = {
+          id: contentId,
+          contentType: item.contentType || "content",
+          fileUrl: item.fileUrl,
+          title: item.title,
+          speaker: item.speaker,
+          uploadedBy: item.uploadedBy,
+          description: item.description,
+          createdAt: item.createdAt || new Date().toISOString(),
+          speakerAvatar: item.speakerAvatar,
+          views: getLikeCount(contentId) || item.views || 0,
+          shares: 0,
+          likes: getLikeCount(contentId) || item.likes || 0,
+          comments: getCommentCount(contentId) || item.comment || 0,
+          saved: 1,
+          imageUrl: item.imageUrl,
+          thumbnailUrl:
+            item.contentType === "videos"
+              ? item.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg"
+              : item.imageUrl || item.fileUrl,
+          originalKey: key,
+        };
+
+        await libraryStore.addToLibrary(libraryItem);
+      } else {
+        // Remove from library
+        await libraryStore.removeFromLibrary(contentId);
+      }
+    } catch (error) {
+      console.error("❌ Save error:", error);
     }
 
-    // Save stats are now managed by the interaction store
-
-    // ✅ Close modal after save action
+    // Close modal after save action
     setModalVisible(null);
   };
 
   const handleFavorite = async (key: string, item: any) => {
-    console.log(`🎯 Handling like for: ${item.title}`);
-
     try {
-      // Use backend API for user-specific likes
-      await toggleLike(item._id || key, item.contentType || "video");
+      const contentId = item._id || key;
+      const contentType = item.contentType || "media";
 
-      console.log(`✅ Like toggled for ${item.title} via backend API`);
+      await handleLike(contentId, contentType);
     } catch (error) {
       console.error(`❌ Failed to toggle like for ${item.title}:`, error);
     }
@@ -1513,7 +1454,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const renderEbookCard = (ebook: MediaItem, index: number) => {
     const modalKey = `ebook-${ebook._id || index}`;
     const key = getContentKey(ebook);
-    const stats = contentStats[key] || {};
+    const contentId = ebook._id || key;
     const thumbnailSource = ebook?.imageUrl
       ? typeof ebook.imageUrl === "string"
         ? { uri: ebook.imageUrl }
@@ -1575,7 +1516,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                 <View className="flex-row items-center mr-6">
                   <MaterialIcons name="visibility" size={28} color="#98A2B3" />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.views ?? ebook.views ?? 0}
+                    {ebook.views ?? 0}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1584,26 +1525,22 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                 >
                   <MaterialIcons
                     name={
-                      getUserLikeState(ebook._id || key)
+                      getUserLikeState(contentId)
                         ? "favorite"
                         : "favorite-border"
                     }
                     size={28}
-                    color={
-                      getUserLikeState(ebook._id || key) ? "#FF1744" : "#98A2B3"
-                    }
+                    color={getUserLikeState(contentId) ? "#FF1744" : "#98A2B3"}
                     style={{
-                      textShadowColor: getUserLikeState(ebook._id || key)
+                      textShadowColor: getUserLikeState(contentId)
                         ? "rgba(255, 23, 68, 0.6)"
                         : "transparent",
                       textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: getUserLikeState(ebook._id || key)
-                        ? 10
-                        : 0,
+                      textShadowRadius: getUserLikeState(contentId) ? 10 : 0,
                     }}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {getLikeCount(ebook._id || key)}
+                    {getLikeCount(contentId)}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1615,11 +1552,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                     size={28}
                     color="#98A2B3"
                     showCount={true}
-                    count={
-                      stats.comments === 1
-                        ? (ebook.comments ?? 0) + 1
-                        : ebook.comments ?? 0
-                    }
+                    count={getCommentCount(contentId)}
                     layout="horizontal"
                   />
                 </TouchableOpacity>
@@ -1628,14 +1561,16 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   className="flex-row items-center mr-6"
                 >
                   <MaterialIcons
-                    name={stats.saves === 1 ? "bookmark" : "bookmark-border"}
+                    name={
+                      getUserSaveState(contentId)
+                        ? "bookmark"
+                        : "bookmark-border"
+                    }
                     size={28}
-                    color={stats.saves === 1 ? "#FEA74E" : "#98A2B3"}
+                    color={getUserSaveState(contentId) ? "#FEA74E" : "#98A2B3"}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.saves === 1
-                      ? (ebook.saves ?? 0) + 1
-                      : ebook.saves ?? 0}
+                    {getSaveCount(contentId)}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1677,7 +1612,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const renderMusicCard = (audio: MediaItem, index: number) => {
     const modalKey = `music-${audio._id || index}`;
     const key = getContentKey(audio);
-    const stats = contentStats[key] || {};
+    const contentId = audio._id || key;
     const thumbnailSource = audio?.imageUrl
       ? typeof audio.imageUrl === "string"
         ? { uri: audio.imageUrl }
@@ -1782,7 +1717,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                 <View className="flex-row items-center mr-6">
                   <MaterialIcons name="visibility" size={28} color="#98A2B3" />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.views ?? audio.views ?? 0}
+                    {audio.views ?? 0}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1791,26 +1726,22 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                 >
                   <MaterialIcons
                     name={
-                      getUserLikeState(audio._id || key)
+                      getUserLikeState(contentId)
                         ? "favorite"
                         : "favorite-border"
                     }
                     size={28}
-                    color={
-                      getUserLikeState(audio._id || key) ? "#FF1744" : "#98A2B3"
-                    }
+                    color={getUserLikeState(contentId) ? "#FF1744" : "#98A2B3"}
                     style={{
-                      textShadowColor: getUserLikeState(audio._id || key)
+                      textShadowColor: getUserLikeState(contentId)
                         ? "rgba(255, 23, 68, 0.6)"
                         : "transparent",
                       textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: getUserLikeState(audio._id || key)
-                        ? 10
-                        : 0,
+                      textShadowRadius: getUserLikeState(contentId) ? 10 : 0,
                     }}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {getLikeCount(audio._id || key)}
+                    {getLikeCount(contentId)}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1822,11 +1753,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                     size={28}
                     color="#98A2B3"
                     showCount={true}
-                    count={
-                      stats.comments === 1
-                        ? (audio.comments ?? 0) + 1
-                        : audio.comments ?? 0
-                    }
+                    count={getCommentCount(contentId)}
                     layout="horizontal"
                   />
                 </TouchableOpacity>
@@ -1835,14 +1762,16 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   className="flex-row items-center mr-6"
                 >
                   <MaterialIcons
-                    name={stats.saves === 1 ? "bookmark" : "bookmark-border"}
+                    name={
+                      getUserSaveState(contentId)
+                        ? "bookmark"
+                        : "bookmark-border"
+                    }
                     size={28}
-                    color={stats.saves === 1 ? "#FEA74E" : "#98A2B3"}
+                    color={getUserSaveState(contentId) ? "#FEA74E" : "#98A2B3"}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.saves === 1
-                      ? (audio.saves ?? 0) + 1
-                      : audio.saves ?? 0}
+                    {getSaveCount(contentId)}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1884,12 +1813,12 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const renderVideoCard = (video: MediaItem, index: number) => {
     const modalKey = `video-${video._id || video.fileUrl || index}`;
     const key = getContentKey(video);
-    const stats = contentStats[key] || {};
+    const contentId = video._id || key;
 
     // Create backend-compatible favorites state
-    const backendUserFavorites = { [key]: getUserLikeState(video._id || key) };
+    const backendUserFavorites = { [key]: getUserLikeState(contentId) };
     const backendGlobalFavoriteCounts = {
-      [key]: getLikeCount(video._id || key),
+      [key]: getLikeCount(contentId),
     };
 
     return (
@@ -1925,19 +1854,6 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
       />
     );
   };
-
-  // For now, let's create a simple placeholder that shows we're implementing the new interface
-  console.log("🚨 DEBUG: About to render AllContentTikTok");
-  console.log("🚨 DEBUG: - mediaList length:", mediaList?.length || 0);
-  console.log(
-    "🚨 DEBUG: - filteredMediaList length:",
-    filteredMediaList?.length || 0
-  );
-  console.log("🚨 DEBUG: - contentType filter:", contentType);
-  console.log("🚨 DEBUG: - allContentLoading:", allContentLoading);
-  console.log("🚨 DEBUG: - defaultContentLoading:", defaultContentLoading);
-  console.log("🚨 DEBUG: - allContentError:", allContentError);
-  console.log("🚨 DEBUG: - defaultContentError:", defaultContentError);
 
   return (
     <ScrollView
@@ -1988,16 +1904,18 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
             {filteredMediaList.length} items)
           </Text>
           {filteredMediaList.map((item, index) => {
-            console.log(`🚨 DEBUG: Rendering item ${index}:`, {
-              _id: item._id,
+            // Debug each item being rendered
+            console.log(`🎬 Rendering item ${index}:`, {
               title: item.title,
               contentType: item.contentType,
               fileUrl: item.fileUrl?.substring(0, 50) + "...",
+              isVideo:
+                item.contentType === "video" || item.contentType === "videos",
             });
 
             // Render based on content type
             if (item.contentType === "video" || item.contentType === "videos") {
-              console.log(`🚨 DEBUG: Rendering video card for item ${index}`);
+              console.log(`🎥 Rendering video card for: ${item.title}`);
               return renderVideoCard(item, index);
             } else if (
               item.contentType === "audio" ||
@@ -2038,10 +1956,20 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
       )}
 
       {/* 📹 Videos Section */}
+      {(() => {
+        console.log("🎥 Videos Section Debug:", {
+          allVideosLength: allVideos.length,
+          videosExcludingRecentLength: videosExcludingRecent.length,
+          mostRecentItem: mostRecentItem?.title,
+          recentId: recentId,
+          allVideos: allVideos.map((v) => ({ title: v.title, id: v._id })),
+        });
+        return null;
+      })()}
       {videosExcludingRecent.length > 0 && (
         <View className="mt-5">
           <Text className="text-[16px] font-rubik-semibold px-4 mb-3">
-            Videos
+            Videos ({videosExcludingRecent.length})
           </Text>
           {videosExcludingRecent.map((video, index) =>
             renderVideoCard(video, index + 1)
@@ -2132,59 +2060,6 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
             ? "🔴 Real-time Disconnected"
             : "🟡 Real-time Unavailable"}
         </Text>
-      </View>
-
-      {/* Debug info */}
-      <View className="mt-5 p-4 bg-blue-100 mx-4 rounded-lg">
-        <Text className="text-blue-800 font-bold mb-2">Debug Info:</Text>
-        <Text className="text-blue-700">
-          TikTok All Content: {allContent?.length || 0} items
-        </Text>
-        <Text className="text-blue-700">
-          Default Content: {defaultContent?.length || 0} items
-        </Text>
-        <Text className="text-blue-700">
-          Source Data: {allContent.length > 0 ? "allContent" : "defaultContent"}
-        </Text>
-        <Text className="text-blue-700">
-          Transformed Data: {mediaList.length} items
-        </Text>
-        <Text className="text-blue-700">
-          Filtered Data: {filteredMediaList.length} items ({contentType})
-        </Text>
-        <Text className="text-blue-700">Videos: {allVideos.length}</Text>
-        <Text className="text-blue-700">Music: {allMusic.length}</Text>
-        <Text className="text-blue-700">Sermons: {allSermons.length}</Text>
-        <Text className="text-blue-700">Ebooks: {allEbooks.length}</Text>
-        <Text className="text-blue-700">
-          All Content Loading: {allContentLoading ? "Yes" : "No"}
-        </Text>
-        <Text className="text-blue-700">
-          Default Loading: {defaultContentLoading ? "Yes" : "No"}
-        </Text>
-        <Text className="text-blue-700">
-          All Content Error: {allContentError || "None"}
-        </Text>
-        <Text className="text-blue-700">
-          Default Error: {defaultContentError || "None"}
-        </Text>
-
-        {/* Content Type Distribution */}
-        {filteredMediaList.length > 0 && (
-          <View className="mt-2">
-            <Text className="text-blue-800 font-bold mb-1">Content Types:</Text>
-            {Object.entries(
-              filteredMediaList.reduce((acc, item) => {
-                acc[item.contentType] = (acc[item.contentType] || 0) + 1;
-                return acc;
-              }, {} as Record<string, number>)
-            ).map(([type, count]) => (
-              <Text key={type} className="text-blue-700 text-xs">
-                {type}: {count} items
-              </Text>
-            ))}
-          </View>
-        )}
       </View>
 
       {/* Empty state */}

@@ -39,18 +39,42 @@ export const useSafeLibraryStore = (): SafeLibraryStore => {
 
   // Check if store is properly initialized
   useEffect(() => {
-    if (actualStore && typeof actualStore.isItemSaved === "function") {
+    console.log("🔍 useSafeLibraryStore - actualStore:", actualStore);
+    console.log(
+      "🔍 useSafeLibraryStore - isItemSaved function:",
+      typeof actualStore?.isItemSaved
+    );
+    console.log("🔍 useSafeLibraryStore - isLoaded:", actualStore?.isLoaded);
+    console.log(
+      "🔍 useSafeLibraryStore - savedItems count:",
+      actualStore?.savedItems?.length || 0
+    );
+
+    if (
+      actualStore &&
+      typeof actualStore.isItemSaved === "function" &&
+      actualStore.isLoaded
+    ) {
       setIsReady(true);
       setStoreError(null);
+      console.log("✅ useSafeLibraryStore - Store is ready and loaded");
     } else {
       setIsReady(false);
+      console.log("❌ useSafeLibraryStore - Store not ready or not loaded");
     }
   }, [actualStore]);
 
   // Return the actual store if ready and valid, otherwise fallback
-  if (isReady && actualStore && typeof actualStore.isItemSaved === "function") {
+  if (
+    isReady &&
+    actualStore &&
+    typeof actualStore.isItemSaved === "function" &&
+    actualStore.isLoaded
+  ) {
+    console.log("✅ useSafeLibraryStore - Returning actual store");
     return actualStore;
   }
 
+  console.log("⚠️ useSafeLibraryStore - Returning fallback store");
   return fallbackStore;
 };

@@ -767,59 +767,64 @@ class AllMediaAPI {
     data?: any;
     error?: string;
   }> {
+    console.log("🔍 AllMediaAPI: Getting saved content with params:", {
+      page,
+      limit,
+    });
+
     try {
       const headers = await this.getAuthHeaders();
 
-      // Use the correct endpoint that matches contentInteractionAPI
       const queryParams = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
       });
 
+      console.log("📡 AllMediaAPI: Using endpoint: /api/bookmark/user");
       const response = await fetch(
-        `${this.baseURL}/api/user/saved-content?${queryParams}`,
+        `${this.baseURL}/api/bookmark/user?${queryParams}`,
         {
           method: "GET",
           headers,
         }
       );
 
+      console.log(
+        "📡 AllMediaAPI: Response status:",
+        response.status,
+        response.statusText
+      );
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error("❌ AllMediaAPI: API Error:", response.status, errorText);
+
+        // Handle 500 errors gracefully
+        if (response.status === 500) {
+          console.warn(
+            "⚠️ AllMediaAPI: Backend server error (500) - returning empty saved content"
+          );
+          return {
+            success: false,
+            error: "Backend server error",
+            data: { media: [] },
+          };
+        }
+
         throw new Error(
           `HTTP error! status: ${response.status} - ${errorText}`
         );
       }
 
       const data = await response.json();
+      console.log(
+        "📡 AllMediaAPI: API Response:",
+        JSON.stringify(data, null, 2)
+      );
+      console.log("✅ AllMediaAPI: Successfully got saved content");
       return { success: true, data };
     } catch (error) {
-      console.error("Error getting saved content:", error);
-
-      // Try alternative endpoint
-      try {
-        console.log("🔄 Trying alternative endpoint: /api/user/saved-content");
-        const altHeaders = await this.getAuthHeaders();
-        const queryParams = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
-        });
-        const altResponse = await fetch(
-          `${this.baseURL}/api/user/saved-content?${queryParams}`,
-          {
-            method: "GET",
-            headers: altHeaders,
-          }
-        );
-
-        if (altResponse.ok) {
-          const altData = await altResponse.json();
-          console.log("✅ Alternative endpoint worked:", altData);
-          return { success: true, data: altData };
-        }
-      } catch (altError) {
-        console.error("Alternative endpoint also failed:", altError);
-      }
+      console.error("❌ AllMediaAPI: Error getting saved content:", error);
 
       return {
         success: false,

@@ -40,14 +40,22 @@ interface InteractionState {
   addComment: (
     contentId: string,
     comment: string,
+    contentType?: string,
     parentCommentId?: string
   ) => Promise<void>;
-  loadComments: (contentId: string, page?: number) => Promise<void>;
+  loadComments: (
+    contentId: string,
+    contentType?: string,
+    page?: number
+  ) => Promise<void>;
   toggleCommentLike: (commentId: string, contentId: string) => Promise<void>;
 
   // Stats actions
-  loadContentStats: (contentId: string) => Promise<void>;
-  loadBatchContentStats: (contentIds: string[]) => Promise<void>;
+  loadContentStats: (contentId: string, contentType?: string) => Promise<void>;
+  loadBatchContentStats: (
+    contentIds: string[],
+    contentType?: string
+  ) => Promise<void>;
 
   // User content actions
   loadUserSavedContent: (contentType?: string, page?: number) => Promise<void>;
@@ -261,12 +269,14 @@ export const useInteractionStore = create<InteractionState>()(
     addComment: async (
       contentId: string,
       comment: string,
+      contentType: string = "media",
       parentCommentId?: string
     ) => {
       try {
         const newComment = await contentInteractionAPI.addComment(
           contentId,
           comment,
+          contentType,
           parentCommentId
         );
 
@@ -303,7 +313,11 @@ export const useInteractionStore = create<InteractionState>()(
       }
     },
 
-    loadComments: async (contentId: string, page: number = 1) => {
+    loadComments: async (
+      contentId: string,
+      contentType: string = "media",
+      page: number = 1
+    ) => {
       if (!contentId) return;
       const key = `${contentId}_comments`;
 
@@ -312,7 +326,11 @@ export const useInteractionStore = create<InteractionState>()(
       }));
 
       try {
-        const result = await contentInteractionAPI.getComments(contentId, page);
+        const result = await contentInteractionAPI.getComments(
+          contentId,
+          contentType,
+          page
+        );
 
         set((state) => {
           const existingComments =
@@ -373,27 +391,53 @@ export const useInteractionStore = create<InteractionState>()(
     },
 
     // ============= STATS ACTIONS =============
-    loadContentStats: async (contentId: string) => {
+    loadContentStats: async (
+      contentId: string,
+      contentType: string = "media"
+    ) => {
       set((state) => ({
         loadingStats: { ...state.loadingStats, [contentId]: true },
       }));
 
       try {
-        const stats = await contentInteractionAPI.getContentStats(contentId);
+        const stats = await contentInteractionAPI.getContentMetadata(
+          contentId,
+          contentType
+        );
 
         set((state) => ({
           contentStats: { ...state.contentStats, [contentId]: stats },
           loadingStats: { ...state.loadingStats, [contentId]: false },
         }));
       } catch (error) {
-        console.error("Error loading content stats:", error);
+        console.warn("⚠️ Error loading content stats, using fallback:", error);
+        // Don't fail completely - provide default stats
+        const defaultStats: ContentStats = {
+          contentId,
+          likes: 0,
+          saves: 0,
+          shares: 0,
+          views: 0,
+          comments: 0,
+          userInteractions: {
+            liked: false,
+            saved: false,
+            shared: false,
+            viewed: false,
+          },
+        };
+
         set((state) => ({
+          contentStats: { ...state.contentStats, [contentId]: defaultStats },
           loadingStats: { ...state.loadingStats, [contentId]: false },
         }));
       }
     },
 
-    loadBatchContentStats: async (contentIds: string[]) => {
+    loadBatchContentStats: async (
+      contentIds: string[],
+      contentType: string = "media"
+    ) => {
       // Set loading state for all content IDs
       set((state) => {
         const loadingStates = contentIds.reduce((acc, id) => {
@@ -407,9 +451,19 @@ export const useInteractionStore = create<InteractionState>()(
       });
 
       try {
-        const batchStats = await contentInteractionAPI.getBatchContentStats(
-          contentIds
-        );
+        // Load stats for each content ID individually since we don't have a batch endpoint
+        const batchStats: Record<string, ContentStats> = {};
+        for (const contentId of contentIds) {
+          try {
+            const stats = await contentInteractionAPI.getContentMetadata(
+              contentId,
+              contentType
+            );
+            batchStats[contentId] = stats;
+          } catch (error) {
+            console.error(`Error loading stats for ${contentId}:`, error);
+          }
+        }
 
         set((state) => {
           const loadingStates = contentIds.reduce((acc, id) => {

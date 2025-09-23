@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { VideoCardProps } from "../types/media";
+import { useThreadSafeVideo } from "../utils/videoPlayerUtils";
 import AIDescriptionBox from "./AIDescriptionBox";
 import CommentIcon from "./CommentIcon";
 
@@ -48,6 +49,9 @@ export default function VideoCard({
   const videoRef = useRef<Video>(null);
   const isMountedRef = useRef(true);
 
+  // Thread-safe video operations
+  const threadSafeVideo = useThreadSafeVideo(videoRef);
+
   const key = getContentKey(video);
   const stats = contentStats[key] || {};
   const isSermon = video.contentType === "sermon";
@@ -57,19 +61,12 @@ export default function VideoCard({
     return () => {
       isMountedRef.current = false;
 
-      // Safely cleanup video on main thread
-      InteractionManager.runAfterInteractions(() => {
-        if (videoRef.current && isMountedRef.current === false) {
-          try {
-            // Only cleanup if component is unmounted
-            videoRef.current = null;
-          } catch (error) {
-            console.warn("Video cleanup error:", error);
-          }
-        }
+      // Safely cleanup video using thread-safe utility
+      threadSafeVideo.unload().catch((error) => {
+        console.warn("Video cleanup error:", error);
       });
     };
-  }, []);
+  }, [threadSafeVideo]);
 
   // Get existing comments for this video
   const contentId = video._id || modalKey;
@@ -121,14 +118,17 @@ export default function VideoCard({
 
   const videoUrl = refreshedUrl || video.fileUrl;
 
-  // Debug: Log the shouldPlay value
+  // Debug: Log video URL and shouldPlay value
   const shouldPlayValue = playingVideos[modalKey] ?? false;
-  console.log(
-    `🎥 Video ${modalKey} shouldPlay:`,
-    shouldPlayValue,
-    "playingVideos:",
-    playingVideos
-  );
+  console.log(`🎥 VideoCard ${modalKey} debug:`, {
+    title: video.title,
+    contentType: video.contentType,
+    originalFileUrl: video.fileUrl,
+    refreshedUrl,
+    finalVideoUrl: videoUrl,
+    shouldPlay: shouldPlayValue,
+    playingVideos: playingVideos,
+  });
 
   // Handle play/pause button click (local playback)
   const handlePlayButtonPress = () => {
@@ -210,12 +210,22 @@ export default function VideoCard({
           <Video
             ref={videoRef}
             source={{
-              uri:
-                videoUrl &&
-                videoUrl.trim() &&
-                videoUrl.trim() !== "https://example.com/placeholder.mp4"
-                  ? videoUrl.trim()
-                  : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+              uri: (() => {
+                const finalUri =
+                  videoUrl &&
+                  videoUrl.trim() &&
+                  videoUrl.trim() !== "https://example.com/placeholder.mp4"
+                    ? videoUrl.trim()
+                    : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+                console.log(`🎬 Video source URI for "${video.title}":`, {
+                  originalVideoUrl: videoUrl,
+                  finalUri,
+                  isUsingFallback: finalUri.includes("BigBuckBunny"),
+                });
+
+                return finalUri;
+              })(),
             }}
             style={{ width: "100%", height: "100%", position: "absolute" }}
             resizeMode={ResizeMode.COVER}
@@ -239,14 +249,12 @@ export default function VideoCard({
                   );
                 }
 
-                // Safely reset video position on main thread
-                InteractionManager.runAfterInteractions(() => {
-                  if (videoRef.current && isMountedRef.current) {
-                    videoRef.current.setPositionAsync(0).catch((error) => {
-                      console.warn("Video reset error:", error);
-                    });
-                  }
-                });
+                // Safely reset video position using thread-safe utility
+                if (isMountedRef.current) {
+                  threadSafeVideo.reset().catch((error) => {
+                    console.warn("Video reset error:", error);
+                  });
+                }
 
                 console.log("Video finished:", modalKey);
               }
@@ -501,10 +509,16 @@ export default function VideoCard({
               onPress={() => onSave(modalKey, video)}
             >
               <Text className="text-[#1D2939] font-rubik ml-2">
-                {stats.saved === 1 ? "Remove from Library" : "Save to Library"}
+                {stats.userInteractions?.saved === true
+                  ? "Remove from Library"
+                  : "Save to Library"}
               </Text>
               <MaterialIcons
-                name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                name={
+                  stats.userInteractions?.saved === true
+                    ? "bookmark"
+                    : "bookmark-border"
+                }
                 size={22}
                 color="#1D2939"
               />

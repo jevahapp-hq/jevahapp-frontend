@@ -20,7 +20,7 @@ export const authUtils = {
    */
   async waitForUserData(user: any, maxRetries: number = 20): Promise<any> {
     let retries = 0;
-    
+
     while (retries < maxRetries) {
       if (user && user.firstName && user.lastName) {
         console.log("✅ User data available after", retries, "retries");
@@ -30,7 +30,7 @@ export const authUtils = {
       retries++;
       console.log(`⏳ Waiting for user data... retry ${retries}/${maxRetries}`);
     }
-    
+
     throw new Error("User data not available after OAuth flow");
   },
 
@@ -41,7 +41,7 @@ export const authUtils = {
     try {
       const apiUrl = `${API_BASE_URL}/api/auth/clerk-login`;
       console.log("🧪 Testing minimal auth request to:", apiUrl);
-      
+
       const testBody = {
         token: "test_token",
         userInfo: {
@@ -51,9 +51,9 @@ export const authUtils = {
           email: "test@example.com",
         },
       };
-      
+
       console.log("🧪 Test request body:", JSON.stringify(testBody, null, 2));
-      
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,18 +87,18 @@ export const authUtils = {
     console.log("🔍 === AUTHENTICATION DEBUG INFO ===");
     console.log("📍 API_BASE_URL:", API_BASE_URL);
     console.log("🔧 Environment:", __DEV__ ? "Development" : "Production");
-    
+
     // Test backend connectivity
     const backendAvailable = await this.testBackendConnection();
     console.log("🌐 Backend accessible:", backendAvailable);
-    
+
     // Check stored tokens
     const storedToken = await this.getStoredToken();
     console.log("🔑 Stored token exists:", !!storedToken);
     if (storedToken) {
       console.log("🔑 Token preview:", storedToken.substring(0, 20) + "...");
     }
-    
+
     // Check stored user data
     try {
       const userData = await AsyncStorage.getItem("user");
@@ -114,7 +114,7 @@ export const authUtils = {
     } catch (error) {
       console.log("❌ Error reading stored user data:", error);
     }
-    
+
     console.log("🔍 === END DEBUG INFO ===");
   },
 
@@ -125,18 +125,18 @@ export const authUtils = {
     try {
       const apiUrl = `${API_BASE_URL}/api/auth/clerk-login`;
       console.log("🔍 Testing backend connection to:", apiUrl);
-      
+
       const response = await fetch(apiUrl, {
         method: "OPTIONS",
         headers: { "Content-Type": "application/json" },
       });
-      
+
       console.log("📡 Backend connection test result:", {
         status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries()),
       });
-      
+
       return response.ok;
     } catch (error) {
       console.error("❌ Backend connection test failed:", error);
@@ -150,12 +150,12 @@ export const authUtils = {
   async sendAuthRequest(token: string, userInfo: UserInfo) {
     const apiUrl = `${API_BASE_URL}/api/auth/clerk-login`;
     console.log("🚀 Making request to:", apiUrl);
-    
+
     const requestBody = {
       token,
       userInfo,
     };
-    
+
     console.log("📤 Request payload:", {
       token: token ? `${token.substring(0, 20)}...` : "null",
       userInfo: {
@@ -173,7 +173,7 @@ export const authUtils = {
     try {
       const response = await fetch(apiUrl, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "expo-platform": Platform.OS,
         },
@@ -182,7 +182,7 @@ export const authUtils = {
 
       const responseText = await response.text();
       console.log("📥 Backend response:", {
-        status: response.status, 
+        status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries()),
         text: responseText,
@@ -204,7 +204,7 @@ export const authUtils = {
           errorDetails:
             result.error || result.details || "No additional error details",
         });
-        
+
         // Check if it's a Clerk signing key error
         if (
           result.error &&
@@ -224,7 +224,7 @@ export const authUtils = {
             "Clerk configuration error: Please check your backend Clerk setup"
           );
         }
-        
+
         // Provide more specific error messages based on the response
         if (response.status === 500) {
           throw new Error(
@@ -328,9 +328,9 @@ export const authUtils = {
    */
   handleAuthError(error: any) {
     console.error("Authentication error:", error);
-    
+
     let message = "An unexpected error occurred during authentication.";
-    
+
     if (error instanceof Error) {
       if (error.message.includes("User data not available")) {
         message = "Failed to retrieve user information. Please try again.";
@@ -344,7 +344,7 @@ export const authUtils = {
         message = error.message;
       }
     }
-    
+
     Alert.alert("Authentication Error", message);
   },
 };
