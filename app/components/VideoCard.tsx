@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { VideoCardProps } from "../types/media";
+import AIDescriptionBox from "./AIDescriptionBox";
 import CommentIcon from "./CommentIcon";
 
 export default function VideoCard({
@@ -462,6 +463,17 @@ export default function VideoCard({
           <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
+
+      {/* AI Description Box */}
+      <AIDescriptionBox
+        description={video.description}
+        enhancedDescription={video.enhancedDescription}
+        bibleVerses={video.bibleVerses}
+        title={video.title}
+        authorName={getUserDisplayNameFromContent(video)}
+        contentType={video.contentType}
+        category={video.category}
+      />
 
       {/* Modal */}
       {modalVisible === modalKey && (

@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -327,6 +328,7 @@ const DownloadScreen: React.FC = () => {
         const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
+            "expo-platform": Platform.OS,
           },
         });
 

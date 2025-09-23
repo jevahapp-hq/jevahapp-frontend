@@ -4,6 +4,7 @@ import {
   Dimensions,
   Image,
   KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -451,6 +452,7 @@ export default function UploadScreen() {
         headers: {
           Authorization: `Bearer ${authStatus.token}`,
           Accept: "application/json",
+          "expo-platform": Platform.OS,
         },
         body: formData,
         signal: controller.signal,

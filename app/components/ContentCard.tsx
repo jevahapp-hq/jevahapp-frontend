@@ -116,15 +116,30 @@ const ContentCard: React.FC<ContentCardProps> = ({
     // Map author structure with proper fallbacks
     author: content.author ||
       content.authorInfo || {
-        _id:
-          (content as any).uploadedBy?._id ||
-          (content as any).uploadedBy ||
-          "unknown",
-        firstName: (content as any).uploadedBy?.firstName || "Unknown",
-        lastName: (content as any).uploadedBy?.lastName || "User",
-        avatar: (content as any).uploadedBy?.avatar,
-      },
+      _id:
+        (content as any).uploadedBy?._id ||
+        (content as any).uploadedBy ||
+        "unknown",
+      firstName: (content as any).uploadedBy?.firstName || "Unknown",
+      lastName: (content as any).uploadedBy?.lastName || "User",
+      avatar: (content as any).uploadedBy?.avatar,
+    },
   };
+
+  // SAFE LIBRARY STORE - Never fails, always returns a valid store
+  const safeLibraryStore = useSafeLibraryStore();
+
+  // Check if item is saved - this will NEVER crash
+  const isItemInLibrary = React.useMemo(() => {
+    try {
+      const result = safeLibraryStore.isItemSaved(content._id);
+      console.log(`🔍 Item ${content._id} saved status:`, result);
+      return result;
+    } catch (error) {
+      console.warn("⚠️ Error calling isItemSaved:", error);
+      return false;
+    }
+  }, [safeLibraryStore, content._id]);
 
   // Real-time state
   const [isLiked, setIsLiked] = useState(mappedContent.isLiked || false);
@@ -137,8 +152,14 @@ const ContentCard: React.FC<ContentCardProps> = ({
     mappedContent.liveViewers || 0
   );
   const [isBookmarked, setIsBookmarked] = useState(
-    mappedContent.isBookmarked || false
+    mappedContent.isBookmarked || isItemInLibrary || false
   );
+  
+  // Sync local bookmark state with store state
+  React.useEffect(() => {
+    setIsBookmarked(isItemInLibrary);
+  }, [isItemInLibrary]);
+  
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [isLive, setIsLive] = useState(mappedContent.isLive || false);
@@ -220,7 +241,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const safeVideoUri =
     content.contentType === "video"
       ? isValidUri(videoUrl)
-        ? String(videoUrl).trim()
+      ? String(videoUrl).trim()
         : rawVideoUrl ||
           "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
       : mappedContent.thumbnailUrl ||
@@ -247,21 +268,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const globalMediaStore = useGlobalMediaStore();
   const { comments } = useInteractionStore();
   const { showCommentModal } = useCommentModal();
-
-  // SAFE LIBRARY STORE - Never fails, always returns a valid store
-  const safeLibraryStore = useSafeLibraryStore();
-
-  // Check if item is saved - this will NEVER crash
-  const isItemInLibrary = React.useMemo(() => {
-    try {
-      const result = safeLibraryStore.isItemSaved(content._id);
-      console.log(`🔍 Item ${content._id} saved status:`, result);
-      return result;
-    } catch (error) {
-      console.warn("⚠️ Error calling isItemSaved:", error);
-      return false;
-    }
-  }, [safeLibraryStore, content._id]);
 
   // Refs
   const videoRef = useRef<Video>(null);
@@ -849,9 +855,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={isItemInLibrary ? "bookmark" : "bookmark-border"}
+                  name={isBookmarked ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={isItemInLibrary ? "#FEA74E" : "#FFFFFF"}
+                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
                   {isItemInLibrary ? 1 : 0}
@@ -951,41 +957,41 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
             {/* Bottom Controls - only show when playing */}
             {isVideoPlaying && (
-              <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
+            <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
                 <View className="flex-1 h-1 bg-white/30 rounded-full relative">
-                  <View
-                    className="h-full bg-[#FEA74E] rounded-full"
-                    style={{
-                      width: `${globalVideoStore.progresses[modalKey] || 0}%`,
-                    }}
-                  />
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: `${globalVideoStore.progresses[modalKey] || 0}%`,
-                      transform: [{ translateX: -6 }],
-                      top: -5,
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: "#FFFFFF",
-                      borderWidth: 1,
-                      borderColor: "#FEA74E",
-                    }}
-                  />
-                </View>
-                <TouchableOpacity onPress={toggleMute}>
-                  <Ionicons
-                    name={
-                      globalVideoStore.mutedVideos[modalKey]
-                        ? "volume-mute"
-                        : "volume-high"
-                    }
-                    size={20}
-                    color="#FEA74E"
-                  />
-                </TouchableOpacity>
+                <View
+                  className="h-full bg-[#FEA74E] rounded-full"
+                  style={{
+                    width: `${globalVideoStore.progresses[modalKey] || 0}%`,
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    left: `${globalVideoStore.progresses[modalKey] || 0}%`,
+                    transform: [{ translateX: -6 }],
+                    top: -5,
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    backgroundColor: "#FFFFFF",
+                    borderWidth: 1,
+                    borderColor: "#FEA74E",
+                  }}
+                />
               </View>
+              <TouchableOpacity onPress={toggleMute}>
+                <Ionicons
+                  name={
+                    globalVideoStore.mutedVideos[modalKey]
+                      ? "volume-mute"
+                      : "volume-high"
+                  }
+                  size={20}
+                  color="#FEA74E"
+                />
+              </TouchableOpacity>
+            </View>
             )}
           </View>
         </TouchableWithoutFeedback>
@@ -1044,9 +1050,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={isItemInLibrary ? "bookmark" : "bookmark-border"}
+                  name={isBookmarked ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={isItemInLibrary ? "#FEA74E" : "#FFFFFF"}
+                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
                   {isItemInLibrary ? 1 : 0}
@@ -1139,9 +1145,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 className="flex-col justify-center items-center mt-6"
               >
                 <MaterialIcons
-                  name={isItemInLibrary ? "bookmark" : "bookmark-border"}
+                  name={isBookmarked ? "bookmark" : "bookmark-border"}
                   size={30}
-                  color={isItemInLibrary ? "#FEA74E" : "#FFFFFF"}
+                  color={isBookmarked ? "#FEA74E" : "#FFFFFF"}
                 />
                 <Text className="text-[10px] text-white font-rubik-semibold">
                   {isItemInLibrary ? 1 : 0}
@@ -1285,10 +1291,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
               onPress={handleSaveToLibrary}
             >
               <Text className="text-[#1D2939] font-rubik ml-2">
-                {isItemInLibrary ? "Remove from Library" : "Save to Library"}
+                {isBookmarked ? "Remove from Library" : "Save to Library"}
               </Text>
               <MaterialIcons
-                name={isItemInLibrary ? "bookmark" : "bookmark-border"}
+                name={isBookmarked ? "bookmark" : "bookmark-border"}
                 size={22}
                 color="#1D2939"
               />

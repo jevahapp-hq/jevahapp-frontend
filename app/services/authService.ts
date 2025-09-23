@@ -1,4 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 // Jevah Backend API Base URL
 const JEVAH_API_BASE_URL = "https://jevahapp-backend.onrender.com/api/auth";
@@ -11,11 +12,12 @@ class AuthService {
     try {
       console.log("🔍 Sending forgot password request for:", email);
       console.log("🔍 API URL:", `${this.baseURL}/forgot-password`);
-      
+
       const response = await fetch(`${this.baseURL}/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
         body: JSON.stringify({ email: email.trim() }),
       });
@@ -25,17 +27,17 @@ class AuthService {
       console.log("📧 Response status:", response.status);
       console.log("📧 Response ok:", response.ok);
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error) {
       console.error("❌ Error in forgotPassword:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -44,11 +46,12 @@ class AuthService {
   async verifyResetCode(email: string, code: string) {
     try {
       console.log("🔍 Verifying reset code for:", email);
-      
+
       const response = await fetch(`${this.baseURL}/verify-reset-code`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
         body: JSON.stringify({
           email: email.trim(),
@@ -59,17 +62,17 @@ class AuthService {
       const data = await response.json();
       console.log("✅ Verify reset code response:", data);
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error) {
       console.error("❌ Error in verifyResetCode:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -78,11 +81,12 @@ class AuthService {
   async resetPassword(email: string, token: string, newPassword: string) {
     try {
       console.log("🔍 Resetting password for:", email);
-      
+
       const response = await fetch(`${this.baseURL}/reset-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
         body: JSON.stringify({
           email: email.trim(),
@@ -94,17 +98,17 @@ class AuthService {
       const data = await response.json();
       console.log("✅ Reset password response:", data);
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error) {
       console.error("❌ Error in resetPassword:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -113,11 +117,12 @@ class AuthService {
   async login(email: string, password: string) {
     try {
       console.log("🔍 Logging in user:", email);
-      
+
       const response = await fetch(`${this.baseURL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
         body: JSON.stringify({
           email: email.trim(),
@@ -131,31 +136,31 @@ class AuthService {
       if (response.ok && data.token) {
         await AsyncStorage.setItem("token", data.token);
         console.log("💾 Token stored in AsyncStorage");
-        
+
         // Also store user data if available
         if (data.user) {
           console.log("🔍 Login user data:", {
             section: data.user.section,
             sectionType: typeof data.user.section,
             userKeys: Object.keys(data.user),
-            fullUserData: data.user
+            fullUserData: data.user,
           });
           await AsyncStorage.setItem("user", JSON.stringify(data.user));
           console.log("💾 User data stored in AsyncStorage");
         }
       }
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error) {
       console.error("❌ Error in login:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -164,11 +169,12 @@ class AuthService {
   async register(userData: any) {
     try {
       console.log("🔍 Registering new user:", userData.email);
-      
+
       const response = await fetch(`${this.baseURL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
         body: JSON.stringify(userData),
       });
@@ -176,17 +182,17 @@ class AuthService {
       const data = await response.json();
       console.log("✅ Register response:", data);
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error) {
       console.error("❌ Error in register:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -195,11 +201,12 @@ class AuthService {
   async verifyEmailCode(email: string, code: string) {
     try {
       console.log("🔍 Verifying email code for:", email);
-      
+
       const response = await fetch(`${this.baseURL}/verify-email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
         body: JSON.stringify({
           email: email.trim(),
@@ -210,17 +217,17 @@ class AuthService {
       const data = await response.json();
       console.log("✅ Verify email response:", data);
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error: any) {
       console.error("❌ Error in verifyEmailCode:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -229,31 +236,34 @@ class AuthService {
   async resendEmailVerification(email: string) {
     try {
       console.log("🔍 Resending email verification for:", email);
-      
-      const response = await fetch(`${this.baseURL}/resend-email-verification`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-        }),
-      });
+
+      const response = await fetch(
+        `${this.baseURL}/resend-email-verification`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email.trim(),
+          }),
+        }
+      );
 
       const data = await response.json();
       console.log("✅ Resend email verification response:", data);
 
-      return { 
-        success: response.ok, 
+      return {
+        success: response.ok,
         data,
-        status: response.status 
+        status: response.status,
       };
     } catch (error: any) {
       console.error("❌ Error in resendEmailVerification:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "Network error occurred",
-        status: 0 
+        status: 0,
       };
     }
   }
@@ -263,6 +273,18 @@ class AuthService {
     try {
       await AsyncStorage.removeItem("token");
       console.log("🗑️ Token removed from AsyncStorage");
+
+      // Clear user-specific interaction data
+      try {
+        const { useInteractionStore } = await import(
+          "../store/useInteractionStore"
+        );
+        useInteractionStore.getState().clearCache();
+        console.log("🗑️ Interaction cache cleared on logout");
+      } catch (cacheError) {
+        console.warn("⚠️ Failed to clear interaction cache:", cacheError);
+      }
+
       return { success: true };
     } catch (error) {
       console.error("❌ Error in logout:", error);
@@ -274,7 +296,10 @@ class AuthService {
   async getToken() {
     try {
       const token = await AsyncStorage.getItem("token");
-      console.log("🔑 Retrieved token from AsyncStorage:", token ? "exists" : "not found");
+      console.log(
+        "🔑 Retrieved token from AsyncStorage:",
+        token ? "exists" : "not found"
+      );
       return token;
     } catch (error) {
       console.error("❌ Error getting token:", error);
@@ -284,5 +309,3 @@ class AuthService {
 }
 
 export default new AuthService();
-
-

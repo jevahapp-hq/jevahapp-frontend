@@ -82,6 +82,15 @@ export default function MobileHeader({
 
   console.log("🔍 MobileHeader: Received user data:", user);
 
+  const safeRightActions = Array.isArray(rightActions)
+    ? rightActions.filter(
+        (action) =>
+          action &&
+          typeof action === "object" &&
+          typeof action.onPress === "function"
+      )
+    : [];
+
   const handleBackPress = () => {
     if (onBackPress) {
       onBackPress();
@@ -162,7 +171,7 @@ export default function MobileHeader({
 
       {/* Right Side - Action Buttons */}
       <View className="flex-row items-center space-x-3">
-        {rightActions.map((action, index) => (
+        {safeRightActions.map((action, index) => (
           <TouchableOpacity
             key={index}
             onPress={action.onPress}
@@ -278,7 +287,7 @@ export default function MobileHeader({
       <View className="flex-1 items-end">
         {rightComponent || (
           <View className="flex-row items-center space-x-3">
-            {rightActions.map((action, index) => (
+            {safeRightActions.map((action, index) => (
               <TouchableOpacity
                 key={index}
                 onPress={action.onPress}

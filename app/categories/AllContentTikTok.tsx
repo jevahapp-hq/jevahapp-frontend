@@ -45,12 +45,10 @@ import {
   useDownloadHandler,
 } from "../utils/downloadUtils";
 import {
-  getFavoriteState,
   getPersistedStats,
   getViewed,
   persistStats,
   persistViewed,
-  toggleFavorite,
 } from "../utils/persistentStorage";
 import TokenUtils from "../utils/tokenUtils";
 import {
@@ -238,10 +236,10 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         views: item.viewCount || item.totalViews || 0,
-        sheared: item.shareCount || item.totalShares || 0,
-        saved: 0, // Default value
-        comment: item.commentCount || 0,
-        favorite: item.likeCount || item.totalLikes || 0,
+        shares: item.shareCount || item.totalShares || 0,
+        saves: 0, // Default value
+        comments: item.commentCount || 0,
+        likes: item.likeCount || item.totalLikes || 0,
         imageUrl: hasValidThumbnailUrl ? item.thumbnailUrl : null,
         speakerAvatar: item.authorInfo?.avatar || item.author?.avatar,
       };
@@ -887,16 +885,22 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
       item._id || Math.random().toString(36).substring(2)
     }`;
   const getAudioKey = (fileUrl: string): string => `Audio-${fileUrl}`;
-  const [contentStats, setContentStats] = useState<Record<string, any>>({});
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
 
-  // 🎯 New favorite system state
-  const [userFavorites, setUserFavorites] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [globalFavoriteCounts, setGlobalFavoriteCounts] = useState<
-    Record<string, number>
-  >({});
+  // 🎯 Use interaction store for backend-managed likes
+  const { contentStats, toggleLike, loadingInteraction } =
+    useInteractionStore();
+
+  // Helper functions to get like state from backend
+  const getUserLikeState = (contentId: string) => {
+    const stats = contentStats[contentId];
+    return stats?.userInteractions?.liked || false;
+  };
+
+  const getLikeCount = (contentId: string) => {
+    const stats = contentStats[contentId];
+    return stats?.likes || 0;
+  };
 
   // Video control state
   const videoRefs = useRef<Record<string, any>>({});
@@ -1029,7 +1033,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
         index,
         allVideos,
         contentStats,
-        globalFavoriteCounts,
+        globalFavoriteCounts: {}, // Empty since we're using backend state
         getContentKey,
         getTimeAgo,
         getDisplayName,
@@ -1266,10 +1270,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
       setIsLoadingContent(true);
 
       // Set loading state immediately for better UX
-      setContentStats({});
       setPreviouslyViewed([]);
-      setUserFavorites({});
-      setGlobalFavoriteCounts({});
 
       try {
         // Load data in parallel for better performance
@@ -1281,33 +1282,9 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
             : libraryStore.loadSavedItems(),
         ]);
 
-        setContentStats(stats || {});
         setPreviouslyViewed(viewed || []);
 
-        // Load favorite states in batches to prevent blocking
-        if (mediaList.length > 0) {
-          const batchSize = 10; // Process 10 items at a time
-          const favoriteStates: Record<string, boolean> = {};
-          const favoriteCounts: Record<string, number> = {};
-
-          for (let i = 0; i < mediaList.length; i += batchSize) {
-            const batch = mediaList.slice(i, i + batchSize);
-            await Promise.all(
-              batch.map(async (item) => {
-                const key = getContentKey(item);
-                const { isUserFavorite, globalCount } = await getFavoriteState(
-                  key
-                );
-                favoriteStates[key] = isUserFavorite;
-                favoriteCounts[key] = globalCount;
-              })
-            );
-
-            // Update state incrementally for better perceived performance
-            setUserFavorites((prev) => ({ ...prev, ...favoriteStates }));
-            setGlobalFavoriteCounts((prev) => ({ ...prev, ...favoriteCounts }));
-          }
-        }
+        // Favorite states are now managed by the interaction store
 
         console.log(
           `✅ AllContent: Loaded ${
@@ -1398,17 +1375,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
 
       if (result.action === Share.sharedAction) {
         console.log("✅ Share completed successfully");
-        setContentStats((prev) => {
-          const updated = {
-            ...prev,
-            [key]: {
-              ...prev[key],
-              sheared: (prev[key]?.sheared || item.sheared || 0) + 1,
-            },
-          };
-          persistStats(updated);
-          return updated;
-        });
+        // Share stats are now managed by the interaction store
       }
 
       // ✅ Close modal after share action
@@ -1423,7 +1390,7 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
   const handleSave = async (key: string, item: any) => {
     console.log("🔄 Save button clicked for:", item.title);
 
-    const isSaved = contentStats[key]?.saved === 1;
+    const isSaved = contentStats[key]?.saves === 1;
 
     if (!isSaved) {
       // Save to library
@@ -1438,9 +1405,9 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
         createdAt: item.createdAt || new Date().toISOString(),
         speakerAvatar: item.speakerAvatar,
         views: contentStats[key]?.views || item.views || 0,
-        sheared: contentStats[key]?.sheared || item.sheared || 0,
-        favorite: contentStats[key]?.favorite || item.favorite || 0,
-        comment: contentStats[key]?.comment || item.comment || 0,
+        shares: contentStats[key]?.shares || item.shares || 0,
+        likes: contentStats[key]?.likes || item.likes || 0,
+        comments: contentStats[key]?.comments || item.comments || 0,
         saved: 1,
         imageUrl: item.imageUrl,
         thumbnailUrl:
@@ -1456,44 +1423,22 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
       await libraryStore.removeFromLibrary(key);
     }
 
-    setContentStats((prev) => {
-      const updated = {
-        ...prev,
-        [key]: {
-          ...prev[key],
-          saved: isSaved ? 0 : 1,
-        },
-      };
-      persistStats(updated);
-      console.log(
-        `✅ Save ${isSaved ? "removed from" : "added to"} library:`,
-        item.title
-      );
-      return updated;
-    });
+    // Save stats are now managed by the interaction store
 
     // ✅ Close modal after save action
     setModalVisible(null);
   };
 
   const handleFavorite = async (key: string, item: any) => {
-    console.log(`🎯 Handling favorite for: ${item.title}`);
+    console.log(`🎯 Handling like for: ${item.title}`);
 
     try {
-      // Toggle favorite using new system
-      const { isUserFavorite, globalCount } = await toggleFavorite(key);
+      // Use backend API for user-specific likes
+      await toggleLike(item._id || key, item.contentType || "video");
 
-      // Update local state immediately for UI responsiveness
-      setUserFavorites((prev) => ({ ...prev, [key]: isUserFavorite }));
-      setGlobalFavoriteCounts((prev) => ({ ...prev, [key]: globalCount }));
-
-      console.log(
-        `✅ Favorite ${isUserFavorite ? "added" : "removed"} for ${
-          item.title
-        }. Global count: ${globalCount}`
-      );
+      console.log(`✅ Like toggled for ${item.title} via backend API`);
     } catch (error) {
-      console.error(`❌ Failed to toggle favorite for ${item.title}:`, error);
+      console.error(`❌ Failed to toggle like for ${item.title}:`, error);
     }
   };
 
@@ -1540,22 +1485,8 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
       });
     }
 
-    // ✅ Increment view count in stats
-    setContentStats((prev) => {
-      const updated = {
-        ...prev,
-        [key]: {
-          ...prev[key],
-          views: (prev[key]?.views || 0) + 1,
-          sheared: prev[key]?.sheared || item.sheared || 0,
-          favorite: prev[key]?.favorite || item.favorite || 0,
-          saved: prev[key]?.saved || item.saved || 0,
-          comment: prev[key]?.comment || item.comment || 0,
-        },
-      };
-      persistStats(updated);
-      return updated;
-    });
+    // ✅ Note: View counting is handled by the interaction store's recordView function
+    // This is typically called when content is actually viewed, not during save operations
   };
 
   // Download functionality
@@ -1652,19 +1583,27 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   className="flex-row items-center mr-6"
                 >
                   <MaterialIcons
-                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    name={
+                      getUserLikeState(ebook._id || key)
+                        ? "favorite"
+                        : "favorite-border"
+                    }
                     size={28}
-                    color={userFavorites[key] ? "#FF1744" : "#98A2B3"}
+                    color={
+                      getUserLikeState(ebook._id || key) ? "#FF1744" : "#98A2B3"
+                    }
                     style={{
-                      textShadowColor: userFavorites[key]
+                      textShadowColor: getUserLikeState(ebook._id || key)
                         ? "rgba(255, 23, 68, 0.6)"
                         : "transparent",
                       textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: userFavorites[key] ? 10 : 0,
+                      textShadowRadius: getUserLikeState(ebook._id || key)
+                        ? 10
+                        : 0,
                     }}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {globalFavoriteCounts[key] || 0}
+                    {getLikeCount(ebook._id || key)}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1677,9 +1616,9 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                     color="#98A2B3"
                     showCount={true}
                     count={
-                      stats.comment === 1
-                        ? (ebook.comment ?? 0) + 1
-                        : ebook.comment ?? 0
+                      stats.comments === 1
+                        ? (ebook.comments ?? 0) + 1
+                        : ebook.comments ?? 0
                     }
                     layout="horizontal"
                   />
@@ -1689,14 +1628,14 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   className="flex-row items-center mr-6"
                 >
                   <MaterialIcons
-                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                    name={stats.saves === 1 ? "bookmark" : "bookmark-border"}
                     size={28}
-                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                    color={stats.saves === 1 ? "#FEA74E" : "#98A2B3"}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.saved === 1
-                      ? (ebook.saved ?? 0) + 1
-                      : ebook.saved ?? 0}
+                    {stats.saves === 1
+                      ? (ebook.saves ?? 0) + 1
+                      : ebook.saves ?? 0}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1851,12 +1790,27 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   className="flex-row items-center mr-6"
                 >
                   <MaterialIcons
-                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    name={
+                      getUserLikeState(audio._id || key)
+                        ? "favorite"
+                        : "favorite-border"
+                    }
                     size={28}
-                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                    color={
+                      getUserLikeState(audio._id || key) ? "#FF1744" : "#98A2B3"
+                    }
+                    style={{
+                      textShadowColor: getUserLikeState(audio._id || key)
+                        ? "rgba(255, 23, 68, 0.6)"
+                        : "transparent",
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: getUserLikeState(audio._id || key)
+                        ? 10
+                        : 0,
+                    }}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {globalFavoriteCounts[key] || 0}
+                    {getLikeCount(audio._id || key)}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1869,9 +1823,9 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                     color="#98A2B3"
                     showCount={true}
                     count={
-                      stats.comment === 1
-                        ? (audio.comment ?? 0) + 1
-                        : audio.comment ?? 0
+                      stats.comments === 1
+                        ? (audio.comments ?? 0) + 1
+                        : audio.comments ?? 0
                     }
                     layout="horizontal"
                   />
@@ -1881,14 +1835,14 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
                   className="flex-row items-center mr-6"
                 >
                   <MaterialIcons
-                    name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                    name={stats.saves === 1 ? "bookmark" : "bookmark-border"}
                     size={28}
-                    color={stats.saved === 1 ? "#FEA74E" : "#98A2B3"}
+                    color={stats.saves === 1 ? "#FEA74E" : "#98A2B3"}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.saved === 1
-                      ? (audio.saved ?? 0) + 1
-                      : audio.saved ?? 0}
+                    {stats.saves === 1
+                      ? (audio.saves ?? 0) + 1
+                      : audio.saves ?? 0}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1932,6 +1886,12 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
     const key = getContentKey(video);
     const stats = contentStats[key] || {};
 
+    // Create backend-compatible favorites state
+    const backendUserFavorites = { [key]: getUserLikeState(video._id || key) };
+    const backendGlobalFavoriteCounts = {
+      [key]: getLikeCount(video._id || key),
+    };
+
     return (
       <VideoCard
         key={modalKey}
@@ -1939,8 +1899,8 @@ function AllContentTikTok({ contentType = "ALL" }: { contentType?: string }) {
         index={index}
         modalKey={modalKey}
         contentStats={contentStats}
-        userFavorites={userFavorites}
-        globalFavoriteCounts={globalFavoriteCounts}
+        userFavorites={backendUserFavorites}
+        globalFavoriteCounts={backendGlobalFavoriteCounts}
         playingVideos={playingVideos}
         mutedVideos={mutedVideos}
         progresses={progresses}

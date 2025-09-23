@@ -1,30 +1,44 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { environmentManager } from './environmentManager';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { Platform } from "react-native";
+import { environmentManager } from "./environmentManager";
 
 // Prioritize environment variable over environment manager
-let API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || environmentManager.getCurrentUrl();
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || environmentManager.getCurrentUrl();
 
 // Log the API URL source for debugging
 if (process.env.EXPO_PUBLIC_API_URL) {
-  console.log('🌐 Using EXPO_PUBLIC_API_URL from environment:', process.env.EXPO_PUBLIC_API_URL);
+  console.log(
+    "🌐 Using EXPO_PUBLIC_API_URL from environment:",
+    process.env.EXPO_PUBLIC_API_URL
+  );
 } else {
-  console.log('🌐 Using API URL from environment manager:', environmentManager.getCurrentUrl());
+  console.log(
+    "🌐 Using API URL from environment manager:",
+    environmentManager.getCurrentUrl()
+  );
 }
 
 // Update API URL when environment changes (only if no environment variable is set)
 if (!process.env.EXPO_PUBLIC_API_URL) {
   environmentManager.addListener((environment) => {
-    API_BASE_URL = environmentManager.getCurrentUrl();
-    console.log('🌐 Environment switched to:', environment, 'URL:', API_BASE_URL);
-    
+    // API_BASE_URL is now a const, so we can't reassign it
+    // This logic should be handled differently if needed
+    console.log(
+      "🌐 Environment switched to:",
+      environment,
+      "URL:",
+      API_BASE_URL
+    );
+
     // Update axios base URL
-    apiAxios.defaults.baseURL = API_BASE_URL;
+    // apiAxios.defaults.baseURL is set at creation time
   });
 }
 
 // Log the current API URL for debugging
-console.log('🌐 Final API Base URL:', API_BASE_URL);
+console.log("🌐 Final API Base URL:", API_BASE_URL);
 
 // Configure axios defaults for better timeout handling
 axios.defaults.timeout = 15000; // 15 seconds timeout
@@ -37,22 +51,22 @@ axios.interceptors.response.use(
     if (!config) {
       return Promise.reject(error);
     }
-    
+
     // Add retry configuration to config
     const retryConfig = config as any;
     retryConfig.retry = retryConfig.retry || 3;
     retryConfig.retryDelay = retryConfig.retryDelay || 1000;
     retryConfig.retryCount = retryConfig.retryCount || 0;
-    
+
     if (retryConfig.retryCount >= retryConfig.retry) {
       return Promise.reject(error);
     }
-    
+
     retryConfig.retryCount += 1;
-    
+
     // Wait before retrying
-    await new Promise(resolve => setTimeout(resolve, retryConfig.retryDelay));
-    
+    await new Promise((resolve) => setTimeout(resolve, retryConfig.retryDelay));
+
     return axios(config);
   }
 );
@@ -62,7 +76,8 @@ export const apiAxios = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
+    "expo-platform": Platform.OS,
   },
 });
 
@@ -70,17 +85,18 @@ export const apiAxios = axios.create({
 apiAxios.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('token') || 
-                   await AsyncStorage.getItem('userToken') || 
-                   await AsyncStorage.getItem('authToken');
-      
+      const token =
+        (await AsyncStorage.getItem("token")) ||
+        (await AsyncStorage.getItem("userToken")) ||
+        (await AsyncStorage.getItem("authToken"));
+
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.warn('Failed to get auth token:', error);
+      console.warn("Failed to get auth token:", error);
     }
-    
+
     return config;
   },
   (error) => {
@@ -99,20 +115,22 @@ export class APIClient {
   // Get authorization header with user token
   async getAuthHeaders(): Promise<HeadersInit> {
     try {
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem("userToken");
       const headers: HeadersInit = {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
       };
 
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
 
       return headers;
     } catch (error) {
-      console.error('Error getting auth headers:', error);
+      console.error("Error getting auth headers:", error);
       return {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
       };
     }
   }
@@ -121,21 +139,23 @@ export class APIClient {
   async request<T>(
     endpoint: string,
     options: {
-      method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+      method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
       body?: any;
       headers?: HeadersInit;
       requireAuth?: boolean;
     } = {}
   ): Promise<T> {
     const {
-      method = 'GET',
+      method = "GET",
       body,
       headers: customHeaders = {},
-      requireAuth = true
+      requireAuth = true,
     } = options;
 
     try {
-      const authHeaders = requireAuth ? await this.getAuthHeaders() : { 'Content-Type': 'application/json' };
+      const authHeaders = requireAuth
+        ? await this.getAuthHeaders()
+        : { "Content-Type": "application/json", "expo-platform": Platform.OS };
       const headers = { ...authHeaders, ...customHeaders };
 
       const config: RequestInit = {
@@ -143,8 +163,8 @@ export class APIClient {
         headers,
       };
 
-      if (body && method !== 'GET') {
-        config.body = typeof body === 'string' ? body : JSON.stringify(body);
+      if (body && method !== "GET") {
+        config.body = typeof body === "string" ? body : JSON.stringify(body);
       }
 
       const response = await fetch(`${this.baseURL}${endpoint}`, config);
@@ -154,11 +174,11 @@ export class APIClient {
         throw new Error(`HTTP ${response.status}: ${errorData}`);
       }
 
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
         return await response.json();
       } else {
-        return await response.text() as unknown as T;
+        return (await response.text()) as unknown as T;
       }
     } catch (error) {
       console.error(`API request failed for ${endpoint}:`, error);
@@ -167,16 +187,22 @@ export class APIClient {
   }
 
   // Authentication methods
-  async login(email: string, password: string): Promise<{ user: any; token: string }> {
-    const response = await this.request<{ user: any; token: string }>('/api/auth/login', {
-      method: 'POST',
-      body: { email, password },
-      requireAuth: false,
-    });
+  async login(
+    email: string,
+    password: string
+  ): Promise<{ user: any; token: string }> {
+    const response = await this.request<{ user: any; token: string }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: { email, password },
+        requireAuth: false,
+      }
+    );
 
     // Store token and user data
-    await AsyncStorage.setItem('userToken', response.token);
-    await AsyncStorage.setItem('user', JSON.stringify(response.user));
+    await AsyncStorage.setItem("userToken", response.token);
+    await AsyncStorage.setItem("user", JSON.stringify(response.user));
 
     return response;
   }
@@ -187,43 +213,60 @@ export class APIClient {
     username: string;
     fullName?: string;
   }): Promise<{ user: any; token: string }> {
-    const response = await this.request<{ user: any; token: string }>('/api/auth/register', {
-      method: 'POST',
-      body: userData,
-      requireAuth: false,
-    });
+    const response = await this.request<{ user: any; token: string }>(
+      "/api/auth/register",
+      {
+        method: "POST",
+        body: userData,
+        requireAuth: false,
+      }
+    );
 
     // Store token and user data
-    await AsyncStorage.setItem('userToken', response.token);
-    await AsyncStorage.setItem('user', JSON.stringify(response.user));
+    await AsyncStorage.setItem("userToken", response.token);
+    await AsyncStorage.setItem("user", JSON.stringify(response.user));
 
     return response;
   }
 
   async logout(): Promise<void> {
     try {
-      await this.request('/api/auth/logout', { method: 'POST' });
+      await this.request("/api/auth/logout", { method: "POST" });
     } catch (error) {
-      console.warn('Logout API call failed:', error);
+      console.warn("Logout API call failed:", error);
     } finally {
       // Clear local storage regardless of API success
-      await AsyncStorage.multiRemove(['userToken', 'user']);
+      await AsyncStorage.multiRemove(["userToken", "user"]);
+
+      // Clear user-specific interaction data
+      try {
+        const { useInteractionStore } = await import(
+          "../store/useInteractionStore"
+        );
+        useInteractionStore.getState().clearCache();
+        console.log("✅ Cleared interaction cache on logout");
+      } catch (cacheError) {
+        console.warn("⚠️ Failed to clear interaction cache:", cacheError);
+      }
     }
   }
 
   async refreshToken(): Promise<string> {
-    const response = await this.request<{ token: string }>('/api/auth/refresh', {
-      method: 'POST',
-    });
+    const response = await this.request<{ token: string }>(
+      "/api/auth/refresh",
+      {
+        method: "POST",
+      }
+    );
 
-    await AsyncStorage.setItem('userToken', response.token);
+    await AsyncStorage.setItem("userToken", response.token);
     return response.token;
   }
 
   // Check if user is authenticated
   async isAuthenticated(): Promise<boolean> {
     try {
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem("userToken");
       return !!token;
     } catch (error) {
       return false;
@@ -233,10 +276,10 @@ export class APIClient {
   // Get current user data
   async getCurrentUser(): Promise<any> {
     try {
-      const userStr = await AsyncStorage.getItem('user');
+      const userStr = await AsyncStorage.getItem("user");
       return userStr ? JSON.parse(userStr) : null;
     } catch (error) {
-      console.error('Error getting current user:', error);
+      console.error("Error getting current user:", error);
       return null;
     }
   }

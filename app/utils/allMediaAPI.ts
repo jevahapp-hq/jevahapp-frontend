@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -66,16 +67,19 @@ class AllMediaAPI {
         return {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "expo-platform": Platform.OS,
         };
       }
 
       return {
         "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
       };
     } catch (error) {
       console.error("Error getting auth headers:", error);
       return {
         "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
       };
     }
   }

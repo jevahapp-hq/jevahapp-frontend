@@ -490,6 +490,7 @@ export const useInteractionStore = create<InteractionState>()(
         loadingComments: {},
         savedContent: [],
       });
+      console.log("🗑️ Interaction store cache cleared");
     },
   }))
 );

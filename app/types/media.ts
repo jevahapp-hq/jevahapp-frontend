@@ -7,6 +7,8 @@ export interface MediaItem {
   speaker?: string;
   uploadedBy?: string;
   description?: string;
+  enhancedDescription?: string; // NEW: AI-generated enhanced description
+  bibleVerses?: string[]; // NEW: Array of Bible verse references
   createdAt: string;
   speakerAvatar?: string | number | { uri: string };
   views?: number;
@@ -15,6 +17,15 @@ export interface MediaItem {
   comment?: number;
   favorite?: number;
   imageUrl?: string | { uri: string };
+  category?: string; // NEW: Content category
+  authorInfo?: {
+    // NEW: Enhanced author information
+    _id: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    avatar?: string;
+  };
 }
 
 export interface VideoCardProps {

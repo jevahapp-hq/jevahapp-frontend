@@ -1,5 +1,6 @@
 // Content Interaction API Service
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { API_BASE_URL } from './api';
 
 // Types for content interactions
@@ -82,17 +83,20 @@ class ContentInteractionService {
         return {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'expo-platform': Platform.OS,
         };
       }
       
       console.warn('⚠️ No token found in AsyncStorage or SecureStore');
       return {
         'Content-Type': 'application/json',
+        'expo-platform': Platform.OS,
       };
     } catch (error) {
       console.error('Error getting auth headers:', error);
       return {
         'Content-Type': 'application/json',
+        'expo-platform': Platform.OS,
       };
     }
   }
@@ -119,12 +123,22 @@ class ContentInteractionService {
         return this.fallbackToggleLike(contentId);
       }
       const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.baseURL}/api/interactions/media/${contentId}/like`, {
+      
+      // Try the alternative endpoint pattern first (from allMediaAPI)
+      let response = await fetch(`${this.baseURL}/api/content/${contentType}/${contentId}/like`, {
         method: 'POST',
         headers,
-        // Backend does not require a body; keep optional for future-proofing
-        body: JSON.stringify({ contentType }),
       });
+
+      // If that fails, try the original endpoint
+      if (!response.ok) {
+        console.log(`🔄 Trying alternative like endpoint for ${contentId}`);
+        response = await fetch(`${this.baseURL}/api/interactions/media/${contentId}/like`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ contentType }),
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -153,12 +167,21 @@ class ContentInteractionService {
       console.log(`🔍 SAVE DEBUG: Headers:`, headers);
       console.log(`🔍 SAVE DEBUG: Body:`, { contentType });
       
-      // NOTE: Assuming backend save endpoint exists at interactions path; falls back if not
-      const response = await fetch(`${this.baseURL}/api/interactions/media/${contentId}/save`, {
+      // Try alternative endpoint patterns for save functionality
+      let response = await fetch(`${this.baseURL}/api/content/${contentType}/${contentId}/save`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ contentType }),
       });
+
+      // If that fails, try the original endpoint
+      if (!response.ok) {
+        console.log(`🔄 Trying alternative save endpoint for ${contentId}`);
+        response = await fetch(`${this.baseURL}/api/interactions/media/${contentId}/save`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ contentType }),
+        });
+      }
 
       // DEBUG: Log response details
       console.log(`🔍 SAVE DEBUG: Response status: ${response.status}`);
@@ -277,12 +300,22 @@ class ContentInteractionService {
         return { totalShares: 0 };
       }
       const headers = await this.getAuthHeaders();
-      // Align with backend: expects { platform, message }
-      const response = await fetch(`${this.baseURL}/api/interactions/media/${contentId}/share`, {
+      // Try alternative endpoint patterns for share functionality
+      let response = await fetch(`${this.baseURL}/api/content/${contentType}/${contentId}/share`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ platform: shareMethod, message: message || '' }),
       });
+
+      // If that fails, try the original endpoint
+      if (!response.ok) {
+        console.log(`🔄 Trying alternative share endpoint for ${contentId}`);
+        response = await fetch(`${this.baseURL}/api/interactions/media/${contentId}/share`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ platform: shareMethod, message: message || '' }),
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
