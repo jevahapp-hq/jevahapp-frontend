@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
+import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { EbookCardProps } from "../../../shared/types";
 import {
   getTimeAgo,
@@ -52,6 +53,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
 
   const handleComment = () => onComment(ebook);
   const handleShare = () => onShare(ebook);
+
+  // Local modal visibility for options (three dots)
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   return (
     <View className="flex flex-col mb-10">
@@ -175,10 +179,24 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         <TouchableOpacity
           className="mr-2"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => setIsModalVisible(true)}
         >
           <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
+
+      {/* Slide-up Content Action Modal */}
+      <ContentActionModal
+        isVisible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        onViewDetails={() => {}}
+        onSaveToLibrary={() => onSave(ebook)}
+        onShare={() => onShare(ebook)}
+        onDownload={() => onDownload(ebook)}
+        isSaved={!!(ebook as any)?.saved}
+        isDownloaded={false}
+        contentTitle={ebook.title}
+      />
     </View>
   );
 };
