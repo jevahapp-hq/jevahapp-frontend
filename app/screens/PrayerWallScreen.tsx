@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AuthHeader from '../components/AuthHeader';
 
 interface PrayerRequest {
@@ -10,7 +10,7 @@ interface PrayerRequest {
   date: string;
   prayer: string;
   color: string;
-  shape: 'rectangle' | 'circle' | 'scalloped';
+  shape: 'rectangle' | 'circle' | 'scalloped' | 'square' | 'square2' | 'square3' | 'square4';
 }
 
 export default function PrayerWallScreen() {
@@ -26,8 +26,8 @@ export default function PrayerWallScreen() {
       time: '6am',
       date: 'Today',
       prayer: 'Prayer for my InJob Interview today. That I find favour in the sight of the empliyers',
-      color: '#9370DB',
-      shape: 'rectangle'
+      color: '#A16CE5',
+      shape: 'square'
     },
     {
       id: '2',
@@ -35,8 +35,8 @@ export default function PrayerWallScreen() {
       time: '6am',
       date: 'Yesterday',
       prayer: 'Prayer for my InJob Interview today. That I find favour in the sight of the empliyers',
-      color: '#279CCA',
-      shape: 'circle'
+      color: '#1078B2',
+      shape: 'square2'
     },
     {
       id: '3',
@@ -44,8 +44,8 @@ export default function PrayerWallScreen() {
       time: '6am',
       date: 'Yesterday',
       prayer: 'Prayer for my InJob Interview today. That I find favour in the sight of the empliyers',
-      color: '#C8A2C8',
-      shape: 'circle'
+      color: '#6360DE',
+      shape: 'square3'
     },
     {
       id: '4',
@@ -53,8 +53,8 @@ export default function PrayerWallScreen() {
       time: '6am',
       date: 'Today',
       prayer: 'Prayer for my InJob Interview today. That I find favour in the sight of the empliyers',
-      color: '#FFD700',
-      shape: 'rectangle'
+      color: '#DFCC21',
+      shape: 'square4'
     },
     {
       id: '5',
@@ -71,8 +71,8 @@ export default function PrayerWallScreen() {
       time: '6am',
       date: 'Yesterday',
       prayer: 'Prayer for my InJob Interview today. That I find favour in the sight of the empliyers',
-      color: '#1E40AF',
-      shape: 'rectangle'
+      color: '#1078B2',
+      shape: 'square2'
     }
   ];
 
@@ -81,6 +81,7 @@ export default function PrayerWallScreen() {
       backgroundColor: color,
       padding: 16,
       marginBottom: 12,
+      justifyContent: 'center' as const,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
@@ -90,6 +91,42 @@ export default function PrayerWallScreen() {
     };
 
     switch (shape) {
+      case 'square':
+        return {
+          ...baseStyle,
+          width: 156,
+          height: 156,
+          alignSelf: 'center' as const,
+          borderRadius: 12,
+          overflow: 'hidden' as const,
+        };
+      case 'square2':
+        return {
+          ...baseStyle,
+          width: 183,
+          height: 183,
+          alignSelf: 'center' as const,
+          borderRadius: 91.5,
+          overflow: 'hidden' as const,
+        };
+      case 'square3':
+        return {
+          ...baseStyle,
+          width: 183,
+          height: 183,
+          alignSelf: 'center' as const,
+          borderRadius: 91.5,
+          overflow: 'hidden' as const,
+        };
+      case 'square4':
+        return {
+          ...baseStyle,
+          width: 156,
+          height: 156,
+          alignSelf: 'center' as const,
+          borderRadius: 12,
+          overflow: 'hidden' as const,
+        };
       case 'circle':
         return {
           ...baseStyle,
@@ -102,46 +139,102 @@ export default function PrayerWallScreen() {
         return {
           ...baseStyle,
           borderRadius: 20,
-          width: 160,
-          height: 160,
+          width: 216,
+          height: 216,
           alignSelf: 'center' as const,
+          backgroundColor: 'transparent',
+          padding: 0,
+          justifyContent: 'flex-start' as const,
         };
       default: // rectangle
         return {
           ...baseStyle,
           borderRadius: 12,
-          borderTopRightRadius: 30, // Curved top-right corner like the image
-          width: '100%',
+          width: '100%' as const,
           minHeight: 120,
         };
     }
   };
 
-  const renderFoldedCorner = (color: string) => (
-    <View style={styles.foldedCorner}>
-      <View style={[styles.foldedCornerInner, { backgroundColor: color }]} />
-    </View>
-  );
 
-  const renderPrayerCard = (prayer: PrayerRequest, index: number) => (
-    <View key={prayer.id} style={styles.cardContainer}>
-      {index === 0 ? (
-        <Image
-          source={require('../../assets/images/Prayer note.png')}
-          style={styles.fullCardImage}
-          resizeMode="cover"
+  const renderScallopedCard = (prayer: PrayerRequest) => {
+    const numBlobs = 13;
+    const containerSize = 216;
+    const center = containerSize / 2;
+    const blobRadius = 22; // each scallop 'tooth'
+    const ringRadius = center - blobRadius + 2; // pull slightly outward
+    const blobs = Array.from({ length: numBlobs }).map((_, i) => {
+      const angle = (2 * Math.PI * i) / numBlobs;
+      const x = center + ringRadius * Math.cos(angle) - blobRadius;
+      const y = center + ringRadius * Math.sin(angle) - blobRadius;
+      return (
+        <View
+          key={`scallop-${i}`}
+          style={[
+            styles.scallopBlob,
+            {
+              left: x,
+              top: y,
+              width: blobRadius * 2,
+              height: blobRadius * 2,
+              borderRadius: blobRadius,
+              backgroundColor: prayer.color,
+            },
+          ]}
         />
-      ) : (
-        <TouchableOpacity
-          style={getCardStyle(prayer.shape, prayer.color)}
-          activeOpacity={0.8}
-        >
-          {renderFoldedCorner(prayer.color)}
+      );
+    });
+
+    return (
+      <View style={styles.scallopContainer}>
+        {blobs}
+        <View style={[styles.scallopCenter, { backgroundColor: prayer.color }]}>
           <Text style={styles.prayerName}>{prayer.name}</Text>
           <Text style={styles.prayerTime}>{prayer.time}, {prayer.date}</Text>
           <Text style={styles.prayerText}>{prayer.prayer}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPrayerCard = (prayer: PrayerRequest, index: number) => (
+    <View key={prayer.id} style={[styles.cardContainer, prayer.id === '6' ? styles.sixthCardOffset : undefined]}>
+      <TouchableOpacity
+        style={getCardStyle(prayer.shape, prayer.color)}
+        activeOpacity={0.8}
+      >
+        {prayer.shape === 'scalloped' ? (
+          renderScallopedCard(prayer)
+        ) : (
+          <>
+            {prayer.shape === 'square' && (
+              <View style={styles.diagonalCut}>
+                <View style={styles.triangle} />
+              </View>
+            )}
+            {prayer.shape === 'square2' && (
+              <View style={styles.diagonalCut2}>
+                <View style={styles.diagonalMask2} />
+                <View style={styles.triangle2} />
+              </View>
+            )}
+            {prayer.shape === 'square3' && (
+              <View style={styles.diagonalCut3}>
+                <View style={styles.diagonalMask3} />
+                <View style={styles.triangle3} />
+              </View>
+            )}
+            {prayer.shape === 'square4' && (
+              <View style={styles.diagonalCut4}>
+                <View style={styles.triangle4} />
+              </View>
+            )}
+            <Text style={styles.prayerName}>{prayer.name}</Text>
+            <Text style={styles.prayerTime}>{prayer.time}, {prayer.date}</Text>
+            <Text style={styles.prayerText}>{prayer.prayer}</Text>
+          </>
+        )}
         </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -250,67 +343,170 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardContainer: {
-    marginBottom: 8,
+    marginBottom: 16,
+  },
+  sixthCardOffset: {
+    marginLeft: 20,
   },
   prayerName: {
-    fontSize: 12,
+    fontSize: 10,
     color: 'white',
     marginBottom: 4,
     fontFamily: 'Rubik-Regular',
     textAlign: 'left',
   },
   prayerTime: {
-    fontSize: 12,
+    fontSize: 10,
     color: 'white',
     marginBottom: 8,
     fontFamily: 'Rubik-Regular',
     textAlign: 'left',
   },
   prayerText: {
-    fontSize: 14,
+    fontSize: 12,
     color: 'white',
-    lineHeight: 20,
+    lineHeight: 16,
     fontFamily: 'Rubik-Regular',
     textAlign: 'left',
   },
-  foldedCorner: {
+  diagonalCut: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 56,
+    height: 56,
+    backgroundColor: '#8B5DDD',
+    zIndex: 1,
+  },
+  triangle: {
     position: 'absolute',
     top: 0,
     right: 0,
     width: 0,
     height: 0,
     borderStyle: 'solid',
-    borderTopWidth: 18,
-    borderTopColor: 'rgba(0, 0, 0, 0.2)',
-    borderLeftWidth: 18,
+    borderTopWidth: 56,
+    borderTopColor: 'white',
+    borderLeftWidth: 56,
     borderLeftColor: 'transparent',
-    zIndex: 2,
   },
-  foldedCornerInner: {
+  diagonalCut2: {
     position: 'absolute',
-    top: -14,
-    right: 1,
+    top: 0,
+    right: 0,
+    width: 91,
+    height: 91,
+    backgroundColor: '#0D608E',
+    borderBottomLeftRadius: 91,
+    zIndex: 1,
+  },
+  diagonalMask2: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
     width: 0,
     height: 0,
     borderStyle: 'solid',
-    borderTopWidth: 14,
-    borderTopColor: 'rgba(255, 255, 255, 0.9)',
-    borderLeftWidth: 14,
+    borderTopWidth: 91,
+    borderTopColor: '#FCFCFD',
+    borderLeftWidth: 91,
     borderLeftColor: 'transparent',
-    zIndex: 3,
+    zIndex: 1,
   },
-  fullCardImage: {
-    width: '100%',
-    minHeight: 120,
-    borderRadius: 12,
-    borderTopRightRadius: 30, // Curved top-right corner to match the image
+  diagonalCut3: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 91,
+    height: 91,
+    backgroundColor: '#4F4DB2',
+    borderBottomLeftRadius: 91,
+    zIndex: 1,
+  },
+  diagonalMask3: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: 91,
+    borderTopColor: '#FCFCFD',
+    borderLeftWidth: 91,
+    borderLeftColor: 'transparent',
+    zIndex: 1,
+  },
+  triangle3: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: 56,
+    borderTopColor: 'white',
+    borderLeftWidth: 56,
+    borderLeftColor: 'transparent',
+    zIndex: 2,
+  },
+  diagonalCut4: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 56,
+    height: 56,
+    backgroundColor: '#B2A31A',
+    zIndex: 1,
+  },
+  triangle4: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: 56,
+    borderTopColor: 'white',
+    borderLeftWidth: 56,
+    borderLeftColor: 'transparent',
+  },
+  
+  triangle2: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: 56,
+    borderTopColor: 'white',
+    borderLeftWidth: 56,
+    borderLeftColor: 'transparent',
+    zIndex: 2,
+  },
+  scallopContainer: {
+    width: 216,
+    height: 216,
+    alignSelf: 'center',
+    position: 'relative',
+  },
+  scallopBlob: {
+    position: 'absolute',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  scallopCenter: {
+    position: 'absolute',
+    left: 28,
+    top: 28,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    padding: 12,
   },
 });
