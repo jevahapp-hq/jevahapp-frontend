@@ -1,6 +1,7 @@
 // Content Interaction API Service
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from './api';
+// Use the same API URL as other services
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://jevahapp-backend.onrender.com';
 
 // Types for content interactions
 export interface ContentInteraction {
@@ -42,7 +43,7 @@ class ContentInteractionService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = API_BASE_URL || 'http://localhost:8081'; // Fallback for development
+    this.baseURL = API_BASE_URL || 'https://jevahapp-backend.onrender.com'; // Fallback for development
   }
 
   private isValidObjectId(id?: string): boolean {
@@ -672,6 +673,126 @@ class ContentInteractionService {
           viewed: false,
         },
       };
+    }
+  }
+
+  // 🌐 Public Media Interaction Methods (based on your API documentation)
+  
+  // Like/Unlike Media
+  async likeMedia(mediaId: string): Promise<{ success: boolean; message: string; interaction?: any }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseURL}/api/media/${mediaId}/interact`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          interactionType: 'like',
+        }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('❌ Error liking media:', error);
+      return { success: false, message: 'Failed to like media' };
+    }
+  }
+
+  // Add/Remove from Library
+  async addToLibrary(mediaId: string): Promise<{ success: boolean; message: string; bookmark?: any }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseURL}/api/media/${mediaId}/bookmark`, {
+        method: 'POST',
+        headers,
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('❌ Error adding to library:', error);
+      return { success: false, message: 'Failed to add to library' };
+    }
+  }
+
+  // Record View/Listen/Read
+  async recordInteraction(mediaId: string, interactionType: 'view' | 'listen' | 'read' | 'download'): Promise<{ success: boolean; message: string }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseURL}/api/media/${mediaId}/interact`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          interactionType,
+        }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('❌ Error recording interaction:', error);
+      return { success: false, message: 'Failed to record interaction' };
+    }
+  }
+
+  // Track View Duration
+  async trackViewDuration(mediaId: string, duration: number, isComplete: boolean = false): Promise<{ success: boolean; message: string }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseURL}/api/media/${mediaId}/track-view`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          duration,
+          isComplete,
+        }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('❌ Error tracking view duration:', error);
+      return { success: false, message: 'Failed to track view duration' };
+    }
+  }
+
+  // Share Media
+  async shareMedia(mediaId: string, platform?: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseURL}/api/media/${mediaId}/share`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          platform,
+        }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('❌ Error sharing media:', error);
+      return { success: false, message: 'Failed to share media' };
+    }
+  }
+
+  // Download Media
+  async downloadMedia(mediaId: string, fileSize: number): Promise<{ success: boolean; message: string }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseURL}/api/media/${mediaId}/download`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          fileSize,
+        }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('❌ Error recording download:', error);
+      return { success: false, message: 'Failed to record download' };
     }
   }
 }

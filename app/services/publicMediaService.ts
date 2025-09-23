@@ -1,17 +1,28 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://jevahapp-backend.onrender.com';
 
-export interface AllMediaItem {
+// TypeScript types for public media responses based on your documentation
+export type PublicContentType = "videos" | "audio" | "ebook" | "music" | "live";
+
+export interface PublicAuthorInfo {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  avatar?: string;
+  section?: string;
+}
+
+export interface PublicMediaItem {
   _id: string;
   title: string;
   description?: string;
-  contentType: 'videos' | 'audio' | 'ebook' | 'music' | 'live';
+  contentType: PublicContentType;
   category?: string;
-  topics?: string[];
   fileUrl: string;
   thumbnailUrl?: string;
   thumbnail?: string; // alias of thumbnailUrl in some responses
+  topics?: string[];
   viewCount?: number;
   shareCount?: number;
   likeCount?: number;
@@ -22,31 +33,22 @@ export interface AllMediaItem {
   createdAt?: string;
   updatedAt?: string;
   formattedCreatedAt?: string;
-  authorInfo?: {
-    _id: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    avatar?: string;
-    section?: string;
-  };
-  // Legacy fields for backward compatibility
-  uploadedBy?: {
-    _id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
+  authorInfo?: PublicAuthorInfo;
+  // Additional fields that might be present
   duration?: number;
-  listenCount?: number;
-  readCount?: number;
-  downloadCount?: number;
-  favoriteCount?: number;
+  isLive?: boolean;
+  concurrentViewers?: number;
 }
 
-export interface AllMediaResponse {
+export interface AllPublicContentResponse {
   success: boolean;
-  media: AllMediaItem[];
+  media: PublicMediaItem[];
+  total: number;
+}
+
+export interface PublicMediaResponse {
+  success: boolean;
+  media: PublicMediaItem[];
   pagination: {
     page: number;
     limit: number;
@@ -55,12 +57,12 @@ export interface AllMediaResponse {
   };
 }
 
-class AllMediaAPI {
+class PublicMediaService {
   private baseURL: string;
 
   constructor() {
     this.baseURL = API_BASE_URL;
-    console.log(`🌐 AllMediaAPI initialized with base URL: ${this.baseURL}`);
+    console.log(`🌐 PublicMediaService initialized with base URL: ${this.baseURL}`);
   }
 
   private isNetworkError(error: Error): boolean {
@@ -79,40 +81,7 @@ class AllMediaAPI {
     );
   }
 
-  private async getAuthHeaders(): Promise<HeadersInit> {
-    try {
-      let token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        token = await AsyncStorage.getItem('token');
-      }
-      if (!token) {
-        try {
-          const { default: SecureStore } = await import('expo-secure-store');
-          token = await SecureStore.getItemAsync('jwt');
-        } catch (secureStoreError) {
-          console.log('SecureStore not available or no JWT token');
-        }
-      }
-      
-      if (token) {
-        return {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        };
-      }
-      
-      return {
-        'Content-Type': 'application/json',
-      };
-    } catch (error) {
-      console.error('Error getting auth headers:', error);
-      return {
-        'Content-Type': 'application/json',
-      };
-    }
-  }
-
-  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 10000): Promise<Response> {
+  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 15000): Promise<Response> {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         reject(new Error('Request timeout'));
@@ -135,11 +104,11 @@ class AllMediaAPI {
     
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        console.log(`🔄 Attempt ${attempt}/${retries} - Fetching from: ${url}`);
-        const response = await this.fetchWithTimeout(url, options, 15000);
+        console.log(`🔄 Attempt ${attempt}/${retries} - Fetching public media from: ${url}`);
+        const response = await this.fetchWithTimeout(url, options, 20000);
         
         if (response.ok) {
-          console.log(`✅ Request successful on attempt ${attempt}`);
+          console.log(`✅ Public media request successful on attempt ${attempt}`);
           return response;
         } else if (response.status >= 500 && attempt < retries) {
           // Server error - retry
@@ -166,136 +135,8 @@ class AllMediaAPI {
     throw lastError || new Error('All retry attempts failed');
   }
 
-  async getAllMedia(params: {
-    sort?: 'views' | 'comments' | 'likes' | 'reads' | 'createdAt' | 'updatedAt';
-    contentType?: 'videos' | 'music' | 'books' | 'live';
-    category?: string;
-    page?: number;
-    limit?: number;
-    search?: string;
-  } = {}): Promise<AllMediaResponse> {
-    try {
-      const headers = await this.getAuthHeaders();
-      
-      const queryParams = new URLSearchParams();
-      if (params.sort) queryParams.append('sort', params.sort);
-      if (params.contentType) queryParams.append('contentType', params.contentType);
-      if (params.category) queryParams.append('category', params.category);
-      if (params.page) queryParams.append('page', params.page.toString());
-      if (params.limit) queryParams.append('limit', params.limit.toString());
-      if (params.search) queryParams.append('search', params.search);
-
-      const url = `${this.baseURL}/api/media?${queryParams.toString()}`;
-      
-      const response = await this.makeRequest(url, {
-        method: 'GET',
-        headers,
-      });
-
-      const data = await response.json();
-      console.log(`✅ Successfully fetched ${data.media?.length || 0} media items`);
-      return data;
-    } catch (error) {
-      console.error('❌ Error fetching all media:', error);
-      
-      // Determine error type and provide appropriate fallback
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      if (this.isNetworkError(error as Error)) {
-        console.log('🌐 Network connectivity issue detected - returning empty response');
-        console.log('💡 Tip: Check your internet connection and server availability');
-      } else if (errorMessage.includes('HTTP error')) {
-        console.log('🔧 Server error detected - returning empty response');
-      } else {
-        console.log('❓ Unknown error - returning empty response');
-      }
-      
-      // Return empty response instead of throwing to prevent app crashes
-      return {
-        success: false,
-        media: [],
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: 0,
-          pages: 0,
-        },
-      };
-    }
-  }
-
-  async getTrendingMedia(limit: number = 20): Promise<AllMediaResponse> {
-    return this.getAllMedia({
-      sort: 'views',
-      limit,
-    });
-  }
-
-  async getMostCommentedMedia(limit: number = 20): Promise<AllMediaResponse> {
-    return this.getAllMedia({
-      sort: 'comments',
-      limit,
-    });
-  }
-
-  async getMostLikedMedia(limit: number = 20): Promise<AllMediaResponse> {
-    return this.getAllMedia({
-      sort: 'likes',
-      limit,
-    });
-  }
-
-  async getLatestMedia(limit: number = 20): Promise<AllMediaResponse> {
-    return this.getAllMedia({
-      sort: 'createdAt',
-      limit,
-    });
-  }
-
-  async searchAllMedia(searchTerm: string, limit: number = 20): Promise<AllMediaResponse> {
-    return this.getAllMedia({
-      search: searchTerm,
-      limit,
-    });
-  }
-
-  async testConnection(): Promise<{ success: boolean; message: string }> {
-    try {
-      console.log(`🔍 Testing connection to: ${this.baseURL}`);
-      const response = await this.fetchWithTimeout(`${this.baseURL}/api/health`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }, 5000);
-
-      if (response.ok) {
-        console.log('✅ API connection test successful');
-        return { success: true, message: 'API connection successful' };
-      } else {
-        console.log(`⚠️ API connection test failed with status: ${response.status}`);
-        return { success: false, message: `API returned status ${response.status}` };
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.log(`❌ API connection test failed: ${errorMessage}`);
-      
-      if (this.isNetworkError(error as Error)) {
-        return { 
-          success: false, 
-          message: 'Network connection failed. Please check your internet connection.' 
-        };
-      } else {
-        return { 
-          success: false, 
-          message: `Connection failed: ${errorMessage}` 
-        };
-      }
-    }
-  }
-
-  // Get all public content without pagination (for "All" tab)
-  async fetchAllPublicContent(): Promise<{ success: boolean; media: AllMediaItem[]; total: number }> {
+  // Get all public media without pagination (for "All" tab)
+  async fetchAllPublicContent(): Promise<AllPublicContentResponse> {
     try {
       const url = `${this.baseURL}/api/media/public/all-content`;
       console.log(`🌐 Fetching all public content from: ${url}`);
@@ -345,8 +186,157 @@ class AllMediaAPI {
     }
   }
 
-  // Transform public media item to match frontend MediaItem interface
-  transformToMediaItem(publicItem: AllMediaItem): any {
+  // Get public media with pagination and filters
+  async fetchPublicMedia(params: {
+    search?: string;
+    contentType?: string;
+    category?: string;
+    topics?: string;
+    sort?: string;
+    page?: number;
+    limit?: number;
+    creator?: string;
+    duration?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}): Promise<PublicMediaResponse> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.search) queryParams.append('search', params.search);
+      if (params.contentType) queryParams.append('contentType', params.contentType);
+      if (params.category) queryParams.append('category', params.category);
+      if (params.topics) queryParams.append('topics', params.topics);
+      if (params.sort) queryParams.append('sort', params.sort);
+      if (params.page) queryParams.append('page', params.page.toString());
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      if (params.creator) queryParams.append('creator', params.creator);
+      if (params.duration) queryParams.append('duration', params.duration);
+      if (params.startDate) queryParams.append('startDate', params.startDate);
+      if (params.endDate) queryParams.append('endDate', params.endDate);
+
+      const url = `${this.baseURL}/api/media/public?${queryParams.toString()}`;
+      console.log(`🌐 Fetching public media with filters from: ${url}`);
+      
+      const response = await this.makeRequest(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      console.log(`✅ Successfully fetched ${data.media?.length || 0} filtered public media items`);
+      
+      // Validate response structure
+      if (!data.success || !Array.isArray(data.media)) {
+        console.warn('⚠️ Unexpected response structure:', data);
+        return {
+          success: false,
+          media: [],
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            pages: 0,
+          },
+        };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Error fetching public media with filters:', error);
+      
+      // Return empty response instead of throwing to prevent app crashes
+      return {
+        success: false,
+        media: [],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 0,
+        },
+      };
+    }
+  }
+
+  // Search public media
+  async searchPublicMedia(searchTerm: string, filters: {
+    contentType?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<PublicMediaResponse> {
+    return this.fetchPublicMedia({
+      search: searchTerm,
+      ...filters,
+    });
+  }
+
+  // Get single public media item by ID
+  async fetchPublicMediaById(mediaId: string): Promise<{ success: boolean; media?: PublicMediaItem }> {
+    try {
+      const url = `${this.baseURL}/api/media/public/${mediaId}`;
+      console.log(`🌐 Fetching public media by ID from: ${url}`);
+      
+      const response = await this.makeRequest(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      console.log(`✅ Successfully fetched public media item: ${mediaId}`);
+      
+      return data;
+    } catch (error) {
+      console.error(`❌ Error fetching public media item ${mediaId}:`, error);
+      
+      return {
+        success: false,
+      };
+    }
+  }
+
+  // Test connection to public endpoints
+  async testPublicConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log(`🔍 Testing public media connection to: ${this.baseURL}`);
+      const response = await this.fetchWithTimeout(`${this.baseURL}/api/media/public/all-content`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, 10000);
+
+      if (response.ok) {
+        console.log('✅ Public media API connection test successful');
+        return { success: true, message: 'Public media API connection successful' };
+      } else {
+        console.log(`⚠️ Public media API connection test failed with status: ${response.status}`);
+        return { success: false, message: `Public media API returned status ${response.status}` };
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`❌ Public media API connection test failed: ${errorMessage}`);
+      
+      if (this.isNetworkError(error as Error)) {
+        return { 
+          success: false, 
+          message: 'Network connection failed. Please check your internet connection.' 
+        };
+      } else {
+        return { 
+          success: false, 
+          message: `Connection failed: ${errorMessage}` 
+        };
+      }
+    }
+  }
+
+  // Helper function to transform backend response to match frontend MediaItem interface
+  transformToMediaItem(publicItem: PublicMediaItem): any {
     return {
       _id: publicItem._id,
       title: publicItem.title,
@@ -363,8 +353,8 @@ class AllMediaAPI {
       listenCount: publicItem.contentType === 'music' || publicItem.contentType === 'audio' ? (publicItem.viewCount || 0) : 0,
       readCount: publicItem.contentType === 'ebook' ? (publicItem.viewCount || 0) : 0,
       downloadCount: 0, // Not provided in public API
-      isLive: publicItem.contentType === 'live' || false,
-      concurrentViewers: 0,
+      isLive: publicItem.isLive || false,
+      concurrentViewers: publicItem.concurrentViewers || 0,
       createdAt: publicItem.createdAt || new Date().toISOString(),
       updatedAt: publicItem.updatedAt || new Date().toISOString(),
       topics: publicItem.topics || [],
@@ -387,8 +377,8 @@ class AllMediaAPI {
     };
   }
 
-  private getMimeTypeFromContentType(contentType: string): string {
-    const mimeTypes: Record<string, string> = {
+  private getMimeTypeFromContentType(contentType: PublicContentType): string {
+    const mimeTypes: Record<PublicContentType, string> = {
       'videos': 'video/mp4',
       'audio': 'audio/mpeg',
       'music': 'audio/mpeg',
@@ -399,4 +389,4 @@ class AllMediaAPI {
   }
 }
 
-export default new AllMediaAPI();
+export default new PublicMediaService();

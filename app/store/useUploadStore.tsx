@@ -135,6 +135,7 @@ interface MediaState {
   clearMediaList: () => void;
   loadPersistedMedia: () => Promise<void>;
   refreshUserDataForExistingMedia: () => Promise<void>;
+  loadPublicContent: () => Promise<void>;
 
   // 🔊 Add this for global audio control
   stopAudioFn: (() => Promise<void>) | null;
@@ -165,6 +166,9 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       if (persistedMedia.length > 0) {
         await get().refreshUserDataForExistingMedia();
       }
+      
+      // 🌐 Load public content from all users
+      await get().loadPublicContent();
       
     } catch (error) {
       console.error("❌ Failed to load persisted media:", error);
@@ -331,6 +335,47 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   forceRefreshWithCompleteUserData: async () => {
     console.log("🔄 Force refreshing media with complete user data...");
     await get().refreshUserDataForExistingMedia();
+  },
+
+  // 🌐 Load public content from all users
+  loadPublicContent: async () => {
+    try {
+      console.log("🌐 Loading public content from all users...");
+      
+      // Import allMediaAPI dynamically to avoid circular dependencies
+      const allMediaAPI = (await import("../utils/allMediaAPI")).default;
+      
+      const response = await allMediaAPI.fetchAllPublicContent();
+      
+      if (response.success && Array.isArray(response.media)) {
+        console.log(`✅ Successfully loaded ${response.media.length} public media items`);
+        
+        // Transform public media items to match our MediaItem interface
+        const transformedMedia: MediaItem[] = response.media.map(item => 
+          allMediaAPI.transformToMediaItem(item)
+        );
+        
+        // Merge with existing media (avoid duplicates)
+        const currentMedia = get().mediaList;
+        const existingIds = new Set(currentMedia.map(item => item._id));
+        const newItems = transformedMedia.filter(item => !existingIds.has(item._id));
+        
+        const updatedMediaList = [...newItems, ...currentMedia].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        
+        set({ mediaList: updatedMediaList });
+        
+        // Persist the updated media list
+        await persistMediaList(updatedMediaList);
+        
+        console.log(`✅ Added ${newItems.length} new public media items to store`);
+      } else {
+        console.warn("⚠️ Failed to load public content:", response);
+      }
+    } catch (error) {
+      console.error("❌ Failed to load public content:", error);
+    }
   },
 
   setMediaList: (items: MediaItem[]) => {

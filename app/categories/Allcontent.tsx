@@ -3,20 +3,20 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  BackHandler,
-  Dimensions,
-  Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  PanResponder,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    ActivityIndicator,
+    Alert,
+    BackHandler,
+    Dimensions,
+    Image,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    PanResponder,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
 import ContentActionModal from "../components/ContentActionModal";
@@ -49,6 +49,7 @@ interface MediaItem {
   comment?: number;
   favorite?: number;
   imageUrl?: string | { uri: string };
+  thumbnailUrl?: string; // Add thumbnailUrl for public media support
 }
 
 function AllContent() {
@@ -961,6 +962,12 @@ function AllContent() {
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // 🔧 Enhanced URL validation for public media URLs
+    const isValidUri = (u: any) => typeof u === 'string' && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
+    const safeVideoUri = isValidUri(video.fileUrl)
+      ? String(video.fileUrl).trim()
+      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
     // Get existing comments for this video
     const contentId = video._id || modalKey;
     const currentComments = comments[contentId] || [];
@@ -1054,17 +1061,18 @@ function AllContent() {
               ref={(ref) => {
                 if (ref) videoRefs.current[modalKey] = ref;
               }}
-              source={{ 
-                uri: videoUrl && videoUrl.trim() && videoUrl.trim() !== 'https://example.com/placeholder.mp4' 
-                  ? videoUrl.trim() 
-                  : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-              }}
+              source={{ uri: safeVideoUri }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
               isMuted={mutedVideos[modalKey] ?? false}
               volume={mutedVideos[modalKey] ? 0.0 : videoVolume}
               shouldPlay={playingVideos[modalKey] ?? false}
               useNativeControls={false}
+              onError={(e) => {
+                console.warn('Video failed to load in AllContent:', video?.title, e);
+                globalVideoStore.pauseVideo(modalKey);
+                setCurrentlyVisibleVideo(null);
+              }}
               onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
                 const pct = status.durationMillis
@@ -1253,9 +1261,22 @@ function AllContent() {
     const modalKey = `music-${audio._id || index}`;
     const key = getContentKey(audio);
     const stats = contentStats[key] || {};
-    const thumbnailSource = audio?.imageUrl
+    
+    // 🔧 Enhanced URL validation for public media URLs
+    const isValidUri = (u: any) => typeof u === 'string' && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
+    
+    const thumbnailSource = audio.thumbnailUrl 
+      ? { uri: audio.thumbnailUrl }
+      : audio?.imageUrl
       ? (typeof audio.imageUrl === "string" ? { uri: audio.imageUrl } : (audio.imageUrl as any))
-      : { uri: audio.fileUrl };
+      : isValidUri(audio.fileUrl)
+      ? { uri: audio.fileUrl }
+      : require("../../assets/images/image (10).png");
+      
+    const safeAudioUri = isValidUri(audio.fileUrl)
+      ? String(audio.fileUrl).trim()
+      : audio.fileUrl;
+      
     const isPlaying = playingAudioId === modalKey;
     const currentProgress = audioProgressMap[modalKey] || 0;
     
@@ -1324,7 +1345,7 @@ function AllContent() {
       refreshIfNeeded();
     }, [audio.fileUrl]);
 
-    const audioUrl = refreshedUrl || audio.fileUrl;
+    const audioUrl = refreshedUrl || safeAudioUri;
 
     return (
       <View 
@@ -1552,7 +1573,13 @@ function AllContent() {
     const modalKey = `ebook-${ebook._id || index}`;
     const key = getContentKey(ebook);
     const stats = contentStats[key] || {};
-    const thumbnailSource = ebook?.imageUrl
+    
+    // 🔧 Enhanced URL validation for public media URLs
+    const isValidUri = (u: any) => typeof u === 'string' && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
+    
+    const thumbnailSource = ebook.thumbnailUrl 
+      ? { uri: ebook.thumbnailUrl }
+      : ebook?.imageUrl
       ? (typeof ebook.imageUrl === "string" ? { uri: ebook.imageUrl } : (ebook.imageUrl as any))
       : require("../../assets/images/bilble.png"); // Use bible image as PDF placeholder
 
@@ -1966,7 +1993,7 @@ function AllContent() {
               onPress: async () => {
                 try {
                   // Remove from downloads
-                  await useDownloadStore.getState().removeDownload(itemId);
+                  await useDownloadStore.getState().removeFromDownloads(itemId);
                   await loadDownloadedItems();
                   Alert.alert("Removed!", `${item.title} has been removed from downloads.`);
                   closeAllMenus();
@@ -1988,7 +2015,7 @@ function AllContent() {
       await loadDownloadedItems();
           closeAllMenus();
         } else {
-          Alert.alert("Error", result.error || "Failed to download content. Please try again.");
+          Alert.alert("Error", result.message || "Failed to download content. Please try again.");
         }
       }
     } catch (error) {
