@@ -1030,11 +1030,12 @@ export default function VideoComponent() {
         sheared: videoStats[getVideoKey(v.fileUrl)]?.sheared || v.sheared || 0,
         saved: (videoStats[getVideoKey(v.fileUrl)] as any)?.totalSaves || v.saved || 0,
         favorite: globalFavoriteCounts[getVideoKey(v.fileUrl)] || 0,
-        fileUrl: v.fileUrl,
-        imageUrl: v.fileUrl,
+        fileUrl: v.fileUrl, // Ensure fileUrl is properly set
+        imageUrl: v.fileUrl, // Use same URL for consistency
         speakerAvatar: typeof v.speakerAvatar === "string" 
           ? v.speakerAvatar 
           : require("../../assets/images/Avatar-1.png").toString(),
+        thumbnailUrl: v.thumbnailUrl, // Add thumbnailUrl for better image handling
       }));
 
       router.push({
@@ -1054,6 +1055,8 @@ export default function VideoComponent() {
           category: "videos",
           videoList: JSON.stringify(videoListForNavigation),
           currentIndex: String(index),
+          fileUrl: video.fileUrl, // Explicitly pass fileUrl parameter
+          thumbnailUrl: video.thumbnailUrl, // Pass thumbnailUrl for better image handling
         },
       });
     };

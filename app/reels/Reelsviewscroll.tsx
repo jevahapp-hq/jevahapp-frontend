@@ -47,6 +47,8 @@ type Params = {
   category?: string;
   videoList?: string; // JSON string of video array
   currentIndex?: string; // Current video index in the list
+  fileUrl?: string; // Explicit video file URL
+  thumbnailUrl?: string; // Thumbnail URL for better image handling
 };
 
 export default function Reelsviewscroll() {
@@ -145,6 +147,8 @@ export default function Reelsviewscroll() {
     category,
     videoList,
     currentIndex = "0",
+    fileUrl,
+    thumbnailUrl,
   } = useLocalSearchParams() as Params;
 
   const live = isLive === "true";
@@ -278,7 +282,8 @@ export default function Reelsviewscroll() {
         favorite: parseInt(favorite) || 0,
         imageUrl: imageUrl || '',
         speakerAvatar: speakerAvatar || '',
-        fileUrl: imageUrl || '',
+        fileUrl: fileUrl || imageUrl || '', // Prioritize explicit fileUrl parameter
+        thumbnailUrl: thumbnailUrl || '', // Include thumbnailUrl
       };
     } catch (error) {
       console.error("❌ Error creating current video object:", error);
@@ -294,6 +299,7 @@ export default function Reelsviewscroll() {
         imageUrl: '',
         speakerAvatar: '',
         fileUrl: '',
+        thumbnailUrl: '',
       };
     }
   })();
@@ -663,14 +669,28 @@ export default function Reelsviewscroll() {
       refreshIfNeeded();
     }, [videoData.fileUrl]);
 
-    const videoUrl = refreshedUrl || videoData.fileUrl || videoData.imageUrl;
+    // Prioritize fileUrl over imageUrl for video playback
+    let videoUrl = refreshedUrl || videoData.fileUrl || videoData.imageUrl;
+    
+    // Enhanced URL validation for public media URLs
+    const isValidVideoUrl = (url: string) => {
+      if (!url || typeof url !== 'string') return false;
+      const trimmedUrl = url.trim();
+      return trimmedUrl.length > 0 && /^https?:\/\//.test(trimmedUrl);
+    };
+    
+    // Clean and validate the video URL
+    if (videoUrl && typeof videoUrl === 'string') {
+      videoUrl = videoUrl.trim();
+    }
     
     // Validate video URL
-    if (!videoUrl || String(videoUrl).trim() === "") {
-      console.warn("⚠️ No valid video URL for:", videoData.title);
+    if (!isValidVideoUrl(videoUrl)) {
+      console.warn("⚠️ No valid video URL for:", videoData.title, "URL:", videoUrl);
       return (
         <View key={videoKey} style={{ height: screenHeight, width: '100%', justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ color: '#fff', fontSize: 16 }}>Video not available</Text>
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 8 }}>Invalid URL: {videoUrl || 'No URL provided'}</Text>
         </View>
       );
     }

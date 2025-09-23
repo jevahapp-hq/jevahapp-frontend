@@ -476,8 +476,8 @@ function AllContent() {
         sheared: contentStats[getContentKey(v)]?.sheared || v.sheared || 0,
         saved: contentStats[getContentKey(v)]?.saved || v.saved || 0,
         favorite: globalFavoriteCounts[getContentKey(v)] || v.favorite || 0,
-        fileUrl: v.fileUrl || "", // Will be refreshed in reels if empty
-        imageUrl: v.fileUrl,
+        fileUrl: v.fileUrl || "", // This is the actual video URL
+        imageUrl: v.fileUrl || "", // Use the same URL for imageUrl to ensure consistency
         speakerAvatar: typeof v.speakerAvatar === "string" 
           ? v.speakerAvatar 
           : v.speakerAvatar || require("../../assets/images/Avatar-1.png"),
@@ -486,6 +486,7 @@ function AllContent() {
         description: v.description,
         createdAt: v.createdAt,
         uploadedBy: v.uploadedBy,
+        thumbnailUrl: v.thumbnailUrl, // Add thumbnailUrl for better image handling
       }));
 
       router.push({
@@ -498,13 +499,15 @@ function AllContent() {
           sheared: String(contentStats[getContentKey(video)]?.sheared || video.sheared || 0),
           saved: String(contentStats[getContentKey(video)]?.saved || video.saved || 0),
           favorite: String(globalFavoriteCounts[getContentKey(video)] || video.favorite || 0),
-          imageUrl: video.fileUrl || "",
+          imageUrl: video.fileUrl || "", // Ensure we pass the actual video URL
           speakerAvatar: typeof video.speakerAvatar === "string" 
             ? video.speakerAvatar 
             : video.speakerAvatar || require("../../assets/images/Avatar-1.png").toString(),
           category: "videos",
           videoList: JSON.stringify(videoListForNavigation),
           currentIndex: String(index),
+          fileUrl: video.fileUrl || "", // Explicitly pass fileUrl parameter
+          thumbnailUrl: video.thumbnailUrl || "", // Pass thumbnailUrl for better image handling
         },
       });
     }

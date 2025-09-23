@@ -335,6 +335,8 @@ export default function SermonComponent() {
               ? selectedContent.speakerAvatar 
               : selectedContent.speakerAvatar || require("../../assets/images/Avatar-1.png").toString(),
             category: selectedContent.contentType,
+            fileUrl: selectedContent.fileUrl || "", // Explicitly pass fileUrl parameter
+            thumbnailUrl: selectedContent.thumbnailUrl || "", // Pass thumbnailUrl for better image handling
           },
         });
       } else {
