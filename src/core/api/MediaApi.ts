@@ -1,12 +1,12 @@
-import { apiClient } from './ApiClient';
-import { API_CONFIG } from '../../shared/constants';
-import { MediaItem, MediaApiResponse, ContentFilter } from '../../shared/types';
+import { API_CONFIG } from "../../shared/constants";
+import { ContentFilter, MediaApiResponse, MediaItem } from "../../shared/types";
+import { apiClient } from "./ApiClient";
 
 class MediaApi {
   // Get all content (public)
   async getAllContentPublic(): Promise<MediaApiResponse> {
     const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT);
-    
+
     if (response.success) {
       return {
         success: true,
@@ -16,17 +16,19 @@ class MediaApi {
         limit: response.data?.limit || 10,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch content',
+      error: response.error || "Failed to fetch content",
     };
   }
 
   // Get all content (authenticated)
   async getAllContentWithAuth(): Promise<MediaApiResponse> {
-    const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH);
-    
+    const response = await apiClient.get<any>(
+      API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH
+    );
+
     if (response.success) {
       return {
         success: true,
@@ -36,24 +38,30 @@ class MediaApi {
         limit: response.data?.limit || 10,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch content',
+      error: response.error || "Failed to fetch content",
     };
   }
 
   // Get default content with pagination
-  async getDefaultContent(filter: ContentFilter = {}): Promise<MediaApiResponse> {
+  async getDefaultContent(
+    filter: ContentFilter = {}
+  ): Promise<MediaApiResponse> {
     const params = {
       page: filter.page || 1,
       limit: filter.limit || 10,
-      contentType: filter.contentType !== 'ALL' ? filter.contentType : undefined,
+      contentType:
+        filter.contentType !== "ALL" ? filter.contentType : undefined,
       search: filter.search,
     };
 
-    const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.DEFAULT_CONTENT, params);
-    
+    const response = await apiClient.get<any>(
+      API_CONFIG.ENDPOINTS.DEFAULT_CONTENT,
+      params
+    );
+
     if (response.success) {
       return {
         success: true,
@@ -63,190 +71,242 @@ class MediaApi {
         limit: response.data?.limit || 10,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch content',
+      error: response.error || "Failed to fetch content",
     };
   }
 
   // Get content by ID
-  async getContentById(contentId: string): Promise<{ success: boolean; data?: MediaItem; error?: string }> {
-    const response = await apiClient.get<any>(`${API_CONFIG.ENDPOINTS.DEFAULT_CONTENT}/${contentId}`);
-    
+  async getContentById(
+    contentId: string
+  ): Promise<{ success: boolean; data?: MediaItem; error?: string }> {
+    const response = await apiClient.get<any>(
+      `${API_CONFIG.ENDPOINTS.DEFAULT_CONTENT}/${contentId}`
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch content',
+      error: response.error || "Failed to fetch content",
     };
   }
 
   // Get content stats
-  async getContentStats(contentId: string, contentType?: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  async getContentStats(
+    contentId: string,
+    contentType?: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
     const params = contentType ? { contentType } : {};
-    const response = await apiClient.get<any>(`${API_CONFIG.ENDPOINTS.CONTENT_STATS}/${contentId}`, params);
-    
+    const response = await apiClient.get<any>(
+      `${API_CONFIG.ENDPOINTS.CONTENT_STATS}/${contentId}`,
+      params
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch content stats',
+      error: response.error || "Failed to fetch content stats",
     };
   }
 
   // Like/Unlike content
-  async toggleLike(contentId: string, contentType: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>(`${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/like`, {
-      contentType,
-    });
-    
+  async toggleLike(
+    contentId: string,
+    contentType: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/like`,
+      {
+        contentType,
+      }
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to toggle like',
+      error: response.error || "Failed to toggle like",
     };
   }
 
   // Save/Unsave content
-  async toggleSave(contentId: string, contentType: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>(`${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/save`, {
-      contentType,
-    });
-    
+  async toggleSave(
+    contentId: string,
+    contentType: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/save`,
+      {
+        contentType,
+      }
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to toggle save',
+      error: response.error || "Failed to toggle save",
     };
   }
 
   // Record share
-  async recordShare(contentId: string, contentType: string, shareMethod?: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>(`${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/share`, {
-      contentType,
-      shareMethod,
-    });
-    
+  async recordShare(
+    contentId: string,
+    contentType: string,
+    shareMethod?: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/share`,
+      {
+        contentType,
+        shareMethod,
+      }
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to record share',
+      error: response.error || "Failed to record share",
     };
   }
 
   // Record view
-  async recordView(contentId: string, contentType: string, duration?: number): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>(`${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/view`, {
-      contentType,
-      duration,
-    });
-    
+  async recordView(
+    contentId: string,
+    contentType: string,
+    duration?: number
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/view`,
+      {
+        contentType,
+        duration,
+      }
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to record view',
+      error: response.error || "Failed to record view",
     };
   }
 
   // Get comments
-  async getComments(contentId: string, contentType?: string, page?: number): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  async getComments(
+    contentId: string,
+    contentType?: string,
+    page?: number
+  ): Promise<{ success: boolean; data?: any[]; error?: string }> {
     const params = {
       contentType,
       page: page || 1,
     };
 
-    const response = await apiClient.get<any>(`${API_CONFIG.ENDPOINTS.COMMENTS}/${contentId}`, params);
-    
+    const response = await apiClient.get<any>(
+      `${API_CONFIG.ENDPOINTS.COMMENTS}/${contentId}`,
+      params
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data?.comments || response.data || [],
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch comments',
+      error: response.error || "Failed to fetch comments",
     };
   }
 
   // Add comment
   async addComment(
-    contentId: string, 
-    comment: string, 
-    contentType?: string, 
+    contentId: string,
+    comment: string,
+    contentType?: string,
     parentCommentId?: string
   ): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>(`${API_CONFIG.ENDPOINTS.COMMENTS}/${contentId}`, {
-      comment,
-      contentType,
-      parentCommentId,
-    });
-    
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.COMMENTS}/${contentId}`,
+      {
+        comment,
+        contentType,
+        parentCommentId,
+      }
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to add comment',
+      error: response.error || "Failed to add comment",
     };
   }
 
   // Like/Unlike comment
-  async toggleCommentLike(commentId: string, contentId: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>(`${API_CONFIG.ENDPOINTS.COMMENTS}/${commentId}/like`, {
-      contentId,
-    });
-    
+  async toggleCommentLike(
+    commentId: string,
+    contentId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.COMMENTS}/${commentId}/like`,
+      {
+        contentId,
+      }
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to toggle comment like',
+      error: response.error || "Failed to toggle comment like",
     };
   }
 
@@ -260,49 +320,62 @@ class MediaApi {
       tags?: string[];
     }
   ): Promise<{ success: boolean; data?: MediaItem; error?: string }> {
-    const response = await apiClient.upload<any>(API_CONFIG.ENDPOINTS.UPLOAD, file, metadata);
-    
+    const response = await apiClient.upload<any>(
+      API_CONFIG.ENDPOINTS.UPLOAD,
+      file,
+      metadata
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to upload media',
+      error: response.error || "Failed to upload media",
     };
   }
 
   // Get user's saved content
-  async getUserSavedContent(contentType?: string, page?: number): Promise<{ success: boolean; data?: MediaItem[]; error?: string }> {
+  async getUserSavedContent(
+    contentType?: string,
+    page?: number
+  ): Promise<{ success: boolean; data?: MediaItem[]; error?: string }> {
     const params = {
       contentType,
       page: page || 1,
     };
 
-    const response = await apiClient.get<any>('/api/user/saved-content', params);
-    
+    const response = await apiClient.get<any>(
+      "/api/user/saved-content",
+      params
+    );
+
     if (response.success) {
       return {
         success: true,
         data: response.data?.content || response.data || [],
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch saved content',
+      error: response.error || "Failed to fetch saved content",
     };
   }
 
   // Test available endpoints
-  async testAvailableEndpoints(): Promise<{ available: string[]; unavailable: string[] }> {
+  async testAvailableEndpoints(): Promise<{
+    available: string[];
+    unavailable: string[];
+  }> {
     const endpoints = [
-      { name: 'All Content Public', path: API_CONFIG.ENDPOINTS.ALL_CONTENT },
-      { name: 'All Content Auth', path: API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH },
-      { name: 'Default Content', path: API_CONFIG.ENDPOINTS.DEFAULT_CONTENT },
+      { name: "All Content Public", path: API_CONFIG.ENDPOINTS.ALL_CONTENT },
+      { name: "All Content Auth", path: API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH },
+      { name: "Default Content", path: API_CONFIG.ENDPOINTS.DEFAULT_CONTENT },
     ];
 
     const available: string[] = [];
@@ -321,27 +394,30 @@ class MediaApi {
       }
     }
 
-    console.log('🔍 Endpoint availability test:', { available, unavailable });
+    console.log("🔍 Endpoint availability test:", { available, unavailable });
     return { available, unavailable };
   }
 
   // Batch operations
-  async batchGetContentStats(contentIds: string[], contentType?: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const response = await apiClient.post<any>('/api/media/batch-stats', {
+  async batchGetContentStats(
+    contentIds: string[],
+    contentType?: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>("/api/media/batch-stats", {
       contentIds,
       contentType,
     });
-    
+
     if (response.success) {
       return {
         success: true,
         data: response.data,
       };
     }
-    
+
     return {
       success: false,
-      error: response.error || 'Failed to fetch batch stats',
+      error: response.error || "Failed to fetch batch stats",
     };
   }
 }

@@ -1,8 +1,13 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, PanResponder, Animated } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Audio, AVPlaybackStatus } from 'expo-av';
-import { UI_CONFIG } from '../../constants';
+import { Ionicons } from "@expo/vector-icons";
+import { Audio, AVPlaybackStatus } from "expo-av";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  PanResponder,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface AudioPlayerState {
   isPlaying: boolean;
@@ -68,7 +73,7 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
         const newPosition = Math.max(0, Math.min(gestureState.moveX, 200));
         const progress = newPosition / 200;
         const newTime = progress * duration;
-        
+
         sound.setPositionAsync(newTime);
         setPosition(newTime);
         progressAnimation.setValue(progress);
@@ -111,7 +116,8 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
 
           // Update progress animation
           if (status.durationMillis && status.durationMillis > 0) {
-            const progress = (status.positionMillis || 0) / status.durationMillis;
+            const progress =
+              (status.positionMillis || 0) / status.durationMillis;
             progressAnimation.setValue(progress);
           }
 
@@ -147,7 +153,17 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
       setIsLoading(false);
       onError?.(errorMessage);
     }
-  }, [audioUrl, isLoading, sound, isMuted, volume, onPlaybackStatusUpdate, onError, onFinished, progressAnimation]);
+  }, [
+    audioUrl,
+    isLoading,
+    sound,
+    isMuted,
+    volume,
+    onPlaybackStatusUpdate,
+    onError,
+    onFinished,
+    progressAnimation,
+  ]);
 
   // Toggle play/pause
   const togglePlayPause = useCallback(async () => {
@@ -198,20 +214,22 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
     const seconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
   const progress = duration > 0 ? position / duration : 0;
 
   return (
     <View
-      className={`flex-row items-center justify-between px-3 py-2 bg-black/50 rounded-lg ${className || ''}`}
+      className={`flex-row items-center justify-between px-3 py-2 bg-black/50 rounded-lg ${
+        className || ""
+      }`}
       {...panResponder.panHandlers}
     >
       {/* Play/Pause Button */}
       <TouchableOpacity onPress={togglePlayPause} disabled={isLoading}>
         <Ionicons
-          name={isPlaying ? 'pause' : 'play'}
+          name={isPlaying ? "pause" : "play"}
           size={20}
           color="#FFFFFF"
         />
@@ -229,8 +247,8 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
           style={{
             width: progressAnimation.interpolate({
               inputRange: [0, 1],
-              outputRange: ['0%', '100%'],
-              extrapolate: 'clamp',
+              outputRange: ["0%", "100%"],
+              extrapolate: "clamp",
             }),
           }}
         />
@@ -239,7 +257,7 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
       {/* Mute Button */}
       <TouchableOpacity onPress={toggleMute} disabled={isLoading}>
         <Ionicons
-          name={isMuted ? 'volume-mute' : 'volume-high'}
+          name={isMuted ? "volume-mute" : "volume-high"}
           size={20}
           color="#FFFFFF"
         />

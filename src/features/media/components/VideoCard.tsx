@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -10,8 +10,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import { InteractionButtons } from "../../../shared/components/InteractionButtons";
 import { UI_CONFIG } from "../../../shared/constants";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
@@ -158,6 +158,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const saveCount = contentStats[contentId]?.saves || 0;
   const commentCount = contentStats[contentId]?.comments || 0;
   const viewCount = contentStats[contentId]?.views || video.views || 0;
+  const stats = contentStats[contentId] || {};
+
+  // Build formatted comments for the CommentIcon
+  const currentComments = comments[contentId] || [];
+  const formattedComments = currentComments.map((comment: any) => ({
+    id: comment.id,
+    userName: comment.username || "Anonymous",
+    avatar: comment.userAvatar || "",
+    timestamp: comment.timestamp,
+    comment: comment.comment,
+    likes: comment.likes || 0,
+    isLiked: comment.isLiked || false,
+  }));
 
   const thumbnailSource = video?.imageUrl || video?.thumbnailUrl;
   const thumbnailUri =
@@ -279,63 +292,87 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         </View>
       </TouchableWithoutFeedback>
 
-      {/* Footer with User Info and Interactions */}
+      {/* Footer */}
       <View className="flex-row items-center justify-between mt-1 px-3">
-        {/* Tapping anywhere in the user-info section opens full (reels) view */}
-        <View className="flex flex-row items-center flex-1">
-          {/* User Avatar */}
-          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
+        {/* Left: avatar, name/time, then eye/comment/share */}
+        <View className="flex flex-row items-center">
+          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
             <Image
               source={getUserAvatarFromContent(video)}
               style={{ width: 30, height: 30, borderRadius: 999 }}
               resizeMode="cover"
+              onError={(error) => {
+                console.warn(
+                  "❌ Failed to load video speaker avatar:",
+                  error.nativeEvent.error
+                );
+              }}
             />
           </View>
-
-          {/* User Info */}
-          <View className="ml-3 flex-1">
+          <View className="ml-3">
             <View className="flex-row items-center">
-              <Text className="text-sm font-semibold text-gray-800">
+              <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
                 {getUserDisplayNameFromContent(video)}
               </Text>
-              <View className="flex flex-row mt-1 ml-2">
-                <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                <Text className="text-xs text-gray-500 ml-1">
+              <View className="flex flex-row mt-2 ml-2">
+                <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {getTimeAgo(video.createdAt)}
                 </Text>
               </View>
             </View>
-
-            {/* Interaction Buttons */}
-            <View className="mt-2">
-              <InteractionButtons
-                item={video}
-                contentId={contentId}
-                onLike={() => onFavorite(key, video)}
-                onComment={() => onComment(key, video)}
-                onSave={() => onSave(key, video)}
-                onShare={() => onShare(key, video)}
-                onDownload={() => onDownload(video)}
-                userLikeState={userLikeState}
-                userSaveState={userSaveState}
-                likeCount={likeCount}
-                saveCount={saveCount}
-                commentCount={commentCount}
-                viewCount={viewCount}
-                isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
-                layout="horizontal"
-              />
+            <View className="flex-row mt-2 items-center pl-2">
+              <View className="flex-row items-center mr-6">
+                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  {viewCount}
+                </Text>
+              </View>
+              <TouchableOpacity
+                className="flex-row items-center mr-6"
+                onPress={() => onFavorite(key, video)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons
+                  name={userLikeState ? "favorite" : "favorite-border"}
+                  size={28}
+                  color={userLikeState ? "#FF1744" : "#98A2B3"}
+                />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  {likeCount}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-row items-center mr-6"
+                onPress={() => onComment(key, video)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <CommentIcon
+                  comments={formattedComments}
+                  size={26}
+                  color="#98A2B3"
+                  showCount={true}
+                  count={commentCount || video.comment || 0}
+                  layout="horizontal"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onShare(modalKey, video)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="send" size={26} color="#98A2B3" />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
-
-        {/* More Options */}
+        {/* Right: options (three dots) */}
         <TouchableOpacity
           onPress={() => {
             console.log("⋯ More pressed for", modalKey);
             onModalToggle(modalVisible === modalKey ? null : modalKey);
           }}
           className="mr-2"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
         </TouchableOpacity>

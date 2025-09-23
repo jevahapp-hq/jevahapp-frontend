@@ -1,2 +1,1 @@
-export { MediaCard } from './MediaCard';
-export { default } from './MediaCard';
+export { MediaCard, default } from "./MediaCard";

@@ -1,2 +1,1 @@
-export { InteractionButtons } from './InteractionButtons';
-export { default } from './InteractionButtons';
+export { InteractionButtons, default } from "./InteractionButtons";

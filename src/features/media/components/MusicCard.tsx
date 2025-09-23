@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
 import {
   Image,
@@ -7,9 +7,9 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { CommentIcon } from "../../../shared/components/CommentIcon";
 import { CompactAudioControls } from "../../../shared/components/CompactAudioControls";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import { InteractionButtons } from "../../../shared/components/InteractionButtons";
 import { UI_CONFIG } from "../../../shared/constants";
 import { MusicCardProps } from "../../../shared/types";
 import {
@@ -154,10 +154,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         </View>
       </TouchableWithoutFeedback>
 
-      {/* Footer with User Info and Interactions */}
+      {/* Footer with User Info and compact left-aligned stats/actions */}
       <View className="flex-row items-center justify-between mt-2 px-3">
-        <View className="flex flex-row items-center flex-1">
-          {/* User Avatar */}
+        <View className="flex flex-row items-center">
+          {/* Avatar */}
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
             <Image
               source={getUserAvatarFromContent(audio)}
@@ -166,8 +166,8 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             />
           </View>
 
-          {/* User Info */}
-          <View className="ml-3 flex-1">
+          {/* Name/time and inline icons */}
+          <View className="ml-3">
             <View className="flex-row items-center">
               <Text className="text-sm font-semibold text-gray-800">
                 {getUserDisplayNameFromContent(audio)}
@@ -180,25 +180,47 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               </View>
             </View>
 
-            {/* Interaction Buttons */}
-            <View className="mt-2">
-              <InteractionButtons
-                item={audio}
-                contentId={contentId}
-                onLike={() => onLike(audio)}
-                onComment={() => onComment(audio)}
-                onSave={() => onSave(audio)}
-                onShare={() => onShare(audio)}
-                onDownload={() => onDownload(audio)}
-                userLikeState={false} // These should come from props or context
-                userSaveState={false}
-                likeCount={audio.likes || 0}
-                saveCount={audio.saves || 0}
-                commentCount={audio.comments || 0}
-                viewCount={audio.views || 0}
-                isDownloaded={false} // This should come from download store
-                layout="horizontal"
-              />
+            <View className="flex-row mt-2 items-center pl-2">
+              <View className="flex-row items-center mr-6">
+                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1">
+                  {audio.views || 0}
+                </Text>
+              </View>
+              <TouchableOpacity
+                className="flex-row items-center mr-6"
+                onPress={() => onLike(audio)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons
+                  name={false ? "favorite" : "favorite-border"}
+                  size={28}
+                  color={false ? "#D22A2A" : "#98A2B3"}
+                />
+                <Text className="text-[10px] text-gray-500 ml-1">
+                  {audio.likes || 0}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-row items-center mr-6"
+                onPress={() => onComment(audio)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <CommentIcon
+                  comments={[]}
+                  size={26}
+                  color="#98A2B3"
+                  showCount={true}
+                  count={audio.comments || 0}
+                  layout="horizontal"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onShare(audio)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="send" size={26} color="#98A2B3" />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -207,6 +229,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         <TouchableOpacity
           className="ml-2"
           onPress={() => setModalVisible(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
         </TouchableOpacity>

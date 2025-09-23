@@ -1,2 +1,1 @@
-export { CommentIcon } from './CommentIcon';
-export { default } from './CommentIcon';
+export { CommentIcon, default } from "./CommentIcon";

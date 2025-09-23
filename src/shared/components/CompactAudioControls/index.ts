@@ -1,2 +1,1 @@
-export { CompactAudioControls } from './CompactAudioControls';
-export { default } from './CompactAudioControls';
+export { CompactAudioControls, default } from "./CompactAudioControls";

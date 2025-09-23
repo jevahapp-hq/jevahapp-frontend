@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { InteractionButtonsProps } from '../../types';
-import { UI_CONFIG } from '../../constants';
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import React from "react";
+import { Text, TouchableOpacity, View } from "react-native";
+import { UI_CONFIG } from "../../constants";
+import { InteractionButtonsProps } from "../../types";
 
 export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
   item,
@@ -19,14 +19,14 @@ export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
   commentCount = 0,
   viewCount = 0,
   isDownloaded = false,
-  layout = 'horizontal',
+  layout = "horizontal",
 }) => {
-  const isHorizontal = layout === 'horizontal';
+  const isHorizontal = layout === "horizontal";
 
   const buttonStyle = {
-    flexDirection: isHorizontal ? 'row' : 'column',
-    alignItems: 'center',
-    justifyContent: isHorizontal ? 'space-between' : 'center',
+    flexDirection: isHorizontal ? "row" : "column",
+    alignItems: "center",
+    justifyContent: isHorizontal ? "space-between" : "center",
     paddingVertical: UI_CONFIG.SPACING.SM,
     paddingHorizontal: UI_CONFIG.SPACING.MD,
   };
@@ -55,8 +55,8 @@ export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
       {/* Views */}
       <TouchableOpacity
         style={{
-          flexDirection: isHorizontal ? 'row' : 'column',
-          alignItems: 'center',
+          flexDirection: isHorizontal ? "row" : "column",
+          alignItems: "center",
           marginRight: isHorizontal ? UI_CONFIG.SPACING.MD : 0,
           marginBottom: isHorizontal ? 0 : UI_CONFIG.SPACING.SM,
         }}
@@ -77,23 +77,27 @@ export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
       {/* Like/Favorite */}
       <TouchableOpacity
         style={{
-          flexDirection: isHorizontal ? 'row' : 'column',
-          alignItems: 'center',
+          flexDirection: isHorizontal ? "row" : "column",
+          alignItems: "center",
           marginRight: isHorizontal ? UI_CONFIG.SPACING.MD : 0,
           marginBottom: isHorizontal ? 0 : UI_CONFIG.SPACING.SM,
         }}
         onPress={onLike}
       >
         <MaterialIcons
-          name={userLikeState ? 'favorite' : 'favorite-border'}
+          name={userLikeState ? "favorite" : "favorite-border"}
           size={iconStyle.size}
-          color={userLikeState ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY}
+          color={
+            userLikeState
+              ? UI_CONFIG.COLORS.ERROR
+              : UI_CONFIG.COLORS.TEXT_SECONDARY
+          }
           style={{
             marginBottom: iconStyle.marginBottom,
             marginRight: iconStyle.marginRight,
             textShadowColor: userLikeState
-              ? 'rgba(255, 23, 68, 0.6)'
-              : 'transparent',
+              ? "rgba(255, 23, 68, 0.6)"
+              : "transparent",
             textShadowOffset: { width: 0, height: 0 },
             textShadowRadius: userLikeState ? 10 : 0,
           }}
@@ -104,8 +108,8 @@ export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
       {/* Comment */}
       <TouchableOpacity
         style={{
-          flexDirection: isHorizontal ? 'row' : 'column',
-          alignItems: 'center',
+          flexDirection: isHorizontal ? "row" : "column",
+          alignItems: "center",
           marginRight: isHorizontal ? UI_CONFIG.SPACING.MD : 0,
           marginBottom: isHorizontal ? 0 : UI_CONFIG.SPACING.SM,
         }}
@@ -126,17 +130,21 @@ export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
       {/* Save/Bookmark */}
       <TouchableOpacity
         style={{
-          flexDirection: isHorizontal ? 'row' : 'column',
-          alignItems: 'center',
+          flexDirection: isHorizontal ? "row" : "column",
+          alignItems: "center",
           marginRight: isHorizontal ? UI_CONFIG.SPACING.MD : 0,
           marginBottom: isHorizontal ? 0 : UI_CONFIG.SPACING.SM,
         }}
         onPress={onSave}
       >
         <MaterialIcons
-          name={userSaveState ? 'bookmark' : 'bookmark-border'}
+          name={userSaveState ? "bookmark" : "bookmark-border"}
           size={iconStyle.size}
-          color={userSaveState ? UI_CONFIG.COLORS.SECONDARY : UI_CONFIG.COLORS.TEXT_SECONDARY}
+          color={
+            userSaveState
+              ? UI_CONFIG.COLORS.SECONDARY
+              : UI_CONFIG.COLORS.TEXT_SECONDARY
+          }
           style={{
             marginBottom: iconStyle.marginBottom,
             marginRight: iconStyle.marginRight,
@@ -148,32 +156,36 @@ export const InteractionButtons: React.FC<InteractionButtonsProps> = ({
       {/* Download */}
       <TouchableOpacity
         style={{
-          flexDirection: isHorizontal ? 'row' : 'column',
-          alignItems: 'center',
+          flexDirection: isHorizontal ? "row" : "column",
+          alignItems: "center",
           marginRight: isHorizontal ? UI_CONFIG.SPACING.MD : 0,
           marginBottom: isHorizontal ? 0 : UI_CONFIG.SPACING.SM,
         }}
         onPress={onDownload}
       >
         <Ionicons
-          name={isDownloaded ? 'checkmark-circle' : 'download-outline'}
+          name={isDownloaded ? "checkmark-circle" : "download-outline"}
           size={iconStyle.size}
-          color={isDownloaded ? UI_CONFIG.COLORS.SUCCESS : UI_CONFIG.COLORS.TEXT_SECONDARY}
+          color={
+            isDownloaded
+              ? UI_CONFIG.COLORS.SUCCESS
+              : UI_CONFIG.COLORS.TEXT_SECONDARY
+          }
           style={{
             marginBottom: iconStyle.marginBottom,
             marginRight: iconStyle.marginRight,
           }}
         />
         <Text style={[textStyle, countStyle]}>
-          {isDownloaded ? 'Downloaded' : 'Download'}
+          {isDownloaded ? "Downloaded" : "Download"}
         </Text>
       </TouchableOpacity>
 
       {/* Share */}
       <TouchableOpacity
         style={{
-          flexDirection: isHorizontal ? 'row' : 'column',
-          alignItems: 'center',
+          flexDirection: isHorizontal ? "row" : "column",
+          alignItems: "center",
         }}
         onPress={onShare}
       >

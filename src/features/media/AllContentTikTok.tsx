@@ -34,7 +34,6 @@ import {
 import { useMedia } from "../../shared/hooks/useMedia";
 
 // Component imports
-import { MediaCard } from "../../shared/components/MediaCard";
 import { EbookCard } from "./components/EbookCard";
 import { MusicCard } from "./components/MusicCard";
 import { VideoCard } from "./components/VideoCard";
@@ -811,14 +810,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           );
 
         default:
+          // Treat any other content type as an Ebook for display purposes
           return (
-            <MediaCard
+            <EbookCard
               key={key}
-              item={item}
+              ebook={item}
               index={index}
-              onPress={(item, index) =>
-                console.log("Item pressed:", item.title)
-              }
               onLike={() => handleFavorite(key, item)}
               onComment={() => handleComment(key, item)}
               onSave={() => handleSave(key, item)}
@@ -994,9 +991,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           {filteredMediaList.length} items)
         </Text>
 
-        {filteredMediaList.map((item, index) =>
-          renderContentByType(item, index)
-        )}
+        {(filteredMediaList || [])
+          .filter((item) => !mostRecentItem || item._id !== mostRecentItem._id)
+          .map((item, index) => renderContentByType(item, index))}
       </View>
 
       {/* Loading indicator for refresh */}
