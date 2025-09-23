@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import {
   Dimensions,
   Modal,
+  ScrollView,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -168,8 +169,8 @@ export default function ContentActionModal({
                 borderTopRightRadius: 24,
                 paddingHorizontal: 24,
                 paddingVertical: 24,
-                maxHeight: SCREEN_HEIGHT * 0.45,
-                minHeight: 320,
+                maxHeight: SCREEN_HEIGHT * 0.7,
+                minHeight: 340,
                 zIndex: 1000,
                 elevation: 1000,
               },
@@ -233,7 +234,11 @@ export default function ContentActionModal({
               {contentTitle}
             </Text>
 
-            <View style={{ gap: 8 }}>
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingBottom: 24 }}
+            >
               <TouchableOpacity
                 onPress={() => handleAction(onViewDetails)}
                 style={{
@@ -403,7 +408,7 @@ export default function ContentActionModal({
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </Animated.View>
         </PanGestureHandler>
       </GestureHandlerRootView>
