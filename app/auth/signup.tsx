@@ -150,9 +150,10 @@ export default function SignUpScreen() {
         emailAddress,
         firstName,
         lastName,
+        password, // Include password for automatic login after verification
       },
     });
-  }, [router, emailAddress, firstName, lastName]);
+  }, [router, emailAddress, firstName, lastName, password]);
 
   return (
     <View className="flex-1 bg-white">

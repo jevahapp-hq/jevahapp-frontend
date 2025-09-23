@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Jevah Backend API Base URL
-const JEVAH_API_BASE_URL = "https://jevahapp-backend.onrender.com/api/auth";
+import { getApiBaseUrl } from '../utils/api';
 
 class AuthService {
-  private baseURL: string = JEVAH_API_BASE_URL;
+  private get baseURL(): string {
+    const baseUrl = getApiBaseUrl();
+    // Add /api/auth suffix if not already present
+    return baseUrl.endsWith('/api/auth') ? baseUrl : `${baseUrl}/api/auth`;
+  }
 
   // Forgot Password - Step 1: Send reset code to email
   async forgotPassword(email: string) {
@@ -230,7 +232,7 @@ class AuthService {
     try {
       console.log("🔍 Resending email verification for:", email);
       
-      const response = await fetch(`${this.baseURL}/resend-email-verification`, {
+      const response = await fetch(`${this.baseURL}/resend-verification`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,5 +1,4 @@
 
-import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Dimensions, Image, Text, TouchableOpacity, View } from "react-native";
 import {
@@ -158,18 +157,7 @@ export default function VerifyEmail({
                 verifyCardY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
                 runOnJS(() => {
                   onClose();
-                  // Reduced delay for faster navigation
-                  setTimeout(() => {
-                    router.push({
-                      pathname: "/auth/codeVerification",
-                      params: {
-                        emailAddress,
-                        password,
-                        firstName,
-                        lastName,
-                      },
-                    });
-                  }, 200);
+                  onVerify(); // Call the onVerify callback to handle navigation
                 })();
               }}
               className="bg-[#090E24] p-2 rounded-full mt-4 w-[333px] h-[45px]"

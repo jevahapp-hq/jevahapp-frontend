@@ -242,6 +242,11 @@ export class APIClient {
   }
 }
 
+// Export function to get current API base URL
+export function getApiBaseUrl(): string {
+  return process.env.EXPO_PUBLIC_API_URL || environmentManager.getCurrentUrl();
+}
+
 // Export singleton instance
 export const apiClient = new APIClient();
 export default apiClient;
