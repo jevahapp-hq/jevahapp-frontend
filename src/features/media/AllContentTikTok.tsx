@@ -8,11 +8,11 @@ import React, {
   useState,
 } from "react";
 import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  Share,
-  Text,
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView,
+    Share,
+    Text,
   View,
 } from "react-native";
 
@@ -20,13 +20,13 @@ import {
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-  categorizeContent,
-  filterContentByType,
-  getContentKey,
-  getMostRecentItem,
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    categorizeContent,
+    filterContentByType,
+    getContentKey,
+    getMostRecentItem,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
   transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
@@ -61,11 +61,11 @@ export interface AllContentTikTokProps {
   contentType?: ContentType | "ALL";
 }
 
-export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
+export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({ 
   contentType = "ALL",
 }) => {
   const router = useRouter();
-
+  
   // Media data from the new hook
   const {
     allContent,
@@ -97,6 +97,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState<string | null>(null);
+  const toggleModal = useCallback((val: string | null) => {
+    console.log("🔧 toggleModal called with:", val);
+    setModalVisible(val);
+  }, []);
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
@@ -163,7 +167,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Transform and filter content
   const mediaList: MediaItem[] = useMemo(() => {
     const sourceData = allContent.length > 0 ? allContent : defaultContent;
-
+    
     if (!sourceData || !Array.isArray(sourceData)) {
       return [];
     }
@@ -189,7 +193,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       ...categorizedContent.ebooks,
       ...categorizedContent.sermons,
     ];
-
+    
     return getMostRecentItem(allItems);
   }, [categorizedContent]);
 
@@ -293,7 +297,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       const contentIds = filteredMediaList
         .map((item) => item._id)
         .filter(Boolean);
-
+      
       if (contentIds.length > 0) {
         const contentTypes = [
           ...new Set(filteredMediaList.map((item) => item.contentType)),
@@ -390,7 +394,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       console.warn("🚨 Audio URI is empty or invalid:", { uri, id });
       return;
     }
-
+    
     if (isLoadingAudio) {
       console.log("🚨 Audio is already loading, skipping...");
       return;
@@ -485,7 +489,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           [id]: (status.positionMillis || 0) / safeDur,
         }));
         setAudioDurationMap((prev) => ({ ...prev, [id]: safeDur }));
-
+        
         if (status.didJustFinish) {
           try {
             await sound.unloadAsync();
@@ -573,16 +577,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           return uploadedBy;
         return "Unknown";
       };
-      if (video && index !== undefined) {
-        console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
-        navigateToReels({
+    if (video && index !== undefined) {
+      console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
+      navigateToReels({
           video: video as any,
-          index,
+        index,
           allVideos: categorizedContent.videos as any,
-          contentStats,
-          globalFavoriteCounts: {}, // Empty since we're using backend state
-          getContentKey,
-          getTimeAgo,
+        contentStats,
+        globalFavoriteCounts: {}, // Empty since we're using backend state
+        getContentKey,
+        getTimeAgo,
           getDisplayName: buildDisplayName,
         });
       }
@@ -598,68 +602,68 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const handleLike = useCallback(
     async (contentId: string, contentType: string) => {
-      try {
-        if (socketManager && socketManager.isConnected()) {
-          try {
-            socketManager.sendLike(contentId, "media");
-          } catch (socketError) {
+    try {
+      if (socketManager && socketManager.isConnected()) {
+        try {
+          socketManager.sendLike(contentId, "media");
+        } catch (socketError) {
             console.warn(
               "⚠️ Real-time like failed, continuing with API call:",
               socketError
             );
-          }
         }
-        await toggleLike(contentId, contentType);
-      } catch (error) {
-        console.error("❌ Like error:", error);
       }
+      await toggleLike(contentId, contentType);
+    } catch (error) {
+      console.error("❌ Like error:", error);
+    }
     },
     [socketManager, toggleLike]
   );
 
   const handleComment = useCallback(
     (key: string, item: MediaItem) => {
-      const contentId = item._id || key;
-      const currentComments = comments[contentId] || [];
-      const formattedComments = currentComments.map((comment: any) => ({
-        id: comment.id,
-        userName: comment.username || "Anonymous",
-        avatar: comment.userAvatar || "",
-        timestamp: comment.timestamp,
-        comment: comment.comment,
-        likes: comment.likes || 0,
-        isLiked: comment.isLiked || false,
-      }));
-      showCommentModal(formattedComments, contentId);
+    const contentId = item._id || key;
+    const currentComments = comments[contentId] || [];
+    const formattedComments = currentComments.map((comment: any) => ({
+      id: comment.id,
+      userName: comment.username || "Anonymous",
+      avatar: comment.userAvatar || "",
+      timestamp: comment.timestamp,
+      comment: comment.comment,
+      likes: comment.likes || 0,
+      isLiked: comment.isLiked || false,
+    }));
+    showCommentModal(formattedComments, contentId);
     },
     [comments, showCommentModal]
   );
 
   const handleSave = useCallback(
     async (key: string, item: MediaItem) => {
-      try {
-        const contentId = item._id || key;
-        const contentType = item.contentType || "media";
-        await toggleSave(contentId, contentType);
+    try {
+      const contentId = item._id || key;
+      const contentType = item.contentType || "media";
+      await toggleSave(contentId, contentType);
 
-        const isSaved = getUserSaveState(contentId);
-        if (!isSaved) {
-          const libraryItem = {
-            id: contentId,
-            contentType: item.contentType || "content",
-            fileUrl: item.fileUrl,
-            title: item.title,
-            speaker: item.speaker,
-            uploadedBy: item.uploadedBy,
-            description: item.description,
-            createdAt: item.createdAt || new Date().toISOString(),
-            speakerAvatar: item.speakerAvatar,
-            views: getLikeCount(contentId) || item.views || 0,
-            shares: 0,
-            likes: getLikeCount(contentId) || item.likes || 0,
-            comments: getCommentCount(contentId) || item.comment || 0,
-            saved: 1,
-            imageUrl: item.imageUrl,
+      const isSaved = getUserSaveState(contentId);
+      if (!isSaved) {
+        const libraryItem = {
+          id: contentId,
+          contentType: item.contentType || "content",
+          fileUrl: item.fileUrl,
+          title: item.title,
+          speaker: item.speaker,
+          uploadedBy: item.uploadedBy,
+          description: item.description,
+          createdAt: item.createdAt || new Date().toISOString(),
+          speakerAvatar: item.speakerAvatar,
+          views: getLikeCount(contentId) || item.views || 0,
+          shares: 0,
+          likes: getLikeCount(contentId) || item.likes || 0,
+          comments: getCommentCount(contentId) || item.comment || 0,
+          saved: 1,
+          imageUrl: item.imageUrl,
             thumbnailUrl: (() => {
               if (
                 item.contentType === "videos" &&
@@ -672,16 +676,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               if (typeof item.imageUrl === "string") return item.imageUrl;
               return typeof item.fileUrl === "string" ? item.fileUrl : "";
             })(),
-            originalKey: key,
-          };
-          await libraryStore.addToLibrary(libraryItem);
-        } else {
-          await libraryStore.removeFromLibrary(contentId);
-        }
-      } catch (error) {
-        console.error("❌ Save error:", error);
+          originalKey: key,
+        };
+        await libraryStore.addToLibrary(libraryItem);
+      } else {
+        await libraryStore.removeFromLibrary(contentId);
       }
-      setModalVisible(null);
+    } catch (error) {
+      console.error("❌ Save error:", error);
+    }
+    setModalVisible(null);
     },
     [toggleSave, getUserSaveState, getLikeCount, getCommentCount, libraryStore]
   );
@@ -707,19 +711,19 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const handleFavorite = useCallback(
     async (key: string, item: MediaItem) => {
-      try {
-        const contentId = item._id || key;
-        const contentType = item.contentType || "media";
-        await handleLike(contentId, contentType);
-      } catch (error) {
-        console.error(`❌ Failed to toggle like for ${item.title}:`, error);
-      }
+    try {
+      const contentId = item._id || key;
+      const contentType = item.contentType || "media";
+      await handleLike(contentId, contentType);
+    } catch (error) {
+      console.error(`❌ Failed to toggle like for ${item.title}:`, error);
+    }
     },
     [handleLike]
   );
 
   const toggleMute = (key: string) => toggleVideoMuteAction(key);
-
+  
   const togglePlay = (key: string) => {
     console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
     playMediaGlobally(key, "video");
@@ -728,127 +732,127 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Render content by type
   const renderContentByType = useCallback(
     (item: MediaItem, index: number) => {
-      const key = getContentKey(item);
-      const contentId = item._id || key;
+    const key = getContentKey(item);
+    const contentId = item._id || key;
 
-      switch (item.contentType) {
+    switch (item.contentType) {
         case "video":
         case "videos":
-          const backendUserFavorites = { [key]: getUserLikeState(contentId) };
+        const backendUserFavorites = { [key]: getUserLikeState(contentId) };
           const backendGlobalFavoriteCounts = {
             [key]: getLikeCount(contentId),
           };
-
-          return (
-            <VideoCard
-              key={key}
-              video={item}
-              index={index}
-              modalKey={`video-${item._id || item.fileUrl || index}`}
-              contentStats={contentStats}
-              userFavorites={backendUserFavorites}
-              globalFavoriteCounts={backendGlobalFavoriteCounts}
-              playingVideos={playingVideos}
-              mutedVideos={mutedVideos}
-              progresses={progresses}
-              videoVolume={videoVolume}
-              currentlyVisibleVideo={currentlyVisibleVideo}
-              onVideoTap={handleVideoTap}
-              onTogglePlay={togglePlay}
-              onToggleMute={toggleMute}
-              onFavorite={handleFavorite}
-              onComment={handleComment}
-              onSave={handleSave}
-              onDownload={handleDownloadPress}
-              onShare={handleShare}
-              onModalToggle={setModalVisible}
-              modalVisible={modalVisible}
-              comments={comments}
-              checkIfDownloaded={checkIfDownloaded}
-              getContentKey={getContentKey}
-              getTimeAgo={getTimeAgo}
-              getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-              getUserAvatarFromContent={getUserAvatarFromContent}
-            />
-          );
-
+        
+        return (
+          <VideoCard
+            key={key}
+            video={item}
+            index={index}
+            modalKey={`video-${item._id || item.fileUrl || index}`}
+            contentStats={contentStats}
+            userFavorites={backendUserFavorites}
+            globalFavoriteCounts={backendGlobalFavoriteCounts}
+            playingVideos={playingVideos}
+            mutedVideos={mutedVideos}
+            progresses={progresses}
+            videoVolume={videoVolume}
+            currentlyVisibleVideo={currentlyVisibleVideo}
+            onVideoTap={handleVideoTap}
+            onTogglePlay={togglePlay}
+            onToggleMute={toggleMute}
+            onFavorite={handleFavorite}
+            onComment={handleComment}
+            onSave={handleSave}
+            onDownload={handleDownloadPress}
+            onShare={handleShare}
+              onModalToggle={toggleModal}
+            modalVisible={modalVisible}
+            comments={comments}
+            checkIfDownloaded={checkIfDownloaded}
+            getContentKey={getContentKey}
+            getTimeAgo={getTimeAgo}
+            getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+            getUserAvatarFromContent={getUserAvatarFromContent}
+          />
+        );
+      
         case "audio":
         case "music":
-          return (
-            <MusicCard
-              key={key}
-              audio={item}
-              index={index}
-              onLike={() => handleFavorite(key, item)}
-              onComment={() => handleComment(key, item)}
-              onSave={() => handleSave(key, item)}
-              onShare={() => handleShare(key, item)}
-              onDownload={() => handleDownloadPress(item)}
-              onPlay={playAudio}
-              isPlaying={playingAudioId === `music-${item._id || index}`}
-              progress={audioProgressMap[`music-${item._id || index}`] || 0}
-            />
-          );
-
+        return (
+          <MusicCard
+            key={key}
+            audio={item}
+            index={index}
+            onLike={() => handleFavorite(key, item)}
+            onComment={() => handleComment(key, item)}
+            onSave={() => handleSave(key, item)}
+            onShare={() => handleShare(key, item)}
+            onDownload={() => handleDownloadPress(item)}
+            onPlay={playAudio}
+            isPlaying={playingAudioId === `music-${item._id || index}`}
+            progress={audioProgressMap[`music-${item._id || index}`] || 0}
+          />
+        );
+      
         case "image":
         case "ebook":
         case "books":
-          return (
-            <EbookCard
-              key={key}
-              ebook={item}
-              index={index}
-              onLike={() => handleFavorite(key, item)}
-              onComment={() => handleComment(key, item)}
-              onSave={() => handleSave(key, item)}
-              onShare={() => handleShare(key, item)}
-              onDownload={() => handleDownloadPress(item)}
-            />
-          );
-
-        default:
-          return (
-            <MediaCard
-              key={key}
-              item={item}
-              index={index}
+        return (
+          <EbookCard
+            key={key}
+            ebook={item}
+            index={index}
+            onLike={() => handleFavorite(key, item)}
+            onComment={() => handleComment(key, item)}
+            onSave={() => handleSave(key, item)}
+            onShare={() => handleShare(key, item)}
+            onDownload={() => handleDownloadPress(item)}
+          />
+        );
+      
+      default:
+        return (
+          <MediaCard
+            key={key}
+            item={item}
+            index={index}
               onPress={(item, index) =>
                 console.log("Item pressed:", item.title)
               }
-              onLike={() => handleFavorite(key, item)}
-              onComment={() => handleComment(key, item)}
-              onSave={() => handleSave(key, item)}
-              onShare={() => handleShare(key, item)}
-              onDownload={() => handleDownloadPress(item)}
-            />
-          );
-      }
+            onLike={() => handleFavorite(key, item)}
+            onComment={() => handleComment(key, item)}
+            onSave={() => handleSave(key, item)}
+            onShare={() => handleShare(key, item)}
+            onDownload={() => handleDownloadPress(item)}
+          />
+        );
+    }
     },
     [
-      getContentKey,
-      getUserLikeState,
-      getLikeCount,
-      contentStats,
-      playingVideos,
-      mutedVideos,
-      progresses,
-      videoVolume,
-      currentlyVisibleVideo,
-      handleVideoTap,
-      handleFavorite,
-      handleComment,
-      handleSave,
-      handleShare,
-      handleDownloadPress,
-      modalVisible,
-      comments,
-      checkIfDownloaded,
-      getTimeAgo,
-      getUserDisplayNameFromContent,
-      getUserAvatarFromContent,
-      playAudio,
-      playingAudioId,
-      audioProgressMap,
+    getContentKey,
+    getUserLikeState,
+    getLikeCount,
+    contentStats,
+    playingVideos,
+    mutedVideos,
+    progresses,
+    videoVolume,
+    currentlyVisibleVideo,
+    handleVideoTap,
+    handleFavorite,
+    handleComment,
+    handleSave,
+    handleShare,
+    handleDownloadPress,
+    modalVisible,
+    comments,
+    checkIfDownloaded,
+    getTimeAgo,
+    getUserDisplayNameFromContent,
+    getUserAvatarFromContent,
+    playAudio,
+    playingAudioId,
+    audioProgressMap,
     ]
   );
 
@@ -962,11 +966,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
           <Text
             style={{
-              fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
               fontWeight: "600",
-              color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-              paddingHorizontal: UI_CONFIG.SPACING.MD,
-              marginBottom: UI_CONFIG.SPACING.MD,
+            color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
+            marginBottom: UI_CONFIG.SPACING.MD,
             }}
           >
             Most Recent
@@ -979,17 +983,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
         <Text
           style={{
-            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+          fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
             fontWeight: "600",
-            color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-            paddingHorizontal: UI_CONFIG.SPACING.MD,
-            marginBottom: UI_CONFIG.SPACING.MD,
+          color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+          paddingHorizontal: UI_CONFIG.SPACING.MD,
+          marginBottom: UI_CONFIG.SPACING.MD,
           }}
         >
           {contentType === "ALL" ? "All Content" : `${contentType} Content`} (
           {filteredMediaList.length} items)
         </Text>
-
+        
         {filteredMediaList.map((item, index) =>
           renderContentByType(item, index)
         )}

@@ -170,6 +170,8 @@ export default function ContentActionModal({
                 paddingVertical: 24,
                 maxHeight: SCREEN_HEIGHT * 0.45,
                 minHeight: 320,
+                zIndex: 1000,
+                elevation: 1000,
               },
             ]}
           >

@@ -10,7 +10,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import AIDescriptionBox from "../../../shared/components/AIDescriptionBox";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { InteractionButtons } from "../../../shared/components/InteractionButtons";
 import { UI_CONFIG } from "../../../shared/constants";
@@ -332,9 +331,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
         {/* More Options */}
         <TouchableOpacity
-          onPress={() =>
-            onModalToggle(modalVisible === modalKey ? "" : modalKey)
-          }
+          onPress={() => {
+            console.log("⋯ More pressed for", modalKey);
+            onModalToggle(modalVisible === modalKey ? null : modalKey);
+          }}
           className="mr-2"
         >
           <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
@@ -344,7 +344,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       {/* Slide-up Content Action Modal */}
       <ContentActionModal
         isVisible={modalVisible === modalKey}
-        onClose={() => onModalToggle("")}
+        onClose={() => onModalToggle(null)}
         onViewDetails={() => {}}
         onSaveToLibrary={() => onSave(modalKey, video)}
         onShare={() => onShare(modalKey, video)}
@@ -354,16 +354,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         contentTitle={video.title}
       />
 
-      {/* AI Description Box */}
-      <AIDescriptionBox
-        description={video.description}
-        enhancedDescription={video.enhancedDescription}
-        bibleVerses={video.bibleVerses}
-        title={video.title}
-        authorName={getUserDisplayNameFromContent(video)}
-        contentType={video.contentType}
-        category={video.category}
-      />
+      {/* AI Description Box removed in src version; exists only in app layer */}
 
       {/* Modal */}
       {/* Legacy inline popover removed in favor of sliding modal */}

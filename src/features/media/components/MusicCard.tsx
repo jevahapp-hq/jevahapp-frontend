@@ -36,6 +36,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 
   const modalKey = `music-${audio._id || index}`;
   const contentId = audio._id || `music-${index}`;
+  const audioKey = `music-${audio._id || index}`;
   const isSermon = audio.contentType === "sermon";
 
   // Debug logging
@@ -51,15 +52,15 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const handlePlayPress = useCallback(() => {
     console.log(`🎵 Playing audio: ${audio.title}`, {
       uri: audio.fileUrl,
-      id: contentId,
+      id: audioKey,
     });
 
     if (audio.fileUrl && isValidUri(audio.fileUrl)) {
-      onPlay(audio.fileUrl, contentId);
+      onPlay(audio.fileUrl, audioKey);
     } else {
       console.warn("❌ Invalid audio URL:", audio.fileUrl);
     }
-  }, [audio.fileUrl, audio.title, contentId, onPlay]);
+  }, [audio.fileUrl, audio.title, audioKey, onPlay]);
 
   // Handle overlay toggle
   const handleOverlayToggle = useCallback(() => {
@@ -124,7 +125,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           <View className="absolute bottom-3 left-3 right-3">
             <CompactAudioControls
               audioUrl={audio.fileUrl || ""}
-              audioKey={audio._id || audio.fileUrl || "unknown"}
+              audioKey={audioKey}
               className="bg-black/50 rounded-lg"
               onPlay={handlePlayPress}
               onPause={() => {}}
