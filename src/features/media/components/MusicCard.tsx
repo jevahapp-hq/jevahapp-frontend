@@ -1,16 +1,17 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   Image,
+  PanResponder,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
-import { CompactAudioControls } from "../../../shared/components/CompactAudioControls";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import { UI_CONFIG } from "../../../shared/constants";
 import { MusicCardProps } from "../../../shared/types";
 import {
   getTimeAgo,
@@ -18,6 +19,8 @@ import {
   getUserDisplayNameFromContent,
   isValidUri,
 } from "../../../shared/utils";
+
+const ORANGE = "#FF8A00";
 
 export const MusicCard: React.FC<MusicCardProps> = ({
   audio,
@@ -39,46 +42,90 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const audioKey = `music-${audio._id || index}`;
   const isSermon = audio.contentType === "sermon";
 
-  // Debug logging
-  console.log(`🎵 MusicCard rendering: ${audio.title}`, {
-    contentId,
-    fileUrl: audio.fileUrl,
-    isValidUrl: isValidUri(audio.fileUrl),
-    isPlaying,
-    progress,
-  });
-
-  // Handle play button press
-  const handlePlayPress = useCallback(() => {
-    console.log(`🎵 Playing audio: ${audio.title}`, {
-      uri: audio.fileUrl,
-      id: audioKey,
-    });
-
-    if (audio.fileUrl && isValidUri(audio.fileUrl)) {
-      onPlay(audio.fileUrl, audioKey);
-    } else {
-      console.warn("❌ Invalid audio URL:", audio.fileUrl);
+  const audioUrl = typeof audio.fileUrl === "string" ? audio.fileUrl : "";
+  const [playerState, controls] = useAdvancedAudioPlayer(
+    isValidUri(audioUrl) ? audioUrl : null,
+    {
+      audioKey,
+      autoPlay: false,
+      loop: false,
     }
-  }, [audio.fileUrl, audio.title, audioKey, onPlay]);
+  );
 
-  // Handle overlay toggle
+  const handlePlayPress = useCallback(() => {
+    if (!audioUrl || !isValidUri(audioUrl)) return;
+    controls.togglePlay();
+  }, [audioUrl, controls]);
+
   const handleOverlayToggle = useCallback(() => {
     setShowOverlay((prev) => !prev);
   }, []);
 
-  // Get thumbnail source
+  const seekBySeconds = useCallback(
+    async (deltaSec: number) => {
+      const dur = playerState.duration || 0;
+      if (dur === 0) return;
+      const nextMs = Math.max(
+        0,
+        Math.min((playerState.position || 0) + deltaSec * 1000, dur)
+      );
+      await controls.seekTo(nextMs / dur);
+    },
+    [playerState.duration, playerState.position, controls]
+  );
+
   const thumbnailSource = audio?.imageUrl || audio?.thumbnailUrl;
   const thumbnailUri =
     typeof thumbnailSource === "string"
       ? thumbnailSource
       : (thumbnailSource as any)?.uri;
 
+  const formattedProgress = Math.round((playerState.progress || 0) * 100);
+
+  // Draggable seek bar
+  const trackWidthRef = useRef(1);
+  const handleX = useRef(new Animated.Value(0)).current;
+  const currentX = useMemo(
+    () => (playerState.progress || 0) * (trackWidthRef.current || 1),
+    [playerState.progress]
+  );
+
+  // Sync handle position on progress update
+  React.useEffect(() => {
+    Animated.timing(handleX, {
+      toValue: currentX,
+      duration: 80,
+      useNativeDriver: false,
+    }).start();
+  }, [currentX, handleX]);
+
+  const onSeekToX = useCallback(
+    async (x: number) => {
+      const width = trackWidthRef.current || 1;
+      const clamped = Math.max(0, Math.min(x, width));
+      const nextProgress = clamped / width;
+      await controls.seekTo(nextProgress);
+    },
+    [controls]
+  );
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt, gestureState) => {
+        onSeekToX(gestureState.x0 - 16);
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        onSeekToX(gestureState.moveX - 16);
+      },
+    })
+  ).current;
+
   return (
     <View className="flex flex-col mb-10">
       <TouchableWithoutFeedback onPress={handleOverlayToggle}>
         <View className="w-full h-[400px] overflow-hidden relative">
-          {/* Background Image/Thumbnail */}
           <Image
             source={
               thumbnailUri
@@ -87,16 +134,11 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                     uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Music",
                   }
             }
-            style={{
-              width: "100%",
-              height: "100%",
-              position: "absolute",
-            }}
+            style={{ width: "100%", height: "100%", position: "absolute" }}
             resizeMode="cover"
           />
 
-          {/* Content Type Icon - Top Left */}
-          <View className="absolute top-4 left-4">
+          <View className="absolute top-4 left-4" pointerEvents="box-none">
             <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">
               <Ionicons
                 name={isSermon ? "person" : "musical-notes"}
@@ -106,34 +148,78 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             </View>
           </View>
 
-          {/* Center Play/Pause Button */}
-          <View className="absolute inset-0 justify-center items-center">
-            <TouchableOpacity
-              onPress={handlePlayPress}
-              className="bg-white/70 p-4 rounded-full"
-              activeOpacity={0.9}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={40}
-                color={UI_CONFIG.COLORS.SECONDARY}
-              />
-            </TouchableOpacity>
-          </View>
+          {/* Bottom Controls Styled */}
+          <View
+            className="absolute bottom-4 left-3 right-3"
+            pointerEvents="box-none"
+          >
+            {/* Controls row with play button and progress bar */}
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                onPress={handlePlayPress}
+                className="mr-3"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={playerState.isPlaying ? "pause" : "play"}
+                  size={24}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
 
-          {/* Compact Audio Controls - Bottom */}
-          <View className="absolute bottom-3 left-3 right-3">
-            <CompactAudioControls
-              audioUrl={audio.fileUrl || ""}
-              audioKey={audioKey}
-              className="bg-black/50 rounded-lg"
-              onPlay={handlePlayPress}
-              onPause={() => {}}
-            />
+              {/* Orange seek bar with handle */}
+              <View
+                className="flex-1 h-1.5 rounded-full mr-3"
+                style={{ backgroundColor: ORANGE }}
+                onLayout={(e) => {
+                  trackWidthRef.current = e.nativeEvent.layout.width;
+                }}
+                {...panResponder.panHandlers}
+              >
+                <Animated.View
+                  style={{
+                    transform: [{ translateX: handleX }],
+                    position: "absolute",
+                    top: -4.5,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: ORANGE,
+                    }}
+                  />
+                </Animated.View>
+              </View>
+
+              <View className="flex-row items-center">
+                <TouchableOpacity
+                  onPress={() => controls.toggleMute()}
+                  className="mr-3"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={
+                      playerState.isMuted
+                        ? ("volume-mute" as any)
+                        : ("volume-high-outline" as any)
+                    }
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+                <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+              </View>
+            </View>
           </View>
 
           {/* Title Overlay */}
-          <View className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md">
+          <View
+            className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md"
+            pointerEvents="box-none"
+          >
             <Text
               className="text-white font-semibold text-sm"
               numberOfLines={2}
@@ -146,18 +232,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               {audio.title}
             </Text>
           </View>
-
-          {/* Tap to show/hide overlay */}
-          <TouchableWithoutFeedback onPress={handleOverlayToggle}>
-            <View className="absolute inset-0" />
-          </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
 
       {/* Footer with User Info and compact left-aligned stats/actions */}
       <View className="flex-row items-center justify-between mt-2 px-3">
         <View className="flex flex-row items-center">
-          {/* Avatar */}
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
             <Image
               source={getUserAvatarFromContent(audio)}
@@ -165,8 +245,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               resizeMode="cover"
             />
           </View>
-
-          {/* Name/time and inline icons */}
           <View className="ml-3">
             <View className="flex-row items-center">
               <Text className="text-sm font-semibold text-gray-800">
@@ -179,7 +257,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 </Text>
               </View>
             </View>
-
             <View className="flex-row mt-2 items-center pl-2">
               <View className="flex-row items-center mr-6">
                 <MaterialIcons name="visibility" size={24} color="#98A2B3" />
@@ -216,6 +293,16 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 />
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => onSave(audio)}
+                className="flex-row items-center mr-6"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="bookmark-outline" size={26} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1">
+                  {audio.saves || 0}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => onShare(audio)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -224,8 +311,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             </View>
           </View>
         </View>
-
-        {/* More Options */}
         <TouchableOpacity
           className="ml-2"
           onPress={() => setModalVisible(true)}
@@ -235,7 +320,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Slide-up Content Action Modal */}
       <ContentActionModal
         isVisible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -247,18 +331,15 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         isDownloaded={false}
         contentTitle={audio.title}
       />
-
-      {/* Debug Info (Development Only) */}
-      {__DEV__ && (
-        <View className="mx-3 mt-2 p-2 bg-green-100 rounded">
-          <Text className="text-xs text-green-800">
-            Debug: {audio.title} | Playing: {isPlaying ? "Yes" : "No"} |
-            Progress: {Math.round(progress * 100)}% | Type: {audio.contentType}
-          </Text>
-        </View>
-      )}
     </View>
   );
 };
+
+function formatTime(ms: number): string {
+  const totalSeconds = Math.floor((ms || 0) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
 
 export default MusicCard;

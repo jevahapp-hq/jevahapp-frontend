@@ -168,6 +168,16 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                 />
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => onSave(ebook)}
+                className="flex-row items-center mr-6"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="bookmark-outline" size={26} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  {(ebook as any)?.saves || 0}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={handleShare}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >

@@ -397,12 +397,13 @@ export default function ExploreSearch() {
 
         {/* Audio controls for music */}
         {isMusic && (
-          <View className="absolute bottom-2 left-2 right-2">
-            <View className="bg-black/70 rounded-lg p-2">
+          <View className="absolute inset-0 justify-end">
+            <View className="h-16 bg-black/60" />
+            <View className="absolute bottom-0 left-0 right-0 p-2">
               <View className="flex-row items-center justify-between mb-1">
                 <TouchableOpacity
                   onPress={() => toggleAudioPlayback(itemId, item.fileUrl)}
-                  className="bg-white/20 rounded-full p-1"
+                  className="bg-white/20 rounded-full p-2"
                 >
                   <Ionicons
                     name={isAudioPlaying ? "pause" : "play"}
@@ -410,6 +411,29 @@ export default function ExploreSearch() {
                     color="white"
                   />
                 </TouchableOpacity>
+
+                <View className="flex-1 mx-2">
+                  {audioDuration[itemId] && (
+                    <View className="w-full">
+                      <View className="w-full h-1.5 bg-white/30 rounded-full">
+                        <View
+                          className="h-1.5 bg-white rounded-full"
+                          style={{
+                            width: `${(audioProgress[itemId] || 0) * 100}%`,
+                          }}
+                        />
+                      </View>
+                      <View className="flex-row justify-between mt-1">
+                        <Text className="text-white text-xs font-rubik">
+                          {formatTime(audioPosition[itemId] || 0)}
+                        </Text>
+                        <Text className="text-white text-xs font-rubik">
+                          {formatTime(audioDuration[itemId] || 0)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
 
                 <TouchableOpacity
                   onPress={() =>
@@ -420,35 +444,13 @@ export default function ExploreSearch() {
                   <Ionicons name="ellipsis-vertical" size={16} color="white" />
                 </TouchableOpacity>
               </View>
-
-              {/* Progress bar for audio */}
-              {audioDuration[itemId] && (
-                <View className="w-full">
-                  <View className="w-full h-1 bg-white/30 rounded-full">
-                    <View
-                      className="h-1 bg-white rounded-full"
-                      style={{
-                        width: `${(audioProgress[itemId] || 0) * 100}%`,
-                      }}
-                    />
-                  </View>
-                  <View className="flex-row justify-between mt-1">
-                    <Text className="text-white text-xs font-rubik">
-                      {formatTime(audioPosition[itemId] || 0)}
-                    </Text>
-                    <Text className="text-white text-xs font-rubik">
-                      {formatTime(audioDuration[itemId] || 0)}
-                    </Text>
-                  </View>
-                </View>
-              )}
             </View>
           </View>
         )}
 
         {/* Title overlay for non-music content */}
         {!isMusic && (
-          <View className="absolute bottom-2 left-2 right-2">
+          <View className="absolute bottom-0 left-0 right-0 bg-black/50 p-2">
             <View className="flex flex-row justify-between items-center">
               <Text
                 className="text-white font-rubik-bold text-sm flex-1 mr-2"

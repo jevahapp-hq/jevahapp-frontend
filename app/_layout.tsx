@@ -80,6 +80,24 @@ export default function RootLayout() {
     Rubik_600SemiBold,
     Rubik_700Bold,
   });
+
+  // Suppress Clerk telemetry errors
+  useEffect(() => {
+    const originalError = console.error;
+    console.error = (...args) => {
+      if (
+        args[0]?.includes?.("clerk/telemetry") ||
+        args[0]?.includes?.("Clerk hooks not available")
+      ) {
+        return; // Suppress these specific errors
+      }
+      originalError.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalError;
+    };
+  }, []);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadPersistedMedia = useMediaStore((state) => state.loadPersistedMedia);
@@ -205,7 +223,12 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <ClerkProvider
+          publishableKey={publishableKey}
+          tokenCache={tokenCache}
+          afterSignInUrl="/"
+          afterSignUpUrl="/"
+        >
           <GestureHandlerRootView style={{ flex: 1 }}>
             <PersistentNotificationProvider>
               <NotificationProvider>

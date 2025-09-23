@@ -254,20 +254,23 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           )}
 
           {/* Video Controls - Bottom */}
-          <View className="absolute bottom-3 left-3 right-3">
-            <View className="flex-row items-center justify-between bg-black/50 rounded-lg px-3 py-2">
+          <View className="absolute bottom-4 left-3 right-3">
+            {/* Controls row with progress bar */}
+            <View className="flex-row items-center">
               {/* Progress Bar */}
-              <View className="flex-1 h-1 bg-white/30 rounded-full mx-2">
+              <View className="flex-1 h-1.5 bg-white/30 rounded-full mr-3">
                 <View
                   className="h-full bg-white rounded-full"
                   style={{ width: `${progress * 100}%` }}
                 />
               </View>
 
-              {/* Mute Button */}
-              <TouchableOpacity onPress={handleToggleMute} className="ml-2">
+              <TouchableOpacity
+                onPress={handleToggleMute}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons
-                  name={isMuted ? "volume-mute" : "volume-high"}
+                  name={isMuted ? "volume-mute" : "volume-high-outline"}
                   size={20}
                   color="#FFFFFF"
                 />
@@ -357,6 +360,16 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 />
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => onSave(modalKey, video)}
+                className="flex-row items-center mr-6"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="bookmark-outline" size={26} color="#98A2B3" />
+                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  {saveCount}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => onShare(modalKey, video)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -395,16 +408,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       {/* Modal */}
       {/* Legacy inline popover removed in favor of sliding modal */}
-
-      {/* Debug Info (Development Only) */}
-      {__DEV__ && (
-        <View className="mx-3 mt-2 p-2 bg-blue-100 rounded">
-          <Text className="text-xs text-blue-800">
-            Debug: {video.title} | Playing: {isPlaying ? "Yes" : "No"} | Muted:{" "}
-            {isMuted ? "Yes" : "No"} | Progress: {Math.round(progress * 100)}%
-          </Text>
-        </View>
-      )}
     </View>
   );
 };
