@@ -1,4 +1,4 @@
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -14,9 +14,9 @@ import {
   useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
-import { CommentIcon } from "../../../shared/components/CommentIcon";
+import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import LikeBurst from "../../../shared/components/LikeBurst";
+import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
   getTimeAgo,
@@ -78,6 +78,21 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const saveCount =
     useContentCount(contentId, "saves") || (ebook as any)?.saves || 0;
   const savedFromStore = useUserInteraction(contentId, "saved");
+  useHydrateContentStats(contentId, "media");
+
+  // Hydrate stats on mount to keep saved highlight after tab switches
+  useEffect(() => {
+    try {
+      const {
+        useInteractionStore,
+      } = require("../../../../app/store/useInteractionStore");
+      const loadContentStats = useInteractionStore.getState()
+        .loadContentStats as (id: string, type?: string) => Promise<void>;
+      if (contentId) {
+        loadContentStats(contentId, "media");
+      }
+    } catch {}
+  }, [contentId]);
 
   const handleFavorite = () => {
     try {
@@ -213,90 +228,38 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                 </Text>
               </View>
             </View>
-            <View className="flex-row mt-2 items-center pl-2">
-              <View className="flex-row items-center mr-6">
-                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {viewCount}
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="flex-row items-center mr-6"
-                onPress={handleFavorite}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <MaterialIcons
-                  name={liked ? "favorite" : "favorite-border"}
-                  size={28}
-                  color={liked ? "#FF1744" : "#98A2B3"}
-                />
-                <LikeBurst
-                  triggerKey={likeBurstKey}
-                  color="#FF1744"
-                  size={14}
-                  style={{ marginLeft: -6, marginTop: -8 }}
-                />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {likeCount}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center mr-6"
-                onPress={() => {
-                  try {
-                    console.log("🗨️ Comment icon pressed (ebook)", {
-                      contentId,
-                      title: ebook.title,
-                    });
-                    showCommentModal([], String(contentId));
-                  } catch {}
-                  handleComment();
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <CommentIcon
-                  comments={[]}
-                  size={26}
-                  color="#98A2B3"
-                  showCount={true}
-                  count={commentCount || (ebook as any).comment || 0}
-                  layout="horizontal"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  const wasSaved = Boolean(savedFromStore);
-                  onSave(ebook);
-                  const message = wasSaved
-                    ? "Removed from library"
-                    : "Saved to library";
-                  try {
-                    Alert.alert("Library", message);
-                  } catch {}
-                }}
-                className="flex-row items-center mr-6"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={
-                    savedFromStore
-                      ? ("bookmark" as any)
-                      : ("bookmark-outline" as any)
-                  }
-                  size={26}
-                  color={savedFromStore ? "#FEA74E" : "#98A2B3"}
-                />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {saveCount}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleShare}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Feather name="send" size={26} color="#98A2B3" />
-              </TouchableOpacity>
-            </View>
+            <CardFooterActions
+              viewCount={viewCount}
+              liked={liked}
+              likeCount={likeCount}
+              likeBurstKey={likeBurstKey}
+              likeColor="#FF1744"
+              onLike={handleFavorite}
+              commentCount={commentCount || (ebook as any).comment || 0}
+              onComment={() => {
+                try {
+                  console.log("🗨️ Comment icon pressed (ebook)", {
+                    contentId,
+                    title: ebook.title,
+                  });
+                  showCommentModal([], String(contentId));
+                } catch {}
+                handleComment();
+              }}
+              saved={!!savedFromStore}
+              saveCount={saveCount}
+              onSave={() => {
+                const wasSaved = Boolean(savedFromStore);
+                onSave(ebook);
+                const message = wasSaved
+                  ? "Removed from library"
+                  : "Saved to library";
+                try {
+                  Alert.alert("Library", message);
+                } catch {}
+              }}
+              onShare={handleShare}
+            />
           </View>
         </View>
         <TouchableOpacity

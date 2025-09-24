@@ -1,4 +1,4 @@
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React, {
   useCallback,
   useEffect,
@@ -23,9 +23,9 @@ import {
   useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
-import { CommentIcon } from "../../../shared/components/CommentIcon";
+import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import LikeBurst from "../../../shared/components/LikeBurst";
+import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
   getTimeAgo,
@@ -143,6 +143,24 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const savedFromStore = contentIdForViews
     ? useUserInteraction(contentIdForViews, "saved")
     : false;
+  useHydrateContentStats(contentId, audio.contentType || "media");
+
+  // Ensure saved state is hydrated when card mounts (persists highlight after tab switch)
+  useEffect(() => {
+    try {
+      const {
+        loadContentStats,
+      } = require("../../../../app/store/useInteractionStore");
+      const loadFn = loadContentStats as any as (
+        id: string,
+        type?: string
+      ) => Promise<void>;
+      if (contentId) {
+        loadFn(contentId, audio.contentType || "media");
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentId]);
   const commentsFromStore = contentIdForViews
     ? useContentCount(contentIdForViews, "comments")
     : 0;
@@ -364,93 +382,41 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 </Text>
               </View>
             </View>
-            <View className="flex-row mt-2 items-center pl-2">
-              <View className="flex-row items-center mr-6">
-                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1">
-                  {viewsFromStore || audio.views || 0}
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="flex-row items-center mr-6"
-                onPress={() => {
-                  setLikeBurstKey((k) => k + 1);
-                  onLike(audio);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <MaterialIcons
-                  name={false ? "favorite" : "favorite-border"}
-                  size={28}
-                  color={false ? "#D22A2A" : "#98A2B3"}
-                />
-                <LikeBurst
-                  triggerKey={likeBurstKey}
-                  color="#D22A2A"
-                  size={14}
-                  style={{ marginLeft: -6, marginTop: -8 }}
-                />
-                <Text className="text-[10px] text-gray-500 ml-1">
-                  {audio.likes || 0}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center mr-6"
-                onPress={() => {
-                  try {
-                    console.log("🗨️ Comment icon pressed (music)", {
-                      contentId: contentIdForViews,
-                      title: audio.title,
-                    });
-                    showCommentModal([], String(contentId));
-                  } catch {}
-                  onComment && onComment(audio);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <CommentIcon
-                  comments={[]}
-                  size={26}
-                  color="#98A2B3"
-                  showCount={true}
-                  count={commentsFromStore || audio.comments || 0}
-                  layout="horizontal"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  const wasSaved = Boolean(savedFromStore);
-                  onSave(audio);
-                  const message = wasSaved
-                    ? "Removed from library"
-                    : "Saved to library";
-                  try {
-                    Alert.alert("Library", message);
-                  } catch {}
-                }}
-                className="flex-row items-center mr-6"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={
-                    savedFromStore
-                      ? ("bookmark" as any)
-                      : ("bookmark-outline" as any)
-                  }
-                  size={26}
-                  color={savedFromStore ? "#FEA74E" : "#98A2B3"}
-                />
-                <Text className="text-[10px] text-gray-500 ml-1">
-                  {savesFromStore || audio.saves || 0}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => onShare(audio)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Feather name="send" size={26} color="#98A2B3" />
-              </TouchableOpacity>
-            </View>
+            <CardFooterActions
+              viewCount={viewsFromStore || audio.views || 0}
+              liked={false}
+              likeCount={audio.likes || 0}
+              likeBurstKey={likeBurstKey}
+              likeColor="#D22A2A"
+              onLike={() => {
+                setLikeBurstKey((k) => k + 1);
+                onLike(audio);
+              }}
+              commentCount={commentsFromStore || audio.comments || 0}
+              onComment={() => {
+                try {
+                  console.log("🗨️ Comment icon pressed (music)", {
+                    contentId: contentIdForViews,
+                    title: audio.title,
+                  });
+                  showCommentModal([], String(contentId));
+                } catch {}
+                onComment && onComment(audio);
+              }}
+              saved={!!savedFromStore}
+              saveCount={savesFromStore || audio.saves || 0}
+              onSave={() => {
+                const wasSaved = Boolean(savedFromStore);
+                onSave(audio);
+                const message = wasSaved
+                  ? "Removed from library"
+                  : "Saved to library";
+                try {
+                  Alert.alert("Library", message);
+                } catch {}
+              }}
+              onShare={() => onShare(audio)}
+            />
           </View>
         </View>
         <TouchableOpacity

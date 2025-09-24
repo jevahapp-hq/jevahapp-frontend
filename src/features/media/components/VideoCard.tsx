@@ -1,4 +1,4 @@
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -12,10 +12,10 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
-import { CommentIcon } from "../../../shared/components/CommentIcon";
+import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import LikeBurst from "../../../shared/components/LikeBurst";
 import { UI_CONFIG } from "../../../shared/constants";
+import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
 
@@ -175,6 +175,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const commentCount = contentStats[contentId]?.comments || 0;
   const viewCount = contentStats[contentId]?.views || video.views || 0;
   const stats = contentStats[contentId] || {};
+  useHydrateContentStats(contentId, "media");
 
   // View tracking state (thresholds: 3s or 25%, or completion) & avatar fallback initial
   const [hasTrackedView, setHasTrackedView] = useState(false);
@@ -394,97 +395,42 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 </Text>
               </View>
             </View>
-            <View className="flex-row mt-2 items-center pl-2">
-              <View className="flex-row items-center mr-6">
-                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {viewCount}
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="flex-row items-center mr-6"
-                onPress={() => {
-                  setLikeBurstKey((k) => k + 1);
-                  onFavorite(key, video);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <MaterialIcons
-                  name={userLikeState ? "favorite" : "favorite-border"}
-                  size={28}
-                  color={userLikeState ? "#FF1744" : "#98A2B3"}
-                />
-                {/* Like burst overlay anchored near the icon */}
-                <LikeBurst
-                  triggerKey={likeBurstKey}
-                  color="#FF1744"
-                  size={14}
-                  style={{ marginLeft: -6, marginTop: -8 }}
-                />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {likeCount}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center mr-6"
-                onPress={() => {
-                  try {
-                    console.log("🗨️ Comment icon pressed (video)", {
-                      key,
-                      contentId,
-                      title: video.title,
-                    });
-                    // Open global comment modal immediately (loads server data inside)
-                    showCommentModal([], String(contentId));
-                  } catch {}
-                  // Keep parent handler for any side-effects (optional)
-                  onComment(key, video);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <CommentIcon
-                  comments={formattedComments}
-                  size={26}
-                  color="#98A2B3"
-                  showCount={true}
-                  count={commentCount || video.comment || 0}
-                  layout="horizontal"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  const wasSaved = Boolean(userSaveState);
-                  onSave(modalKey, video);
-                  const message = wasSaved
-                    ? "Removed from library"
-                    : "Saved to library";
-                  try {
-                    Alert.alert("Library", message);
-                  } catch {}
-                }}
-                className="flex-row items-center mr-6"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={
-                    userSaveState
-                      ? ("bookmark" as any)
-                      : ("bookmark-outline" as any)
-                  }
-                  size={26}
-                  color={userSaveState ? "#FEA74E" : "#98A2B3"}
-                />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {saveCount}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => onShare(modalKey, video)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Feather name="send" size={26} color="#98A2B3" />
-              </TouchableOpacity>
-            </View>
+            <CardFooterActions
+              viewCount={viewCount}
+              liked={!!userLikeState}
+              likeCount={likeCount}
+              likeBurstKey={likeBurstKey}
+              likeColor="#FF1744"
+              onLike={() => {
+                setLikeBurstKey((k) => k + 1);
+                onFavorite(key, video);
+              }}
+              commentCount={commentCount || video.comment || 0}
+              onComment={() => {
+                try {
+                  console.log("🗨️ Comment icon pressed (video)", {
+                    key,
+                    contentId,
+                    title: video.title,
+                  });
+                  showCommentModal([], String(contentId));
+                } catch {}
+                onComment(key, video);
+              }}
+              saved={!!userSaveState}
+              saveCount={saveCount}
+              onSave={() => {
+                const wasSaved = Boolean(userSaveState);
+                onSave(modalKey, video);
+                const message = wasSaved
+                  ? "Removed from library"
+                  : "Saved to library";
+                try {
+                  Alert.alert("Library", message);
+                } catch {}
+              }}
+              onShare={() => onShare(modalKey, video)}
+            />
           </View>
         </View>
         {/* Right: options (three dots) */}
