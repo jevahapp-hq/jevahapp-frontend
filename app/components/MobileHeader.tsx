@@ -107,6 +107,15 @@ export default function MobileHeader({
     }
   };
 
+  // Safely render nodes that could be strings or numbers by wrapping in <Text>
+  const renderNode = (node: React.ReactNode) => {
+    if (node === null || node === undefined) return null;
+    if (typeof node === "string" || typeof node === "number") {
+      return <Text className="text-[#3B3B3B]">{String(node)}</Text>;
+    }
+    return node as React.ReactElement;
+  };
+
   const renderMainHeader = () => (
     <View className="flex-row items-center justify-between w-full px-4 py-3">
       {/* Left Side - User Profile */}
@@ -247,45 +256,49 @@ export default function MobileHeader({
     <View className="flex-row items-center justify-between w-full px-4 py-3">
       {/* Left Side */}
       <View className="flex-1">
-        {leftComponent ||
-          (leftAction ? (
-            <TouchableOpacity
-              onPress={leftAction.onPress}
-              className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={leftAction.icon as any}
-                size={20}
-                color={textColor}
-              />
-              {leftAction.badge && (
-                <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
-              )}
-            </TouchableOpacity>
-          ) : null)}
+        {leftComponent ? (
+          renderNode(leftComponent)
+        ) : leftAction ? (
+          <TouchableOpacity
+            onPress={leftAction.onPress}
+            className="w-10 h-10 items-center justify-center rounded-full bg-gray-50 relative"
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={leftAction.icon as any}
+              size={20}
+              color={textColor}
+            />
+            {leftAction.badge && (
+              <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
+            )}
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Center */}
       <View className="flex-1 items-center">
-        {centerComponent ||
-          (title ? (
-            <View>
-              <Text className="text-[17px] font-rubik font-semibold text-[#3B3B3B] text-center">
-                {title}
+        {centerComponent ? (
+          renderNode(centerComponent)
+        ) : title ? (
+          <View>
+            <Text className="text-[17px] font-rubik font-semibold text-[#3B3B3B] text-center">
+              {title}
+            </Text>
+            {subtitle && (
+              <Text className="text-[13px] text-[#3B3B3B] font-rubik text-center mt-0.5">
+                {subtitle}
               </Text>
-              {subtitle && (
-                <Text className="text-[13px] text-[#3B3B3B] font-rubik text-center mt-0.5">
-                  {subtitle}
-                </Text>
-              )}
-            </View>
-          ) : null)}
+            )}
+          </View>
+        ) : null}
       </View>
 
       {/* Right Side */}
       <View className="flex-1 items-end">
-        {rightComponent || (
+        {rightComponent ? (
+          renderNode(rightComponent)
+        ) : (
           <View className="flex-row items-center space-x-3">
             {safeRightActions.map((action, index) => (
               <TouchableOpacity

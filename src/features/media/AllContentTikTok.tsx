@@ -290,40 +290,33 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
   }, []);
 
-  // Load content stats for all media items on mount
+  // Load content stats for all visible items so user-liked/bookmarked states persist
   useEffect(() => {
-    const loadStatsForAllContent = async () => {
-      const contentIds = filteredMediaList
-        .map((item) => item._id)
-        .filter(Boolean);
+    const loadStatsForVisibleContent = async () => {
+      const items = filteredMediaList || [];
+      if (items.length === 0) return;
 
-      if (contentIds.length > 0) {
-        const contentTypes = [
-          ...new Set(filteredMediaList.map((item) => item.contentType)),
-        ];
-        for (const contentType of contentTypes) {
-          const idsForType = filteredMediaList
-            .filter((item) => item.contentType === contentType)
-            .map((item) => item._id)
-            .filter(Boolean);
-
-          if (idsForType.length > 0 && idsForType[0]) {
-            try {
-              await loadContentStats(idsForType[0], contentType);
-            } catch (error) {
-              console.warn(
-                `⚠️ Failed to load stats for ${contentType}:`,
-                error
-              );
-            }
+      // Prefer batch metadata when available
+      const ids = items.map((i) => i._id).filter(Boolean) as string[];
+      try {
+        await useInteractionStore
+          .getState()
+          .loadBatchContentStats(ids, "media");
+      } catch (e) {
+        for (const item of items) {
+          const id = item?._id;
+          const type = item?.contentType as any;
+          if (!id) continue;
+          try {
+            await loadContentStats(id, type);
+          } catch (error) {
+            console.warn(`⚠️ Failed to load stats for ${type} ${id}:`, error);
           }
         }
       }
     };
 
-    if (filteredMediaList.length > 0) {
-      loadStatsForAllContent();
-    }
+    loadStatsForVisibleContent();
   }, [filteredMediaList, loadContentStats]);
 
   // Load persisted data

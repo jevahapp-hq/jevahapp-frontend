@@ -683,7 +683,7 @@ class AllMediaAPI {
       const headers = await this.getAuthHeaders();
       console.log("🔍 DEBUG: Auth headers:", headers);
 
-      const url = `${this.baseURL}/api/interactions/media/${mediaId}/save`;
+      const url = `${this.baseURL}/api/bookmark/${mediaId}/toggle`;
       console.log("🔍 DEBUG: Full URL:", url);
 
       const response = await fetch(url, {
@@ -728,7 +728,7 @@ class AllMediaAPI {
       console.log("🔍 DEBUG: Auth headers:", headers);
 
       // Use the correct endpoint that matches contentInteractionAPI
-      const url = `${this.baseURL}/api/interactions/media/${mediaId}/save`;
+      const url = `${this.baseURL}/api/bookmark/${mediaId}/toggle`;
       console.log("🔍 DEBUG: Full URL:", url);
 
       const response = await fetch(url, {

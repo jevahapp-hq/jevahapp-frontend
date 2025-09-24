@@ -1,5 +1,11 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Animated,
   Image,
@@ -10,8 +16,11 @@ import {
   View,
 } from "react-native";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
+import { useContentCount } from "../../../../app/store/useInteractionStore";
+import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import LikeBurst from "../../../shared/components/LikeBurst";
 import { MusicCardProps } from "../../../shared/types";
 import {
   getTimeAgo,
@@ -34,8 +43,31 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   isPlaying = false,
   progress = 0,
 }) => {
+  const AvatarWithInitialFallback = ({
+    imageSource,
+    name,
+  }: {
+    imageSource: any;
+    name: string;
+  }) => {
+    const [errored, setErrored] = useState(false);
+    const initial = (name || "?").trim().charAt(0).toUpperCase();
+    return !errored ? (
+      <Image
+        source={imageSource}
+        style={{ width: 30, height: 30, borderRadius: 999 }}
+        resizeMode="cover"
+        onError={() => setErrored(true)}
+      />
+    ) : (
+      <Text className="text-[14px] font-semibold text-[#344054]">
+        {initial}
+      </Text>
+    );
+  };
   const [showOverlay, setShowOverlay] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [likeBurstKey, setLikeBurstKey] = useState(0);
 
   const modalKey = `music-${audio._id || index}`;
   const contentId = audio._id || `music-${index}`;
@@ -81,6 +113,66 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       : (thumbnailSource as any)?.uri;
 
   const formattedProgress = Math.round((playerState.progress || 0) * 100);
+
+  // View tracking state
+  const [hasTrackedView, setHasTrackedView] = useState(false);
+  const storeRef = useRef<any>(null);
+  useEffect(() => {
+    try {
+      const {
+        useInteractionStore,
+      } = require("../../../../app/store/useInteractionStore");
+      storeRef.current = useInteractionStore.getState();
+    } catch {}
+  }, []);
+
+  // Derive current view count from store if available
+  const contentIdForViews = String(audio._id || "");
+  const viewsFromStore = contentIdForViews
+    ? useContentCount(contentIdForViews, "views")
+    : 0;
+
+  // Record a qualified view when playback crosses 3s or 25%, or on completion
+  useEffect(() => {
+    const contentId = String(audio._id || "");
+    if (!contentId || hasTrackedView) return;
+    const isPlaying = playerState.isPlaying;
+    const positionMs = playerState.position || 0;
+    const progress = playerState.progress || 0;
+    const durationMs = playerState.duration || 0;
+
+    const qualifies = isPlaying && (positionMs >= 3000 || progress >= 0.25);
+    const finished = durationMs > 0 && progress >= 0.999;
+
+    if (qualifies || finished) {
+      (async () => {
+        try {
+          const result = await contentInteractionAPI.recordView(
+            contentId,
+            "media",
+            {
+              durationMs: finished ? durationMs : positionMs,
+              progressPct: Math.round((progress || 0) * 100),
+              isComplete: finished,
+            }
+          );
+          setHasTrackedView(true);
+          if (result?.totalViews != null && storeRef.current?.mutateStats) {
+            storeRef.current.mutateStats(contentId, () => ({
+              views: Number(result.totalViews) || 0,
+            }));
+          }
+        } catch {}
+      })();
+    }
+  }, [
+    audio._id,
+    playerState.isPlaying,
+    playerState.position,
+    playerState.progress,
+    playerState.duration,
+    hasTrackedView,
+  ]);
 
   // Draggable seek bar
   const trackWidthRef = useRef(1);
@@ -239,10 +331,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       <View className="flex-row items-center justify-between mt-2 px-3">
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
-            <Image
-              source={getUserAvatarFromContent(audio)}
-              style={{ width: 30, height: 30, borderRadius: 999 }}
-              resizeMode="cover"
+            {/* Avatar with initial fallback */}
+            <AvatarWithInitialFallback
+              imageSource={getUserAvatarFromContent(audio) as any}
+              name={getUserDisplayNameFromContent(audio)}
             />
           </View>
           <View className="ml-3">
@@ -261,18 +353,27 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               <View className="flex-row items-center mr-6">
                 <MaterialIcons name="visibility" size={24} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-1">
-                  {audio.views || 0}
+                  {viewsFromStore || audio.views || 0}
                 </Text>
               </View>
               <TouchableOpacity
                 className="flex-row items-center mr-6"
-                onPress={() => onLike(audio)}
+                onPress={() => {
+                  setLikeBurstKey((k) => k + 1);
+                  onLike(audio);
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <MaterialIcons
                   name={false ? "favorite" : "favorite-border"}
                   size={28}
                   color={false ? "#D22A2A" : "#98A2B3"}
+                />
+                <LikeBurst
+                  triggerKey={likeBurstKey}
+                  color="#D22A2A"
+                  size={14}
+                  style={{ marginLeft: -6, marginTop: -8 }}
                 />
                 <Text className="text-[10px] text-gray-500 ml-1">
                   {audio.likes || 0}

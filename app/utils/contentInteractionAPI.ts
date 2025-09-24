@@ -354,6 +354,65 @@ class ContentInteractionService {
   }
 
   // ============= CONTENT METADATA =============
+  async getBatchMetadata(
+    contentIds: string[],
+    contentType: string = "media"
+  ): Promise<Record<string, ContentStats>> {
+    try {
+      const ids = (contentIds || []).filter((id) => this.isValidObjectId(id));
+      if (ids.length === 0) return {};
+
+      const headers = await this.getAuthHeaders();
+      const backendContentType = this.mapContentTypeToBackend(contentType);
+
+      const response = await fetch(
+        `${this.baseURL}/api/content/batch-metadata`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            contentIds: ids,
+            contentType: backendContentType,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(
+          `⚠️ batch-metadata failed (${response.status}), falling back to per-item`
+        );
+        return {};
+      }
+
+      const payload = await response.json();
+      if (!payload?.success || !Array.isArray(payload?.data)) return {};
+
+      const result: Record<string, ContentStats> = {};
+      for (const item of payload.data) {
+        const id = String(item.id || item.contentId || "");
+        if (!id) continue;
+        result[id] = {
+          contentId: id,
+          likes: Number(item.likeCount || 0),
+          saves: Number(item.bookmarkCount || 0),
+          shares: Number(item.shareCount || 0),
+          views: Number(item.viewCount || 0),
+          comments: Number(item.commentCount || 0),
+          userInteractions: {
+            liked: Boolean(item.hasLiked || false),
+            saved: Boolean(item.hasBookmarked || false),
+            shared: Boolean(item.hasShared || false),
+            viewed: Boolean(item.hasViewed || false),
+          },
+        };
+      }
+      return result;
+    } catch (error) {
+      console.warn("⚠️ Error in getBatchMetadata, falling back:", error);
+      return {};
+    }
+  }
+
   async getContentMetadata(
     contentId: string,
     contentType: string
@@ -449,17 +508,21 @@ class ContentInteractionService {
   async recordView(
     contentId: string,
     contentType: string,
-    duration?: number
-  ): Promise<{ totalViews: number }> {
+    payload?: {
+      durationMs?: number;
+      progressPct?: number;
+      isComplete?: boolean;
+    }
+  ): Promise<{ totalViews: number; hasViewed?: boolean }> {
     try {
       const headers = await this.getAuthHeaders();
-      // If you expose a views endpoint under interactions, update this path accordingly
+      const backendContentType = this.mapContentTypeToBackend(contentType);
       const response = await fetch(
-        `${this.baseURL}/api/content/${contentId}/view`,
+        `${this.baseURL}/api/content/${backendContentType}/${contentId}/view`,
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ contentType, duration }),
+          body: JSON.stringify(payload || {}),
         }
       );
 
@@ -468,9 +531,9 @@ class ContentInteractionService {
       }
 
       const data = await response.json();
-      return {
-        totalViews: data.totalViews,
-      };
+      const viewCount = data?.data?.viewCount ?? data?.totalViews ?? 0;
+      const hasViewed = data?.data?.hasViewed ?? undefined;
+      return { totalViews: Number(viewCount) || 0, hasViewed };
     } catch (error) {
       console.error("Error recording view:", error);
       return { totalViews: 0 };

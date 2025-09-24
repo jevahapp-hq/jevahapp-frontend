@@ -1,5 +1,5 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Image,
   Text,
@@ -7,8 +7,11 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useContentCount } from "../../../../app/store/useInteractionStore";
+import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import LikeBurst from "../../../shared/components/LikeBurst";
 import { EbookCardProps } from "../../../shared/types";
 import {
   getTimeAgo,
@@ -25,6 +28,28 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onShare,
   onDownload,
 }) => {
+  const AvatarWithInitialFallback = ({
+    imageSource,
+    name,
+  }: {
+    imageSource: any;
+    name: string;
+  }) => {
+    const [errored, setErrored] = useState(false);
+    const initial = (name || "?").trim().charAt(0).toUpperCase();
+    return !errored ? (
+      <Image
+        source={imageSource}
+        style={{ width: 30, height: 30, borderRadius: 999 }}
+        resizeMode="cover"
+        onError={() => setErrored(true)}
+      />
+    ) : (
+      <Text className="text-[14px] font-rubik-semibold text-[#344054]">
+        {initial}
+      </Text>
+    );
+  };
   const modalKey = `ebook-${ebook._id || index}`;
   const contentId = ebook._id || `ebook-${index}`;
 
@@ -39,12 +64,14 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const shouldShowImage = !!initialThumb && !imageErrored;
 
   const [liked, setLiked] = useState(false);
+  const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [likeCount, setLikeCount] = useState<number>(ebook.likes || 0);
-  const viewCount = ebook.views || 0;
+  const viewCount = useContentCount(contentId, "views") || ebook.views || 0;
   const commentCount = ebook.comments || 0;
 
   const handleFavorite = () => {
     try {
+      setLikeBurstKey((k) => k + 1);
       setLiked((prev) => !prev);
       setLikeCount((prev) => (liked ? Math.max(0, prev - 1) : prev + 1));
       onLike(ebook);
@@ -57,9 +84,43 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   // Local modal visibility for options (three dots)
   const [isModalVisible, setIsModalVisible] = useState(false);
 
+  // Track a qualified view shortly after open (5s) or first interaction
+  const [hasTrackedView, setHasTrackedView] = useState(false);
+  const startTimeRef = useRef<number | null>(null);
+  useEffect(() => {
+    startTimeRef.current = Date.now();
+    const t = setTimeout(async () => {
+      if (!hasTrackedView) {
+        try {
+          await contentInteractionAPI.recordView(contentId, "ebook", {
+            durationMs: 5000,
+            progressPct: 0,
+            isComplete: false,
+          });
+          setHasTrackedView(true);
+        } catch {}
+      }
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [contentId, hasTrackedView]);
+
   return (
     <View className="flex flex-col mb-10">
-      <TouchableWithoutFeedback onPress={() => {}}>
+      <TouchableWithoutFeedback
+        onPress={() => {
+          try {
+            const { router } = require("expo-router");
+            const pdfUrl =
+              (ebook as any)?.fileUrl || (ebook as any)?.pdfUrl || "";
+            if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
+              router.push({
+                pathname: "/reader/PdfViewer",
+                params: { url: pdfUrl, title: ebook.title },
+              });
+            }
+          } catch {}
+        }}
+      >
         <View className="w-full h-[400px] overflow-hidden relative">
           {shouldShowImage ? (
             <Image
@@ -114,10 +175,10 @@ export const EbookCard: React.FC<EbookCardProps> = ({
       <View className="flex-row items-center justify-between mt-1 px-3">
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
-            <Image
-              source={getUserAvatarFromContent(ebook)}
-              style={{ width: 30, height: 30, borderRadius: 999 }}
-              resizeMode="cover"
+            {/* Avatar with initial fallback */}
+            <AvatarWithInitialFallback
+              imageSource={getUserAvatarFromContent(ebook) as any}
+              name={getUserDisplayNameFromContent(ebook)}
             />
           </View>
           <View className="ml-3">
@@ -148,6 +209,12 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                   name={liked ? "favorite" : "favorite-border"}
                   size={28}
                   color={liked ? "#FF1744" : "#98A2B3"}
+                />
+                <LikeBurst
+                  triggerKey={likeBurstKey}
+                  color="#FF1744"
+                  size={14}
+                  style={{ marginLeft: -6, marginTop: -8 }}
                 />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {likeCount}

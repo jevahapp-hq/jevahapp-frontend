@@ -3,15 +3,16 @@ import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
-  InteractionManager,
   PanResponder,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import LikeBurst from "../../../shared/components/LikeBurst";
 import { UI_CONFIG } from "../../../shared/constants";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
@@ -49,6 +50,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const isMountedRef = useRef(true);
   const [showOverlay, setShowOverlay] = useState(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
+  const [likeBurstKey, setLikeBurstKey] = useState(0);
 
   const contentId = video._id || getContentKey(video);
   const key = getContentKey(video);
@@ -67,33 +69,44 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     progress,
   });
 
-  // Pan responder for seeking
+  // Track last known duration to avoid calling getStatusAsync during pan
+  const lastKnownDurationRef = useRef(0);
+  const lastSeekTsRef = useRef(0);
+  const pendingSeekRef = useRef<number | null>(null);
+
+  // Pan responder for seeking (avoids getStatusAsync; uses cached duration)
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onPanResponderMove: (evt, gestureState) => {
+    onPanResponderMove: (_evt, gestureState) => {
+      if (!isMountedRef.current) return;
       const x = Math.max(0, Math.min(gestureState.moveX - 50, 260));
-      const pct = (x / 260) * 100;
-
-      if (isPlaying && videoRef.current) {
-        InteractionManager.runAfterInteractions(() => {
-          if (videoRef.current && isMountedRef.current) {
-            videoRef.current
-              .getStatusAsync()
-              .then((status: AVPlaybackStatus) => {
-                if (
-                  status.isLoaded &&
-                  status.durationMillis &&
-                  isMountedRef.current
-                ) {
-                  const position = (pct / 100) * status.durationMillis;
-                  videoRef.current?.setPositionAsync(position);
-                }
-              })
-              .catch((error) => {
+      const pct = Math.max(0, Math.min((x / 260) * 100, 100));
+      const duration = lastKnownDurationRef.current;
+      if (isPlaying && videoRef.current && duration > 0) {
+        const position = (pct / 100) * duration;
+        const now = Date.now();
+        if (now - lastSeekTsRef.current >= 75) {
+          lastSeekTsRef.current = now;
+          try {
+            videoRef.current.setPositionAsync(position);
+          } catch (error) {
                 console.warn("Video seek error:", error);
-              });
           }
-        });
+        } else {
+          pendingSeekRef.current = position;
+        }
+      }
+    },
+    onPanResponderRelease: () => {
+      if (!isMountedRef.current) return;
+      const finalPos = pendingSeekRef.current;
+      pendingSeekRef.current = null;
+      if (videoRef.current && typeof finalPos === "number") {
+        try {
+          videoRef.current.setPositionAsync(finalPos);
+        } catch (error) {
+          console.warn("Video seek release error:", error);
+        }
       }
     },
   });
@@ -160,6 +173,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const viewCount = contentStats[contentId]?.views || video.views || 0;
   const stats = contentStats[contentId] || {};
 
+  // View tracking state (thresholds: 3s or 25%, or completion) & avatar fallback initial
+  const [hasTrackedView, setHasTrackedView] = useState(false);
+  const [avatarErrored, setAvatarErrored] = useState(false);
+  const storeRef = useRef<any>(null);
+  useEffect(() => {
+    try {
+      const {
+        useInteractionStore,
+      } = require("../../../../app/store/useInteractionStore");
+      storeRef.current = useInteractionStore.getState();
+    } catch {}
+  }, []);
+
   // Build formatted comments for the CommentIcon
   const currentComments = comments[contentId] || [];
   const formattedComments = currentComments.map((comment: any) => ({
@@ -177,6 +203,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     typeof thumbnailSource === "string"
       ? thumbnailSource
       : (thumbnailSource as any)?.uri;
+
+  const displayName = getUserDisplayNameFromContent(video);
+  const firstInitial = (displayName || "?").trim().charAt(0).toUpperCase();
 
   return (
     <View key={modalKey} className="flex flex-col mb-10">
@@ -198,14 +227,40 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               volume={videoVolume}
               onError={handleVideoError}
               onLoad={handleVideoLoad}
-              onPlaybackStatusUpdate={(status) => {
-                if (status.isLoaded) {
-                  // Update progress if needed
-                  if (status.positionMillis && status.durationMillis) {
-                    const newProgress =
-                      status.positionMillis / status.durationMillis;
-                    // Note: Progress updates should be handled by parent component
-                  }
+              onPlaybackStatusUpdate={async (status) => {
+                if (!status?.isLoaded) return;
+                const positionMs = Number(status.positionMillis || 0);
+                const durationMs = Number(status.durationMillis || 0);
+                const progress = durationMs > 0 ? positionMs / durationMs : 0;
+                // Cache duration for pan responder
+                lastKnownDurationRef.current = durationMs;
+
+                const qualifies =
+                  status.isPlaying && (positionMs >= 3000 || progress >= 0.25);
+                const finished = Boolean(status.didJustFinish);
+
+                if (!isMountedRef.current) return;
+                if (!hasTrackedView && (qualifies || finished)) {
+                  try {
+                    const result = await contentInteractionAPI.recordView(
+                      contentId,
+                      "media",
+                      {
+                        durationMs: finished ? durationMs : positionMs,
+                        progressPct: Math.round(progress * 100),
+                        isComplete: finished,
+                      }
+                    );
+                    setHasTrackedView(true);
+                    if (
+                      result?.totalViews != null &&
+                      storeRef.current?.mutateStats
+                    ) {
+                      storeRef.current.mutateStats(contentId, () => ({
+                        views: Number(result.totalViews) || 0,
+                      }));
+                    }
+                  } catch {}
                 }
               }}
             />
@@ -300,17 +355,24 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         {/* Left: avatar, name/time, then eye/comment/share */}
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
+            {!avatarErrored ? (
             <Image
               source={getUserAvatarFromContent(video)}
               style={{ width: 30, height: 30, borderRadius: 999 }}
               resizeMode="cover"
               onError={(error) => {
+                  setAvatarErrored(true);
                 console.warn(
                   "❌ Failed to load video speaker avatar:",
                   error.nativeEvent.error
                 );
               }}
             />
+            ) : (
+              <Text className="text-[14px] font-rubik-semibold text-[#344054]">
+                {firstInitial}
+              </Text>
+            )}
           </View>
           <View className="ml-3">
             <View className="flex-row items-center">
@@ -333,13 +395,23 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               </View>
               <TouchableOpacity
                 className="flex-row items-center mr-6"
-                onPress={() => onFavorite(key, video)}
+                onPress={() => {
+                  setLikeBurstKey((k) => k + 1);
+                  onFavorite(key, video);
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <MaterialIcons
                   name={userLikeState ? "favorite" : "favorite-border"}
                   size={28}
                   color={userLikeState ? "#FF1744" : "#98A2B3"}
+                />
+                {/* Like burst overlay anchored near the icon */}
+                <LikeBurst
+                  triggerKey={likeBurstKey}
+                  color="#FF1744"
+                  size={14}
+                  style={{ marginLeft: -6, marginTop: -8 }}
                 />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {likeCount}

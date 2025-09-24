@@ -56,6 +56,13 @@ interface InteractionState {
     contentIds: string[],
     contentType?: string
   ) => Promise<void>;
+  // Optimistic mutation helper
+  mutateStats: (
+    contentId: string,
+    fn: (
+      s: ContentStats
+    ) => Partial<ContentStats | ContentStats["userInteractions"]>
+  ) => void;
 
   // User content actions
   loadUserSavedContent: (contentType?: string, page?: number) => Promise<void>;
@@ -89,46 +96,83 @@ export const useInteractionStore = create<InteractionState>()(
     // ============= LIKE ACTIONS =============
     toggleLike: async (contentId: string, contentType: string) => {
       const key = `${contentId}_like`;
-
-      set((state) => ({
-        loadingInteraction: { ...state.loadingInteraction, [key]: true },
-      }));
+      // Optimistic UI
+      set((state) => {
+        const s =
+          state.contentStats[contentId] ||
+          ({
+            contentId,
+            likes: 0,
+            saves: 0,
+            shares: 0,
+            views: 0,
+            comments: 0,
+            userInteractions: {
+              liked: false,
+              saved: false,
+              shared: false,
+              viewed: false,
+            },
+          } as ContentStats);
+        const liked = !s.userInteractions.liked;
+        const likes = Math.max(0, (s.likes || 0) + (liked ? 1 : -1));
+        return {
+          contentStats: {
+            ...state.contentStats,
+            [contentId]: {
+              ...s,
+              likes,
+              userInteractions: { ...s.userInteractions, liked },
+            },
+          },
+          loadingInteraction: { ...state.loadingInteraction, [key]: true },
+        };
+      });
 
       try {
         const result = await contentInteractionAPI.toggleLike(
           contentId,
           contentType
         );
-
+        // Reconcile with server
         set((state) => {
-          const currentStats = state.contentStats[contentId];
-          const updatedStats: ContentStats = {
-            ...currentStats,
-            contentId,
-            likes: result.totalLikes,
-            saves: currentStats?.saves || 0,
-            shares: currentStats?.shares || 0,
-            views: currentStats?.views || 0,
-            comments: currentStats?.comments || 0,
-            userInteractions: {
-              ...currentStats?.userInteractions,
-              liked: result.liked,
-              saved: currentStats?.userInteractions?.saved || false,
-              shared: currentStats?.userInteractions?.shared || false,
-              viewed: currentStats?.userInteractions?.viewed || false,
-            },
-          };
-
+          const s = state.contentStats[contentId];
+          if (!s) return state;
           return {
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+            contentStats: {
+              ...state.contentStats,
+              [contentId]: {
+                ...s,
+                likes: result.totalLikes,
+                userInteractions: {
+                  ...s.userInteractions,
+                  liked: result.liked,
+                },
+              },
+            },
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
       } catch (error) {
         console.error("Error toggling like:", error);
-        set((state) => ({
-          loadingInteraction: { ...state.loadingInteraction, [key]: false },
-        }));
+        // Revert on failure
+        set((state) => {
+          const s = state.contentStats[contentId];
+          if (!s) return state;
+          const liked = !s.userInteractions.liked;
+          const likes = Math.max(0, (s.likes || 0) + (liked ? 1 : -1));
+          return {
+            contentStats: {
+              ...state.contentStats,
+              [contentId]: {
+                ...s,
+                likes,
+                userInteractions: { ...s.userInteractions, liked },
+              },
+            },
+            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+          };
+        });
       }
     },
 
@@ -438,57 +482,45 @@ export const useInteractionStore = create<InteractionState>()(
       contentIds: string[],
       contentType: string = "media"
     ) => {
-      // Set loading state for all content IDs
-      set((state) => {
-        const loadingStates = contentIds.reduce((acc, id) => {
-          acc[id] = true;
-          return acc;
-        }, {} as Record<string, boolean>);
+      try {
+        const fromBatch = await contentInteractionAPI.getBatchMetadata(
+          contentIds,
+          contentType
+        );
+        if (Object.keys(fromBatch).length > 0) {
+          set((state) => ({
+            contentStats: { ...state.contentStats, ...fromBatch },
+          }));
+          return;
+        }
+        // Fallback to per-item
+        for (const id of contentIds) {
+          try {
+            await get().loadContentStats(id, contentType);
+          } catch {}
+        }
+      } catch (e) {
+        console.warn("Batch metadata failed; falling back per-item", e);
+        for (const id of contentIds) {
+          try {
+            await get().loadContentStats(id, contentType);
+          } catch {}
+        }
+      }
+    },
 
+    mutateStats: (contentId, fn) => {
+      set((state) => {
+        const s = state.contentStats[contentId];
+        if (!s) return state;
+        const patch = fn(s) as any;
         return {
-          loadingStats: { ...state.loadingStats, ...loadingStates },
+          contentStats: {
+            ...state.contentStats,
+            [contentId]: { ...s, ...patch },
+          },
         };
       });
-
-      try {
-        // Load stats for each content ID individually since we don't have a batch endpoint
-        const batchStats: Record<string, ContentStats> = {};
-        for (const contentId of contentIds) {
-          try {
-            const stats = await contentInteractionAPI.getContentMetadata(
-              contentId,
-              contentType
-            );
-            batchStats[contentId] = stats;
-          } catch (error) {
-            console.error(`Error loading stats for ${contentId}:`, error);
-          }
-        }
-
-        set((state) => {
-          const loadingStates = contentIds.reduce((acc, id) => {
-            acc[id] = false;
-            return acc;
-          }, {} as Record<string, boolean>);
-
-          return {
-            contentStats: { ...state.contentStats, ...batchStats },
-            loadingStats: { ...state.loadingStats, ...loadingStates },
-          };
-        });
-      } catch (error) {
-        console.error("Error loading batch content stats:", error);
-        set((state) => {
-          const loadingStates = contentIds.reduce((acc, id) => {
-            acc[id] = false;
-            return acc;
-          }, {} as Record<string, boolean>);
-
-          return {
-            loadingStats: { ...state.loadingStats, ...loadingStates },
-          };
-        });
-      }
     },
 
     // ============= USER CONTENT ACTIONS =============

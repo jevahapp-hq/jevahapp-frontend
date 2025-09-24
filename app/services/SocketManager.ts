@@ -200,6 +200,22 @@ class SocketManager {
       this.handleViewerCountUpdate(data);
     });
 
+    // New production-grade view updates
+    this.socket.on("view-updated", (data) => {
+      try {
+        console.log("Real-time view updated:", data);
+        const { useInteractionStore } = require("../store/useInteractionStore");
+        const store = useInteractionStore.getState();
+        if (data?.contentId && typeof data?.viewCount === "number") {
+          store.mutateStats(data.contentId, (s) => ({
+            views: Number(data.viewCount) || 0,
+          }));
+        }
+      } catch (e) {
+        console.error("Error applying view-updated socket event:", e);
+      }
+    });
+
     // Notifications
     this.socket.on("new-like-notification", (data) => {
       console.log("New like notification:", data);
