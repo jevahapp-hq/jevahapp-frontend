@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AuthHeader from '../components/AuthHeader';
 
@@ -15,11 +16,12 @@ interface PrayerRequest {
 
 export default function PrayerWallScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
 
   const handleBackToCommunity = () => {
     router.push('/screens/CommunityScreen');
   };
-  const prayerRequests: PrayerRequest[] = [
+  const initialRequests: PrayerRequest[] = [
     {
       id: '1',
       name: '-ABIDEMI JOHN',
@@ -75,6 +77,32 @@ export default function PrayerWallScreen() {
       shape: 'square2'
     }
   ];
+
+  const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>(initialRequests);
+
+  // If navigated back from PostAPrayer with a new post, append it once
+  const pendingNewPrayer = useMemo(() => {
+    const prayerText = typeof params.prayer === 'string' ? params.prayer : undefined;
+    const color = typeof params.color === 'string' ? params.color : undefined;
+    const shape = (typeof params.shape === 'string' ? params.shape : undefined) as PrayerRequest['shape'] | undefined;
+    return prayerText && color && shape ? { prayerText, color, shape } : undefined;
+  }, [params]);
+
+  useEffect(() => {
+    if (!pendingNewPrayer) return;
+    const newItem: PrayerRequest = {
+      id: String(Date.now()),
+      name: '-ABIDEMI JOHN',
+      time: '6am',
+      date: 'Today',
+      prayer: pendingNewPrayer.prayerText,
+      color: pendingNewPrayer.color,
+      shape: pendingNewPrayer.shape,
+    };
+    setPrayerRequests(prev => [newItem, ...prev]);
+    // clear params by replacing route without params
+    router.replace('/screens/PrayerWallScreen');
+  }, [pendingNewPrayer]);
 
   const getCardStyle = (shape: string, color: string) => {
     const baseStyle = {
@@ -256,7 +284,7 @@ export default function PrayerWallScreen() {
             style={styles.searchInput}
           />
         </View>
-        <TouchableOpacity style={styles.addButton} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={() => router.push('/screens/PostAPrayer')}>
           <Ionicons name="add" size={24} color="white" />
         </TouchableOpacity>
       </View>
