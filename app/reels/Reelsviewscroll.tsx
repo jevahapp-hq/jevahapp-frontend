@@ -17,7 +17,7 @@ import {
 } from "react-native";
 
 import BottomNav from "../components/BottomNav";
-import CommentReplyModal from "../components/CommentReplyModal";
+import CommentModalV2 from "../components/CommentModalV2";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
@@ -1740,8 +1740,8 @@ export default function Reelsviewscroll() {
         />
       </View>
 
-      {/* Comment Reply Modal */}
-      <CommentReplyModal />
+      {/* Comment Modal */}
+      <CommentModalV2 />
     </ErrorBoundary>
   );
 }

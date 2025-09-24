@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import {
+  Alert,
   Animated,
   Image,
   PanResponder,
@@ -17,7 +18,10 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import { useContentCount } from "../../../../app/store/useInteractionStore";
+import {
+  useContentCount,
+  useUserInteraction,
+} from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
@@ -133,6 +137,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const viewsFromStore = contentIdForViews
     ? useContentCount(contentIdForViews, "views")
     : 0;
+  const savesFromStore = contentIdForViews
+    ? useContentCount(contentIdForViews, "saves")
+    : 0;
+  const savedFromStore = contentIdForViews
+    ? useUserInteraction(contentIdForViews, "saved")
+    : false;
   const commentsFromStore = contentIdForViews
     ? useContentCount(contentIdForViews, "comments")
     : 0;
@@ -408,13 +418,30 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => onSave(audio)}
+                onPress={() => {
+                  const wasSaved = Boolean(savedFromStore);
+                  onSave(audio);
+                  const message = wasSaved
+                    ? "Removed from library"
+                    : "Saved to library";
+                  try {
+                    Alert.alert("Library", message);
+                  } catch {}
+                }}
                 className="flex-row items-center mr-6"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="bookmark-outline" size={26} color="#98A2B3" />
+                <Ionicons
+                  name={
+                    savedFromStore
+                      ? ("bookmark" as any)
+                      : ("bookmark-outline" as any)
+                  }
+                  size={26}
+                  color={savedFromStore ? "#FEA74E" : "#98A2B3"}
+                />
                 <Text className="text-[10px] text-gray-500 ml-1">
-                  {audio.saves || 0}
+                  {savesFromStore || audio.saves || 0}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

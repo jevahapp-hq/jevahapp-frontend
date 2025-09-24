@@ -1,6 +1,7 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Image,
   Text,
   TouchableOpacity,
@@ -8,7 +9,10 @@ import {
   View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
-import { useContentCount } from "../../../../app/store/useInteractionStore";
+import {
+  useContentCount,
+  useUserInteraction,
+} from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
@@ -71,6 +75,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const viewCount = useContentCount(contentId, "views") || ebook.views || 0;
   const commentCount =
     useContentCount(contentId, "comments") || ebook.comments || 0;
+  const saveCount =
+    useContentCount(contentId, "saves") || (ebook as any)?.saves || 0;
+  const savedFromStore = useUserInteraction(contentId, "saved");
 
   const handleFavorite = () => {
     try {
@@ -257,13 +264,30 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => onSave(ebook)}
+                onPress={() => {
+                  const wasSaved = Boolean(savedFromStore);
+                  onSave(ebook);
+                  const message = wasSaved
+                    ? "Removed from library"
+                    : "Saved to library";
+                  try {
+                    Alert.alert("Library", message);
+                  } catch {}
+                }}
                 className="flex-row items-center mr-6"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="bookmark-outline" size={26} color="#98A2B3" />
+                <Ionicons
+                  name={
+                    savedFromStore
+                      ? ("bookmark" as any)
+                      : ("bookmark-outline" as any)
+                  }
+                  size={26}
+                  color={savedFromStore ? "#FEA74E" : "#98A2B3"}
+                />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {(ebook as any)?.saves || 0}
+                  {saveCount}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

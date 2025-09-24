@@ -2,6 +2,7 @@ import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Image,
   PanResponder,
   Text,
@@ -206,8 +207,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       ? thumbnailSource
       : (thumbnailSource as any)?.uri;
 
-  const displayName = getUserDisplayNameFromContent(video);
-  const firstInitial = (displayName || "?").trim().charAt(0).toUpperCase();
+  let displayNameSafe: string = "Unknown";
+  try {
+    const maybe = getUserDisplayNameFromContent(video as any);
+    displayNameSafe =
+      typeof maybe === "string" && maybe.trim().length > 0 ? maybe : "Unknown";
+  } catch {}
+  const firstInitial = (displayNameSafe || "?").trim().charAt(0).toUpperCase();
 
   return (
     <View key={modalKey} className="flex flex-col mb-10">
@@ -446,11 +452,28 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => onSave(modalKey, video)}
+                onPress={() => {
+                  const wasSaved = Boolean(userSaveState);
+                  onSave(modalKey, video);
+                  const message = wasSaved
+                    ? "Removed from library"
+                    : "Saved to library";
+                  try {
+                    Alert.alert("Library", message);
+                  } catch {}
+                }}
                 className="flex-row items-center mr-6"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="bookmark-outline" size={26} color="#98A2B3" />
+                <Ionicons
+                  name={
+                    userSaveState
+                      ? ("bookmark" as any)
+                      : ("bookmark-outline" as any)
+                  }
+                  size={26}
+                  color={userSaveState ? "#FEA74E" : "#98A2B3"}
+                />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {saveCount}
                 </Text>

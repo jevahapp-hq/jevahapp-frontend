@@ -37,9 +37,9 @@ import { useMedia } from "../../shared/hooks/useMedia";
 
 // Component imports
 import { Ionicons } from "@expo/vector-icons";
-import { EbookCard } from "./components/EbookCard";
-import { MusicCard } from "./components/MusicCard";
-import { VideoCard } from "./components/VideoCard";
+import EbookCard from "./components/EbookCard";
+import MusicCard from "./components/MusicCard";
+import VideoCard from "./components/VideoCard";
 
 // Import original stores and hooks (these will be bridged)
 import { useCommentModal } from "../../../app/context/CommentModalContext";

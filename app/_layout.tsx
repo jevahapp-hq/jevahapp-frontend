@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import CommentReplyModal from "./components/CommentReplyModal";
+import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -234,7 +234,7 @@ export default function RootLayout() {
               <NotificationProvider>
                 <CommentModalProvider>
                   <Slot />
-                  <CommentReplyModal />
+                  <CommentModalV2 />
                 </CommentModalProvider>
               </NotificationProvider>
             </PersistentNotificationProvider>
