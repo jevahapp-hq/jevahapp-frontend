@@ -356,7 +356,7 @@ export default function ExploreSearch() {
     const isAudioPlaying = playingAudio === itemId;
 
     return (
-      <View className="w-[48%] mb-4 h-[232px] rounded-xl overflow-hidden bg-gray-100">
+      <View className="w-full mb-4 h-[232px] rounded-xl overflow-hidden bg-gray-100">
         {isVideo ? (
           // Video content - show video thumbnail with play overlay
           <TouchableOpacity
@@ -622,7 +622,7 @@ export default function ExploreSearch() {
       >
         {/* Search */}
         <View className="flex flex-row items-center mt-3 w-full">
-          <View className="flex-row items-center px-2 bg-gray-100 w-[315px] rounded-xl h-[42px] mb-3 flex-1">
+          <View className="flex-row items-center px-2 bg-gray-100 w-full rounded-xl h-[42px] mb-3 flex-1">
             <View className="ml-2">
               <Ionicons name="search" size={20} color="#666" />
             </View>

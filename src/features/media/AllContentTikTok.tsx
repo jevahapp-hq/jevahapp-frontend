@@ -9,10 +9,12 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
   Share,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -34,6 +36,7 @@ import {
 import { useMedia } from "../../shared/hooks/useMedia";
 
 // Component imports
+import { Ionicons } from "@expo/vector-icons";
 import { EbookCard } from "./components/EbookCard";
 import { MusicCard } from "./components/MusicCard";
 import { VideoCard } from "./components/VideoCard";
@@ -102,6 +105,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, []);
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [hymns, setHymns] = useState<any[]>([]);
+  const [loadingHymns, setLoadingHymns] = useState(false);
 
   // Audio playback state
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -288,6 +293,36 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         socketManager.disconnect();
       }
     };
+  }, []);
+
+  // Fetch Hymnary Psalm 136 once (for MVP showcase)
+  useEffect(() => {
+    const fetchHymns = async () => {
+      try {
+        setLoadingHymns(true);
+        const res = await fetch(
+          "https://hymnary.org/api/scripture?reference=Psalm+136"
+        );
+        const json = await res.json();
+        // Transform key/value map to array of mini items
+        const items = Object.values(json || {})
+          .slice(0, 10)
+          .map((h: any) => ({
+            id: h.title || Math.random().toString(36).slice(2),
+            title: h.title,
+            author: h.author || h.paraphraser || h.translator || "Unknown",
+            meter: h.meter,
+            textLink: h["text link"],
+            refs: String(h["scripture references"] || "").trim(),
+          }));
+        setHymns(items);
+      } catch (e) {
+        console.warn("Hymnary fetch failed:", e);
+      } finally {
+        setLoadingHymns(false);
+      }
+    };
+    fetchHymns();
   }, []);
 
   // Load content stats for all visible items so user-liked/bookmarked states persist
@@ -968,6 +1003,111 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           {renderContentByType(mostRecentItem, 0)}
         </View>
       )}
+
+      {/* Hymnary (Psalm 136) – Horizontal mini-cards (refactored to match mini card UI) */}
+      <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+        <Text
+          style={{
+            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+            fontWeight: "600",
+            color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
+            marginBottom: UI_CONFIG.SPACING.MD,
+          }}
+        >
+          Scripture Hymns (Psalm 136)
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+        >
+          {loadingHymns ? (
+            <View style={{ paddingVertical: 16, alignItems: "center" }}>
+              <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY }}>
+                Loading hymns…
+              </Text>
+            </View>
+          ) : (
+            (hymns || []).map((h) => (
+              <View key={h.id} className="mr-4 w-[154px] flex-col items-center">
+                <TouchableOpacity
+                  onPress={() => {
+                    if (h.textLink) {
+                      router.push({
+                        pathname: "/reader/WebPage",
+                        params: { url: h.textLink, title: h.title },
+                      });
+                    }
+                  }}
+                  className="w-full h-[232px] rounded-2xl overflow-hidden relative"
+                  activeOpacity={0.9}
+                >
+                  <Image
+                    source={(() => {
+                      const candidate =
+                        (h as any).imageUrl ||
+                        (h as any).thumbnail ||
+                        (h as any).cover;
+                      if (
+                        typeof candidate === "string" &&
+                        candidate.trim().length > 0
+                      ) {
+                        return { uri: candidate.trim() } as any;
+                      }
+                      return {
+                        uri: "https://res.cloudinary.com/ddgzzjp4x/image/upload/v1758677253/jevah-hq_tcqmxl.jpg",
+                      } as any;
+                    })()}
+                    className="w-full h-full absolute"
+                    resizeMode="cover"
+                  />
+                  {/* Dark overlay to improve text contrast */}
+                  <View className="absolute inset-0 bg-black/60" />
+                  <View className="absolute inset-0 justify-center items-center">
+                    <View className="bg-white/70 p-2 rounded-full">
+                      <Ionicons name="book" size={24} color="#FEA74E" />
+                    </View>
+                  </View>
+                  <View className="absolute bottom-2 left-2 right-2">
+                    <Text
+                      className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                      numberOfLines={2}
+                    >
+                      {h.title}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <View className="mt-2 flex flex-col w-full">
+                  <View className="flex flex-row justify-between items-center">
+                    <Text
+                      className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {(h.author || "Unknown").toString()}
+                    </Text>
+                    <Ionicons
+                      name="ellipsis-vertical"
+                      size={14}
+                      color="#9CA3AF"
+                    />
+                  </View>
+                  <View className="flex-row items-center">
+                    <Ionicons name="book-outline" size={13} color="#98A2B3" />
+                    <Text
+                      className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik"
+                      numberOfLines={1}
+                    >
+                      {(h.meter || h.refs || "Psalm 136").toString()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
 
       {/* All Content Section */}
       <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>

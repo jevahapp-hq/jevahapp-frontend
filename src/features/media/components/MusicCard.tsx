@@ -15,6 +15,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import { useContentCount } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
@@ -68,6 +69,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const [showOverlay, setShowOverlay] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
+  const { showCommentModal } = useCommentModal();
 
   const modalKey = `music-${audio._id || index}`;
   const contentId = audio._id || `music-${index}`;
@@ -126,10 +128,13 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     } catch {}
   }, []);
 
-  // Derive current view count from store if available
+  // Derive current view and comment counts from store if available
   const contentIdForViews = String(audio._id || "");
   const viewsFromStore = contentIdForViews
     ? useContentCount(contentIdForViews, "views")
+    : 0;
+  const commentsFromStore = contentIdForViews
+    ? useContentCount(contentIdForViews, "comments")
     : 0;
 
   // Record a qualified view when playback crosses 3s or 25%, or on completion
@@ -381,7 +386,16 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center mr-6"
-                onPress={() => onComment(audio)}
+                onPress={() => {
+                  try {
+                    console.log("🗨️ Comment icon pressed (music)", {
+                      contentId: contentIdForViews,
+                      title: audio.title,
+                    });
+                    showCommentModal([], String(contentId));
+                  } catch {}
+                  onComment && onComment(audio);
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <CommentIcon
@@ -389,7 +403,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                   size={26}
                   color="#98A2B3"
                   showCount={true}
-                  count={audio.comments || 0}
+                  count={commentsFromStore || audio.comments || 0}
                   layout="horizontal"
                 />
               </TouchableOpacity>

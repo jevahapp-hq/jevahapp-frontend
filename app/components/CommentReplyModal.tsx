@@ -7,7 +7,7 @@ import {
   Image,
   InteractionManager,
   Keyboard,
-  KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Text,
@@ -43,6 +43,8 @@ export default function CommentReplyModal() {
     likeComment,
     replyToComment,
     addComment,
+    submitComment,
+    loadMoreComments,
   } = useCommentModal();
   const [replyText, setReplyText] = useState("");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -93,11 +95,8 @@ export default function CommentReplyModal() {
     const keyboardDidShowListener = Keyboard.addListener(
       "keyboardDidShow",
       (e) => {
-        // Add platform-specific adjustments for better keyboard handling
-        const adjustedHeight =
-          Platform.OS === "ios"
-            ? e.endCoordinates.height
-            : e.endCoordinates.height + (Platform.OS === "android" ? 20 : 0);
+        // Use the exact keyboard height to avoid any visible gap
+        const adjustedHeight = e.endCoordinates.height;
         setKeyboardHeight(adjustedHeight);
       }
     );
@@ -173,19 +172,7 @@ export default function CommentReplyModal() {
           replyToComment(replyingTo, mainInputText.trim());
         } else {
           // This is a new top-level comment
-          const newComment = {
-            id: Date.now().toString(),
-            userName: "Current User",
-            avatar: "",
-            timestamp: new Date().toISOString(),
-            comment: mainInputText.trim(),
-            likes: 0,
-            isLiked: false,
-            replies: [],
-          };
-
-          // Add the comment to the comments list
-          addComment(newComment);
+          submitComment(mainInputText.trim());
         }
 
         // Clear the input and reset reply state
@@ -404,275 +391,277 @@ export default function CommentReplyModal() {
   }
 
   return (
-    <GestureHandlerRootView
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 9999,
-        alignItems: "center",
-        justifyContent: "flex-end",
-      }}
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="none"
+      onRequestClose={hideCommentModal}
+      hardwareAccelerated
     >
-      {/* Background overlay - disabled touch to close */}
-      <View
+      <GestureHandlerRootView
         style={{
           position: "absolute",
           inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.3)",
+          zIndex: 9999,
+          alignItems: "center",
+          justifyContent: "flex-end",
         }}
-      />
+      >
+        {/* Background overlay - disabled touch to close */}
+        <View
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.3)",
+          }}
+        />
 
-      <GestureDetector gesture={panGesture}>
-        <Animated.View
-          style={[
-            animatedStyle,
-            {
-              position: "absolute",
-              bottom: 0,
-              width: SCREEN_WIDTH,
-              height: SCREEN_HEIGHT * 0.7,
-              backgroundColor: "white",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              paddingTop: 20,
-            },
-          ]}
-        >
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-            enabled={true}
+        <GestureDetector gesture={panGesture}>
+          <Animated.View
+            style={[
+              animatedStyle,
+              {
+                position: "absolute",
+                bottom: 0,
+                width: SCREEN_WIDTH,
+                height: SCREEN_HEIGHT * 0.7,
+                backgroundColor: "white",
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                paddingTop: 20,
+              },
+            ]}
           >
-            {/* Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingHorizontal: 20,
-                paddingBottom: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: "#F3F4F6",
-              }}
-            >
-              <Text
-                style={{ fontSize: 18, fontWeight: "700", color: "#374151" }}
-              >
-                Comments
-              </Text>
-              <TouchableOpacity
-                onPress={PerformanceOptimizer.handleButtonPress(
-                  hideCommentModal,
-                  {
-                    debounceMs: 100,
-                    key: "close-modal",
-                  }
-                )}
-                style={{
-                  width: 44, // Increased for better touch target
-                  height: 44, // Increased for better touch target
-                  borderRadius: 22,
-                  backgroundColor: "#F3F4F6",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={20} color="#374151" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Comments list */}
-            <ScrollView
-              style={{ flex: 1 }}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingBottom:
-                  keyboardHeight > 0
-                    ? keyboardHeight +
-                      (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) +
-                      24
-                    : (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) +
-                      24,
-              }}
-            >
-              {comments.map((comment) => (
-                <CommentItem key={comment.id} comment={comment} level={0} />
-              ))}
-            </ScrollView>
-
-            {/* Input Modal - Always visible when comment modal is open */}
-            {showInputModal && (
+            <View style={{ flex: 1 }}>
+              {/* Header */}
               <View
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: keyboardHeight > 0 ? keyboardHeight : 0,
-                  backgroundColor: "white",
-                  borderTopWidth: 1,
-                  borderTopColor: "#E5E7EB",
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  height: replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT,
-                  zIndex: 1000,
-                  // Add shadow for better visual separation
-                  shadowColor: "#000",
-                  shadowOffset: {
-                    width: 0,
-                    height: -2,
-                  },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 5,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingBottom: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#F3F4F6",
                 }}
               >
-                {/* Reply indicator */}
-                {replyingTo && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingBottom: 8,
-                      borderBottomWidth: 1,
-                      borderBottomColor: "#F3F4F6",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#6B7280",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Replying to{" "}
-                      {mainInputText.split("@")[1]?.split(" ")[0] || "user"}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setReplyingTo(null);
-                        setMainInputText("");
-                      }}
-                      style={{
-                        padding: 4,
-                      }}
-                    >
-                      <Ionicons name="close" size={16} color="#6B7280" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                <View
+                <Text
+                  style={{ fontSize: 18, fontWeight: "700", color: "#374151" }}
+                >
+                  Comments
+                </Text>
+                <TouchableOpacity
+                  onPress={PerformanceOptimizer.handleButtonPress(
+                    hideCommentModal,
+                    {
+                      debounceMs: 100,
+                      key: "close-modal",
+                    }
+                  )}
                   style={{
-                    flex: 1,
-                    flexDirection: "row",
+                    width: 44, // Increased for better touch target
+                    height: 44, // Increased for better touch target
+                    borderRadius: 22,
+                    backgroundColor: "#F3F4F6",
+                    justifyContent: "center",
                     alignItems: "center",
                   }}
+                  activeOpacity={0.7}
                 >
-                  {/* Left Reply Icon */}
-                  <TouchableOpacity
-                    onPress={PerformanceOptimizer.handleButtonPress(
-                      () => {
-                        // Handle back action
-                        if (replyingTo) {
+                  <Ionicons name="close" size={20} color="#374151" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Comments list */}
+              <ScrollView
+                style={{ flex: 1 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom:
+                    (replyingTo ? INPUT_BAR_HEIGHT + 30 : INPUT_BAR_HEIGHT) +
+                    24,
+                }}
+              >
+                {comments.map((comment) => (
+                  <CommentItem key={comment.id} comment={comment} level={0} />
+                ))}
+              </ScrollView>
+
+              {/* Input Modal - Always visible when comment modal is open */}
+              {showInputModal && (
+                <View
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    // Anchor directly above the keyboard with no extra gap
+                    bottom: Math.max(keyboardHeight, 0),
+                    backgroundColor: "white",
+                    borderTopWidth: 1,
+                    borderTopColor: "#E5E7EB",
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    height: replyingTo
+                      ? INPUT_BAR_HEIGHT + 30
+                      : INPUT_BAR_HEIGHT,
+                    zIndex: 1000,
+                    // Add shadow for better visual separation
+                    shadowColor: "#000",
+                    shadowOffset: {
+                      width: 0,
+                      height: -2,
+                    },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 5,
+                  }}
+                >
+                  {/* Reply indicator */}
+                  {replyingTo && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingBottom: 8,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "#F3F4F6",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: "#6B7280",
+                          fontWeight: "500",
+                        }}
+                      >
+                        Replying to{" "}
+                        {mainInputText.split("@")[1]?.split(" ")[0] || "user"}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
                           setReplyingTo(null);
                           setMainInputText("");
-                        }
-                      },
-                      { debounceMs: 100, key: "back-button" }
-                    )}
-                    style={{
-                      width: 44, // Increased for better touch target
-                      height: 44, // Increased for better touch target
-                      borderRadius: 8,
-                      backgroundColor: "white",
-                      borderWidth: 1,
-                      borderColor: "#D1D5DB",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      marginRight: 8,
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <AntDesign name="back" size={15} color="black" />
-                  </TouchableOpacity>
+                        }}
+                        style={{
+                          padding: 4,
+                        }}
+                      >
+                        <Ionicons name="close" size={16} color="#6B7280" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
 
-                  {/* Text input bubble */}
                   <View
                     style={{
                       flex: 1,
-                      backgroundColor: "#F9FAFB",
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderWidth: 1,
-                      borderColor: "#E5E7EB",
-                    }}
-                  >
-                    <TextInput
-                      ref={mainInputRef}
-                      value={mainInputText}
-                      onChangeText={setMainInputText}
-                      placeholder={
-                        replyingTo
-                          ? `Replying to ${
-                              mainInputText.split("@")[1]?.split(" ")[0] ||
-                              "user"
-                            }`
-                          : "Add a comment..."
-                      }
-                      placeholderTextColor="#6B7280"
-                      style={{
-                        fontSize: 14,
-                        color: "#374151",
-                        paddingVertical: 0,
-                        minHeight: 20,
-                      }}
-                      multiline
-                      returnKeyType="send"
-                      blurOnSubmit={false}
-                      onSubmitEditing={() => {
-                        if (mainInputText.trim()) {
-                          handleMainCommentSubmit();
-                        }
-                      }}
-                    />
-                  </View>
-
-                  {/* Right Send/Filter Icon */}
-                  <TouchableOpacity
-                    onPress={PerformanceOptimizer.handleButtonPress(
-                      () => {
-                        if (mainInputText.trim()) {
-                          handleMainCommentSubmit();
-                        }
-                      },
-                      { debounceMs: 100, key: "send-button" }
-                    )}
-                    style={{
-                      width: 44, // Increased for better touch target
-                      height: 44, // Increased for better touch target
-                      borderRadius: 8,
-                      backgroundColor: mainInputText.trim()
-                        ? "#10B981"
-                        : "#D1D5DB",
-                      justifyContent: "center",
+                      flexDirection: "row",
                       alignItems: "center",
-                      marginLeft: 8,
                     }}
-                    disabled={!mainInputText.trim()}
-                    activeOpacity={0.7}
                   >
-                    <FontAwesome name="send-o" size={15} color="white" />
-                  </TouchableOpacity>
+                    {/* Left Reply Icon */}
+                    <TouchableOpacity
+                      onPress={PerformanceOptimizer.handleButtonPress(
+                        () => {
+                          // Handle back action
+                          if (replyingTo) {
+                            setReplyingTo(null);
+                            setMainInputText("");
+                          }
+                        },
+                        { debounceMs: 100, key: "back-button" }
+                      )}
+                      style={{
+                        width: 44, // Increased for better touch target
+                        height: 44, // Increased for better touch target
+                        borderRadius: 8,
+                        backgroundColor: "white",
+                        borderWidth: 1,
+                        borderColor: "#D1D5DB",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 8,
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <AntDesign name="back" size={15} color="black" />
+                    </TouchableOpacity>
+
+                    {/* Text input bubble */}
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: "#F9FAFB",
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderWidth: 1,
+                        borderColor: "#E5E7EB",
+                      }}
+                    >
+                      <TextInput
+                        ref={mainInputRef}
+                        value={mainInputText}
+                        onChangeText={setMainInputText}
+                        placeholder={
+                          replyingTo
+                            ? `Replying to ${
+                                mainInputText.split("@")[1]?.split(" ")[0] ||
+                                "user"
+                              }`
+                            : "Add a comment..."
+                        }
+                        placeholderTextColor="#6B7280"
+                        style={{
+                          fontSize: 14,
+                          color: "#374151",
+                          paddingVertical: 0,
+                          minHeight: 20,
+                        }}
+                        multiline
+                        returnKeyType="send"
+                        blurOnSubmit={false}
+                        onSubmitEditing={() => {
+                          if (mainInputText.trim()) {
+                            handleMainCommentSubmit();
+                          }
+                        }}
+                      />
+                    </View>
+
+                    {/* Right Send/Filter Icon */}
+                    <TouchableOpacity
+                      onPress={PerformanceOptimizer.handleButtonPress(
+                        () => {
+                          if (mainInputText.trim()) {
+                            handleMainCommentSubmit();
+                          }
+                        },
+                        { debounceMs: 100, key: "send-button" }
+                      )}
+                      style={{
+                        width: 44, // Increased for better touch target
+                        height: 44, // Increased for better touch target
+                        borderRadius: 8,
+                        backgroundColor: mainInputText.trim()
+                          ? "#10B981"
+                          : "#D1D5DB",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginLeft: 8,
+                      }}
+                      disabled={!mainInputText.trim()}
+                      activeOpacity={0.7}
+                    >
+                      <FontAwesome name="send-o" size={15} color="white" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            )}
-          </KeyboardAvoidingView>
-        </Animated.View>
-      </GestureDetector>
-    </GestureHandlerRootView>
+              )}
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </GestureHandlerRootView>
+    </Modal>
   );
 }

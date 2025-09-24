@@ -9,6 +9,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
@@ -51,6 +52,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [showOverlay, setShowOverlay] = useState(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
+  const { showCommentModal } = useCommentModal();
 
   const contentId = video._id || getContentKey(video);
   const key = getContentKey(video);
@@ -90,7 +92,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           try {
             videoRef.current.setPositionAsync(position);
           } catch (error) {
-                console.warn("Video seek error:", error);
+            console.warn("Video seek error:", error);
           }
         } else {
           pendingSeekRef.current = position;
@@ -356,18 +358,18 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
             {!avatarErrored ? (
-            <Image
-              source={getUserAvatarFromContent(video)}
-              style={{ width: 30, height: 30, borderRadius: 999 }}
-              resizeMode="cover"
-              onError={(error) => {
+              <Image
+                source={getUserAvatarFromContent(video)}
+                style={{ width: 30, height: 30, borderRadius: 999 }}
+                resizeMode="cover"
+                onError={(error) => {
                   setAvatarErrored(true);
-                console.warn(
-                  "❌ Failed to load video speaker avatar:",
-                  error.nativeEvent.error
-                );
-              }}
-            />
+                  console.warn(
+                    "❌ Failed to load video speaker avatar:",
+                    error.nativeEvent.error
+                  );
+                }}
+              />
             ) : (
               <Text className="text-[14px] font-rubik-semibold text-[#344054]">
                 {firstInitial}
@@ -419,7 +421,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center mr-6"
-                onPress={() => onComment(key, video)}
+                onPress={() => {
+                  try {
+                    console.log("🗨️ Comment icon pressed (video)", {
+                      key,
+                      contentId,
+                      title: video.title,
+                    });
+                    // Open global comment modal immediately (loads server data inside)
+                    showCommentModal([], String(contentId));
+                  } catch {}
+                  // Keep parent handler for any side-effects (optional)
+                  onComment(key, video);
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <CommentIcon

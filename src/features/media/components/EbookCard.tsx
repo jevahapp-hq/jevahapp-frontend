@@ -7,6 +7,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useContentCount } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { CommentIcon } from "../../../shared/components/CommentIcon";
@@ -28,6 +29,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onShare,
   onDownload,
 }) => {
+  const { showCommentModal } = useCommentModal();
   const AvatarWithInitialFallback = ({
     imageSource,
     name,
@@ -67,7 +69,8 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [likeCount, setLikeCount] = useState<number>(ebook.likes || 0);
   const viewCount = useContentCount(contentId, "views") || ebook.views || 0;
-  const commentCount = ebook.comments || 0;
+  const commentCount =
+    useContentCount(contentId, "comments") || ebook.comments || 0;
 
   const handleFavorite = () => {
     try {
@@ -155,6 +158,16 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             </View>
           </View>
 
+          {/* Centered Ebook Icon Overlay (for visual parity with video) */}
+          <View
+            className="absolute inset-0 justify-center items-center"
+            pointerEvents="none"
+          >
+            <View className="bg-white/70 p-4 rounded-full">
+              <Ionicons name="book" size={40} color="#FEA74E" />
+            </View>
+          </View>
+
           {/* Title Overlay */}
           <View className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md">
             <Text
@@ -222,7 +235,16 @@ export const EbookCard: React.FC<EbookCardProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center mr-6"
-                onPress={handleComment}
+                onPress={() => {
+                  try {
+                    console.log("🗨️ Comment icon pressed (ebook)", {
+                      contentId,
+                      title: ebook.title,
+                    });
+                    showCommentModal([], String(contentId));
+                  } catch {}
+                  handleComment();
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <CommentIcon
