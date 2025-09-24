@@ -765,6 +765,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       switch (item.contentType) {
         case "video":
         case "videos":
+        case "sermon":
           const backendUserFavorites = { [key]: getUserLikeState(contentId) };
           const backendGlobalFavoriteCounts = {
             [key]: getLikeCount(contentId),

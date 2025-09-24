@@ -1,16 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Animated,
   Image,
-  PanResponder,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -23,6 +15,7 @@ import {
   useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
+import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
@@ -140,8 +133,14 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const savesFromStore = contentIdForViews
     ? useContentCount(contentIdForViews, "saves")
     : 0;
+  const likesFromStore = contentIdForViews
+    ? useContentCount(contentIdForViews, "likes")
+    : 0;
   const savedFromStore = contentIdForViews
     ? useUserInteraction(contentIdForViews, "saved")
+    : false;
+  const likedFromStore = contentIdForViews
+    ? useUserInteraction(contentIdForViews, "liked")
     : false;
   useHydrateContentStats(contentId, audio.contentType || "media");
 
@@ -207,45 +206,19 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     hasTrackedView,
   ]);
 
-  // Draggable seek bar
-  const trackWidthRef = useRef(1);
-  const handleX = useRef(new Animated.Value(0)).current;
-  const currentX = useMemo(
-    () => (playerState.progress || 0) * (trackWidthRef.current || 1),
-    [playerState.progress]
+  const onSeekRelative = useCallback(
+    async (deltaSec: number) => {
+      await seekBySeconds(deltaSec);
+    },
+    [seekBySeconds]
   );
 
-  // Sync handle position on progress update
-  React.useEffect(() => {
-    Animated.timing(handleX, {
-      toValue: currentX,
-      duration: 80,
-      useNativeDriver: false,
-    }).start();
-  }, [currentX, handleX]);
-
-  const onSeekToX = useCallback(
-    async (x: number) => {
-      const width = trackWidthRef.current || 1;
-      const clamped = Math.max(0, Math.min(x, width));
-      const nextProgress = clamped / width;
-      await controls.seekTo(nextProgress);
+  const onSeekToPercent = useCallback(
+    async (pct: number) => {
+      await controls.seekTo(Math.max(0, Math.min(pct, 1)));
     },
     [controls]
   );
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt, gestureState) => {
-        onSeekToX(gestureState.x0 - 16);
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        onSeekToX(gestureState.moveX - 16);
-      },
-    })
-  ).current;
 
   return (
     <View className="flex flex-col mb-10">
@@ -273,71 +246,28 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             </View>
           </View>
 
-          {/* Bottom Controls Styled */}
-          <View
-            className="absolute bottom-4 left-3 right-3"
-            pointerEvents="box-none"
-          >
-            {/* Controls row with play button and progress bar */}
-            <View className="flex-row items-center">
-              <TouchableOpacity
-                onPress={handlePlayPress}
-                className="mr-3"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons
-                  name={playerState.isPlaying ? "pause" : "play"}
-                  size={24}
-                  color="#FFFFFF"
-                />
-              </TouchableOpacity>
+          {/* Bottom Controls Styled (modular overlay) */}
+          <AudioControlsOverlay
+            progress={playerState.progress || 0}
+            isMuted={playerState.isMuted}
+            onToggleMute={() => controls.toggleMute()}
+            onSeekRelative={onSeekRelative}
+            onSeekToPercent={onSeekToPercent}
+          />
 
-              {/* Orange seek bar with handle */}
-              <View
-                className="flex-1 h-1.5 rounded-full mr-3"
-                style={{ backgroundColor: ORANGE }}
-                onLayout={(e) => {
-                  trackWidthRef.current = e.nativeEvent.layout.width;
-                }}
-                {...panResponder.panHandlers}
-              >
-                <Animated.View
-                  style={{
-                    transform: [{ translateX: handleX }],
-                    position: "absolute",
-                    top: -4.5,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: ORANGE,
-                    }}
-                  />
-                </Animated.View>
-              </View>
-
-              <View className="flex-row items-center">
-                <TouchableOpacity
-                  onPress={() => controls.toggleMute()}
-                  className="mr-3"
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons
-                    name={
-                      playerState.isMuted
-                        ? ("volume-mute" as any)
-                        : ("volume-high-outline" as any)
-                    }
-                    size={20}
-                    color="#FFFFFF"
-                  />
-                </TouchableOpacity>
-                <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
-              </View>
-            </View>
+          {/* Play/Pause button overlayed near controls to preserve design */}
+          <View className="absolute bottom-4 left-3" pointerEvents="box-none">
+            <TouchableOpacity
+              onPress={handlePlayPress}
+              className="mr-3"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={playerState.isPlaying ? "pause" : "play"}
+                size={24}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Title Overlay */}
@@ -384,8 +314,8 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             </View>
             <CardFooterActions
               viewCount={viewsFromStore || audio.views || 0}
-              liked={false}
-              likeCount={audio.likes || 0}
+              liked={!!likedFromStore}
+              likeCount={likesFromStore || audio.likes || 0}
               likeBurstKey={likeBurstKey}
               likeColor="#D22A2A"
               onLike={() => {
@@ -416,6 +346,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 } catch {}
               }}
               onShare={() => onShare(audio)}
+              contentType="media"
+              contentId={contentId}
+              useEnhancedComponents={false}
             />
           </View>
         </View>

@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
-  PanResponder,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -14,6 +13,7 @@ import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import VideoControlsOverlay from "../../../shared/components/VideoControlsOverlay";
 import { UI_CONFIG } from "../../../shared/constants";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
@@ -72,47 +72,39 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     progress,
   });
 
-  // Track last known duration to avoid calling getStatusAsync during pan
+  // Track last known duration from playback updates
   const lastKnownDurationRef = useRef(0);
-  const lastSeekTsRef = useRef(0);
-  const pendingSeekRef = useRef<number | null>(null);
+  const seekBySeconds = useCallback(
+    async (deltaSec: number) => {
+      const durationMs = lastKnownDurationRef.current || 0;
+      if (!videoRef.current || durationMs <= 0) return;
+      const currentMs = Math.max(
+        0,
+        Math.min(progress * durationMs, durationMs)
+      );
+      const nextMs = Math.max(
+        0,
+        Math.min(currentMs + deltaSec * 1000, durationMs)
+      );
+      try {
+        await videoRef.current.setPositionAsync(nextMs);
+      } catch (e) {
+        console.warn("Video seekBySeconds failed", e);
+      }
+    },
+    [progress]
+  );
 
-  // Pan responder for seeking (avoids getStatusAsync; uses cached duration)
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderMove: (_evt, gestureState) => {
-      if (!isMountedRef.current) return;
-      const x = Math.max(0, Math.min(gestureState.moveX - 50, 260));
-      const pct = Math.max(0, Math.min((x / 260) * 100, 100));
-      const duration = lastKnownDurationRef.current;
-      if (isPlaying && videoRef.current && duration > 0) {
-        const position = (pct / 100) * duration;
-        const now = Date.now();
-        if (now - lastSeekTsRef.current >= 75) {
-          lastSeekTsRef.current = now;
-          try {
-            videoRef.current.setPositionAsync(position);
-          } catch (error) {
-            console.warn("Video seek error:", error);
-          }
-        } else {
-          pendingSeekRef.current = position;
-        }
-      }
-    },
-    onPanResponderRelease: () => {
-      if (!isMountedRef.current) return;
-      const finalPos = pendingSeekRef.current;
-      pendingSeekRef.current = null;
-      if (videoRef.current && typeof finalPos === "number") {
-        try {
-          videoRef.current.setPositionAsync(finalPos);
-        } catch (error) {
-          console.warn("Video seek release error:", error);
-        }
-      }
-    },
-  });
+  const seekToPercent = useCallback(async (percent: number) => {
+    const durationMs = lastKnownDurationRef.current || 0;
+    if (!videoRef.current || durationMs <= 0) return;
+    const clamped = Math.max(0, Math.min(percent, 1));
+    try {
+      await videoRef.current.setPositionAsync(clamped * durationMs);
+    } catch (e) {
+      console.warn("Video seekToPercent failed", e);
+    }
+  }, []);
 
   // Handle video tap
   const handleVideoTap = useCallback(() => {
@@ -317,30 +309,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </View>
           )}
 
-          {/* Video Controls - Bottom */}
-          <View className="absolute bottom-4 left-3 right-3">
-            {/* Controls row with progress bar */}
-            <View className="flex-row items-center">
-              {/* Progress Bar */}
-              <View className="flex-1 h-1.5 bg-white/30 rounded-full mr-3">
-                <View
-                  className="h-full bg-white rounded-full"
-                  style={{ width: `${progress * 100}%` }}
-                />
-              </View>
-
-              <TouchableOpacity
-                onPress={handleToggleMute}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons
-                  name={isMuted ? "volume-mute" : "volume-high-outline"}
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
+          {/* Video Controls - Bottom (modular overlay) */}
+          <VideoControlsOverlay
+            progress={progress}
+            isMuted={isMuted}
+            onToggleMute={handleToggleMute}
+            onSeekRelative={seekBySeconds}
+            onSeekToPercent={seekToPercent}
+          />
 
           {/* Title Overlay */}
           <View className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md">
@@ -430,6 +406,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 } catch {}
               }}
               onShare={() => onShare(modalKey, video)}
+              contentType="media"
+              contentId={contentId}
+              useEnhancedComponents={false}
             />
           </View>
         </View>

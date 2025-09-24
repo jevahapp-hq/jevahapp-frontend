@@ -17,10 +17,7 @@ import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
 import allMediaAPI from "../../utils/allMediaAPI";
-import {
-  convertToDownloadableItem,
-  useDownloadHandler,
-} from "../../utils/downloadUtils";
+import { useDownloadHandler } from "../../utils/downloadUtils";
 
 const sampleMedia = [
   {
@@ -1213,51 +1210,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                 </>
               )}
 
-              {/* Video Controls Overlay */}
-              {isPlaying && (
-                <View className="absolute top-2 right-2 flex-row items-center space-x-2">
-                  <TouchableOpacity
-                    onPress={() => globalVideoStore.toggleVideoMute(itemId)}
-                    className="bg-black/70 rounded-full p-1"
-                  >
-                    <Ionicons
-                      name={
-                        globalVideoStore.mutedVideos[itemId]
-                          ? "volume-mute"
-                          : "volume-high"
-                      }
-                      size={16}
-                      color="#FFFFFF"
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Video Progress Bar with Timeline Scrubbing */}
-              {isPlaying && (
-                <View className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
-                  <TouchableOpacity
-                    className="h-full w-full"
-                    onPress={async (event) => {
-                      const { locationX } = event.nativeEvent;
-                      const progressBarWidth = 200; // Fixed width for progress bar
-                      const progress = Math.max(
-                        0,
-                        Math.min(1, locationX / progressBarWidth)
-                      );
-                      await seekVideo(itemId, progress);
-                    }}
-                    activeOpacity={1}
-                  >
-                    <View
-                      className="h-full bg-[#FEA74E]"
-                      style={{
-                        width: `${globalVideoStore.progresses[itemId] || 0}%`,
-                      }}
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
+              {/* Minimal design: no extra controls or progress bar */}
             </TouchableOpacity>
           ) : isAudio ? (
             // Audio content with play/pause overlay
@@ -1296,47 +1249,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                 </View>
               </View>
 
-              {/* Audio Progress Bar with Timeline Scrubbing */}
-              {isAudioPlaying && (
-                <View className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
-                  <TouchableOpacity
-                    className="h-full w-full"
-                    onPress={(event) => {
-                      const { locationX } = event.nativeEvent;
-                      const progressBarWidth = 200; // Fixed width for progress bar
-                      const progress = Math.max(
-                        0,
-                        Math.min(1, locationX / progressBarWidth)
-                      );
-                      seekAudio(itemId, progress);
-                    }}
-                    activeOpacity={1}
-                  >
-                    <View
-                      className="h-full bg-[#FEA74E]"
-                      style={{
-                        width: `${(audioProgress[itemId] || 0) * 100}%`,
-                      }}
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Audio Controls Overlay */}
-              {isAudioPlaying && (
-                <View className="absolute top-2 right-2 flex-row items-center space-x-2">
-                  <TouchableOpacity
-                    onPress={() => toggleAudioMute(itemId)}
-                    className="bg-black/70 rounded-full p-1"
-                  >
-                    <Ionicons
-                      name={audioMuted[itemId] ? "volume-mute" : "volume-high"}
-                      size={16}
-                      color="#FFFFFF"
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
+              {/* Minimal design: no audio progress or controls */}
 
               {/* Audio Title */}
               <View className="absolute bottom-2 left-2 right-2">
@@ -1423,7 +1336,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             </View>
           )}
 
-          {/* Ellipsis Menu Trigger */}
+          {/* Three-dots menu trigger */}
           <TouchableOpacity
             className="absolute bottom-2 right-2 bg-white rounded-full p-1"
             onPress={(e) => {
@@ -1434,17 +1347,15 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             <Ionicons name="ellipsis-vertical" size={14} color="#3A3E50" />
           </TouchableOpacity>
 
-          {/* Ellipsis Menu */}
+          {/* Minimal menu modal */}
           {menuOpenId === itemId && (
             <>
-              {/* Background overlay for this card only */}
               <TouchableOpacity
                 className="absolute inset-0 bg-black/10 z-40"
                 activeOpacity={1}
                 onPress={() => setMenuOpenId(null)}
               />
-              {/* Menu positioned relative to this card - smaller and better positioned */}
-              <View className="absolute bottom-12 right-1 bg-white shadow-xl rounded-lg p-2 z-50 w-[140px] border border-gray-200">
+              <View className="absolute bottom-12 right-1 bg-white shadow-xl rounded-lg p-2 z-50 w-[160px] border border-gray-200">
                 <TouchableOpacity
                   className="py-2 px-2 border-b border-gray-100 flex-row items-center justify-between"
                   onPress={() => setMenuOpenId(null)}
@@ -1464,6 +1375,35 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                   <Feather name="send" size={16} color="#1D2939" />
                 </TouchableOpacity>
                 <TouchableOpacity
+                  className="py-2 px-2 border-b border-gray-100 flex-row items-center justify-between"
+                  onPress={async () => {
+                    try {
+                      const contentType =
+                        item.contentType === "music"
+                          ? "audio"
+                          : item.contentType;
+                      const { convertToDownloadableItem } = await import(
+                        "../../utils/downloadUtils"
+                      );
+                      const downloadableItem = convertToDownloadableItem(
+                        item,
+                        contentType as any
+                      );
+                      const result = await handleDownload(downloadableItem);
+                      if (result.success) {
+                        setMenuOpenId(null);
+                      }
+                    } catch (e) {
+                      console.warn("Download failed:", e);
+                    }
+                  }}
+                >
+                  <Text className="text-[#1D2939] font-rubik text-xs">
+                    Download
+                  </Text>
+                  <Ionicons name="download-outline" size={16} color="#1D2939" />
+                </TouchableOpacity>
+                <TouchableOpacity
                   className="py-2 px-2 flex-row items-center justify-between"
                   onPress={() => handleRemoveFromLibrary(item)}
                 >
@@ -1472,111 +1412,18 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                   </Text>
                   <MaterialIcons name="bookmark" size={16} color="#1D2939" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  className="py-2 px-2 flex-row items-center justify-between border-t border-gray-100"
-                  onPress={async () => {
-                    const contentType =
-                      item.contentType === "music" ? "audio" : item.contentType;
-                    const downloadableItem = convertToDownloadableItem(
-                      item,
-                      contentType as any
-                    );
-                    const result = await handleDownload(downloadableItem);
-                    if (result.success) {
-                      setMenuOpenId(null);
-                    }
-                  }}
-                >
-                  <Text className="text-[#1D2939] font-rubik text-xs">
-                    {checkIfDownloaded(itemId) ? "Downloaded" : "Download"}
-                  </Text>
-                  <Ionicons
-                    name={
-                      checkIfDownloaded(itemId)
-                        ? "checkmark-circle"
-                        : "download-outline"
-                    }
-                    size={16}
-                    color={checkIfDownloaded(itemId) ? "#256E63" : "#090E24"}
-                  />
-                </TouchableOpacity>
               </View>
             </>
           )}
 
-          {/* Interaction Buttons - Shifted Left for Better Clickability */}
-          <View className="absolute top-2 left-2 flex-col space-y-2">
-            {/* Like Button */}
-            <TouchableOpacity
-              className="bg-black/70 rounded-full p-2"
-              activeOpacity={0.8}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleLike(itemId, item.title, item.thumbnailUrl);
-              }}
-            >
-              <Ionicons
-                name={likedItems[itemId] ? "heart" : "heart-outline"}
-                size={16}
-                color={likedItems[itemId] ? "#FF6B6B" : "#FFFFFF"}
-              />
-              {likeCounts[itemId] > 0 && (
-                <Text className="text-white text-xs font-rubik-bold text-center mt-1">
-                  {likeCounts[itemId]}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Comment Button */}
-            <TouchableOpacity
-              className="bg-black/70 rounded-full p-2"
-              activeOpacity={0.8}
-              onPress={(e) => {
-                e.stopPropagation();
-                // TODO: Implement comment functionality
-                console.log("Comment pressed for:", item.title);
-              }}
-            >
-              <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            {/* Save to Library Button */}
-            <TouchableOpacity
-              className="bg-black/70 rounded-full p-2"
-              activeOpacity={0.8}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleSaveToLibrary(item);
-              }}
-            >
-              <Ionicons
-                name={isItemSaved(itemId) ? "bookmark" : "bookmark-outline"}
-                size={16}
-                color={isItemSaved(itemId) ? "#FEA74E" : "#FFFFFF"}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Content type badge with colored background */}
-          <View
-            className="absolute top-2 right-2 rounded-full p-2"
-            style={{ backgroundColor: getContentTypeColor(item.contentType) }}
-          >
+          {/* Content type badge - transparent circle at top right */}
+          <View className="absolute top-2 right-2 bg-black/40 rounded-full p-2">
             <Ionicons
               name={getContentTypeIcon(item.contentType)}
               size={12}
               color="#FFFFFF"
             />
           </View>
-
-          {/* Speaker Badge */}
-          {item.speaker && (
-            <View className="absolute top-12 left-2 bg-black/50 rounded px-2 py-1">
-              <Text className="text-white text-xs font-rubik">
-                {item.speaker}
-              </Text>
-            </View>
-          )}
         </View>
       );
     },

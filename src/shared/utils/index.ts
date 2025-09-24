@@ -113,9 +113,13 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem => {
     ? String(rawThumbnailUrl).trim()
     : "";
 
-  // Only fallback to video frame for videos. For non-video (ebook/audio/etc), avoid using fileUrl as image.
+  // Only fallback to video frame for videos or sermons. For non-video (ebook/audio/etc), avoid using fileUrl as image.
   if (!thumbnailUrl) {
-    if (contentTypeLower === "video" || contentTypeLower === "videos") {
+    if (
+      contentTypeLower === "video" ||
+      contentTypeLower === "videos" ||
+      contentTypeLower === "sermon"
+    ) {
       thumbnailUrl = generateVideoThumbnail(videoUrl);
     } else {
       thumbnailUrl = ""; // let UI components use their own image fallback

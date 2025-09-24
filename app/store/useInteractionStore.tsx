@@ -275,10 +275,12 @@ export const useInteractionStore = create<InteractionState>()(
       duration?: number
     ) => {
       try {
+        const payload =
+          typeof duration === "number" ? { durationMs: duration } : undefined;
         const result = await contentInteractionAPI.recordView(
           contentId,
           contentType,
-          duration
+          payload
         );
 
         set((state) => {
@@ -449,32 +451,69 @@ export const useInteractionStore = create<InteractionState>()(
           contentType
         );
 
-        set((state) => ({
-          contentStats: { ...state.contentStats, [contentId]: stats },
-          loadingStats: { ...state.loadingStats, [contentId]: false },
-        }));
-      } catch (error) {
-        console.warn("⚠️ Error loading content stats, using fallback:", error);
-        // Don't fail completely - provide default stats
-        const defaultStats: ContentStats = {
-          contentId,
-          likes: 0,
-          saves: 0,
-          shares: 0,
-          views: 0,
-          comments: 0,
-          userInteractions: {
-            liked: false,
-            saved: false,
-            shared: false,
-            viewed: false,
-          },
-        };
+        set((state) => {
+          const existing = state.contentStats[contentId];
+          const merged: ContentStats = {
+            contentId,
+            likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
+            saves: Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+            shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
+            views: Math.max(existing?.views ?? 0, stats.views ?? 0),
+            comments: Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+            userInteractions: {
+              liked:
+                stats.userInteractions?.liked ??
+                existing?.userInteractions?.liked ??
+                false,
+              saved:
+                stats.userInteractions?.saved ??
+                existing?.userInteractions?.saved ??
+                false,
+              shared:
+                stats.userInteractions?.shared ??
+                existing?.userInteractions?.shared ??
+                false,
+              viewed:
+                stats.userInteractions?.viewed ??
+                existing?.userInteractions?.viewed ??
+                false,
+            },
+          };
 
-        set((state) => ({
-          contentStats: { ...state.contentStats, [contentId]: defaultStats },
-          loadingStats: { ...state.loadingStats, [contentId]: false },
-        }));
+          return {
+            contentStats: { ...state.contentStats, [contentId]: merged },
+            loadingStats: { ...state.loadingStats, [contentId]: false },
+          };
+        });
+      } catch (error) {
+        console.warn(
+          "⚠️ Error loading content stats, using safe merge:",
+          error
+        );
+        set((state) => {
+          // Keep existing stats if present; otherwise initialize to zeros
+          const existing = state.contentStats[contentId];
+          const fallback: ContentStats =
+            existing ||
+            ({
+              contentId,
+              likes: 0,
+              saves: 0,
+              shares: 0,
+              views: 0,
+              comments: 0,
+              userInteractions: {
+                liked: false,
+                saved: false,
+                shared: false,
+                viewed: false,
+              },
+            } as ContentStats);
+          return {
+            contentStats: { ...state.contentStats, [contentId]: fallback },
+            loadingStats: { ...state.loadingStats, [contentId]: false },
+          };
+        });
       }
     },
 
@@ -488,9 +527,45 @@ export const useInteractionStore = create<InteractionState>()(
           contentType
         );
         if (Object.keys(fromBatch).length > 0) {
-          set((state) => ({
-            contentStats: { ...state.contentStats, ...fromBatch },
-          }));
+          set((state) => {
+            const merged = { ...state.contentStats } as Record<
+              string,
+              ContentStats
+            >;
+            for (const [id, stats] of Object.entries(fromBatch)) {
+              const existing = state.contentStats[id];
+              merged[id] = {
+                contentId: id,
+                likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
+                saves: Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+                shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
+                views: Math.max(existing?.views ?? 0, stats.views ?? 0),
+                comments: Math.max(
+                  existing?.comments ?? 0,
+                  stats.comments ?? 0
+                ),
+                userInteractions: {
+                  liked:
+                    stats.userInteractions?.liked ??
+                    existing?.userInteractions?.liked ??
+                    false,
+                  saved:
+                    stats.userInteractions?.saved ??
+                    existing?.userInteractions?.saved ??
+                    false,
+                  shared:
+                    stats.userInteractions?.shared ??
+                    existing?.userInteractions?.shared ??
+                    false,
+                  viewed:
+                    stats.userInteractions?.viewed ??
+                    existing?.userInteractions?.viewed ??
+                    false,
+                },
+              } as ContentStats;
+            }
+            return { contentStats: merged };
+          });
           return;
         }
         // Fallback to per-item

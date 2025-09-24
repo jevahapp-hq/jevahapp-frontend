@@ -259,6 +259,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                 } catch {}
               }}
               onShare={handleShare}
+              contentType="media"
+              contentId={contentId}
+              useEnhancedComponents={false}
             />
           </View>
         </View>

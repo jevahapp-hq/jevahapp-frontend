@@ -149,37 +149,114 @@ class ContentInteractionService {
     contentId: string,
     contentType: string
   ): Promise<{ liked: boolean; totalLikes: number }> {
+    // Map content types to backend expected types (move outside try block)
+    const backendContentType = this.mapContentTypeToBackend(contentType);
+
     try {
       if (!this.isValidObjectId(contentId)) {
         return this.fallbackToggleLike(contentId);
       }
       const headers = await this.getAuthHeaders();
 
-      // Map content types to backend expected types
-      const backendContentType = this.mapContentTypeToBackend(contentType);
+      const requestUrl = `${this.baseURL}/api/content/${backendContentType}/${contentId}/like`;
+      console.log(
+        "📡 TOGGLE LIKE: Making request",
+        JSON.stringify(
+          {
+            url: requestUrl,
+            method: "POST",
+            hasAuth: Boolean((headers as any)?.Authorization),
+            contentTypeHeader: (headers as any)?.["Content-Type"],
+            contentType: backendContentType,
+            contentId,
+          },
+          null,
+          2
+        )
+      );
 
-      // Use the correct backend endpoint from integration guide
-      const response = await fetch(
-        `${this.baseURL}/api/content/${backendContentType}/${contentId}/like`,
-        {
-          method: "POST",
-          headers,
-        }
+      // Use the correct endpoint from backend docs
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log(
+        "📡 TOGGLE LIKE: Response status:",
+        response.status,
+        response.statusText
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        // Graceful fallback on 404 Content not found
+        if (response.status === 404) {
+          console.warn(
+            `⚠️ TOGGLE LIKE: Content not found (404) for ${backendContentType}/${contentId}. Falling back to local like.`
+          );
+          return this.fallbackToggleLike(contentId);
+        }
+        console.error(
+          "❌ TOGGLE LIKE: Request failed",
+          response.status,
+          errorText
+        );
+        throw new Error(
+          `HTTP error! status: ${response.status}, body: ${errorText}`
+        );
       }
 
       const result = await response.json();
       console.log(`✅ Like toggled successfully for ${contentId}:`, result);
 
+      // FIXED: Parse response strictly per backend format
+      const liked = result.data?.liked ?? false;
+      const totalLikes = result.data?.likeCount ?? 0;
+
+      // Track analytics for backend consolidation
+      const analyticsData = {
+        action: "like_toggle",
+        contentId,
+        contentType: backendContentType,
+        liked,
+        totalLikes,
+        endpoint: `/api/content/${backendContentType}/${contentId}/like`,
+        responseTime: Date.now(),
+        success: true,
+        rawResponse: result, // Include full response for debugging
+      };
+      console.log(
+        "📊 USER_INTERACTION:",
+        JSON.stringify(analyticsData, null, 2)
+      );
+
       return {
-        liked: result.data?.liked || false,
-        totalLikes: result.data?.likeCount || 0,
+        liked,
+        totalLikes,
       };
     } catch (error) {
       console.error("Error toggling like:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      // Track error analytics for backend consolidation
+      const errorAnalyticsData = {
+        action: "like_toggle_error",
+        contentId,
+        contentType: backendContentType,
+        error: errorMessage || "Unknown error",
+        endpoint: `/api/content/${backendContentType}/${contentId}/like`,
+        responseTime: Date.now(),
+        success: false,
+      };
+      console.log(
+        "📊 USER_INTERACTION_ERROR:",
+        JSON.stringify(errorAnalyticsData, null, 2)
+      );
+
       // Fallback to local storage if API fails
       return this.fallbackToggleLike(contentId);
     }
@@ -232,12 +309,27 @@ class ContentInteractionService {
         JSON.stringify(result, null, 2)
       );
 
-      // Handle the response based on the integration guide format
-      const isSaved = result.data?.bookmarked || result.bookmarked || false;
-      const bookmarkCount =
-        result.data?.bookmarkCount || result.bookmarkCount || 0;
+      // FIXED: Parse response strictly per backend format
+      const isSaved = result.data?.bookmarked ?? false;
+      const bookmarkCount = result.data?.bookmarkCount ?? 0;
 
       console.log(`✅ TOGGLE SAVE: Parsed result:`, { isSaved, bookmarkCount });
+
+      // Track analytics for backend consolidation
+      const analyticsData = {
+        action: "save_toggle",
+        contentId,
+        contentType,
+        saved: isSaved,
+        totalSaves: bookmarkCount,
+        endpoint: `/api/bookmark/${contentId}/toggle`,
+        responseTime: Date.now(),
+        success: true,
+      };
+      console.log(
+        "📊 USER_INTERACTION:",
+        JSON.stringify(analyticsData, null, 2)
+      );
 
       // Sync with library store - this will handle user-specific saves
       await this.syncWithLibraryStore(contentId, isSaved);
@@ -248,6 +340,24 @@ class ContentInteractionService {
       };
     } catch (error) {
       console.error("❌ TOGGLE SAVE: Error toggling save:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      // Track error analytics for backend consolidation
+      const errorAnalyticsData = {
+        action: "save_toggle_error",
+        contentId,
+        contentType,
+        error: errorMessage || "Unknown error",
+        endpoint: `/api/bookmark/${contentId}/toggle`,
+        responseTime: Date.now(),
+        success: false,
+      };
+      console.log(
+        "📊 USER_INTERACTION_ERROR:",
+        JSON.stringify(errorAnalyticsData, null, 2)
+      );
+
       return this.fallbackToggleSave(contentId);
     }
   }
@@ -291,9 +401,10 @@ class ContentInteractionService {
 
       const data = await response.json();
       console.log(`🔍 GET SAVE STATE: Success response:`, data);
+      // FIXED: Use correct response structure
       return {
-        saved: data.saved || false,
-        totalSaves: data.totalSaves || 0,
+        saved: data.data?.isBookmarked ?? false,
+        totalSaves: data.data?.bookmarkCount ?? 0,
       };
     } catch (error) {
       console.error("Error getting save state:", error);
@@ -533,6 +644,26 @@ class ContentInteractionService {
       const data = await response.json();
       const viewCount = data?.data?.viewCount ?? data?.totalViews ?? 0;
       const hasViewed = data?.data?.hasViewed ?? undefined;
+
+      // Track view analytics for backend consolidation
+      const viewAnalyticsData = {
+        action: "view_record",
+        contentId,
+        contentType: backendContentType,
+        totalViews: Number(viewCount) || 0,
+        hasViewed,
+        durationMs: payload?.durationMs,
+        progressPct: payload?.progressPct,
+        isComplete: payload?.isComplete,
+        endpoint: `/api/content/${backendContentType}/${contentId}/view`,
+        responseTime: Date.now(),
+        success: true,
+      };
+      console.log(
+        "📊 VIEW_INTERACTION:",
+        JSON.stringify(viewAnalyticsData, null, 2)
+      );
+
       return { totalViews: Number(viewCount) || 0, hasViewed };
     } catch (error) {
       console.error("Error recording view:", error);

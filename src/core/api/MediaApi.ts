@@ -123,15 +123,36 @@ class MediaApi {
     };
   }
 
-  // Like/Unlike content
+  // Like/Unlike content (Universal endpoint - Recommended)
   async toggleLike(
     contentId: string,
     contentType: string
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     const response = await apiClient.post<any>(
-      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/like`,
+      `/api/content/${contentType}/${contentId}/like`
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to toggle like",
+    };
+  }
+
+  // Media-specific like (Fallback)
+  async toggleMediaLike(
+    mediaId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${mediaId}/like`,
       {
-        contentType,
+        contentType: "media",
       }
     );
 
@@ -148,16 +169,13 @@ class MediaApi {
     };
   }
 
-  // Save/Unsave content
+  // Save/Unsave content (Universal bookmark endpoint - Recommended)
   async toggleSave(
     contentId: string,
     contentType: string
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     const response = await apiClient.post<any>(
-      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${contentId}/save`,
-      {
-        contentType,
-      }
+      `/api/bookmark/${contentId}/toggle`
     );
 
     if (response.success) {
@@ -170,6 +188,30 @@ class MediaApi {
     return {
       success: false,
       error: response.error || "Failed to toggle save",
+    };
+  }
+
+  // Media-specific bookmark (Fallback)
+  async toggleMediaBookmark(
+    mediaId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `${API_CONFIG.ENDPOINTS.INTERACTIONS}/${mediaId}/save`,
+      {
+        contentType: "media",
+      }
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to toggle bookmark",
     };
   }
 
@@ -339,7 +381,7 @@ class MediaApi {
     };
   }
 
-  // Get user's saved content
+  // Get user's saved content (Universal bookmark endpoint)
   async getUserSavedContent(
     contentType?: string,
     page?: number
@@ -349,21 +391,63 @@ class MediaApi {
       page: page || 1,
     };
 
-    const response = await apiClient.get<any>(
-      "/api/user/saved-content",
-      params
-    );
+    const response = await apiClient.get<any>("/api/bookmark/user", params);
 
     if (response.success) {
       return {
         success: true,
-        data: response.data?.content || response.data || [],
+        data:
+          response.data?.bookmarks?.map((bookmark: any) => bookmark.media) ||
+          response.data?.bookmarkedMedia ||
+          [],
       };
     }
 
     return {
       success: false,
       error: response.error || "Failed to fetch saved content",
+    };
+  }
+
+  // Get action status (like status)
+  async getActionStatus(
+    mediaId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.get<any>(
+      `/api/media/${mediaId}/action-status`
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to fetch action status",
+    };
+  }
+
+  // Get bookmark status
+  async getBookmarkStatus(
+    mediaId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.get<any>(
+      `/api/bookmark/${mediaId}/status`
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to fetch bookmark status",
     };
   }
 
