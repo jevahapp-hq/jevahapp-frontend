@@ -54,8 +54,7 @@ export default function CommunityScreen() {
         console.log("Polls navigation - to be implemented");
         break;
       case "Groups":
-        // router.push("/screens/GroupsScreen");
-        console.log("Groups navigation - to be implemented");
+        router.push("/screens/GroupsScreen");
         break;
       default:
         break;
