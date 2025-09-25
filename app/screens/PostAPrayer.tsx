@@ -34,6 +34,18 @@ export default function PostAPrayer() {
   const [selectedShape, setSelectedShape] = useState<ShapeType>('square');
   const [isTyping, setIsTyping] = useState(false);
 
+  // Helper function to darken a hex color
+  const darkenColor = (hex: string, percent: number = 30) => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = (num >> 16) - amt;
+    const G = (num >> 8 & 0x00FF) - amt;
+    const B = (num & 0x0000FF) - amt;
+    return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+      (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+  };
+
   const handleBackToPrayerWall = () => {
     router.push('/screens/PrayerWallScreen');
   };
@@ -204,29 +216,29 @@ export default function PostAPrayer() {
         onPress={() => setIsTyping(true)}
         activeOpacity={0.8}
       >
-      <View style={getCardStyle(selectedShape, selectedColor)}>
-        {selectedShape === 'square' && (
-          <View style={styles.diagonalCut}>
-            <View style={styles.triangle} />
-          </View>
-        )}
-        {selectedShape === 'square2' && (
-          <View style={styles.diagonalCut2}>
-            <View style={styles.diagonalMask2} />
-            <View style={styles.triangle2} />
-          </View>
-        )}
-        {selectedShape === 'square3' && (
-          <View style={styles.diagonalCut3}>
-            <View style={styles.diagonalMask3} />
-            <View style={styles.triangle3} />
-          </View>
-        )}
-        {selectedShape === 'square4' && (
-          <View style={styles.diagonalCut4}>
-            <View style={styles.triangle4} />
-          </View>
-        )}
+        <View style={getCardStyle(selectedShape, selectedColor)}>
+          {selectedShape === 'square' && (
+            <View style={[styles.diagonalCut, { backgroundColor: darkenColor(selectedColor) }]}>
+              <View style={styles.triangle} />
+            </View>
+          )}
+          {selectedShape === 'square2' && (
+            <View style={[styles.diagonalCut2, { backgroundColor: darkenColor(selectedColor) }]}>
+              <View style={styles.diagonalMask2} />
+              <View style={styles.triangle2} />
+            </View>
+          )}
+          {selectedShape === 'square3' && (
+            <View style={[styles.diagonalCut3, { backgroundColor: darkenColor(selectedColor) }]}>
+              <View style={styles.diagonalMask3} />
+              <View style={styles.triangle3} />
+            </View>
+          )}
+          {selectedShape === 'square4' && (
+            <View style={[styles.diagonalCut4, { backgroundColor: darkenColor(selectedColor) }]}>
+              <View style={styles.triangle4} />
+            </View>
+          )}
           <View style={styles.textContainer}>
             {isTyping ? (
               <TextInput
@@ -278,7 +290,7 @@ export default function PostAPrayer() {
               overflow: 'hidden' as const,
             }
           ]}>
-            <View style={styles.templateDiagonalCut}>
+            <View style={[styles.templateDiagonalCut, { backgroundColor: darkenColor(selectedColor) }]}>
               <View style={styles.templateTriangle} />
             </View>
           </View>
@@ -294,7 +306,7 @@ export default function PostAPrayer() {
               overflow: 'hidden' as const,
             }
           ]}>
-            <View style={styles.templateDiagonalCut2}>
+            <View style={[styles.templateDiagonalCut2, { backgroundColor: darkenColor(selectedColor) }]}>
               <View style={styles.templateDiagonalMask2} />
               <View style={styles.templateTriangle2} />
             </View>
@@ -311,7 +323,7 @@ export default function PostAPrayer() {
               overflow: 'hidden' as const,
             }
           ]}>
-            <View style={styles.templateDiagonalCut3}>
+            <View style={[styles.templateDiagonalCut3, { backgroundColor: darkenColor(selectedColor) }]}>
               <View style={styles.templateDiagonalMask3} />
               <View style={styles.templateTriangle3} />
             </View>
@@ -328,7 +340,7 @@ export default function PostAPrayer() {
               overflow: 'hidden' as const,
             }
           ]}>
-            <View style={styles.templateDiagonalCut4}>
+            <View style={[styles.templateDiagonalCut4, { backgroundColor: darkenColor(selectedColor) }]}>
               <View style={styles.templateTriangle4} />
             </View>
           </View>
@@ -433,7 +445,7 @@ export default function PostAPrayer() {
                 Post
               </Text>
             </TouchableOpacity>
-          </View>
+        </View>
         </View>
 
 
@@ -593,7 +605,6 @@ const styles = StyleSheet.create({
      right: 0,
      width: 20,
      height: 20,
-     backgroundColor: '#8B5DDD',
      zIndex: 1,
    },
    templateTriangle: {
@@ -614,7 +625,6 @@ const styles = StyleSheet.create({
      right: 0,
      width: 32,
      height: 32,
-     backgroundColor: '#0D608E',
      borderBottomLeftRadius: 32,
      zIndex: 1,
    },
@@ -650,7 +660,6 @@ const styles = StyleSheet.create({
      right: 0,
      width: 32,
      height: 32,
-     backgroundColor: '#4F4DB2',
      borderBottomLeftRadius: 32,
      zIndex: 1,
    },
@@ -686,7 +695,6 @@ const styles = StyleSheet.create({
      right: 0,
      width: 20,
      height: 20,
-     backgroundColor: '#B2A31A',
      zIndex: 1,
    },
    templateTriangle4: {
@@ -797,15 +805,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   // Shape styles (copied from PrayerWallScreen)
-  diagonalCut: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 56,
-    height: 56,
-    backgroundColor: '#8B5DDD',
-    zIndex: 1,
-  },
+   diagonalCut: {
+     position: 'absolute',
+     top: 0,
+     right: 0,
+     width: 56,
+     height: 56,
+     zIndex: 1,
+   },
   triangle: {
     position: 'absolute',
     top: 0,
@@ -818,16 +825,15 @@ const styles = StyleSheet.create({
     borderLeftWidth: 56,
     borderLeftColor: 'transparent',
   },
-  diagonalCut2: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 91,
-    height: 91,
-    backgroundColor: '#0D608E',
-    borderBottomLeftRadius: 91,
-    zIndex: 1,
-  },
+   diagonalCut2: {
+     position: 'absolute',
+     top: 0,
+     right: 0,
+     width: 91,
+     height: 91,
+     borderBottomLeftRadius: 91,
+     zIndex: 1,
+   },
   diagonalMask2: {
     position: 'absolute',
     top: 0,
@@ -854,16 +860,15 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     zIndex: 2,
   },
-  diagonalCut3: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 91,
-    height: 91,
-    backgroundColor: '#4F4DB2',
-    borderBottomLeftRadius: 91,
-    zIndex: 1,
-  },
+   diagonalCut3: {
+     position: 'absolute',
+     top: 0,
+     right: 0,
+     width: 91,
+     height: 91,
+     borderBottomLeftRadius: 91,
+     zIndex: 1,
+   },
   diagonalMask3: {
     position: 'absolute',
     top: 0,
@@ -890,15 +895,14 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     zIndex: 2,
   },
-  diagonalCut4: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 56,
-    height: 56,
-    backgroundColor: '#B2A31A',
-    zIndex: 1,
-  },
+   diagonalCut4: {
+     position: 'absolute',
+     top: 0,
+     right: 0,
+     width: 56,
+     height: 56,
+     zIndex: 1,
+   },
   triangle4: {
     position: 'absolute',
     top: 0,

@@ -47,8 +47,7 @@ export default function CommunityScreen() {
         router.push("/screens/PrayerWallScreen");
         break;
       case "Forum":
-        // router.push("/screens/ForumScreen");
-        console.log("Forum navigation - to be implemented");
+        router.push("/screens/ForumScreen");
         break;
       case "Polls/surveys":
         // router.push("/screens/PollsScreen");
