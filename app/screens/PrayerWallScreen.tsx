@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AuthHeader from '../components/AuthHeader';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 interface PrayerRequest {
   id: string;
@@ -17,9 +16,26 @@ interface PrayerRequest {
 export default function PrayerWallScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').width)).current;
+
+  useEffect(() => {
+    // Slide in animation from right to left
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const handleBackToCommunity = () => {
-    router.push('/screens/CommunityScreen');
+    // Slide out animation to the right
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push('/screens/CommunityScreen');
+    });
   };
   const initialRequests: PrayerRequest[] = [
     {
@@ -267,12 +283,20 @@ export default function PrayerWallScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <AuthHeader 
-        title="Prayer Wall" 
-        onBackPress={handleBackToCommunity}
-        onCancelPress={handleBackToCommunity}
-      />
+    <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: slideAnim }] }]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FCFCFD" />
+        
+        {/* Custom Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBackToCommunity} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Prayer Wall</Text>
+          <TouchableOpacity style={styles.filterButton}>
+            <Ionicons name="options-outline" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
       
       {/* Search and Action Bar */}
       <View style={styles.searchContainer}>
@@ -306,7 +330,8 @@ export default function PrayerWallScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -314,6 +339,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FCFCFD',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 16,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    fontFamily: 'Rubik-Bold',
+  },
+  filterButton: {
+    padding: 8,
   },
   searchContainer: {
     flexDirection: 'row',

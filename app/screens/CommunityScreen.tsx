@@ -50,8 +50,7 @@ export default function CommunityScreen() {
         router.push("/screens/ForumScreen");
         break;
       case "Polls/surveys":
-        // router.push("/screens/PollsScreen");
-        console.log("Polls navigation - to be implemented");
+        router.push("/screens/PollsScreen");
         break;
       case "Groups":
         router.push("/screens/GroupsScreen");

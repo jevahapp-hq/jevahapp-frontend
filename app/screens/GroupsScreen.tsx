@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+    Animated,
     Dimensions,
     Image,
     SafeAreaView,
@@ -17,9 +18,26 @@ export default function GroupsScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const [selectedTab, setSelectedTab] = useState<"MY GROUPS" | "EXPLORE GROUPS">("MY GROUPS");
   const router = useRouter();
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').width)).current;
+
+  useEffect(() => {
+    // Slide in animation from right to left
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const handleBackPress = () => {
-    router.back();
+    // Slide out animation to the right
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push('/screens/CommunityScreen');
+    });
   };
 
   const handleJoinGroupPress = () => {
@@ -29,7 +47,14 @@ export default function GroupsScreen() {
   const handleTabChange = (tab: "MY GROUPS" | "EXPLORE GROUPS") => {
     setSelectedTab(tab);
     if (tab === "EXPLORE GROUPS") {
-      router.push("/screens/ExploreGroupsScreen");
+      // Slide out animation to the right, then navigate
+      Animated.timing(slideAnim, {
+        toValue: Dimensions.get('window').width,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        router.push("/screens/ExploreGroupsScreen");
+      });
     }
   };
 
@@ -102,8 +127,9 @@ export default function GroupsScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: slideAnim }] }]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Header */}
       <View style={{
@@ -226,6 +252,7 @@ export default function GroupsScreen() {
         {selectedTab === "MY GROUPS" ? renderEmptyState() : null}
       </View>
 
-    </SafeAreaView>
+      </SafeAreaView>
+    </Animated.View>
   );
 }

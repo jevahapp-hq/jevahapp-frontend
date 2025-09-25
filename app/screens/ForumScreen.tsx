@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+    Animated,
+    Dimensions,
     Linking,
     SafeAreaView,
     ScrollView,
@@ -32,6 +34,16 @@ export default function ForumScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const router = useRouter();
   const [newPostText, setNewPostText] = useState('');
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').width)).current;
+
+  useEffect(() => {
+    // Slide in animation from right to left
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const forumPosts: ForumPost[] = [
     {
@@ -97,7 +109,14 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
   ];
 
   const handleBackToCommunity = () => {
-    router.push('/screens/CommunityScreen');
+    // Slide out animation to the right
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push('/screens/CommunityScreen');
+    });
   };
 
   const handleVideoPress = (url: string) => {
@@ -178,7 +197,8 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Animated.View style={[styles.container, { transform: [{ translateX: slideAnim }] }]}>
+      <SafeAreaView style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" backgroundColor="#FCFCFD" />
       
       {/* Header */}
@@ -257,7 +277,8 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
           }}
         />
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
 

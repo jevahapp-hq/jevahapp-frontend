@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Alert,
+    Animated,
+    Dimensions,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
@@ -32,6 +34,16 @@ export default function GroupChatScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const router = useRouter();
   const params = useLocalSearchParams();
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').width)).current;
+
+  useEffect(() => {
+    // Slide in animation from right to left
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const groupTitle = (params.groupTitle as string) || "Gospel Music Trends";
   const groupDescription = (params.groupDescription as string) || "Gospel music, Lyrics, songs that elevate your spirit on a daily basis";
@@ -68,11 +80,25 @@ export default function GroupChatScreen() {
   }, []);
 
   const handleBackPress = () => {
-    router.back();
+    // Slide out animation to the right
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push('/screens/CommunityScreen');
+    });
   };
 
   const handleClosePress = () => {
-    router.back();
+    // Slide out animation to the right
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push('/screens/CommunityScreen');
+    });
   };
 
   const handleJoinGroup = () => {
@@ -235,8 +261,9 @@ export default function GroupChatScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: slideAnim }] }]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Header */}
       <View style={{
@@ -402,6 +429,7 @@ export default function GroupChatScreen() {
         groupMembers={groupMembers}
       />
 
-    </SafeAreaView>
+      </SafeAreaView>
+    </Animated.View>
   );
 }

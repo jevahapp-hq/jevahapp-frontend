@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+    Animated,
     Dimensions,
     SafeAreaView,
     ScrollView,
@@ -26,6 +27,16 @@ export default function ExploreGroupsScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const [selectedTab, setSelectedTab] = useState<"MY GROUPS" | "EXPLORE GROUPS">("EXPLORE GROUPS");
   const router = useRouter();
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').width)).current;
+
+  useEffect(() => {
+    // Slide in animation from right to left
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const groups: Group[] = [
     {
@@ -71,25 +82,46 @@ export default function ExploreGroupsScreen() {
   ];
 
   const handleBackPress = () => {
-    router.back();
+    // Slide out animation to the right
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push('/screens/CommunityScreen');
+    });
   };
 
   const handleJoinGroup = (group: Group) => {
-    router.push({
-      pathname: "/screens/GroupChatScreen",
-      params: {
-        groupId: group.id,
-        groupTitle: group.title,
-        groupDescription: group.description,
-        groupMembers: group.members.toString()
-      }
+    // Slide out animation to the right, then navigate
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      router.push({
+        pathname: "/screens/GroupChatScreen",
+        params: {
+          groupId: group.id,
+          groupTitle: group.title,
+          groupDescription: group.description,
+          groupMembers: group.members.toString()
+        }
+      });
     });
   };
 
   const handleTabChange = (tab: "MY GROUPS" | "EXPLORE GROUPS") => {
     setSelectedTab(tab);
     if (tab === "MY GROUPS") {
-      router.push("/screens/GroupsScreen");
+      // Slide out animation to the right, then navigate
+      Animated.timing(slideAnim, {
+        toValue: Dimensions.get('window').width,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        router.push("/screens/GroupsScreen");
+      });
     }
   };
 
@@ -172,8 +204,9 @@ export default function ExploreGroupsScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: slideAnim }] }]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Header */}
       <View style={{
@@ -300,6 +333,7 @@ export default function ExploreGroupsScreen() {
         {groups.map(renderGroupCard)}
       </ScrollView>
 
-    </SafeAreaView>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
