@@ -3,11 +3,9 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     Dimensions,
-    FlatList,
     Image,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
     Text,
     TouchableOpacity,
     View
@@ -51,11 +49,14 @@ const slides = [
 ];
 
 export default function Welcome() {
-  const flatListRef = useRef<FlatList<any> | null>(null);
   const currentIndexRef = useRef<number>(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
+  
+  // Animation values for fade transitions
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const textFadeAnim = useRef(new Animated.Value(1)).current;
 
   const { isSignedIn, isLoaded: authLoaded, signOut, getToken } = useAuth();
   const { isLoaded: userLoaded, user } = useUser();
@@ -69,50 +70,29 @@ export default function Welcome() {
       if (slides.length === 0) return;
       let nextIndex = currentIndexRef.current + 1;
       if (nextIndex >= slides.length) nextIndex = 0;
-      try {
-        flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-        currentIndexRef.current = nextIndex;
-        setCurrentIndex(nextIndex);
-      } catch (error) {
-        console.warn('Error scrolling to index:', error);
-      }
+      
+      currentIndexRef.current = nextIndex;
+      setCurrentIndex(nextIndex);
     }, 3500);
     return () => clearInterval(interval);
   }, [showIntro, slides.length]);
 
-  const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const contentOffset = event?.nativeEvent?.contentOffset;
-    if (contentOffset && typeof contentOffset.x === 'number') {
-      const index = Math.round(contentOffset.x / width);
-      currentIndexRef.current = index;
-      setCurrentIndex(index);
-    }
-  };
-
   const Pagination = () => (
-    <View className="flex-row justify-center items-center mt-4">
+    <View className="flex-row justify-center items-center">
       {slides.map((_, i) => (
         <View
           key={i}
-          className={`w-[20px] h-[6px] rounded-full mx-1.5 ${
-            i === currentIndex ? 'bg-[#C2C1FE]' : 'bg-[#EAECF0]'
+          className={`mx-1.5 ${
+            i === currentIndex 
+              ? 'w-[20px] h-[6px] rounded-full bg-[#C2C1FE]' 
+              : 'w-[6px] h-[6px] rounded-full bg-[#EAECF0]'
           }`}
         />
       ))}
     </View>
   );
 
-  const renderItem = ({ item }: { item: (typeof slides)[0] }) => (
-    <View className="items-center justify-start" style={{ width }}>
-      <Image source={item.image} className="w-full h-[340px]" resizeMode="cover" />
-      <View className="bg-white rounded-t-3xl mt-[-19px] items-center w-full px-4 py-4">
-        <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
-        <Text className="text-[#1D2939] text-[30px] font-bold text-center">{item.title}</Text>
-        <Text className="text-[#344054] text-[14px] text-center mt-2 w-full">{item.description}</Text>
-        <Pagination />
-      </View>
-    </View>
-  );
+  const currentSlide = slides[currentIndex] || slides[0];
 
   const handleIntroFinished = useCallback(() => setShowIntro(false), []);
 
@@ -139,21 +119,37 @@ export default function Welcome() {
 
   return (
     <View className="w-full h-full bg-white">
-      <FlatList
-        ref={flatListRef}
-        data={slides}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-      />
-      <View className="absolute top-[500px] left-0 right-0 items-center w-full px-4">
-        <Text className="text-[#344054] text-[12px] font-rubik-bold text-center mt-6">
-          GET STARTED WITH
-        </Text>
-        <View className="flex-row mt-12 gap-[16px]">
+      <View className="items-center justify-start" style={{ width }}>
+        <View style={{ width: '100%', height: 340 }}>
+          <Image 
+            source={currentSlide.image} 
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+        </View>
+        <View className="bg-white rounded-t-3xl mt-[-19px] items-center w-full px-6 py-6">
+          <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
+          <View className="px-4 min-h-[120px] justify-center">
+            <Text className="text-[#1D2939] text-[28px] font-bold text-center leading-8 mb-3">
+              {currentSlide.title}
+            </Text>
+            <Text className="text-[#344054] text-[14px] text-center leading-5 max-w-[280px] mx-auto">
+              {currentSlide.description}
+            </Text>
+          </View>
+          <View className="mt-8">
+            <Pagination />
+          </View>
+          
+          {/* Fixed gap section */}
+          <View className="mt-8">
+            <Text className="text-[#344054] text-[12px] font-rubik-bold text-center">
+              GET STARTED WITH
+            </Text>
+          </View>
+          
+          {/* Social login buttons */}
+          <View className="flex-row mt-12 gap-[16px]">
           <TouchableOpacity 
             onPress={fastPress(() => handleSignIn('facebook'), { 
               key: 'facebook_login',
@@ -196,55 +192,64 @@ export default function Welcome() {
               resizeMode="contain"
             />
           </TouchableOpacity>
+          </View>
+          
+          {/* OR separator */}
+          <View className="flex-row items-center mt-9 justify-center w-[90%] max-w-[361px]">
+            <Image
+              source={require('../assets/images/Rectangle.png')}
+              className="h-[1px] w-[30%]"
+              resizeMode="contain"
+            />
+            <Text className="text-[#101828] font-bold text-[10px]">OR</Text>
+            <Image
+              source={require('../assets/images/Rectangle (1).png')}
+              className="h-[1px] w-[30%]"
+              resizeMode="contain"
+            />
+          </View>
+          
+          {/* Email signup button */}
+          <TouchableOpacity
+            onPress={fastPress(() => router.push('/auth/signup'), { 
+              key: 'signup_button',
+              priority: 'high'
+            })}
+            activeOpacity={0.8}
+            style={{
+              width: '90%',
+              maxWidth: 400,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: '#090E24',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginTop: 36
+            }}
+          >
+            <Text className="text-white font-semibold">Get Started with Email</Text>
+          </TouchableOpacity>
+          
+          {/* Sign in link */}
+          <TouchableOpacity 
+            onPress={fastPress(() => router.push('/auth/login'), { 
+              key: 'login_button',
+              priority: 'high'
+            })} 
+            activeOpacity={0.7}
+            style={{ marginTop: 36, padding: 8 }}
+          >
+            <Text className="font-rubik-bold text-[#344054]">Sign In</Text>
+          </TouchableOpacity>
+          
+          {/* Loading and error states */}
+          {loginLoading && <ActivityIndicator className="mt-4" color="#090E24" />}
+          {loginError && (
+            <Text className="text-red-500 text-center mt-2 px-4">
+              {loginError}
+            </Text>
+          )}
         </View>
-        <View className="flex-row items-center mt-9 justify-center w-[90%] max-w-[361px]">
-          <Image
-            source={require('../assets/images/Rectangle.png')}
-            className="h-[1px] w-[30%]"
-            resizeMode="contain"
-          />
-          <Text className="text-[#101828] font-bold text-[10px]">OR</Text>
-          <Image
-            source={require('../assets/images/Rectangle (1).png')}
-            className="h-[1px] w-[30%]"
-            resizeMode="contain"
-          />
-        </View>
-        <TouchableOpacity
-          onPress={fastPress(() => router.push('/auth/signup'), { 
-            key: 'signup_button',
-            priority: 'high'
-          })}
-          activeOpacity={0.8}
-          style={{
-            width: '90%',
-            maxWidth: 400,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: '#090E24',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginTop: 36
-          }}
-        >
-          <Text className="text-white font-semibold">Get Started with Email</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          onPress={fastPress(() => router.push('/auth/login'), { 
-            key: 'login_button',
-            priority: 'high'
-          })} 
-          activeOpacity={0.7}
-          style={{ marginTop: 36, padding: 8 }}
-        >
-          <Text className="font-rubik-bold text-[#344054]">Sign In</Text>
-        </TouchableOpacity>
-        {loginLoading && <ActivityIndicator className="mt-4" color="#090E24" />}
-        {loginError && (
-          <Text className="text-red-500 text-center mt-2 px-4">
-            {loginError}
-          </Text>
-        )}
       </View>
     </View>
   );

@@ -103,6 +103,11 @@ export default function VerifyEmail({
 
   return (
     <GestureHandlerRootView className="absolute inset-0 z-50">
+      {/* Blurred Background Overlay */}
+      <View 
+        className="absolute inset-0 bg-black/50"
+      />
+      
       {/* First Card - Verification */}
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
