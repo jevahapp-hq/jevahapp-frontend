@@ -4,15 +4,15 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
@@ -262,7 +262,7 @@ export default function SignUpScreen() {
             {/* Password Field */}
             <View className="flex flex-col w-[333px] mt-2">
               <View className="flex flex-row rounded-[15px] h-[56px] border border-[#9D9FA7] items-center px-3">
-                <FontAwesome6 name="unlock-keyhole" size={15} color="black" />
+                <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
                 <TextInput
                   placeholder="Password"
                   value={password}

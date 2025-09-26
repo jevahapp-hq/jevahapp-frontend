@@ -3,12 +3,12 @@ import { router } from "expo-router";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useCallback, useState } from "react";
 import {
-  Alert,
-  Image,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Image,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import { loginDebugger } from "../utils/loginDebugger";
@@ -143,7 +143,7 @@ export default function LoginScreen() {
           {/* Password Field */}
           <View className="flex flex-col w-[333px] mt-3">
             <View className="flex flex-row rounded-[15px] h-[56px] border border-[#9D9FA7] items-center px-3">
-              <FontAwesome6 name="unlock-keyhole" size={15} color="black" />
+              <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
               <TextInput
                 placeholder="Password"
                 value={password}
@@ -178,7 +178,7 @@ export default function LoginScreen() {
             onPress={() => router.push("/auth/forgetPassword")}
             className="mt-2 flex flex-row w-[333px] ml-2"
           >
-            <Text className="text-[#6663FD] text-[14px] font-rubik-semibold underline">
+            <Text className="text-[#FEA74E] text-[14px] font-rubik-semibold" style={{ textDecorationLine: 'none' }}>
               Forgot password?
             </Text>
           </TouchableOpacity>
