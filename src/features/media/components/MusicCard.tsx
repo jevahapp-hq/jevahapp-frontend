@@ -246,33 +246,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             </View>
           </View>
 
-          {/* Bottom Controls Styled (modular overlay) */}
-          <AudioControlsOverlay
-            progress={playerState.progress || 0}
-            isMuted={playerState.isMuted}
-            onToggleMute={() => controls.toggleMute()}
-            onSeekRelative={onSeekRelative}
-            onSeekToPercent={onSeekToPercent}
-          />
-
-          {/* Play/Pause button overlayed near controls to preserve design */}
-          <View className="absolute bottom-4 left-3" pointerEvents="box-none">
-            <TouchableOpacity
-              onPress={handlePlayPress}
-              className="mr-3"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons
-                name={playerState.isPlaying ? "pause" : "play"}
-                size={24}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Title Overlay */}
+          {/* Title Overlay - positioned directly above progress bar */}
           <View
-            className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md"
+            className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md"
             pointerEvents="box-none"
           >
             <Text
@@ -286,6 +262,31 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             >
               {audio.title}
             </Text>
+          </View>
+
+          {/* Bottom Controls Styled (modular overlay) */}
+          <AudioControlsOverlay
+            progress={playerState.progress || 0}
+            isMuted={playerState.isMuted}
+            onToggleMute={() => controls.toggleMute()}
+            onSeekRelative={onSeekRelative}
+            onSeekToPercent={onSeekToPercent}
+          />
+
+          {/* Play/Pause button overlayed near controls with spacing from bar */}
+          <View className="absolute bottom-4 left-3" pointerEvents="box-none">
+            <TouchableOpacity
+              onPress={handlePlayPress}
+              className="mr-3"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ marginRight: 12 }}
+            >
+              <Ionicons
+                name={playerState.isPlaying ? "pause" : "play"}
+                size={24}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableWithoutFeedback>

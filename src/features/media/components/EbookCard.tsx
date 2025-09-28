@@ -190,8 +190,8 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             </View>
           </View>
 
-          {/* Title Overlay */}
-          <View className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md">
+          {/* Title Overlay - positioned above lower controls area for consistency */}
+          <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
             <Text
               className="text-white font-semibold text-sm"
               numberOfLines={2}
