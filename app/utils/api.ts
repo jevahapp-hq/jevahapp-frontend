@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Platform } from "react-native";
 import { environmentManager } from "./environmentManager";
+import TokenUtils from "./tokenUtils";
 
 // Prioritize environment variable over environment manager
 export const API_BASE_URL =
@@ -115,7 +116,7 @@ export class APIClient {
   // Get authorization header with user token
   async getAuthHeaders(): Promise<HeadersInit> {
     try {
-      const token = await AsyncStorage.getItem("userToken");
+      const token = await TokenUtils.getAuthToken();
       const headers: HeadersInit = {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
@@ -135,6 +136,36 @@ export class APIClient {
     }
   }
 
+  // Refresh token once using backend contract: POST /api/auth/refresh { token }
+  private async refreshToken(): Promise<string> {
+    const current = await TokenUtils.getAuthToken();
+    if (!current) {
+      throw new Error("No token to refresh");
+    }
+
+    const res = await fetch(`${this.baseURL}/api/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${current}`,
+      },
+      body: JSON.stringify({ token: current }),
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${JSON.stringify(json)}`);
+    }
+
+    const newToken = (json as any)?.data?.token || (json as any)?.token;
+    if (!newToken) {
+      throw new Error("Refresh succeeded but no token in response");
+    }
+
+    await TokenUtils.storeAuthToken(newToken);
+    return newToken;
+  }
+
   // Generic API request method
   async request<T>(
     endpoint: string,
@@ -143,6 +174,8 @@ export class APIClient {
       body?: any;
       headers?: HeadersInit;
       requireAuth?: boolean;
+      timeoutMs?: number;
+      retryOnAbort?: boolean;
     } = {}
   ): Promise<T> {
     const {
@@ -150,6 +183,8 @@ export class APIClient {
       body,
       headers: customHeaders = {},
       requireAuth = true,
+      timeoutMs = 15000,
+      retryOnAbort = false,
     } = options;
 
     try {
@@ -167,20 +202,122 @@ export class APIClient {
         config.body = typeof body === "string" ? body : JSON.stringify(body);
       }
 
-      const response = await fetch(`${this.baseURL}${endpoint}`, config);
+      // First attempt with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const first = await fetch(`${this.baseURL}${endpoint}`, {
+        ...config,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorData}`);
+      if (requireAuth && first.status === 401) {
+        try {
+          const newToken = await this.refreshToken();
+          const retryHeaders: HeadersInit = {
+            ...customHeaders,
+            "Content-Type": "application/json",
+            "expo-platform": Platform.OS,
+            Authorization: `Bearer ${newToken}`,
+          };
+          const retryConfig: RequestInit = {
+            method,
+            headers: retryHeaders,
+          };
+          if (body && method !== "GET") {
+            retryConfig.body =
+              typeof body === "string" ? body : JSON.stringify(body);
+          }
+          // Retry with a fresh timeout
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(
+            () => retryController.abort(),
+            15000
+          );
+          const retry = await fetch(`${this.baseURL}${endpoint}`, {
+            ...retryConfig,
+            signal: retryController.signal,
+          });
+          clearTimeout(retryTimeoutId);
+          if (!retry.ok) {
+            const errorData = await retry.text();
+            throw new Error(`HTTP ${retry.status}: ${errorData}`);
+          }
+          const retryContentType = retry.headers.get("content-type");
+          if (
+            retryContentType &&
+            retryContentType.includes("application/json")
+          ) {
+            return (await retry.json()) as T;
+          }
+          return (await retry.text()) as unknown as T;
+        } catch (refreshErr) {
+          console.error("Token refresh failed:", refreshErr);
+        }
       }
 
-      const contentType = response.headers.get("content-type");
+      if (!first.ok) {
+        const errorData = await first.text();
+        throw new Error(`HTTP ${first.status}: ${errorData}`);
+      }
+
+      const contentType = first.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
-        return await response.json();
+        return (await first.json()) as T;
       } else {
-        return (await response.text()) as unknown as T;
+        return (await first.text()) as unknown as T;
       }
     } catch (error) {
+      // Swallow AbortError if caller wants retry-on-abort
+      if ((error as any)?.name === "AbortError" && retryOnAbort) {
+        try {
+          // Single retry with same options but without changing auth/headers
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(
+            () => retryController.abort(),
+            timeoutMs
+          );
+          const authHeaders = requireAuth
+            ? await this.getAuthHeaders()
+            : {
+                "Content-Type": "application/json",
+                "expo-platform": Platform.OS,
+              };
+          const headers = { ...authHeaders, ...customHeaders };
+          const config: RequestInit = { method, headers };
+          if (body && method !== "GET") {
+            config.body =
+              typeof body === "string" ? body : JSON.stringify(body);
+          }
+          const retryResp = await fetch(`${this.baseURL}${endpoint}`, {
+            ...config,
+            signal: retryController.signal,
+          });
+          clearTimeout(retryTimeoutId);
+          if (!retryResp.ok) {
+            const errorData = await retryResp.text();
+            throw new Error(`HTTP ${retryResp.status}: ${errorData}`);
+          }
+          const contentType = retryResp.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            return (await retryResp.json()) as T;
+          }
+          return (await retryResp.text()) as unknown as T;
+        } catch (retryErr) {
+          console.error(
+            `API retry after abort failed for ${endpoint}:`,
+            retryErr
+          );
+          throw retryErr;
+        }
+      }
+
+      if ((error as any)?.name === "AbortError") {
+        // Suppress noisy stack; let caller handle
+        console.warn(`API request aborted (timeout) for ${endpoint}`);
+        throw error;
+      }
+
       console.error(`API request failed for ${endpoint}:`, error);
       throw error;
     }
@@ -200,8 +337,8 @@ export class APIClient {
       }
     );
 
-    // Store token and user data
-    await AsyncStorage.setItem("userToken", response.token);
+    // Store token and user data (single source of truth)
+    await TokenUtils.storeAuthToken(response.token);
     await AsyncStorage.setItem("user", JSON.stringify(response.user));
 
     return response;
@@ -222,8 +359,8 @@ export class APIClient {
       }
     );
 
-    // Store token and user data
-    await AsyncStorage.setItem("userToken", response.token);
+    // Store token and user data (single source of truth)
+    await TokenUtils.storeAuthToken(response.token);
     await AsyncStorage.setItem("user", JSON.stringify(response.user));
 
     return response;
@@ -236,7 +373,24 @@ export class APIClient {
       console.warn("Logout API call failed:", error);
     } finally {
       // Clear local storage regardless of API success
-      await AsyncStorage.multiRemove(["userToken", "user"]);
+      await TokenUtils.clearAuthTokens();
+      await AsyncStorage.removeItem("user");
+
+      // Clear user-scoped notification caches
+      try {
+        await AsyncStorage.removeItem("cache.notifications.list:anonymous");
+        await AsyncStorage.removeItem("cache.notifications.stats:anonymous");
+        // Also attempt to clear for known user if present
+        const userStr = await AsyncStorage.getItem("user");
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          const uid = user?._id || user?.id;
+          if (uid) {
+            await AsyncStorage.removeItem(`cache.notifications.list:${uid}`);
+            await AsyncStorage.removeItem(`cache.notifications.stats:${uid}`);
+          }
+        }
+      } catch {}
 
       // Clear user-specific interaction data
       try {
@@ -251,17 +405,7 @@ export class APIClient {
     }
   }
 
-  async refreshToken(): Promise<string> {
-    const response = await this.request<{ token: string }>(
-      "/api/auth/refresh",
-      {
-        method: "POST",
-      }
-    );
-
-    await AsyncStorage.setItem("userToken", response.token);
-    return response.token;
-  }
+  // No refresh implementation on frontend; backend may add later.
 
   // Check if user is authenticated
   async isAuthenticated(): Promise<boolean> {

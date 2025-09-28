@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   Text,
@@ -12,157 +13,179 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import { SafeImage } from "../components/SafeImage";
-import { useNotifications } from "../context/PersistentNotificationContext";
+import { useNotifications } from "../hooks/useNotifications";
+import { notificationAPIService } from "../services/NotificationAPIService";
 
 export default function NotificationsScreen() {
   const {
     notifications,
-    unreadNotifications,
-    badge,
+    unreadCount,
+    loading,
+    error,
     markAsRead,
     markAllAsRead,
-    deleteNotification,
-    clearAllNotifications,
-    formatTime,
-    getIcon,
-    getColor,
+    refreshNotifications,
+    loadMoreNotifications,
+    hasMore,
   } = useNotifications();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Simulate refresh delay
-    setTimeout(() => {
+    try {
+      await refreshNotifications();
+    } catch (error) {
+      console.error("Error refreshing notifications:", error);
+    } finally {
       setRefreshing(false);
-    }, 1000);
-  };
+    }
+  }, [refreshNotifications]);
 
-  const handleMarkAllAsRead = async () => {
+  const handleMarkAllAsRead = useCallback(async () => {
     try {
       await markAllAsRead();
       Alert.alert("Success", "All notifications marked as read");
     } catch (error) {
       Alert.alert("Error", "Failed to mark notifications as read");
     }
-  };
+  }, [markAllAsRead]);
 
-  const handleClearAll = async () => {
-    Alert.alert(
-      "Clear All Notifications",
-      "Are you sure you want to clear all notifications?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await clearAllNotifications();
-              Alert.alert("Success", "All notifications cleared");
-            } catch (error) {
-              Alert.alert("Error", "Failed to clear notifications");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleNotificationPress = async (notification: any) => {
-    if (!notification.read) {
-      await markAsRead(notification.id);
+  const handleLoadMore = useCallback(async () => {
+    if (hasMore && !loading) {
+      await loadMoreNotifications();
     }
-    // TODO: Navigate to relevant content or user profile
-  };
+  }, [hasMore, loading, loadMoreNotifications]);
 
-  const handleDeleteNotification = async (notificationId: string) => {
-    Alert.alert(
-      "Delete Notification",
-      "Are you sure you want to delete this notification?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteNotification(notificationId);
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete notification");
-            }
-          },
-        },
-      ]
-    );
-  };
+  const handleNotificationPress = useCallback(
+    async (notification: any) => {
+      if (!notification.isRead) {
+        await markAsRead(notification._id);
+      }
+      // TODO: Navigate to relevant content or user profile
+    },
+    [markAsRead]
+  );
+
+  // Utility functions
+  const formatTimeAgo = useCallback((dateString: string): string => {
+    return notificationAPIService.formatTimeAgo(dateString);
+  }, []);
+
+  const getNotificationIcon = useCallback((type: string): string => {
+    return notificationAPIService.getNotificationIcon(type);
+  }, []);
+
+  const getNotificationColor = useCallback((type: string): string => {
+    return notificationAPIService.getNotificationColor(type);
+  }, []);
+
+  const groupNotificationsByTime = useCallback(
+    (notifications: any[]): any[] => {
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const newNotifications = notifications.filter(
+        (notif) => new Date(notif.createdAt) > oneDayAgo
+      );
+      const weekNotifications = notifications.filter(
+        (notif) =>
+          new Date(notif.createdAt) > oneWeekAgo &&
+          new Date(notif.createdAt) <= oneDayAgo
+      );
+      const monthNotifications = notifications.filter(
+        (notif) =>
+          new Date(notif.createdAt) > oneMonthAgo &&
+          new Date(notif.createdAt) <= oneWeekAgo
+      );
+
+      const sections: any[] = [];
+
+      if (newNotifications.length > 0) {
+        sections.push({ category: "New", items: newNotifications });
+      }
+      if (weekNotifications.length > 0) {
+        sections.push({ category: "Last 7 days", items: weekNotifications });
+      }
+      if (monthNotifications.length > 0) {
+        sections.push({ category: "Last 30 days", items: monthNotifications });
+      }
+
+      return sections;
+    },
+    []
+  );
 
   const renderNotificationItem = (notification: any) => (
-    <View
-      key={notification.id}
-      className={`bg-white rounded-[10px] shadow-sm p-3 mb-4 ${
-        !notification.read ? "border-l-4 border-blue-500" : ""
+    <TouchableOpacity
+      key={notification._id}
+      onPress={() => handleNotificationPress(notification)}
+      className={`bg-white rounded-[10px] shadow-sm p-3 h-[215px] mb-4 ${
+        !notification.isRead ? "border-l-4 border-[#256E63]" : ""
       }`}
     >
-      <TouchableOpacity
-        onPress={() => handleNotificationPress(notification)}
-        onLongPress={() => handleDeleteNotification(notification.id)}
-        activeOpacity={0.7}
-      >
-        <View className="flex-row items-start">
-          {/* Notification Icon */}
-          <View
-            className="w-8 h-8 rounded-full items-center justify-center mr-3"
-            style={{ backgroundColor: `${getColor(notification.type)}20` }}
-          >
-            <Ionicons
-              name={getIcon(notification.type) as any}
-              size={16}
-              color={getColor(notification.type)}
-            />
-          </View>
+      <View className="flex-row items-center justify-between mb-2">
+        <Text className="text-[#475467] mb-1 font-medium">
+          {getNotificationIcon(notification.type)} {notification.title}
+        </Text>
+        {!notification.isRead && (
+          <View className="w-2 h-2 bg-[#256E63] rounded-full" />
+        )}
+      </View>
 
-          {/* Notification Content */}
-          <View className="flex-1">
-            <View className="flex-row items-center justify-between mb-1">
-              <Text className="font-rubik-semibold text-[#1D2939] text-sm">
-                {notification.title}
-              </Text>
-              <Text className="text-xs text-[#667085] font-rubik">
-                {formatTime(notification.timestamp)}
-              </Text>
-            </View>
+      <View className="flex-row items-center mb-2">
+        <SafeImage
+          uri={notification.metadata?.actorAvatar}
+          className="w-6 h-6 rounded-full mr-2"
+          fallbackText={
+            notification.metadata?.actorName?.[0]?.toUpperCase() || "U"
+          }
+          showFallback={true}
+        />
+        <Text className="font-rubik-semibold text-[#667085] text-[12px]">
+          {notification.metadata?.actorName || "Someone"}
+        </Text>
+        <View className="flex-row items-center ml-3">
+          <Text className="text-[#FFD9B3] text-[18px] text-xs font-rubik">
+            •
+          </Text>
+          <Text className="text-xs text-[#667085] font-rubik ml-1">
+            {formatTimeAgo(notification.createdAt)}
+          </Text>
+        </View>
+      </View>
 
-            <Text className="text-[#475467] text-sm font-rubik mb-2">
-              {notification.message}
+      <Text className="mb-2 ml-8 text-[#1D2939] font-rubik">
+        {notification.message}
+      </Text>
+
+      <TouchableOpacity>
+        <Text className="text-[#256E63] font-bold text-xs ml-8">REPLY</Text>
+      </TouchableOpacity>
+
+      {notification.metadata?.thumbnailUrl && (
+        <View className="mt-3 flex-row items-start space-x-3 bg-[#F3F3F4] rounded-md p-3">
+          <Image
+            source={{ uri: notification.metadata.thumbnailUrl }}
+            className="w-14 h-14 rounded-md"
+          />
+          <View className="flex-1 ml-3">
+            <Text className="font-rubik-semibold text-[#1D2939]">
+              {notification.metadata.contentTitle || "Content"}
             </Text>
-
-            {/* User Info */}
-            {notification.userName && (
-              <View className="flex-row items-center">
-                <SafeImage
-                  uri={notification.avatar}
-                  className="w-5 h-5 rounded-full mr-2"
-                  fallbackText={
-                    notification.userName?.[0]?.toUpperCase() || "U"
-                  }
-                  showFallback={true}
-                />
-                <Text className="font-rubik-medium text-[#667085] text-xs">
-                  {notification.userName}
-                </Text>
-              </View>
-            )}
-
-            {/* Unread Indicator */}
-            {!notification.read && (
-              <View className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full" />
-            )}
+            <Text
+              className="text-[#667085] font-rubik text-sm"
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {notification.metadata.contentType || "media"}
+            </Text>
           </View>
         </View>
-      </TouchableOpacity>
-    </View>
+      )}
+    </TouchableOpacity>
   );
 
   const renderEmptyState = () => (
@@ -187,89 +210,93 @@ export default function NotificationsScreen() {
     </View>
   );
 
+  if (loading && notifications.length === 0) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <View className="px-4">
+          <AuthHeader title="Notifications" />
+        </View>
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#256E63" />
+          <Text className="mt-4 text-gray-600">Loading notifications...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const groupedNotifications = groupNotificationsByTime(notifications);
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
       <View className="px-4">
-        <View className="flex-row items-center justify-between">
-          <AuthHeader title="Notifications" />
-
-          {/* Action Buttons */}
-          <View className="flex-row items-center space-x-2">
-            {badge.hasUnread && (
-              <TouchableOpacity
-                onPress={handleMarkAllAsRead}
-                className="bg-blue-500 px-3 py-1 rounded-full"
-              >
-                <Text className="text-white text-xs font-rubik-semibold">
-                  Mark All Read
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {notifications.length > 0 && (
-              <TouchableOpacity
-                onPress={handleClearAll}
-                className="bg-gray-500 px-3 py-1 rounded-full"
-              >
-                <Text className="text-white text-xs font-rubik-semibold">
-                  Clear All
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        <AuthHeader title="Notifications" />
+        {unreadCount > 0 && (
+          <TouchableOpacity
+            onPress={handleMarkAllAsRead}
+            className="bg-[#256E63] px-4 py-2 rounded-lg self-end mt-2"
+          >
+            <Text className="text-white font-semibold text-sm">
+              Mark all as read ({unreadCount})
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Badge Info */}
-      {badge.hasUnread && (
-        <View className="mx-4 mb-4 bg-blue-50 p-3 rounded-lg">
-          <Text className="text-blue-800 text-sm font-rubik-semibold">
-            {badge.count} unread notification{badge.count !== 1 ? "s" : ""}
+      {/* Error State */}
+      {error && (
+        <View className="mx-4 mb-4 bg-red-50 p-3 rounded-lg">
+          <Text className="text-red-800 text-sm font-rubik-semibold">
+            {error}
           </Text>
         </View>
       )}
 
-      {/* Notifications List */}
+      {/* Scrollable Body */}
       <ScrollView
-        className="px-4 bg-[#F3F3F4]"
+        className="px-7 bg-[#F3F3F4]"
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={["#6366F1"]}
-            tintColor="#6366F1"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const isCloseToBottom =
+            layoutMeasurement.height + contentOffset.y >=
+            contentSize.height - 20;
+          if (isCloseToBottom && hasMore && !loading) {
+            handleLoadMore();
+          }
+        }}
+        scrollEventThrottle={400}
       >
-        {loading ? (
-          renderLoadingState()
-        ) : notifications.length === 0 ? (
-          renderEmptyState()
+        {groupedNotifications.length === 0 ? (
+          <View className="flex-1 justify-center items-center py-20">
+            <Text className="text-6xl mb-4">🔔</Text>
+            <Text className="text-xl font-semibold text-gray-800 mb-2">
+              No notifications yet
+            </Text>
+            <Text className="text-gray-600 text-center">
+              When people interact with your content, you'll see notifications
+              here.
+            </Text>
+          </View>
         ) : (
-          <View className="mt-2">
-            {/* Recent Notifications */}
-            {unreadNotifications.length > 0 && (
-              <View className="mb-4">
-                <Text className="text-[#1D2939] font-rubik-semibold mb-2">
-                  Recent ({unreadNotifications.length})
-                </Text>
-                {unreadNotifications.map(renderNotificationItem)}
-              </View>
-            )}
+          groupedNotifications.map((section, idx) => (
+            <View key={idx} className="mt-5">
+              <Text className="text-[#1D2939] font-rubik-semibold mb-2">
+                {section.category}
+              </Text>
+              {section.items.map(renderNotificationItem)}
+            </View>
+          ))
+        )}
 
-            {/* Older Notifications */}
-            {notifications.filter((n) => n.read).length > 0 && (
-              <View>
-                <Text className="text-[#1D2939] font-rubik-semibold mb-2">
-                  Earlier
-                </Text>
-                {notifications
-                  .filter((n) => n.read)
-                  .map(renderNotificationItem)}
-              </View>
-            )}
+        {/* Load More Indicator */}
+        {loading && notifications.length > 0 && (
+          <View className="py-4 items-center">
+            <ActivityIndicator size="small" color="#256E63" />
+            <Text className="text-gray-600 text-sm mt-2">Loading more...</Text>
           </View>
         )}
       </ScrollView>

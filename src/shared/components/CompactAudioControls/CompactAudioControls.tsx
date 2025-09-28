@@ -224,10 +224,13 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
       className={`flex-row items-center justify-between px-3 py-2 bg-black/50 rounded-lg ${
         className || ""
       }`}
-      {...panResponder.panHandlers}
     >
       {/* Play/Pause Button */}
-      <TouchableOpacity onPress={togglePlayPause} disabled={isLoading}>
+      <TouchableOpacity
+        onPress={togglePlayPause}
+        disabled={isLoading}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
         <Ionicons
           name={isPlaying ? "pause" : "play"}
           size={20}
@@ -241,7 +244,10 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
       </Text>
 
       {/* Progress Bar */}
-      <View className="flex-1 h-2 bg-white/30 rounded-full mx-2 relative">
+      <View
+        className="flex-1 h-2 bg-white/30 rounded-full ml-3 mr-2 relative"
+        {...panResponder.panHandlers}
+      >
         <Animated.View
           className="h-full bg-white rounded-full absolute left-0 top-0"
           style={{
@@ -252,6 +258,52 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
             }),
           }}
         />
+
+        {/* Thumb indicator at the progress end, centered vertically */}
+        <Animated.View
+          style={{
+            position: "absolute",
+            top: "50%",
+            transform: [
+              { translateY: -6 },
+              {
+                translateX: progressAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1],
+                }),
+              },
+            ],
+            // We'll position using percentage by nesting the thumb within another container
+          }}
+        />
+
+        {/* Container to position the thumb using width interpolation */}
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: progressAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0%", "100%"],
+              extrapolate: "clamp",
+            }),
+          }}
+        >
+          <View
+            style={{
+              position: "absolute",
+              right: -6,
+              top: "50%",
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              backgroundColor: "#FFFFFF",
+              transform: [{ translateY: -6 }],
+            }}
+          />
+        </Animated.View>
       </View>
 
       {/* Mute Button */}

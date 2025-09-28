@@ -59,7 +59,7 @@ export default function CommentModalV2() {
       onRequestClose={hideCommentModal}
     >
       <GestureHandlerRootView
-        style={{ position: "absolute", inset: 0, justifyContent: "flex-end" }}
+        style={{ position: "absolute", inset: 0, justifyContent: "flex-start" }}
       >
         <View
           style={{ position: "absolute", inset: 0, backgroundColor: "#0006" }}
@@ -68,10 +68,10 @@ export default function CommentModalV2() {
         <View
           style={{
             backgroundColor: "white",
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
+            borderBottomLeftRadius: 16,
+            borderBottomRightRadius: 16,
             maxHeight: "70%",
-            paddingTop: 12,
+            paddingTop: Math.max(insets?.top || 0, 12),
           }}
         >
           {/* Header */}
@@ -142,16 +142,16 @@ export default function CommentModalV2() {
           </ScrollView>
         </View>
 
-        {/* Input bar anchored to keyboard */}
+        {/* Input bar anchored to top (swap positions) */}
         <View
           style={{
             position: "absolute",
             left: 0,
             right: 0,
-            bottom: bottomOffset,
+            top: Math.max(insets?.top || 0, 8),
             backgroundColor: "white",
-            borderTopWidth: 1,
-            borderTopColor: "#E5E7EB",
+            borderBottomWidth: 1,
+            borderBottomColor: "#E5E7EB",
             paddingHorizontal: 12,
             paddingVertical: 10,
           }}

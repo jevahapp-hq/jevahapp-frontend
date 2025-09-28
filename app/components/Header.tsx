@@ -1,11 +1,10 @@
 import { useRouter } from "expo-router";
-import { useNotifications } from "../context/PersistentNotificationContext";
 import { useUserProfile } from "../hooks/useUserProfile";
 import MobileHeader from "./MobileHeader";
+import { NotificationBadge } from "./NotificationBadge";
 
 export default function Header() {
   const { user, loading, getAvatarUrl, error } = useUserProfile();
-  const { badge } = useNotifications();
   const router = useRouter();
 
   console.log("🔍 Header: User data:", user);
@@ -38,8 +37,12 @@ export default function Header() {
     {
       icon: "notifications-outline",
       onPress: () => router.push("/noitfication/NotificationsScreen"),
-      badge: badge.hasUnread,
-      badgeCount: badge.count,
+      badge: (
+        <NotificationBadge
+          size="small"
+          onPress={() => router.push("/noitfication/NotificationsScreen")}
+        />
+      ),
     },
     {
       icon: "download-outline",

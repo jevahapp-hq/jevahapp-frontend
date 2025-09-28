@@ -43,16 +43,8 @@ export default function AudioControlsOverlay({
   return (
     <View className="absolute bottom-4 left-3 right-3" pointerEvents="box-none">
       <View className="flex-row items-center">
-        <TouchableOpacity
-          onPress={() => onSeekRelative(-10)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          className="mr-3"
-        >
-          <Ionicons name="play-back" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-
         <View
-          className="flex-1 h-1.5 rounded-full mr-3"
+          className="flex-1 h-1.5 rounded-full"
           style={{ backgroundColor: barColor }}
           onLayout={(e) => (barWidthRef.current = e.nativeEvent.layout.width)}
           {...panResponder.panHandlers}
@@ -70,6 +62,7 @@ export default function AudioControlsOverlay({
           <TouchableOpacity
             onPress={onToggleMute}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            className="ml-3"
           >
             <Ionicons
               name={
@@ -82,14 +75,6 @@ export default function AudioControlsOverlay({
             />
           </TouchableOpacity>
         )}
-
-        <TouchableOpacity
-          onPress={() => onSeekRelative(10)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          className="ml-3"
-        >
-          <Ionicons name="play-forward" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
     </View>
   );

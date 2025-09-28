@@ -62,15 +62,18 @@ class SocketManager {
         tokenPreview: TokenUtils.getTokenPreview(this.authToken),
       });
 
-      // Test backend connectivity first
+      // Test backend connectivity with an authenticated endpoint
       try {
-        const response = await fetch(`${this.serverUrl}/health`, {
+        const response = await fetch(`${this.serverUrl}/api/auth/me`, {
           method: "GET",
-          timeout: 5000,
+          headers: {
+            Authorization: `Bearer ${this.authToken}`,
+            "Content-Type": "application/json",
+          },
         });
         if (!response.ok) {
           console.warn(
-            "⚠️ Backend health check failed, skipping socket connection"
+            "⚠️ Auth check failed, skipping socket connection (are you logged in?)"
           );
           return;
         }
@@ -120,7 +123,7 @@ class SocketManager {
       this.handleReconnect();
     });
 
-    this.socket.on("connect_error", (error) => {
+    this.socket.on("connect_error", (error: any) => {
       // Check if it's an authentication error first
       const isAuthError =
         error.message?.includes("Authentication failed") ||
@@ -130,8 +133,8 @@ class SocketManager {
         error.message?.includes("Forbidden") ||
         error.message?.includes("401") ||
         error.message?.includes("403") ||
-        error.code === "UNAUTHORIZED" ||
-        error.code === "FORBIDDEN";
+        error?.code === "UNAUTHORIZED" ||
+        error?.code === "FORBIDDEN";
 
       if (isAuthError) {
         console.log("🔐 Authentication required - please log in to connect");
@@ -149,22 +152,22 @@ class SocketManager {
       }
 
       // Log other connection errors (non-authentication)
-      console.error("❌ Socket connection error:", error.message);
+      console.error("❌ Socket connection error:", error?.message);
       console.error("❌ Error details:", {
-        message: error.message,
-        type: error.type,
-        description: error.description,
-        context: error.context,
-        code: error.code,
-        data: error.data,
+        message: error?.message,
+        type: (error as any)?.type,
+        description: (error as any)?.description,
+        context: (error as any)?.context,
+        code: (error as any)?.code,
+        data: (error as any)?.data,
       });
 
       // Don't reconnect on network errors that are likely permanent
       if (
-        error.message?.includes("Network Error") ||
-        error.message?.includes("timeout") ||
-        error.message?.includes("ECONNREFUSED") ||
-        error.code === "NETWORK_ERROR"
+        error?.message?.includes("Network Error") ||
+        error?.message?.includes("timeout") ||
+        error?.message?.includes("ECONNREFUSED") ||
+        (error as any)?.code === "NETWORK_ERROR"
       ) {
         console.log(
           "🌐 Network error detected, stopping reconnection attempts"
@@ -201,13 +204,13 @@ class SocketManager {
     });
 
     // New production-grade view updates
-    this.socket.on("view-updated", (data) => {
+    this.socket.on("view-updated", (data: any) => {
       try {
         console.log("Real-time view updated:", data);
         const { useInteractionStore } = require("../store/useInteractionStore");
         const store = useInteractionStore.getState();
         if (data?.contentId && typeof data?.viewCount === "number") {
-          store.mutateStats(data.contentId, (s) => ({
+          store.mutateStats(data.contentId, (_s: any) => ({
             views: Number(data.viewCount) || 0,
           }));
         }
@@ -217,19 +220,19 @@ class SocketManager {
     });
 
     // Notifications
-    this.socket.on("new-like-notification", (data) => {
+    this.socket.on("new-like-notification", (data: any) => {
       console.log("New like notification:", data);
       this.handleLikeNotification(data);
     });
 
-    this.socket.on("new-comment-notification", (data) => {
+    this.socket.on("new-comment-notification", (data: any) => {
       console.log("New comment notification:", data);
       this.handleCommentNotification(data);
     });
 
     // Error handling
-    this.socket.on("error", (error) => {
-      console.error("Socket error:", error);
+    this.socket.on("error", (error: any) => {
+      console.error("Socket error:", error?.message || error);
     });
   }
 
@@ -354,7 +357,7 @@ class SocketManager {
     notificationService.addNotification(notification);
 
     // Call custom handler if set
-    this.customHandlers?.onLikeNotification?.(data);
+    (this as any).customHandlers?.onLikeNotification?.(data);
   }
 
   public handleCommentNotification(data: any): void {
@@ -369,7 +372,7 @@ class SocketManager {
     notificationService.addNotification(notification);
 
     // Call custom handler if set
-    this.customHandlers?.onCommentNotification?.(data);
+    (this as any).customHandlers?.onCommentNotification?.(data);
   }
 
   // Public methods for components to override
@@ -446,14 +449,17 @@ class SocketManager {
       }
 
       // Test token with a simple API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const response = await fetch(`${this.serverUrl}/api/auth/validate`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.authToken}`,
           "Content-Type": "application/json",
         },
-        timeout: 5000,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       return response.ok;
     } catch (error) {

@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import TokenUtils from "../utils/tokenUtils";
 
 // Jevah Backend API Base URL
 const JEVAH_API_BASE_URL = "https://jevahapp-backend.onrender.com/api/auth";
@@ -20,7 +21,9 @@ class AuthService {
       const data = await response.json();
       if (response.ok && (data?.data?.token || data?.token)) {
         const token = data?.data?.token || data?.token;
-        await AsyncStorage.setItem("token", token);
+        // Store token consistently in all places used across the app
+        await TokenUtils.storeAuthToken(token);
+        await AsyncStorage.setItem("userToken", token);
         const user = data?.data?.user || data?.user;
         if (user) await AsyncStorage.setItem("user", JSON.stringify(user));
       }
@@ -113,7 +116,7 @@ class AuthService {
 
   async logout() {
     try {
-      await AsyncStorage.removeItem("token");
+      await TokenUtils.clearAuthTokens();
       await AsyncStorage.removeItem("user");
       try {
         const { useInteractionStore } = await import(
