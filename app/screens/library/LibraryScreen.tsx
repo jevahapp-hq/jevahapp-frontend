@@ -128,7 +128,7 @@ export default function LibraryScreen() {
                 router.replace({ pathname: "/categories/HomeScreen" });
                 break;
               case "Community":
-                router.replace({ pathname: "/screens/CommunityScreen" });
+                router.replace({ pathname: "/screens/PrayerWallScreen" });
                 break;
               case "Library":
                 router.replace({ pathname: "/screens/library/LibraryScreen" });

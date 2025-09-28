@@ -76,6 +76,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   const globalVideoStore = useGlobalVideoStore();
   const [savedItems, setSavedItems] = useState<any[]>([]);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [savedItemIds, setSavedItemIds] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -93,6 +94,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   );
   const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({});
   const videoRefs = useRef<Record<string, any>>({});
+  const dotsRefs = useRef<Record<string, any>>({});
 
   // Audio playback state
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -1336,82 +1338,154 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             </View>
           )}
 
-          {/* Three-dots menu trigger */}
-          <TouchableOpacity
-            className="absolute bottom-2 right-2 bg-white rounded-full p-1"
-            onPress={(e) => {
-              if (isVideo) e.stopPropagation();
-              setMenuOpenId((prev) => (prev === itemId ? null : itemId));
+          {/* Three-dots menu trigger (measured) */}
+          <View
+            ref={(ref) => {
+              if (ref) dotsRefs.current[itemId] = ref;
             }}
+            collapsable={false}
+            className="absolute bottom-2 right-2"
           >
-            <Ionicons name="ellipsis-vertical" size={14} color="#3A3E50" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              className="bg-white rounded-full p-1"
+              onPress={() => {
+                if (isVideo) return; // avoid toggling during video press bubbling
+                const node = dotsRefs.current[itemId];
+                try {
+                  node?.measureInWindow?.((x: number, y: number) => {
+                    setMenuPos({ x, y });
+                    setMenuOpenId((prev) => (prev === itemId ? null : itemId));
+                  });
+                } catch {
+                  setMenuOpenId((prev) => (prev === itemId ? null : itemId));
+                }
+              }}
+            >
+              <Ionicons name="ellipsis-vertical" size={14} color="#3A3E50" />
+            </TouchableOpacity>
+          </View>
 
-          {/* Minimal menu modal */}
+          {/* Compact options menu (portal-like absolute overlay within card bounds) */}
           {menuOpenId === itemId && (
             <>
               <TouchableOpacity
-                className="absolute inset-0 bg-black/10 z-40"
+                className="absolute inset-0 z-40"
                 activeOpacity={1}
                 onPress={() => setMenuOpenId(null)}
               />
-              <View className="absolute bottom-12 right-1 bg-white shadow-xl rounded-lg p-2 z-50 w-[160px] border border-gray-200">
-                <TouchableOpacity
-                  className="py-2 px-2 border-b border-gray-100 flex-row items-center justify-between"
-                  onPress={() => setMenuOpenId(null)}
-                >
-                  <Text className="text-[#1D2939] font-rubik text-xs">
-                    View Details
-                  </Text>
-                  <Ionicons name="eye-outline" size={16} color="#1D2939" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="py-2 px-2 border-b border-gray-100 flex-row items-center justify-between"
-                  onPress={() => handleShare(item)}
-                >
-                  <Text className="text-[#1D2939] font-rubik text-xs">
-                    Share
-                  </Text>
-                  <Feather name="send" size={16} color="#1D2939" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="py-2 px-2 border-b border-gray-100 flex-row items-center justify-between"
-                  onPress={async () => {
-                    try {
-                      const contentType =
-                        item.contentType === "music"
-                          ? "audio"
-                          : item.contentType;
-                      const { convertToDownloadableItem } = await import(
-                        "../../utils/downloadUtils"
-                      );
-                      const downloadableItem = convertToDownloadableItem(
-                        item,
-                        contentType as any
-                      );
-                      const result = await handleDownload(downloadableItem);
-                      if (result.success) {
-                        setMenuOpenId(null);
-                      }
-                    } catch (e) {
-                      console.warn("Download failed:", e);
-                    }
+              <View
+                pointerEvents="box-none"
+                style={{
+                  position: "absolute",
+                  zIndex: 50,
+                  // Position relative to trigger; clamp within card bounds
+                  bottom: 36,
+                  right: 4,
+                }}
+              >
+                <View
+                  style={{
+                    maxWidth: 180,
+                    minWidth: 148,
+                    borderRadius: 10,
+                    paddingVertical: 4,
+                    backgroundColor: "#FFFFFF",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.12,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 4 },
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
                   }}
                 >
-                  <Text className="text-[#1D2939] font-rubik text-xs">
-                    Download
-                  </Text>
-                  <Ionicons name="download-outline" size={16} color="#1D2939" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="py-2 px-2 flex-row items-center justify-between"
-                  onPress={() => handleRemoveFromLibrary(item)}
-                >
-                  <Text className="text-[#1D2939] font-rubik text-xs">
-                    Remove
-                  </Text>
-                  <MaterialIcons name="bookmark" size={16} color="#1D2939" />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                    onPress={() => setMenuOpenId(null)}
+                  >
+                    <Text className="text-[#1D2939] font-rubik text-xs">
+                      View Details
+                    </Text>
+                    <Ionicons name="eye-outline" size={16} color="#1D2939" />
+                  </TouchableOpacity>
+                  <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
+                  <TouchableOpacity
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                    onPress={() => handleShare(item)}
+                  >
+                    <Text className="text-[#1D2939] font-rubik text-xs">
+                      Share
+                    </Text>
+                    <Feather name="send" size={16} color="#1D2939" />
+                  </TouchableOpacity>
+                  <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
+                  <TouchableOpacity
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                    onPress={async () => {
+                      try {
+                        const contentType =
+                          item.contentType === "music"
+                            ? "audio"
+                            : item.contentType;
+                        const { convertToDownloadableItem } = await import(
+                          "../../utils/downloadUtils"
+                        );
+                        const downloadableItem = convertToDownloadableItem(
+                          item,
+                          contentType as any
+                        );
+                        const result = await handleDownload(downloadableItem);
+                        if (result.success) {
+                          setMenuOpenId(null);
+                        }
+                      } catch (e) {
+                        console.warn("Download failed:", e);
+                      }
+                    }}
+                  >
+                    <Text className="text-[#1D2939] font-rubik text-xs">
+                      Download
+                    </Text>
+                    <Ionicons
+                      name="download-outline"
+                      size={16}
+                      color="#1D2939"
+                    />
+                  </TouchableOpacity>
+                  <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
+                  <TouchableOpacity
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                    onPress={() => handleRemoveFromLibrary(item)}
+                  >
+                    <Text className="text-[#1D2939] font-rubik text-xs">
+                      Remove
+                    </Text>
+                    <MaterialIcons name="bookmark" size={16} color="#1D2939" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </>
           )}

@@ -376,9 +376,12 @@ export default function VideoCard({
             </View>
           </View>
 
-          {/* Video Title - show when paused */}
+          {/* Video Title - show when paused (just above progress bar) */}
           {!playingVideos[modalKey] && (
-            <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
+            <View
+              className="absolute left-3 right-3 px-4 py-2 rounded-md"
+              style={{ bottom: 28, zIndex: 5 }}
+            >
               <Text
                 className="text-white font-semibold text-[14px]"
                 numberOfLines={2}
@@ -389,7 +392,10 @@ export default function VideoCard({
           )}
 
           {/* Bottom Controls */}
-          <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
+          <View
+            className="absolute left-3 right-3 flex-row items-center gap-2 px-3"
+            style={{ bottom: 12, zIndex: 4 }}
+          >
             <View
               className="flex-1 h-1 bg-white/30 rounded-full relative"
               {...panResponder.panHandlers}

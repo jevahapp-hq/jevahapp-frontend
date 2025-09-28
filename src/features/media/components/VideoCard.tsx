@@ -318,8 +318,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             onSeekToPercent={seekToPercent}
           />
 
-          {/* Title Overlay */}
-          <View className="absolute bottom-12 left-3 right-3 px-4 py-2 rounded-md">
+          {/* Title Overlay - positioned just above the progress bar */}
+          <View className="absolute bottom-8 left-3 right-3 px-4 py-2 rounded-md">
             <Text
               className="text-white font-semibold text-sm"
               numberOfLines={2}
