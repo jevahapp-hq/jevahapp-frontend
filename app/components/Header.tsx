@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useUserProfile } from "../hooks/useUserProfile";
 import MobileHeader from "./MobileHeader";
+import { NotificationBadge } from "./NotificationBadge";
 
 export default function Header() {
   const { user, loading, getAvatarUrl, error } = useUserProfile();
@@ -14,11 +15,17 @@ export default function Header() {
   // Helper function to normalize section value
   const normalizeSection = (section: string | undefined | null): string => {
     if (!section) return "ADULT";
-    
+
     const normalized = section.toLowerCase().trim();
     if (normalized === "adult" || normalized === "adults") return "ADULT";
-    if (normalized === "kid" || normalized === "kids" || normalized === "child" || normalized === "children") return "KID";
-    
+    if (
+      normalized === "kid" ||
+      normalized === "kids" ||
+      normalized === "child" ||
+      normalized === "children"
+    )
+      return "KID";
+
     return "ADULT"; // Default fallback
   };
 
@@ -30,7 +37,12 @@ export default function Header() {
     {
       icon: "notifications-outline",
       onPress: () => router.push("/noitfication/NotificationsScreen"),
-      badge: true,
+      badge: (
+        <NotificationBadge
+          size="small"
+          onPress={() => router.push("/noitfication/NotificationsScreen")}
+        />
+      ),
     },
     {
       icon: "download-outline",
@@ -41,18 +53,24 @@ export default function Header() {
   return (
     <MobileHeader
       type="main"
-      user={user ? {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        avatar: getAvatarUrl(user) || undefined,
-        section: normalizeSection(user.section),
-        isOnline: true,
-      } : loading ? {
-        firstName: "Loading...",
-        lastName: "",
-        section: "USER",
-        isOnline: false,
-      } : undefined}
+      user={
+        user
+          ? {
+              firstName: user.firstName,
+              lastName: user.lastName,
+              avatar: getAvatarUrl(user) || undefined,
+              section: normalizeSection(user.section),
+              isOnline: true,
+            }
+          : loading
+          ? {
+              firstName: "Loading...",
+              lastName: "",
+              section: "USER",
+              isOnline: false,
+            }
+          : undefined
+      }
       rightActions={rightActions}
     />
   );

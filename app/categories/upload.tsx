@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { Feather } from "@expo/vector-icons";
@@ -18,24 +19,27 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-    getButtonSize,
-    getInputSize,
-    getKeyboardAdjustment,
-    getMediaPickerSize,
-    getOrientation,
-    getResponsiveFontSize,
-    getResponsiveSize,
-    getResponsiveSpacing,
-    getScreenDimensions,
-    getThumbnailSize,
-    getTouchTargetSize,
-    isSmallScreen
+  getButtonSize,
+  getInputSize,
+  getKeyboardAdjustment,
+  getMediaPickerSize,
+  getOrientation,
+  getResponsiveFontSize,
+  getResponsiveSize,
+  getResponsiveSpacing,
+  getScreenDimensions,
+  getThumbnailSize,
+  getTouchTargetSize,
+  isSmallScreen,
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { useMediaStore } from "../store/useUploadStore";
 
-import { logUserDataStatus, validateUserForUpload } from "../utils/userValidation";
+import {
+  logUserDataStatus,
+  validateUserForUpload,
+} from "../utils/userValidation";
 
 // Use the correct API base URL for uploads
 const API_BASE_URL = "https://jevahapp-backend.onrender.com";
@@ -68,28 +72,31 @@ export default function UploadScreen() {
   const [selectedType, setSelectedType] = useState("");
   const [isSermonContent, setIsSermonContent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(getOrientation());
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">(
+    getOrientation()
+  );
 
   // Check authentication status on component mount
   useEffect(() => {
     const checkAuth = async () => {
       const authStatus = await checkAuthenticationStatus();
-      
+
       console.log("🔍 Upload Screen - Auth Check:", {
         hasToken: authStatus.hasToken,
         tokenSource: authStatus.tokenSource,
         hasUser: authStatus.hasUser,
-        userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+        userKeys: authStatus.user ? Object.keys(authStatus.user) : null,
       });
     };
-    
+
     checkAuth();
   }, []);
 
   // Handle orientation changes
   useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      const newOrientation = window.width > window.height ? 'landscape' : 'portrait';
+    const subscription = Dimensions.addEventListener("change", ({ window }) => {
+      const newOrientation =
+        window.width > window.height ? "landscape" : "portrait";
       setOrientation(newOrientation);
     });
 
@@ -110,7 +117,12 @@ export default function UploadScreen() {
 
   const pickMedia = async () => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ["video/mp4", "audio/mpeg", "application/pdf", "application/epub+zip"],
+      type: [
+        "video/mp4",
+        "audio/mpeg",
+        "application/pdf",
+        "application/epub+zip",
+      ],
       copyToCacheDirectory: true,
       multiple: false,
     });
@@ -134,19 +146,33 @@ export default function UploadScreen() {
       return;
     }
 
+    const fileSize = result.assets[0].size;
+    console.log("📁 File selected:", {
+      name,
+      mimeType: guessedMime,
+      size: fileSize,
+      hasSize: !!fileSize,
+      uri: uri?.substring(0, 50) + "...",
+    });
+
     setFile({
       uri,
       name,
       mimeType: guessedMime,
+      size: fileSize, // Add size property
     });
   };
 
   const pickThumbnail = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert("Permission needed", "Please allow access to photo library to select thumbnail.");
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Please allow access to photo library to select thumbnail."
+        );
         return;
       }
 
@@ -162,7 +188,7 @@ export default function UploadScreen() {
         setThumbnail({
           uri: asset.uri,
           name: `thumbnail_${Date.now()}.jpg`,
-          mimeType: 'image/jpeg',
+          mimeType: "image/jpeg",
         });
       }
     } catch (error) {
@@ -190,32 +216,32 @@ export default function UploadScreen() {
     // Check for token in multiple locations
     let token = await AsyncStorage.getItem("userToken");
     let tokenSource = "userToken";
-    
+
     if (!token) {
       token = await AsyncStorage.getItem("token");
       tokenSource = "token";
     }
-    
+
     if (!token) {
       try {
-        const { default: SecureStore } = await import('expo-secure-store');
-        token = await SecureStore.getItemAsync('jwt');
+        const { default: SecureStore } = await import("expo-secure-store");
+        token = await SecureStore.getItemAsync("jwt");
         tokenSource = "jwt";
       } catch (secureStoreError) {
         // Silent fallback
       }
     }
-    
+
     const userRaw = await AsyncStorage.getItem("user");
     const user = userRaw ? JSON.parse(userRaw) : null;
-    
+
     return {
       hasToken: !!token,
       token,
       tokenSource,
       hasUser: !!user,
       user,
-      userRaw
+      userRaw,
     };
   };
 
@@ -227,12 +253,12 @@ export default function UploadScreen() {
 
     // Check authentication before proceeding
     const authStatus = await checkAuthenticationStatus();
-    
+
     console.log("🔍 Upload Auth Check:", {
       hasToken: authStatus.hasToken,
       tokenSource: authStatus.tokenSource,
       hasUser: authStatus.hasUser,
-      userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+      userKeys: authStatus.user ? Object.keys(authStatus.user) : null,
     });
 
     if (!authStatus.hasToken || !authStatus.hasUser) {
@@ -244,26 +270,22 @@ export default function UploadScreen() {
       } else if (!authStatus.hasUser) {
         message = "User data missing. Please log in again.";
       }
-      
-      Alert.alert(
-        "Authentication Required", 
-        message,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Go to Login", onPress: () => router.push("/auth/login") }
-        ]
-      );
+
+      Alert.alert("Authentication Required", message, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Go to Login", onPress: () => router.push("/auth/login") },
+      ]);
       return;
     }
 
     // Recommend thumbnail for music uploads
     if (selectedType === "music" && !thumbnail) {
       Alert.alert(
-        "Thumbnail Recommended", 
+        "Thumbnail Recommended",
         "Adding a thumbnail image will help your music stand out. Would you like to continue without one?",
         [
           { text: "Add Thumbnail", style: "cancel" },
-          { text: "Continue", onPress: () => proceedWithUpload() }
+          { text: "Continue", onPress: () => proceedWithUpload() },
         ]
       );
       return;
@@ -275,22 +297,24 @@ export default function UploadScreen() {
   const proceedWithUpload = async () => {
     try {
       setLoading(true);
-      
+
       // Check authentication status first
       const authStatus = await checkAuthenticationStatus();
-      
+
       console.log("🔍 Upload Debug - Retrieved data:", {
         hasToken: authStatus.hasToken,
         tokenSource: authStatus.tokenSource,
         tokenLength: authStatus.token?.length,
-        tokenPreview: authStatus.token ? `${authStatus.token.substring(0, 10)}...` : null,
+        tokenPreview: authStatus.token
+          ? `${authStatus.token.substring(0, 10)}...`
+          : null,
         hasUser: authStatus.hasUser,
         userRaw: authStatus.userRaw,
         userData: authStatus.user,
         userAvatar: authStatus.user?.avatar,
         userImageUrl: authStatus.user?.imageUrl,
         userProfileImage: authStatus.user?.profileImage,
-        userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+        userKeys: authStatus.user ? Object.keys(authStatus.user) : null,
       });
 
       if (!authStatus.hasToken || !authStatus.hasUser) {
@@ -299,9 +323,9 @@ export default function UploadScreen() {
           tokenExists: authStatus.hasToken,
           userExists: authStatus.hasUser,
           tokenSource: authStatus.tokenSource,
-          userKeys: authStatus.user ? Object.keys(authStatus.user) : null
+          userKeys: authStatus.user ? Object.keys(authStatus.user) : null,
         });
-        
+
         let message = "Please log in again to upload content.";
         if (!authStatus.hasToken && !authStatus.hasUser) {
           message = "Session expired. Please log in again.";
@@ -310,7 +334,7 @@ export default function UploadScreen() {
         } else if (!authStatus.hasUser) {
           message = "User data missing. Please log in again.";
         }
-        
+
         Alert.alert("Authentication Required", message);
         return;
       }
@@ -318,18 +342,25 @@ export default function UploadScreen() {
       // ✅ Validate and normalize user data
       const validation = validateUserForUpload(authStatus.user);
       const normalizedUser = validation.normalizedUser;
-      
+
       logUserDataStatus(authStatus.user, "Upload");
-      
+
       // Warn about missing data but don't block upload
       if (!validation.isValid) {
-        console.warn("⚠️ Upload with incomplete user data:", validation.missingFields);
+        console.warn(
+          "⚠️ Upload with incomplete user data:",
+          validation.missingFields
+        );
       }
 
       // Ensure user data includes avatar for upload
       if (!normalizedUser.avatar && authStatus.user) {
         // Try to get avatar from various possible fields
-        const avatar = authStatus.user.avatar || authStatus.user.imageUrl || authStatus.user.profileImage || '';
+        const avatar =
+          authStatus.user.avatar ||
+          authStatus.user.imageUrl ||
+          authStatus.user.profileImage ||
+          "";
         if (avatar) {
           normalizedUser.avatar = avatar;
           console.log("✅ Found user avatar for upload:", avatar);
@@ -340,7 +371,7 @@ export default function UploadScreen() {
         fullName: normalizedUser.fullName,
         avatar: normalizedUser.avatar,
         hasAvatar: !!normalizedUser.avatar,
-        validation: validation
+        validation: validation,
       });
 
       const formData = new FormData();
@@ -348,8 +379,9 @@ export default function UploadScreen() {
         uri: file.uri,
         type: file.mimeType,
         name: file.name,
+        size: file.size, // Add file size
       } as any);
-      
+
       // ✅ Add thumbnail if selected
       if (thumbnail) {
         formData.append("thumbnail", {
@@ -358,10 +390,20 @@ export default function UploadScreen() {
           name: thumbnail.name,
         } as any);
       }
-      
+
       formData.append("title", title);
       formData.append("description", description);
-      
+
+      // Add file size as separate field for backend validation
+      if (file.size) {
+        formData.append("fileSize", file.size.toString());
+        console.log("📊 File size added to FormData:", file.size, "bytes");
+      } else {
+        console.warn(
+          "⚠️ No file size available - this might cause upload issues"
+        );
+      }
+
       // Handle sermon content type - determine if it should be music or videos based on file type
       let apiContentType = selectedType;
       if (selectedType === "sermon") {
@@ -378,7 +420,7 @@ export default function UploadScreen() {
         // Map ebook to books for API compatibility
         apiContentType = "books";
       }
-      
+
       formData.append("contentType", apiContentType);
       formData.append(
         "genre",
@@ -390,19 +432,27 @@ export default function UploadScreen() {
         url: `${API_BASE_URL}/api/media/upload`,
         hasToken: !!authStatus.token,
         tokenLength: authStatus.token?.length,
-        fileSize: file?.uri ? "File selected" : "No file",
-        thumbnailSize: thumbnail?.uri ? "Thumbnail selected" : "No thumbnail"
+        fileSize: file?.size ? `${file.size} bytes` : "No file size",
+        fileName: file?.name || "No file name",
+        fileType: file?.mimeType || "No file type",
+        thumbnailSize: thumbnail?.size
+          ? `${thumbnail.size} bytes`
+          : "No thumbnail",
       });
 
-      // Add timeout to prevent hanging requests
+      // Add timeout to prevent hanging requests (longer for video uploads)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutDuration = file.mimeType?.startsWith("video/")
+        ? 120000
+        : 60000; // 2 min for videos, 1 min for others
+      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
       const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${authStatus.token}`,
           Accept: "application/json",
+          "expo-platform": Platform.OS,
         },
         body: formData,
         signal: controller.signal,
@@ -435,7 +485,9 @@ export default function UploadScreen() {
         });
         const message =
           (result && (result.message || result.error)) ||
-          (rawText ? `Unexpected response (${res.status}).` : `HTTP ${res.status}`);
+          (rawText
+            ? `Unexpected response (${res.status}).`
+            : `HTTP ${res.status}`);
         Alert.alert("Upload failed", message || "Please try again.");
         return;
       }
@@ -446,7 +498,10 @@ export default function UploadScreen() {
           contentType,
           rawTextPreview: rawText ? rawText.slice(0, 300) : null,
         });
-        Alert.alert("Upload failed", "Server returned unexpected response. Please try again.");
+        Alert.alert(
+          "Upload failed",
+          "Server returned unexpected response. Please try again."
+        );
         return;
       }
 
@@ -454,7 +509,7 @@ export default function UploadScreen() {
       const now = new Date();
 
       // 🛡️ Use the new validation method to ensure fresh user data
-      
+
       await useMediaStore.getState().addMediaWithUserValidation({
         _id: uploaded._id,
         title: uploaded.title,
@@ -509,22 +564,31 @@ export default function UploadScreen() {
     } catch (error: any) {
       setLoading(false);
       console.error("❌ Upload error:", error?.message ?? error);
-      
+      console.error("❌ Upload error details:", {
+        name: error?.name,
+        message: error?.message,
+        status: error?.status,
+        response: error?.response,
+        code: error?.code,
+      });
+
       // Provide more specific error messages
       let errorMessage = "Something went wrong.";
-      
-      if (error?.name === 'AbortError') {
+
+      if (error?.name === "AbortError") {
         errorMessage = "Request timed out. Please try again.";
       } else if (error?.message?.includes("Network request failed")) {
-        errorMessage = "Network connection failed. Please check your internet connection and try again.";
+        errorMessage =
+          "Network connection failed. Please check your internet connection and try again.";
       } else if (error?.message?.includes("timeout")) {
         errorMessage = "Request timed out. Please try again.";
       } else if (error?.message?.includes("fetch")) {
-        errorMessage = "Unable to connect to server. Please check your internet connection.";
+        errorMessage =
+          "Unable to connect to server. Please check your internet connection.";
       } else if (error?.message) {
         errorMessage = error.message;
       }
-      
+
       Alert.alert("Upload Failed", errorMessage);
     }
   };
@@ -539,7 +603,7 @@ export default function UploadScreen() {
     const tagPadding = getResponsiveSpacing(8, 12, 16);
     const tagFontSize = getResponsiveFontSize(12, 14, 16);
     const touchTargetSize = getTouchTargetSize();
-    
+
     return (
       <TouchableOpacity
         key={value}
@@ -562,7 +626,7 @@ export default function UploadScreen() {
         }}
         activeOpacity={0.8}
       >
-        <Text 
+        <Text
           className={isSelected ? "text-white" : "text-black"}
           style={{ fontSize: tagFontSize }}
         >
@@ -578,11 +642,14 @@ export default function UploadScreen() {
     const thumbnailSize = getThumbnailSize();
     const containerPadding = getResponsiveSpacing(16, 20, 24, 32);
     const { width: screenWidth } = getScreenDimensions();
-    
+
     // On small screens or landscape, stack vertically
-    if (isSmallScreen || orientation === 'landscape') {
+    if (isSmallScreen || orientation === "landscape") {
       return (
-        <View className="items-center" style={{ paddingHorizontal: containerPadding }}>
+        <View
+          className="items-center"
+          style={{ paddingHorizontal: containerPadding }}
+        >
           {/* Main Media Picker */}
           <TouchableOpacity
             onPress={pickMedia}
@@ -595,8 +662,15 @@ export default function UploadScreen() {
           >
             {!file ? (
               <View className="items-center">
-                <Feather name="plus" size={getResponsiveSize(30, 35, 40)} color="gray" />
-                <Text className="text-gray-600 text-center mt-2" style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}>
+                <Feather
+                  name="plus"
+                  size={getResponsiveSize(30, 35, 40)}
+                  color="gray"
+                />
+                <Text
+                  className="text-gray-600 text-center mt-2"
+                  style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+                >
                   Select Media
                 </Text>
               </View>
@@ -608,7 +682,10 @@ export default function UploadScreen() {
                 style={{ width: "100%", height: "100%", borderRadius: 12 }}
               />
             ) : (
-              <Text className="px-4 text-gray-700 text-center" style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}>
+              <Text
+                className="px-4 text-gray-700 text-center"
+                style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+              >
                 {file.name}
               </Text>
             )}
@@ -626,9 +703,16 @@ export default function UploadScreen() {
           >
             {!thumbnail ? (
               <View className="items-center">
-                <Feather name="image" size={getResponsiveSize(25, 30, 35)} color="gray" />
-                <Text className="text-gray-600 text-center mt-2" style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}>
-                  Select{'\n'}Thumbnail
+                <Feather
+                  name="image"
+                  size={getResponsiveSize(25, 30, 35)}
+                  color="gray"
+                />
+                <Text
+                  className="text-gray-600 text-center mt-2"
+                  style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+                >
+                  Select{"\n"}Thumbnail
                 </Text>
               </View>
             ) : (
@@ -645,7 +729,10 @@ export default function UploadScreen() {
 
     // On larger screens, use horizontal layout
     return (
-      <View className="flex-row justify-center items-start" style={{ paddingHorizontal: containerPadding }}>
+      <View
+        className="flex-row justify-center items-start"
+        style={{ paddingHorizontal: containerPadding }}
+      >
         {/* Main Media Picker */}
         <TouchableOpacity
           onPress={pickMedia}
@@ -658,8 +745,15 @@ export default function UploadScreen() {
         >
           {!file ? (
             <View className="items-center">
-              <Feather name="plus" size={getResponsiveSize(30, 35, 40)} color="gray" />
-              <Text className="text-gray-600 text-center mt-2" style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}>
+              <Feather
+                name="plus"
+                size={getResponsiveSize(30, 35, 40)}
+                color="gray"
+              />
+              <Text
+                className="text-gray-600 text-center mt-2"
+                style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+              >
                 Select Media
               </Text>
             </View>
@@ -671,7 +765,10 @@ export default function UploadScreen() {
               style={{ width: "100%", height: "100%", borderRadius: 12 }}
             />
           ) : (
-            <Text className="px-4 text-gray-700 text-center" style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}>
+            <Text
+              className="px-4 text-gray-700 text-center"
+              style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+            >
               {file.name}
             </Text>
           )}
@@ -689,9 +786,16 @@ export default function UploadScreen() {
         >
           {!thumbnail ? (
             <View className="items-center">
-              <Feather name="image" size={getResponsiveSize(25, 30, 35)} color="gray" />
-              <Text className="text-gray-600 text-center mt-2" style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}>
-                Select{'\n'}Thumbnail
+              <Feather
+                name="image"
+                size={getResponsiveSize(25, 30, 35)}
+                color="gray"
+              />
+              <Text
+                className="text-gray-600 text-center mt-2"
+                style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+              >
+                Select{"\n"}Thumbnail
               </Text>
             </View>
           ) : (
@@ -709,31 +813,33 @@ export default function UploadScreen() {
   return (
     <>
       {loading && <LoadingOverlay />}
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         {...getKeyboardAdjustment()}
         className="flex-1 bg-white"
       >
-        <ScrollView 
+        <ScrollView
           className="flex-1"
-          contentContainerStyle={{ 
+          contentContainerStyle={{
             paddingBottom: getResponsiveSpacing(20, 30, 40),
-            minHeight: getScreenDimensions().height - 100 // Ensure content fills screen
+            minHeight: getScreenDimensions().height - 100, // Ensure content fills screen
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32) }}>
+          <View
+            style={{ paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32) }}
+          >
             <View className="mt-6">
               <AuthHeader title="New Upload" />
             </View>
 
             {/* Media and Thumbnail Pickers */}
-            <View className="mt-4 mb-6">
-              {renderMediaPickers()}
-            </View>
+            <View className="mt-4 mb-6">{renderMediaPickers()}</View>
 
             {/* Form Fields */}
             <View className="flex-1">
-              <Text className="text-xs text-gray-600 mb-1 font-medium">TITLE</Text>
+              <Text className="text-xs text-gray-600 mb-1 font-medium">
+                TITLE
+              </Text>
               <TextInput
                 placeholder="Enter title..."
                 value={title}
@@ -748,7 +854,9 @@ export default function UploadScreen() {
                 }}
               />
 
-              <Text className="text-xs text-gray-600 mb-1 font-medium">DESCRIPTION</Text>
+              <Text className="text-xs text-gray-600 mb-1 font-medium">
+                DESCRIPTION
+              </Text>
               <TextInput
                 placeholder="Enter description..."
                 value={description}
@@ -764,7 +872,9 @@ export default function UploadScreen() {
               />
 
               {/* Categories */}
-              <Text className="text-xs text-gray-600 mb-2 font-medium">CATEGORY</Text>
+              <Text className="text-xs text-gray-600 mb-2 font-medium">
+                CATEGORY
+              </Text>
               <View className="flex-row flex-wrap mb-4">
                 {categories.map((item) =>
                   renderTag(item, item, selectedCategory, setSelectedCategory)
@@ -772,15 +882,20 @@ export default function UploadScreen() {
               </View>
 
               {/* Content Types */}
-              <Text className="text-xs text-gray-600 mb-2 font-medium">CONTENT TYPE</Text>
+              <Text className="text-xs text-gray-600 mb-2 font-medium">
+                CONTENT TYPE
+              </Text>
               <View className="flex-row flex-wrap mb-6">
                 {contentTypes.map((item) =>
-                  renderTag(item.label, item.value, selectedType, setSelectedType)
+                  renderTag(
+                    item.label,
+                    item.value,
+                    selectedType,
+                    setSelectedType
+                  )
                 )}
               </View>
             </View>
-
-
 
             {/* Upload Button */}
             <View className="items-center mt-4">
@@ -792,13 +907,17 @@ export default function UploadScreen() {
                 }}
                 className="bg-black justify-center rounded-full items-center"
                 style={{
-                  width: Math.min(getScreenDimensions().width - (getResponsiveSpacing(16, 20, 24, 32) * 2), 300),
+                  width: Math.min(
+                    getScreenDimensions().width -
+                      getResponsiveSpacing(16, 20, 24, 32) * 2,
+                    300
+                  ),
                   height: getButtonSize().height,
                   minHeight: getTouchTargetSize(), // Ensure minimum touch target
                 }}
                 activeOpacity={0.8}
               >
-                <Text 
+                <Text
                   className="text-white font-semibold"
                   style={{ fontSize: getResponsiveFontSize(16, 18, 20) }}
                 >

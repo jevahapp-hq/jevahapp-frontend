@@ -9,15 +9,15 @@ import {
   TextInput,
   TextStyle,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withTiming
-} from 'react-native-reanimated';
-import Icon from 'react-native-vector-icons/FontAwesome';
+  withTiming,
+} from "react-native-reanimated";
+import Icon from "react-native-vector-icons/FontAwesome";
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
@@ -28,7 +28,7 @@ export default function CodeVerification() {
   const params = useLocalSearchParams();
   const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
-  const [codeArray, setCodeArray] = useState(['', '', '', '', '', '']);
+  const [codeArray, setCodeArray] = useState(["", "", "", "", "", ""]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -61,7 +61,7 @@ export default function CodeVerification() {
   const handleCodeChange = (text: string, index: number) => {
     // If user pasted/auto-filled multiple characters starting at this index, distribute them
     if (text.length > 1) {
-      const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
       const newCode = [...codeArray];
       let writeIndex = index;
       for (let i = 0; i < sanitized.length && writeIndex < 6; i += 1) {
@@ -84,30 +84,30 @@ export default function CodeVerification() {
     setCodeArray(newCode);
 
     // Auto-advance focus when a character is entered
-    if (char !== '' && index < 5) {
+    if (char !== "" && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace') {
+    if (key === "Backspace") {
       const newCode = [...codeArray];
-      if (newCode[index] === '') {
+      if (newCode[index] === "") {
         // Move focus back and clear previous if current is already empty
         if (index > 0) {
-          newCode[index - 1] = '';
+          newCode[index - 1] = "";
           setCodeArray(newCode);
           inputsRef.current[index - 1]?.focus();
         }
       } else {
-        newCode[index] = '';
+        newCode[index] = "";
         setCodeArray(newCode);
       }
     }
   };
 
-  const triggerBounceDrop = (type: 'success' | 'failure') => {
-    if (type === 'success') {
+  const triggerBounceDrop = (type: "success" | "failure") => {
+    if (type === "success") {
       setShowFailure(false);
       setShowSuccess(true);
     } else {
@@ -126,9 +126,9 @@ export default function CodeVerification() {
         bounciness: 10,
         speed: 5,
       }).start(() => {
-        if (type === 'success') {
+        if (type === "success") {
           setTimeout(() => {
-            router.replace('/Profile/profileSetUp');
+            router.replace("/Profile/profileSetUp");
           }, 600);
         }
       });
@@ -149,7 +149,7 @@ export default function CodeVerification() {
 
   const onVerifyPress = async () => {
     setIsVerifying(true);
-    const code = codeArray.join('');
+    const code = codeArray.join("");
 
     if (code.length !== 6) {
       triggerBounceDrop("failure");
@@ -159,7 +159,7 @@ export default function CodeVerification() {
 
     try {
       console.log("🔍 Verifying email code for:", emailAddress, "code:", code);
-      
+
       // Use authService for email verification
       const result = await authService.verifyEmailCode(emailAddress, code);
       console.log("✅ Verify email result:", result);
@@ -170,42 +170,74 @@ export default function CodeVerification() {
 
         if (loginResult.success) {
           // Validate user data before saving
-          if (loginResult.data?.user && loginResult.data.user.firstName && loginResult.data.user.lastName) {
-            await AsyncStorage.setItem("user", JSON.stringify(loginResult.data.user));
+          if (
+            loginResult.data?.user &&
+            loginResult.data.user.firstName &&
+            loginResult.data.user.lastName
+          ) {
+            await AsyncStorage.setItem(
+              "user",
+              JSON.stringify(loginResult.data.user)
+            );
             console.log("✅ Complete user data saved after verification:", {
               firstName: loginResult.data.user.firstName,
               lastName: loginResult.data.user.lastName,
-              hasAvatar: !!loginResult.data.user.avatar
+              hasAvatar: !!loginResult.data.user.avatar,
             });
+
+            // Clear any previous user's interaction data
+            try {
+              const { useInteractionStore } = await import(
+                "../store/useInteractionStore"
+              );
+              useInteractionStore.getState().clearCache();
+              console.log("✅ Cleared interaction cache after verification");
+            } catch (cacheError) {
+              console.warn(
+                "⚠️ Failed to clear interaction cache after verification:",
+                cacheError
+              );
+            }
+
             triggerBounceDrop("success");
           } else {
-            console.error("🚨 BLOCKED: Verification login returned incomplete user data!");
+            console.error(
+              "🚨 BLOCKED: Verification login returned incomplete user data!"
+            );
             console.error("   Incomplete data:", loginResult.data?.user);
-            Alert.alert("Login Issue", "Incomplete user profile. Please contact support.");
+            Alert.alert(
+              "Login Issue",
+              "Incomplete user profile. Please contact support."
+            );
             triggerBounceDrop("failure");
             return;
           }
         } else {
-          Alert.alert("Login Failed", loginResult.data?.message || "Try signing in manually.");
+          Alert.alert(
+            "Login Failed",
+            loginResult.data?.message || "Try signing in manually."
+          );
           triggerBounceDrop("failure");
         }
       } else {
         // Show specific error message from backend
-        const errorMessage = result.data?.message || "Invalid verification code. Please try again.";
+        const errorMessage =
+          result.data?.message ||
+          "Invalid verification code. Please try again.";
         Alert.alert("Verification Failed", errorMessage);
         triggerBounceDrop("failure");
       }
-
     } catch (err: any) {
       console.error("❌ Error verifying code:", err);
-      
+
       let errorMessage = "Unable to verify code. Try again later.";
-      if (err.name === 'AbortError') {
-        errorMessage = "Request timeout. Please check your connection and try again.";
-      } else if (err.message?.includes('Network request failed')) {
+      if (err.name === "AbortError") {
+        errorMessage =
+          "Request timeout. Please check your connection and try again.";
+      } else if (err.message?.includes("Network request failed")) {
         errorMessage = "Network error. Please check your internet connection.";
       }
-      
+
       Alert.alert("Server Error", errorMessage);
       triggerBounceDrop("failure");
     } finally {
@@ -217,27 +249,34 @@ export default function CodeVerification() {
     setIsResending(true);
     try {
       console.log("🔍 Resending email verification for:", emailAddress);
-      
+
       // Use authService for resending email verification
       const result = await authService.resendEmailVerification(emailAddress);
       console.log("✅ Resend email verification result:", result);
 
       if (result.success) {
-        Alert.alert("Code Resent", "A new verification code has been sent to your email.");
+        Alert.alert(
+          "Code Resent",
+          "A new verification code has been sent to your email."
+        );
       } else {
         triggerBounceDrop("failure");
-        Alert.alert("Resend Failed", result.data?.message || "Try again later.");
+        Alert.alert(
+          "Resend Failed",
+          result.data?.message || "Try again later."
+        );
       }
     } catch (err: any) {
       console.error("❌ Error resending code:", err);
-      
+
       let errorMessage = "Failed to resend code. Try again later.";
-      if (err.name === 'AbortError') {
-        errorMessage = "Request timeout. Please check your connection and try again.";
-      } else if (err.message?.includes('Network request failed')) {
+      if (err.name === "AbortError") {
+        errorMessage =
+          "Request timeout. Please check your connection and try again.";
+      } else if (err.message?.includes("Network request failed")) {
         errorMessage = "Network error. Please check your internet connection.";
       }
-      
+
       Alert.alert("Resend Failed", errorMessage);
       triggerBounceDrop("failure");
     } finally {
@@ -245,55 +284,55 @@ export default function CodeVerification() {
     }
   };
 
-  const getInputStyle = (): TextStyle => ({
-    height: 40,
-    width: 40,
-    fontSize: 18,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
-    padding: 0,
-    margin: 0,
-    borderWidth: 1,
-    borderColor: '#9D9FA7',
-    borderRadius: 9,
-    backgroundColor: 'white',
-  } as TextStyle);
+  const getInputStyle = (): TextStyle =>
+    ({
+      height: 40,
+      width: 40,
+      fontSize: 18,
+      textAlign: "center",
+      textAlignVertical: "center",
+      includeFontPadding: false,
+      padding: 0,
+      margin: 0,
+      borderWidth: 1,
+      borderColor: "#9D9FA7",
+      borderRadius: 9,
+      backgroundColor: "white",
+    } as TextStyle);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center' }}>
-    
-
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF", alignItems: "center" }}>
       <View className="w-[370px] mt-6">
         <AuthHeader title="Code Verification" />
       </View>
 
       <RNAnimated.View
         style={{
-          position: 'absolute',
-          width: '100%',
-          alignItems: 'center',
-          backgroundColor: '#F9FAFB',
+          position: "absolute",
+          width: "100%",
+          alignItems: "center",
+          backgroundColor: "#F9FAFB",
           paddingHorizontal: 16,
           transform: [{ translateY: dropdownAnim }],
           zIndex: 10,
         }}
       >
         {showSuccess && <SuccessfulCard text="Successfully verified" />}
-        {showFailure && <FailureCard text="Invalid code" onClose={hideDropdown} />}
+        {showFailure && (
+          <FailureCard text="Invalid code" onClose={hideDropdown} />
+        )}
       </RNAnimated.View>
 
       <View className="w-[333px] mt-10 ml-2">
-  <Text className="text-4xl font-bold text-[#1D2939]">
-    Verify with code
-  </Text>
-  <Text className="mt-2 text-base text-[#1D2939]">
-    Enter the 6-character code we sent to {emailAddress}
-  </Text>
-</View>
+        <Text className="text-4xl font-bold text-[#1D2939]">
+          Verify with code
+        </Text>
+        <Text className="mt-2 text-base text-[#1D2939]">
+          Enter the 6-character code we sent to {emailAddress}
+        </Text>
+      </View>
 
-
-      <View style={{ flexDirection: 'row', marginTop: 30, gap: 12 }}>
+      <View style={{ flexDirection: "row", marginTop: 30, gap: 12 }}>
         {codeArray.map((char, i) => (
           <TextInput
             key={i}
@@ -317,18 +356,18 @@ export default function CodeVerification() {
         onPress={onVerifyPress}
         disabled={isVerifying}
         style={{
-          backgroundColor: '#090E24',
+          backgroundColor: "#090E24",
           height: 45,
           width: 333,
           marginTop: 40,
           borderRadius: 999,
-          justifyContent: 'center',
-          alignItems: 'center',
-          flexDirection: 'row',
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: "row",
         }}
       >
-        <Text style={{ color: 'white', fontSize: 16 }}>
-          {isVerifying ? 'Verifying...' : 'Verify'}
+        <Text style={{ color: "white", fontSize: 16 }}>
+          {isVerifying ? "Verifying..." : "Verify"}
         </Text>
         {isVerifying && (
           <Animated.View style={[{ marginLeft: 8 }, animatedStyle]}>
@@ -337,11 +376,13 @@ export default function CodeVerification() {
         )}
       </TouchableOpacity>
 
-      <View style={{ flexDirection: 'row', marginTop: 24 }}>
-        <Text style={{ fontSize: 16, fontWeight: '600' }}>Didn't get a code? </Text>
+      <View style={{ flexDirection: "row", marginTop: 24 }}>
+        <Text style={{ fontSize: 16, fontWeight: "600" }}>
+          Didn't get a code?{" "}
+        </Text>
         <TouchableOpacity onPress={handleResend} disabled={isResending}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: '#6663FD' }}>
-            {isResending ? 'Resending...' : 'Resend'}
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#6663FD" }}>
+            {isResending ? "Resending..." : "Resend"}
           </Text>
         </TouchableOpacity>
       </View>

@@ -3,21 +3,22 @@ import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Animated as RNAnimated,
-    Text,
-    TextInput,
-    TextStyle,
-    TouchableOpacity,
-    View
+  Alert,
+  Platform,
+  Animated as RNAnimated,
+  Text,
+  TextInput,
+  TextStyle,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withTiming
-} from 'react-native-reanimated';
-import Icon from 'react-native-vector-icons/FontAwesome';
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
+import Icon from "react-native-vector-icons/FontAwesome";
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
@@ -27,7 +28,7 @@ export default function PasswordResetVerification() {
   const params = useLocalSearchParams();
   const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
-  const [codeArray, setCodeArray] = useState(['', '', '', '', '', '']);
+  const [codeArray, setCodeArray] = useState(["", "", "", "", "", ""]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -59,7 +60,7 @@ export default function PasswordResetVerification() {
   const handleCodeChange = (text: string, index: number) => {
     // If user pasted/auto-filled multiple characters starting at this index, distribute them
     if (text.length > 1) {
-      const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
       const newCode = [...codeArray];
       let writeIndex = index;
       for (let i = 0; i < sanitized.length && writeIndex < 6; i += 1) {
@@ -82,30 +83,30 @@ export default function PasswordResetVerification() {
     setCodeArray(newCode);
 
     // Auto-advance focus when a character is entered
-    if (char !== '' && index < 5) {
+    if (char !== "" && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace') {
+    if (key === "Backspace") {
       const newCode = [...codeArray];
-      if (newCode[index] === '') {
+      if (newCode[index] === "") {
         // Move focus back and clear previous if current is already empty
         if (index > 0) {
-          newCode[index - 1] = '';
+          newCode[index - 1] = "";
           setCodeArray(newCode);
           inputsRef.current[index - 1]?.focus();
         }
       } else {
-        newCode[index] = '';
+        newCode[index] = "";
         setCodeArray(newCode);
       }
     }
   };
 
-  const triggerBounceDrop = (type: 'success' | 'failure') => {
-    if (type === 'success') {
+  const triggerBounceDrop = (type: "success" | "failure") => {
+    if (type === "success") {
       setShowFailure(false);
       setShowSuccess(true);
     } else {
@@ -124,12 +125,12 @@ export default function PasswordResetVerification() {
         bounciness: 10,
         speed: 5,
       }).start(() => {
-        if (type === 'success') {
+        if (type === "success") {
           setTimeout(() => {
             // Navigate to reset password screen with email parameter
             router.replace({
-              pathname: '/auth/resetPassword',
-              params: { emailAddress }
+              pathname: "/auth/resetPassword",
+              params: { emailAddress },
             });
           }, 600);
         }
@@ -151,7 +152,7 @@ export default function PasswordResetVerification() {
 
   const onVerifyPress = async () => {
     setIsVerifying(true);
-    const code = codeArray.join('');
+    const code = codeArray.join("");
 
     if (code.length !== 6) {
       triggerBounceDrop("failure");
@@ -160,14 +161,20 @@ export default function PasswordResetVerification() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-reset-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: emailAddress,
-          code,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/auth/verify-reset-code`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "expo-platform": Platform.OS,
+          },
+          body: JSON.stringify({
+            email: emailAddress,
+            code,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -178,7 +185,6 @@ export default function PasswordResetVerification() {
       } else {
         triggerBounceDrop("failure");
       }
-
     } catch (err) {
       console.error("❌ Error verifying reset code:", err);
       Alert.alert("Server Error", "Unable to verify code. Try again later.");
@@ -191,16 +197,25 @@ export default function PasswordResetVerification() {
   const handleResend = async () => {
     setIsResending(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/resend-reset-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddress }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/auth/resend-reset-email`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "expo-platform": Platform.OS,
+          },
+          body: JSON.stringify({ email: emailAddress }),
+        }
+      );
 
       const data = await response.json();
 
       if (data.success) {
-        Alert.alert("Code Resent", "A new password reset code has been sent to your email.");
+        Alert.alert(
+          "Code Resent",
+          "A new password reset code has been sent to your email."
+        );
       } else {
         triggerBounceDrop("failure");
         Alert.alert("Resend Failed", data.message || "Try again later.");
@@ -213,40 +228,43 @@ export default function PasswordResetVerification() {
     }
   };
 
-  const getInputStyle = (): TextStyle => ({
-    height: 40,
-    width: 40,
-    fontSize: 18,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
-    padding: 0,
-    margin: 0,
-    borderWidth: 1,
-    borderColor: '#9D9FA7',
-    borderRadius: 9,
-    backgroundColor: 'white',
-  } as TextStyle);
+  const getInputStyle = (): TextStyle =>
+    ({
+      height: 40,
+      width: 40,
+      fontSize: 18,
+      textAlign: "center",
+      textAlignVertical: "center",
+      includeFontPadding: false,
+      padding: 0,
+      margin: 0,
+      borderWidth: 1,
+      borderColor: "#9D9FA7",
+      borderRadius: 9,
+      backgroundColor: "white",
+    } as TextStyle);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF", alignItems: "center" }}>
       <View className="w-[370px] mt-6">
         <AuthHeader title="Reset Code Verification" />
       </View>
 
       <RNAnimated.View
         style={{
-          position: 'absolute',
-          width: '100%',
-          alignItems: 'center',
-          backgroundColor: '#F9FAFB',
+          position: "absolute",
+          width: "100%",
+          alignItems: "center",
+          backgroundColor: "#F9FAFB",
           paddingHorizontal: 16,
           transform: [{ translateY: dropdownAnim }],
           zIndex: 10,
         }}
       >
         {showSuccess && <SuccessfulCard text="Code verified successfully" />}
-        {showFailure && <FailureCard text="Invalid reset code" onClose={hideDropdown} />}
+        {showFailure && (
+          <FailureCard text="Invalid reset code" onClose={hideDropdown} />
+        )}
       </RNAnimated.View>
 
       <View className="w-[333px] mt-10 ml-2">
@@ -258,7 +276,7 @@ export default function PasswordResetVerification() {
         </Text>
       </View>
 
-      <View style={{ flexDirection: 'row', marginTop: 30, gap: 12 }}>
+      <View style={{ flexDirection: "row", marginTop: 30, gap: 12 }}>
         {codeArray.map((char, i) => (
           <TextInput
             key={i}
@@ -282,18 +300,18 @@ export default function PasswordResetVerification() {
         onPress={onVerifyPress}
         disabled={isVerifying}
         style={{
-          backgroundColor: '#090E24',
+          backgroundColor: "#090E24",
           height: 45,
           width: 333,
           marginTop: 40,
           borderRadius: 999,
-          justifyContent: 'center',
-          alignItems: 'center',
-          flexDirection: 'row',
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: "row",
         }}
       >
-        <Text style={{ color: 'white', fontSize: 16 }}>
-          {isVerifying ? 'Verifying...' : 'Verify'}
+        <Text style={{ color: "white", fontSize: 16 }}>
+          {isVerifying ? "Verifying..." : "Verify"}
         </Text>
         {isVerifying && (
           <Animated.View style={[{ marginLeft: 8 }, animatedStyle]}>
@@ -302,11 +320,13 @@ export default function PasswordResetVerification() {
         )}
       </TouchableOpacity>
 
-      <View style={{ flexDirection: 'row', marginTop: 24 }}>
-        <Text style={{ fontSize: 16, fontWeight: '600' }}>Didn't get a code? </Text>
+      <View style={{ flexDirection: "row", marginTop: 24 }}>
+        <Text style={{ fontSize: 16, fontWeight: "600" }}>
+          Didn't get a code?{" "}
+        </Text>
         <TouchableOpacity onPress={handleResend} disabled={isResending}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: '#6663FD' }}>
-            {isResending ? 'Resending...' : 'Resend'}
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#6663FD" }}>
+            {isResending ? "Resending..." : "Resend"}
           </Text>
         </TouchableOpacity>
       </View>

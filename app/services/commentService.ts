@@ -1,5 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PerformanceOptimizer } from '../utils/performance';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import allMediaAPI from "../utils/allMediaAPI";
+import { PerformanceOptimizer } from "../utils/performance";
 
 export interface Comment {
   id: string;
@@ -43,7 +44,9 @@ class CommentService {
           }
 
           // Check AsyncStorage for persisted comments
-          const storedComments = await AsyncStorage.getItem(`comments-${contentId}`);
+          const storedComments = await AsyncStorage.getItem(
+            `comments-${contentId}`
+          );
           if (storedComments) {
             const parsedComments = JSON.parse(storedComments).map((c: any) => ({
               ...c,
@@ -53,47 +56,49 @@ class CommentService {
             return parsedComments;
           }
 
-          // Mock API call - replace with actual API
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Mock comments data
-          const mockComments: Comment[] = [
-            {
-              id: '1',
-              text: 'This is really helpful! Thank you for sharing.',
-              userId: 'user456',
-              userName: 'Sarah Wilson',
-              timestamp: new Date(Date.now() - 3600000), // 1 hour ago
-              likes: 3,
-              contentId,
-            },
-            {
-              id: '2',
-              text: 'Great content! I learned a lot from this.',
-              userId: 'user789',
-              userName: 'Mike Johnson',
-              timestamp: new Date(Date.now() - 7200000), // 2 hours ago
-              likes: 1,
-              contentId,
-            },
-            {
-              id: '3',
-              text: 'Amazing! This really helped me understand the topic better.',
-              userId: 'user101',
-              userName: 'Emily Davis',
-              timestamp: new Date(Date.now() - 10800000), // 3 hours ago
-              likes: 5,
-              contentId,
-            },
-          ];
+          // Real API call
+          console.log(`🔄 Fetching comments for content: ${contentId}`);
+          const response = await allMediaAPI.getComments(
+            "media",
+            contentId,
+            1,
+            50
+          );
 
-          // Cache the comments
-          this.commentsCache.set(contentId, mockComments);
-          
-          // Persist to AsyncStorage
-          await AsyncStorage.setItem(`comments-${contentId}`, JSON.stringify(mockComments));
-          
-          return mockComments;
+          if (response.success && response.data?.comments) {
+            // Transform API response to our Comment interface
+            const apiComments: Comment[] = response.data.comments.map(
+              (apiComment: any) => ({
+                id: apiComment._id,
+                text: apiComment.comment,
+                userId: apiComment.author?._id || "unknown",
+                userName: `${apiComment.author?.firstName || "Unknown"} ${
+                  apiComment.author?.lastName || "User"
+                }`,
+                userAvatar: apiComment.author?.avatar || "",
+                timestamp: new Date(apiComment.createdAt),
+                likes: apiComment.likeCount || 0,
+                contentId,
+              })
+            );
+
+            // Cache the comments
+            this.commentsCache.set(contentId, apiComments);
+
+            // Persist to AsyncStorage
+            await AsyncStorage.setItem(
+              `comments-${contentId}`,
+              JSON.stringify(apiComments)
+            );
+
+            console.log(
+              `✅ Loaded ${apiComments.length} comments for content: ${contentId}`
+            );
+            return apiComments;
+          } else {
+            console.log(`⚠️ No comments found for content: ${contentId}`);
+            return [];
+          }
         },
         {
           cacheDuration: 5 * 60 * 1000, // 5 minutes
@@ -101,47 +106,70 @@ class CommentService {
         }
       );
     } catch (error) {
-      console.error('Failed to get comments:', error);
+      console.error("Failed to get comments:", error);
       return [];
     }
   }
 
   // Post a new comment
-  async postComment(contentId: string, commentData: {
-    text: string;
-    userId: string;
-    userName: string;
-    userAvatar?: string;
-  }): Promise<Comment | null> {
+  async postComment(
+    contentId: string,
+    commentData: {
+      text: string;
+      userId: string;
+      userName: string;
+      userAvatar?: string;
+    }
+  ): Promise<Comment | null> {
     try {
-      const newComment: Comment = {
-        id: Date.now().toString(),
-        text: commentData.text.trim(),
-        userId: commentData.userId,
-        userName: commentData.userName,
-        userAvatar: commentData.userAvatar,
-        timestamp: new Date(),
-        likes: 0,
+      console.log(`🔄 Posting comment for content: ${contentId}`);
+
+      // Real API call
+      const response = await allMediaAPI.addComment(
+        "media",
         contentId,
-      };
+        commentData.text.trim()
+      );
 
-      // Mock API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (response.success && response.data?.comment) {
+        const apiComment = response.data.comment;
 
-      // Add to cache
-      const existingComments = this.commentsCache.get(contentId) || [];
-      const updatedComments = [newComment, ...existingComments];
-      this.commentsCache.set(contentId, updatedComments);
+        // Transform API response to our Comment interface
+        const newComment: Comment = {
+          id: apiComment._id,
+          text: apiComment.comment,
+          userId: apiComment.author?._id || "unknown",
+          userName: `${apiComment.author?.firstName || "Unknown"} ${
+            apiComment.author?.lastName || "User"
+          }`,
+          userAvatar: apiComment.author?.avatar || "",
+          timestamp: new Date(apiComment.createdAt),
+          likes: apiComment.likeCount || 0,
+          contentId,
+        };
 
-      // Persist to AsyncStorage
-      await AsyncStorage.setItem(`comments-${contentId}`, JSON.stringify(updatedComments));
+        // Add to cache
+        const existingComments = this.commentsCache.get(contentId) || [];
+        const updatedComments = [newComment, ...existingComments];
+        this.commentsCache.set(contentId, updatedComments);
 
-      // Clear performance cache to force refresh
-      PerformanceOptimizer.clearCache(`comments-${contentId}`);
+        // Persist to AsyncStorage
+        await AsyncStorage.setItem(
+          `comments-${contentId}`,
+          JSON.stringify(updatedComments)
+        );
 
-      return newComment;
+        // Clear performance cache to force refresh
+        // PerformanceOptimizer.clearCache(`comments-${contentId}`);
+
+        console.log(`✅ Comment posted successfully for content: ${contentId}`);
+        return newComment;
+      } else {
+        console.error(`❌ Failed to post comment: ${response.error}`);
+        return null;
+      }
     } catch (error) {
-      console.error('Failed to post comment:', error);
+      console.error("Failed to post comment:", error);
       return null;
     }
   }
@@ -150,18 +178,21 @@ class CommentService {
   async likeComment(contentId: string, commentId: string): Promise<boolean> {
     try {
       const comments = this.commentsCache.get(contentId) || [];
-      const updatedComments = comments.map(comment =>
+      const updatedComments = comments.map((comment) =>
         comment.id === commentId
           ? { ...comment, likes: comment.likes + 1 }
           : comment
       );
 
       this.commentsCache.set(contentId, updatedComments);
-      await AsyncStorage.setItem(`comments-${contentId}`, JSON.stringify(updatedComments));
+      await AsyncStorage.setItem(
+        `comments-${contentId}`,
+        JSON.stringify(updatedComments)
+      );
 
       return true;
     } catch (error) {
-      console.error('Failed to like comment:', error);
+      console.error("Failed to like comment:", error);
       return false;
     }
   }
@@ -172,31 +203,46 @@ class CommentService {
       const comments = await this.getComments(contentId);
       return comments.length;
     } catch (error) {
-      console.error('Failed to get comment count:', error);
+      console.error("Failed to get comment count:", error);
       return 0;
     }
   }
 
   // Delete a comment (only for comment owner)
-  async deleteComment(contentId: string, commentId: string, userId: string): Promise<boolean> {
+  async deleteComment(
+    contentId: string,
+    commentId: string,
+    userId: string
+  ): Promise<boolean> {
     try {
-      const comments = this.commentsCache.get(contentId) || [];
-      const commentToDelete = comments.find(c => c.id === commentId);
-      
-      if (!commentToDelete || commentToDelete.userId !== userId) {
-        return false; // Not authorized or comment not found
+      console.log(
+        `🔄 Deleting comment: ${commentId} for content: ${contentId}`
+      );
+
+      // Real API call
+      const response = await allMediaAPI.deleteComment(commentId);
+
+      if (response.success) {
+        // Update local cache
+        const comments = this.commentsCache.get(contentId) || [];
+        const updatedComments = comments.filter((c) => c.id !== commentId);
+        this.commentsCache.set(contentId, updatedComments);
+        await AsyncStorage.setItem(
+          `comments-${contentId}`,
+          JSON.stringify(updatedComments)
+        );
+
+        // Clear performance cache
+        // PerformanceOptimizer.clearCache(`comments-${contentId}`);
+
+        console.log(`✅ Comment deleted successfully: ${commentId}`);
+        return true;
+      } else {
+        console.error(`❌ Failed to delete comment: ${response.error}`);
+        return false;
       }
-
-      const updatedComments = comments.filter(c => c.id !== commentId);
-      this.commentsCache.set(contentId, updatedComments);
-      await AsyncStorage.setItem(`comments-${contentId}`, JSON.stringify(updatedComments));
-
-      // Clear performance cache
-      PerformanceOptimizer.clearCache(`comments-${contentId}`);
-
-      return true;
     } catch (error) {
-      console.error('Failed to delete comment:', error);
+      console.error("Failed to delete comment:", error);
       return false;
     }
   }
@@ -206,10 +252,10 @@ class CommentService {
     try {
       this.commentsCache.delete(contentId);
       await AsyncStorage.removeItem(`comments-${contentId}`);
-      PerformanceOptimizer.clearCache(`comments-${contentId}`);
+      // PerformanceOptimizer.clearCache(`comments-${contentId}`);
       return true;
     } catch (error) {
-      console.error('Failed to clear comments:', error);
+      console.error("Failed to clear comments:", error);
       return false;
     }
   }
@@ -218,11 +264,11 @@ class CommentService {
   async getRecentComments(limit: number = 10): Promise<Comment[]> {
     try {
       const allComments: Comment[] = [];
-      
+
       // Get all comment keys from AsyncStorage
       const keys = await AsyncStorage.getAllKeys();
-      const commentKeys = keys.filter(key => key.startsWith('comments-'));
-      
+      const commentKeys = keys.filter((key) => key.startsWith("comments-"));
+
       // Load all comments
       for (const key of commentKeys) {
         const storedComments = await AsyncStorage.getItem(key);
@@ -234,13 +280,13 @@ class CommentService {
           allComments.push(...parsedComments);
         }
       }
-      
+
       // Sort by timestamp and return recent ones
       return allComments
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, limit);
     } catch (error) {
-      console.error('Failed to get recent comments:', error);
+      console.error("Failed to get recent comments:", error);
       return [];
     }
   }
@@ -249,14 +295,14 @@ class CommentService {
   async searchComments(query: string, contentId?: string): Promise<Comment[]> {
     try {
       let comments: Comment[] = [];
-      
+
       if (contentId) {
         comments = await this.getComments(contentId);
       } else {
         // Search across all comments
         const keys = await AsyncStorage.getAllKeys();
-        const commentKeys = keys.filter(key => key.startsWith('comments-'));
-        
+        const commentKeys = keys.filter((key) => key.startsWith("comments-"));
+
         for (const key of commentKeys) {
           const storedComments = await AsyncStorage.getItem(key);
           if (storedComments) {
@@ -268,15 +314,16 @@ class CommentService {
           }
         }
       }
-      
+
       // Filter by query
       const lowerQuery = query.toLowerCase();
-      return comments.filter(comment =>
-        comment.text.toLowerCase().includes(lowerQuery) ||
-        comment.userName.toLowerCase().includes(lowerQuery)
+      return comments.filter(
+        (comment) =>
+          comment.text.toLowerCase().includes(lowerQuery) ||
+          comment.userName.toLowerCase().includes(lowerQuery)
       );
     } catch (error) {
-      console.error('Failed to search comments:', error);
+      console.error("Failed to search comments:", error);
       return [];
     }
   }

@@ -24,10 +24,10 @@ export interface LibraryItem {
 interface LibraryStore {
   savedItems: LibraryItem[];
   isLoaded: boolean;
-  
+
   // Actions
-  addToLibrary: (item: LibraryItem) => void;
-  removeFromLibrary: (itemId: string) => void;
+  addToLibrary: (item: LibraryItem) => Promise<void>;
+  removeFromLibrary: (itemId: string) => Promise<void>;
   isItemSaved: (itemId: string) => boolean;
   loadSavedItems: () => Promise<void>;
   getSavedItemsByType: (contentType: string) => LibraryItem[];
@@ -42,9 +42,12 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   addToLibrary: async (item: LibraryItem) => {
     const { savedItems } = get();
-    
+    const currentSavedItems = Array.isArray(savedItems) ? savedItems : [];
+
     // Check if item already exists
-    const existingItem = savedItems.find(saved => saved.id === item.id);
+    const existingItem = currentSavedItems.find(
+      (saved) => saved.id === item.id
+    );
     if (existingItem) {
       console.log(`📚 Item already in library: ${item.title}`);
       return;
@@ -53,48 +56,53 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     // Add timestamp for when it was saved
     const itemWithSaveTime = {
       ...item,
-      savedAt: new Date().toISOString()
+      savedAt: new Date().toISOString(),
     };
 
-    const updatedItems = [itemWithSaveTime, ...savedItems];
-    
+    const updatedItems = [itemWithSaveTime, ...currentSavedItems];
+
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
       set({ savedItems: updatedItems });
       console.log(`✅ Added to library: ${item.title} (${item.contentType})`);
     } catch (error) {
       console.error("❌ Failed to save item to library:", error);
+      throw error; // Re-throw to let caller handle
     }
   },
 
   removeFromLibrary: async (itemId: string) => {
     const { savedItems } = get();
-    const updatedItems = savedItems.filter(item => item.id !== itemId);
-    
+    const currentSavedItems = Array.isArray(savedItems) ? savedItems : [];
+    const updatedItems = currentSavedItems.filter((item) => item.id !== itemId);
+
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
       set({ savedItems: updatedItems });
       console.log(`🗑️ Removed from library: ${itemId}`);
     } catch (error) {
       console.error("❌ Failed to remove item from library:", error);
+      throw error; // Re-throw to let caller handle
     }
   },
 
   isItemSaved: (itemId: string) => {
     const { savedItems } = get();
-    return savedItems.some(item => item.id === itemId);
+    return (
+      Array.isArray(savedItems) && savedItems.some((item) => item.id === itemId)
+    );
   },
 
   loadSavedItems: async () => {
     try {
       const savedData = await AsyncStorage.getItem(STORAGE_KEY);
       const savedItems = savedData ? JSON.parse(savedData) : [];
-      
-      set({ 
+
+      set({
         savedItems,
-        isLoaded: true 
+        isLoaded: true,
       });
-      
+
       console.log(`📚 Loaded ${savedItems.length} items from library`);
     } catch (error) {
       console.error("❌ Failed to load saved items:", error);
@@ -104,15 +112,17 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   getSavedItemsByType: (contentType: string) => {
     const { savedItems } = get();
-    return savedItems.filter(item => 
-      item.contentType.toLowerCase() === contentType.toLowerCase()
-    );
+    return Array.isArray(savedItems)
+      ? savedItems.filter(
+          (item) => item.contentType.toLowerCase() === contentType.toLowerCase()
+        )
+      : [];
   },
 
   getAllSavedItems: () => {
     const { savedItems } = get();
-    return savedItems;
-  }
+    return Array.isArray(savedItems) ? savedItems : [];
+  },
 }));
 
 // Default export for route compatibility

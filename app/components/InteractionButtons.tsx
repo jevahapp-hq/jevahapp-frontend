@@ -1,15 +1,20 @@
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { Alert, Share, Text, TouchableOpacity, View } from 'react-native';
-import { useCommentModal } from '../context/CommentModalContext';
-import { useContentCount, useContentStats, useInteractionStore, useUserInteraction } from '../store/useInteractionStore';
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { Alert, Share, Text, TouchableOpacity, View } from "react-native";
+import { useCommentModal } from "../context/CommentModalContext";
+import {
+  useContentCount,
+  useContentStats,
+  useInteractionStore,
+  useUserInteraction,
+} from "../store/useInteractionStore";
 
 interface InteractionButtonsProps {
   contentId: string;
-  contentType: 'video' | 'audio' | 'ebook' | 'sermon' | 'live';
+  contentType: "video" | "audio" | "ebook" | "sermon" | "live";
   contentTitle: string;
   contentUrl?: string;
-  layout?: 'vertical' | 'horizontal';
+  layout?: "vertical" | "horizontal";
   iconSize?: number;
   showCounts?: boolean;
   onCommentPress?: () => void;
@@ -20,29 +25,24 @@ export default function InteractionButtons({
   contentType,
   contentTitle,
   contentUrl,
-  layout = 'vertical',
+  layout = "vertical",
   iconSize = 30,
   showCounts = true,
   onCommentPress,
 }: InteractionButtonsProps) {
-  const {
-    toggleLike,
-    toggleSave,
-    recordShare,
-    loadContentStats,
-    comments,
-  } = useInteractionStore();
+  const { toggleLike, toggleSave, recordShare, loadContentStats, comments } =
+    useInteractionStore();
 
   const { showCommentModal } = useCommentModal();
 
   // Use selectors for better performance
   const contentStats = useContentStats(contentId);
-  const isLiked = useUserInteraction(contentId, 'liked');
-  const isSaved = useUserInteraction(contentId, 'saved');
-  const likesCount = useContentCount(contentId, 'likes');
-  const savesCount = useContentCount(contentId, 'saves');
-  const sharesCount = useContentCount(contentId, 'shares');
-  const commentsCount = useContentCount(contentId, 'comments');
+  const isLiked = useUserInteraction(contentId, "liked");
+  const isSaved = useUserInteraction(contentId, "saved");
+  const likesCount = useContentCount(contentId, "likes");
+  const savesCount = useContentCount(contentId, "saves");
+  const sharesCount = useContentCount(contentId, "shares");
+  const commentsCount = useContentCount(contentId, "comments");
 
   const [isLoading, setIsLoading] = useState({
     like: false,
@@ -59,55 +59,59 @@ export default function InteractionButtons({
 
   const handleLike = async () => {
     if (isLoading.like) return;
-    
-    setIsLoading(prev => ({ ...prev, like: true }));
+
+    setIsLoading((prev) => ({ ...prev, like: true }));
     try {
       await toggleLike(contentId, contentType);
     } catch (error) {
-      console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like. Please try again.');
+      console.error("Error toggling like:", error);
+      Alert.alert("Error", "Failed to update like. Please try again.");
     } finally {
-      setIsLoading(prev => ({ ...prev, like: false }));
+      setIsLoading((prev) => ({ ...prev, like: false }));
     }
   };
 
   const handleSave = async () => {
     if (isLoading.save) return;
-    
-    setIsLoading(prev => ({ ...prev, save: true }));
+
+    setIsLoading((prev) => ({ ...prev, save: true }));
     try {
       await toggleSave(contentId, contentType);
     } catch (error) {
-      console.error('Error toggling save:', error);
-      Alert.alert('Error', 'Failed to save content. Please try again.');
+      console.error("Error toggling save:", error);
+      Alert.alert("Error", "Failed to save content. Please try again.");
     } finally {
-      setIsLoading(prev => ({ ...prev, save: false }));
+      setIsLoading((prev) => ({ ...prev, save: false }));
     }
   };
 
   const handleShare = async () => {
     if (isLoading.share) return;
-    
+
     try {
-      setIsLoading(prev => ({ ...prev, share: true }));
-      
+      setIsLoading((prev) => ({ ...prev, share: true }));
+
       const shareOptions = {
         title: contentTitle,
         message: `Check out this ${contentType}: ${contentTitle}`,
-        url: contentUrl || '',
+        url: contentUrl || "",
       };
 
       const result = await Share.share(shareOptions);
-      
+
       // Record share interaction if user actually shared
       if (result.action === Share.sharedAction) {
-        await recordShare(contentId, contentType, result.activityType || 'generic');
+        await recordShare(
+          contentId,
+          contentType,
+          result.activityType || "generic"
+        );
       }
     } catch (error) {
-      console.error('Error sharing content:', error);
-      Alert.alert('Error', 'Failed to share content. Please try again.');
+      console.error("Error sharing content:", error);
+      Alert.alert("Error", "Failed to share content. Please try again.");
     } finally {
-      setIsLoading(prev => ({ ...prev, share: false }));
+      setIsLoading((prev) => ({ ...prev, share: false }));
     }
   };
 
@@ -121,8 +125,8 @@ export default function InteractionButtons({
     const currentComments = comments[contentId] || [];
     const formattedComments = currentComments.map((comment: any) => ({
       id: comment.id,
-      userName: comment.username || 'Anonymous',
-      avatar: comment.userAvatar || '',
+      userName: comment.username || "Anonymous",
+      avatar: comment.userAvatar || "",
       timestamp: comment.timestamp,
       comment: comment.comment,
       likes: comment.likes || 0,
@@ -133,32 +137,34 @@ export default function InteractionButtons({
     showCommentModal(formattedComments, contentId);
   };
 
-  const ButtonContainer = layout === 'vertical' ? 
-    ({ children }: { children: React.ReactNode }) => (
-      <View className="flex-col space-y-4">
-        {children}
-      </View>
-    ) :
-    ({ children }: { children: React.ReactNode }) => (
-      <View className="flex-row items-center space-x-6">
-        {children}
-      </View>
-    );
+  const ButtonContainer =
+    layout === "vertical"
+      ? ({ children }: { children: React.ReactNode }) => (
+          <View className="flex-col space-y-4">{children}</View>
+        )
+      : ({ children }: { children: React.ReactNode }) => (
+          <View className="flex-row items-center space-x-6">{children}</View>
+        );
 
-  const ButtonSpacing = layout === 'vertical' ? 'mt-6' : 'ml-6';
+  const ButtonSpacing = layout === "vertical" ? "mt-6" : "ml-6";
 
   return (
     <ButtonContainer>
       {/* Like Button */}
-      <TouchableOpacity 
-        onPress={handleLike} 
+      <TouchableOpacity
+        onPress={handleLike}
         className="flex-col justify-center items-center"
         disabled={isLoading.like}
       >
         <MaterialIcons
           name={isLiked ? "favorite" : "favorite-border"}
           size={iconSize}
-          color={isLiked ? "#D22A2A" : "#FFFFFF"}
+          color={isLiked ? "#FF1744" : "#FFFFFF"}
+          style={{
+            textShadowColor: isLiked ? "rgba(255, 23, 68, 0.5)" : "transparent",
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: isLiked ? 8 : 0,
+          }}
         />
         {showCounts && (
           <Text className="text-[10px] text-white font-rubik-semibold mt-1">
@@ -168,8 +174,8 @@ export default function InteractionButtons({
       </TouchableOpacity>
 
       {/* Comment Button */}
-      <TouchableOpacity 
-        onPress={handleCommentPress} 
+      <TouchableOpacity
+        onPress={handleCommentPress}
         className={`flex-col justify-center items-center ${ButtonSpacing}`}
       >
         <Ionicons name="chatbubble-sharp" size={iconSize} color="white" />
@@ -181,8 +187,8 @@ export default function InteractionButtons({
       </TouchableOpacity>
 
       {/* Save Button */}
-      <TouchableOpacity 
-        onPress={handleSave} 
+      <TouchableOpacity
+        onPress={handleSave}
         className={`flex-col justify-center items-center ${ButtonSpacing}`}
         disabled={isLoading.save}
       >
@@ -206,9 +212,9 @@ export function HorizontalInteractionStats({
   contentId,
   contentType,
   iconSize = 16,
-  textSize = 'text-[10px]',
-  iconColor = '#98A2B3',
-  textColor = 'text-gray-500',
+  textSize = "text-[10px]",
+  iconColor = "#98A2B3",
+  textColor = "text-gray-500",
 }: {
   contentId: string;
   contentType: string;
@@ -218,12 +224,12 @@ export function HorizontalInteractionStats({
   textColor?: string;
 }) {
   const { loadContentStats } = useInteractionStore();
-  
+
   const contentStats = useContentStats(contentId);
-  const likesCount = useContentCount(contentId, 'likes');
-  const savesCount = useContentCount(contentId, 'saves');
-  const sharesCount = useContentCount(contentId, 'shares');
-  const viewsCount = useContentCount(contentId, 'views');
+  const likesCount = useContentCount(contentId, "likes");
+  const savesCount = useContentCount(contentId, "saves");
+  const sharesCount = useContentCount(contentId, "shares");
+  const viewsCount = useContentCount(contentId, "views");
 
   useEffect(() => {
     if (!contentStats) {
@@ -251,7 +257,11 @@ export function HorizontalInteractionStats({
 
       {/* Saves */}
       <View className="flex-row items-center ml-4">
-        <MaterialIcons name="bookmark-border" size={iconSize} color={iconColor} />
+        <MaterialIcons
+          name="bookmark-border"
+          size={iconSize}
+          color={iconColor}
+        />
         <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
           {savesCount}
         </Text>
@@ -259,7 +269,11 @@ export function HorizontalInteractionStats({
 
       {/* Likes */}
       <View className="flex-row items-center ml-4">
-        <MaterialIcons name="favorite-border" size={iconSize} color={iconColor} />
+        <MaterialIcons
+          name="favorite-border"
+          size={iconSize}
+          color={iconColor}
+        />
         <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
           {likesCount}
         </Text>

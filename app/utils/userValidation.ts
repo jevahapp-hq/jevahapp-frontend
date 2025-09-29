@@ -28,16 +28,21 @@ export interface NormalizedUser {
 export function normalizeUserData(user: UserData | null): NormalizedUser {
   if (!user) {
     return {
-      firstName: "Anonymous",
-      lastName: "User",
-      fullName: "Anonymous User",
-      avatar: "",
+      firstName: "Jevah",
+      lastName: "HQ",
+      fullName: "Jevah HQ",
+      avatar:
+        "https://res.cloudinary.com/demo/image/upload/w_400,h_400,c_crop,g_face,r_max/w_200/lady.jpg",
     };
   }
 
-  const firstName = user.firstName || user.first_name || "Anonymous";
-  const lastName = user.lastName || user.last_name || "User";
-  const avatar = user.avatar || user.imageUrl || user.profileImage || "";
+  const firstName = user.firstName || user.first_name || "Jevah";
+  const lastName = user.lastName || user.last_name || "HQ";
+  const avatar =
+    user.avatar ||
+    user.imageUrl ||
+    user.profileImage ||
+    "https://res.cloudinary.com/demo/image/upload/w_400,h_400,c_crop,g_face,r_max/w_200/lady.jpg";
 
   return {
     firstName,
@@ -65,7 +70,10 @@ export function validateUserForUpload(user: UserData | null): {
   }
 
   // Check for missing name information
-  if (normalizedUser.firstName === "Anonymous" || normalizedUser.lastName === "User") {
+  if (
+    normalizedUser.firstName === "Anonymous" ||
+    normalizedUser.lastName === "User"
+  ) {
     missingFields.push("name");
   }
 
@@ -75,7 +83,9 @@ export function validateUserForUpload(user: UserData | null): {
   }
 
   return {
-    isValid: missingFields.length === 0 || (missingFields.length === 1 && missingFields[0] === "avatar"),
+    isValid:
+      missingFields.length === 0 ||
+      (missingFields.length === 1 && missingFields[0] === "avatar"),
     missingFields,
     normalizedUser,
   };
@@ -84,14 +94,21 @@ export function validateUserForUpload(user: UserData | null): {
 /**
  * Gets display name for content attribution
  */
-export function getDisplayName(speaker?: string, uploadedBy?: string, fallback = "Anonymous User"): string {
+export function getDisplayName(
+  speaker?: string,
+  uploadedBy?: string,
+  fallback = "Jevah HQ"
+): string {
   return speaker || uploadedBy || fallback;
 }
 
 /**
  * Logs user data status for debugging
  */
-export function logUserDataStatus(user: UserData | null, context: string): void {
+export function logUserDataStatus(
+  user: UserData | null,
+  context: string
+): void {
   const normalizedUser = normalizeUserData(user);
   const validation = validateUserForUpload(user);
 
@@ -112,12 +129,18 @@ export function logUserDataStatus(user: UserData | null, context: string): void 
  */
 export function getUserAvatarFromContent(
   content: any,
-  fallbackAvatar: any = require("../../assets/images/Avatar-1.png")
+  fallbackAvatar: any = {
+    uri: "https://res.cloudinary.com/demo/image/upload/w_400,h_400,c_crop,g_face,r_max/w_200/lady.jpg",
+  }
 ): any {
   // Check if content has uploadedBy object with user profile data
-  if (content.uploadedBy && typeof content.uploadedBy === 'object' && content.uploadedBy.avatar) {
+  if (
+    content.uploadedBy &&
+    typeof content.uploadedBy === "object" &&
+    content.uploadedBy.avatar
+  ) {
     const avatarUrl = content.uploadedBy.avatar;
-    if (typeof avatarUrl === 'string' && avatarUrl.startsWith('http')) {
+    if (typeof avatarUrl === "string" && avatarUrl.startsWith("http")) {
       return { uri: avatarUrl.trim() };
     }
     return avatarUrl;
@@ -125,7 +148,10 @@ export function getUserAvatarFromContent(
 
   // Check if content has speakerAvatar (legacy format)
   if (content.speakerAvatar) {
-    if (typeof content.speakerAvatar === 'string' && content.speakerAvatar.startsWith('http')) {
+    if (
+      typeof content.speakerAvatar === "string" &&
+      content.speakerAvatar.startsWith("http")
+    ) {
       return { uri: content.speakerAvatar.trim() };
     }
     return content.speakerAvatar;
@@ -133,7 +159,10 @@ export function getUserAvatarFromContent(
 
   // Check if content has userAvatar (alternative field name)
   if (content.userAvatar) {
-    if (typeof content.userAvatar === 'string' && content.userAvatar.startsWith('http')) {
+    if (
+      typeof content.userAvatar === "string" &&
+      content.userAvatar.startsWith("http")
+    ) {
       return { uri: content.userAvatar.trim() };
     }
     return content.userAvatar;
@@ -151,10 +180,10 @@ export function getUserAvatarFromContent(
  */
 export function getUserDisplayNameFromContent(
   content: any,
-  fallback: string = "Anonymous User"
+  fallback: string = "Jevah HQ"
 ): string {
   // Check if content has uploadedBy object with user profile data
-  if (content.uploadedBy && typeof content.uploadedBy === 'object') {
+  if (content.uploadedBy && typeof content.uploadedBy === "object") {
     const user = content.uploadedBy;
     if (user.firstName && user.lastName) {
       return `${user.firstName} ${user.lastName}`.trim();
@@ -166,7 +195,7 @@ export function getUserDisplayNameFromContent(
       return user.lastName;
     }
     if (user.email) {
-      return user.email.split('@')[0]; // Use email prefix as fallback
+      return user.email.split("@")[0]; // Use email prefix as fallback
     }
   }
 
@@ -175,7 +204,7 @@ export function getUserDisplayNameFromContent(
     return content.speaker;
   }
 
-  if (content.uploadedBy && typeof content.uploadedBy === 'string') {
+  if (content.uploadedBy && typeof content.uploadedBy === "string") {
     return content.uploadedBy;
   }
 
@@ -196,7 +225,7 @@ export function getUserProfileFromContent(content: any): {
   fullName?: string;
 } | null {
   // Check if content has uploadedBy object with user profile data
-  if (content.uploadedBy && typeof content.uploadedBy === 'object') {
+  if (content.uploadedBy && typeof content.uploadedBy === "object") {
     const user = content.uploadedBy;
     return {
       id: user._id || user.id,
@@ -204,7 +233,10 @@ export function getUserProfileFromContent(content: any): {
       lastName: user.lastName,
       email: user.email,
       avatar: user.avatar,
-      fullName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}`.trim() : undefined
+      fullName:
+        user.firstName && user.lastName
+          ? `${user.firstName} ${user.lastName}`.trim()
+          : undefined,
     };
   }
 
