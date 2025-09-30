@@ -1,13 +1,37 @@
-import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { useEffect } from "react";
+import {
+    Dimensions,
+    Modal,
+    Platform,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
+} from "react-native";
+import {
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
+} from "react-native-gesture-handler";
+import Animated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from "react-native-reanimated";
 
-type Props = {
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+
+interface JoinGroupModalProps {
   visible: boolean;
   onClose: () => void;
-  onJoin?: () => void;
-  groupTitle?: string;
-  groupDescription?: string;
-  groupMembers?: number;
-};
+  onJoin: () => void;
+  groupTitle: string;
+  groupDescription: string;
+  groupMembers: number;
+}
 
 export default function JoinGroupModal({
   visible,
@@ -16,96 +40,208 @@ export default function JoinGroupModal({
   groupTitle,
   groupDescription,
   groupMembers,
-}: Props) {
+}: JoinGroupModalProps) {
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const lastTranslateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      translateY.value = withSpring(0, {
+        damping: 20,
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true,
+      });
+    } else {
+      translateY.value = withSpring(SCREEN_HEIGHT, {
+        damping: 20,
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true,
+      });
+    }
+  }, [visible, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
+    const { translationY } = event.nativeEvent;
+    if (translationY > 0) {
+      translateY.value = translationY;
+      lastTranslateY.value = translationY;
+    }
+  };
+
+  const onGestureEnd = (
+    _event: HandlerStateChangeEvent<Record<string, unknown>>
+  ) => {
+    if (lastTranslateY.value > 150) {
+      translateY.value = withSpring(SCREEN_HEIGHT, {
+        damping: 20,
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true,
+      });
+      runOnJS(onClose)();
+    } else {
+      translateY.value = withSpring(0, {
+        damping: 20,
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true,
+      });
+    }
+  };
+
+  const handleClose = () => {
+    translateY.value = withSpring(SCREEN_HEIGHT, {
+      damping: 20,
+      stiffness: 100,
+      mass: 1,
+      overshootClamping: true,
+    });
+    runOnJS(onClose)();
+  };
+
+  const handleJoin = () => {
+    translateY.value = withSpring(SCREEN_HEIGHT, {
+      damping: 20,
+      stiffness: 100,
+      mass: 1,
+      overshootClamping: true,
+    });
+    runOnJS(onJoin)();
+  };
+
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      transparent={true}
+      animationType="none"
+      onRequestClose={handleClose}
     >
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.4)",
-          justifyContent: "flex-end",
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: "white",
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            padding: 20,
-          }}
-        >
-          <Text
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        {/* Background overlay */}
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <View
             style={{
-              fontSize: 18,
-              fontWeight: "700",
-              color: "#111827",
-              marginBottom: 8,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
             }}
+          />
+        </TouchableWithoutFeedback>
+
+        <PanGestureHandler
+          onGestureEvent={onGestureEvent}
+          onHandlerStateChange={onGestureEnd}
+        >
+          <Animated.View
+            style={[
+              animatedStyle,
+              {
+                position: "absolute",
+                bottom: 0,
+                width: SCREEN_WIDTH,
+                backgroundColor: "white",
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                paddingHorizontal: 24,
+                paddingVertical: 24,
+                maxHeight: SCREEN_HEIGHT * 0.6,
+                minHeight: 320,
+              },
+            ]}
           >
-            Join Group
-          </Text>
-          {groupTitle ? (
-            <>
-              <Text
-                style={{ color: "#1F2937", fontWeight: "600", marginBottom: 4 }}
-              >
-                {groupTitle}
-              </Text>
-              {groupDescription ? (
-                <Text style={{ color: "#6B7280", marginBottom: 4 }}>
-                  {groupDescription}
-                </Text>
-              ) : null}
-              {typeof groupMembers === "number" ? (
-                <Text style={{ color: "#6B7280", marginBottom: 16 }}>
-                  {groupMembers} members
-                </Text>
-              ) : (
-                <Text style={{ color: "#6B7280", marginBottom: 16 }}>
-                  Do you want to join this group?
-                </Text>
-              )}
-            </>
-          ) : (
-            <Text style={{ color: "#6B7280", marginBottom: 16 }}>
-              Do you want to join this group?
+            {/* Handle */}
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                backgroundColor: "#D1D5DB",
+                alignSelf: "center",
+                borderRadius: 2,
+                marginBottom: 24,
+                marginTop: 0,
+              }}
+            />
+
+            {/* Group Title */}
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: "bold",
+                color: "#000",
+                textAlign: "center",
+                marginBottom: 8,
+                fontFamily: "Rubik-Bold",
+              }}
+            >
+              {groupTitle}
             </Text>
-          )}
-          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-            <TouchableOpacity
-              onPress={onClose}
+
+            {/* Members Count */}
+            <Text
               style={{
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                marginRight: 8,
+                fontSize: 16,
+                color: "#666",
+                textAlign: "center",
+                marginBottom: 16,
+                fontFamily: "Rubik-Regular",
               }}
             >
-              <Text style={{ color: "#6B7280", fontWeight: "600" }}>
-                Cancel
+              {groupMembers.toLocaleString()} Members
+            </Text>
+
+            {/* Group Description */}
+            <Text
+              style={{
+                fontSize: 16,
+                color: "#333",
+                textAlign: "center",
+                lineHeight: 24,
+                marginBottom: 32,
+                paddingHorizontal: 16,
+                fontFamily: "Rubik-Regular",
+              }}
+            >
+              {groupDescription}
+            </Text>
+
+            {/* Join Button */}
+            <TouchableOpacity
+              onPress={handleJoin}
+              style={{
+                backgroundColor: "#1A1A1A",
+                paddingVertical: 16,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: Platform.OS === "ios" ? 20 : 16,
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  fontFamily: "Rubik-Bold",
+                }}
+              >
+                Join
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                onJoin?.();
-                onClose();
-              }}
-              style={{
-                backgroundColor: "#256E63",
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: "white", fontWeight: "700" }}>Join</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </Animated.View>
+        </PanGestureHandler>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

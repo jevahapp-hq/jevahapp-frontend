@@ -1,145 +1,266 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
-import TokenUtils from "../utils/tokenUtils";
-
-// Jevah Backend API Base URL
-const JEVAH_API_BASE_URL = "https://jevahapp-backend.onrender.com/api/auth";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getApiBaseUrl } from '../utils/api';
 
 class AuthService {
-  private baseURL: string = JEVAH_API_BASE_URL;
+  private get baseURL(): string {
+    const baseUrl = getApiBaseUrl();
+    // Add /api/auth suffix if not already present
+    return baseUrl.endsWith('/api/auth') ? baseUrl : `${baseUrl}/api/auth`;
+  }
 
+  // Forgot Password - Step 1: Send reset code to email
+  async forgotPassword(email: string) {
+    try {
+      console.log("🔍 Sending forgot password request for:", email);
+      console.log("🔍 API URL:", `${this.baseURL}/forgot-password`);
+      
+      const response = await fetch(`${this.baseURL}/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = await response.json();
+      console.log("📧 Forgot password response:", data);
+      console.log("📧 Response status:", response.status);
+      console.log("📧 Response ok:", response.ok);
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
+    } catch (error) {
+      console.error("❌ Error in forgotPassword:", error);
+      return { 
+        success: false, 
+        error: "Network error occurred",
+        status: 0 
+      };
+    }
+  }
+
+  // Verify Reset Code - Step 2: Validate the 6-digit code
+  async verifyResetCode(email: string, code: string) {
+    try {
+      console.log("🔍 Verifying reset code for:", email);
+      
+      const response = await fetch(`${this.baseURL}/verify-reset-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          code: code.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      console.log("✅ Verify reset code response:", data);
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
+    } catch (error) {
+      console.error("❌ Error in verifyResetCode:", error);
+      return { 
+        success: false, 
+        error: "Network error occurred",
+        status: 0 
+      };
+    }
+  }
+
+  // Reset Password - Step 3: Reset password with email, token, and new password
+  async resetPassword(email: string, token: string, newPassword: string) {
+    try {
+      console.log("🔍 Resetting password for:", email);
+      
+      const response = await fetch(`${this.baseURL}/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          token: token.trim(),
+          newPassword: newPassword.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      console.log("✅ Reset password response:", data);
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
+    } catch (error) {
+      console.error("❌ Error in resetPassword:", error);
+      return { 
+        success: false, 
+        error: "Network error occurred",
+        status: 0 
+      };
+    }
+  }
+
+  // Login with Jevah backend
   async login(email: string, password: string) {
     try {
+      console.log("🔍 Logging in user:", email);
+      
       const response = await fetch(`${this.baseURL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "expo-platform": Platform.OS,
         },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password,
+        }),
       });
+
       const data = await response.json();
-      if (response.ok && (data?.data?.token || data?.token)) {
-        const token = data?.data?.token || data?.token;
-        // Store token consistently in all places used across the app
-        await TokenUtils.storeAuthToken(token);
-        await AsyncStorage.setItem("userToken", token);
-        const user = data?.data?.user || data?.user;
-        if (user) await AsyncStorage.setItem("user", JSON.stringify(user));
+      console.log("✅ Login response:", data);
+
+      if (response.ok && data.token) {
+        await AsyncStorage.setItem("token", data.token);
+        console.log("💾 Token stored in AsyncStorage");
+        
+        // Also store user data if available
+        if (data.user) {
+          console.log("🔍 Login user data:", {
+            section: data.user.section,
+            sectionType: typeof data.user.section,
+            userKeys: Object.keys(data.user),
+            fullUserData: data.user
+          });
+          await AsyncStorage.setItem("user", JSON.stringify(data.user));
+          console.log("💾 User data stored in AsyncStorage");
+        }
       }
-      return { success: response.ok, data, status: response.status };
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
     } catch (error) {
+      console.error("❌ Error in login:", error);
       return {
         success: false,
         error: "Network error occurred",
-        status: 0,
-      } as any;
+        status: 0 
+      };
     }
   }
 
+  // Register with Jevah backend
   async register(userData: any) {
     try {
+      console.log("🔍 Registering new user:", userData.email);
+      
       const response = await fetch(`${this.baseURL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "expo-platform": Platform.OS,
         },
         body: JSON.stringify(userData),
       });
+
       const data = await response.json();
-      return { success: response.ok, data, status: response.status };
+      console.log("✅ Register response:", data);
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
     } catch (error) {
+      console.error("❌ Error in register:", error);
       return {
         success: false,
         error: "Network error occurred",
-        status: 0,
-      } as any;
+        status: 0 
+      };
     }
   }
 
-  async resendVerification(email: string) {
-    try {
-      const response = await fetch(
-        `${this.baseURL}/resend-verification-email`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim() }),
-        }
-      );
-      const data = await response.json();
-      return { success: response.ok, data, status: response.status };
-    } catch (error) {
-      return {
-        success: false,
-        error: "Network error occurred",
-        status: 0,
-      } as any;
-    }
-  }
-
-  // Align with backend: POST /verify-email { email, code }
+  // Verify Email Code - For email verification during signup
   async verifyEmailCode(email: string, code: string) {
     try {
+      console.log("🔍 Verifying email code for:", email);
+      
       const response = await fetch(`${this.baseURL}/verify-email`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           email: email.trim(),
-          code: String(code).trim(),
+          code: code.trim(),
         }),
       });
+
       const data = await response.json();
-      return { success: response.ok, data, status: response.status };
-    } catch (error) {
+      console.log("✅ Verify email response:", data);
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
+    } catch (error: any) {
+      console.error("❌ Error in verifyEmailCode:", error);
       return {
         success: false,
         error: "Network error occurred",
-        status: 0,
-      } as any;
+        status: 0 
+      };
     }
   }
 
-  // Alias used by CodeVerification screen; same endpoint as resendVerification
+  // Resend Email Verification Code
   async resendEmailVerification(email: string) {
     try {
-      const response = await fetch(
-        `${this.baseURL}/resend-verification-email`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim() }),
-        }
-      );
+      console.log("🔍 Resending email verification for:", email);
+      
+      const response = await fetch(`${this.baseURL}/resend-verification`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+        }),
+      });
+
       const data = await response.json();
-      return { success: response.ok, data, status: response.status };
-    } catch (error) {
+      console.log("✅ Resend email verification response:", data);
+
+      return { 
+        success: response.ok, 
+        data,
+        status: response.status 
+      };
+    } catch (error: any) {
+      console.error("❌ Error in resendEmailVerification:", error);
       return {
         success: false,
         error: "Network error occurred",
-        status: 0,
-      } as any;
+        status: 0 
+      };
     }
   }
 
-  async verifyEmail(token: string) {
-    try {
-      const url = `https://jevahapp-backend.onrender.com/api/auth/verify-email?token=${encodeURIComponent(
-        token
-      )}`;
-      const response = await fetch(url, { method: "GET" });
-      const data = await response.json();
-      return { success: response.ok, data, status: response.status };
-    } catch (error) {
-      return {
-        success: false,
-        error: "Network error occurred",
-        status: 0,
-      } as any;
-    }
-  }
-
+  // Get current user data
   async fetchMe() {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -161,30 +282,31 @@ class AuthService {
     }
   }
 
+  // Logout - Clear stored token
   async logout() {
     try {
-      await TokenUtils.clearAuthTokens();
-      await AsyncStorage.removeItem("user");
-      try {
-        const { useInteractionStore } = await import(
-          "../store/useInteractionStore"
-        );
-        useInteractionStore.getState().clearCache();
-      } catch {}
+      await AsyncStorage.removeItem("token");
+      console.log("🗑️ Token removed from AsyncStorage");
       return { success: true };
-    } catch {
+    } catch (error) {
+      console.error("❌ Error in logout:", error);
       return { success: false };
     }
   }
 
+  // Get stored token
   async getToken() {
     try {
       const token = await AsyncStorage.getItem("token");
+      console.log("🔑 Retrieved token from AsyncStorage:", token ? "exists" : "not found");
       return token;
-    } catch {
+    } catch (error) {
+      console.error("❌ Error getting token:", error);
       return null;
     }
   }
 }
 
 export default new AuthService();
+
+

@@ -4,15 +4,15 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
@@ -150,9 +150,10 @@ export default function SignUpScreen() {
         emailAddress,
         firstName,
         lastName,
+        password, // Include password for automatic login after verification
       },
     });
-  }, [router, emailAddress, firstName, lastName]);
+  }, [router, emailAddress, firstName, lastName, password]);
 
   return (
     <View className="flex-1 bg-white">
@@ -161,18 +162,14 @@ export default function SignUpScreen() {
       </View>
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={100}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <ScrollView
-          contentContainerStyle={{
-            alignItems: "center",
-            justifyContent: "flex-start",
-            paddingBottom: 160,
-          }}
-          keyboardShouldPersistTaps="handled"
+        <View
+          className="flex-1 items-center justify-start"
+          style={{ paddingBottom: 50 }}
         >
-          <View className="flex flex-col justify-center items-start h-[160px] w-[333px] mt-3 bg-[#FCFCFD]">
+          <View className="flex flex-col justify-center items-start h-[140px] w-[333px] mt-2 bg-[#FCFCFD]">
             <Text className="font-rubik-semibold text-[#1D2939] text-star text-[40px]">
               Welcome to the {"\n"}family!{" "}
               <Image
@@ -188,7 +185,7 @@ export default function SignUpScreen() {
             </Text>
           </View>
 
-          <View className="flex flex-col justify-center mt-9 items-center w-[33px]">
+          <View className="flex flex-col justify-center mt-4 items-center w-[333px]">
             {/* First Name */}
             <View className="flex flex-col w-[333px] mt-2">
               <View className="flex flex-row rounded-[15px] h-[56px] border border-[#9D9FA7] items-center px-3">
@@ -203,6 +200,8 @@ export default function SignUpScreen() {
                   className="ml-3 w-full text-[#090E24]"
                   placeholderTextColor="#090E24"
                   editable={!isLoading}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
               {firstNameError && (
@@ -226,6 +225,8 @@ export default function SignUpScreen() {
                   className="ml-3 w-full text-[#090E24]"
                   placeholderTextColor="#090E24"
                   editable={!isLoading}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
               {lastNameError && (
@@ -251,6 +252,8 @@ export default function SignUpScreen() {
                   className="ml-5 w-full"
                   placeholderTextColor="#090E24"
                   editable={!isLoading}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
               {emailError && (
@@ -261,7 +264,7 @@ export default function SignUpScreen() {
             {/* Password Field */}
             <View className="flex flex-col w-[333px] mt-2">
               <View className="flex flex-row rounded-[15px] h-[56px] border border-[#9D9FA7] items-center px-3">
-                <FontAwesome6 name="unlock-keyhole" size={15} color="black" />
+                <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
                 <TextInput
                   placeholder="Password"
                   value={password}
@@ -275,6 +278,8 @@ export default function SignUpScreen() {
                     fontWeight: '400'
                   }}
                   editable={!isLoading}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -296,7 +301,7 @@ export default function SignUpScreen() {
           </View>
 
           {/* Sign Up Button */}
-          <View className="flex flex-col mt-24 justify-center items-center w-full">
+          <View className="flex flex-col mt-8 justify-center items-center w-full">
             <TouchableOpacity
               onPress={handleSignUpValidation}
               disabled={isLoading}
@@ -328,7 +333,7 @@ export default function SignUpScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
 
       <VerifyEmail

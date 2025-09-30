@@ -2,17 +2,18 @@ import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Image,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated,
+    FlatList,
+    Image,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SuccessCard from "../../components/SuccessCard";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
@@ -72,6 +73,11 @@ const pastSearchesInitial = [
 
 export default function AllLibrary({ contentType }: { contentType?: string }) {
   const [query, setQuery] = useState("");
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  
   const libraryStore = useLibraryStore();
   const globalVideoStore = useGlobalVideoStore();
   const [savedItems, setSavedItems] = useState<any[]>([]);
@@ -666,7 +672,8 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                 onPress: async () => {
                   try {
                     await handleRemoveFromLibrary(item);
-                    Alert.alert("Success", "Item removed from library");
+                    setSuccessMessage("Removed from library!");
+                    setShowSuccessCard(true);
                   } catch (error) {
                     console.error("Error removing from library:", error);
                     Alert.alert(
@@ -1532,6 +1539,13 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
 
   return (
     <SafeAreaView className="flex-1  bg-[#98a2b318]">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
       {/* Scrollable Content with matching px-6 */}
       <ScrollView
         className="flex-1 px-3"

@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { Image, ImageSourcePropType, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 
 import { router, useFocusEffect, useRouter } from "expo-router";
+import SuccessCard from "../components/SuccessCard";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 
@@ -266,7 +267,7 @@ const renderMiniCards = (
               />
               <View className="absolute inset-0 justify-center items-center">
                 <View className="bg-white/70 p-2 rounded-full">
-                  <Ionicons name="play" size={24} color="#6663FD" />
+                  <Ionicons name="play" size={24} color="#FEA74E" />
                 </View>
               </View>
               <View className="absolute bottom-2 left-2 right-2">
@@ -341,6 +342,10 @@ export default function LiveComponent() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [favModalIndex, setFavModalIndex] = useState<number | null>(null);
   let globalIndex = 0;
 
@@ -514,6 +519,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                 const result = await handleDownload(downloadableItem);
                 if (result.success) {
                   setModalVisible(null);
+                  setSuccessMessage("Downloaded successfully!");
+                  setShowSuccessCard(true);
                 }
               }}
             >
@@ -673,10 +680,18 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
   );
   
   return (
-    <ScrollView
-      className="flex-1 pb-10"
-      onScrollBeginDrag={() => setModalVisible(null)}
-      onTouchStart={() => setModalVisible(null)}
+    <View className="flex-1">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
+      <ScrollView
+        className="flex-1 pb-10"
+        onScrollBeginDrag={() => setModalVisible(null)}
+        onTouchStart={() => setModalVisible(null)}
     >
       <View className="mt-9">
         {videos.map((video, index) => renderVideoCard(video, index, "videos"))}
@@ -698,6 +713,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
           renderVideoCard(video, index, "videosB")
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

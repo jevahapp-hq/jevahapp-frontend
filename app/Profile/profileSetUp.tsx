@@ -3,13 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ COR
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  Alert,
-  BackHandler,
-  Pressable,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    BackHandler,
+    Pressable,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
@@ -171,7 +171,7 @@ export default function ProfileSetUp() {
                   <Pressable
                     onPress={() => toggleInterest(interest)}
                     className={`w-[24px] h-[24px] rounded-[9px] ml-3 items-center justify-center ${
-                      isSelected ? "bg-[#6663FD]" : "border border-[#C2C1FE]"
+                      isSelected ? "bg-[#FEA74E]" : "border border-[#FEA74E]"
                     }`}
                   >
                     {isSelected && (
@@ -179,9 +179,14 @@ export default function ProfileSetUp() {
                     )}
                   </Pressable>
 
-                  <Text className="text-[16px] font-bold ml-3 text-[#1D2939]">
-                    {interest}
-                  </Text>
+                  <TouchableOpacity 
+                    onPress={() => toggleInterest(interest)}
+                    className="flex-1 ml-3"
+                  >
+                    <Text className="text-[16px] font-bold text-[#1D2939]">
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               );
             })}

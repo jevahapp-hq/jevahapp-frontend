@@ -1,9 +1,8 @@
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
 import AuthHeader from '../components/AuthHeader';
 import authService from "../services/authService";
 
@@ -36,7 +35,7 @@ export default function ResetPassword() {
 
         <View className="flex flex-col">
           <View className="flex flex-row rounded-[15px] w-[333px] h-[56px] border border-[#9D9FA7] items-center justify-center mt-2">
-            <FontAwesome6 name="unlock-keyhole" size={15} color="black" />
+            <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
             <TextInput
               placeholder="Password"
               className="border-hidden outline-none w-[250px] h-[40px] ml-2 text-[#090E24]"
@@ -60,7 +59,7 @@ export default function ResetPassword() {
           </View>
 
           <View className="flex flex-row rounded-[15px] w-[333px] h-[56px] border border-[#9D9FA7] items-center justify-center mt-4">
-            <FontAwesome6 name="unlock-keyhole" size={15} color="black" />
+            <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
             <TextInput
               placeholder="Confirm Password"
               className="border-hidden outline-none w-[250px] h-[40px] ml-2 text-[#090E24]"

@@ -8,6 +8,11 @@ import TokenUtils from "./tokenUtils";
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || environmentManager.getCurrentUrl();
 
+// Function to get API base URL (for use in services)
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 // Log the API URL source for debugging
 if (process.env.EXPO_PUBLIC_API_URL) {
   console.log(

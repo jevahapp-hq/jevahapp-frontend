@@ -74,7 +74,7 @@ export default function CommunityScreen() {
             width: 40,
             height: 40,
             borderRadius: 20,
-            backgroundColor: "#6663FD",
+            backgroundColor: "#FEA74E",
             alignItems: "center",
             justifyContent: "center",
           }}

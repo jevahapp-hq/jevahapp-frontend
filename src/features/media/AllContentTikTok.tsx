@@ -1,35 +1,35 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    RefreshControl,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-  categorizeContent,
-  filterContentByType,
-  getContentKey,
-  getMostRecentItem,
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  transformApiResponseToMediaItem,
+    categorizeContent,
+    filterContentByType,
+    getContentKey,
+    getMostRecentItem,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
 // Feature-specific imports
@@ -37,6 +37,7 @@ import { useMedia } from "../../shared/hooks/useMedia";
 
 // Component imports
 import { Ionicons } from "@expo/vector-icons";
+import SuccessCard from "../../../app/components/SuccessCard";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
@@ -50,12 +51,12 @@ import { useGlobalMediaStore } from "../../../app/store/useGlobalMediaStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-  getPersistedStats,
-  getViewed,
+    getPersistedStats,
+    getViewed,
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -99,6 +100,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState<string | null>(null);
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const toggleModal = useCallback((val: string | null) => {
     console.log("🔧 toggleModal called with:", val);
     setModalVisible(val);
@@ -576,6 +581,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     );
     const result = await handleDownload(downloadableItem);
     if (result.success) {
+      setSuccessMessage("Downloaded successfully!");
+      setShowSuccessCard(true);
       await loadDownloadedItems();
     }
   };
@@ -706,8 +713,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             originalKey: key,
           };
           await libraryStore.addToLibrary(libraryItem);
+          setSuccessMessage("Saved to library!");
+          setShowSuccessCard(true);
         } else {
           await libraryStore.removeFromLibrary(contentId);
+          setSuccessMessage("Removed from library!");
+          setShowSuccessCard(true);
         }
       } catch (error) {
         console.error("❌ Save error:", error);
@@ -974,11 +985,19 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      style={{ flex: 1 }}
-      refreshControl={
-        <RefreshControl
+    <View style={{ flex: 1 }}>
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl
           refreshing={refreshing}
           onRefresh={handleRefresh}
           colors={[UI_CONFIG.COLORS.PRIMARY]}
@@ -1189,6 +1208,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             : "🟡 Real-time Unavailable"}
         </Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };

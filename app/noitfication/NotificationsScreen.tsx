@@ -1,14 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    RefreshControl,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
@@ -203,7 +203,7 @@ export default function NotificationsScreen() {
 
   const renderLoadingState = () => (
     <View className="flex-1 items-center justify-center py-20">
-      <ActivityIndicator size="large" color="#6366F1" />
+      <ActivityIndicator size="large" color="#FEA74E" />
       <Text className="text-[#6B7280] text-sm font-rubik mt-4">
         Loading notifications...
       </Text>
