@@ -70,7 +70,7 @@ export function useAuth() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authService.resendVerification(email);
+      const res = await authService.resendEmailVerification(email);
       if (!res.success) throw new Error(res?.data?.message || "Resend failed");
       return res.data;
     } catch (e: any) {
@@ -144,4 +144,3 @@ export function useAuth() {
     signOut,
   };
 }
-
