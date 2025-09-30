@@ -1,12 +1,12 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 interface AIDescriptionBoxProps {
@@ -121,7 +121,7 @@ const AIDescriptionBox = memo(function AIDescriptionBox({
         return "#FEA74E";
       case "audio":
       case "music":
-        return "#8B5CF6";
+        return "#FEA74E";
       case "books":
       case "ebook":
         return "#059669";

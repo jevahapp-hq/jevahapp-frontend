@@ -1,4 +1,3 @@
-import React from "react";
 import { View } from "react-native";
 
 interface ProgressBarProps {
@@ -16,7 +15,7 @@ export default function ProgressBar({
     <View className="w-[333px] h-[8px] mt-2 mb-2 bg-[#E0E0FF] rounded-[5px] relative">
       {/* Filled progress */}
       <View
-        className="h-full bg-[#6663FD] rounded-[5px]"
+        className="h-full bg-[#FEA74E] rounded-[5px]"
         style={{ width: `${progress}%` }}
       />
 

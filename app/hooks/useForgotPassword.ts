@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-const API_BASE_URL = "https://jevahapp-backend.onrender.com";
+import { API_BASE_URL } from "../utils/api";
 
 export function useForgotPassword() {
   const [loading, setLoading] = useState(false);

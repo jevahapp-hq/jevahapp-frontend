@@ -380,7 +380,7 @@ export const ChannelAvatar = ({
       source={avatar}
       size={size}
       fallbackText={fallbackText}
-      fallbackColor="#8B5CF6"
+      fallbackColor="#FEA74E"
       onPress={onPress}
       showBorder={true}
     />

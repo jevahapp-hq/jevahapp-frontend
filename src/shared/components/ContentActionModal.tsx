@@ -1,25 +1,25 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import {
-  Dimensions,
-  Modal,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Modal,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import {
-  GestureHandlerRootView,
-  HandlerStateChangeEvent,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -341,14 +341,14 @@ export default function ContentActionModal({
                     style={{
                       width: 36,
                       height: 36,
-                      backgroundColor: "#EDE9FE",
+                      backgroundColor: "#FEF3E2",
                       borderRadius: 18,
                       justifyContent: "center",
                       alignItems: "center",
                       marginRight: 12,
                     }}
                   >
-                    <Feather name="send" size={18} color="#8B5CF6" />
+                    <Feather name="send" size={18} color="#FEA74E" />
                   </View>
                   <Text
                     style={{

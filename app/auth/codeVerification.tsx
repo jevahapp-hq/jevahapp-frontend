@@ -1,21 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Animated as RNAnimated,
-  Text,
-  TextInput,
-  TextStyle,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated as RNAnimated,
+    Text,
+    TextInput,
+    TextStyle,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/FontAwesome";
 import AuthHeader from "../components/AuthHeader";
@@ -26,7 +25,6 @@ import authService from "../services/authService";
 export default function CodeVerification() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const API_BASE_URL = Constants.expoConfig?.extra?.API_URL;
 
   const [codeArray, setCodeArray] = useState(["", "", "", "", "", ""]);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -371,7 +369,7 @@ export default function CodeVerification() {
         </Text>
         {isVerifying && (
           <Animated.View style={[{ marginLeft: 8 }, animatedStyle]}>
-            <Icon name="star" size={16} color="#6663FD" />
+            <Icon name="star" size={16} color="#FEA74E" />
           </Animated.View>
         )}
       </TouchableOpacity>
@@ -381,7 +379,7 @@ export default function CodeVerification() {
           Didn't get a code?{" "}
         </Text>
         <TouchableOpacity onPress={handleResend} disabled={isResending}>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#6663FD" }}>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#FEA74E" }}>
             {isResending ? "Resending..." : "Resend"}
           </Text>
         </TouchableOpacity>

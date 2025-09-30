@@ -17,6 +17,7 @@ import {
     View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useInteractionStore } from "../store/useInteractionStore";
@@ -238,6 +239,10 @@ export default function Music() {
   // Audio playback state
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioProgressMap, setAudioProgressMap] = useState<Record<string, number>>({});
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [audioMuteMap, setAudioMuteMap] = useState<Record<string, boolean>>({});
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
@@ -441,6 +446,9 @@ export default function Music() {
           persistStats(updated);
           return updated;
         });
+        
+        setSuccessMessage("Saved to library!");
+        setShowSuccessCard(true);
       } else {
         await libraryStore.removeFromLibrary(key);
         setAudioStats((prev) => {
@@ -454,6 +462,9 @@ export default function Music() {
           persistStats(updated);
           return updated;
         });
+        
+        setSuccessMessage("Removed from library!");
+        setShowSuccessCard(true);
       }
     } catch (error) {
       console.error("❌ Save operation failed for audio:", error);
@@ -506,6 +517,8 @@ export default function Music() {
       
       if (result.success) {
         console.log("✅ Download successful:", result.message);
+        setSuccessMessage("Downloaded successfully!");
+        setShowSuccessCard(true);
       } else {
         console.log("ℹ️ Download info:", result.message);
       }
@@ -1027,6 +1040,8 @@ useEffect(() => {
                   const result = await handleDownload(downloadableItem);
                   if (result.success) {
                     setModalVisible(null);
+                    setSuccessMessage("Downloaded successfully!");
+                    setShowSuccessCard(true);
                   }
                 }}
               >
@@ -1224,6 +1239,8 @@ useEffect(() => {
                     const result = await handleDownload(downloadableItem);
                     if (result.success) {
                       setModalIndex(null);
+                      setSuccessMessage("Downloaded successfully!");
+                      setShowSuccessCard(true);
                       // Force re-render to update download status
                       await loadDownloadedItems();
                     }
@@ -1276,11 +1293,19 @@ useEffect(() => {
   );
 
   return (
-    <ScrollView
-      className="flex-1"
-      onScrollBeginDrag={() => setModalVisible(null)}
-      onTouchStart={() => setModalVisible(null)}
-    >
+    <View className="flex-1">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
+      <ScrollView
+        className="flex-1"
+        onScrollBeginDrag={() => setModalVisible(null)}
+        onTouchStart={() => setModalVisible(null)}
+      >
       {/* 1. Most Recent */}
       {musicItems.length > 0 && (
         <>
@@ -1491,7 +1516,8 @@ useEffect(() => {
 
       {/* Bottom spacing to ensure last card footer is fully visible */}
       <View className="h-20" />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

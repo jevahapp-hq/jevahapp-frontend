@@ -84,7 +84,7 @@ export default function Welcome() {
           key={i}
           className={`mx-1.5 ${
             i === currentIndex 
-              ? 'w-[20px] h-[6px] rounded-full bg-[#C2C1FE]' 
+              ? 'w-[20px] h-[6px] rounded-full bg-[#FEA74E]' 
               : 'w-[6px] h-[6px] rounded-full bg-[#EAECF0]'
           }`}
         />

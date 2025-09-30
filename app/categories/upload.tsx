@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Dimensions,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 import { Feather } from "@expo/vector-icons";
@@ -19,26 +19,26 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-  getButtonSize,
-  getInputSize,
-  getKeyboardAdjustment,
-  getMediaPickerSize,
-  getOrientation,
-  getResponsiveFontSize,
-  getResponsiveSize,
-  getResponsiveSpacing,
-  getScreenDimensions,
-  getThumbnailSize,
-  getTouchTargetSize,
-  isSmallScreen,
+    getButtonSize,
+    getInputSize,
+    getKeyboardAdjustment,
+    getMediaPickerSize,
+    getOrientation,
+    getResponsiveFontSize,
+    getResponsiveSize,
+    getResponsiveSpacing,
+    getScreenDimensions,
+    getThumbnailSize,
+    getTouchTargetSize,
+    isSmallScreen,
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { useMediaStore } from "../store/useUploadStore";
 
 import {
-  logUserDataStatus,
-  validateUserForUpload,
+    logUserDataStatus,
+    validateUserForUpload,
 } from "../utils/userValidation";
 
 // Use the correct API base URL for uploads
@@ -712,7 +712,7 @@ export default function UploadScreen() {
                   className="text-gray-600 text-center mt-2"
                   style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
                 >
-                  Select{"\n"}Thumbnail
+                  Select{"\n"}Cover Photo
                 </Text>
               </View>
             ) : (
@@ -795,7 +795,7 @@ export default function UploadScreen() {
                 className="text-gray-600 text-center mt-2"
                 style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
               >
-                Select{"\n"}Thumbnail
+                Select{"\n"}Cover Photo
               </Text>
             </View>
           ) : (
@@ -921,7 +921,7 @@ export default function UploadScreen() {
                   className="text-white font-semibold"
                   style={{ fontSize: getResponsiveFontSize(16, 18, 20) }}
                 >
-                  Upload
+                  Post
                 </Text>
               </TouchableOpacity>
             </View>

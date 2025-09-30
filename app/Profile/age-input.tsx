@@ -102,7 +102,7 @@ export default function AgeInputScreen() {
           Tell us your age
         </Text>
         <TouchableOpacity
-          className="w-[333px] h-[56px] bg-white rounded-2xl shadow-md justify-center items-center mb-8 border border-[#6663FD]"
+          className="w-[333px] h-[56px] bg-white rounded-2xl shadow-md justify-center items-center mb-8 border border-[#FEA74E]"
           onPress={() => setShowPicker(true)}
         >
           <Text className="text-[16px] font-rubik  text-[#1D2939]">

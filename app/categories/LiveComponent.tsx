@@ -266,7 +266,7 @@ const renderMiniCards = (
               />
               <View className="absolute inset-0 justify-center items-center">
                 <View className="bg-white/70 p-2 rounded-full">
-                  <Ionicons name="play" size={24} color="#6663FD" />
+                  <Ionicons name="play" size={24} color="#FEA74E" />
                 </View>
               </View>
               <View className="absolute bottom-2 left-2 right-2">

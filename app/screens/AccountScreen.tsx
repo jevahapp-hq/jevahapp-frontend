@@ -217,7 +217,7 @@ export default function AccountScreen() {
             </Text>
             
             <TouchableOpacity className="mb-2">
-              <Text className="text-[#4F46E5] font-medium">
+              <Text className="text-[#FEA74E] font-medium">
                 + Add bio
               </Text>
             </TouchableOpacity>

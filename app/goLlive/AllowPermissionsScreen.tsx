@@ -2,21 +2,17 @@
 
 
 import React from "react";
-import { View, TouchableOpacity, Image } from "react-native";
-import { Ionicons, Feather } from "@expo/vector-icons";
-import { Pressable, Text } from "react-native";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
+import { Pressable, Text, TouchableOpacity, View } from "react-native";
 import {
-  getResponsiveFontSize,
-  getResponsiveSpacing,
-  getResponsiveTextStyle,
-  getResponsiveBorderRadius,
-  getResponsiveShadow,
-  getIconSize,
-  getResponsiveSize,
+    getIconSize,
+    getResponsiveBorderRadius,
+    getResponsiveSize,
+    getResponsiveSpacing,
+    getResponsiveTextStyle
 } from "../../utils/responsive";
-
 const AllowPermissionsScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
@@ -109,7 +105,7 @@ const AllowPermissionsScreen = () => {
           marginTop: getResponsiveSpacing(32, 36, 40, 44),
         }}>
           <View style={{
-            backgroundColor: '#6366F1',
+            backgroundColor: '#FEA74E',
             borderRadius: getResponsiveBorderRadius('round'),
             padding: getResponsiveSpacing(16, 20, 24, 28),
             marginBottom: getResponsiveSpacing(16, 20, 24, 28),
