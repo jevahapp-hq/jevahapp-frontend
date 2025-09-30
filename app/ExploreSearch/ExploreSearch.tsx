@@ -1,27 +1,28 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  FlatList,
-  Image,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    FlatList,
+    Image,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
+import SuccessCard from "../components/SuccessCard";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { MediaItem, useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
-  addToSearchHistory,
-  getSearchHistory,
-  getTrendingSearches,
-  removeFromSearchHistory
+    addToSearchHistory,
+    getSearchHistory,
+    getTrendingSearches,
+    removeFromSearchHistory
 } from "../utils/searchHistoryUtils";
 import { getDisplayName } from "../utils/userValidation";
 
@@ -31,6 +32,10 @@ export default function ExploreSearch() {
   const [trendingSearches, setTrendingSearches] = useState<Array<{query: string, count: number, category?: string}>>([]);
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   
   // Audio playback state
@@ -523,8 +528,9 @@ export default function ExploreSearch() {
                   
                   if (result.success) {
                     console.log('✅ Download successful, closing modal');
-                    Alert.alert('Success', 'Item downloaded successfully!');
                     setModalIndex(null);
+                    setSuccessMessage("Downloaded successfully!");
+                    setShowSuccessCard(true);
                     // Force a re-render to update the download status
                     setTimeout(() => {
                       console.log('🔄 Forcing re-render');
@@ -597,6 +603,13 @@ export default function ExploreSearch() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
       {/* Header */}
       <AuthHeader title="Search and Filter" />
 

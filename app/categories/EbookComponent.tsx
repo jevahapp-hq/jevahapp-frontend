@@ -8,6 +8,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useInteractionStore } from "../store/useInteractionStore";
@@ -40,6 +41,10 @@ export default function EbookComponent() {
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
   const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
@@ -100,6 +105,8 @@ export default function EbookComponent() {
     const downloadableItem = convertToDownloadableItem(item, 'ebook');
     const result = await handleDownload(downloadableItem);
     if (result.success) {
+      setSuccessMessage("Downloaded successfully!");
+      setShowSuccessCard(true);
       await loadDownloadedItems();
     }
   };
@@ -206,6 +213,8 @@ export default function EbookComponent() {
                     const result = await handleDownload(downloadableItem);
                     if (result.success) {
                       setModalVisible(null);
+                      setSuccessMessage("Downloaded successfully!");
+                      setShowSuccessCard(true);
                     }
                   }}
                 >
@@ -358,6 +367,8 @@ export default function EbookComponent() {
                     const result = await handleDownload(downloadableItem);
                     if (result.success) {
                       setModalIndex(null);
+                      setSuccessMessage("Downloaded successfully!");
+                      setShowSuccessCard(true);
                       // Force re-render to update download status
                       await loadDownloadedItems();
                     }
@@ -486,11 +497,19 @@ export default function EbookComponent() {
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      onScrollBeginDrag={() => {
-        setModalVisible(null);
-        setPvModalIndex(null);
+    <View className="flex-1">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
+      <ScrollView
+        className="flex-1"
+        onScrollBeginDrag={() => {
+          setModalVisible(null);
+          setPvModalIndex(null);
         setRsModalIndex(null);
       }}
       onTouchStart={() => {
@@ -606,6 +625,7 @@ export default function EbookComponent() {
 
       {/* Bottom spacing to ensure last card footer is fully visible */}
       <View className="h-20" />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

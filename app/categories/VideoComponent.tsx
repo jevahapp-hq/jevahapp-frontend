@@ -1,34 +1,35 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons,
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  Dimensions,
-  Image,
-  ImageSourcePropType,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  PanResponder,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    ImageSourcePropType,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    PanResponder,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
@@ -38,20 +39,20 @@ import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../utils/downloadUtils";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  getViewed,
-  persistStats,
-  persistViewed,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    getViewed,
+    persistStats,
+    persistViewed,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 import {
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../utils/userValidation";
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
@@ -106,6 +107,10 @@ export default function VideoComponent() {
 
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   // Removed legacy rsModalIndex; using specific indices per section instead
   // Separate modal indices for different mini-card sections to avoid conflicts
   const [trendingModalIndex, setTrendingModalIndex] = useState<number | null>(
@@ -555,6 +560,9 @@ export default function VideoComponent() {
 
         await libraryStore.addToLibrary(libraryItem);
         console.log(`✅ Added to user's library: ${video.title}`);
+        
+        setSuccessMessage("Saved to library!");
+        setShowSuccessCard(true);
 
         // Update local stats with incremented save count
         setVideoStats((prev) => {
@@ -579,6 +587,9 @@ export default function VideoComponent() {
         // User wants to unsave - remove from local library and decrement global count
         await libraryStore.removeFromLibrary(key);
         console.log(`🗑️ Removed from user's library: ${video.title}`);
+        
+        setSuccessMessage("Removed from library!");
+        setShowSuccessCard(true);
 
         // Update local stats with decremented save count
         setVideoStats((prev) => {
@@ -1469,6 +1480,8 @@ export default function VideoComponent() {
                   const result = await handleDownload(downloadableItem);
                   if (result.success) {
                     setModalVisible(null);
+                    setSuccessMessage("Downloaded successfully!");
+                    setShowSuccessCard(true);
                     // Force re-render to update download status
                     await loadDownloadedItems();
                     // Force component re-render by updating a state
@@ -1703,6 +1716,8 @@ export default function VideoComponent() {
                         const result = await handleDownload(downloadableItem);
                         if (result.success) {
                           closeAllMenus();
+                          setSuccessMessage("Downloaded successfully!");
+                          setShowSuccessCard(true);
                           // Force re-render to update download status
                           await loadDownloadedItems();
                         }
@@ -2074,11 +2089,19 @@ export default function VideoComponent() {
   );
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      className="flex-1 px-3 w-full"
-      onScrollBeginDrag={closeAllMenus}
-      onTouchStart={closeAllMenus}
+    <View className="flex-1">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
+      <ScrollView
+        ref={scrollViewRef}
+        className="flex-1 px-3 w-full"
+        onScrollBeginDrag={closeAllMenus}
+        onTouchStart={closeAllMenus}
       onScroll={handleScroll}
       onScrollEndDrag={() => {
         recomputeVisibilityFromLayouts();
@@ -2279,6 +2302,7 @@ export default function VideoComponent() {
           </View>
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

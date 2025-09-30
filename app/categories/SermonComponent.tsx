@@ -1,22 +1,23 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons,
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons,
 } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Image,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
+import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
@@ -25,14 +26,14 @@ import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../utils/downloadUtils";
 import { persistStats, toggleFavorite } from "../utils/persistentStorage";
 import {
-  getDisplayName,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getDisplayName,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../utils/userValidation";
 
 interface SermonCard {
@@ -145,6 +146,10 @@ export default function SermonComponent() {
   const [isMuted, setIsMuted] = useState(true);
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
+  
+  // Success card state
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
   const [trendingModalIndex, setTrendingModalIndex] = useState<number | null>(
     null
@@ -614,6 +619,8 @@ export default function SermonComponent() {
                 const result = await handleDownload(downloadableItem);
                 if (result.success) {
                   setModalVisible(null);
+                  setSuccessMessage("Downloaded successfully!");
+                  setShowSuccessCard(true);
                 }
               }}
             >
@@ -1135,6 +1142,8 @@ export default function SermonComponent() {
                       const result = await handleDownload(downloadableItem);
                       if (result.success) {
                         setModalIndex(null);
+                        setSuccessMessage("Downloaded successfully!");
+                        setShowSuccessCard(true);
                         // Force re-render to update download status
                         await loadDownloadedItems();
                       }
@@ -1198,11 +1207,19 @@ export default function SermonComponent() {
   );
 
   return (
-    <ScrollView
-      className="flex-1"
-      onScrollBeginDrag={() => {
-        setModalVisible(null);
-        setPvModalIndex(null);
+    <View className="flex-1">
+      {showSuccessCard && (
+        <SuccessCard
+          message={successMessage}
+          onClose={() => setShowSuccessCard(false)}
+          duration={3000}
+        />
+      )}
+      <ScrollView
+        className="flex-1"
+        onScrollBeginDrag={() => {
+          setModalVisible(null);
+          setPvModalIndex(null);
         setRsModalIndex(null);
         setTrendingModalIndex(null);
         setRecommendedModalIndex(null);
@@ -1344,6 +1361,7 @@ export default function SermonComponent() {
 
       {/* Bottom spacing to ensure last card footer is fully visible */}
       <View className="h-20" />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

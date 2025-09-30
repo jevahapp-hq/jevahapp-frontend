@@ -1,20 +1,20 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons,
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons,
 } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  Dimensions,
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Alert,
+    Animated,
+    Dimensions,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useSafeLibraryStore } from "../hooks/useSafeLibraryStore";
@@ -602,16 +602,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
   };
 
   const handleLongPress = () => {
-    // Show content options menu
-    Alert.alert("Content Options", "What would you like to do?", [
-      { text: "Share", onPress: handleShare },
-      {
-        text: "Save to Library",
-        onPress: () => setIsBookmarked(!isBookmarked),
-      },
-      { text: "Report", onPress: () => console.log("Report content") },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    // Directly toggle save to library without showing alert
+    handleSaveToLibrary();
   };
 
   const handleSaveToLibrary = async () => {
