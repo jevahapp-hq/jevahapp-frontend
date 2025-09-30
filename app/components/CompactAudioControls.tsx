@@ -143,7 +143,7 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
         </TouchableOpacity>
 
         {/* Progress Bar */}
-        <View className="flex-1">
+        <View className="flex-1 ml-3">
           <View
             ref={progressBarRef}
             className="w-full h-1 bg-white/30 rounded-full relative"

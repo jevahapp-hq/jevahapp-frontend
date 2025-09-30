@@ -60,11 +60,58 @@ class AuthService {
 
   async resendVerification(email: string) {
     try {
-      const response = await fetch(`${this.baseURL}/resend-verification`, {
+      const response = await fetch(
+        `${this.baseURL}/resend-verification-email`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        }
+      );
+      const data = await response.json();
+      return { success: response.ok, data, status: response.status };
+    } catch (error) {
+      return {
+        success: false,
+        error: "Network error occurred",
+        status: 0,
+      } as any;
+    }
+  }
+
+  // Align with backend: POST /verify-email { email, code }
+  async verifyEmailCode(email: string, code: string) {
+    try {
+      const response = await fetch(`${this.baseURL}/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({
+          email: email.trim(),
+          code: String(code).trim(),
+        }),
       });
+      const data = await response.json();
+      return { success: response.ok, data, status: response.status };
+    } catch (error) {
+      return {
+        success: false,
+        error: "Network error occurred",
+        status: 0,
+      } as any;
+    }
+  }
+
+  // Alias used by CodeVerification screen; same endpoint as resendVerification
+  async resendEmailVerification(email: string) {
+    try {
+      const response = await fetch(
+        `${this.baseURL}/resend-verification-email`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        }
+      );
       const data = await response.json();
       return { success: response.ok, data, status: response.status };
     } catch (error) {

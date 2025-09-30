@@ -136,37 +136,39 @@ async function enhancedFetch(
 
   PerformanceMonitor.startTimer(`fetch-${method}-${url}`);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  const fetchOptions: RequestInit = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "expo-platform": Platform.OS,
-      ...headers,
-    },
-    signal: controller.signal,
-  };
-
-  if (body) {
-    fetchOptions.body = JSON.stringify(body);
-  }
-
   let lastError: Error;
 
   for (let attempt = 1; attempt <= retryCount; attempt++) {
+    // Create a fresh controller and timeout per attempt to avoid reusing aborted signals
+    const controller = new AbortController();
+    const attemptTimeoutId = setTimeout(() => controller.abort(), timeout);
+
+    // Build fetch options per attempt so we attach the fresh signal
+    const fetchOptions: RequestInit = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
+        ...headers,
+      },
+      signal: controller.signal,
+    };
+
+    if (body) {
+      fetchOptions.body = JSON.stringify(body);
+    }
+
     try {
       const response = await fetch(url, fetchOptions);
-      clearTimeout(timeoutId);
+      clearTimeout(attemptTimeoutId);
       PerformanceMonitor.endTimer(`fetch-${method}-${url}`);
       return response;
     } catch (error) {
+      clearTimeout(attemptTimeoutId);
       lastError = error as Error;
       console.warn(`Fetch attempt ${attempt} failed:`, error);
 
       if (attempt === retryCount) {
-        clearTimeout(timeoutId);
         PerformanceMonitor.endTimer(`fetch-${method}-${url}`);
         throw lastError;
       }

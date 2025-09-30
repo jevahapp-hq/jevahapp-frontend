@@ -1,7 +1,5 @@
-import CommentReplyModal from './CommentReplyModal';
+import CommentModalV2 from "./CommentModalV2";
 
 export default function CommentsModalWrapper() {
-  return (
-    <CommentReplyModal />
-  );
+  return <CommentModalV2 />;
 }

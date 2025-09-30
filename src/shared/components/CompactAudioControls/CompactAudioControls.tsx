@@ -245,7 +245,7 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
 
       {/* Progress Bar */}
       <View
-        className="flex-1 h-2 bg-white/30 rounded-full ml-3 mr-2 relative"
+        className="flex-1 h-2 bg-white/30 rounded-full ml-2 mr-2 relative"
         {...panResponder.panHandlers}
       >
         <Animated.View
