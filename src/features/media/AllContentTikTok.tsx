@@ -37,7 +37,10 @@ import { useMedia } from "../../shared/hooks/useMedia";
 
 // Component imports
 import { Ionicons } from "@expo/vector-icons";
+import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
+import { SafeImage } from "../../../app/components/SafeImage";
 import SuccessCard from "../../../app/components/SuccessCard";
+import { urlManager } from "../../../app/utils/urlManager";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
@@ -985,15 +988,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      {showSuccessCard && (
-        <SuccessCard
-          message={successMessage}
-          onClose={() => setShowSuccessCard(false)}
-          duration={3000}
-        />
-      )}
-      <ScrollView
+    <ContentErrorBoundary>
+      <View style={{ flex: 1 }}>
+        {showSuccessCard && (
+          <SuccessCard
+            message={successMessage}
+            onClose={() => setShowSuccessCard(false)}
+            duration={3000}
+          />
+        )}
+        <ScrollView
         ref={scrollViewRef}
         style={{ flex: 1 }}
         refreshControl={
@@ -1063,8 +1067,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                   className="w-full h-[232px] rounded-2xl overflow-hidden relative"
                   activeOpacity={0.9}
                 >
-                  <Image
-                    source={(() => {
+                  <SafeImage
+                    uri={(() => {
                       const candidate =
                         (h as any).imageUrl ||
                         (h as any).thumbnail ||
@@ -1073,14 +1077,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                         typeof candidate === "string" &&
                         candidate.trim().length > 0
                       ) {
-                        return { uri: candidate.trim() } as any;
+                        return candidate.trim();
                       }
-                      return {
-                        uri: "https://res.cloudinary.com/ddgzzjp4x/image/upload/v1758677253/jevah-hq_tcqmxl.jpg",
-                      } as any;
+                      return "https://res.cloudinary.com/ddgzzjp4x/image/upload/v1758677253/jevah-hq_tcqmxl.jpg";
                     })()}
                     className="w-full h-full absolute"
                     resizeMode="cover"
+                    fallbackText="Scripture Hymn"
+                    showLoadingIndicator={true}
                   />
                   {/* Dark overlay to improve text contrast */}
                   <View className="absolute inset-0 bg-black/60" />
@@ -1210,5 +1214,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       </View>
       </ScrollView>
     </View>
+    </ContentErrorBoundary>
   );
 };
