@@ -1,12 +1,12 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import { Alert, Share, Text, TouchableOpacity, View } from "react-native";
+import { Share, Text, TouchableOpacity, View } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
 import {
-  useContentCount,
-  useContentStats,
-  useInteractionStore,
-  useUserInteraction,
+    useContentCount,
+    useContentStats,
+    useInteractionStore,
+    useUserInteraction,
 } from "../store/useInteractionStore";
 
 interface InteractionButtonsProps {
@@ -65,7 +65,6 @@ export default function InteractionButtons({
       await toggleLike(contentId, contentType);
     } catch (error) {
       console.error("Error toggling like:", error);
-      Alert.alert("Error", "Failed to update like. Please try again.");
     } finally {
       setIsLoading((prev) => ({ ...prev, like: false }));
     }
@@ -79,7 +78,6 @@ export default function InteractionButtons({
       await toggleSave(contentId, contentType);
     } catch (error) {
       console.error("Error toggling save:", error);
-      Alert.alert("Error", "Failed to save content. Please try again.");
     } finally {
       setIsLoading((prev) => ({ ...prev, save: false }));
     }
@@ -109,7 +107,6 @@ export default function InteractionButtons({
       }
     } catch (error) {
       console.error("Error sharing content:", error);
-      Alert.alert("Error", "Failed to share content. Please try again.");
     } finally {
       setIsLoading((prev) => ({ ...prev, share: false }));
     }

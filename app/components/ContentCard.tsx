@@ -7,7 +7,6 @@ import {
 import { ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Alert,
     Animated,
     Dimensions,
     Image,
@@ -577,7 +576,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
       // Revert optimistic update on error
       setIsLiked(!isLiked);
       setLikeCount(likeCount);
-      Alert.alert("Error", "Failed to update like");
     }
   };
 
@@ -591,7 +589,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
       await onShare(content._id);
       setShareCount(shareCount + 1);
     } catch (error) {
-      Alert.alert("Error", "Failed to share content");
+      console.error("Error sharing content:", error);
     }
   };
 

@@ -132,6 +132,7 @@ export interface EbookCardProps {
   onSave: (item: MediaItem) => void;
   onShare: (item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
+  checkIfDownloaded: (itemId: string) => boolean;
 }
 
 // Shared media card interface

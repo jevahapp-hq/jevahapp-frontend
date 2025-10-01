@@ -1,18 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import {
-  useContentCount,
-  useUserInteraction,
+    useContentCount,
+    useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
@@ -21,10 +20,10 @@ import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  isValidUri,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    isValidUri,
 } from "../../../shared/utils";
 
 const ORANGE = "#FF8A00";
@@ -337,14 +336,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               saved={!!savedFromStore}
               saveCount={savesFromStore || audio.saves || 0}
               onSave={() => {
-                const wasSaved = Boolean(savedFromStore);
                 onSave(audio);
-                const message = wasSaved
-                  ? "Removed from library"
-                  : "Saved to library";
-                try {
-                  Alert.alert("Library", message);
-                } catch {}
               }}
               onShare={() => onShare(audio)}
               contentType="media"

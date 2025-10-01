@@ -3,7 +3,6 @@ import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     Dimensions,
     FlatList,
     Image,
@@ -122,7 +121,6 @@ export default function CommentsModal({
 
   const handleSubmitComment = useCallback(async () => {
     if (!newComment.trim()) {
-      Alert.alert('Error', 'Please enter a comment');
       return;
     }
 
@@ -140,7 +138,6 @@ export default function CommentsModal({
       }, 100);
     } catch (error) {
       console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -154,7 +151,6 @@ export default function CommentsModal({
       await toggleCommentLike(commentId, contentId);
     } catch (error) {
       console.error('Error liking comment:', error);
-      Alert.alert('Error', 'Failed to like comment. Please try again.');
     }
   }, [contentId, toggleCommentLike]);
 

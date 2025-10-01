@@ -1,35 +1,34 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    RefreshControl,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-    categorizeContent,
-    filterContentByType,
-    getContentKey,
-    getMostRecentItem,
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
-    transformApiResponseToMediaItem,
+  categorizeContent,
+  filterContentByType,
+  getContentKey,
+  getMostRecentItem,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+  transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
 // Feature-specific imports
@@ -40,7 +39,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
 import { SafeImage } from "../../../app/components/SafeImage";
 import SuccessCard from "../../../app/components/SuccessCard";
-import { urlManager } from "../../../app/utils/urlManager";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
@@ -54,12 +52,12 @@ import { useGlobalMediaStore } from "../../../app/store/useGlobalMediaStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
 import {
-    convertToDownloadableItem,
-    useDownloadHandler,
+  convertToDownloadableItem,
+  useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-    getPersistedStats,
-    getViewed,
+  getPersistedStats,
+  getViewed,
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -849,6 +847,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
+              checkIfDownloaded={checkIfDownloaded}
             />
           );
 
@@ -864,6 +863,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
+              checkIfDownloaded={checkIfDownloaded}
             />
           );
       }

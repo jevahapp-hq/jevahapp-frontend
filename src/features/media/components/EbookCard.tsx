@@ -1,17 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
-  useContentCount,
-  useUserInteraction,
+    useContentCount,
+    useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -19,9 +18,9 @@ import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../../../shared/utils";
 
 export const EbookCard: React.FC<EbookCardProps> = ({
@@ -32,6 +31,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onSave,
   onShare,
   onDownload,
+  checkIfDownloaded,
 }) => {
   const { showCommentModal } = useCommentModal();
   const AvatarWithInitialFallback = ({
@@ -249,14 +249,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
               saved={!!savedFromStore}
               saveCount={saveCount}
               onSave={() => {
-                const wasSaved = Boolean(savedFromStore);
                 onSave(ebook);
-                const message = wasSaved
-                  ? "Removed from library"
-                  : "Saved to library";
-                try {
-                  Alert.alert("Library", message);
-                } catch {}
               }}
               onShare={handleShare}
               contentType="media"
@@ -283,7 +276,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         onShare={() => onShare(ebook)}
         onDownload={() => onDownload(ebook)}
         isSaved={!!(ebook as any)?.saved}
-        isDownloaded={false}
+        isDownloaded={checkIfDownloaded(ebook._id || ebook.fileUrl)}
         contentTitle={ebook.title}
       />
     </View>

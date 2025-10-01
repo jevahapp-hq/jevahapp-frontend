@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Text, TouchableOpacity } from "react-native";
+import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import { mediaApi } from "../../core/api/MediaApi";
 
 interface SaveButtonProps {
@@ -85,12 +85,6 @@ const SaveButton: React.FC<SaveButtonProps> = ({
         setSaveCount(serverCount);
         onSaveChange?.(serverSaved, serverCount);
 
-        // Show user feedback
-        const message = serverSaved
-          ? "Saved to library"
-          : "Removed from library";
-        Alert.alert("Library", message);
-
         // Track analytics
         try {
           // Import analytics dynamically to avoid circular deps
@@ -113,9 +107,6 @@ const SaveButton: React.FC<SaveButtonProps> = ({
 
         const errorMessage = result.error || "Failed to update save status";
         setError(errorMessage);
-
-        // Show user-friendly error
-        Alert.alert("Error", errorMessage);
       }
     } catch (error: any) {
       // Revert optimistic update on error
@@ -125,31 +116,6 @@ const SaveButton: React.FC<SaveButtonProps> = ({
 
       const errorMessage = error.message || "Network error occurred";
       setError(errorMessage);
-
-      // Handle specific error types
-      if (
-        error.message?.includes("401") ||
-        error.message?.includes("Unauthorized")
-      ) {
-        Alert.alert(
-          "Authentication Required",
-          "Please log in to save content",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Login",
-              onPress: () => {
-                // Navigate to login - implement based on your navigation
-                console.log("Navigate to login");
-              },
-            },
-          ]
-        );
-      } else if (error.message?.includes("404")) {
-        Alert.alert("Error", "Content not found");
-      } else {
-        Alert.alert("Error", errorMessage);
-      }
     } finally {
       setLoading(false);
     }

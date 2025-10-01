@@ -2,12 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
@@ -396,14 +395,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               saved={!!userSaveState}
               saveCount={saveCount}
               onSave={() => {
-                const wasSaved = Boolean(userSaveState);
                 onSave(modalKey, video);
-                const message = wasSaved
-                  ? "Removed from library"
-                  : "Saved to library";
-                try {
-                  Alert.alert("Library", message);
-                } catch {}
               }}
               onShare={() => onShare(modalKey, video)}
               contentType="media"
