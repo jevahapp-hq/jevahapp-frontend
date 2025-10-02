@@ -68,15 +68,60 @@ export default function HymnDetail() {
           data={hymn.verses || []}
           keyExtractor={(v, i) => `${hymn.id}-v-${i}`}
           ListHeaderComponent={header}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ 
+            paddingBottom: 40,
+            paddingTop: 8,
+            flexGrow: 1
+          }}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={5}
+          getItemLayout={(data, index) => ({
+            length: 120, // Estimated height per verse
+            offset: 120 * index,
+            index,
+          })}
           renderItem={({ item, index }) => (
-            <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
+            <View style={{ 
+              paddingHorizontal: 16, 
+              marginTop: 20,
+              marginBottom: 8,
+              backgroundColor: '#fff',
+              borderRadius: 8,
+              paddingVertical: 12,
+              shadowColor: '#000',
+              shadowOffset: {
+                width: 0,
+                height: 1,
+              },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            }}>
               <Text
-                style={{ color: "#111", fontWeight: "600", marginBottom: 12, fontSize: 18, fontFamily: "Rubik-SemiBold" }}
+                style={{ 
+                  color: "#111", 
+                  fontWeight: "600", 
+                  marginBottom: 16, 
+                  fontSize: 18, 
+                  fontFamily: "Rubik-SemiBold" 
+                }}
               >
                 Verse {index + 1}
               </Text>
-              <Text style={{ color: "#1D2939", lineHeight: 28, fontSize: 17, fontFamily: "Rubik-Regular" }}>{item}</Text>
+              <Text style={{ 
+                color: "#1D2939", 
+                lineHeight: 30, 
+                fontSize: 17, 
+                fontFamily: "Rubik-Regular",
+                textAlign: 'left'
+              }}>
+                {item}
+              </Text>
             </View>
           )}
         />
