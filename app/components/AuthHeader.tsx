@@ -62,7 +62,7 @@ export default function AuthHeader({
       
       {/* Header Container */}
       <View className="w-full bg-white border-b border-gray-100">
-        <View className="flex-row items-center justify-between w-full px-4 py-3">
+        <View className="flex-row items-center justify-between w-full px-4 py-3" style={{ paddingTop: 20 }}>
           {/* Left Side - Back Button */}
           <View className="w-10 h-10 items-center justify-center">
             {showBack ? (
