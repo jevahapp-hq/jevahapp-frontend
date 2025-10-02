@@ -65,7 +65,7 @@ export default function HomeTabContent() {
       <View
         style={{
           paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
-          backgroundColor: "#dcdfe418",
+          backgroundColor: "#FCFCFD",
         }}
       >
         <ScrollView
@@ -133,7 +133,7 @@ export default function HomeTabContent() {
       </View>
 
       {/* Content without Padding - Let FlatList handle scrolling */}
-      <View style={{ flex: 1, width: "100%", backgroundColor: "#dcdfe418" }}>{renderContent()}</View>
+      <View style={{ flex: 1, width: "100%", backgroundColor: "#FCFCFD" }}>{renderContent()}</View>
     </View>
   );
 }

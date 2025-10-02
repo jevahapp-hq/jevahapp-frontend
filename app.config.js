@@ -16,7 +16,7 @@ export default {
         "https://jevahapp-backend.onrender.com",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
-        projectId: "5cb1aa56-fa50-4d01-b2e6-366405946e71",
+        projectId: "9ccc6cfe-5736-477b-b6d6-801debb2a124",
       },
     },
     ios: {
