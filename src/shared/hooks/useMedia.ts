@@ -203,6 +203,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         limit,
         contentType: contentType !== "ALL" ? contentType : undefined,
       });
+      // Prefetch the next page in background if available
+      const next = defaultContentPagination.page + 2;
+      if (next <= defaultContentPagination.pages) {
+        fetchDefaultContent({
+          page: next,
+          limit,
+          contentType: contentType !== "ALL" ? contentType : undefined,
+        });
+      }
     }
   }, [fetchDefaultContent, defaultContentPagination, limit, contentType]);
 

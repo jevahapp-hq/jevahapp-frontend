@@ -34,7 +34,7 @@ export const useContentCacheStore = create<ContentCacheState>()(
   persist(
     (set, get) => ({
       cache: {},
-      ttlMs: 2 * 60 * 1000,
+      ttlMs: 5 * 60 * 1000,
       setTTL: (ms) => set({ ttlMs: ms }),
       get: (key) => get().cache[key],
       set: (key, page) => set((s) => ({ cache: { ...s.cache, [key]: page } })),
