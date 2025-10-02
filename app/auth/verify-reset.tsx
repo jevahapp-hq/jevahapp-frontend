@@ -2,19 +2,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Animated as RNAnimated,
-  Text,
-  TextInput,
-  TextStyle,
-  TouchableOpacity,
-  View
+    Alert,
+    Animated as RNAnimated,
+    Text,
+    TextInput,
+    TextStyle,
+    TouchableOpacity,
+    View
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming
 } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import AuthHeader from "../components/AuthHeader";
@@ -174,8 +174,8 @@ export default function VerifyReset() {
 
       if (result.success) {
         // Store the verification code as the reset token for the password reset screen
-        console.log("✅ Storing reset token:", code);
-        await AsyncStorage.setItem("resetToken", code);
+        console.log("✅ Storing reset code:", code);
+        await AsyncStorage.setItem("resetCode", code);
         triggerBounceDrop("success");
       } else {
         console.log("❌ Verification failed:", result.data?.message);
