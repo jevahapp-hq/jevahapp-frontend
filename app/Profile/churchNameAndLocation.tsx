@@ -5,15 +5,15 @@ import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
@@ -256,7 +256,7 @@ function ChurchNameAndLocation() {
         <AuthHeader title="Profile Setup" />
       </View>
          
-            <ProgressBar currentStep={3} totalSteps={7} />
+            <ProgressBar currentStep={3} totalSteps={4} />
             <Text className="text-[#1D2939] font-semibold mt-3 ml-1">
               Let&apos;s make this feel like home
             </Text>
@@ -269,7 +269,7 @@ function ChurchNameAndLocation() {
               What’s the name of your church?
             </Text>
 
-            <View className="flex flex-row items-center justify-between h-[56px] w-full mt-5 border rounded-3xl bg-white px-3 mb-2">
+            <View className="flex flex-row items-center justify-between h-[72px] w-full mt-5 border rounded-3xl bg-white px-4 mb-2">
               <TextInput
                 className="flex-1 h-full text-base text-gray-800"
                 placeholder="Search church or location"
@@ -279,8 +279,17 @@ function ChurchNameAndLocation() {
                 }}
                 value={search}
                 returnKeyType="search"
+                numberOfLines={1}
+                multiline={false}
+                style={{ 
+                  flex: 1, 
+                  height: '100%',
+                  fontSize: 16,
+                  color: '#1F2937',
+                  textAlignVertical: 'center'
+                }}
               />
-              <Ionicons name="search" size={30} color="#6B7280" />
+              <Ionicons name="search" size={32} color="#6B7280" />
             </View>
 
             <View className="flex-1 mt-2">
@@ -294,7 +303,11 @@ function ChurchNameAndLocation() {
                     onPress={() => selectSuggestion(item)}
                     className="bg-white border-b border-gray-200"
                   >
-                    <Text className="p-3 text-gray-800">
+                    <Text 
+                      className="p-3 text-gray-800"
+                      numberOfLines={1}
+                      style={{ fontSize: 16 }}
+                    >
                       {item.name}
                       {item.type === "location" ? " (Location)" : ""}
                     </Text>

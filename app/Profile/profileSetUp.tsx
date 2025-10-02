@@ -150,7 +150,7 @@ export default function ProfileSetUp() {
       >
         <View className="flex flex-col justify-center items-center px-4 py-5 w-full">
           <View className="flex flex-col w-[333px]">
-            <ProgressBar currentStep={0} totalSteps={7} />
+            <ProgressBar currentStep={1} totalSteps={4} />
             <Text className="text-[#1D2939] font-semibold mt-3">
               Let&apos;s make this feel like home
             </Text>
@@ -171,7 +171,7 @@ export default function ProfileSetUp() {
                   <Pressable
                     onPress={() => toggleInterest(interest)}
                     className={`w-[24px] h-[24px] rounded-[9px] ml-3 items-center justify-center ${
-                      isSelected ? "bg-[#FEA74E]" : "border border-[#FEA74E]"
+                      isSelected ? "bg-[#4C887F]" : "border border-[#4C887F]"
                     }`}
                   >
                     {isSelected && (

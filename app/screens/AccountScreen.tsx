@@ -163,7 +163,7 @@ export default function AccountScreen() {
         style={{ flex: 1 }} 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 50 }}
-        className="bg-[#98a2b318]"
+        className="bg-[#dcdfe418]"
       >
         {/* Profile Section */}
         <View className="px-4 py-8">

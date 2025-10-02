@@ -7,12 +7,10 @@ import {
     PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-    Easing,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
-    withSpring,
-    withTiming,
+    withTiming
 } from "react-native-reanimated";
 import {
     getResponsiveBorderRadius,
@@ -41,24 +39,10 @@ export default function SlideUpSetProfileImageModal({
 
   useEffect(() => {
     if (isVisible) {
-      // Use slower animation for Android to ensure smooth sliding
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 30 });
-      }
+      // Use slower animation to match sign-up modals
+      translateY.value = withTiming(0, { duration: 300 });
     } else {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 300,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
-      }
+      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
     }
   }, [isVisible]);
 
@@ -78,24 +62,10 @@ export default function SlideUpSetProfileImageModal({
     _event: HandlerStateChangeEvent<Record<string, unknown>>
   ) => {
     if (lastTranslateY.value > 150) {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 300,
-          easing: Easing.in(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(SCREEN_HEIGHT);
-      }
+      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
       runOnJS(onCancel)();
     } else {
-      if (Platform.OS === 'android') {
-        translateY.value = withTiming(0, {
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
-        });
-      } else {
-        translateY.value = withSpring(0, { damping: 30 });
-      }
+      translateY.value = withTiming(0, { duration: 300 });
     }
   };
 
@@ -105,17 +75,11 @@ export default function SlideUpSetProfileImageModal({
     <GestureHandlerRootView className="absolute inset-0 z-50 items-center justify-end">
       {/* Background overlay */}
       <TouchableOpacity 
-        className="absolute inset-0 bg-black/30" 
+        className="absolute inset-0" 
+        style={{ backgroundColor: 'rgba(0, 0, 0, 0.35)' }}
         activeOpacity={1}
         onPress={() => {
-          if (Platform.OS === 'android') {
-            translateY.value = withTiming(SCREEN_HEIGHT, {
-              duration: 300,
-              easing: Easing.in(Easing.cubic),
-            });
-          } else {
-            translateY.value = withSpring(SCREEN_HEIGHT);
-          }
+          translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
           runOnJS(onCancel)();
         }}
       />
@@ -186,14 +150,7 @@ export default function SlideUpSetProfileImageModal({
             }}>
               <TouchableOpacity
                 onPress={() => {
-                  if (Platform.OS === 'android') {
-                    translateY.value = withTiming(SCREEN_HEIGHT, {
-                      duration: 300,
-                      easing: Easing.in(Easing.cubic),
-                    });
-                  } else {
-                    translateY.value = withSpring(SCREEN_HEIGHT);
-                  }
+                  translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
                   runOnJS(onCancel)();
                 }}
                 style={{
@@ -219,14 +176,7 @@ export default function SlideUpSetProfileImageModal({
 
               <TouchableOpacity
                 onPress={() => {
-                  if (Platform.OS === 'android') {
-                    translateY.value = withTiming(SCREEN_HEIGHT, {
-                      duration: 300,
-                      easing: Easing.in(Easing.cubic),
-                    });
-                  } else {
-                    translateY.value = withSpring(SCREEN_HEIGHT);
-                  }
+                  translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
                   runOnJS(onConfirm)();
                 }}
                 style={{

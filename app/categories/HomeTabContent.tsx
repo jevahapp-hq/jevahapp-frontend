@@ -52,27 +52,10 @@ export default function HomeTabContent() {
   const renderContent = () => {
     return <AllContentTikTok contentType={selectedCategory} />;
 
-    // switch (selectedCategory) {
-    //   case "ALL":
-    //     return <FilteredMediaList tag="All" />;
-    //   case "LIVE":
-    //     return <FilteredMediaList tag="Live" />;
-    //   case "SERMON":
-    //     return <FilteredMediaList tag="Sermons" />;
-    //   case "MUSIC":
-    //     return <FilteredMediaList tag="Music" />;
-    //   case "E-BOOKS":
-    //     return <FilteredMediaList tag="Books" />;
-    //   case "VIDEO":
-    //     return <FilteredMediaList tag="Videos" />;
-    //   default:
-    //     return null;
-    // }
+   
   };
 
-  // const renderContent = () => {
-
-  // };
+  
 
   return (
     <View style={{ flex: 1, width: "100%" }}>
@@ -82,7 +65,7 @@ export default function HomeTabContent() {
       <View
         style={{
           paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
-          backgroundColor: "#FCFCFD",
+          backgroundColor: "#dcdfe418",
         }}
       >
         <ScrollView
@@ -150,7 +133,7 @@ export default function HomeTabContent() {
       </View>
 
       {/* Content without Padding - Let FlatList handle scrolling */}
-      <View style={{ flex: 1, width: "100%" }}>{renderContent()}</View>
+      <View style={{ flex: 1, width: "100%", backgroundColor: "#dcdfe418" }}>{renderContent()}</View>
     </View>
   );
 }

@@ -341,7 +341,7 @@ const AvatarSelection = () => {
       </RNAnimated.View>
 
       <View className="w-[333px] mt-3">
-        <ProgressBar currentStep={4} totalSteps={7} />
+        <ProgressBar currentStep={4} totalSteps={4} />
         <Text className="text-[#1D2939] font-semibold mt-3">
           Let&apos;s make this feel like home
         </Text>

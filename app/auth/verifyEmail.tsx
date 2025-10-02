@@ -2,16 +2,16 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Dimensions, Image, Text, TouchableOpacity, View } from "react-native";
 import {
-  GestureHandlerRootView,
-  HandlerStateChangeEvent,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming
 } from "react-native-reanimated";
 import { useAuth } from "../hooks/useAuth";
 
@@ -127,6 +127,19 @@ export default function VerifyEmail({
 
   return (
     <GestureHandlerRootView className="absolute inset-0 z-50">
+      {/* Background overlay */}
+      <TouchableOpacity
+        className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(0, 0, 0, 0.35)' }}
+        activeOpacity={1}
+        onPress={() => {
+          // Close modal when overlay is pressed
+          verifyCardY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
+          emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
+          runOnJS(onClose)();
+        }}
+      />
+      
       {/* First Card - Verification */}
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
@@ -146,11 +159,6 @@ export default function VerifyEmail({
               Select which verification method you prefer, and it will be sent
               to your email.
             </Text>
-            {sendMessage && (
-              <Text className="text-green-600 text-sm text-center">
-                {sendMessage}
-              </Text>
-            )}
             {sendError && (
               <Text className="text-red-600 text-sm text-center">
                 {sendError}
@@ -188,48 +196,13 @@ export default function VerifyEmail({
             </Text>
             <Text className="text-base mb-4 text-[#1D2939] text-center">
               Check your email for a verification message. If you don't see it,
-              tap resend below and check spam.
+              check your spam folder.
             </Text>
-            {sendMessage && (
-              <Text className="text-green-600 text-sm text-center mb-2">
-                {sendMessage}
-              </Text>
-            )}
             {sendError && (
               <Text className="text-red-600 text-sm text-center mb-2">
                 {sendError}
               </Text>
             )}
-            <TouchableOpacity
-              onPress={() => {
-                if (sending) return;
-                setSending(true);
-                setSendMessage(null);
-                setSendError(null);
-                resendVerification(emailAddress)
-                  .then((res: any) => {
-                    try {
-                      const msg =
-                        res?.message ||
-                        res?.data?.message ||
-                        "Verification email sent";
-                      setSendMessage(msg);
-                    } catch {}
-                  })
-                  .catch((e: any) => {
-                    const msg =
-                      e?.message || "Failed to send verification email";
-                    setSendError(msg);
-                  })
-                  .finally(() => setSending(false));
-              }}
-              className="border border-[#090E24] rounded-full w-[333px] h-[45px] flex items-center justify-center mb-3"
-              disabled={sending}
-            >
-              <Text className="text-[#090E24] font-semibold">
-                {sending ? "Resending…" : "Resend verification email"}
-              </Text>
-            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });

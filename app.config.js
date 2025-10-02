@@ -21,7 +21,7 @@ export default {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.judecowart1.jevahapp",
+      bundleIdentifier: "com.italgyirhrudhdhd.jevahapp",
       infoPlist: {
         NSPhotoLibraryUsageDescription:
           "This app needs access to your photo and video library.",
@@ -30,7 +30,7 @@ export default {
       },
     },
     android: {
-      package: "com.judecowart1.jevahapp",
+      package: "com.italgyirhrudhdhd.jevahapp",
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
         foregroundImage: "./assets/images/Jevah.png",

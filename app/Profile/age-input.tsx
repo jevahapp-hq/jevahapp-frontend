@@ -91,7 +91,7 @@ export default function AgeInputScreen() {
       </View>
 
       <View className="flex flex-col w-[333px] mx-auto mt-2">
-        <ProgressBar currentStep={1} totalSteps={7} />
+        <ProgressBar currentStep={2} totalSteps={4} />
         <Text className="text-[#1D2939] font-semibold mt-2 text-left">
           Let&apos;s make this feel like home
         </Text>

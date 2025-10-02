@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
   Share,
@@ -37,7 +38,6 @@ import { useMedia } from "../../shared/hooks/useMedia";
 // Component imports
 import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
-import { SafeImage } from "../../../app/components/SafeImage";
 import SuccessCard from "../../../app/components/SuccessCard";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
@@ -768,6 +768,157 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     playMediaGlobally(key, "video");
   };
 
+  // Reusable renderer for Hymn mini-cards (matches mini-card UI in design)
+  const renderHymnMiniCards = useCallback(() => {
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+      >
+        {loadingHymns ? (
+          <View style={{ paddingVertical: 16, alignItems: "center" }}>
+            <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY }}>
+              Loading hymns…
+            </Text>
+          </View>
+        ) : (
+          (hymns || []).map((h) => (
+            <View key={h.id} className="mr-4 w-[154px] flex-col items-center">
+              <TouchableOpacity
+                onPress={() => {
+                  if (h.textLink) {
+                    router.push({
+                      pathname: "/reader/WebPage",
+                      params: { url: h.textLink, title: h.title },
+                    });
+                  }
+                }}
+                className="w-full h-[232px] rounded-2xl overflow-hidden relative"
+                activeOpacity={0.9}
+              >
+                <Image
+                  source={require("../../../assets/images/image (13).png")}
+                  style={{ position: "absolute", width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                />
+                <View className="absolute inset-0 bg-black/60" />
+                <View className="absolute inset-0 justify-center items-center">
+                  <View className="bg-white/70 p-2 rounded-full">
+                    <Ionicons name="book" size={24} color="#FEA74E" />
+                  </View>
+                </View>
+                <View className="absolute bottom-2 left-2 right-2">
+                  <Text
+                    className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                    numberOfLines={2}
+                  >
+                    {h.title}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <View className="mt-2 flex flex-col w-full">
+                <View className="flex flex-row justify-between items-center">
+                  <Text
+                    className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {(h.author || "Unknown").toString()}
+                  </Text>
+                  <Ionicons name="ellipsis-vertical" size={14} color="#9CA3AF" />
+                </View>
+                <View className="flex-row items-center">
+                  <Ionicons name="book-outline" size={13} color="#98A2B3" />
+                  <Text
+                    className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik"
+                    numberOfLines={1}
+                  >
+                    {(h.meter || h.refs || "Psalm 136").toString()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    );
+  }, [hymns, loadingHymns, router]);
+
+  // Reusable renderer for Recommended Live mini-cards with red LIVE badge
+  const renderRecommendedLiveCards = useCallback(() => {
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+      >
+        {loadingHymns ? (
+          <View style={{ paddingVertical: 16, alignItems: "center" }}>
+            <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY }}>
+              Loading content…
+            </Text>
+          </View>
+        ) : (
+          (hymns || []).map((h) => (
+            <View key={`live-${h.id}`} className="mr-4 w-[154px] flex-col items-center">
+              <TouchableOpacity
+                onPress={() => {
+                  // Live content - no navigation for now
+                  console.log("Live content tapped:", h.title);
+                }}
+                className="w-full h-[232px] rounded-2xl overflow-hidden relative"
+                activeOpacity={0.9}
+              >
+                <Image
+                  source={require("../../../assets/images/image (7).png")}
+                  style={{ position: "absolute", width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                />
+                
+                {/* Red LIVE badge */}
+                <View className="absolute top-2 left-2 bg-red-600 rounded-md px-2 py-1 flex-row items-center">
+                  <View className="w-2 h-2 bg-white rounded-full mr-1" />
+                  <Text className="text-white text-[10px] font-rubik font-semibold">LIVE</Text>
+                </View>
+                
+                <View className="absolute bottom-2 left-2 right-2">
+                  <Text
+                    className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                    numberOfLines={2}
+                  >
+                    {h.title}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <View className="mt-2 flex flex-col w-full">
+                <View className="flex flex-row justify-between items-center">
+                  <Text
+                    className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    Minister Joseph Eluwa
+                  </Text>
+                  <Ionicons name="ellipsis-vertical" size={14} color="#9CA3AF" />
+                </View>
+                <View className="flex-row items-center mt-1">
+                  <Ionicons name="eye" size={12} color="#98A2B3" />
+                  <Text
+                    className="text-[10px] text-gray-500 ml-1 font-rubik"
+                    numberOfLines={1}
+                  >
+                    500 • 3HRS AGO
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    );
+  }, [hymns, loadingHymns, router]);
+
   // Render content by type
   const renderContentByType = useCallback(
     (item: MediaItem, index: number) => {
@@ -1028,7 +1179,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         </View>
       )}
 
-      {/* Hymnary (Psalm 136) – Horizontal mini-cards (refactored to match mini card UI) */}
+      {/* Hymns section (mini cards) */}
       <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
         <Text
           style={{
@@ -1039,101 +1190,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             marginBottom: UI_CONFIG.SPACING.MD,
           }}
         >
-          Scripture Hymns (Psalm 136)
+          Hymns
         </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
-        >
-          {loadingHymns ? (
-            <View style={{ paddingVertical: 16, alignItems: "center" }}>
-              <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY }}>
-                Loading hymns…
-              </Text>
-            </View>
-          ) : (
-            (hymns || []).map((h) => (
-              <View key={h.id} className="mr-4 w-[154px] flex-col items-center">
-                <TouchableOpacity
-                  onPress={() => {
-                    if (h.textLink) {
-                      router.push({
-                        pathname: "/reader/WebPage",
-                        params: { url: h.textLink, title: h.title },
-                      });
-                    }
-                  }}
-                  className="w-full h-[232px] rounded-2xl overflow-hidden relative"
-                  activeOpacity={0.9}
-                >
-                  <SafeImage
-                    uri={(() => {
-                      const candidate =
-                        (h as any).imageUrl ||
-                        (h as any).thumbnail ||
-                        (h as any).cover;
-                      if (
-                        typeof candidate === "string" &&
-                        candidate.trim().length > 0
-                      ) {
-                        return candidate.trim();
-                      }
-                      return "https://res.cloudinary.com/ddgzzjp4x/image/upload/v1758677253/jevah-hq_tcqmxl.jpg";
-                    })()}
-                    className="w-full h-full absolute"
-                    resizeMode="cover"
-                    fallbackText="Scripture Hymn"
-                    showLoadingIndicator={true}
-                  />
-                  {/* Dark overlay to improve text contrast */}
-                  <View className="absolute inset-0 bg-black/60" />
-                  <View className="absolute inset-0 justify-center items-center">
-                    <View className="bg-white/70 p-2 rounded-full">
-                      <Ionicons name="book" size={24} color="#FEA74E" />
-                    </View>
-                  </View>
-                  <View className="absolute bottom-2 left-2 right-2">
-                    <Text
-                      className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
-                      numberOfLines={2}
-                    >
-                      {h.title}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                <View className="mt-2 flex flex-col w-full">
-                  <View className="flex flex-row justify-between items-center">
-                    <Text
-                      className="text-[12px] text-[#1D2939] font-rubik font-medium"
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {(h.author || "Unknown").toString()}
-                    </Text>
-                    <Ionicons
-                      name="ellipsis-vertical"
-                      size={14}
-                      color="#9CA3AF"
-                    />
-                  </View>
-                  <View className="flex-row items-center">
-                    <Ionicons name="book-outline" size={13} color="#98A2B3" />
-                    <Text
-                      className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik"
-                      numberOfLines={1}
-                    >
-                      {(h.meter || h.refs || "Psalm 136").toString()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
+        {renderHymnMiniCards()}
       </View>
 
-      {/* All Content Section */}
+
+      {/* All Content Section (split into first four, then Recommended Live, then rest) */}
       <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
         <Text
           style={{
@@ -1148,9 +1211,54 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           {filteredMediaList.length} items)
         </Text>
 
-        {(filteredMediaList || [])
-          .filter((item) => !mostRecentItem || item._id !== mostRecentItem._id)
-          .map((item, index) => renderContentByType(item, index))}
+        {/* First four big cards (excluding Most Recent if duplicated) */}
+        {(() => {
+          const remaining = (filteredMediaList || []).filter(
+            (item) => !mostRecentItem || item._id !== mostRecentItem._id
+          );
+          const firstFour = remaining.slice(0, 4);
+          const nextFour = remaining.slice(4, 8);
+          const rest = remaining.slice(8);
+          return (
+            <>
+              {firstFour.map((item, index) => renderContentByType(item, index))}
+
+              {/* Insert Recommended Live for you here with red LIVE badge */}
+              <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+                <Text
+                  style={{
+                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                    fontWeight: "600",
+                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                    paddingHorizontal: UI_CONFIG.SPACING.MD,
+                    marginBottom: UI_CONFIG.SPACING.MD,
+                  }}
+                >
+                  Recommended Live for you
+                </Text>
+                {renderRecommendedLiveCards()}
+              </View>
+
+              {/* Gap before next four cards */}
+              <View style={{ marginTop: UI_CONFIG.SPACING.XL }} />
+
+              {/* Next four cards */}
+              {nextFour.map((item, index) =>
+                renderContentByType(item, index + firstFour.length)
+              )}
+
+              {/* Trending Contents temporarily removed */}
+
+              {/* Gap before remaining content */}
+              <View style={{ marginTop: UI_CONFIG.SPACING.XL }} />
+
+              {/* Render the rest of All Content */}
+              {rest.map((item, index) =>
+                renderContentByType(item, index + firstFour.length + nextFour.length)
+              )}
+            </>
+          );
+        })()}
       </View>
 
       {/* Loading indicator for refresh */}
