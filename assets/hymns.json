@@ -1,0 +1,191 @@
+[
+  {
+    "id": "hymn_amazing_grace",
+    "title": "Amazing Grace",
+    "author": "John Newton",
+    "meter": "8.6.8.6 (C.M.)",
+    "refs": "Ephesians 2:8-9",
+    "verses": [
+      "Amazing grace! how sweet the sound, That saved a wretch like me! I once was lost, but now am found; Was blind, but now I see.",
+      "’Twas grace that taught my heart to fear, And grace my fears relieved; How precious did that grace appear The hour I first believed!",
+      "Through many dangers, toils, and snares, I have already come; ’Tis grace hath brought me safe thus far, And grace will lead me home.",
+      "The Lord has promised good to me, His Word my hope secures; He will my shield and portion be, As long as life endures.",
+      "Yea, when this flesh and heart shall fail, And mortal life shall cease; I shall possess, within the veil, A life of joy and peace."
+    ]
+  },
+  {
+    "id": "hymn_great_is_thy_faithfulness",
+    "title": "Great Is Thy Faithfulness",
+    "author": "Thomas O. Chisholm",
+    "meter": "11.10.11.10 with refrain",
+    "refs": "Lamentations 3:22-23",
+    "verses": [
+      "Great is Thy faithfulness, O God my Father; There is no shadow of turning with Thee; Thou changest not, Thy compassions, they fail not; As Thou hast been, Thou forever wilt be.",
+      "Summer and winter, and springtime and harvest, Sun, moon and stars in their courses above; Join with all nature in manifold witness, To Thy great faithfulness, mercy and love.",
+      "Pardon for sin and a peace that endureth, Thine own dear presence to cheer and to guide; Strength for today and bright hope for tomorrow, Blessings all mine, with ten thousand beside!"
+    ]
+  },
+  {
+    "id": "hymn_when_i_survey",
+    "title": "When I Survey the Wondrous Cross",
+    "author": "Isaac Watts",
+    "meter": "8.8.8.8 (L.M.)",
+    "refs": "Galatians 6:14",
+    "verses": [
+      "When I survey the wondrous cross On which the Prince of Glory died, My richest gain I count but loss, And pour contempt on all my pride.",
+      "Forbid it, Lord, that I should boast, Save in the death of Christ my God! All the vain things that charm me most, I sacrifice them to His blood.",
+      "See, from His head, His hands, His feet, Sorrow and love flow mingled down; Did e’er such love and sorrow meet, Or thorns compose so rich a crown?",
+      "Were the whole realm of nature mine, That were an offering far too small; Love so amazing, so divine, Demands my soul, my life, my all."
+    ]
+  },
+  {
+    "id": "hymn_holy_holy_holy",
+    "title": "Holy, Holy, Holy",
+    "author": "Reginald Heber",
+    "meter": "11.12.12.10",
+    "refs": "Isaiah 6:3; Revelation 4:8",
+    "verses": [
+      "Holy, holy, holy! Lord God Almighty! Early in the morning our song shall rise to Thee; Holy, holy, holy, merciful and mighty! God in three Persons, blessed Trinity!"
+    ]
+  },
+  {
+    "id": "hymn_be_thou_my_vision",
+    "title": "Be Thou My Vision",
+    "author": "Ancient Irish, tr. Mary E. Byrne",
+    "meter": "10.10.10.10",
+    "refs": "Psalm 16:8",
+    "verses": [
+      "Be Thou my Vision, O Lord of my heart; Naught be all else to me, save that Thou art; Thou my best Thought, by day or by night, Waking or sleeping, Thy presence my light."
+    ]
+  },
+  {
+    "id": "hymn_it_is_well",
+    "title": "It Is Well with My Soul",
+    "author": "Horatio G. Spafford",
+    "meter": "11.8.11.9 with refrain",
+    "refs": "Philippians 4:7",
+    "verses": [
+      "When peace like a river attendeth my way, When sorrows like sea billows roll; Whatever my lot, Thou hast taught me to say, It is well, it is well with my soul."
+    ]
+  },
+  {
+    "id": "hymn_blessed_assurance",
+    "title": "Blessed Assurance",
+    "author": "Fanny J. Crosby",
+    "meter": "9.10.9.9 with refrain",
+    "refs": "Hebrews 10:22",
+    "verses": [
+      "Blessed assurance, Jesus is mine! O what a foretaste of glory divine! Heir of salvation, purchase of God, Born of His Spirit, washed in His blood."
+    ]
+  },
+  {
+    "id": "hymn_to_god_be_the_glory",
+    "title": "To God Be the Glory",
+    "author": "Fanny J. Crosby",
+    "meter": "11.11.11.11 with refrain",
+    "refs": "Psalm 126:3",
+    "verses": [
+      "To God be the glory, great things He hath done! So loved He the world that He gave us His Son, Who yielded His life an atonement for sin, And opened the life-gate that all may go in."
+    ]
+  },
+  {
+    "id": "hymn_what_a_friend",
+    "title": "What a Friend We Have in Jesus",
+    "author": "Joseph M. Scriven",
+    "meter": "8.7.8.7 D",
+    "refs": "Philippians 4:6",
+    "verses": [
+      "What a friend we have in Jesus, All our sins and griefs to bear! What a privilege to carry Everything to God in prayer!"
+    ]
+  },
+  {
+    "id": "hymn_all_hail_the_power",
+    "title": "All Hail the Power of Jesus' Name",
+    "author": "Edward Perronet",
+    "meter": "C.M. (Common Meter)",
+    "refs": "Philippians 2:9-11",
+    "verses": [
+      "All hail the power of Jesus' Name! Let angels prostrate fall; Bring forth the royal diadem, And crown Him Lord of all!"
+    ]
+  },
+  {
+    "id": "hymn_rock_of_ages",
+    "title": "Rock of Ages",
+    "author": "Augustus M. Toplady",
+    "meter": "7.7.7.7.7.7",
+    "refs": "1 Corinthians 10:4",
+    "verses": [
+      "Rock of Ages, cleft for me, Let me hide myself in Thee; Let the water and the blood, From Thy wounded side which flowed, Be of sin the double cure, Save from wrath and make me pure."
+    ]
+  },
+  {
+    "id": "hymn_crown_him",
+    "title": "Crown Him with Many Crowns",
+    "author": "Matthew Bridges",
+    "meter": "S.M.D.",
+    "refs": "Revelation 19:12",
+    "verses": [
+      "Crown Him with many crowns, The Lamb upon His throne; Hark! how the heavenly anthem drowns All music but its own."
+    ]
+  },
+  {
+    "id": "hymn_old_rugged_cross",
+    "title": "The Old Rugged Cross",
+    "author": "George Bennard",
+    "meter": "12.9.12.9 with refrain",
+    "refs": "Galatians 6:14",
+    "verses": [
+      "On a hill far away stood an old rugged cross, The emblem of suffering and shame; And I love that old cross where the dearest and best For a world of lost sinners was slain."
+    ]
+  },
+  {
+    "id": "hymn_come_thou_fount",
+    "title": "Come, Thou Fount of Every Blessing",
+    "author": "Robert Robinson",
+    "meter": "8.7.8.7 D",
+    "refs": "1 Samuel 7:12",
+    "verses": [
+      "Come, Thou Fount of every blessing, Tune my heart to sing Thy grace; Streams of mercy, never ceasing, Call for songs of loudest praise."
+    ]
+  },
+  {
+    "id": "hymn_a_mighty_fortress",
+    "title": "A Mighty Fortress Is Our God",
+    "author": "Martin Luther",
+    "meter": "8.7.8.7.6.6.6.6.7",
+    "refs": "Psalm 46",
+    "verses": [
+      "A mighty fortress is our God, A bulwark never failing; Our helper He amid the flood Of mortal ills prevailing."
+    ]
+  },
+  {
+    "id": "hymn_i_surrender_all",
+    "title": "I Surrender All",
+    "author": "Judson W. Van DeVenter",
+    "meter": "15.15.15.15 with refrain",
+    "refs": "Romans 12:1",
+    "verses": [
+      "All to Jesus I surrender, All to Him I freely give; I will ever love and trust Him, In His presence daily live."
+    ]
+  },
+  {
+    "id": "hymn_nearer_my_god",
+    "title": "Nearer, My God, to Thee",
+    "author": "Sarah F. Adams",
+    "meter": "6.4.6.4.6.6.6.4",
+    "refs": "Genesis 28:10-22",
+    "verses": [
+      "Nearer, my God, to Thee, nearer to Thee! E'en though it be a cross that raiseth me; Still all my song shall be, nearer, my God, to Thee."
+    ]
+  },
+  {
+    "id": "hymn_o_for_a_thousand",
+    "title": "O for a Thousand Tongues to Sing",
+    "author": "Charles Wesley",
+    "meter": "C.M. (Common Meter)",
+    "refs": "Psalm 145:21",
+    "verses": [
+      "O for a thousand tongues to sing My great Redeemer’s praise, The glories of my God and King, The triumphs of His grace!"
+    ]
+  }
+]

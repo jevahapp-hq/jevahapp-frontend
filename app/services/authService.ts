@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { getApiBaseUrl } from "../utils/api";
 
 class AuthService {
@@ -111,6 +112,46 @@ class AuthService {
     }
   }
 
+  // Reset Password with Code - Backend contract: POST /reset-password-with-code
+  async resetPasswordWithCode(
+    email: string,
+    code: string,
+    newPassword: string
+  ) {
+    try {
+      console.log("🔍 Resetting password with code for:", email);
+
+      const response = await fetch(`${this.baseURL}/reset-password-with-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          code: code.trim(),
+          newPassword: newPassword.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      console.log("✅ Reset password with code response:", data);
+
+      return {
+        success: response.ok,
+        data,
+        status: response.status,
+      };
+    } catch (error) {
+      console.error("❌ Error in resetPasswordWithCode:", error);
+      return {
+        success: false,
+        error: "Network error occurred",
+        status: 0,
+      };
+    }
+  }
+
   // Login with Jevah backend
   async login(email: string, password: string) {
     try {
@@ -197,16 +238,23 @@ class AuthService {
   async verifyEmailCode(email: string, code: string) {
     try {
       console.log("🔍 Verifying email code for:", email);
+      console.log("🔍 Code being sent:", code);
+      console.log("🔍 Code length:", code.length);
+      console.log("🔍 API URL:", `${this.baseURL}/verify-email`);
+
+      const requestBody = {
+        email: email.trim(),
+        code: code.trim(),
+      };
+      console.log("🔍 Request body:", JSON.stringify(requestBody));
 
       const response = await fetch(`${this.baseURL}/verify-email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
-        body: JSON.stringify({
-          email: email.trim(),
-          code: code.trim(),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -240,6 +288,7 @@ class AuthService {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "expo-platform": Platform.OS,
           },
           body: JSON.stringify({
             email: email.trim(),

@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  isFresh,
+  useContentCacheStore,
+} from "../../../app/store/useContentCacheStore";
 import { mediaApi } from "../../core/api/MediaApi";
 import {
   ContentFilter,
@@ -66,6 +70,14 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           transformApiResponseToMediaItem
         );
         setAllContent(transformedMedia);
+        // cache write-through
+        useContentCacheStore.getState().set("ALL:first", {
+          items: transformedMedia,
+          page: 1,
+          limit: response.limit || 10,
+          total: response.total || 0,
+          fetchedAt: Date.now(),
+        });
         setAllContentTotal(response.total || 0);
         setAllContentLoading(false);
       } else {
@@ -125,6 +137,16 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
             setDefaultContent(transformedMedia);
           }
 
+          // cache write-through by contentType key
+          const key = `${filter.contentType || "ALL"}:page:${filter.page || 1}`;
+          useContentCacheStore.getState().set(key, {
+            items: transformedMedia,
+            page: filter.page || 1,
+            limit: filter.limit || limit,
+            total: response.total || 0,
+            fetchedAt: Date.now(),
+          });
+
           setDefaultContentPagination({
             page: response.page || 1,
             limit: response.limit || 10,
@@ -181,6 +203,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         limit,
         contentType: contentType !== "ALL" ? contentType : undefined,
       });
+      // Prefetch the next page in background if available
+      const next = defaultContentPagination.page + 2;
+      if (next <= defaultContentPagination.pages) {
+        fetchDefaultContent({
+          page: next,
+          limit,
+          contentType: contentType !== "ALL" ? contentType : undefined,
+        });
+      }
     }
   }, [fetchDefaultContent, defaultContentPagination, limit, contentType]);
 
@@ -204,8 +235,30 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       // Test available endpoints first
       mediaApi.testAvailableEndpoints();
 
-      // Try TikTok-style all content endpoints first
+      // Hydrate from cache instantly if fresh; then background revalidate
+      const cachedAll = useContentCacheStore.getState().get("ALL:first");
+      if (cachedAll && isFresh("ALL:first")) {
+        setAllContent(cachedAll.items as any);
+        setAllContentTotal(cachedAll.total || 0);
+      }
+      const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
+      const cachedDefault = useContentCacheStore.getState().get(defaultKey);
+      if (cachedDefault && isFresh(defaultKey)) {
+        setDefaultContent(cachedDefault.items as any);
+        setDefaultContentPagination((p) => ({
+          ...p,
+          page: cachedDefault.page,
+          limit: cachedDefault.limit,
+          total: cachedDefault.total || 0,
+          pages: Math.ceil(
+            (cachedDefault.total || 0) / (cachedDefault.limit || 10)
+          ),
+        }));
+      }
+
+      // Background revalidate
       refreshAllContent();
+      fetchDefaultContent({ page, limit, contentType });
     }
   }, [immediate, refreshAllContent]);
 

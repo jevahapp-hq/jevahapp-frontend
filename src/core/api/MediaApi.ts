@@ -8,12 +8,20 @@ class MediaApi {
     const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT);
 
     if (response.success) {
+      const data = (response as any).data || {};
+      const mediaArr = Array.isArray(data?.media)
+        ? data.media
+        : Array.isArray(data?.data?.media)
+        ? data.data.media
+        : Array.isArray(data)
+        ? data
+        : [];
       return {
         success: true,
-        media: response.data?.media || response.data || [],
-        total: response.data?.total || 0,
-        page: response.data?.page || 1,
-        limit: response.data?.limit || 10,
+        media: mediaArr,
+        total: data?.total || data?.data?.total || 0,
+        page: data?.page || data?.data?.page || 1,
+        limit: data?.limit || data?.data?.limit || 10,
       };
     }
 
@@ -30,12 +38,20 @@ class MediaApi {
     );
 
     if (response.success) {
+      const data = (response as any).data || {};
+      const mediaArr = Array.isArray(data?.media)
+        ? data.media
+        : Array.isArray(data?.data?.media)
+        ? data.data.media
+        : Array.isArray(data)
+        ? data
+        : [];
       return {
         success: true,
-        media: response.data?.media || response.data || [],
-        total: response.data?.total || 0,
-        page: response.data?.page || 1,
-        limit: response.data?.limit || 10,
+        media: mediaArr,
+        total: data?.total || data?.data?.total || 0,
+        page: data?.page || data?.data?.page || 1,
+        limit: data?.limit || data?.data?.limit || 10,
       };
     }
 
@@ -63,12 +79,20 @@ class MediaApi {
     );
 
     if (response.success) {
+      const data = (response as any).data || {};
+      const mediaArr = Array.isArray(data?.media)
+        ? data.media
+        : Array.isArray(data?.data?.media)
+        ? data.data.media
+        : Array.isArray(data)
+        ? data
+        : [];
       return {
         success: true,
-        media: response.data?.media || response.data || [],
-        total: response.data?.total || 0,
-        page: response.data?.page || 1,
-        limit: response.data?.limit || 10,
+        media: mediaArr,
+        total: data?.total || data?.data?.total || 0,
+        page: data?.page || data?.data?.page || 1,
+        limit: data?.limit || data?.data?.limit || 10,
       };
     }
 

@@ -1,25 +1,25 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import {
-    Dimensions,
-    Modal,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import {
-    GestureHandlerRootView,
-    HandlerStateChangeEvent,
-    PanGestureHandler,
-    PanGestureHandlerGestureEvent,
+  GestureHandlerRootView,
+  HandlerStateChangeEvent,
+  PanGestureHandler,
+  PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
 } from "react-native-reanimated";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;

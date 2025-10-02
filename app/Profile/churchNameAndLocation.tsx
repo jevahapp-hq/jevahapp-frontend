@@ -17,12 +17,15 @@ import {
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
+import type { SuggestSource } from "../hooks/useChurchSuggestions";
+import { useChurchSuggestions } from "../hooks/useChurchSuggestions";
 import { environmentManager } from "../utils/environmentManager";
 
 type Suggestion = {
   id: string;
   name: string;
-  type: "church" | "location";
+  type: "church" | "branch";
+  source: SuggestSource; // "internal" | "mapbox"
 };
 
 function ChurchNameAndLocation() {
@@ -34,160 +37,98 @@ function ChurchNameAndLocation() {
   );
   const [selectedItem, setSelectedItem] = useState<Suggestion | null>(null);
   const [loading, setLoading] = useState(false);
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    null
+  );
 
   // Debug log for filtered suggestions
   useEffect(() => {
-    console.log("Filtered suggestions updated:", filteredSuggestions.length, filteredSuggestions);
+    console.log(
+      "Filtered suggestions updated:",
+      filteredSuggestions.length,
+      filteredSuggestions
+    );
   }, [filteredSuggestions]);
 
   useEffect(() => {
-    const fetchLocationAndChurches = async () => {
+    const fetchLocation = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           console.log("Permission denied");
           return;
         }
-
         const location = await Location.getCurrentPositionAsync({});
         const lat = location.coords.latitude;
         const lng = location.coords.longitude;
         setCoords({ lat, lng });
-
-        // Get nearby churches using Mapbox reverse geocoding first
-        try {
-          const reverseGeoRes = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place&limit=1`
-          );
-          const reverseGeoData = await reverseGeoRes.json();
-        } catch (error) {
-          console.warn("Mapbox reverse geocoding failed:", error);
-        }
-
-        try {
-          console.log("🌐 Fetching churches from:", `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`);
-          const res = await fetch(
-            `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`
-          );
-          
-          if (!res.ok) {
-            console.error("Church API error:", res.status, res.statusText);
-            return;
-          }
-          
-          const data = await res.json();
-
-          const churchSuggestions = data.map((church: any) => ({
-            id: church.id,
-            name: church.name,
-            type: "church" as const,
-          }));
-
-          setChurches(churchSuggestions);
-        } catch (error) {
-          console.error("Error fetching churches:", error);
-        }
       } catch (error) {
-        console.error("Error in fetchLocationAndChurches:", error);
+        console.error("Error getting location:", error);
       }
     };
-
-    fetchLocationAndChurches();
+    fetchLocation();
   }, []);
 
+  const { items: suggestionItems, loading: suggestLoading } =
+    useChurchSuggestions(search, {
+      near: coords || undefined,
+      countryCode: "NG",
+      source: "combined",
+      limit: 10,
+    });
+
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      const fetchSuggestions = async () => {
-        if (search.trim().length === 0) {
-          setFilteredSuggestions([]);
-          return;
-        }
+    if (search.trim().length < 2) {
+      setFilteredSuggestions([]);
+      return;
+    }
+    const mapped: Suggestion[] = (suggestionItems || []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      type: (r.type as "church" | "branch") || "church",
+      source: (r.source as SuggestSource) || "internal",
+    }));
+    setFilteredSuggestions(mapped);
+  }, [suggestionItems, search]);
 
-        try {
-          // Mapbox Geocoding API for location search
-          const proximity = coords
-            ? `&proximity=${coords.lng},${coords.lat}&autocomplete=true`
-            : "";
-          
-          console.log("🌐 Fetching location suggestions for:", search);
-          const locRes = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-              search
-            )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=10${proximity}`
-          );
-
-          if (!locRes.ok) {
-            console.error("Mapbox API error:", locRes.status, locRes.statusText);
-            return;
-          }
-
-          const locData = await locRes.json();
-
-          if (!locData.features || !Array.isArray(locData.features)) {
-            console.error("No features returned:", locData);
-            return;
-          }
-
-          const locationSuggestions: Suggestion[] = locData.features.map(
-            (feature: any) => ({
-              id: feature.id,
-              name: feature.place_name,
-              type: "location",
-            })
-          );
-
-          console.log("Setting suggestions:", locationSuggestions);
-          setFilteredSuggestions(locationSuggestions);
-        } catch (err) {
-          console.error("Error fetching suggestions:", err);
-          setFilteredSuggestions([]);
-        }
-      };
-
-      fetchSuggestions();
-    }, 400);
-
-    return () => clearTimeout(timeout);
-  }, [search]);
+  // Optional Mapbox fallback if backend returns no results
+  useEffect(() => {
+    const fetchMapboxFallback = async () => {
+      if (filteredSuggestions.length > 0) return;
+      const q = search.trim();
+      if (q.length < 2) return;
+      try {
+        const proximity = coords
+          ? `&proximity=${coords.lng},${coords.lat}&autocomplete=true`
+          : "";
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+            q
+          )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=8${proximity}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data?.features)) return;
+        const mapboxItems: Suggestion[] = data.features.map((f: any) => ({
+          id: f.id,
+          name: f.place_name,
+          type: "church", // default when not known
+          source: "mapbox",
+        }));
+        if (mapboxItems.length) setFilteredSuggestions(mapboxItems);
+      } catch (e) {
+        // silent fallback
+      }
+    };
+    fetchMapboxFallback();
+    // Only when backend produced none
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredSuggestions.length, search, coords?.lat, coords?.lng]);
 
   const selectSuggestion = async (item: Suggestion) => {
     setSearch(item.name);
     setSelectedItem(item);
     setFilteredSuggestions([]);
-
-    if (item.type === "location") {
-      try {
-        // For Mapbox, we can get coordinates directly from the feature
-        // We'll need to make another call to get the full feature details
-        const geoRes = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-            item.name
-          )}.json?access_token=pk.eyJ1IjoiamV2YWgtYXBwIiwiYSI6ImNtZXVienJlcjA1ZmMybXIweWY4Zmp4eXQifQ.N5dmx2NazRcN83YhhoXa4w&types=place,address,poi&limit=1`
-        );
-        const geoData = await geoRes.json();
-        
-        if (geoData.features && geoData.features.length > 0) {
-          const feature = geoData.features[0];
-          const [lng, lat] = feature.center; // Mapbox returns [longitude, latitude]
-
-          const res = await fetch(
-            `${API_BASE_URL}/api/churches?lat=${lat}&lng=${lng}`
-          );
-          const churchData = await res.json();
-
-          const churchSuggestions = churchData.map((church: any) => ({
-            id: church.id,
-            name: church.name,
-            type: "church" as const,
-          }));
-
-          setChurches(churchSuggestions);
-        }
-      } catch (error) {
-        console.error("Error processing location:", error);
-      }
-    }
   };
 
   const handleNext = async () => {
@@ -207,7 +148,7 @@ function ChurchNameAndLocation() {
         timeout: 15000, // 15 seconds timeout
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
@@ -215,6 +156,9 @@ function ChurchNameAndLocation() {
         `${API_BASE_URL}/api/auth/complete-profile`,
         {
           location: selectedItem.name,
+          entityId: selectedItem.id,
+          entityType: selectedItem.type,
+          entitySource: selectedItem.source,
         }
       );
 
@@ -225,11 +169,12 @@ function ChurchNameAndLocation() {
       }
     } catch (error: any) {
       // console.error("Location submission error:", error);
-      
+
       // Provide more specific error messages
       let errorMessage = "Something went wrong";
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        errorMessage =
+          "Request timed out. Please check your internet connection and try again.";
       } else if (error.response?.status === 401) {
         errorMessage = "Authentication failed. Please login again.";
       } else if (error.response?.status === 500) {
@@ -237,7 +182,7 @@ function ChurchNameAndLocation() {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
+
       Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
@@ -251,17 +196,15 @@ function ChurchNameAndLocation() {
         style={{ flex: 1 }}
       >
         <View className="w-full items-center">
-
-        <View className="px-4 mt-6">
-        <AuthHeader title="Profile Setup" />
-      </View>
-         
-            <ProgressBar currentStep={3} totalSteps={4} />
-            <Text className="text-[#1D2939] font-semibold mt-3 ml-1">
-              Let&apos;s make this feel like home
-            </Text>
+          <View className="px-4 mt-6">
+            <AuthHeader title="Profile Setup" />
           </View>
-      
+
+          <ProgressBar currentStep={3} totalSteps={4} />
+          <Text className="text-[#1D2939] font-semibold mt-3 ml-1">
+            Let&apos;s make this feel like home
+          </Text>
+        </View>
 
         <View className="flex-1 w-full items-center mt-2 bg-[#FCFCFD]">
           <View className="flex-1 w-[333px]">
@@ -281,12 +224,12 @@ function ChurchNameAndLocation() {
                 returnKeyType="search"
                 numberOfLines={1}
                 multiline={false}
-                style={{ 
-                  flex: 1, 
-                  height: '100%',
+                style={{
+                  flex: 1,
+                  height: "100%",
                   fontSize: 16,
-                  color: '#1F2937',
-                  textAlignVertical: 'center'
+                  color: "#1F2937",
+                  textAlignVertical: "center",
                 }}
               />
               <Ionicons name="search" size={32} color="#6B7280" />
@@ -299,11 +242,11 @@ function ChurchNameAndLocation() {
                 keyboardShouldPersistTaps="handled"
                 style={{ maxHeight: 200 }}
                 renderItem={({ item }) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => selectSuggestion(item)}
                     className="bg-white border-b border-gray-200"
                   >
-                    <Text 
+                    <Text
                       className="p-3 text-gray-800"
                       numberOfLines={1}
                       style={{ fontSize: 16 }}

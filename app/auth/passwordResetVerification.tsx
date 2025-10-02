@@ -2,20 +2,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Platform,
-    Animated as RNAnimated,
-    Text,
-    TextInput,
-    TextStyle,
-    TouchableOpacity,
-    View,
+  Alert,
+  Platform,
+  Animated as RNAnimated,
+  Text,
+  TextInput,
+  TextStyle,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withTiming,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/FontAwesome";
 import AuthHeader from "../components/AuthHeader";
@@ -151,7 +151,8 @@ export default function PasswordResetVerification() {
 
   const onVerifyPress = async () => {
     setIsVerifying(true);
-    const code = codeArray.join("");
+    const raw = codeArray.join("");
+    const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
     if (code.length !== 6) {
       triggerBounceDrop("failure");
@@ -169,7 +170,7 @@ export default function PasswordResetVerification() {
             "expo-platform": Platform.OS,
           },
           body: JSON.stringify({
-            email: emailAddress,
+            email: (emailAddress || "").trim(),
             code,
           }),
         }
@@ -178,8 +179,8 @@ export default function PasswordResetVerification() {
       const data = await response.json();
 
       if (data.success) {
-        // Store the reset token for the password reset screen
-        await AsyncStorage.setItem("resetToken", data.resetToken);
+        // Store the normalized reset code for the password reset screen
+        await AsyncStorage.setItem("resetCode", code);
         triggerBounceDrop("success");
       } else {
         triggerBounceDrop("failure");

@@ -1,17 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import {
-    useContentCount,
-    useUserInteraction,
+  useContentCount,
+  useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
@@ -20,10 +20,10 @@ import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
-    isValidUri,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+  isValidUri,
 } from "../../../shared/utils";
 
 const ORANGE = "#FF8A00";
@@ -278,7 +278,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               onPress={handlePlayPress}
               className="mr-3"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{ marginRight: 12 }}
+              style={{ marginRight: 24 }}
             >
               <Ionicons
                 name={playerState.isPlaying ? "pause" : "play"}

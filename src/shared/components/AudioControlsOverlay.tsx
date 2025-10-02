@@ -43,8 +43,8 @@ export default function AudioControlsOverlay({
   return (
     <View className="absolute bottom-4 left-3 right-3" pointerEvents="box-none">
       <View className="flex-row items-center">
-        {/* Add left spacing to separate a left overlay icon/button from the bar if present */}
-        <View style={{ width: 12 }} />
+        {/* Add left spacing to separate play icon from the progress bar */}
+        <View style={{ width: 24 }} />
 
         <View
           className="flex-1 h-1.5 rounded-full"
