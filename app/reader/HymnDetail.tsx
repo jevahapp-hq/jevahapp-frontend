@@ -90,7 +90,7 @@ export default function HymnDetail() {
               paddingHorizontal: 16, 
               marginTop: 20,
               marginBottom: 8,
-              backgroundColor: '#fff',
+              backgroundColor: '#ffffff',
               borderRadius: 8,
               paddingVertical: 12,
               shadowColor: '#000',
