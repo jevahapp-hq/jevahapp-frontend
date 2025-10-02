@@ -2,22 +2,32 @@ import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Alert, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
-import AuthHeader from '../components/AuthHeader';
+import {
+  Alert,
+  Image,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
 
 export default function ResetPassword() {
   const params = useLocalSearchParams();
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Debug password visibility
-  console.log('Password visibility states:', { showPassword, showConfirmPassword });
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  console.log("Password visibility states:", {
+    showPassword,
+    showConfirmPassword,
+  });
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const emailAddress = params.emailAddress as string;
 
   return (
@@ -28,14 +38,15 @@ export default function ResetPassword() {
           <Text className="text-4xl font-bold mb-4 text-[#1D2939]">
             Reset Password
           </Text>
-          <Text className="mt-2 text-[#1D2939]">
-            Enter your new password.  
-          </Text>
+          <Text className="mt-2 text-[#1D2939]">Enter your new password.</Text>
         </View>
 
         <View className="flex flex-col">
           <View className="flex flex-row rounded-[15px] w-[333px] h-[56px] border border-[#9D9FA7] items-center justify-center mt-2">
-            <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
+            <Image
+              source={require("../../assets/images/lock.png")}
+              className="w-[20px] h-[18px]"
+            />
             <TextInput
               placeholder="Password"
               className="border-hidden outline-none w-[250px] h-[40px] ml-2 text-[#090E24]"
@@ -43,23 +54,26 @@ export default function ResetPassword() {
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
               placeholderTextColor="#090E24"
-              style={{ 
-                color: '#090E24',
+              style={{
+                color: "#090E24",
                 fontSize: 16,
-                fontWeight: '400'
+                fontWeight: "400",
               }}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <FontAwesome5 
-                name={showPassword ? "eye" : "eye-slash"} 
-                size={15} 
-                color="black" 
+              <FontAwesome5
+                name={showPassword ? "eye" : "eye-slash"}
+                size={15}
+                color="black"
               />
             </TouchableOpacity>
           </View>
 
           <View className="flex flex-row rounded-[15px] w-[333px] h-[56px] border border-[#9D9FA7] items-center justify-center mt-4">
-            <Image source={require('../../assets/images/lock.png')} className="w-[20px] h-[18px]" />
+            <Image
+              source={require("../../assets/images/lock.png")}
+              className="w-[20px] h-[18px]"
+            />
             <TextInput
               placeholder="Confirm Password"
               className="border-hidden outline-none w-[250px] h-[40px] ml-2 text-[#090E24]"
@@ -67,17 +81,19 @@ export default function ResetPassword() {
               onChangeText={setConfirmPassword}
               secureTextEntry={!showConfirmPassword}
               placeholderTextColor="#090E24"
-              style={{ 
-                color: '#090E24',
+              style={{
+                color: "#090E24",
                 fontSize: 16,
-                fontWeight: '400'
+                fontWeight: "400",
               }}
             />
-            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-              <FontAwesome5 
-                name={showConfirmPassword ? "eye" : "eye-slash"} 
-                size={15} 
-                color="black" 
+            <TouchableOpacity
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              <FontAwesome5
+                name={showConfirmPassword ? "eye" : "eye-slash"}
+                size={15}
+                color="black"
               />
             </TouchableOpacity>
           </View>
@@ -90,51 +106,76 @@ export default function ResetPassword() {
                 Alert.alert("Error", "Please fill in all fields");
                 return;
               }
-              
+
               if (password !== confirmPassword) {
                 Alert.alert("Error", "Passwords do not match");
                 return;
               }
-              
+
               if (password.length < 6) {
-                Alert.alert("Error", "Password must be at least 6 characters long");
+                Alert.alert(
+                  "Error",
+                  "Password must be at least 6 characters long"
+                );
                 return;
               }
-              
+
               // Additional password validation
               if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-                Alert.alert("Error", "Password must contain at least one uppercase letter, one lowercase letter, and one number");
+                Alert.alert(
+                  "Error",
+                  "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+                );
                 return;
               }
-              
+
               setIsSubmitting(true);
-              
+
               try {
-                const resetToken = await AsyncStorage.getItem("resetToken");
-                console.log("Retrieved reset token:", resetToken);
-                
-                if (!resetToken) {
-                  Alert.alert("Error", "Reset token not found. Please try the reset process again.");
+                let resetCode = await AsyncStorage.getItem("resetCode");
+                resetCode = (resetCode || "")
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "");
+                console.log("Retrieved reset code (normalized):", resetCode);
+
+                if (!resetCode) {
+                  Alert.alert(
+                    "Error",
+                    "Reset code not found. Please try the reset process again."
+                  );
                   return;
                 }
-                
-                console.log("Sending reset password request for email:", emailAddress);
-                const result = await authService.resetPassword(emailAddress, resetToken, password);
+
+                console.log(
+                  "Sending reset password with code for email:",
+                  emailAddress
+                );
+                const result = await authService.resetPasswordWithCode(
+                  emailAddress,
+                  resetCode,
+                  password
+                );
 
                 if (result.success) {
-                  await AsyncStorage.removeItem("resetToken"); // Clean up
+                  await AsyncStorage.removeItem("resetCode"); // Clean up
                   Alert.alert("Success", "Password reset successfully!", [
                     {
                       text: "OK",
-                      onPress: () => router.replace("/auth/login")
-                    }
+                      onPress: () => router.replace("/auth/login"),
+                    },
                   ]);
                 } else {
-                  Alert.alert("Error", result.data?.message || "Failed to reset password");
+                  Alert.alert(
+                    "Error",
+                    result.data?.message || "Failed to reset password"
+                  );
                 }
               } catch (error) {
                 console.error("Error resetting password:", error);
-                Alert.alert("Error", "Failed to reset password. Please try again.");
+                Alert.alert(
+                  "Error",
+                  "Failed to reset password. Please try again."
+                );
               } finally {
                 setIsSubmitting(false);
               }
