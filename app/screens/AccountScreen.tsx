@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BottomNav from "../components/BottomNav";
-import { useProfileTabItems, useProfileTabs } from "../hooks/useProfileTabs";
 import { useUserProfile } from "../hooks/useUserProfile";
 import EditProfileSlideOver from "../Profile/EditProfileSlideOver";
 import { authUtils } from "../utils/authUtils";
@@ -29,28 +28,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export default function AccountScreen() {
   const [activeTab, setActiveTab] = useState<string>("Account");
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [selectedTabKey, setSelectedTabKey] = useState<string | null>(null);
+  const [selectedContentTab, setSelectedContentTab] = useState(0);
   const [avatarError, setAvatarError] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const router = useRouter();
   const { signOut } = useClerk();
   const { user, getAvatarUrl, getFullName, getUserSection } = useUserProfile();
-
-  // Dynamic profile tabs (Photos, Posts, Videos, Audios)
-  const { tabs, loadingTabs } = useProfileTabs(user?.id);
-  const resolvedActiveKey =
-    selectedTabKey || (tabs && tabs.length ? tabs[0].key : (null as any));
-  const {
-    items: tabItems,
-    loading: loadingTabItems,
-    refresh: refreshTabItems,
-    loadMore: loadMoreTabItems,
-  } = useProfileTabItems<any>(resolvedActiveKey as any, {
-    userId: user?.id,
-    page: 1,
-    limit: 12,
-    sort: "recent",
-  });
 
   const handleLogout = async () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -90,20 +73,35 @@ export default function AccountScreen() {
     setShowProfileModal(true);
   };
 
-  // Map tab key to a friendly empty state message
-  const emptyStateFor = (key?: string | null) => {
-    switch (key) {
-      case "photos":
-        return "No photos yet";
-      case "videos":
-        return "No videos yet";
-      case "audios":
-        return "No audios yet";
-      case "posts":
-        return "No posts yet";
-      default:
-        return "No items yet";
-    }
+  const contentTabs = [
+    { icon: "grid-outline", label: "Posts" },
+    { icon: "camera-outline", label: "Media" },
+    { icon: "play-outline", label: "Videos" },
+    { icon: "stats-chart-outline", label: "Analytics" },
+  ];
+
+  // Local images for each tab (3 tiles). Adjust paths to images in assets/images
+  const tabImages: Record<number, any[]> = {
+    0: [
+      require("../../assets/images/image (4).png"),
+      require("../../assets/images/Asset 37 (2).png"),
+      require("../../assets/images/image (4).png"),
+    ],
+    1: [
+      require("../../assets/images/Asset 37 (2).png"),
+      require("../../assets/images/image (4).png"),
+      require("../../assets/images/Asset 37 (2).png"),
+    ],
+    2: [
+      require("../../assets/images/image (4).png"),
+      require("../../assets/images/image (4).png"),
+      require("../../assets/images/Asset 37 (2).png"),
+    ],
+    3: [
+      require("../../assets/images/Asset 37 (2).png"),
+      require("../../assets/images/Asset 37 (2).png"),
+      require("../../assets/images/image (4).png"),
+    ],
   };
 
   return (
@@ -120,7 +118,7 @@ export default function AccountScreen() {
             <View className="relative">
               {user && getAvatarUrl(user) && !avatarError ? (
                 <Image
-                  source={{ uri: getAvatarUrl(user) as string }}
+                  source={{ uri: getAvatarUrl(user) }}
                   className="w-10 h-10 rounded-lg"
                   style={{ borderWidth: 1, borderColor: "#E5E7EB" }}
                   onError={() => setAvatarError(true)}
@@ -196,7 +194,7 @@ export default function AccountScreen() {
               <View className="relative">
                 {user && getAvatarUrl(user) && !avatarError ? (
                   <Image
-                    source={{ uri: getAvatarUrl(user) as string }}
+                    source={{ uri: getAvatarUrl(user) }}
                     className="w-24 h-24 rounded-full"
                     style={{ borderWidth: 3, borderColor: "#E5E7EB" }}
                     onError={() => setAvatarError(true)}
@@ -265,90 +263,120 @@ export default function AccountScreen() {
 
           {/* Content Navigation Tabs */}
           <View className="px-4 mt-0 mb-3">
-            <View className="bg-gray-200 rounded-xl px-2 py-1 flex-row items-center w-full self-center flex-wrap">
-              {(tabs || []).map((t) => (
+            {/* Darker group background with evenly spaced, full-width icons */}
+            <View className="bg-gray-200 rounded-xl px-2 py-1 flex-row items-center justify-between w-10/12 self-center">
+              {contentTabs.map((tab, index) => (
                 <TouchableOpacity
-                  key={t.key}
-                  onPress={() => setSelectedTabKey(t.key)}
-                  className={`rounded-md items-center justify-center px-3 py-2 mr-2 mb-2`}
+                  key={index}
+                  onPress={() => setSelectedContentTab(index)}
+                  className={`flex-1 h-8 mx-1 rounded-md items-center justify-center`}
                   activeOpacity={0.7}
                   style={
-                    resolvedActiveKey === t.key
+                    selectedContentTab === index
                       ? { backgroundColor: "#0A332D" }
-                      : { backgroundColor: "#E5E7EB" }
+                      : {}
                   }
                 >
-                  <Text
-                    style={{
-                      color: resolvedActiveKey === t.key ? "white" : "#111827",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {t.label} ({t.count ?? 0})
-                  </Text>
+                  <Ionicons
+                    name={tab.icon as any}
+                    size={16}
+                    color={selectedContentTab === index ? "white" : "#4B5563"}
+                  />
                 </TouchableOpacity>
               ))}
-              {loadingTabs && (
-                <View className="px-3 py-2">
-                  <Text>Loading tabs…</Text>
-                </View>
-              )}
             </View>
           </View>
 
-          {/* Content Section - dynamic items per selected tab */}
+          {/* Content Section - images for tabs 0-2, analytics list for tab 3 */}
           <View className="px-4 mb-8">
-            {loadingTabItems ? (
-              <View className="items-center justify-center">
-                <Text>Loading…</Text>
-              </View>
-            ) : (tabItems || []).length > 0 ? (
-              <View className="flex-row flex-wrap justify-between">
-                {(tabItems || []).map((it: any, index: number) => (
+            {selectedContentTab !== 3 ? (
+              <View className="flex-row justify-between">
+                {tabImages[selectedContentTab].map((imgSrc, index) => (
                   <View
-                    key={`tile-${resolvedActiveKey}-${it.id || index}`}
-                    className="mb-3"
-                    style={{ width: (SCREEN_WIDTH - 16 * 2 - 8) / 3 }}
+                    key={`tile-${selectedContentTab}-${index}`}
+                    className="flex-1 mx-1"
                   >
-                    <View className="aspect-square bg-gray-200 rounded-lg overflow-hidden">
-                      {it.thumbnailUrl || it.url ? (
-                        <Image
-                          source={{
-                            uri: (it.thumbnailUrl || it.url) as string,
-                          }}
-                          className="w-full h-full"
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View className="flex-1 items-center justify-center">
-                          <Text
-                            className="text-xs text-gray-600"
-                            numberOfLines={1}
-                          >
-                            {it.title || it.type}
-                          </Text>
-                        </View>
-                      )}
+                    <View className="aspect-square bg-gray-200 rounded-lg mb-2 overflow-hidden">
+                      <Image
+                        source={imgSrc}
+                        className="w-full h-full"
+                        resizeMode="cover"
+                      />
                     </View>
                   </View>
                 ))}
               </View>
             ) : (
-              <View className="items-center justify-center py-6">
-                <Text className="text-gray-600">
-                  {emptyStateFor(resolvedActiveKey)}
-                </Text>
+              <View>
+                {[
+                  {
+                    icon: "albums-outline",
+                    label: "Posts",
+                    value: "1200",
+                    sub: "Total published posts",
+                  },
+                  {
+                    icon: "heart-outline",
+                    label: "Likes",
+                    value: "16.8k",
+                    sub: 'Number of "Like" engagements on all posts',
+                  },
+                  {
+                    icon: "radio-outline",
+                    label: "Live sessions",
+                    value: "32",
+                    sub: "Number of times you went Live",
+                  },
+                  {
+                    icon: "chatbubble-ellipses-outline",
+                    label: "Comments",
+                    value: "20k",
+                    sub: 'Number of "comments" on all posts',
+                  },
+                  {
+                    icon: "document-text-outline",
+                    label: "Drafts",
+                    value: "25",
+                    sub: "Unpublished posts",
+                  },
+                  {
+                    icon: "share-social-outline",
+                    label: "Shares",
+                    value: "0",
+                    sub: "Number of times people shared your contents",
+                  },
+                ].map((row, idx) => (
+                  <View
+                    key={`row-${idx}`}
+                    className="flex-row items-center justify-between bg-white rounded-2xl px-4 py-4"
+                    style={{
+                      shadowColor: "#000",
+                      shadowOpacity: 0.03,
+                      shadowRadius: 8,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <View className="flex-row items-center">
+                      <Ionicons
+                        name={row.icon as any}
+                        size={18}
+                        color="#0A332D"
+                      />
+                      <View className="ml-3">
+                        <Text className="text-[#111827] font-semibold">
+                          {row.label}
+                        </Text>
+                        <Text className="text-[#6B7280] text-xs">
+                          {row.sub}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="text-[#111827] font-semibold">
+                      {row.value}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            )}
-            {!loadingTabItems && (tabItems || []).length > 0 && (
-              <TouchableOpacity
-                onPress={loadMoreTabItems}
-                style={{ alignSelf: "center", paddingVertical: 8 }}
-              >
-                <Text style={{ color: "#0A332D", fontWeight: "600" }}>
-                  Load more
-                </Text>
-              </TouchableOpacity>
             )}
           </View>
         </ScrollView>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -55,19 +55,18 @@ export default function ProfileScreen() {
   const prefs = (surface?.data || surface)?.preferences;
   const stats = (surface?.data || surface)?.stats;
 
-  // Tabs: integrate without changing existing header/profile sections
-  const { tabs, loadingTabs } = useProfileTabs();
-  const tabKeys = useMemo(() => (tabs || []).map((t) => t.key), [tabs]);
-  const [activeTab, setActiveTab] = useState<string | null>(null);
-  useEffect(() => {
-    if (!activeTab && tabKeys.length) setActiveTab(tabKeys[0]);
-  }, [tabKeys, activeTab]);
+  // Tabs: reinstate client-approved segmented tab UI and behavior
+  const { tabs, loadingTabs } = useProfileTabs(user?.id);
+  const [selectedTabKey, setSelectedTabKey] = useState<string | null>(null);
+  const resolvedActiveKey =
+    selectedTabKey || (tabs && tabs.length ? tabs[0].key : (null as any));
 
   const {
     items: tabItems,
     loading: tabLoading,
     loadMore: loadMoreTab,
-  } = useProfileTabItems<any>((activeTab as any) || "videos", {
+  } = useProfileTabItems<any>(resolvedActiveKey as any, {
+    userId: user?.id,
     page: 1,
     limit: 12,
     sort: "recent",
@@ -176,33 +175,38 @@ export default function ProfileScreen() {
           ) : null}
         </View>
       ) : null}
-      {/* Dynamic Tabs */}
+      {/* Dynamic Tabs - segmented control style (client-approved) */}
       <View className="mt-10 px-6">
         <Text className="text-lg font-semibold mb-3">My Content</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View className="bg-gray-200 rounded-xl px-2 py-1 flex-row items-center w-full self-center flex-wrap">
           {(tabs || []).map((t) => (
             <TouchableOpacity
               key={t.key}
-              onPress={() => setActiveTab(t.key)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 16,
-                marginRight: 8,
-                backgroundColor: activeTab === t.key ? "#090E24" : "#F3F4F6",
-              }}
+              onPress={() => setSelectedTabKey(t.key)}
+              className={`rounded-md items-center justify-center px-3 py-2 mr-2 mb-2`}
+              activeOpacity={0.7}
+              style={
+                resolvedActiveKey === t.key
+                  ? { backgroundColor: "#0A332D" }
+                  : { backgroundColor: "#E5E7EB" }
+              }
             >
               <Text
                 style={{
-                  color: activeTab === t.key ? "white" : "#111827",
+                  color: resolvedActiveKey === t.key ? "white" : "#111827",
                   fontWeight: "600",
                 }}
               >
-                {t.label} ({t.count})
+                {t.label} ({t.count ?? 0})
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+          {loadingTabs && (
+            <View className="px-3 py-2">
+              <Text>Loading tabs…</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Tab Items Grid (simple) */}
