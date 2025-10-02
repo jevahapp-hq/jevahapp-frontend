@@ -242,9 +242,17 @@ class AuthService {
       console.log("🔍 Code length:", code.length);
       console.log("🔍 API URL:", `${this.baseURL}/verify-email`);
 
-      const requestBody = {
-        email: email.trim(),
-        code: code.trim(),
+      // Normalize to avoid server mismatches
+      const normalizedEmail = (email || "").trim().toLowerCase();
+      const normalizedCode = (code || "")
+        .toString()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "")
+        .trim();
+      const requestBody: any = {
+        email: normalizedEmail,
+        code: normalizedCode,
+        verificationCode: normalizedCode, // some backends accept this key
       };
       console.log("🔍 Request body:", JSON.stringify(requestBody));
 

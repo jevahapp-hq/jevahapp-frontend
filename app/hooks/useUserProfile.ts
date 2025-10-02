@@ -32,8 +32,8 @@ export const useUserProfile = () => {
     }
     if (!token) {
       try {
-        const { default: SecureStore } = await import('expo-secure-store');
-        token = await SecureStore.getItemAsync('jwt');
+        const { default: SecureStore } = await import("expo-secure-store");
+        token = await SecureStore.getItemAsync("jwt");
       } catch (secureStoreError) {
         // Silent fallback
       }
@@ -45,8 +45,8 @@ export const useUserProfile = () => {
     await AsyncStorage.removeItem("userToken");
     await AsyncStorage.removeItem("token");
     try {
-      const { default: SecureStore } = await import('expo-secure-store');
-      await SecureStore.deleteItemAsync('jwt');
+      const { default: SecureStore } = await import("expo-secure-store");
+      await SecureStore.deleteItemAsync("jwt");
     } catch (secureStoreError) {
       // Silent fallback
     }
@@ -60,22 +60,22 @@ export const useUserProfile = () => {
       console.log("🔍 Fetching user profile...");
       const userData = await apiClient.getUserProfile();
       console.log("✅ User profile fetched:", userData);
-      
+
       if (userData && userData.user) {
         console.log("🔍 User section data:", {
           section: userData.user.section,
           sectionType: typeof userData.user.section,
           userKeys: Object.keys(userData.user),
-          fullUserData: userData.user
+          fullUserData: userData.user,
         });
-        
+
         // Ensure section is set if missing and handle optional fields
         const userWithSection = {
           ...userData.user,
-          id: userData.user.id || userData.user._id || '',
-          firstName: userData.user.firstName || '',
-          lastName: userData.user.lastName || '',
-          email: userData.user.email || '',
+          id: userData.user.id || userData.user._id || "",
+          firstName: userData.user.firstName || "",
+          lastName: userData.user.lastName || "",
+          email: userData.user.email || "",
           section: userData.user.section || "adult", // Default to adult if section is missing
           role: userData.user.role || "learner",
           isProfileComplete: userData.user.isProfileComplete || false,
@@ -83,16 +83,26 @@ export const useUserProfile = () => {
           avatar: userData.user.avatar || null,
           avatarUpload: userData.user.avatarUpload || null,
           isOnline: userData.user.isOnline || false,
-          createdAt: userData.user.createdAt || '',
-          updatedAt: userData.user.updatedAt || ''
+          createdAt: userData.user.createdAt || "",
+          updatedAt: userData.user.updatedAt || "",
         };
-        
-        setUser(userWithSection);
-        
-        // Store the complete user data
-        await AsyncStorage.setItem("user", JSON.stringify(userWithSection));
+
+        // Only accept if it has at least one of first/last name to avoid seeded defaults
+        if (
+          userWithSection.firstName ||
+          userWithSection.lastName ||
+          userWithSection.email
+        ) {
+          setUser(userWithSection);
+          await AsyncStorage.setItem("user", JSON.stringify(userWithSection));
+          console.log("💾 User data stored in AsyncStorage");
+        } else {
+          console.warn(
+            "⚠️ Ignoring incomplete user profile from API (to avoid stale default)"
+          );
+        }
         console.log("💾 User data stored in AsyncStorage");
-        
+
         // Refresh any media that was stuck with "Anonymous User"
         try {
           const { useMediaStore } = await import("../store/useUploadStore");
@@ -106,9 +116,12 @@ export const useUserProfile = () => {
       }
     } catch (error: any) {
       console.error("❌ Failed to fetch user profile:", error);
-      
+
       // Handle specific error types
-      if (error.message?.includes("Unauthorized") || error.message?.includes("401")) {
+      if (
+        error.message?.includes("Unauthorized") ||
+        error.message?.includes("401")
+      ) {
         await clearTokens();
         setError("Session expired. Please login again.");
       } else if (error.message?.includes("Network error")) {
@@ -121,7 +134,7 @@ export const useUserProfile = () => {
       } else {
         setError(error.message || "Failed to fetch user profile");
       }
-      
+
       // Try to load user from AsyncStorage as fallback
       try {
         const storedUser = await AsyncStorage.getItem("user");
@@ -133,7 +146,10 @@ export const useUserProfile = () => {
           console.log("📱 No user data found in AsyncStorage");
         }
       } catch (storageError) {
-        console.error("❌ Failed to load user from AsyncStorage:", storageError);
+        console.error(
+          "❌ Failed to load user from AsyncStorage:",
+          storageError
+        );
       }
     } finally {
       setLoading(false);
@@ -164,7 +180,7 @@ export const useUserProfile = () => {
   };
 
   const getFullName = (user: User) => {
-    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    return `${user.firstName || ""} ${user.lastName || ""}`.trim();
   };
 
   const isProfileComplete = () => {
@@ -204,7 +220,3 @@ export const useUserProfile = () => {
     getUserRole,
   };
 };
-
-
-
-

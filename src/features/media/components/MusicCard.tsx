@@ -278,7 +278,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               onPress={handlePlayPress}
               className="mr-3"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{ marginRight: 24 }}
+              style={{ marginRight: 12 }}
             >
               <Ionicons
                 name={playerState.isPlaying ? "pause" : "play"}

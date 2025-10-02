@@ -2,19 +2,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Animated as RNAnimated,
-    Text,
-    TextInput,
-    TextStyle,
-    TouchableOpacity,
-    View,
+  Alert,
+  Animated as RNAnimated,
+  Text,
+  TextInput,
+  TextStyle,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withTiming,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/FontAwesome";
 import AuthHeader from "../components/AuthHeader";
@@ -177,6 +177,31 @@ export default function CodeVerification() {
               "user",
               JSON.stringify(loginResult.data.user)
             );
+            // Immediately refresh canonical profile from backend to avoid stale/default names
+            try {
+              const me = await authService.fetchMe();
+              if (me?.success) {
+                const backendUser = (me.data?.data?.user ||
+                  me.data?.user) as any;
+                if (
+                  backendUser &&
+                  (backendUser.firstName || backendUser.lastName)
+                ) {
+                  await AsyncStorage.setItem(
+                    "user",
+                    JSON.stringify(backendUser)
+                  );
+                  console.log(
+                    "✅ Overwrote user with backend profile after verification"
+                  );
+                }
+              }
+            } catch (refreshErr) {
+              console.warn(
+                "⚠️ Post-verify profile refresh failed:",
+                refreshErr
+              );
+            }
             console.log("✅ Complete user data saved after verification:", {
               firstName: loginResult.data.user.firstName,
               lastName: loginResult.data.user.lastName,

@@ -132,7 +132,14 @@ export default function ResetPassword() {
               setIsSubmitting(true);
 
               try {
+                // Try the canonical key first, then fallback to older key if present
                 let resetCode = await AsyncStorage.getItem("resetCode");
+                if (!resetCode) {
+                  const legacy = await AsyncStorage.getItem("resetToken");
+                  if (legacy) {
+                    resetCode = legacy;
+                  }
+                }
                 resetCode = (resetCode || "")
                   .toUpperCase()
                   .replace(/[^A-Z0-9]/g, "");
@@ -158,6 +165,7 @@ export default function ResetPassword() {
 
                 if (result.success) {
                   await AsyncStorage.removeItem("resetCode"); // Clean up
+                  await AsyncStorage.removeItem("resetToken");
                   Alert.alert("Success", "Password reset successfully!", [
                     {
                       text: "OK",

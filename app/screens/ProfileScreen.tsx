@@ -1,6 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, Image, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
-import authService from '../services/authService';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useProfileTabItems, useProfileTabs } from "../hooks/useProfileTabs";
+import authService from "../services/authService";
 
 export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
@@ -18,12 +27,12 @@ export default function ProfileScreen() {
     try {
       const res = await authService.fetchMe();
       if (!res.success) {
-        const msg = (res as any)?.data?.message || 'Failed to load profile';
+        const msg = (res as any)?.data?.message || "Failed to load profile";
         throw new Error(msg);
       }
       setSurface(res.data);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load profile');
+      setError(e?.message || "Failed to load profile");
     } finally {
       setLoading(false);
     }
@@ -46,6 +55,24 @@ export default function ProfileScreen() {
   const prefs = (surface?.data || surface)?.preferences;
   const stats = (surface?.data || surface)?.stats;
 
+  // Tabs: integrate without changing existing header/profile sections
+  const { tabs, loadingTabs } = useProfileTabs();
+  const tabKeys = useMemo(() => (tabs || []).map((t) => t.key), [tabs]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  useEffect(() => {
+    if (!activeTab && tabKeys.length) setActiveTab(tabKeys[0]);
+  }, [tabKeys, activeTab]);
+
+  const {
+    items: tabItems,
+    loading: tabLoading,
+    loadMore: loadMoreTab,
+  } = useProfileTabItems<any>((activeTab as any) || "videos", {
+    page: 1,
+    limit: 12,
+    sort: "recent",
+  });
+
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -67,7 +94,9 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       className="flex-1 bg-white"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
       contentContainerStyle={{ paddingBottom: 24 }}
     >
       {/* Header */}
@@ -75,7 +104,7 @@ export default function ProfileScreen() {
         {user?.bannerUrl ? (
           <Image
             source={{ uri: user.bannerUrl }}
-            style={{ width: '100%', height: 120, borderRadius: 12 }}
+            style={{ width: "100%", height: 120, borderRadius: 12 }}
             resizeMode="cover"
           />
         ) : null}
@@ -92,19 +121,21 @@ export default function ProfileScreen() {
               className="bg-gray-200 items-center justify-center"
             >
               <Text className="text-[#1D2939] text-xl">
-                {user?.firstName?.[0] || 'U'}
+                {user?.firstName?.[0] || "U"}
               </Text>
             </View>
           )}
           <Text className="text-2xl font-bold mt-3 text-[#1D2939]">
-            {user?.firstName || ''} {user?.lastName || ''}
+            {user?.firstName || ""} {user?.lastName || ""}
           </Text>
           <Text className="text-[#475467] mt-1">{user?.email}</Text>
           {user?.bio ? (
             <Text className="text-center text-[#344054] mt-2">{user.bio}</Text>
           ) : null}
           {user?.location ? (
-            <Text className="text-center text-[#667085] mt-1">{user.location}</Text>
+            <Text className="text-center text-[#667085] mt-1">
+              {user.location}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -113,11 +144,15 @@ export default function ProfileScreen() {
       {stats ? (
         <View className="flex-row justify-around mt-8 px-6">
           <View className="items-center">
-            <Text className="text-xl font-semibold">{stats.followers ?? 0}</Text>
+            <Text className="text-xl font-semibold">
+              {stats.followers ?? 0}
+            </Text>
             <Text className="text-[#667085]">Followers</Text>
           </View>
           <View className="items-center">
-            <Text className="text-xl font-semibold">{stats.following ?? 0}</Text>
+            <Text className="text-xl font-semibold">
+              {stats.following ?? 0}
+            </Text>
             <Text className="text-[#667085]">Following</Text>
           </View>
           <View className="items-center">
@@ -132,15 +167,101 @@ export default function ProfileScreen() {
         <View className="mt-10 px-6">
           <Text className="text-lg font-semibold">Preferences</Text>
           <Text className="text-[#475467] mt-2">
-            Theme: {prefs.theme || 'light'} • Kid: {prefs.isKid ? 'Yes' : 'No'}
+            Theme: {prefs.theme || "light"} • Kid: {prefs.isKid ? "Yes" : "No"}
           </Text>
           {Array.isArray(prefs.interests) && prefs.interests.length ? (
             <Text className="text-[#475467] mt-1">
-              Interests: {prefs.interests.join(', ')}
+              Interests: {prefs.interests.join(", ")}
             </Text>
           ) : null}
         </View>
       ) : null}
+      {/* Dynamic Tabs */}
+      <View className="mt-10 px-6">
+        <Text className="text-lg font-semibold mb-3">My Content</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {(tabs || []).map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              onPress={() => setActiveTab(t.key)}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 14,
+                borderRadius: 16,
+                marginRight: 8,
+                backgroundColor: activeTab === t.key ? "#090E24" : "#F3F4F6",
+              }}
+            >
+              <Text
+                style={{
+                  color: activeTab === t.key ? "white" : "#111827",
+                  fontWeight: "600",
+                }}
+              >
+                {t.label} ({t.count})
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Tab Items Grid (simple) */}
+      <View className="mt-4 px-6">
+        {tabLoading && <ActivityIndicator size="small" color="#090E24" />}
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+            marginTop: 8,
+          }}
+        >
+          {(tabItems || []).map((it: any, idx: number) => (
+            <View
+              key={(it.id || idx) + ""}
+              style={{
+                width: "31%",
+                aspectRatio: 1,
+                backgroundColor: "#E5E7EB",
+                borderRadius: 8,
+                overflow: "hidden",
+              }}
+            >
+              {it.thumbnailUrl || it.url ? (
+                <Image
+                  source={{ uri: (it.thumbnailUrl || it.url) as string }}
+                  style={{ width: "100%", height: "100%" }}
+                />
+              ) : (
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#6B7280", fontSize: 12 }}
+                    numberOfLines={1}
+                  >
+                    {it.title || it.type}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+        {!tabLoading && (tabItems || []).length > 0 && (
+          <TouchableOpacity
+            onPress={loadMoreTab}
+            style={{ alignSelf: "center", paddingVertical: 10 }}
+          >
+            <Text style={{ color: "#090E24", fontWeight: "600" }}>
+              Load more
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 }
