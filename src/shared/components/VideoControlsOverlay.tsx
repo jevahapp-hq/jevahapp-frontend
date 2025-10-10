@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useRef } from "react";
-import { PanResponder, TouchableOpacity, View } from "react-native";
+import { PanResponder, Text, TouchableOpacity, View } from "react-native";
 
 type Props = {
   progress: number; // 0..1
@@ -9,6 +9,9 @@ type Props = {
   onSeekRelative: (seconds: number) => void; // +/- seconds
   onSeekToPercent: (percent: number) => void; // 0..1
   barColor?: string;
+  // Optional time labels (ms) to show current/duration
+  currentMs?: number;
+  durationMs?: number;
 };
 
 export default function VideoControlsOverlay({
@@ -18,6 +21,8 @@ export default function VideoControlsOverlay({
   onSeekRelative,
   onSeekToPercent,
   barColor = "#FFFFFF",
+  currentMs,
+  durationMs,
 }: Props) {
   const barWidthRef = useRef(1);
 
@@ -39,6 +44,14 @@ export default function VideoControlsOverlay({
       }),
     [onSeekToPercent]
   );
+
+  const formatTime = (ms?: number) => {
+    if (typeof ms !== "number" || !isFinite(ms) || ms < 0) return "0:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  };
 
   return (
     <View className="absolute bottom-4 left-3 right-3">
@@ -71,6 +84,18 @@ export default function VideoControlsOverlay({
         </TouchableOpacity>
       </View>
 
+      {/* Time labels */}
+      {(typeof currentMs === "number" || typeof durationMs === "number") && (
+        <View className="flex-row justify-between mt-1">
+          <Text style={{ color: "#FFFFFF", fontSize: 12 }}>
+            {formatTime(currentMs)}
+          </Text>
+          <Text style={{ color: "#FFFFFF", fontSize: 12 }}>
+            {formatTime(durationMs)}
+          </Text>
+        </View>
+      )}
+
       {/* Tap zones for +/- 10s seeking */}
       <View
         className="absolute inset-x-0 -top-6 bottom-6 flex-row"
@@ -94,6 +119,3 @@ export default function VideoControlsOverlay({
     </View>
   );
 }
-
-
-

@@ -1,20 +1,21 @@
 import {
-    AntDesign,
-    Feather,
-    Ionicons,
-    MaterialIcons
+  AntDesign,
+  Feather,
+  Ionicons,
+  MaterialIcons,
 } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Image,
-    PanResponder, View as RNView,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  PanResponder,
+  View as RNView,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
@@ -23,14 +24,20 @@ import { useDownloadStore } from "../store/useDownloadStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
-import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
-    getPersistedStats,
-    getViewedAudio,
-    persistStats,
-    persistViewedAudio,
+  convertToDownloadableItem,
+  useDownloadHandler,
+} from "../utils/downloadUtils";
+import {
+  getPersistedStats,
+  getViewedAudio,
+  persistStats,
+  persistViewedAudio,
 } from "../utils/persistentStorage";
-import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
+import {
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+} from "../utils/userValidation";
 
 interface AudioCard {
   fileUrl: any;
@@ -227,19 +234,22 @@ const recommendedItems: RecommendedItem[] = [
 export default function Music() {
   const mediaStore = useMediaStore();
   const libraryStore = useLibraryStore();
-  
+
   // ✅ Use global comment modal and interaction store
   const { showCommentModal } = useCommentModal();
-  const { comments, userFavorites, globalFavoriteCounts } = useInteractionStore();
-  
+  const { comments, userFavorites, globalFavoriteCounts } =
+    useInteractionStore();
+
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   const { loadDownloadedItems } = useDownloadStore();
-  
+
   // Audio playback state
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
-  const [audioProgressMap, setAudioProgressMap] = useState<Record<string, number>>({});
-  
+  const [audioProgressMap, setAudioProgressMap] = useState<
+    Record<string, number>
+  >({});
+
   // Success card state
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -248,7 +258,7 @@ export default function Music() {
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
   const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
   const [recModalIndex, setRecModalIndex] = useState<number | null>(null);
-  
+
   const soundMap = useRef<Record<string, Audio.Sound>>({});
   const audioRefs = useRef<Record<string, Audio.Sound>>({});
   // Prevent infinite refresh loops: run refresh once after mount using static accessor
@@ -265,17 +275,24 @@ export default function Music() {
       libraryStore.loadSavedItems();
     }
   }, [libraryStore.isLoaded]);
-  const musicItems = mediaStore.mediaList.filter(item => item.contentType === "music");
-  
+  const musicItems = mediaStore.mediaList.filter(
+    (item) => item.contentType === "music" || item.contentType === "audio"
+  );
+
   // 🧮 Build mini-card datasets from uploaded music
   const indexedMusic: RecommendedItem[] = useMemo(() => {
     return musicItems.map((audio: any) => {
-      const audioUrl = typeof audio.fileUrl === "string" ? audio.fileUrl : (audio.fileUrl?.uri || "");
+      const audioUrl =
+        typeof audio.fileUrl === "string"
+          ? audio.fileUrl
+          : audio.fileUrl?.uri || "";
       const imageSrc = audio?.thumbnailUrl
         ? { uri: audio.thumbnailUrl }
         : audio?.imageUrl
-          ? (typeof audio.imageUrl === "string" ? { uri: audio.imageUrl } : audio.imageUrl)
-          : require("../../assets/images/image (10).png");
+        ? typeof audio.imageUrl === "string"
+          ? { uri: audio.imageUrl }
+          : audio.imageUrl
+        : require("../../assets/images/image (10).png");
       return {
         title: audio.title,
         subTitle: audio.speaker || audio.uploadedBy || "Unknown",
@@ -289,12 +306,17 @@ export default function Music() {
   const trendingMusic: RecommendedItem[] = useMemo(() => {
     const now = Date.now();
     const scored = musicItems.map((audio: any) => {
-      const audioUrl = typeof audio.fileUrl === "string" ? audio.fileUrl : (audio.fileUrl?.uri || "");
+      const audioUrl =
+        typeof audio.fileUrl === "string"
+          ? audio.fileUrl
+          : audio.fileUrl?.uri || "";
       const imageSrc = audio?.thumbnailUrl
         ? { uri: audio.thumbnailUrl }
         : audio?.imageUrl
-          ? (typeof audio.imageUrl === "string" ? { uri: audio.imageUrl } : audio.imageUrl)
-          : require("../../assets/images/image (10).png");
+        ? typeof audio.imageUrl === "string"
+          ? { uri: audio.imageUrl }
+          : audio.imageUrl
+        : require("../../assets/images/image (10).png");
       const createdAt = new Date(audio?.createdAt || now).getTime();
       const ageHours = Math.max(1, (now - createdAt) / (1000 * 60 * 60));
       const views = Math.max(0, audio.viewCount || 0);
@@ -305,7 +327,8 @@ export default function Music() {
       const likesPerHour = likes / ageHours;
       const savesPerHour = saves / ageHours;
       const sharesPerHour = shares / ageHours;
-      const weightedVelocity = 1 * Math.sqrt(viewsPerHour) +
+      const weightedVelocity =
+        1 * Math.sqrt(viewsPerHour) +
         2 * Math.log1p(savesPerHour) +
         3 * Math.log1p(likesPerHour) +
         5 * Math.log1p(sharesPerHour);
@@ -349,8 +372,9 @@ export default function Music() {
   }, [indexedMusic, trendingUiList]);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
-  const [previouslyViewedState, setPreviouslyViewedState] = useState<RecommendedItem[]>([]);
-
+  const [previouslyViewedState, setPreviouslyViewedState] = useState<
+    RecommendedItem[]
+  >([]);
 
   const getAudioKey = (fileUrl: string): string => `Audio-${fileUrl}`;
 
@@ -413,7 +437,10 @@ export default function Music() {
       const isCurrentlyUserSaved = libraryStore.isItemSaved(key);
 
       if (!isCurrentlyUserSaved) {
-        const audioUrl = typeof Audio.fileUrl === "string" ? Audio.fileUrl : (Audio.fileUrl?.uri || "");
+        const audioUrl =
+          typeof Audio.fileUrl === "string"
+            ? Audio.fileUrl
+            : Audio.fileUrl?.uri || "";
         const libraryItem = {
           id: key,
           contentType: "music",
@@ -430,7 +457,7 @@ export default function Music() {
           saved: 1,
           imageUrl: Audio.imageUrl,
           thumbnailUrl: Audio.thumbnailUrl || audioUrl,
-          originalKey: key
+          originalKey: key,
         } as const;
 
         await libraryStore.addToLibrary(libraryItem as any);
@@ -446,7 +473,7 @@ export default function Music() {
           persistStats(updated);
           return updated;
         });
-        
+
         setSuccessMessage("Saved to library!");
         setShowSuccessCard(true);
       } else {
@@ -462,7 +489,7 @@ export default function Music() {
           persistStats(updated);
           return updated;
         });
-        
+
         setSuccessMessage("Removed from library!");
         setShowSuccessCard(true);
       }
@@ -492,13 +519,13 @@ export default function Music() {
   const handleComment = (key: string, item: any) => {
     // Get the content ID for this item
     const contentId = item.contentId || key;
-    
+
     // Get existing comments for this item
     const currentComments = comments[contentId] || [];
     const formattedComments = currentComments.map((comment: any) => ({
       id: comment.id,
-      userName: comment.username || 'Anonymous',
-      avatar: comment.userAvatar || '',
+      userName: comment.username || "Anonymous",
+      avatar: comment.userAvatar || "",
       timestamp: comment.timestamp,
       comment: comment.comment,
       likes: comment.likes || 0,
@@ -512,9 +539,9 @@ export default function Music() {
   const handleDownloadPress = async (item: any) => {
     console.log("🔄 Download button clicked for:", item.title);
     try {
-      const downloadableItem = convertToDownloadableItem(item, 'audio');
+      const downloadableItem = convertToDownloadableItem(item, "audio");
       const result = await handleDownload(downloadableItem);
-      
+
       if (result.success) {
         console.log("✅ Download successful:", result.message);
         setSuccessMessage("Downloaded successfully!");
@@ -534,12 +561,18 @@ export default function Music() {
 
       setAudioStats(stats);
       try {
-        const mapped: RecommendedItem[] = (Array.isArray(viewedAudio) ? viewedAudio : []).map((v: any) => ({
-          title: v.title || '',
-          subTitle: v.subTitle || v.speaker || v.uploadedBy || 'Unknown',
-          imageUrl: v.imageUrl || (v.thumbnailUrl ? { uri: v.thumbnailUrl } : require("../../assets/images/image (10).png")),
+        const mapped: RecommendedItem[] = (
+          Array.isArray(viewedAudio) ? viewedAudio : []
+        ).map((v: any) => ({
+          title: v.title || "",
+          subTitle: v.subTitle || v.speaker || v.uploadedBy || "Unknown",
+          imageUrl:
+            v.imageUrl ||
+            (v.thumbnailUrl
+              ? { uri: v.thumbnailUrl }
+              : require("../../assets/images/image (10).png")),
           views: v.views || 0,
-          audioUrl: v.audioUrl || v.fileUrl || '',
+          audioUrl: v.audioUrl || v.fileUrl || "",
         }));
         setPreviouslyViewedState(mapped);
       } catch {
@@ -568,8 +601,6 @@ export default function Music() {
     };
   }, []);
 
- 
-
   // const allIndexedAudios = uploadedAudios.map((Audio, i) => {
   //   const key = getAudioKey(Audio.fileUrl); // ✅ Stable unique key
 
@@ -594,31 +625,46 @@ export default function Music() {
   //   };
   // });
 
-  const recordViewed = useCallback(async (item: { title: string; subTitle: string; imageUrl: any; views?: number; audioUrl: string; }) => {
-    try {
-      setPreviouslyViewedState((prev) => {
-        const existing = prev.filter((p) => p.audioUrl !== item.audioUrl);
-        const updated = [
-          { ...item, views: (item.views ?? 0) + 1 },
-          ...existing,
-        ].slice(0, 20);
-        // fire and forget persistence
-        persistViewedAudio(updated as any);
-        return updated as any;
-      });
-    } catch (e) {
-      // no-op
-    }
-  }, []);
+  const recordViewed = useCallback(
+    async (item: {
+      title: string;
+      subTitle: string;
+      imageUrl: any;
+      views?: number;
+      audioUrl: string;
+    }) => {
+      try {
+        setPreviouslyViewedState((prev) => {
+          const existing = prev.filter((p) => p.audioUrl !== item.audioUrl);
+          const updated = [
+            { ...item, views: (item.views ?? 0) + 1 },
+            ...existing,
+          ].slice(0, 20);
+          // fire and forget persistence
+          persistViewedAudio(updated as any);
+          return updated as any;
+        });
+      } catch (e) {
+        // no-op
+      }
+    },
+    []
+  );
 
   const playAudio = async (
     uri: string,
     id: string,
-    meta?: { title?: string; subTitle?: string; imageUrl?: any; audioUrl?: string; views?: number }
+    meta?: {
+      title?: string;
+      subTitle?: string;
+      imageUrl?: any;
+      audioUrl?: string;
+      views?: number;
+    }
   ) => {
     if (isLoadingAudio) return;
     setIsLoadingAudio(true);
-  
+
     try {
       // Pause currently playing audio if different
       if (playingId && playingId !== id && soundMap[playingId]) {
@@ -631,12 +677,12 @@ export default function Music() {
           }));
         }
       }
-  
+
       const existingSound = soundMap[id];
-  
+
       if (existingSound) {
         const status = await existingSound.getStatusAsync();
-  
+
         if (status.isLoaded) {
           if (status.isPlaying) {
             const pos = status.positionMillis ?? 0;
@@ -647,7 +693,7 @@ export default function Music() {
             const resumePos = pausedMap[id] ?? 0;
             await existingSound.playFromPositionAsync(resumePos);
             setPlayingId(id);
-  
+
             // Ensure duration is set
             let duration = durationMap[id];
             if (!duration) {
@@ -660,12 +706,12 @@ export default function Music() {
                 }));
               }
             }
-  
+
             setProgressMap((prev) => ({
               ...prev,
               [id]: resumePos / Math.max(duration || 1, 1),
             }));
-  
+
             // ✅ View tracking block
             if (!viewedIds.has(id)) {
               setAudioStats((prevStats) => {
@@ -685,13 +731,14 @@ export default function Music() {
                 recordViewed({
                   title: meta?.title || "",
                   subTitle: meta?.subTitle || "Unknown",
-                  imageUrl: meta?.imageUrl || require("../../assets/images/image (10).png"),
+                  imageUrl:
+                    meta?.imageUrl ||
+                    require("../../assets/images/image (10).png"),
                   views: meta?.views ?? 0,
                   audioUrl: meta?.audioUrl || uri,
                 });
               }
             }
-  
           }
           return;
         } else {
@@ -702,7 +749,7 @@ export default function Music() {
           });
         }
       }
-  
+
       const resumePos = pausedMap[id] ?? 0;
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri },
@@ -712,10 +759,10 @@ export default function Music() {
           positionMillis: resumePos,
         }
       );
-  
+
       setSoundMap((prev) => ({ ...prev, [id]: newSound }));
       setPlayingId(id);
-  
+
       // ✅ View tracking block
       if (!viewedIds.has(id)) {
         setAudioStats((prevStats) => {
@@ -735,15 +782,19 @@ export default function Music() {
           recordViewed({
             title: meta?.title || "",
             subTitle: meta?.subTitle || "Unknown",
-            imageUrl: meta?.imageUrl || require("../../assets/images/image (10).png"),
+            imageUrl:
+              meta?.imageUrl || require("../../assets/images/image (10).png"),
             views: meta?.views ?? 0,
             audioUrl: meta?.audioUrl || uri,
           });
         }
       }
-  
+
       const initialStatus = await newSound.getStatusAsync();
-      if (initialStatus.isLoaded && typeof initialStatus.durationMillis === 'number') {
+      if (
+        initialStatus.isLoaded &&
+        typeof initialStatus.durationMillis === "number"
+      ) {
         const safeDuration = initialStatus.durationMillis || 1;
         setDurationMap((prev) => ({
           ...prev,
@@ -755,9 +806,10 @@ export default function Music() {
           [id]: resumePos / safeDuration,
         }));
       }
-  
+
       newSound.setOnPlaybackStatusUpdate(async (status) => {
-        if (!status.isLoaded || typeof status.durationMillis !== 'number') return;
+        if (!status.isLoaded || typeof status.durationMillis !== "number")
+          return;
         const safeDuration = status.durationMillis || 1;
 
         setProgressMap((prev) => ({
@@ -769,12 +821,12 @@ export default function Music() {
           ...prev,
           [id]: safeDuration,
         }));
-  
+
         if (status.didJustFinish) {
           setPlayingId(null);
           setProgressMap((prev) => ({ ...prev, [id]: 0 }));
           setPausedMap((prev) => ({ ...prev, [id]: 0 }));
-  
+
           await newSound.unloadAsync();
           setSoundMap((prev) => {
             const updated = { ...prev };
@@ -789,31 +841,26 @@ export default function Music() {
       setIsLoadingAudio(false);
     }
   };
-  
-  
-  
 
-
-const stopAudio = useCallback(async () => {
-  if (playingId && soundMap[playingId]) {
-    await soundMap[playingId].stopAsync();
-    await soundMap[playingId].unloadAsync();
-    setSoundMap((prev) => {
-      const updated = { ...prev };
-      delete updated[playingId];
-      return updated;
-    });
-    setPlayingId(null);
-  }
-}, [playingId, soundMap]);
-// ✅ 2. Then register it inside useEffect (AFTER the function is declared)
-useEffect(() => {
-  useMediaStore.getState().setStopAudioFn(stopAudio);
-  return () => {
-    useMediaStore.getState().clearStopAudioFn();
-  };
-}, [stopAudio]);
-
+  const stopAudio = useCallback(async () => {
+    if (playingId && soundMap[playingId]) {
+      await soundMap[playingId].stopAsync();
+      await soundMap[playingId].unloadAsync();
+      setSoundMap((prev) => {
+        const updated = { ...prev };
+        delete updated[playingId];
+        return updated;
+      });
+      setPlayingId(null);
+    }
+  }, [playingId, soundMap]);
+  // ✅ 2. Then register it inside useEffect (AFTER the function is declared)
+  useEffect(() => {
+    useMediaStore.getState().setStopAudioFn(stopAudio);
+    return () => {
+      useMediaStore.getState().clearStopAudioFn();
+    };
+  }, [stopAudio]);
 
   useEffect(() => {
     const loadPersistedData = async () => {
@@ -903,14 +950,13 @@ useEffect(() => {
         >
           <View className="w-full h-[393px] overflow-hidden relative">
             {(() => {
-              const coverSource =
-                Audio?.thumbnailUrl
-                  ? { uri: Audio.thumbnailUrl }
-                  : Audio?.imageUrl
-                  ? (typeof Audio.imageUrl === "string"
-                      ? { uri: Audio.imageUrl }
-                      : Audio.imageUrl)
-                  : undefined;
+              const coverSource = Audio?.thumbnailUrl
+                ? { uri: Audio.thumbnailUrl }
+                : Audio?.imageUrl
+                ? typeof Audio.imageUrl === "string"
+                  ? { uri: Audio.imageUrl }
+                  : Audio.imageUrl
+                : undefined;
               return (
                 <Image
                   source={
@@ -936,8 +982,24 @@ useEffect(() => {
             {playType === "progress" ? (
               <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-2">
                 <TouchableOpacity
-                 onPress={() => playAudio(audioUri, modalKey, { title: Audio.title, subTitle: getUserDisplayNameFromContent(Audio), imageUrl: (() => { const coverSource = Audio?.thumbnailUrl ? { uri: Audio.thumbnailUrl } : (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? { uri: Audio.imageUrl } : Audio.imageUrl) : require("../../assets/images/image (10).png")); return coverSource; })(), audioUrl: audioUri, views: stats.views ?? Audio.views ?? 0, })}
-
+                  onPress={() =>
+                    playAudio(audioUri, modalKey, {
+                      title: Audio.title,
+                      subTitle: getUserDisplayNameFromContent(Audio),
+                      imageUrl: (() => {
+                        const coverSource = Audio?.thumbnailUrl
+                          ? { uri: Audio.thumbnailUrl }
+                          : Audio?.imageUrl
+                          ? typeof Audio.imageUrl === "string"
+                            ? { uri: Audio.imageUrl }
+                            : Audio.imageUrl
+                          : require("../../assets/images/image (10).png");
+                        return coverSource;
+                      })(),
+                      audioUrl: audioUri,
+                      views: stats.views ?? Audio.views ?? 0,
+                    })
+                  }
                   className="mr-2"
                 >
                   <Ionicons
@@ -989,8 +1051,24 @@ useEffect(() => {
             ) : (
               <View className="absolute inset-0 justify-center items-center">
                 <TouchableOpacity
-                 onPress={() => playAudio(audioUri, modalKey, { title: Audio.title, subTitle: getUserDisplayNameFromContent(Audio), imageUrl: (() => { const coverSource = Audio?.thumbnailUrl ? { uri: Audio.thumbnailUrl } : (Audio?.imageUrl ? (typeof Audio.imageUrl === "string" ? { uri: Audio.imageUrl } : Audio.imageUrl) : require("../../assets/images/image (10).png")); return coverSource; })(), audioUrl: audioUri, views: stats.views ?? Audio.views ?? 0, })}
-
+                  onPress={() =>
+                    playAudio(audioUri, modalKey, {
+                      title: Audio.title,
+                      subTitle: getUserDisplayNameFromContent(Audio),
+                      imageUrl: (() => {
+                        const coverSource = Audio?.thumbnailUrl
+                          ? { uri: Audio.thumbnailUrl }
+                          : Audio?.imageUrl
+                          ? typeof Audio.imageUrl === "string"
+                            ? { uri: Audio.imageUrl }
+                            : Audio.imageUrl
+                          : require("../../assets/images/image (10).png");
+                        return coverSource;
+                      })(),
+                      audioUrl: audioUri,
+                      views: stats.views ?? Audio.views ?? 0,
+                    })
+                  }
                   className="bg-white/70 p-2 rounded-full"
                 >
                   <Ionicons
@@ -1002,154 +1080,207 @@ useEffect(() => {
               </View>
             )}
 
+            {modalVisible === modalKey && (
+              <>
+                <TouchableWithoutFeedback onPress={closeAllMenus}>
+                  <View className="absolute inset-0 z-40" />
+                </TouchableWithoutFeedback>
 
-       
-
-          
-{modalVisible === modalKey && (
-          <>
-            <TouchableWithoutFeedback onPress={closeAllMenus}>
-              <View className="absolute inset-0 z-40" />
-            </TouchableWithoutFeedback>
-            
-            {/* ✅ Modal content positioned over the video area */}
-            <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
-              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
-                <MaterialIcons name="visibility" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleShare(modalKey, Audio)}
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
-                <Feather name="send" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-row items-center justify-between mt-6" onPress={() => handleSave(modalKey, Audio)}>
-                <Text className="text-[#1D2939] font-rubik ml-2">{isItemSaved ? "Remove from Library" : "Save to Library"}</Text>
-                <MaterialIcons
-                  name={isItemSaved ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color="#1D2939"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
-                onPress={async () => {
-                  const downloadableItem = convertToDownloadableItem(Audio, 'audio');
-                  const result = await handleDownload(downloadableItem);
-                  if (result.success) {
-                    setModalVisible(null);
-                    setSuccessMessage("Downloaded successfully!");
-                    setShowSuccessCard(true);
-                  }
-                }}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  {checkIfDownloaded(Audio._id || Audio.fileUrl) ? "Downloaded" : "Download"}
-                </Text>
-                <Ionicons 
-                  name={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                  size={24} 
-                  color={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "#256E63" : "#090E24"} 
-                />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+                {/* ✅ Modal content positioned over the video area */}
+                <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
+                  <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
+                    <Text className="text-[#1D2939] font-rubik ml-2">
+                      View Details
+                    </Text>
+                    <MaterialIcons
+                      name="visibility"
+                      size={22}
+                      color="#1D2939"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleShare(modalKey, Audio)}
+                    className="py-2 border-b border-gray-200 flex-row items-center justify-between"
+                  >
+                    <Text className="text-[#1D2939] font-rubik ml-2">
+                      Share
+                    </Text>
+                    <Feather name="send" size={22} color="#1D2939" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-row items-center justify-between mt-6"
+                    onPress={() => handleSave(modalKey, Audio)}
+                  >
+                    <Text className="text-[#1D2939] font-rubik ml-2">
+                      {isItemSaved ? "Remove from Library" : "Save to Library"}
+                    </Text>
+                    <MaterialIcons
+                      name={isItemSaved ? "bookmark" : "bookmark-border"}
+                      size={22}
+                      color="#1D2939"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
+                    onPress={async () => {
+                      const downloadableItem = convertToDownloadableItem(
+                        Audio,
+                        "audio"
+                      );
+                      const result = await handleDownload(downloadableItem);
+                      if (result.success) {
+                        setModalVisible(null);
+                        setSuccessMessage("Downloaded successfully!");
+                        setShowSuccessCard(true);
+                      }
+                    }}
+                  >
+                    <Text className="text-[#1D2939] font-rubik ml-2">
+                      {checkIfDownloaded(Audio._id || Audio.fileUrl)
+                        ? "Downloaded"
+                        : "Download"}
+                    </Text>
+                    <Ionicons
+                      name={
+                        checkIfDownloaded(Audio._id || Audio.fileUrl)
+                          ? "checkmark-circle"
+                          : "download-outline"
+                      }
+                      size={24}
+                      color={
+                        checkIfDownloaded(Audio._id || Audio.fileUrl)
+                          ? "#256E63"
+                          : "#090E24"
+                      }
+                    />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
 
           <View className="flex-row items-center justify-between mt-1 px-3 mb-4">
-          <View className="flex flex-row items-center">
-            <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
-              <Image
-                source={getUserAvatarFromContent(Audio)}
-                style={{ width: 30, height: 30, borderRadius: 999 }}
-                resizeMode="cover"
-              />
-            </View>
-            <View className="ml-3">
-              <View className="flex-row items-center">
-                <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getUserDisplayNameFromContent(Audio)}
-                </Text>
-                <View className="flex flex-row mt-2 ml-2">
-                  <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {Audio.timeAgo}
+            <View className="flex flex-row items-center">
+              <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
+                <Image
+                  source={getUserAvatarFromContent(Audio)}
+                  style={{ width: 30, height: 30, borderRadius: 999 }}
+                  resizeMode="cover"
+                />
+              </View>
+              <View className="ml-3">
+                <View className="flex-row items-center">
+                  <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
+                    {getUserDisplayNameFromContent(Audio)}
                   </Text>
+                  <View className="flex flex-row mt-2 ml-2">
+                    <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                      {Audio.timeAgo}
+                    </Text>
+                  </View>
+                </View>
+                <View className="flex-row mt-2 items-center justify-between">
+                  <View className="flex-row items-center mr-6">
+                    <MaterialIcons
+                      name="visibility"
+                      size={28}
+                      color="#98A2B3"
+                    />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                      {(() => {
+                        const displayViews = stats.views ?? Audio.views ?? 0;
+                        console.log(`👁️ Displaying views for ${Audio.title}:`, {
+                          "stats.views": stats.views,
+                          "Audio.views": Audio.views,
+                          displayViews: displayViews,
+                          modalKey: modalKey,
+                          "AudioStats[modalKey]": AudioStats[modalKey],
+                        });
+                        return displayViews;
+                      })()}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleFavorite(modalKey, Audio)}
+                    className="flex-row items-center mr-6"
+                  >
+                    <MaterialIcons
+                      name={
+                        userFavorites?.[modalKey]
+                          ? "favorite"
+                          : "favorite-border"
+                      }
+                      size={28}
+                      color={userFavorites?.[modalKey] ? "#D22A2A" : "#98A2B3"}
+                    />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                      {globalFavoriteCounts?.[modalKey] || 0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-row items-center mr-6"
+                    onPress={() => handleComment(modalKey, Audio)}
+                  >
+                    <CommentIcon
+                      comments={[]}
+                      size={28}
+                      color="#98A2B3"
+                      showCount={true}
+                      count={
+                        stats.comment === 1
+                          ? (Audio.comment ?? 0) + 1
+                          : Audio.comment ?? 0
+                      }
+                      layout="horizontal"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleSave(modalKey, Audio)}
+                    className="flex-row items-center mr-6"
+                  >
+                    <MaterialIcons
+                      name={isItemSaved ? "bookmark" : "bookmark-border"}
+                      size={28}
+                      color={isItemSaved ? "#FEA74E" : "#98A2B3"}
+                    />
+                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                      {(AudioStats[modalKey] as any)?.totalSaves ||
+                        Audio.saved ||
+                        0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-row items-center"
+                    onPress={() => handleDownloadPress(Audio)}
+                  >
+                    <Ionicons
+                      name={
+                        checkIfDownloaded(Audio._id || Audio.fileUrl)
+                          ? "checkmark-circle"
+                          : "download-outline"
+                      }
+                      size={28}
+                      color={
+                        checkIfDownloaded(Audio._id || Audio.fileUrl)
+                          ? "#256E63"
+                          : "#98A2B3"
+                      }
+                    />
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View className="flex-row mt-2 items-center justify-between">
-                <View className="flex-row items-center mr-6">
-                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {(() => {
-                      const displayViews = stats.views ?? Audio.views ?? 0;
-                      console.log(`👁️ Displaying views for ${Audio.title}:`, {
-                        "stats.views": stats.views,
-                        "Audio.views": Audio.views,
-                        "displayViews": displayViews,
-                        "modalKey": modalKey,
-                        "AudioStats[modalKey]": AudioStats[modalKey]
-                      });
-                      return displayViews;
-                    })()}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => handleFavorite(modalKey, Audio)} className="flex-row items-center mr-6">
-                  <MaterialIcons
-                    name={userFavorites?.[modalKey] ? "favorite" : "favorite-border"}
-                    size={28}
-                    color={userFavorites?.[modalKey] ? "#D22A2A" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {globalFavoriteCounts?.[modalKey] || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="flex-row items-center mr-6"
-                  onPress={() => handleComment(modalKey, Audio)}
-                >
-                  <CommentIcon 
-                    comments={[]}
-                    size={28}
-                    color="#98A2B3"
-                    showCount={true}
-                    count={stats.comment === 1 ? (Audio.comment ?? 0) + 1 : Audio.comment ?? 0}
-                    layout="horizontal"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleSave(modalKey, Audio)} className="flex-row items-center mr-6">
-                  <MaterialIcons
-                    name={isItemSaved ? "bookmark" : "bookmark-border"}
-                    size={28}
-                    color={isItemSaved ? "#FEA74E" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {(AudioStats[modalKey] as any)?.totalSaves || Audio.saved || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="flex-row items-center"
-                  onPress={() => handleDownloadPress(Audio)}
-                >
-                  <Ionicons 
-                    name={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                    size={28} 
-                    color={checkIfDownloaded(Audio._id || Audio.fileUrl) ? "#256E63" : "#98A2B3"} 
-                  />
-                </TouchableOpacity>
-              </View>
             </View>
+            <TouchableOpacity
+              onPress={() => {
+                closeAllMenus();
+                setModalVisible(modalVisible === modalKey ? null : modalKey);
+              }}
+              className="mr-2"
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={() => { closeAllMenus(); setModalVisible(modalVisible === modalKey ? null : modalKey); }}
-            className="mr-2"
-          >
-            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
         </TouchableOpacity>
       </View>
     );
@@ -1232,10 +1363,13 @@ useEffect(() => {
                   </Text>
                   <MaterialIcons name="library-add" size={18} color="#3A3E50" />
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   className="py-2 flex-row items-center justify-between"
                   onPress={async () => {
-                    const downloadableItem = convertToDownloadableItem(item, 'audio');
+                    const downloadableItem = convertToDownloadableItem(
+                      item,
+                      "audio"
+                    );
                     const result = await handleDownload(downloadableItem);
                     if (result.success) {
                       setModalIndex(null);
@@ -1247,12 +1381,22 @@ useEffect(() => {
                   }}
                 >
                   <Text className="text-[#1D2939] font-rubik ml-2">
-                    {checkIfDownloaded(item._id || item.audioUrl) ? "Downloaded" : "Download"}
+                    {checkIfDownloaded(item._id || item.audioUrl)
+                      ? "Downloaded"
+                      : "Download"}
                   </Text>
-                  <Ionicons 
-                    name={checkIfDownloaded(item._id || item.audioUrl) ? "checkmark-circle" : "download-outline"} 
-                    size={16} 
-                    color={checkIfDownloaded(item._id || item.audioUrl) ? "#256E63" : "#3A3E50"} 
+                  <Ionicons
+                    name={
+                      checkIfDownloaded(item._id || item.audioUrl)
+                        ? "checkmark-circle"
+                        : "download-outline"
+                    }
+                    size={16}
+                    color={
+                      checkIfDownloaded(item._id || item.audioUrl)
+                        ? "#256E63"
+                        : "#3A3E50"
+                    }
                   />
                 </TouchableOpacity>
               </View>
@@ -1280,7 +1424,7 @@ useEffect(() => {
                 </TouchableOpacity>
               </View>
               <View className="flex-row items-center">
-              <MaterialIcons name="visibility" size={24} color="#98A2B3" />
+                <MaterialIcons name="visibility" size={24} color="#98A2B3" />
                 <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
                   {item.views}
                 </Text>
@@ -1306,220 +1450,212 @@ useEffect(() => {
         onScrollBeginDrag={() => setModalVisible(null)}
         onTouchStart={() => setModalVisible(null)}
       >
-      {/* 1. Most Recent */}
-      {musicItems.length > 0 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            Most Recent
-          </Text>
-          {renderAudioCard(
-            {
-              fileUrl:
-                typeof musicItems[0].fileUrl === "string"
-                  ? { uri: musicItems[0].fileUrl }
-                  : musicItems[0].fileUrl,
-              thumbnailUrl: musicItems[0]?.thumbnailUrl,
-              imageUrl:
-                musicItems[0]?.imageUrl
-                  ? (typeof musicItems[0].imageUrl === "string"
-                      ? { uri: musicItems[0].imageUrl }
-                      : musicItems[0].imageUrl)
+        {/* 1. Most Recent */}
+        {musicItems.length > 0 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              Most Recent
+            </Text>
+            {renderAudioCard(
+              {
+                fileUrl:
+                  typeof musicItems[0].fileUrl === "string"
+                    ? { uri: musicItems[0].fileUrl }
+                    : musicItems[0].fileUrl,
+                thumbnailUrl: musicItems[0]?.thumbnailUrl,
+                imageUrl: musicItems[0]?.imageUrl
+                  ? typeof musicItems[0].imageUrl === "string"
+                    ? { uri: musicItems[0].imageUrl }
+                    : musicItems[0].imageUrl
                   : undefined,
-              title: musicItems[0].title,
-              speaker: musicItems[0].speaker ?? "Uploaded Speaker",
-              timeAgo: getTimeAgo(musicItems[0].createdAt),
-              speakerAvatar:
-                typeof musicItems[0].speakerAvatar === "string"
-                  ? { uri: musicItems[0].speakerAvatar }
-                  : musicItems[0].speakerAvatar ||
-                    require("../../assets/images/Avatar-1.png"),
-              favorite: musicItems[0].favorite ?? 0,
-              views: musicItems[0].viewCount ?? 0,
-              saved: musicItems[0].saved ?? 0,
-              sheared: musicItems[0].sheared ?? 0,
-            },
-            0,
-            `uploaded-recent-${musicItems[0]._id ?? "0"}`,
-            "progress"
+                title: musicItems[0].title,
+                speaker: musicItems[0].speaker ?? "Uploaded Speaker",
+                timeAgo: getTimeAgo(musicItems[0].createdAt),
+                speakerAvatar:
+                  typeof musicItems[0].speakerAvatar === "string"
+                    ? { uri: musicItems[0].speakerAvatar }
+                    : musicItems[0].speakerAvatar ||
+                      require("../../assets/images/Avatar-1.png"),
+                favorite: musicItems[0].favorite ?? 0,
+                views: musicItems[0].viewCount ?? 0,
+                saved: musicItems[0].saved ?? 0,
+                sheared: musicItems[0].sheared ?? 0,
+              },
+              0,
+              `uploaded-recent-${musicItems[0]._id ?? "0"}`,
+              "progress"
+            )}
+          </>
+        )}
+
+        {/* 2. Previously Viewed */}
+        {renderMiniCards(
+          "Previously Viewed",
+          previouslyViewedState,
+          pvModalIndex,
+          setPvModalIndex
+        )}
+
+        {/* 3. Explore More Music */}
+        {musicItems.length > 1 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
+              Explore More Music
+            </Text>
+            <View className="gap-8">
+              {musicItems.slice(1, 5).map((audio, index) => (
+                <View key={`ExploreMoreFirst-${audio._id}-${index}`}>
+                  {renderAudioCard(
+                    {
+                      fileUrl: { uri: audio.fileUrl },
+                      thumbnailUrl: audio?.thumbnailUrl,
+                      imageUrl: audio?.imageUrl
+                        ? typeof audio.imageUrl === "string"
+                          ? { uri: audio.imageUrl }
+                          : audio.imageUrl
+                        : undefined,
+                      title: audio.title,
+                      speaker: audio.speaker ?? "Uploaded Speaker",
+                      timeAgo: getTimeAgo(audio.createdAt),
+                      speakerAvatar:
+                        typeof audio.speakerAvatar === "string"
+                          ? { uri: audio.speakerAvatar }
+                          : audio.speakerAvatar ||
+                            require("../../assets/images/Avatar-1.png"),
+                      favorite: audio.favorite ?? 0,
+                      views: audio.viewCount ?? 0,
+                      saved: audio.saved ?? 0,
+                      sheared: audio.sheared ?? 0,
+                    },
+                    index,
+                    `exploreMoreFirst-${index}`,
+                    "center"
+                  )}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* 4. Trending Now */}
+        {trendingUiList.length > 0 ? (
+          renderMiniCards(
+            `Trending Now • ${trendingUiList.length} audio`,
+            trendingUiList,
+            rsModalIndex,
+            setRsModalIndex
+          )
+        ) : (
+          <View className="mt-5 mb-4">
+            <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+              Trending Now
+            </Text>
+            <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
+              <Text className="text-[32px] mb-2">📈</Text>
+              <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
+                No trending music yet
+              </Text>
+              <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
+                Keep engaging with content to see trending music here
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* 5. Exploring More */}
+        {musicItems.length > 5 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              Exploring More
+            </Text>
+            <View className="gap-8">
+              {musicItems.slice(5, 9).map((audio, index) => (
+                <View key={`ExploreMoreSecond-${audio._id}-${index}`}>
+                  {renderAudioCard(
+                    {
+                      fileUrl: { uri: audio.fileUrl },
+                      thumbnailUrl: audio?.thumbnailUrl,
+                      imageUrl: audio?.imageUrl
+                        ? typeof audio.imageUrl === "string"
+                          ? { uri: audio.imageUrl }
+                          : audio.imageUrl
+                        : undefined,
+                      title: audio.title,
+                      speaker: audio.speaker ?? "Uploaded Speaker",
+                      timeAgo: getTimeAgo(audio.createdAt),
+                      speakerAvatar:
+                        typeof audio.speakerAvatar === "string"
+                          ? { uri: audio.speakerAvatar }
+                          : audio.speakerAvatar ||
+                            require("../../assets/images/Avatar-1.png"),
+                      favorite: audio.favorite ?? 0,
+                      views: audio.viewCount ?? 0,
+                      saved: audio.saved ?? 0,
+                      sheared: audio.sheared ?? 0,
+                    },
+                    index,
+                    `exploreMoreSecond-${index}`,
+                    "center"
+                  )}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* 6. Recommended for You */}
+        {recommendedMusic.length > 0 &&
+          renderMiniCards(
+            `Recommended for You • ${recommendedMusic.length} audio`,
+            recommendedMusic,
+            recModalIndex,
+            setRecModalIndex
           )}
-        </>
-      )}
 
-      {/* 2. Previously Viewed */}
-      {renderMiniCards(
-        "Previously Viewed",
-        previouslyViewedState,
-        pvModalIndex,
-        setPvModalIndex
-      )}
-
-      {/* 3. Explore More Music */}
-      {musicItems.length > 1 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
-            Explore More Music
-          </Text>
-          <View className="gap-8">
-            {musicItems.slice(1, 5).map((audio, index) => (
-              <View key={`ExploreMoreFirst-${audio._id}-${index}`}>
-                {renderAudioCard(
-                  {
-                    fileUrl: { uri: audio.fileUrl },
-                    thumbnailUrl: audio?.thumbnailUrl,
-                    imageUrl:
-                      audio?.imageUrl
-                        ? (typeof audio.imageUrl === "string"
-                            ? { uri: audio.imageUrl }
-                            : audio.imageUrl)
-                        : undefined,
-                    title: audio.title,
-                    speaker: audio.speaker ?? "Uploaded Speaker",
-                    timeAgo: getTimeAgo(audio.createdAt),
-                    speakerAvatar:
-                      typeof audio.speakerAvatar === "string"
-                        ? { uri: audio.speakerAvatar }
-                        : audio.speakerAvatar ||
-                          require("../../assets/images/Avatar-1.png"),
-                    favorite: audio.favorite ?? 0,
-                    views: audio.viewCount ?? 0,
-                    saved: audio.saved ?? 0,
-                    sheared: audio.sheared ?? 0,
-                  },
-                  index,
-                  `exploreMoreFirst-${index}`,
-                  "center"
-                )}
-              </View>
-            ))}
-          </View>
-        </>
-      )}
-
-      {/* 4. Trending Now */}
-      {trendingUiList.length > 0 ? (
-        renderMiniCards(
-          `Trending Now • ${trendingUiList.length} audio`,
-          trendingUiList,
-          rsModalIndex,
-          setRsModalIndex
-        )
-      ) : (
-        <View className="mt-5 mb-4">
-          <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
-            Trending Now
-          </Text>
-          <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
-            <Text className="text-[32px] mb-2">📈</Text>
-            <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
-              No trending music yet
+        {/* 7. More Music */}
+        {musicItems.length > 9 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              More Music
             </Text>
-            <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
-              Keep engaging with content to see trending music here
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* 5. Exploring More */}
-      {musicItems.length > 5 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            Exploring More
-          </Text>
-          <View className="gap-8">
-            {musicItems.slice(5, 9).map((audio, index) => (
-              <View key={`ExploreMoreSecond-${audio._id}-${index}`}>
-                {renderAudioCard(
-                  {
-                    fileUrl: { uri: audio.fileUrl },
-                    thumbnailUrl: audio?.thumbnailUrl,
-                    imageUrl:
-                      audio?.imageUrl
-                        ? (typeof audio.imageUrl === "string"
-                            ? { uri: audio.imageUrl }
-                            : audio.imageUrl)
+            <View className="gap-8">
+              {musicItems.slice(9).map((audio, index) => (
+                <View key={`ExploreMoreRest-${audio._id}-${index}`}>
+                  {renderAudioCard(
+                    {
+                      fileUrl: { uri: audio.fileUrl },
+                      thumbnailUrl: audio?.thumbnailUrl,
+                      imageUrl: audio?.imageUrl
+                        ? typeof audio.imageUrl === "string"
+                          ? { uri: audio.imageUrl }
+                          : audio.imageUrl
                         : undefined,
-                    title: audio.title,
-                    speaker: audio.speaker ?? "Uploaded Speaker",
-                    timeAgo: getTimeAgo(audio.createdAt),
-                    speakerAvatar:
-                      typeof audio.speakerAvatar === "string"
-                        ? { uri: audio.speakerAvatar }
-                        : audio.speakerAvatar ||
-                          require("../../assets/images/Avatar-1.png"),
-                    favorite: audio.favorite ?? 0,
-                    views: audio.viewCount ?? 0,
-                    saved: audio.saved ?? 0,
-                    sheared: audio.sheared ?? 0,
-                  },
-                  index,
-                  `exploreMoreSecond-${index}`,
-                  "center"
-                )}
-              </View>
-            ))}
-          </View>
-        </>
-      )}
+                      title: audio.title,
+                      speaker: audio.speaker ?? "Uploaded Speaker",
+                      timeAgo: getTimeAgo(audio.createdAt),
+                      speakerAvatar:
+                        typeof audio.speakerAvatar === "string"
+                          ? { uri: audio.speakerAvatar }
+                          : audio.speakerAvatar ||
+                            require("../../assets/images/Avatar-1.png"),
+                      favorite: audio.favorite ?? 0,
+                      views: audio.viewCount ?? 0,
+                      saved: audio.saved ?? 0,
+                      sheared: audio.sheared ?? 0,
+                    },
+                    index,
+                    `exploreMoreRest-${index}`,
+                    "center"
+                  )}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
-      {/* 6. Recommended for You */}
-      {recommendedMusic.length > 0 && (
-        renderMiniCards(
-          `Recommended for You • ${recommendedMusic.length} audio`,
-          recommendedMusic,
-          recModalIndex,
-          setRecModalIndex
-        )
-      )}
-
-      {/* 7. More Music */}
-      {musicItems.length > 9 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            More Music
-          </Text>
-          <View className="gap-8">
-            {musicItems.slice(9).map((audio, index) => (
-              <View key={`ExploreMoreRest-${audio._id}-${index}`}>
-                {renderAudioCard(
-                  {
-                    fileUrl: { uri: audio.fileUrl },
-                    thumbnailUrl: audio?.thumbnailUrl,
-                    imageUrl:
-                      audio?.imageUrl
-                        ? (typeof audio.imageUrl === "string"
-                            ? { uri: audio.imageUrl }
-                            : audio.imageUrl)
-                        : undefined,
-                    title: audio.title,
-                    speaker: audio.speaker ?? "Uploaded Speaker",
-                    timeAgo: getTimeAgo(audio.createdAt),
-                    speakerAvatar:
-                      typeof audio.speakerAvatar === "string"
-                        ? { uri: audio.speakerAvatar }
-                        : audio.speakerAvatar ||
-                          require("../../assets/images/Avatar-1.png"),
-                    favorite: audio.favorite ?? 0,
-                    views: audio.viewCount ?? 0,
-                    saved: audio.saved ?? 0,
-                    sheared: audio.sheared ?? 0,
-                  },
-                  index,
-                  `exploreMoreRest-${index}`,
-                  "center"
-                )}
-              </View>
-            ))}
-          </View>
-        </>
-      )}
-
-      {/* Bottom spacing to ensure last card footer is fully visible */}
-      <View className="h-20" />
+        {/* Bottom spacing to ensure last card footer is fully visible */}
+        <View className="h-20" />
       </ScrollView>
     </View>
   );
 }
-
-
-  

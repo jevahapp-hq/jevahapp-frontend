@@ -1,16 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
-    useContentCount,
-    useUserInteraction,
+  useContentCount,
+  useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -18,9 +18,9 @@ import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
 } from "../../../shared/utils";
 
 export const EbookCard: React.FC<EbookCardProps> = ({
@@ -140,7 +140,11 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
               router.push({
                 pathname: "/reader/PdfViewer",
-                params: { url: pdfUrl, title: ebook.title },
+                params: {
+                  url: pdfUrl,
+                  title: ebook.title,
+                  desc: (ebook as any)?.description || "",
+                },
               });
             }
           } catch {}

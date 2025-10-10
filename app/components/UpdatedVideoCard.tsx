@@ -24,6 +24,9 @@ import {
 import { useThreadSafeVideo } from "../utils/videoPlayerUtils";
 import CommentsModal from "./CommentsModal";
 import InteractionButtons from "./InteractionButtons";
+import BaseVideoCard from "./media/BaseVideoCard";
+import PlayOverlay from "./media/PlayOverlay";
+import TypeBadge from "./media/TypeBadge";
 
 interface VideoCardProps {
   video: {
@@ -110,10 +113,35 @@ export default function UpdatedVideoCard({
 
   const togglePlay = async () => {
     try {
-      // ✅ Use global video management - this will pause all other videos across all components
+      // Preferred: global control to pause others and play this
       globalVideoStore.playVideoGlobally(videoKey);
+
+      // Fallback: if playback doesn't start shortly, attempt direct play
+      setTimeout(async () => {
+        try {
+          const status: any = await videoRef.current?.getStatusAsync?.();
+          if (!status?.isLoaded) {
+            await videoRef.current?.loadAsync(
+              { uri: video.fileUrl || "" },
+              { shouldPlay: true }
+            );
+            return;
+          }
+          if (!status?.isPlaying) {
+            await videoRef.current?.playAsync?.();
+          }
+        } catch (e) {
+          // last-resort attempt
+          try {
+            await videoRef.current?.playAsync?.();
+          } catch {}
+        }
+      }, 150);
     } catch (error) {
       console.error("Error toggling video playback:", error);
+      try {
+        await videoRef.current?.playAsync?.();
+      } catch {}
     }
   };
 
@@ -132,7 +160,7 @@ export default function UpdatedVideoCard({
   const userDisplayName = getUserDisplayNameFromContent(video);
 
   return (
-    <View className="mb-6 bg-white rounded-lg overflow-hidden">
+    <BaseVideoCard className="mb-6">
       {/* Video Player Section */}
       <View className="relative">
         <TouchableOpacity
@@ -149,16 +177,30 @@ export default function UpdatedVideoCard({
             shouldPlay={isPlaying}
             useNativeControls={false}
             onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+            posterSource={
+              video.imageUrl
+                ? typeof video.imageUrl === "string"
+                  ? { uri: video.imageUrl }
+                  : (video.imageUrl as any)
+                : undefined
+            }
           />
 
           {/* Play Button Overlay */}
           {!isPlaying && showOverlay && (
-            <View className="absolute inset-0 justify-center items-center">
-              <View className="bg-white/70 p-4 rounded-full">
-                <Ionicons name="play" size={32} color="#FEA74E" />
-              </View>
-            </View>
+            <PlayOverlay isPlaying={false} onPress={togglePlay} />
           )}
+
+          {/* Content Type Badge */}
+          <TypeBadge
+            type={
+              (contentType.includes("video")
+                ? "video"
+                : contentType.includes("sermon")
+                ? "sermon"
+                : "audio") as any
+            }
+          />
 
           {/* Interaction Buttons (only in modal view) */}
           {isModalView && (
@@ -314,7 +356,7 @@ export default function UpdatedVideoCard({
         contentId={contentId}
         contentTitle={video.title}
       />
-    </View>
+    </BaseVideoCard>
   );
 }
 

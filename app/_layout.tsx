@@ -7,10 +7,10 @@ import {
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
-import { Slot } from "expo-router";
+import { Slot, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { Alert, BackHandler, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import CommentModalV2 from "./components/CommentModalV2";
@@ -18,6 +18,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
+import { useAuth } from "./hooks/useAuth";
 import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
@@ -75,6 +76,7 @@ const tokenCache = {
 };
 
 export default function RootLayout() {
+  const router = useRouter();
   const [fontsLoaded] = useFonts({
     Rubik_400Regular,
     Rubik_600SemiBold,
@@ -105,6 +107,7 @@ export default function RootLayout() {
     (state) => state.loadDownloadedItems
   );
   const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
+  const { signOut } = useAuth();
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -149,7 +152,7 @@ export default function RootLayout() {
 
         // Preload critical data for better performance
         try {
-          await PerformanceOptimizer.preloadCriticalData();
+          await PerformanceOptimizer.getInstance().preloadCriticalData();
           console.log("✅ Critical data preloaded successfully");
         } catch (preloadErr) {
           console.warn(
@@ -177,6 +180,30 @@ export default function RootLayout() {
     loadSavedItems,
     isInitialized,
   ]);
+
+  // Intercept Android hardware back to confirm logout instead of exiting app
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const handler = () => {
+      Alert.alert("Logout?", "Do you want to logout and exit?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await signOut();
+              // Navigate to auth screen or root
+              router.replace("/auth/login");
+            } catch {}
+          },
+        },
+      ]);
+      return true; // prevent default exit
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", handler);
+    return () => sub.remove();
+  }, [router, signOut]);
 
   // ✅ Fonts not loaded
   if (!fontsLoaded) {

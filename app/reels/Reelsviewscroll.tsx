@@ -16,15 +16,17 @@ import {
   View,
 } from "react-native";
 
-import BottomNav from "../components/BottomNav";
+import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import CommentModalV2 from "../components/CommentModalV2";
 import ErrorBoundary from "../components/ErrorBoundary";
+import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useReelsStore } from "../store/useReelsStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
+import { navigateMainTab } from "../utils/navigation";
 import {
   getFavoriteState,
   getPersistedStats,
@@ -92,6 +94,37 @@ export default function Reelsviewscroll() {
   const isLargeScreen = screenHeight >= 800;
   const isIOS = Platform.OS === "ios";
   const isAndroid = Platform.OS === "android";
+
+  // Ensure we always have data to render even if network fails
+  const hasList =
+    Array.isArray(reelsStore.videoList) && reelsStore.videoList.length > 0;
+  useEffect(() => {
+    if (!hasList) {
+      // Provide a minimal fallback so UI doesn't go black
+      reelsStore.setVideoList([
+        {
+          _id: "fallback",
+          title: "Video",
+          speaker: "",
+          timeAgo: "",
+          views: 0,
+          sheared: 0,
+          saved: 0,
+          favorite: 0,
+          fileUrl:
+            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          imageUrl:
+            "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217",
+          speakerAvatar: "",
+          contentType: "video",
+          description: "",
+          createdAt: new Date().toISOString(),
+          uploadedBy: "",
+        } as any,
+      ]);
+      reelsStore.setCurrentIndex(0);
+    }
+  }, [hasList]);
 
   // Platform-specific responsive sizing functions
   const getResponsiveSize = (small: number, medium: number, large: number) => {
@@ -587,13 +620,46 @@ export default function Reelsviewscroll() {
     }
   };
 
-  // Video seeking function
-  const seekToPosition = async (position: number) => {
-    const ref = videoRefs.current[modalKey];
-    if (ref && videoDuration > 0) {
-      const seekTime = (position / 100) * videoDuration;
-      await ref.setPositionAsync(seekTime);
+  // Video seeking function - improved for better responsiveness
+  const seekToPosition = async (videoKey: string, position: number) => {
+    const ref = videoRefs.current[videoKey];
+    if (!ref || videoDuration <= 0) {
+      console.warn("⚠️ Cannot seek: video ref not available or duration is 0");
+      return;
+    }
+
+    try {
+      const seekTime = Math.max(
+        0,
+        Math.min((position / 100) * videoDuration, videoDuration)
+      );
+
+      // Update state BEFORE seeking for immediate UI feedback (circle moves instantly)
       setVideoPosition(seekTime);
+      console.log(
+        `🎯 Setting position to ${seekTime.toFixed(2)}ms (${position.toFixed(
+          1
+        )}%)`
+      );
+
+      // Then perform the actual seek on the video
+      await ref.setPositionAsync(seekTime);
+
+      console.log(`✅ Video seeked successfully`);
+    } catch (error) {
+      console.error("❌ Error seeking video:", error);
+      // On error, try to get actual position from video and sync state
+      try {
+        const status = await ref.getStatusAsync();
+        if (status.isLoaded && status.positionMillis !== undefined) {
+          setVideoPosition(status.positionMillis);
+          console.log(
+            `🔄 Synced position from video: ${status.positionMillis}ms`
+          );
+        }
+      } catch (statusError) {
+        console.error("❌ Error getting video status:", statusError);
+      }
     }
   };
 
@@ -602,33 +668,49 @@ export default function Reelsviewscroll() {
   const progressPercentage =
     videoDuration > 0 ? (videoPosition / videoDuration) * 100 : 0;
 
-  // Pan responder for draggable progress bar
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: () => true,
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => {
-      setIsDragging(true);
-      // Calculate initial position based on touch location
-      const touchX = evt.nativeEvent.locationX;
-      const newProgress = Math.max(
-        0,
-        Math.min(100, (touchX / progressBarWidth) * 100)
-      );
-      seekToPosition(newProgress);
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      // Use absolute position instead of relative movement
-      const touchX = evt.nativeEvent.locationX;
-      const newProgress = Math.max(
-        0,
-        Math.min(100, (touchX / progressBarWidth) * 100)
-      );
-      seekToPosition(newProgress);
-    },
-    onPanResponderRelease: () => {
-      setIsDragging(false);
-    },
-  });
+  // Create pan responder inside renderVideoItem for proper video ref access
+  const createPanResponder = (videoKey: string, progressBarRef: any) => {
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        setIsDragging(true);
+        // Pause video while dragging for better UX
+        globalVideoStore.pauseVideo(videoKey);
+
+        // Calculate position based on touch location within the progress bar
+        const touchX = evt.nativeEvent.locationX;
+        const newProgress = Math.max(
+          0,
+          Math.min(100, (touchX / progressBarWidth) * 100)
+        );
+        seekToPosition(videoKey, newProgress);
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        // Use absolute position instead of relative movement
+        const touchX = evt.nativeEvent.locationX;
+        const newProgress = Math.max(
+          0,
+          Math.min(100, (touchX / progressBarWidth) * 100)
+        );
+        seekToPosition(videoKey, newProgress);
+      },
+      onPanResponderRelease: () => {
+        setIsDragging(false);
+        // Resume playback after seeking
+        setTimeout(() => {
+          globalVideoStore.playVideoGlobally(videoKey);
+        }, 100);
+      },
+      onPanResponderTerminate: () => {
+        setIsDragging(false);
+        // Resume playback if gesture is terminated
+        setTimeout(() => {
+          globalVideoStore.playVideoGlobally(videoKey);
+        }, 100);
+      },
+    });
+  };
 
   // Toggle mute function
   const toggleMute = (key: string) => {
@@ -874,9 +956,16 @@ export default function Reelsviewscroll() {
                   }
                 }
 
-                // Update position only if not dragging
-                if (!isDragging && status.positionMillis) {
+                // Update position only if not dragging - this ensures the circle stays where user dragged it
+                if (!isDragging && status.positionMillis !== undefined) {
                   setVideoPosition(status.positionMillis);
+                  console.log(
+                    `📍 Position updated: ${status.positionMillis}ms (not dragging)`
+                  );
+                } else if (isDragging) {
+                  console.log(
+                    `🖱️ Dragging - maintaining position: ${videoPosition}ms`
+                  );
                 }
 
                 const pct = status.durationMillis
@@ -896,6 +985,47 @@ export default function Reelsviewscroll() {
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
             />
 
+            {/* Skeleton overlay while loading or when source is refreshing */}
+            {isActive &&
+              (!playingVideos[videoKey] || isRefreshing || !videoDuration) && (
+                <View
+                  className="absolute inset-0"
+                  style={{
+                    justifyContent: "flex-end",
+                    padding: getResponsiveSpacing(12, 16, 20),
+                  }}
+                  pointerEvents="none"
+                >
+                  <View
+                    style={{ marginBottom: getResponsiveSpacing(8, 10, 12) }}
+                  >
+                    <Skeleton
+                      dark
+                      height={getResponsiveSize(20, 22, 24)}
+                      width={"65%"}
+                      borderRadius={8}
+                    />
+                  </View>
+                  <View
+                    style={{ marginBottom: getResponsiveSpacing(6, 8, 10) }}
+                  >
+                    <Skeleton
+                      dark
+                      height={getResponsiveSize(14, 16, 18)}
+                      width={"40%"}
+                      borderRadius={8}
+                    />
+                  </View>
+                  <Skeleton
+                    dark
+                    height={getResponsiveSize(6, 7, 8)}
+                    width={"90%"}
+                    borderRadius={4}
+                    style={{ opacity: 0.8 }}
+                  />
+                </View>
+              )}
+
             {/* Play/Pause Overlay - Glass Effect */}
             {isActive && !playingVideos[videoKey] && (
               <View
@@ -904,30 +1034,37 @@ export default function Reelsviewscroll() {
                   backgroundColor: "rgba(0, 0, 0, 0.1)",
                 }}
               >
-                <View
-                  style={{
-                    backgroundColor: "rgba(255, 255, 255, 0.15)",
-                    borderRadius: getResponsiveSize(45, 55, 65),
-                    padding: getResponsiveSpacing(16, 20, 24),
-                    borderWidth: 1,
-                    borderColor: "rgba(255, 255, 255, 0.3)",
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 16,
-                    elevation: 8,
-                    // Glass effect with backdrop blur (iOS)
-                    ...(Platform.OS === "ios" && {
-                      backdropFilter: "blur(20px)",
-                    }),
-                  }}
+                <TouchableOpacity
+                  onPress={toggleVideoPlay}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Play video"
+                  accessibilityRole="button"
                 >
-                  <MaterialIcons
-                    name="play-arrow"
-                    size={getResponsiveSize(50, 60, 70)}
-                    color="#FFFFFF"
-                  />
-                </View>
+                  <View
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                      borderRadius: getResponsiveSize(45, 55, 65),
+                      padding: getResponsiveSpacing(16, 20, 24),
+                      borderWidth: 1,
+                      borderColor: "rgba(255, 255, 255, 0.3)",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 16,
+                      elevation: 8,
+                      // Glass effect with backdrop blur (iOS)
+                      ...(Platform.OS === "ios" && {
+                        backdropFilter: "blur(20px)",
+                      }),
+                    }}
+                  >
+                    <MaterialIcons
+                      name="play-arrow"
+                      size={getResponsiveSize(50, 60, 70)}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1388,19 +1525,20 @@ export default function Reelsviewscroll() {
                   }}
                 >
                   <View
-                    {...panResponder.panHandlers}
+                    {...createPanResponder(videoKey, null).panHandlers}
                     style={{
                       paddingVertical: getResponsiveSpacing(12, 16, 20),
                       marginTop: -getResponsiveSpacing(12, 16, 20),
                       marginBottom: -getResponsiveSpacing(12, 16, 20),
                     }}
-                    accessibilityLabel="Video progress bar"
+                    accessibilityLabel="Video progress bar - slide to seek"
                     accessibilityRole="adjustable"
                     accessibilityValue={{
                       min: 0,
                       max: 100,
                       now: Math.round(progressPercentage),
                     }}
+                    accessibilityHint="Double tap and hold to drag, or tap to seek to position"
                   >
                     <View
                       style={{
@@ -1494,18 +1632,14 @@ export default function Reelsviewscroll() {
       lastIndexRef.current = clampedIndex;
       setCurrentIndex_state(clampedIndex);
 
-      // Pause all videos except the current one
-      Object.keys(playingVideos).forEach((key) => {
-        if (key !== `video-${clampedIndex}`) {
-          globalVideoStore.pauseVideo(key);
-        }
-      });
+      // Compute the reel key for the new active index
+      const activeVideo = allVideos[clampedIndex];
+      const activeKey = activeVideo
+        ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
+        : `reel-index-${clampedIndex}`;
 
-      // Play the current video
-      const currentVideoKey = `video-${clampedIndex}`;
-      if (!playingVideos[currentVideoKey]) {
-        globalVideoStore.playVideo(currentVideoKey);
-      }
+      // Pause all other videos and play the active one using the global play
+      globalVideoStore.playVideoGlobally(activeKey);
 
       console.log(
         `🎬 Active index while scrolling: ${clampedIndex}: ${allVideos[clampedIndex]?.title}`
@@ -1523,17 +1657,23 @@ export default function Reelsviewscroll() {
           animated: false,
         });
 
-        // Auto-play the initial video
-        const initialVideoKey = `video-${currentIndex_state}`;
-        globalVideoStore.playVideo(initialVideoKey);
+        // Auto-play the initial video using reel key
+        const initialVideo = allVideos[currentIndex_state];
+        const initialKey = initialVideo
+          ? `reel-${initialVideo.title}-${initialVideo.speaker || "unknown"}`
+          : `reel-index-${currentIndex_state}`;
+        globalVideoStore.playVideoGlobally(initialKey);
       }, 100);
     }
   }, []);
 
   // Handle scroll end to ensure proper video playback
   const handleScrollEnd = () => {
-    const currentVideoKey = `video-${currentIndex_state}`;
-    globalVideoStore.playVideo(currentVideoKey);
+    const activeVideo = allVideos[currentIndex_state];
+    const activeKey = activeVideo
+      ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
+      : `reel-index-${currentIndex_state}`;
+    globalVideoStore.playVideoGlobally(activeKey);
   };
 
   return (
@@ -1712,30 +1852,15 @@ export default function Reelsviewscroll() {
           zIndex: 100,
           backgroundColor: "transparent",
           pointerEvents: "box-none",
-          paddingBottom: isIOS ? 20 : 0, // Extra padding for iOS home indicator
+          paddingBottom: isIOS ? 20 : 0,
         }}
       >
-        <BottomNav
+        <BottomNavOverlay
           selectedTab={activeTab}
-          setSelectedTab={(tab) => {
+          onTabChange={(tab) => {
             setActiveTab(tab);
-            triggerHapticFeedback(); // Add haptic feedback for tab changes
-            switch (tab) {
-              case "Home":
-                router.replace({ pathname: "/categories/HomeScreen" });
-                break;
-              case "Community":
-                router.replace({ pathname: "/screens/PrayerWallScreen" });
-                break;
-              case "Library":
-                router.replace({ pathname: "/screens/library/LibraryScreen" });
-                break;
-              case "Account":
-                router.replace({ pathname: "/screens/AccountScreen" });
-                break;
-              default:
-                break;
-            }
+            triggerHapticFeedback();
+            navigateMainTab(tab as any);
           }}
         />
       </View>

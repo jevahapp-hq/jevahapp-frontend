@@ -9,6 +9,10 @@ import {
   View,
 } from "react-native";
 import { useAudioManager } from "../hooks/useAudioManager";
+import MediaCard from "./media/MediaCard";
+import PlayOverlay from "./media/PlayOverlay";
+import ProgressBar from "./media/ProgressBar";
+import TypeBadge from "./media/TypeBadge";
 
 interface SimpleVideoCardProps {
   video: {
@@ -155,7 +159,7 @@ export default function SimpleVideoCard({
           }
         }}
       >
-        <View className="w-full h-[400px] overflow-hidden relative">
+        <MediaCard className="w-full h-[400px] rounded-2xl">
           <Video
             ref={videoRef}
             source={{ uri: safeVideoUri }}
@@ -183,38 +187,12 @@ export default function SimpleVideoCard({
             }}
           />
 
-          {/* Centered Play/Pause Button */}
-          <View className="absolute inset-0 justify-center items-center">
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                togglePlay();
-              }}
-            >
-              <View
-                className={`${
-                  isPlaying ? "bg-black/30" : "bg-white/70"
-                } p-3 rounded-full`}
-              >
-                <Ionicons
-                  name={isPlaying ? "pause" : "play"}
-                  size={32}
-                  color={isPlaying ? "#FFFFFF" : "#FEA74E"}
-                />
-              </View>
-            </TouchableOpacity>
-          </View>
+          <PlayOverlay isPlaying={isPlaying} onPress={togglePlay} />
 
           {/* Content Type Icon - Top Left */}
-          <View className="absolute top-4 left-4">
-            <View className="bg-black/50 p-1 rounded-full">
-              <Ionicons
-                name={video.contentType === "sermon" ? "person" : "videocam"}
-                size={16}
-                color="#FFFFFF"
-              />
-            </View>
-          </View>
+          <TypeBadge
+            type={video.contentType === "sermon" ? "sermon" : "video"}
+          />
 
           {/* Video Title - show when paused */}
           {!isPlaying && (
@@ -230,35 +208,18 @@ export default function SimpleVideoCard({
 
           {/* Bottom Controls (Progress bar and Mute button) */}
           <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-            <View className="flex-1 h-1 bg-white/30 rounded-full relative">
+            <View className="flex-1">
               <TouchableOpacity
                 onPress={(event) => {
                   const { locationX } = event.nativeEvent;
-                  const progressBarWidth = 200; // Approximate width
+                  const progressBarWidth = 200;
                   const seekRatio = locationX / progressBarWidth;
                   const seekPosition = seekRatio * duration;
                   seekTo(seekPosition);
                 }}
               >
-                <View
-                  className="h-full bg-[#FEA74E] rounded-full"
-                  style={{ width: `${progress * 100}%` }}
-                />
+                <ProgressBar progress={progress * 100} />
               </TouchableOpacity>
-              <View
-                style={{
-                  position: "absolute",
-                  left: `${progress * 100}%`,
-                  transform: [{ translateX: -6 }],
-                  top: -5,
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: "#FFFFFF",
-                  borderWidth: 1,
-                  borderColor: "#FEA74E",
-                }}
-              />
             </View>
 
             {duration > 0 && (
@@ -314,7 +275,7 @@ export default function SimpleVideoCard({
               </View>
             </TouchableOpacity>
           </View>
-        </View>
+        </MediaCard>
       </TouchableWithoutFeedback>
     </View>
   );

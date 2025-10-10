@@ -33,6 +33,7 @@ import {
 } from "../../shared/utils";
 
 // Feature-specific imports
+import Skeleton from "../../shared/components/Skeleton/Skeleton";
 import { useMedia } from "../../shared/hooks/useMedia";
 
 // Component imports
@@ -789,26 +790,32 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
       >
-        {loadingHymns ? (
-          <View style={{ paddingVertical: 16, alignItems: "center" }}>
-            <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY }}>
-              Loading hymns…
-            </Text>
-          </View>
-        ) : (
-          (hymns || []).map((h) => (
-            <HymnMiniCard
-              key={h.id}
-              item={h}
-              onPress={(item) =>
-                router.push({
-                  pathname: "/reader/HymnDetail",
-                  params: { id: item.id },
-                })
-              }
-            />
-          ))
-        )}
+        {loadingHymns
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <View
+                key={`hym-skel-${i}`}
+                className="mr-4 w-[154px] flex-col items-center"
+              >
+                <Skeleton variant="thumbnail" />
+                <View className="mt-2 flex flex-col w-full">
+                  <Skeleton variant="text" width={"70%"} />
+                  <View style={{ height: 6 }} />
+                  <Skeleton variant="text" width={"50%"} />
+                </View>
+              </View>
+            ))
+          : (hymns || []).map((h) => (
+              <HymnMiniCard
+                key={h.id}
+                item={h}
+                onPress={(item) =>
+                  router.push({
+                    pathname: "/reader/HymnDetail",
+                    params: { id: item.id },
+                  })
+                }
+              />
+            ))}
       </ScrollView>
     );
   }, [hymns, loadingHymns, router]);
@@ -1055,17 +1062,59 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Loading state
   if (loading && !hasContent) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color={UI_CONFIG.COLORS.PRIMARY} />
-        <Text
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+          <View
+            style={{
+              paddingHorizontal: UI_CONFIG.SPACING.MD,
+              marginBottom: UI_CONFIG.SPACING.MD,
+            }}
+          >
+            <Skeleton height={22} width={160} borderRadius={6} />
+          </View>
+          <View style={{ marginHorizontal: UI_CONFIG.SPACING.MD }}>
+            <Skeleton variant="card" />
+          </View>
+        </View>
+
+        <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+          <View
+            style={{
+              paddingHorizontal: UI_CONFIG.SPACING.MD,
+              marginBottom: UI_CONFIG.SPACING.MD,
+            }}
+          >
+            <Skeleton height={22} width={120} borderRadius={6} />
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View key={`h-skel-${i}`} style={{ width: 154, marginRight: 16 }}>
+                <Skeleton variant="thumbnail" />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View
           style={{
-            marginTop: UI_CONFIG.SPACING.MD,
-            color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+            marginTop: UI_CONFIG.SPACING.LG,
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
           }}
         >
-          Loading content...
-        </Text>
-      </View>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View
+              key={`card-skel-${i}`}
+              style={{ marginBottom: UI_CONFIG.SPACING.LG }}
+            >
+              <Skeleton variant="card" />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     );
   }
 

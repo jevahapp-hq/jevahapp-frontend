@@ -323,4 +323,3 @@ Display rules:
 - Should we restrict Mapbox by `country` inferred from `near` by default?
 - Admin UI for seed/bulk upload and moderation: in scope now or later?
 - SLA for seed updates to appear in the index (e.g., async reindex within 1 min)
-

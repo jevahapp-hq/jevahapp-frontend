@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -11,21 +11,110 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import EbookAudioControls from "../components/EbookAudioControls";
+import { useTextToSpeech } from "../hooks/useTextToSpeech";
 
 export default function PdfViewer() {
   const router = useRouter();
-  const { url: rawUrl, title: rawTitle } = useLocalSearchParams<{
+  const {
+    url: rawUrl,
+    title: rawTitle,
+    desc: rawDesc,
+  } = useLocalSearchParams<{
     url?: string;
     title?: string;
+    desc?: string;
   }>();
   const url = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
   const title = Array.isArray(rawTitle) ? rawTitle[0] : rawTitle;
+  const desc = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
 
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [extractionReady, setExtractionReady] = useState(false);
+  const [pageTexts, setPageTexts] = useState<string[]>([]);
+  const queueRef = useRef<string[]>([]);
+  const readingRef = useRef(false);
+  const [combinedText, setCombinedText] = useState<string>("");
+
+  const { speak, stop, setVoice, getAvailableVoices } = useTextToSpeech({
+    onDone: () => {
+      // Advance to next chunk if available
+      const next = queueRef.current.shift();
+      if (next) {
+        speak(next);
+      } else {
+        readingRef.current = false;
+      }
+    },
+  });
+
+  // Choose a default voice once
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const voices = await getAvailableVoices();
+        const pick = (gender: "female" | "male") =>
+          voices.find(
+            (v: any) =>
+              v.language?.toLowerCase().includes("en") &&
+              (v.name?.toLowerCase().includes(gender) ||
+                v.identifier?.toLowerCase().includes(gender))
+          );
+        const female = pick("female");
+        const anyEn = voices.find((v: any) =>
+          v.language?.toLowerCase().includes("en")
+        );
+        if (!cancelled) setVoice((female || anyEn)?.identifier || undefined);
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getAvailableVoices, setVoice]);
+
+  // Chunking utility to keep TTS stable
+  const chunkText = useCallback((text: string, maxLen: number = 1500) => {
+    const chunks: string[] = [];
+    const sentences = text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/);
+    let buf = "";
+    for (const s of sentences) {
+      if ((buf + " " + s).trim().length > maxLen) {
+        if (buf) chunks.push(buf.trim());
+        if (s.length > maxLen) {
+          // sentence too long, hard split
+          for (let i = 0; i < s.length; i += maxLen) {
+            chunks.push(s.slice(i, i + maxLen));
+          }
+          buf = "";
+        } else {
+          buf = s;
+        }
+      } else {
+        buf = (buf + " " + s).trim();
+      }
+    }
+    if (buf) chunks.push(buf.trim());
+    return chunks;
+  }, []);
+
+  // Start reading if not already and we have queue
+  const ensureReading = useCallback(() => {
+    if (!readingRef.current && queueRef.current.length > 0) {
+      readingRef.current = true;
+      const next = queueRef.current.shift();
+      if (next) speak(next);
+    }
+  }, [speak]);
+
+  // Combine text for controls (allows manual restart)
+  useEffect(() => {
+    setCombinedText(pageTexts.join("\n\n"));
+  }, [pageTexts]);
 
   const cachePath = useMemo(() => {
     const safe = encodeURIComponent(String(url || ""));
@@ -216,6 +305,80 @@ export default function PdfViewer() {
           </Text>
         </View>
       )}
+
+      {/* Hidden extractor WebView using pdf.js to extract per-page text */}
+      {/** Note: We keep it visually hidden; it only posts page texts via postMessage **/}
+      <WebView
+        style={{ height: 0, width: 0, opacity: 0 }}
+        originWhitelist={["*"]}
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data || "{}");
+            if (data.type === "ready") {
+              setExtractionReady(true);
+            } else if (data.type === "pageText") {
+              const txt = String(data.text || "").trim();
+              if (txt.length > 0) {
+                setPageTexts((prev) => [...prev, txt]);
+                const chunks = chunkText(txt);
+                queueRef.current.push(...chunks);
+                ensureReading();
+              }
+            } else if (data.type === "error") {
+              console.warn("PDF extraction error:", data.message);
+            }
+          } catch (e) {}
+        }}
+        injectedJavaScriptBeforeContentLoaded={`(function(){
+          document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+          document.addEventListener('keydown', function(e){
+            const k = e.key.toLowerCase();
+            if ((e.ctrlKey||e.metaKey) && (k==='s'||k==='p'||k==='u')) { e.preventDefault(); e.stopPropagation(); }
+          });
+        })(); true;`}
+        source={{
+          html: (() => {
+            const pdfUrl = String(localUri || url || "");
+            const esc = (s: string) =>
+              s.replace(/\\/g, "\\\\").replace(/`/g, "\\`");
+            return `<!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head>
+          <body style="margin:0;background:#fff;">
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+            <script>
+              (function(){
+                const RN = window.ReactNativeWebView;
+                function post(obj){ try{ RN.postMessage(JSON.stringify(obj)); }catch(e){} }
+                post({type:'ready'});
+                try {
+                  const url = '${esc(pdfUrl)}';
+                  if(!url){ post({type:'error', message:'No URL'}); return; }
+                  const pdfjsLib = window['pdfjsLib'];
+                  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                  pdfjsLib.getDocument({url:url, withCredentials:false}).promise.then(async function(pdf){
+                    const total = pdf.numPages;
+                    for(let p=1; p<=total; p++){
+                      const page = await pdf.getPage(p);
+                      const content = await page.getTextContent();
+                      const strings = content.items.map(i=> (i.str||'')).join(' ');
+                      post({type:'pageText', page:p, totalPages:total, text: strings});
+                    }
+                  }).catch(function(err){ post({type:'error', message: String(err)}); });
+                } catch (err){ post({type:'error', message: String(err)}); }
+              })();
+            </script>
+          </body>
+          </html>`;
+          })(),
+        }}
+      />
+
+      {/* Audio controls pinned at bottom (frontend-only TTS) */}
+      <EbookAudioControls
+        text={combinedText || title || ""}
+        title={title || "Audio Reader"}
+      />
     </View>
   );
 }

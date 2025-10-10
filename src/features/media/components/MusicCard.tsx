@@ -17,6 +17,7 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
@@ -65,6 +66,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const [showOverlay, setShowOverlay] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
+  const [attemptedPlay, setAttemptedPlay] = useState(false);
   const { showCommentModal } = useCommentModal();
 
   const modalKey = `music-${audio._id || index}`;
@@ -84,6 +86,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 
   const handlePlayPress = useCallback(() => {
     if (!audioUrl || !isValidUri(audioUrl)) return;
+    setAttemptedPlay(true);
     controls.togglePlay();
   }, [audioUrl, controls]);
 
@@ -234,6 +237,26 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             style={{ width: "100%", height: "100%", position: "absolute" }}
             resizeMode="cover"
           />
+
+          {/* Skeleton overlay during initial audio load after play */}
+          {attemptedPlay && !playerState.duration && (
+            <View
+              className="absolute inset-0"
+              style={{ justifyContent: "flex-end", padding: 12 }}
+              pointerEvents="none"
+            >
+              <View style={{ marginBottom: 8 }}>
+                <Skeleton dark variant="text" width={"65%"} />
+              </View>
+              <Skeleton
+                dark
+                height={6}
+                width={"85%"}
+                borderRadius={4}
+                style={{ opacity: 0.85 }}
+              />
+            </View>
+          )}
 
           <View className="absolute top-4 left-4" pointerEvents="box-none">
             <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">

@@ -1,7 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import AuthHeader from "../components/AuthHeader";
+import { useTextToSpeech } from "../hooks/useTextToSpeech";
 
 type HymnRecord = {
   id: string;
@@ -17,6 +19,26 @@ export default function HymnDetail() {
   const { id: rawId } = useLocalSearchParams<{ id?: string }>();
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const [hymn, setHymn] = useState<HymnRecord | null>(null);
+  const {
+    isSpeaking,
+    isPaused,
+    rate,
+    pitch,
+    speak,
+    pause,
+    resume,
+    stop,
+    setRate,
+    setPitch,
+  } = useTextToSpeech({ language: "en-US", rate: 1.0, pitch: 1.0 });
+
+  const readAllVerses = useCallback(async () => {
+    if (!hymn) return;
+    for (let i = 0; i < (hymn.verses || []).length; i++) {
+      const verse = (hymn.verses || [])[i];
+      await speak(`Verse ${i + 1}. ${verse}`);
+    }
+  }, [hymn, speak]);
 
   useEffect(() => {
     async function load() {
@@ -36,42 +58,165 @@ export default function HymnDetail() {
     if (!hymn) return null;
     return (
       <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-        <Text style={{ fontSize: 28, fontWeight: "700", color: "#111", fontFamily: "Rubik-Bold" }}>
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: "700",
+            color: "#111",
+            fontFamily: "Rubik-Bold",
+          }}
+        >
           {hymn.title}
         </Text>
-        <Text style={{ marginTop: 8, color: "#475467", fontSize: 18, fontFamily: "Rubik-Medium" }}>
+        <Text
+          style={{
+            marginTop: 8,
+            color: "#475467",
+            fontSize: 18,
+            fontFamily: "Rubik-Medium",
+          }}
+        >
           {(hymn.author || "Unknown").toString()}
         </Text>
-        <Text style={{ marginTop: 4, color: "#667085", fontSize: 16, fontFamily: "Rubik-Regular" }}>
+        <Text
+          style={{
+            marginTop: 4,
+            color: "#667085",
+            fontSize: 16,
+            fontFamily: "Rubik-Regular",
+          }}
+        >
           {(hymn.meter || hymn.refs || "Hymn").toString()}
         </Text>
+        <View
+          style={{ flexDirection: "row", marginTop: 12, alignItems: "center" }}
+        >
+          <TouchableOpacity
+            onPress={() => readAllVerses()}
+            style={{
+              backgroundColor: "#256E63",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              marginRight: 8,
+            }}
+          >
+            <Text style={{ color: "#fff", fontFamily: "Rubik-Medium" }}>
+              {isSpeaking ? "Reading…" : "Read All"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => (isPaused ? resume() : pause())}
+            style={{
+              backgroundColor: "#FEA74E",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              marginRight: 8,
+            }}
+          >
+            <Text style={{ color: "#090E24", fontFamily: "Rubik-Medium" }}>
+              {isPaused ? "Resume" : "Pause"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => stop()}
+            style={{
+              backgroundColor: "#E5E7EB",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: "#111", fontFamily: "Rubik-Medium" }}>
+              Stop
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }, [hymn]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      <AuthHeader 
-        title="Hymn" 
-        showCancel={false}
-        showBack={true}
-      />
+      <AuthHeader title="Hymn" showCancel={false} showBack={true} />
 
       {!hymn ? (
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
-          <Text style={{ color: "#666" }}>Hymn not found</Text>
-        </View>
+        <FlatList
+          data={[1, 2, 3, 4, 5, 6]}
+          keyExtractor={(v, i) => `skeleton-${i}`}
+          ListHeaderComponent={
+            <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+              <Skeleton
+                height={32}
+                width={220}
+                borderRadius={6}
+                style={{ marginBottom: 12 }}
+              />
+              <Skeleton
+                height={20}
+                width={160}
+                borderRadius={6}
+                style={{ marginBottom: 8 }}
+              />
+              <Skeleton height={18} width={120} borderRadius={6} />
+            </View>
+          }
+          contentContainerStyle={{ paddingBottom: 40, paddingTop: 8 }}
+          renderItem={() => (
+            <View
+              style={{
+                paddingHorizontal: 16,
+                marginTop: 20,
+                marginBottom: 8,
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "#ffffff",
+                  borderRadius: 8,
+                  paddingVertical: 12,
+                  paddingHorizontal: 12,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
+                <Skeleton
+                  height={18}
+                  width={100}
+                  borderRadius={6}
+                  style={{ marginBottom: 12 }}
+                />
+                <Skeleton
+                  height={14}
+                  width={"100%"}
+                  borderRadius={6}
+                  style={{ marginBottom: 8 }}
+                />
+                <Skeleton
+                  height={14}
+                  width={"90%"}
+                  borderRadius={6}
+                  style={{ marginBottom: 8 }}
+                />
+                <Skeleton height={14} width={"75%"} borderRadius={6} />
+              </View>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+        />
       ) : (
         <FlatList
           data={hymn.verses || []}
           keyExtractor={(v, i) => `${hymn.id}-v-${i}`}
           ListHeaderComponent={header}
-          contentContainerStyle={{ 
+          contentContainerStyle={{
             paddingBottom: 40,
             paddingTop: 8,
-            flexGrow: 1
+            flexGrow: 1,
           }}
           showsVerticalScrollIndicator={true}
           bounces={true}
@@ -86,40 +231,44 @@ export default function HymnDetail() {
             index,
           })}
           renderItem={({ item, index }) => (
-            <View style={{ 
-              paddingHorizontal: 16, 
-              marginTop: 20,
-              marginBottom: 8,
-              backgroundColor: '#ffffff',
-              borderRadius: 8,
-              paddingVertical: 12,
-              shadowColor: '#000',
-              shadowOffset: {
-                width: 0,
-                height: 1,
-              },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 1,
-            }}>
+            <View
+              style={{
+                paddingHorizontal: 16,
+                marginTop: 20,
+                marginBottom: 8,
+                backgroundColor: "#ffffff",
+                borderRadius: 8,
+                paddingVertical: 12,
+                shadowColor: "#000",
+                shadowOffset: {
+                  width: 0,
+                  height: 1,
+                },
+                shadowOpacity: 0.05,
+                shadowRadius: 2,
+                elevation: 1,
+              }}
+            >
               <Text
-                style={{ 
-                  color: "#111", 
-                  fontWeight: "600", 
-                  marginBottom: 16, 
-                  fontSize: 18, 
-                  fontFamily: "Rubik-SemiBold" 
+                style={{
+                  color: "#111",
+                  fontWeight: "600",
+                  marginBottom: 16,
+                  fontSize: 18,
+                  fontFamily: "Rubik-SemiBold",
                 }}
               >
                 Verse {index + 1}
               </Text>
-              <Text style={{ 
-                color: "#1D2939", 
-                lineHeight: 30, 
-                fontSize: 17, 
-                fontFamily: "Rubik-Regular",
-                textAlign: 'left'
-              }}>
+              <Text
+                style={{
+                  color: "#1D2939",
+                  lineHeight: 30,
+                  fontSize: 17,
+                  fontFamily: "Rubik-Regular",
+                  textAlign: "left",
+                }}
+              >
                 {item}
               </Text>
             </View>

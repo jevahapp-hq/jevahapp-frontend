@@ -62,27 +62,30 @@ class SocketManager {
         tokenPreview: TokenUtils.getTokenPreview(this.authToken),
       });
 
-      // Test backend connectivity with an authenticated endpoint
+      // Test backend connectivity with an authenticated endpoint (soft-fail)
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(`${this.serverUrl}/api/auth/me`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${this.authToken}`,
             "Content-Type": "application/json",
           },
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         if (!response.ok) {
           console.warn(
-            "⚠️ Auth check failed, skipping socket connection (are you logged in?)"
+            "⚠️ Auth check failed, continuing without real-time features"
           );
-          return;
+          return; // Continue app without socket
         }
       } catch (healthError) {
         console.warn(
-          "⚠️ Backend not reachable, skipping socket connection:",
-          healthError
+          "⚠️ Backend not reachable (socket), continuing without real-time features"
         );
-        return;
+        return; // Continue app without socket
       }
 
       this.socket = io(this.serverUrl, {

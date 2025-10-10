@@ -29,6 +29,11 @@ export const UI_CONFIG = {
     SURFACE: "#F9FAFB",
     BORDER: "#E5E7EB",
     SHADOW: "rgba(0, 0, 0, 0.1)",
+    // Skeleton colors
+    SKELETON_BASE: "#E5E7EB", // light gray (gray-200)
+    SKELETON_HIGHLIGHT: "#F3F4F6", // very light gray (gray-100)
+    SKELETON_DARK_BASE: "#2C2C2C", // dark gray for dark backgrounds
+    SKELETON_DARK_HIGHLIGHT: "#3A3A3A",
   },
   SPACING: {
     XS: 4,

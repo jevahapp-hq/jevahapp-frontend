@@ -2,16 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import VideoControlsOverlay from "../../../shared/components/VideoControlsOverlay";
 import { UI_CONFIG } from "../../../shared/constants";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
@@ -52,6 +53,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [showOverlay, setShowOverlay] = useState(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const { showCommentModal } = useCommentModal();
 
   const contentId = video._id || getContentKey(video);
@@ -141,6 +143,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       if (status.isLoaded) {
         console.log(`✅ Video loaded successfully: ${video.title}`);
         setFailedVideoLoad(false);
+        setVideoLoaded(true);
       }
     },
     [video.title]
@@ -283,6 +286,29 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             />
           )}
 
+          {/* Skeleton overlay while video prepares */}
+          {!videoLoaded && !failedVideoLoad && isValidUri(video.fileUrl) && (
+            <View
+              className="absolute inset-0"
+              style={{ justifyContent: "flex-end", padding: 12 }}
+              pointerEvents="none"
+            >
+              <View style={{ marginBottom: 8 }}>
+                <Skeleton dark variant="text" width={"60%"} />
+              </View>
+              <View style={{ marginBottom: 6 }}>
+                <Skeleton dark variant="text" width={"40%"} />
+              </View>
+              <Skeleton
+                dark
+                height={6}
+                width={"90%"}
+                borderRadius={4}
+                style={{ opacity: 0.85 }}
+              />
+            </View>
+          )}
+
           {/* Content Type Icon - Top Left */}
           <View className="absolute top-4 left-4">
             <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">
@@ -315,6 +341,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             onToggleMute={handleToggleMute}
             onSeekRelative={seekBySeconds}
             onSeekToPercent={seekToPercent}
+            currentMs={
+              lastKnownDurationRef.current > 0
+                ? progress * lastKnownDurationRef.current
+                : 0
+            }
+            durationMs={lastKnownDurationRef.current}
           />
 
           {/* Title Overlay - positioned just above the progress bar */}

@@ -13,7 +13,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import BottomNav from "../components/BottomNav";
+import BottomNavOverlay from "../components/layout/BottomNavOverlay";
+import { navigateMainTab } from "../utils/navigation";
 
 interface ForumPost {
   id: string;
@@ -276,33 +277,13 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
           ))}
         </ScrollView>
 
-        {/* Bottom Nav overlay */}
-        <View style={styles.bottomNavOverlay}>
-          <BottomNav
-            selectedTab={activeTab}
-            setSelectedTab={(tab) => {
-              setActiveTab(tab);
-              switch (tab) {
-                case "Home":
-                  router.replace({ pathname: "/categories/HomeScreen" });
-                  break;
-                case "Community":
-                  router.replace({ pathname: "/screens/PrayerWallScreen" });
-                  break;
-                case "Library":
-                  router.replace({
-                    pathname: "/screens/library/LibraryScreen",
-                  });
-                  break;
-                case "Account":
-                  router.replace({ pathname: "/screens/AccountScreen" });
-                  break;
-                default:
-                  break;
-              }
-            }}
-          />
-        </View>
+        <BottomNavOverlay
+          selectedTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            navigateMainTab(tab as any);
+          }}
+        />
       </SafeAreaView>
     </Animated.View>
   );

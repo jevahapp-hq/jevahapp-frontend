@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import BottomNav from "../../components/BottomNav";
+import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
+import { navigateMainTab } from "../../utils/navigation";
 
 import { Ionicons } from "@expo/vector-icons";
 import AllLibrary from "./AllLibrary";
@@ -108,40 +109,13 @@ export default function LibraryScreen() {
 
         <View className="flex-1 mb-24">{renderContent()}</View>
       </ScrollView>
-      {/* Bottom Nav overlay */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-          backgroundColor: "transparent",
+      <BottomNavOverlay
+        selectedTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          navigateMainTab(tab as any);
         }}
-      >
-        <BottomNav
-          selectedTab={activeTab}
-          setSelectedTab={(tab) => {
-            setActiveTab(tab);
-            switch (tab) {
-              case "Home":
-                router.replace({ pathname: "/categories/HomeScreen" });
-                break;
-              case "Community":
-                router.replace({ pathname: "/screens/PrayerWallScreen" });
-                break;
-              case "Library":
-                router.replace({ pathname: "/screens/library/LibraryScreen" });
-                break;
-              case "Account":
-                router.replace({ pathname: "/screens/AccountScreen" });
-                break;
-              default:
-                break;
-            }
-          }}
-        />
-      </View>
+      />
     </View>
   );
 }

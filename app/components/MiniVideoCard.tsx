@@ -1,8 +1,13 @@
-import { Ionicons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
-import { useEffect, useRef, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
+import { useOptimizedVideo } from "../hooks/useOptimizedVideo";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
+import MediaCard from "./media/MediaCard";
+import PlayOverlay from "./media/PlayOverlay";
+import ProgressBar from "./media/ProgressBar";
+import TypeBadge from "./media/TypeBadge";
 
 interface MiniVideoCardProps {
   video: {
@@ -24,9 +29,7 @@ export default function MiniVideoCard({
   onVideoTap,
   onPlayPress,
 }: MiniVideoCardProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const videoRef = useRef<Video>(null);
   const globalVideoStore = useGlobalVideoStore();
 
   console.log(`🎬 MiniVideoCard:`, {
@@ -40,19 +43,24 @@ export default function MiniVideoCard({
   const videoKey = `mini-video-${video._id || video.fileUrl || index}`;
   const isGloballyPlaying = globalVideoStore.playingVideos[videoKey] ?? false;
 
-  // Sync with global video state
-  useEffect(() => {
-    setIsPlaying(isGloballyPlaying);
-  }, [isGloballyPlaying]);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.unloadAsync();
-      }
-    };
-  }, []);
+  // Use optimized video hook for better performance
+  const { videoRef, isLoading, isBuffering, hasError, videoProps, retry } =
+    useOptimizedVideo({
+      videoUrl: video.fileUrl,
+      shouldPlay: isGloballyPlaying,
+      isMuted: true, // Mini cards are always muted
+      onLoad: () => {
+        console.log(`✅ Mini video loaded: ${video.title}`);
+      },
+      onError: (error) => {
+        console.warn("Mini video failed to load:", video.title, error);
+      },
+      onBuffering: (buffering) => {
+        if (buffering) {
+          console.log(`⏳ Mini video buffering: ${video.title}`);
+        }
+      },
+    });
 
   const handlePlayPress = () => {
     if (onPlayPress) {
@@ -76,10 +84,8 @@ export default function MiniVideoCard({
           ? (status.positionMillis / status.durationMillis) * 100
           : 0
       );
-      setIsPlaying(status.isPlaying);
 
       if (status.didJustFinish) {
-        setIsPlaying(false);
         setProgress(0);
       }
     }
@@ -99,77 +105,98 @@ export default function MiniVideoCard({
     <View className="mr-4 w-[154px] flex-col items-center">
       <TouchableOpacity
         onPress={handleVideoTap}
-        className="w-full h-[232px] rounded-2xl overflow-hidden relative"
+        className="w-full h-[232px]"
         activeOpacity={0.9}
       >
-        <Video
-          ref={videoRef}
-          source={{ uri: safeVideoUri }}
-          style={{ width: "100%", height: "100%", position: "absolute" }}
-          resizeMode={ResizeMode.COVER}
-          useNativeControls={false}
-          isMuted={true} // Mini cards are always muted
-          volume={0.0}
-          shouldPlay={isPlaying}
-          onPlaybackStatusUpdate={handleVideoStatusUpdate}
-          onLoad={() => {
-            console.log(`✅ Mini video loaded: ${video.title}`);
-          }}
-          onError={(e) => {
-            console.warn("Mini video failed to load:", video.title, e);
-            setIsPlaying(false);
-          }}
-        />
-
-        {/* Content Type Icon - Top Left */}
-        <View className="absolute top-2 right-2 bg-black/50 p-1 rounded-full">
-          <Ionicons
-            name={video.contentType === "sermon" ? "person" : "videocam"}
-            size={12}
-            color="#FFFFFF"
-          />
-        </View>
-
-        {/* Play Button Overlay */}
-        <View className="absolute inset-0 justify-center items-center">
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              handlePlayPress();
+        <MediaCard className="w-full h-full rounded-2xl">
+          {/* Optimized Video with buffering support */}
+          <Video
+            ref={videoRef}
+            source={{ uri: safeVideoUri }}
+            style={{ width: "100%", height: "100%", position: "absolute" }}
+            resizeMode={ResizeMode.COVER}
+            useNativeControls={false}
+            {...videoProps}
+            onPlaybackStatusUpdate={(status) => {
+              handleVideoStatusUpdate(status);
+              videoProps?.onPlaybackStatusUpdate?.(status);
             }}
-            className="bg-white/70 p-2 rounded-full"
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={isPlaying ? "pause" : "play"}
-              size={20}
-              color="#FEA74E"
-            />
-          </TouchableOpacity>
-        </View>
+          />
 
-        {/* Progress Bar */}
-        {isPlaying && (
-          <View className="absolute bottom-2 left-2 right-2">
-            <View className="h-1 bg-white/30 rounded-full">
-              <View
-                className="h-full bg-[#FEA74E] rounded-full"
-                style={{ width: `${progress}%` }}
-              />
+          {/* Loading/Buffering Overlay */}
+          {(isLoading || isBuffering) && (
+            <View
+              className="absolute inset-0 bg-black/30 justify-center items-center"
+              pointerEvents="none"
+            >
+              <ActivityIndicator color="#FEA74E" size="small" />
+              {isBuffering && (
+                <Text className="text-white text-xs mt-2 font-rubik">
+                  Buffering...
+                </Text>
+              )}
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Video Title Overlay */}
-        <View className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent" />
-        <View className="absolute bottom-2 left-2 right-2">
-          <Text
-            className="text-white text-[12px] font-rubik-semibold"
-            numberOfLines={2}
-          >
-            {video.title}
-          </Text>
-        </View>
+          {/* Error State */}
+          {hasError && (
+            <View
+              className="absolute inset-0 bg-black/50 justify-center items-center"
+              pointerEvents="box-none"
+            >
+              <Text className="text-white text-xs mb-2 font-rubik">
+                Failed to load
+              </Text>
+              <TouchableOpacity
+                onPress={retry}
+                className="bg-[#FEA74E] px-3 py-1 rounded-full"
+              >
+                <Text className="text-white text-xs font-rubik-semibold">
+                  Retry
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Skeleton while initially loading */}
+          {!hasError && isLoading && (
+            <View
+              className="absolute inset-0"
+              style={{ justifyContent: "flex-end", padding: 8 }}
+              pointerEvents="none"
+            >
+              <Skeleton dark height={12} width={"80%"} borderRadius={6} />
+            </View>
+          )}
+
+          <TypeBadge
+            type={video.contentType === "sermon" ? "sermon" : "video"}
+            position="top-right"
+          />
+
+          <PlayOverlay
+            isPlaying={isGloballyPlaying && !isBuffering}
+            onPress={handlePlayPress}
+            size={20}
+          />
+
+          {isGloballyPlaying && !isBuffering && (
+            <View className="absolute bottom-2 left-2 right-2">
+              <ProgressBar progress={progress} />
+            </View>
+          )}
+
+          {/* Video Title Overlay */}
+          <View className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent" />
+          <View className="absolute bottom-2 left-2 right-2">
+            <Text
+              className="text-white text-[12px] font-rubik-semibold"
+              numberOfLines={2}
+            >
+              {video.title}
+            </Text>
+          </View>
+        </MediaCard>
       </TouchableOpacity>
 
       {/* Video Stats */}

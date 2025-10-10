@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { Feather } from "@expo/vector-icons";
@@ -19,26 +19,26 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-    getButtonSize,
-    getInputSize,
-    getKeyboardAdjustment,
-    getMediaPickerSize,
-    getOrientation,
-    getResponsiveFontSize,
-    getResponsiveSize,
-    getResponsiveSpacing,
-    getScreenDimensions,
-    getThumbnailSize,
-    getTouchTargetSize,
-    isSmallScreen,
+  getButtonSize,
+  getInputSize,
+  getKeyboardAdjustment,
+  getMediaPickerSize,
+  getOrientation,
+  getResponsiveFontSize,
+  getResponsiveSize,
+  getResponsiveSpacing,
+  getScreenDimensions,
+  getThumbnailSize,
+  getTouchTargetSize,
+  isSmallScreen,
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { useMediaStore } from "../store/useUploadStore";
 
 import {
-    logUserDataStatus,
-    validateUserForUpload,
+  logUserDataStatus,
+  validateUserForUpload,
 } from "../utils/userValidation";
 
 // Use the correct API base URL for uploads
@@ -440,12 +440,22 @@ export default function UploadScreen() {
           : "No thumbnail",
       });
 
-      // Add timeout to prevent hanging requests (longer for video uploads)
+      // Add timeout to prevent hanging requests (extended for Render free tier)
       const controller = new AbortController();
+
+      // Much longer timeouts for Render free tier (cold start can take 30+ seconds)
       const timeoutDuration = file.mimeType?.startsWith("video/")
-        ? 120000
-        : 60000; // 2 min for videos, 1 min for others
-      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+        ? 600000 // 10 minutes for videos (large file + slow backend)
+        : 300000; // 5 minutes for other files
+
+      console.log(`⏱️ Upload timeout set to: ${timeoutDuration / 1000}s`);
+      const timeoutId = setTimeout(() => {
+        console.log("⏱️ Upload timed out, aborting...");
+        controller.abort();
+      }, timeoutDuration);
+
+      console.log("📤 Starting upload request...");
+      const uploadStartTime = Date.now();
 
       const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
         method: "POST",
@@ -459,6 +469,8 @@ export default function UploadScreen() {
       });
 
       clearTimeout(timeoutId);
+      const uploadDuration = Date.now() - uploadStartTime;
+      console.log(`✅ Upload request completed in ${uploadDuration}ms`);
 
       const contentType = res.headers.get("content-type") || "";
       let result: any = null;
