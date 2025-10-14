@@ -3,26 +3,26 @@ import { Ionicons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import { useEffect, useRef, useState } from "react";
 import {
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
+import { useCommentModal } from "../context/CommentModalContext";
 import { usePlaybackView } from "../hooks/useContentView";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../utils/downloadUtils";
 import {
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../utils/userValidation";
 import { useThreadSafeVideo } from "../utils/videoPlayerUtils";
-import CommentsModal from "./CommentsModal";
 import InteractionButtons from "./InteractionButtons";
 import BaseVideoCard from "./media/BaseVideoCard";
 import PlayOverlay from "./media/PlayOverlay";
@@ -58,8 +58,8 @@ export default function UpdatedVideoCard({
   index,
   isModalView = false,
 }: VideoCardProps) {
-  const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const { showCommentModal } = useCommentModal();
 
   const videoRef = useRef<Video>(null);
 
@@ -202,20 +202,7 @@ export default function UpdatedVideoCard({
             }
           />
 
-          {/* Interaction Buttons (only in modal view) */}
-          {isModalView && (
-            <View className="absolute right-4 bottom-16">
-              <InteractionButtons
-                contentId={contentId}
-                contentType={contentType as any}
-                contentTitle={video.title}
-                contentUrl={video.fileUrl}
-                layout="vertical"
-                iconSize={30}
-                onCommentPress={() => setShowCommentsModal(true)}
-              />
-            </View>
-          )}
+          {/* Interaction Buttons moved outside parent Touchable to avoid touch conflicts */}
 
           {/* Video Title Overlay */}
           {!isPlaying && showOverlay && (
@@ -229,6 +216,27 @@ export default function UpdatedVideoCard({
             </View>
           )}
         </TouchableOpacity>
+        {/* Interaction Buttons (only in modal view) - placed outside the Touchable to ensure first-tap reliability */}
+        {isModalView && (
+          <View className="absolute right-4 bottom-16" pointerEvents="box-none">
+            <InteractionButtons
+              contentId={contentId}
+              contentType={contentType as any}
+              contentTitle={video.title}
+              contentUrl={video.fileUrl}
+              layout="vertical"
+              iconSize={30}
+              onCommentPress={() =>
+                showCommentModal(
+                  [],
+                  contentId,
+                  "media",
+                  userDisplayName
+                )
+              }
+            />
+          </View>
+        )}
       </View>
 
       {/* Video Info Section (for feed view) */}
@@ -262,7 +270,14 @@ export default function UpdatedVideoCard({
                 contentUrl={video.fileUrl}
                 layout="horizontal"
                 iconSize={20}
-                onCommentPress={() => setShowCommentsModal(true)}
+                onCommentPress={() =>
+                  showCommentModal(
+                    [],
+                    contentId,
+                    "media",
+                    userDisplayName
+                  )
+                }
               />
             </View>
 
@@ -349,13 +364,6 @@ export default function UpdatedVideoCard({
         </View>
       )}
 
-      {/* Comments Modal */}
-      <CommentsModal
-        isVisible={showCommentsModal}
-        onClose={() => setShowCommentsModal(false)}
-        contentId={contentId}
-        contentTitle={video.title}
-      />
     </BaseVideoCard>
   );
 }

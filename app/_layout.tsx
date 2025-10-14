@@ -1,9 +1,9 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
 import {
-  Rubik_400Regular,
-  Rubik_600SemiBold,
-  Rubik_700Bold,
-  useFonts,
+    Rubik_400Regular,
+    Rubik_600SemiBold,
+    Rubik_700Bold,
+    useFonts,
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
@@ -262,6 +263,7 @@ export default function RootLayout() {
                 <CommentModalProvider>
                   <Slot />
                   <CommentModalV2 />
+                  <ServerUnavailableModalWrapper />
                 </CommentModalProvider>
               </NotificationProvider>
             </PersistentNotificationProvider>

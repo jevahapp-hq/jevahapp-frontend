@@ -3,21 +3,20 @@ import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
-  Image,
-  PanResponder,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    PanResponder,
+    Platform,
+    ScrollView,
+    Share,
+    StatusBar,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
-import CommentModalV2 from "../components/CommentModalV2";
 import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../context/CommentModalContext";
@@ -28,10 +27,10 @@ import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
 import { navigateMainTab } from "../utils/navigation";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  persistStats,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    persistStats,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
 
@@ -1865,8 +1864,7 @@ export default function Reelsviewscroll() {
         />
       </View>
 
-      {/* Comment Modal */}
-      <CommentModalV2 />
+      {/* Comment Modal removed; global instance in app/_layout handles it */}
     </ErrorBoundary>
   );
 }

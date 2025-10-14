@@ -547,7 +547,12 @@ export default function SermonComponent() {
                 {globalFavoriteCounts[key] || 0}
               </Text>
             </TouchableOpacity>
-            <View className="flex-col justify-center items-center mt-6">
+            <TouchableOpacity
+              onPress={() => handleComment(key, audio)}
+              className="flex-col justify-center items-center mt-6"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
               <CommentIcon
                 comments={formattedComments}
                 size={30}
@@ -560,7 +565,7 @@ export default function SermonComponent() {
                 }
                 layout="vertical"
               />
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => handleSave(key, audio)}
               className="flex-col justify-center items-center mt-6"
@@ -859,7 +864,12 @@ export default function SermonComponent() {
                   {globalFavoriteCounts[key] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity className="flex-col justify-center items-center mt-6">
+              <TouchableOpacity
+                onPress={() => handleComment(key, video)}
+                className="flex-col justify-center items-center mt-6"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="chatbubble-sharp" size={30} color="white" />
                 <Text className="text-[10px] text-white font-rubik-semibold">
                   {stats.comment === 1

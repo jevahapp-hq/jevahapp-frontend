@@ -442,6 +442,8 @@ export default function EbookComponent() {
                 <TouchableOpacity 
                   className="flex-row items-center mr-6"
                   onPress={() => handleComment(key, item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.7}
                 >
                   <CommentIcon 
                     comments={formattedComments}

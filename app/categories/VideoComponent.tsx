@@ -1265,7 +1265,12 @@ export default function VideoComponent() {
                   {globalFavoriteCounts[modalKey] || 0}
                 </Text>
               </TouchableOpacity>
-              <View className="flex-col justify-center items-center mt-6">
+              <TouchableOpacity
+                onPress={() => showCommentModal(formattedComments, contentId)}
+                className="flex-col justify-center items-center mt-6"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+             >
                 <CommentIcon
                   comments={formattedComments}
                   size={30}
@@ -1278,7 +1283,7 @@ export default function VideoComponent() {
                   }
                   layout="vertical"
                 />
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleSave(modalKey, video)}
                 className="flex-col justify-center items-center mt-6"
