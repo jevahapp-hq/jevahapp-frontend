@@ -1,16 +1,16 @@
-import BottomNav from '@/app/components/BottomNav';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import AccountScreen from '../screens/AccountScreen';
-import CommunityScreen from '../screens/CommunityScreen';
-import LibraryScreen from '../screens/library/LibraryScreen';
-import HomeTabContent from './HomeTabContent';
+import BottomNav from "@/app/components/BottomNav";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
+import BibleScreen from "../screens/BibleScreen";
+import CommunityScreen from "../screens/CommunityScreen";
+import LibraryScreen from "../screens/library/LibraryScreen";
+import HomeTabContent from "./HomeTabContent";
 
-const tabList = ['Home', 'Community', 'Library', 'Account'];
+const tabList = ["Home", "Community", "Library", "Bible"];
 
 export default function HomeScreen() {
-  const [selectedTab, setSelectedTab] = useState('Home');
+  const [selectedTab, setSelectedTab] = useState("Home");
   const { default: defaultTabParamRaw } = useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
@@ -28,14 +28,14 @@ export default function HomeScreen() {
 
   const renderTabContent = () => {
     switch (selectedTab) {
-      case 'Home':
+      case "Home":
         return <HomeTabContent />;
-      case 'Community':
+      case "Community":
         return <CommunityScreen />;
-      case 'Library':
+      case "Library":
         return <LibraryScreen />;
-      case 'Account':
-        return <AccountScreen />;
+      case "Bible":
+        return <BibleScreen />;
       default:
         return <HomeTabContent />;
     }
@@ -46,12 +46,12 @@ export default function HomeScreen() {
       {renderTabContent()}
       <View
         style={{
-          position: 'absolute',
+          position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
           height: 80,
-          backgroundColor: '#fff',
+          backgroundColor: "#fff",
         }}
       >
         <BottomNav selectedTab={selectedTab} setSelectedTab={handleTabChange} />

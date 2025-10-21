@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
+import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
@@ -16,7 +17,6 @@ import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
 import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
-import { VideoTitle } from "../../../shared/components/VideoTitle";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
@@ -59,11 +59,61 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const { showCommentModal } = useCommentModal();
 
+  // Media type detection for sermon content
+  const getMediaType = useCallback(() => {
+    const contentType = video.contentType?.toLowerCase() || "";
+
+    if (contentType === "sermon") {
+      // Sermons can be audio or video, check file extension
+      const fileUrl = video.fileUrl?.toLowerCase() || "";
+      if (
+        fileUrl.includes(".mp4") ||
+        fileUrl.includes(".mov") ||
+        fileUrl.includes(".avi") ||
+        fileUrl.includes(".webm") ||
+        fileUrl.includes(".mkv")
+      ) {
+        return "video";
+      }
+      return "audio";
+    }
+
+    // For non-sermon content, assume video
+    return "video";
+  }, [video.contentType, video.fileUrl]);
+
+  const mediaType = getMediaType();
+  const isAudioSermon = mediaType === "audio";
+
   const contentId = video._id || getContentKey(video);
   const key = getContentKey(video);
   const isPlaying = playingVideos[key] || false;
   const isMuted = mutedVideos[key] || false;
   const progress = progresses[key] || 0;
+
+  // Audio player for audio sermons
+  const audioUrl =
+    isAudioSermon && isValidUri(video.fileUrl) ? video.fileUrl : null;
+  const [audioState, audioControls] = useAdvancedAudioPlayer(audioUrl, {
+    audioKey: key,
+    autoPlay: false,
+    loop: false,
+    volume: videoVolume,
+    onPlaybackStatusUpdate: (status) => {
+      // Update global progress for audio sermons
+      if (status.duration > 0) {
+        const audioProgress = status.position / status.duration;
+        // This will be handled by the parent component's progress tracking
+      }
+    },
+    onError: (error) => {
+      console.error(`❌ Audio sermon error for ${video.title}:`, error);
+      setFailedVideoLoad(true);
+    },
+    onFinished: () => {
+      console.log(`🏁 Audio sermon finished: ${video.title}`);
+    },
+  });
 
   // Debug logging
   console.log(`🎬 VideoCard rendering: ${video.title}`, {
@@ -80,35 +130,74 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const lastKnownDurationRef = useRef(0);
   const seekBySeconds = useCallback(
     async (deltaSec: number) => {
-      const durationMs = lastKnownDurationRef.current || 0;
-      if (!videoRef.current || durationMs <= 0) return;
-      const currentMs = Math.max(
-        0,
-        Math.min(progress * durationMs, durationMs)
-      );
-      const nextMs = Math.max(
-        0,
-        Math.min(currentMs + deltaSec * 1000, durationMs)
-      );
-      try {
-        await videoRef.current.setPositionAsync(nextMs);
-      } catch (e) {
-        console.warn("Video seekBySeconds failed", e);
+      if (isAudioSermon) {
+        // Handle audio seeking
+        const currentPosition = audioState.position;
+        const duration = audioState.duration;
+        if (duration <= 0) return;
+        const nextMs = Math.max(
+          0,
+          Math.min(currentPosition + deltaSec * 1000, duration)
+        );
+        try {
+          await audioControls.seekTo(nextMs);
+        } catch (e) {
+          console.warn("Audio seekBySeconds failed", e);
+        }
+      } else {
+        // Handle video seeking
+        const durationMs = lastKnownDurationRef.current || 0;
+        if (!videoRef.current || durationMs <= 0) return;
+        const currentMs = Math.max(
+          0,
+          Math.min(progress * durationMs, durationMs)
+        );
+        const nextMs = Math.max(
+          0,
+          Math.min(currentMs + deltaSec * 1000, durationMs)
+        );
+        try {
+          await videoRef.current.setPositionAsync(nextMs);
+        } catch (e) {
+          console.warn("Video seekBySeconds failed", e);
+        }
       }
     },
-    [progress]
+    [
+      progress,
+      isAudioSermon,
+      audioState.position,
+      audioState.duration,
+      audioControls,
+    ]
   );
 
-  const seekToPercent = useCallback(async (percent: number) => {
-    const durationMs = lastKnownDurationRef.current || 0;
-    if (!videoRef.current || durationMs <= 0) return;
-    const clamped = Math.max(0, Math.min(percent, 1));
-    try {
-      await videoRef.current.setPositionAsync(clamped * durationMs);
-    } catch (e) {
-      console.warn("Video seekToPercent failed", e);
-    }
-  }, []);
+  const seekToPercent = useCallback(
+    async (percent: number) => {
+      if (isAudioSermon) {
+        // Handle audio seeking
+        const duration = audioState.duration;
+        if (duration <= 0) return;
+        const clamped = Math.max(0, Math.min(percent, 1));
+        try {
+          await audioControls.seekTo(clamped * duration);
+        } catch (e) {
+          console.warn("Audio seekToPercent failed", e);
+        }
+      } else {
+        // Handle video seeking
+        const durationMs = lastKnownDurationRef.current || 0;
+        if (!videoRef.current || durationMs <= 0) return;
+        const clamped = Math.max(0, Math.min(percent, 1));
+        try {
+          await videoRef.current.setPositionAsync(clamped * durationMs);
+        } catch (e) {
+          console.warn("Video seekToPercent failed", e);
+        }
+      }
+    },
+    [isAudioSermon, audioState.duration, audioControls]
+  );
 
   // Handle video tap
   const handleVideoTap = useCallback(() => {
@@ -119,25 +208,53 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const handleTogglePlay = useCallback(() => {
     if (isPlayTogglePending) return; // Prevent double-taps
 
-    console.log("🎮 VideoCard togglePlay called with key:", key);
+    console.log(
+      "🎮 VideoCard togglePlay called with key:",
+      key,
+      "isAudioSermon:",
+      isAudioSermon
+    );
     setIsPlayTogglePending(true);
 
     // Immediate visual feedback - toggle overlay state instantly
     setShowOverlay(false);
-    // Call the actual toggle
-    onTogglePlay(key);
+
+    if (isAudioSermon) {
+      // Handle audio sermon play/pause
+      if (audioState.isPlaying) {
+        audioControls.pause();
+      } else {
+        audioControls.play();
+      }
+    } else {
+      // Call the actual video toggle
+      onTogglePlay(key);
+    }
 
     // Show overlay again after a brief delay and reset pending state
     setTimeout(() => {
       setShowOverlay(true);
       setIsPlayTogglePending(false);
     }, 150);
-  }, [onTogglePlay, key, isPlayTogglePending]);
+  }, [
+    onTogglePlay,
+    key,
+    isPlayTogglePending,
+    isAudioSermon,
+    audioState.isPlaying,
+    audioControls,
+  ]);
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {
-    onToggleMute(key);
-  }, [onToggleMute, key]);
+    if (isAudioSermon) {
+      // Handle audio sermon mute/unmute
+      audioControls.toggleMute();
+    } else {
+      // Handle video mute/unmute
+      onToggleMute(key);
+    }
+  }, [onToggleMute, key, isAudioSermon, audioState.isMuted, audioControls]);
 
   // Handle overlay toggle
   const handleOverlayToggle = useCallback(() => {
@@ -231,7 +348,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       <TouchableWithoutFeedback onPress={handleVideoTap}>
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && isValidUri(video.fileUrl) ? (
+          {!failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermon ? (
             <Video
               ref={videoRef}
               source={{ uri: video.fileUrl }}
@@ -295,13 +412,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               }}
             />
           ) : (
-            /* Fallback Thumbnail */
+            /* Thumbnail for audio sermons or fallback */
             <Image
               source={
                 thumbnailUri
                   ? { uri: thumbnailUri }
                   : {
-                      uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Video",
+                      uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Audio",
                     }
               }
               style={{
@@ -313,28 +430,31 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             />
           )}
 
-          {/* Skeleton overlay while video prepares */}
-          {!videoLoaded && !failedVideoLoad && isValidUri(video.fileUrl) && (
-            <View
-              className="absolute inset-0"
-              style={{ justifyContent: "flex-end", padding: 12 }}
-              pointerEvents="none"
-            >
-              <View style={{ marginBottom: 8 }}>
-                <Skeleton dark variant="text" width={"60%"} />
+          {/* Skeleton overlay while video/audio prepares */}
+          {!videoLoaded &&
+            !failedVideoLoad &&
+            isValidUri(video.fileUrl) &&
+            !isAudioSermon && (
+              <View
+                className="absolute inset-0"
+                style={{ justifyContent: "flex-end", padding: 12 }}
+                pointerEvents="none"
+              >
+                <View style={{ marginBottom: 8 }}>
+                  <Skeleton dark variant="text" width={"60%"} />
+                </View>
+                <View style={{ marginBottom: 6 }}>
+                  <Skeleton dark variant="text" width={"40%"} />
+                </View>
+                <Skeleton
+                  dark
+                  height={6}
+                  width={"90%"}
+                  borderRadius={4}
+                  style={{ opacity: 0.85 }}
+                />
               </View>
-              <View style={{ marginBottom: 6 }}>
-                <Skeleton dark variant="text" width={"40%"} />
-              </View>
-              <Skeleton
-                dark
-                height={6}
-                width={"90%"}
-                borderRadius={4}
-                style={{ opacity: 0.85 }}
-              />
-            </View>
-          )}
+            )}
 
           {/* Content Type Badge */}
           <ContentTypeBadge
@@ -345,7 +465,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
           {/* Play/Pause Overlay */}
           <PlayOverlay
-            isPlaying={isPlaying}
+            isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
             onPress={handleTogglePlay}
             showOverlay={showOverlay}
             size="medium"
@@ -353,18 +473,22 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             disabled={isPlayTogglePending}
           />
 
-          {/* Video Progress Bar */}
+          {/* Video/Audio Progress Bar */}
           <VideoProgressBar
-            progress={progress}
-            isMuted={isMuted}
+            progress={isAudioSermon ? audioState.progress : progress}
+            isMuted={isAudioSermon ? audioState.isMuted : isMuted}
             onToggleMute={handleToggleMute}
             onSeekToPercent={seekToPercent}
             currentMs={
-              lastKnownDurationRef.current > 0
+              isAudioSermon
+                ? audioState.position
+                : lastKnownDurationRef.current > 0
                 ? progress * lastKnownDurationRef.current
                 : 0
             }
-            durationMs={lastKnownDurationRef.current}
+            durationMs={
+              isAudioSermon ? audioState.duration : lastKnownDurationRef.current
+            }
             showControls={true}
             // Pro config to avoid jumpbacks and ensure usability
             showFloatingLabel={true}
@@ -376,22 +500,60 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             seekMsTolerance={200}
             minProgressEpsilon={0.005}
           />
-
-          {/* Video Title Overlay */}
-          <VideoTitle
-            title={video.title}
-            position="overlay"
-            maxLines={2}
-            showShadow={true}
-          />
         </View>
       </TouchableWithoutFeedback>
 
       {/* Footer */}
-      <View className="flex-row items-center justify-between mt-1 px-3">
-        {/* Left: avatar, name/time, then eye/comment/share */}
-        <View className="flex flex-row items-center">
-          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
+      <View className="px-3 mt-1">
+        {/* Interaction Bar - positioned above author info */}
+        <View className="flex-row items-center justify-between mb-3">
+          <CardFooterActions
+            viewCount={viewCount}
+            liked={!!userLikeState}
+            likeCount={likeCount}
+            likeBurstKey={likeBurstKey}
+            likeColor="#FF1744"
+            onLike={() => {
+              setLikeBurstKey((k) => k + 1);
+              onFavorite(key, video);
+            }}
+            commentCount={commentCount || video.comment || 0}
+            onComment={() => {
+              try {
+                console.log("🗨️ Comment icon pressed (video)", {
+                  key,
+                  contentId,
+                  title: video.title,
+                });
+                showCommentModal([], String(contentId));
+              } catch {}
+              onComment(key, video);
+            }}
+            saved={!!userSaveState}
+            saveCount={saveCount}
+            onSave={() => {
+              onSave(modalKey, video);
+            }}
+            onShare={() => onShare(modalKey, video)}
+            contentType="media"
+            contentId={contentId}
+            useEnhancedComponents={false}
+          />
+          {/* Right: options (three dots) */}
+          <TouchableOpacity
+            onPress={() => {
+              console.log("⋯ More pressed for", modalKey);
+              onModalToggle(modalVisible === modalKey ? null : modalKey);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Author Information - below interaction bar */}
+        <View className="flex-row items-center mb-2">
+          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative">
             {!avatarErrored ? (
               <Image
                 source={getUserAvatarFromContent(video)}
@@ -411,62 +573,25 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               </Text>
             )}
           </View>
-          <View className="ml-3">
+          <View className="ml-3 flex-1">
             <View className="flex-row items-center">
-              <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
+              <Text className="text-[13px] font-rubik-semibold text-[#344054]">
                 {getUserDisplayNameFromContent(video)}
               </Text>
-              <View className="flex flex-row mt-2 ml-2">
-                <Text className="text-[10px] text-gray-500 font-rubik">
-                  {getTimeAgo(video.createdAt)}
-                </Text>
-              </View>
+              <View className="w-1 h-1 bg-orange-400 rounded-full mx-2" />
+              <Text className="text-[10px] text-gray-500 font-rubik">
+                {getTimeAgo(video.createdAt)}
+              </Text>
             </View>
-            <CardFooterActions
-              viewCount={viewCount}
-              liked={!!userLikeState}
-              likeCount={likeCount}
-              likeBurstKey={likeBurstKey}
-              likeColor="#FF1744"
-              onLike={() => {
-                setLikeBurstKey((k) => k + 1);
-                onFavorite(key, video);
-              }}
-              commentCount={commentCount || video.comment || 0}
-              onComment={() => {
-                try {
-                  console.log("🗨️ Comment icon pressed (video)", {
-                    key,
-                    contentId,
-                    title: video.title,
-                  });
-                  showCommentModal([], String(contentId));
-                } catch {}
-                onComment(key, video);
-              }}
-              saved={!!userSaveState}
-              saveCount={saveCount}
-              onSave={() => {
-                onSave(modalKey, video);
-              }}
-              onShare={() => onShare(modalKey, video)}
-              contentType="media"
-              contentId={contentId}
-              useEnhancedComponents={false}
-            />
           </View>
         </View>
-        {/* Right: options (three dots) */}
-        <TouchableOpacity
-          onPress={() => {
-            console.log("⋯ More pressed for", modalKey);
-            onModalToggle(modalVisible === modalKey ? null : modalKey);
-          }}
-          className="mr-2"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
+
+        {/* Video Title/Description - below author info */}
+        <View className="ml-13">
+          <Text className="text-[12px] font-rubik text-[#344054] leading-5">
+            {video.title}
+          </Text>
+        </View>
       </View>
 
       {/* Slide-up Content Action Modal */}
