@@ -57,6 +57,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const { showCommentModal } = useCommentModal();
 
   const contentId = video._id || getContentKey(video);
@@ -115,11 +116,24 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     onVideoTap(key, video, index);
   }, [onVideoTap, key, video, index]);
 
-  // Handle play/pause toggle
+  // Handle play/pause toggle with immediate feedback and debounce
   const handleTogglePlay = useCallback(() => {
+    if (isPlayTogglePending) return; // Prevent double-taps
+
     console.log("🎮 VideoCard togglePlay called with key:", key);
+    setIsPlayTogglePending(true);
+
+    // Immediate visual feedback - toggle overlay state instantly
+    setShowOverlay(false);
+    // Call the actual toggle
     onTogglePlay(key);
-  }, [onTogglePlay, key]);
+
+    // Show overlay again after a brief delay and reset pending state
+    setTimeout(() => {
+      setShowOverlay(true);
+      setIsPlayTogglePending(false);
+    }, 150);
+  }, [onTogglePlay, key, isPlayTogglePending]);
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {
@@ -245,6 +259,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                   status.isPlaying && (positionMs >= 3000 || progress >= 0.25);
                 const finished = Boolean(status.didJustFinish);
 
+                // Auto-restart video when finished
+                if (finished && isMountedRef.current) {
+                  try {
+                    // Reset to beginning and play immediately
+                    await videoRef.current?.setPositionAsync(0);
+                    // The video will continue playing automatically due to shouldPlay prop
+                  } catch (error) {
+                    console.warn("Failed to restart video:", error);
+                  }
+                }
+
                 if (!isMountedRef.current) return;
                 if (!hasTrackedView && (qualifies || finished)) {
                   try {
@@ -325,6 +350,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             onPress={handleTogglePlay}
             showOverlay={showOverlay}
             size="medium"
+            immediateFeedback={true}
+            disabled={isPlayTogglePending}
           />
 
           {/* Video Progress Bar */}
@@ -340,6 +367,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             }
             durationMs={lastKnownDurationRef.current}
             showControls={true}
+            // Pro config to avoid jumpbacks and ensure usability
+            showFloatingLabel={true}
+            enlargeOnDrag={true}
+            knobSize={20}
+            knobSizeDragging={24}
+            trackHeights={{ normal: 4, dragging: 8 }}
+            seekSyncTicks={4}
+            seekMsTolerance={200}
+            minProgressEpsilon={0.005}
           />
 
           {/* Video Title Overlay */}

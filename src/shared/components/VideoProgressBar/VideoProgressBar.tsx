@@ -16,6 +16,23 @@ interface VideoProgressBarProps {
   onToggleMute: () => void;
   onSeekToPercent: (percent: number) => void;
   showControls?: boolean;
+  // UI config (optional)
+  showFloatingLabel?: boolean; // default true
+  enlargeOnDrag?: boolean; // default true
+  knobSize?: number; // default 20
+  knobSizeDragging?: number; // default 24
+  trackHeights?: { normal: number; dragging: number }; // default {4,8}
+  // Stability config (optional)
+  seekSyncTicks?: number; // number of consecutive updates near target to finish seeking (default 2)
+  seekMsTolerance?: number; // milliseconds tolerance used to derive epsilon (default 300)
+  minProgressEpsilon?: number; // minimum epsilon as a fraction (default 0.01)
+  // Interaction enhancements
+  enableHaptics?: boolean; // default false
+  verticalScrub?: {
+    enabled?: boolean;
+    sensitivityBase?: number;
+    maxSlowdown?: number;
+  }; // default enabled
 }
 
 export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
@@ -26,7 +43,23 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   onToggleMute,
   onSeekToPercent,
   showControls = true,
+  showFloatingLabel = true,
+  enlargeOnDrag = true,
+  knobSize = 20,
+  knobSizeDragging = 24,
+  trackHeights = { normal: 4, dragging: 8 },
+  seekSyncTicks = 2,
+  seekMsTolerance = 300,
+  minProgressEpsilon = 0.01,
+  enableHaptics = false,
+  verticalScrub = { enabled: true, sensitivityBase: 60, maxSlowdown: 5 },
 }) => {
+  // Optional runtime import for haptics (no crash if not installed)
+  let Haptics: any;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    Haptics = require("expo-haptics");
+  } catch {}
   const [isDragging, setIsDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState(0);
   const progressBarRef = useRef<View>(null);
@@ -34,6 +67,9 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   const [isSeeking, setIsSeeking] = useState(false);
   const targetProgressRef = useRef<number | null>(null);
   const [barWidth, setBarWidth] = useState(0);
+  const stableTicksRef = useRef(0);
+  const dragStartPercentRef = useRef(0);
+  const lastUpdateTimeRef = useRef(0);
 
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -67,7 +103,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       // Respond to moves when dragging
       return isDragging;
     },
-    onPanResponderGrant: (evt) => {
+    onPanResponderGrant: (evt, gestureState) => {
       setIsDragging(true);
       progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
         const percent = Math.max(
@@ -76,17 +112,35 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
         );
         setDragProgress(percent);
         animatedValue.setValue(percent);
+        dragStartPercentRef.current = percent;
+        // Reset seeking state when starting new drag
+        setIsSeeking(false);
+        targetProgressRef.current = null;
+        stableTicksRef.current = 0;
       });
+      if (enableHaptics && Haptics?.impactAsync) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
     },
-    onPanResponderMove: (evt) => {
+    onPanResponderMove: (evt, gestureState) => {
       if (isDragging) {
         progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
-          const percent = Math.max(
+          const basePercent = dragStartPercentRef.current;
+          const dx = gestureState.dx || 0;
+          const dy = gestureState.dy || 0;
+          const slowdownEnabled = verticalScrub?.enabled !== false;
+          const sensitivityBase = verticalScrub?.sensitivityBase ?? 60; // pixels
+          const maxSlowdown = verticalScrub?.maxSlowdown ?? 5; // 1..5x
+          const slowFactor = slowdownEnabled
+            ? Math.min(maxSlowdown, 1 + Math.abs(dy) / sensitivityBase)
+            : 1;
+          const deltaPercent = width > 0 ? dx / width / slowFactor : 0;
+          const nextPercent = Math.max(
             0,
-            Math.min(1, evt.nativeEvent.locationX / width)
+            Math.min(1, basePercent + deltaPercent)
           );
-          setDragProgress(percent);
-          animatedValue.setValue(percent);
+          setDragProgress(nextPercent);
+          animatedValue.setValue(nextPercent);
         });
       }
     },
@@ -96,6 +150,9 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       setIsSeeking(true);
       targetProgressRef.current = dragProgress;
       onSeekToPercent(dragProgress);
+      if (enableHaptics && Haptics?.impactAsync) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      }
     },
     onPanResponderTerminate: () => {
       setIsDragging(false);
@@ -106,33 +163,90 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   // (drag position when dragging, target when seeking, live progress otherwise)
   // This ensures the orange circle always follows the intended position.
 
-  // While seeking, hold the indicator at target until external progress reaches it
+  // While seeking, hold the indicator at target until the external progress stabilizes near it
   useEffect(() => {
-    if (!isSeeking || targetProgressRef.current == null) return;
+    if (!isSeeking || targetProgressRef.current == null) {
+      stableTicksRef.current = 0;
+      return;
+    }
     const target = targetProgressRef.current;
-    const diff = Math.abs(progress - target);
-    // Consider synced when within 2% of target or beyond target on forward seeks
-    if (diff < 0.02 || progress >= target) {
+    const externalProgress =
+      durationMs > 0
+        ? Math.max(0, Math.min(1, currentMs / durationMs))
+        : progress;
+    const epsilon =
+      durationMs > 0
+        ? Math.max(minProgressEpsilon, seekMsTolerance / durationMs)
+        : Math.max(minProgressEpsilon, 0.02); // within ms tolerance or min epsilon
+    const closeEnough = Math.abs(externalProgress - target) <= epsilon;
+
+    if (closeEnough) {
+      stableTicksRef.current += 1;
+    } else {
+      stableTicksRef.current = 0;
+    }
+
+    if (stableTicksRef.current >= seekSyncTicks) {
       setIsSeeking(false);
       targetProgressRef.current = null;
-      animatedValue.setValue(progress);
+      animatedValue.setValue(externalProgress);
     }
-  }, [progress, isSeeking, animatedValue]);
+  }, [
+    currentMs,
+    durationMs,
+    progress,
+    isSeeking,
+    animatedValue,
+    seekSyncTicks,
+    seekMsTolerance,
+    minProgressEpsilon,
+  ]);
 
+  // Derive a reliable external progress from currentMs/durationMs when available
+  const externalProgress =
+    durationMs > 0
+      ? Math.max(0, Math.min(1, currentMs / durationMs))
+      : progress;
+
+  // Use the most recent progress value for better responsiveness
   const currentProgress = isDragging
     ? dragProgress
     : isSeeking && targetProgressRef.current != null
     ? targetProgressRef.current
-    : progress;
-  const progressBarHeight = isDragging ? 8 : 4;
+    : externalProgress;
+  const progressBarHeight = enlargeOnDrag
+    ? isDragging
+      ? trackHeights.dragging
+      : trackHeights.normal
+    : trackHeights.normal;
 
   // Ensure the indicator position always matches the effective progress
   useEffect(() => {
-    animatedValue.setValue(currentProgress);
-  }, [currentProgress, animatedValue]);
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
+
+    // Use smooth animation for non-dragging updates to make progress bar responsive
+    if (!isDragging && !isSeeking) {
+      // Throttle updates to prevent too frequent animations during playback
+      if (timeSinceLastUpdate > 50) {
+        // Update at most every 50ms
+        Animated.timing(animatedValue, {
+          toValue: currentProgress,
+          duration: Math.min(100, timeSinceLastUpdate), // Adaptive duration
+          useNativeDriver: false,
+        }).start();
+        lastUpdateTimeRef.current = now;
+      }
+    } else {
+      // Immediate updates during drag/seek
+      animatedValue.setValue(currentProgress);
+      lastUpdateTimeRef.current = now;
+    }
+  }, [currentProgress, animatedValue, isDragging, isSeeking]);
 
   // Precompute circle geometry for clean centering over the track
-  const circleRadius = isDragging ? 12 : 10; // matches 24/20 sizing above
+  const circleRadius =
+    (enlargeOnDrag ? (isDragging ? knobSizeDragging : knobSize) : knobSize) / 2;
   const circleTop = 8 + progressBarHeight / 2 - circleRadius; // center on track (track top = 8)
   const labelTop = Math.max(0, circleTop - 24); // place label above the knob
 
@@ -179,7 +293,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
           />
 
           {/* Floating time label while dragging/seeking */}
-          {(isDragging || isSeeking) && (
+          {showFloatingLabel && (isDragging || isSeeking) && (
             <Animated.View
               className="absolute bg-black/70 px-2 py-1 rounded"
               style={{
@@ -215,14 +329,17 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
                   : 0,
               transform: [
                 {
-                  scale: isDragging ? 1.1 : 1,
+                  scale: enlargeOnDrag && isDragging ? 1.1 : 1,
                 },
               ],
               shadowColor: "#FEA74E",
-              shadowOffset: { width: 0, height: isDragging ? 3 : 2 },
-              shadowOpacity: isDragging ? 0.5 : 0.35,
-              shadowRadius: isDragging ? 7 : 5,
-              elevation: isDragging ? 7 : 5,
+              shadowOffset: {
+                width: 0,
+                height: enlargeOnDrag && isDragging ? 3 : 2,
+              },
+              shadowOpacity: enlargeOnDrag && isDragging ? 0.5 : 0.35,
+              shadowRadius: enlargeOnDrag && isDragging ? 7 : 5,
+              elevation: enlargeOnDrag && isDragging ? 7 : 5,
               zIndex: 10, // Ensure it's on top
             }}
           />

@@ -11,6 +11,8 @@ interface PlayOverlayProps {
   backgroundColor?: string;
   iconColor?: string;
   className?: string;
+  disabled?: boolean;
+  immediateFeedback?: boolean;
 }
 
 export const PlayOverlay: React.FC<PlayOverlayProps> = ({
@@ -21,6 +23,8 @@ export const PlayOverlay: React.FC<PlayOverlayProps> = ({
   backgroundColor = "bg-white/70",
   iconColor = UI_CONFIG.COLORS.SECONDARY,
   className = "",
+  disabled = false,
+  immediateFeedback = true,
 }) => {
   const getSizeConfig = () => {
     switch (size) {
@@ -39,11 +43,30 @@ export const PlayOverlay: React.FC<PlayOverlayProps> = ({
 
   if (!showOverlay) return null;
 
+  const handlePress = () => {
+    if (disabled) return;
+    if (immediateFeedback) {
+      // Immediate visual feedback
+      onPress();
+    } else {
+      onPress();
+    }
+  };
+
   return (
     <View
       className={`absolute inset-0 justify-center items-center bg-black/20 pointer-events-box-none ${className}`}
     >
-      <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+      <TouchableOpacity
+        onPress={handlePress}
+        activeOpacity={immediateFeedback ? 0.7 : 0.9}
+        disabled={disabled}
+        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        style={{
+          transform: [{ scale: disabled ? 0.95 : 1 }],
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
         <View className={`${backgroundColor} ${container} rounded-full`}>
           <Ionicons
             name={isPlaying ? "pause" : "play"}
