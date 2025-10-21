@@ -16,7 +16,6 @@ import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
 import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
-import { VideoTitle } from "../../../shared/components/VideoTitle";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
@@ -376,26 +375,64 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             seekMsTolerance={200}
             minProgressEpsilon={0.005}
           />
-
-          {/* Video Title Overlay */}
-          <VideoTitle
-            title={video.title}
-            position="overlay"
-            maxLines={2}
-            showShadow={true}
-          />
         </View>
       </TouchableWithoutFeedback>
 
       {/* Footer */}
-      <View className="flex-row items-center justify-between mt-1 px-3">
-        {/* Left: avatar, name/time, then eye/comment/share */}
-        <View className="flex flex-row items-center">
-          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
+      <View className="mt-1 px-3">
+        {/* Top: Interaction buttons */}
+        <View className="flex-row items-center justify-between mb-3">
+          <CardFooterActions
+            viewCount={viewCount}
+            liked={!!userLikeState}
+            likeCount={likeCount}
+            likeBurstKey={likeBurstKey}
+            likeColor="#FF1744"
+            onLike={() => {
+              setLikeBurstKey((k) => k + 1);
+              onFavorite(key, video);
+            }}
+            commentCount={commentCount || video.comment || 0}
+            onComment={() => {
+              try {
+                console.log("🗨️ Comment icon pressed (video)", {
+                  key,
+                  contentId,
+                  title: video.title,
+                });
+                showCommentModal([], String(contentId));
+              } catch {}
+              onComment(key, video);
+            }}
+            saved={!!userSaveState}
+            saveCount={saveCount}
+            onSave={() => {
+              onSave(modalKey, video);
+            }}
+            onShare={() => onShare(modalKey, video)}
+            contentType="media"
+            contentId={contentId}
+            useEnhancedComponents={false}
+          />
+          {/* Right: options (three dots) */}
+          <TouchableOpacity
+            onPress={() => {
+              console.log("⋯ More pressed for", modalKey);
+              onModalToggle(modalVisible === modalKey ? null : modalKey);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Middle: Author info */}
+        <View className="flex-row items-center mb-2">
+          <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center relative mr-3">
             {!avatarErrored ? (
               <Image
                 source={getUserAvatarFromContent(video)}
-                style={{ width: 30, height: 30, borderRadius: 999 }}
+                style={{ width: 24, height: 24, borderRadius: 999 }}
                 resizeMode="cover"
                 onError={(error) => {
                   setAvatarErrored(true);
@@ -406,67 +443,26 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 }}
               />
             ) : (
-              <Text className="text-[14px] font-rubik-semibold text-[#344054]">
+              <Text className="text-[12px] font-rubik-semibold text-[#344054]">
                 {firstInitial}
               </Text>
             )}
           </View>
-          <View className="ml-3">
-            <View className="flex-row items-center">
-              <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                {getUserDisplayNameFromContent(video)}
-              </Text>
-              <View className="flex flex-row mt-2 ml-2">
-                <Text className="text-[10px] text-gray-500 font-rubik">
-                  {getTimeAgo(video.createdAt)}
-                </Text>
-              </View>
-            </View>
-            <CardFooterActions
-              viewCount={viewCount}
-              liked={!!userLikeState}
-              likeCount={likeCount}
-              likeBurstKey={likeBurstKey}
-              likeColor="#FF1744"
-              onLike={() => {
-                setLikeBurstKey((k) => k + 1);
-                onFavorite(key, video);
-              }}
-              commentCount={commentCount || video.comment || 0}
-              onComment={() => {
-                try {
-                  console.log("🗨️ Comment icon pressed (video)", {
-                    key,
-                    contentId,
-                    title: video.title,
-                  });
-                  showCommentModal([], String(contentId));
-                } catch {}
-                onComment(key, video);
-              }}
-              saved={!!userSaveState}
-              saveCount={saveCount}
-              onSave={() => {
-                onSave(modalKey, video);
-              }}
-              onShare={() => onShare(modalKey, video)}
-              contentType="media"
-              contentId={contentId}
-              useEnhancedComponents={false}
-            />
-          </View>
+          <Text className="text-[13px] font-rubik-semibold text-[#344054] mr-2">
+            {getUserDisplayNameFromContent(video)}
+          </Text>
+          <View className="w-1 h-1 bg-[#FEA74E] rounded-full mr-2" />
+          <Text className="text-[10px] text-gray-500 font-rubik">
+            {getTimeAgo(video.createdAt)}
+          </Text>
         </View>
-        {/* Right: options (three dots) */}
-        <TouchableOpacity
-          onPress={() => {
-            console.log("⋯ More pressed for", modalKey);
-            onModalToggle(modalVisible === modalKey ? null : modalKey);
-          }}
-          className="mr-2"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
+
+        {/* Bottom: Content description/title */}
+        <View className="mb-2">
+          <Text className="text-[14px] font-rubik-medium text-[#344054] leading-5">
+            {video.title}
+          </Text>
+        </View>
       </View>
 
       {/* Slide-up Content Action Modal */}
