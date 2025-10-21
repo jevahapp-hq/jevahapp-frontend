@@ -12,9 +12,12 @@ import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
+import { DurationDisplay } from "../../../shared/components/DurationDisplay";
+import { PlayOverlay } from "../../../shared/components/PlayOverlay";
 import Skeleton from "../../../shared/components/Skeleton/Skeleton";
-import VideoControlsOverlay from "../../../shared/components/VideoControlsOverlay";
-import { UI_CONFIG } from "../../../shared/constants";
+import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
+import { VideoTitle } from "../../../shared/components/VideoTitle";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
@@ -309,33 +312,23 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </View>
           )}
 
-          {/* Content Type Icon - Top Left */}
-          <View className="absolute top-4 left-4">
-            <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">
-              <Ionicons name="play" size={16} color="#FFFFFF" />
-            </View>
-          </View>
+          {/* Content Type Badge */}
+          <ContentTypeBadge
+            contentType={video.contentType || "video"}
+            position="top-left"
+            size="medium"
+          />
 
           {/* Play/Pause Overlay */}
-          {showOverlay && (
-            <View
-              className="absolute inset-0 justify-center items-center bg-black/20"
-              pointerEvents="box-none"
-            >
-              <TouchableOpacity onPress={handleTogglePlay} activeOpacity={0.9}>
-                <View className="bg-white/70 p-4 rounded-full">
-                  <Ionicons
-                    name={isPlaying ? "pause" : "play"}
-                    size={40}
-                    color={UI_CONFIG.COLORS.SECONDARY}
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
+          <PlayOverlay
+            isPlaying={isPlaying}
+            onPress={handleTogglePlay}
+            showOverlay={showOverlay}
+            size="medium"
+          />
 
-          {/* Video Controls - Bottom (modular overlay) */}
-          <VideoControlsOverlay
+          {/* Video Progress Bar */}
+          <VideoProgressBar
             progress={progress}
             isMuted={isMuted}
             onToggleMute={handleToggleMute}
@@ -347,22 +340,16 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 : 0
             }
             durationMs={lastKnownDurationRef.current}
+            showControls={true}
           />
 
-          {/* Title Overlay - positioned just above the progress bar */}
-          <View className="absolute bottom-8 left-3 right-3 px-4 py-2 rounded-md">
-            <Text
-              className="text-white font-semibold text-sm"
-              numberOfLines={2}
-              style={{
-                textShadowColor: "rgba(0, 0, 0, 0.8)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 2,
-              }}
-            >
-              {video.title}
-            </Text>
-          </View>
+          {/* Video Title Overlay */}
+          <VideoTitle
+            title={video.title}
+            position="overlay"
+            maxLines={2}
+            showShadow={true}
+          />
         </View>
       </TouchableWithoutFeedback>
 
@@ -396,7 +383,20 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 {getUserDisplayNameFromContent(video)}
               </Text>
               <View className="flex flex-row mt-2 ml-2">
-                <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+                <DurationDisplay
+                  currentMs={
+                    lastKnownDurationRef.current > 0
+                      ? progress * lastKnownDurationRef.current
+                      : 0
+                  }
+                  durationMs={lastKnownDurationRef.current}
+                  showIcon={true}
+                  iconName="time-outline"
+                  iconSize={14}
+                  iconColor="#9CA3AF"
+                  textColor="#9CA3AF"
+                  textSize="xs"
+                />
                 <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                   {getTimeAgo(video.createdAt)}
                 </Text>

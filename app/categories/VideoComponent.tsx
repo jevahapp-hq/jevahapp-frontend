@@ -1,32 +1,32 @@
 import {
-    AntDesign,
-    Feather,
-    Ionicons,
-    MaterialIcons,
+  AntDesign,
+  Feather,
+  Ionicons,
+  MaterialIcons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    Dimensions,
-    Image,
-    ImageSourcePropType,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    PanResponder,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Image,
+  ImageSourcePropType,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  PanResponder,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
@@ -39,20 +39,20 @@ import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
 import {
-    convertToDownloadableItem,
-    useDownloadHandler,
+  convertToDownloadableItem,
+  useDownloadHandler,
 } from "../utils/downloadUtils";
 import {
-    getFavoriteState,
-    getPersistedStats,
-    getViewed,
-    persistStats,
-    persistViewed,
-    toggleFavorite,
+  getFavoriteState,
+  getPersistedStats,
+  getViewed,
+  persistStats,
+  persistViewed,
+  toggleFavorite,
 } from "../utils/persistentStorage";
 import {
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
 } from "../utils/userValidation";
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
@@ -107,7 +107,7 @@ export default function VideoComponent() {
 
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [pvModalIndex, setPvModalIndex] = useState<number | null>(null);
-  
+
   // Success card state
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -164,6 +164,16 @@ export default function VideoComponent() {
     (s) => s.loadBatchContentStats
   );
   const { comments } = useInteractionStore();
+  // Track playback times for display
+  const [positions, setPositions] = useState<Record<string, number>>({});
+  const [durations, setDurations] = useState<Record<string, number>>({});
+
+  const formatTime = (milliseconds: number) => {
+    const totalSeconds = Math.floor((milliseconds || 0) / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
 
   // ✅ Use global comment modal
   const { showCommentModal } = useCommentModal();
@@ -560,7 +570,7 @@ export default function VideoComponent() {
 
         await libraryStore.addToLibrary(libraryItem);
         console.log(`✅ Added to user's library: ${video.title}`);
-        
+
         setSuccessMessage("Saved to library!");
         setShowSuccessCard(true);
 
@@ -587,7 +597,7 @@ export default function VideoComponent() {
         // User wants to unsave - remove from local library and decrement global count
         await libraryStore.removeFromLibrary(key);
         console.log(`🗑️ Removed from user's library: ${video.title}`);
-        
+
         setSuccessMessage("Removed from library!");
         setShowSuccessCard(true);
 
@@ -1221,6 +1231,18 @@ export default function VideoComponent() {
                   ? (status.positionMillis / status.durationMillis) * 100
                   : 0;
                 globalVideoStore.setVideoProgress(modalKey, pct);
+                if (typeof status.positionMillis === "number") {
+                  setPositions((prev) => ({
+                    ...prev,
+                    [modalKey]: status.positionMillis || 0,
+                  }));
+                }
+                if (typeof status.durationMillis === "number") {
+                  setDurations((prev) => ({
+                    ...prev,
+                    [modalKey]: status.durationMillis || 0,
+                  }));
+                }
                 const ref = videoRefs.current[modalKey];
                 if (status.didJustFinish) {
                   ref?.setPositionAsync(0);
@@ -1295,9 +1317,12 @@ export default function VideoComponent() {
                 </Text>
               </TouchableOpacity>
             </View>
-            {/* Video title - show when paused */}
-            {!playingVideos[modalKey] && (
-              <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
+            {/* Video title - show when paused (only for non-progress layout) */}
+            {!playingVideos[modalKey] && playType !== "progress" && (
+              <View
+                className="absolute left-3 right-3 px-4 py-2 rounded-md"
+                style={{ bottom: 40 }}
+              >
                 <Text
                   className="text-white font-rubik-semibold text-[14px]"
                   numberOfLines={2}
@@ -1307,46 +1332,67 @@ export default function VideoComponent() {
               </View>
             )}
 
-            {/* Controls - always show but change based on playing state */}
+            {/* Controls - progress layout stacks Title -> Progress Row -> Time Row */}
             {playType === "progress" ? (
-              <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-                <TouchableOpacity onPress={() => togglePlay(modalKey, video)}>
-                  <Ionicons
-                    name={playingVideos[modalKey] ? "pause" : "play"}
-                    size={24}
-                    color="#FEA74E"
-                  />
-                </TouchableOpacity>
-                <View
-                  className="flex-1 h-1 bg-white/30 rounded-full relative"
-                  {...panResponder.panHandlers}
+              <View
+                className="absolute left-3 right-3 px-3"
+                style={{ bottom: 12 }}
+              >
+                <Text
+                  className="text-white font-rubik-semibold text-[14px]"
+                  numberOfLines={2}
                 >
+                  {video.title}
+                </Text>
+                <View className="flex-row items-center gap-2 mt-2">
+                  <TouchableOpacity onPress={() => togglePlay(modalKey, video)}>
+                    <Ionicons
+                      name={playingVideos[modalKey] ? "pause" : "play"}
+                      size={24}
+                      color="#FEA74E"
+                    />
+                  </TouchableOpacity>
                   <View
-                    className="h-full bg-[#FEA74E] rounded-full"
-                    style={{ width: `${progress}%` }}
-                  />
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: `${progress}%`,
-                      transform: [{ translateX: -6 }],
-                      top: -5,
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: "#FFFFFF",
-                      borderWidth: 1,
-                      borderColor: "#FEA74E",
-                    }}
-                  />
+                    className="flex-1 h-1 bg-white/30 rounded-full relative"
+                    {...panResponder.panHandlers}
+                  >
+                    <View
+                      className="h-full bg-[#FEA74E] rounded-full"
+                      style={{ width: `${progress}%` }}
+                    />
+                    <View
+                      style={{
+                        position: "absolute",
+                        left: `${progress}%`,
+                        transform: [{ translateX: -6 }],
+                        top: -5,
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: "#FFFFFF",
+                        borderWidth: 1,
+                        borderColor: "#FEA74E",
+                      }}
+                    />
+                  </View>
+                  <TouchableOpacity onPress={() => toggleMute(modalKey)}>
+                    <Ionicons
+                      name={
+                        mutedVideos[modalKey] ? "volume-mute" : "volume-high"
+                      }
+                      size={20}
+                      color="#FEA74E"
+                    />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => toggleMute(modalKey)}>
-                  <Ionicons
-                    name={mutedVideos[modalKey] ? "volume-mute" : "volume-high"}
-                    size={20}
-                    color="#FEA74E"
-                  />
-                </TouchableOpacity>
+                <View className="flex-row justify-between mt-1">
+                  <Text className="text-xs text-white font-rubik">
+                    {formatTime(positions[modalKey] || 0)}
+                  </Text>
+                  <Text className="text-xs text-white font-rubik">
+                    {formatTime(durations[modalKey] || 0)}
+                  </Text>
+                </View>
               </View>
             ) : (
               // Center play/pause button inside a non-blocking overlay so side icons stay clickable
@@ -2102,164 +2148,49 @@ export default function VideoComponent() {
         className="flex-1 px-3 w-full"
         onScrollBeginDrag={closeAllMenus}
         onTouchStart={closeAllMenus}
-      onScroll={handleScroll}
-      onScrollEndDrag={() => {
-        recomputeVisibilityFromLayouts();
-      }}
-      onMomentumScrollEnd={() => {
-        recomputeVisibilityFromLayouts();
-      }}
-      scrollEventThrottle={16}
-      showsVerticalScrollIndicator={true}
-    >
-      {uploadedVideos.length > 0 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            Most Recent
-          </Text>
-          {renderVideoCard(
-            {
-              fileUrl: uploadedVideos[0].fileUrl,
-              title: uploadedVideos[0].title,
-              speaker: uploadedVideos[0].speaker || "Unknown",
-              timeAgo: getTimeAgo(uploadedVideos[0].createdAt),
-              speakerAvatar:
-                typeof uploadedVideos[0].speakerAvatar === "string"
-                  ? uploadedVideos[0].speakerAvatar.trim()
-                  : require("../../assets/images/Avatar-1.png"),
-              views: uploadedVideos[0].viewCount || 0,
-              favorite: uploadedVideos[0].favorite || 0,
-              saved: uploadedVideos[0].saved || 0,
-              sheared: uploadedVideos[0].sheared || 0,
-              comment: uploadedVideos[0].comment || 0,
-              createdAt: uploadedVideos[0].createdAt,
-            },
-            0,
-            "uploaded",
-            "progress"
-          )}
-        </>
-      )}
-      {renderMiniCards(
-        "Previously Viewed",
-        previouslyViewedState,
-        pvModalIndex,
-        setPvModalIndex,
-        miniCardViews,
-        setMiniCardViews,
-        miniCardPlaying,
-        setMiniCardPlaying,
-        miniCardHasPlayed,
-        setMiniCardHasPlayed,
-        miniCardHasCompleted,
-        setMiniCardHasCompleted
-      )}
-      {firstExploreVideos.length > 0 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
-            Explore More Videos
-          </Text>
-          <View className="gap-8">
-            {firstExploreVideos.map((video, index) =>
-              renderVideoCard(
-                {
-                  fileUrl: video.fileUrl,
-                  title: video.title,
-                  speaker: video.speaker || "Unknown",
-                  timeAgo: getTimeAgo(video.createdAt),
-                  speakerAvatar:
-                    typeof video.speakerAvatar === "string"
-                      ? video.speakerAvatar.trim()
-                      : require("../../assets/images/Avatar-1.png"),
-                  views: video.viewCount || 0,
-                  favorite: video.favorite || 0,
-                  saved: video.saved || 0,
-                  sheared: video.sheared || 0,
-                  comment: video.comment || 0,
-                  createdAt: video.createdAt,
-                },
-                index + 1,
-                "explore-early",
-                "center"
-              )
-            )}
-          </View>
-        </>
-      )}
-      {/* 🔥 Trending Section with Enhanced Social Media Features */}
-      {trendingItems.length > 0 ? (
-        renderMiniCards(
-          `Trending Now • ${trendingItems.length} videos`,
-          trendingItems,
-          trendingModalIndex,
-          setTrendingModalIndex,
-          miniCardViews,
-          setMiniCardViews,
-          miniCardPlaying,
-          setMiniCardPlaying,
-          miniCardHasPlayed,
-          setMiniCardHasPlayed,
-          miniCardHasCompleted,
-          setMiniCardHasCompleted
-        )
-      ) : (
-        <View className="mt-5 mb-4">
-          <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
-            Trending Now
-          </Text>
-          <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
-            <Text className="text-[32px] mb-2">📈</Text>
-            <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
-              No trending videos yet
+        onScroll={handleScroll}
+        onScrollEndDrag={() => {
+          recomputeVisibilityFromLayouts();
+        }}
+        onMomentumScrollEnd={() => {
+          recomputeVisibilityFromLayouts();
+        }}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={true}
+      >
+        {uploadedVideos.length > 0 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              Most Recent
             </Text>
-            <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
-              Keep engaging with content to see trending videos here
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* 🎥 Continue Exploring - More Videos */}
-      {middleExploreVideos.length > 0 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            Exploring More
-          </Text>
-          <View className="gap-8">
-            {middleExploreVideos.map((video, index) =>
-              renderVideoCard(
-                {
-                  fileUrl: video.fileUrl,
-                  title: video.title,
-                  speaker: video.speaker || "Unknown",
-                  timeAgo: getTimeAgo(video.createdAt),
-                  speakerAvatar:
-                    typeof video.speakerAvatar === "string"
-                      ? video.speakerAvatar.trim()
-                      : require("../../assets/images/Avatar-1.png"),
-                  views: video.viewCount || 0,
-                  favorite: video.favorite || 0,
-                  saved: video.saved || 0,
-                  sheared: video.sheared || 0,
-                  comment: video.comment || 0,
-                  createdAt: video.createdAt,
-                },
-                index + 50, // Different index range to avoid conflicts
-                "explore-middle",
-                "center"
-              )
+            {renderVideoCard(
+              {
+                fileUrl: uploadedVideos[0].fileUrl,
+                title: uploadedVideos[0].title,
+                speaker: uploadedVideos[0].speaker || "Unknown",
+                timeAgo: getTimeAgo(uploadedVideos[0].createdAt),
+                speakerAvatar:
+                  typeof uploadedVideos[0].speakerAvatar === "string"
+                    ? uploadedVideos[0].speakerAvatar.trim()
+                    : require("../../assets/images/Avatar-1.png"),
+                views: uploadedVideos[0].viewCount || 0,
+                favorite: uploadedVideos[0].favorite || 0,
+                saved: uploadedVideos[0].saved || 0,
+                sheared: uploadedVideos[0].sheared || 0,
+                comment: uploadedVideos[0].comment || 0,
+                createdAt: uploadedVideos[0].createdAt,
+              },
+              0,
+              "uploaded",
+              "progress"
             )}
-          </View>
-        </>
-      )}
-
-      {/* 🎯 Enhanced Recommendation Sections */}
-      {enhancedRecommendedForYou.length > 0 &&
-        renderMiniCards(
-          `Recommended for You • ${enhancedRecommendedForYou.length} videos`,
-          enhancedRecommendedForYou,
-          recommendedModalIndex,
-          setRecommendedModalIndex,
+          </>
+        )}
+        {renderMiniCards(
+          "Previously Viewed",
+          previouslyViewedState,
+          pvModalIndex,
+          setPvModalIndex,
           miniCardViews,
           setMiniCardViews,
           miniCardPlaying,
@@ -2269,39 +2200,154 @@ export default function VideoComponent() {
           miniCardHasCompleted,
           setMiniCardHasCompleted
         )}
-
-      {remainingExploreVideos.length > 0 && (
-        <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-            More Videos
-          </Text>
-          <View className="gap-8">
-            {remainingExploreVideos.map((video, index) =>
-              renderVideoCard(
-                {
-                  fileUrl: video.fileUrl,
-                  title: video.title,
-                  speaker: video.speaker || "Unknown",
-                  timeAgo: getTimeAgo(video.createdAt),
-                  speakerAvatar:
-                    typeof video.speakerAvatar === "string"
-                      ? video.speakerAvatar.trim()
-                      : require("../../assets/images/Avatar-1.png"),
-                  views: video.viewCount || 0,
-                  favorite: video.favorite || 0,
-                  saved: video.saved || 0,
-                  sheared: video.sheared || 0,
-                  comment: video.comment || 0,
-                  createdAt: video.createdAt,
-                },
-                index + 100,
-                "explore-remaining",
-                "center"
-              )
-            )}
+        {firstExploreVideos.length > 0 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
+              Explore More Videos
+            </Text>
+            <View className="gap-8">
+              {firstExploreVideos.map((video, index) =>
+                renderVideoCard(
+                  {
+                    fileUrl: video.fileUrl,
+                    title: video.title,
+                    speaker: video.speaker || "Unknown",
+                    timeAgo: getTimeAgo(video.createdAt),
+                    speakerAvatar:
+                      typeof video.speakerAvatar === "string"
+                        ? video.speakerAvatar.trim()
+                        : require("../../assets/images/Avatar-1.png"),
+                    views: video.viewCount || 0,
+                    favorite: video.favorite || 0,
+                    saved: video.saved || 0,
+                    sheared: video.sheared || 0,
+                    comment: video.comment || 0,
+                    createdAt: video.createdAt,
+                  },
+                  index + 1,
+                  "explore-early",
+                  "center"
+                )
+              )}
+            </View>
+          </>
+        )}
+        {/* 🔥 Trending Section with Enhanced Social Media Features */}
+        {trendingItems.length > 0 ? (
+          renderMiniCards(
+            `Trending Now • ${trendingItems.length} videos`,
+            trendingItems,
+            trendingModalIndex,
+            setTrendingModalIndex,
+            miniCardViews,
+            setMiniCardViews,
+            miniCardPlaying,
+            setMiniCardPlaying,
+            miniCardHasPlayed,
+            setMiniCardHasPlayed,
+            miniCardHasCompleted,
+            setMiniCardHasCompleted
+          )
+        ) : (
+          <View className="mt-5 mb-4">
+            <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+              Trending Now
+            </Text>
+            <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
+              <Text className="text-[32px] mb-2">📈</Text>
+              <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
+                No trending videos yet
+              </Text>
+              <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
+                Keep engaging with content to see trending videos here
+              </Text>
+            </View>
           </View>
-        </>
-      )}
+        )}
+
+        {/* 🎥 Continue Exploring - More Videos */}
+        {middleExploreVideos.length > 0 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              Exploring More
+            </Text>
+            <View className="gap-8">
+              {middleExploreVideos.map((video, index) =>
+                renderVideoCard(
+                  {
+                    fileUrl: video.fileUrl,
+                    title: video.title,
+                    speaker: video.speaker || "Unknown",
+                    timeAgo: getTimeAgo(video.createdAt),
+                    speakerAvatar:
+                      typeof video.speakerAvatar === "string"
+                        ? video.speakerAvatar.trim()
+                        : require("../../assets/images/Avatar-1.png"),
+                    views: video.viewCount || 0,
+                    favorite: video.favorite || 0,
+                    saved: video.saved || 0,
+                    sheared: video.sheared || 0,
+                    comment: video.comment || 0,
+                    createdAt: video.createdAt,
+                  },
+                  index + 50, // Different index range to avoid conflicts
+                  "explore-middle",
+                  "center"
+                )
+              )}
+            </View>
+          </>
+        )}
+
+        {/* 🎯 Enhanced Recommendation Sections */}
+        {enhancedRecommendedForYou.length > 0 &&
+          renderMiniCards(
+            `Recommended for You • ${enhancedRecommendedForYou.length} videos`,
+            enhancedRecommendedForYou,
+            recommendedModalIndex,
+            setRecommendedModalIndex,
+            miniCardViews,
+            setMiniCardViews,
+            miniCardPlaying,
+            setMiniCardPlaying,
+            miniCardHasPlayed,
+            setMiniCardHasPlayed,
+            miniCardHasCompleted,
+            setMiniCardHasCompleted
+          )}
+
+        {remainingExploreVideos.length > 0 && (
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              More Videos
+            </Text>
+            <View className="gap-8">
+              {remainingExploreVideos.map((video, index) =>
+                renderVideoCard(
+                  {
+                    fileUrl: video.fileUrl,
+                    title: video.title,
+                    speaker: video.speaker || "Unknown",
+                    timeAgo: getTimeAgo(video.createdAt),
+                    speakerAvatar:
+                      typeof video.speakerAvatar === "string"
+                        ? video.speakerAvatar.trim()
+                        : require("../../assets/images/Avatar-1.png"),
+                    views: video.viewCount || 0,
+                    favorite: video.favorite || 0,
+                    saved: video.saved || 0,
+                    sheared: video.sheared || 0,
+                    comment: video.comment || 0,
+                    createdAt: video.createdAt,
+                  },
+                  index + 100,
+                  "explore-remaining",
+                  "center"
+                )
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );

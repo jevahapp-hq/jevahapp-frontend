@@ -304,7 +304,7 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
   return (
     <View className={`p-3 ${className}`}>
       {/* Content Type Indicator */}
-      <View className="flex-row items-center mb-2">
+      <View className="flex-row items-center mb-3">
         <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center mr-2">
           <Ionicons
             name={
@@ -344,7 +344,7 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
         </TouchableOpacity>
 
         {/* Progress Bar */}
-        <View className="flex-1">
+        <View className="flex-1 ml-2">
           <View
             className="w-full h-1 bg-white/30 rounded-full relative"
             {...panResponder.panHandlers}
@@ -380,7 +380,7 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
           </View>
 
           {/* Time Display */}
-          <View className="flex-row justify-between mt-1">
+          <View className="flex-row justify-between mt-2">
             <Text className="text-white/70 text-xs font-rubik">
               {formatTime(position)}
             </Text>

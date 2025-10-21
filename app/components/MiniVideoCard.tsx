@@ -188,7 +188,10 @@ export default function MiniVideoCard({
 
           {/* Video Title Overlay */}
           <View className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent" />
-          <View className="absolute bottom-2 left-2 right-2">
+          <View
+            className="absolute left-2 right-2"
+            style={{ bottom: isGloballyPlaying && !isBuffering ? 28 : 8 }}
+          >
             <Text
               className="text-white text-[12px] font-rubik-semibold"
               numberOfLines={2}

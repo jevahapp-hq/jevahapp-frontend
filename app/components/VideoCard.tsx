@@ -376,11 +376,11 @@ export default function VideoCard({
             </View>
           </View>
 
-          {/* Video Title - show when paused (just above progress bar) */}
+          {/* Video Title - show when paused (well above progress bar) */}
           {!playingVideos[modalKey] && (
             <View
               className="absolute left-3 right-3 px-4 py-2 rounded-md"
-              style={{ bottom: 28, zIndex: 5 }}
+              style={{ bottom: 60, zIndex: 5 }}
             >
               <Text
                 className="text-white font-semibold text-[14px]"

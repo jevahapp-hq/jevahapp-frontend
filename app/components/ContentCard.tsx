@@ -1,19 +1,19 @@
 import {
-    AntDesign,
-    Feather,
-    Ionicons,
-    MaterialIcons,
+  AntDesign,
+  Feather,
+  Ionicons,
+  MaterialIcons,
 } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useSafeLibraryStore } from "../hooks/useSafeLibraryStore";
@@ -978,7 +978,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
             {/* Video Title - show when paused */}
             {!globalVideoStore.playingVideos[modalKey] && (
-              <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
+              <View className="absolute bottom-16 left-3 right-3 px-4 py-2 rounded-md">
                 <Text
                   className="text-white font-semibold text-[14px]"
                   numberOfLines={2}
