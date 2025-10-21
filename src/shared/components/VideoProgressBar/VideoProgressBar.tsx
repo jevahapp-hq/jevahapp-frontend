@@ -143,7 +143,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       {/* Progress Bar */}
       <View className="flex-1 flex-row items-center">
         <Text className="text-white text-xs font-rubik mr-2 min-w-[35px]">
-          {formatTime(isDragging ? dragProgress * durationMs : currentMs)}
+          {formatTime(currentProgress * durationMs)}
         </Text>
 
         <View
