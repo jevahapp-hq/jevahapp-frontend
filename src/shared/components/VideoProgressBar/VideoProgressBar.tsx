@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   PanResponder,
@@ -30,7 +30,10 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState(0);
   const progressBarRef = useRef<View>(null);
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  const animatedValue = useRef(new Animated.Value(progress)).current;
+  const [isSeeking, setIsSeeking] = useState(false);
+  const targetProgressRef = useRef<number | null>(null);
+  const [barWidth, setBarWidth] = useState(0);
 
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -45,13 +48,25 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
     const { locationX } = event.nativeEvent;
     progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
       const percent = Math.max(0, Math.min(1, locationX / width));
+      // Immediate visual feedback to tapped position
+      setDragProgress(percent);
+      animatedValue.setValue(percent);
+      // Keep indicator at tapped location until external progress catches up
+      setIsSeeking(true);
+      targetProgressRef.current = percent;
       onSeekToPercent(percent);
     });
   };
 
   const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
+    onStartShouldSetPanResponder: (evt, gestureState) => {
+      // Only respond to touches on the progress bar area
+      return true;
+    },
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      // Respond to moves when dragging
+      return isDragging;
+    },
     onPanResponderGrant: (evt) => {
       setIsDragging(true);
       progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
@@ -64,23 +79,57 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       });
     },
     onPanResponderMove: (evt) => {
-      progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
-        const percent = Math.max(
-          0,
-          Math.min(1, evt.nativeEvent.locationX / width)
-        );
-        setDragProgress(percent);
-        animatedValue.setValue(percent);
-      });
+      if (isDragging) {
+        progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+          const percent = Math.max(
+            0,
+            Math.min(1, evt.nativeEvent.locationX / width)
+          );
+          setDragProgress(percent);
+          animatedValue.setValue(percent);
+        });
+      }
     },
     onPanResponderRelease: () => {
       setIsDragging(false);
+      // Keep indicator at released location until external progress catches up
+      setIsSeeking(true);
+      targetProgressRef.current = dragProgress;
       onSeekToPercent(dragProgress);
+    },
+    onPanResponderTerminate: () => {
+      setIsDragging(false);
     },
   });
 
-  const currentProgress = isDragging ? dragProgress : progress;
+  // Drive the animated value from the effective progress source-of-truth
+  // (drag position when dragging, target when seeking, live progress otherwise)
+  // This ensures the orange circle always follows the intended position.
+
+  // While seeking, hold the indicator at target until external progress reaches it
+  useEffect(() => {
+    if (!isSeeking || targetProgressRef.current == null) return;
+    const target = targetProgressRef.current;
+    const diff = Math.abs(progress - target);
+    // Consider synced when within 2% of target or beyond target on forward seeks
+    if (diff < 0.02 || progress >= target) {
+      setIsSeeking(false);
+      targetProgressRef.current = null;
+      animatedValue.setValue(progress);
+    }
+  }, [progress, isSeeking, animatedValue]);
+
+  const currentProgress = isDragging
+    ? dragProgress
+    : isSeeking && targetProgressRef.current != null
+    ? targetProgressRef.current
+    : progress;
   const progressBarHeight = isDragging ? 8 : 4;
+
+  // Ensure the indicator position always matches the effective progress
+  useEffect(() => {
+    animatedValue.setValue(currentProgress);
+  }, [currentProgress, animatedValue]);
 
   if (!showControls) return null;
 
@@ -96,6 +145,12 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
           ref={progressBarRef}
           className="flex-1 relative"
           style={{ height: progressBarHeight + 16 }} // Extra height for touch area
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w && Math.abs(w - barWidth) > 0.5) {
+              setBarWidth(w);
+            }
+          }}
           {...panResponder.panHandlers}
         >
           {/* Background Track */}
@@ -108,46 +163,41 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
             }}
           />
 
-          {/* Progress Fill - Orange */}
+          {/* Progress Fill - Orange (ends at the indicator position) */}
           <Animated.View
             className="absolute bg-[#FEA74E] rounded-full"
             style={{
               height: progressBarHeight,
-              width: animatedValue.interpolate({
-                inputRange: [0, 1],
-                outputRange: ["0%", "100%"],
-                extrapolate: "clamp",
-              }),
+              width: barWidth ? Animated.multiply(animatedValue, barWidth) : 0,
               top: 8,
             }}
           />
 
-          {/* Draggable Indicator */}
+          {/* Draggable Orange Indicator - Main Control */}
           <Animated.View
             className="absolute bg-[#FEA74E] rounded-full"
             style={{
-              width: 16,
-              height: 16,
-              top: 4,
-              left: animatedValue.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, "100%"],
-                extrapolate: "clamp",
-              }),
+              width: isDragging ? 24 : 20, // Larger when dragging
+              height: isDragging ? 24 : 20, // Larger when dragging
+              top: isDragging ? 0 : 2, // Adjust position when larger
+              left:
+                barWidth > 0
+                  ? Animated.subtract(
+                      Animated.multiply(animatedValue, barWidth),
+                      isDragging ? 12 : 10
+                    )
+                  : 0,
               transform: [
                 {
-                  translateX: animatedValue.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-8, 0], // Center the indicator
-                    extrapolate: "clamp",
-                  }),
+                  scale: isDragging ? 1.2 : 1, // Slightly larger when dragging
                 },
               ],
               shadowColor: "#FEA74E",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 4,
+              shadowOffset: { width: 0, height: isDragging ? 4 : 3 },
+              shadowOpacity: isDragging ? 0.6 : 0.4,
+              shadowRadius: isDragging ? 8 : 6,
+              elevation: isDragging ? 8 : 6,
+              zIndex: 10, // Ensure it's on top
             }}
           />
         </View>
