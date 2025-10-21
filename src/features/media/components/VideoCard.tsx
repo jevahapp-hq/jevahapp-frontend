@@ -13,7 +13,6 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
-import { DurationDisplay } from "../../../shared/components/DurationDisplay";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
 import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
@@ -418,21 +417,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 {getUserDisplayNameFromContent(video)}
               </Text>
               <View className="flex flex-row mt-2 ml-2">
-                <DurationDisplay
-                  currentMs={
-                    lastKnownDurationRef.current > 0
-                      ? progress * lastKnownDurationRef.current
-                      : 0
-                  }
-                  durationMs={lastKnownDurationRef.current}
-                  showIcon={true}
-                  iconName="time-outline"
-                  iconSize={14}
-                  iconColor="#9CA3AF"
-                  textColor="#9CA3AF"
-                  textSize="xs"
-                />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 font-rubik">
                   {getTimeAgo(video.createdAt)}
                 </Text>
               </View>
