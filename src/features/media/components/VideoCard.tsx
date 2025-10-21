@@ -557,7 +557,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             {!avatarErrored ? (
               <Image
                 source={getUserAvatarFromContent(video)}
-                style={{ width: 30, height: 30, borderRadius: 999 }}
+                style={{ width: 24, height: 24, borderRadius: 999 }}
                 resizeMode="cover"
                 onError={(error) => {
                   setAvatarErrored(true);
@@ -568,7 +568,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 }}
               />
             ) : (
-              <Text className="text-[14px] font-rubik-semibold text-[#344054]">
+              <Text className="text-[12px] font-rubik-semibold text-[#344054]">
                 {firstInitial}
               </Text>
             )}
