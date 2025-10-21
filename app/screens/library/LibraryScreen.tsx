@@ -14,6 +14,7 @@ import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
 import { navigateMainTab } from "../../utils/navigation";
 
 import { Ionicons } from "@expo/vector-icons";
+import CopyrightFreeSongs from "../../components/CopyrightFreeSongs";
 import AllLibrary from "./AllLibrary";
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
@@ -33,7 +34,19 @@ export default function LibraryScreen() {
       case "SERMON":
         return <AllLibrary contentType="SERMON" />;
       case "MUSIC":
-        return <AllLibrary contentType="MUSIC" />;
+        return (
+          <View className="flex-1">
+            {/* Copyright-Free Songs Section */}
+            <View className="mb-4">
+              <CopyrightFreeSongs />
+            </View>
+
+            {/* Regular Music Library */}
+            <View className="flex-1">
+              <AllLibrary contentType="MUSIC" />
+            </View>
+          </View>
+        );
       case "E-BOOKS":
         return <AllLibrary contentType="E-BOOKS" />;
       case "VIDEO":

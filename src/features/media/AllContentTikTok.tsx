@@ -39,6 +39,7 @@ import { useMedia } from "../../shared/hooks/useMedia";
 // Component imports
 import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
+import CopyrightFreeSongs from "../../../app/components/CopyrightFreeSongs";
 import SuccessCard from "../../../app/components/SuccessCard";
 import HymnMiniCard, {
   HymnItem,
@@ -1223,6 +1224,22 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               Hymns
             </Text>
             {renderHymnMiniCards()}
+          </View>
+
+          {/* Copyright-Free Songs Section */}
+          <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+            <Text
+              style={{
+                fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                fontWeight: "600",
+                color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                paddingHorizontal: UI_CONFIG.SPACING.MD,
+                marginBottom: UI_CONFIG.SPACING.MD,
+              }}
+            >
+              Copyright-Free Songs
+            </Text>
+            <CopyrightFreeSongs />
           </View>
 
           {/* All Content Section (split into first four, then Recommended Live, then rest) */}

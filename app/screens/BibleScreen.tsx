@@ -8,10 +8,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import BibleOnboarding from "../components/BibleOnboarding";
 
 export default function BibleScreen() {
+  const [showOnboarding, setShowOnboarding] = useState(true);
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+
+  const handleEnterBible = () => {
+    setShowOnboarding(false);
+  };
+
+  // Show onboarding screen first
+  if (showOnboarding) {
+    return <BibleOnboarding onEnterBible={handleEnterBible} />;
+  }
 
   // Sample Bible books data
   const bibleBooks = [
@@ -187,6 +198,12 @@ export default function BibleScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => setShowOnboarding(true)}
+        >
+          <Ionicons name="arrow-back" size={24} color="#256E63" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Holy Bible</Text>
         <TouchableOpacity style={styles.searchButton}>
           <Ionicons name="search-outline" size={24} color="#256E63" />
@@ -224,10 +241,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
+  backButton: {
+    padding: 8,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#1F2937",
+    flex: 1,
+    textAlign: "center",
   },
   searchButton: {
     padding: 8,

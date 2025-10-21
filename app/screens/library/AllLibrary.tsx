@@ -2,15 +2,15 @@ import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    FlatList,
-    Image,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Animated,
+  FlatList,
+  Image,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import SuccessCard from "../../components/SuccessCard";
@@ -73,11 +73,11 @@ const pastSearchesInitial = [
 
 export default function AllLibrary({ contentType }: { contentType?: string }) {
   const [query, setQuery] = useState("");
-  
+
   // Success card state
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  
+
   const libraryStore = useLibraryStore();
   const globalVideoStore = useGlobalVideoStore();
   const [savedItems, setSavedItems] = useState<any[]>([]);
@@ -226,7 +226,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             const likeCountState: Record<string, number> = {};
             const savedIds = new Set<string>();
 
-            userBookmarks.forEach((item) => {
+            userBookmarks.forEach((item: any) => {
               const itemId = item._id || item.id;
               savedIds.add(itemId); // Add to saved items set
               if (item.contentType === "videos") {
@@ -274,6 +274,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           await libraryStore.loadSavedItems();
         }
         const localItems = libraryStore.getAllSavedItems();
+
         setSavedItems(localItems);
 
         // Update saved items set from local storage
@@ -281,13 +282,12 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
         const likeState: Record<string, boolean> = {};
         const likeCountState: Record<string, number> = {};
 
-        localItems.forEach((item) => {
-          const itemId = item.id;
+        localItems.forEach((item: any) => {
+          const itemId = item.id || item._id;
           savedIds.add(itemId);
           // Initialize like states from local storage
-          likeState[itemId] = (item as any).isLiked || false;
-          likeCountState[itemId] =
-            (item as any).likeCount || (item as any).likes || 0;
+          likeState[itemId] = item.isLiked || false;
+          likeCountState[itemId] = item.likeCount || item.likes || 0;
         });
 
         setSavedItemIds(savedIds);
@@ -1505,6 +1505,13 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
               color="#FFFFFF"
             />
           </View>
+
+          {/* Public Domain Badge for Hymns */}
+          {item.isPublicDomain && (
+            <View className="absolute top-2 left-2 bg-green-500/80 rounded-full px-2 py-1">
+              <Text className="text-white text-xs font-bold">FREE</Text>
+            </View>
+          )}
         </View>
       );
     },
