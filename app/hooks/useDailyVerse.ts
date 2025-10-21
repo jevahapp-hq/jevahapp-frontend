@@ -21,32 +21,6 @@ export const useDailyVerse = () => {
     }
   };
 
-  const fadeToNewVerse = async () => {
-    try {
-      // Fade out current verse
-      await new Promise((resolve) => {
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }).start(resolve);
-      });
-
-      // Load new verse
-      const verse = dailyVerseService.getTodaysVerse();
-      setCurrentVerse(verse);
-
-      // Fade in new verse
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-    } catch (error) {
-      console.error("Failed to fade to new verse:", error);
-    }
-  };
-
   const checkForNewDay = () => {
     const now = new Date();
     // Use AsyncStorage instead of localStorage for React Native
@@ -68,6 +42,5 @@ export const useDailyVerse = () => {
     loading,
     fadeAnim,
     loadTodaysVerse,
-    fadeToNewVerse,
   };
 };

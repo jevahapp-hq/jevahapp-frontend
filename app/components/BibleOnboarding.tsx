@@ -21,8 +21,7 @@ const { width, height } = Dimensions.get("window");
 export default function BibleOnboarding({
   onEnterBible,
 }: BibleOnboardingProps) {
-  const { currentVerse, loading, fadeAnim, loadTodaysVerse, fadeToNewVerse } =
-    useDailyVerse();
+  const { currentVerse, loading, fadeAnim, loadTodaysVerse } = useDailyVerse();
   const [slideAnim] = useState(new Animated.Value(50));
 
   useEffect(() => {
@@ -134,14 +133,6 @@ export default function BibleOnboarding({
             <Ionicons name="book" size={24} color="#FFFFFF" />
             <Text style={styles.primaryButtonText}>Open Bible</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={fadeToNewVerse}
-          >
-            <Ionicons name="refresh" size={20} color="#256E63" />
-            <Text style={styles.secondaryButtonText}>New Verse</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Features */}
@@ -186,7 +177,7 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 60,
   },
   logoContainer: {
     width: 120,
@@ -316,6 +307,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   actionSection: {
+    marginTop: 40,
     marginBottom: 40,
   },
   primaryButton: {
