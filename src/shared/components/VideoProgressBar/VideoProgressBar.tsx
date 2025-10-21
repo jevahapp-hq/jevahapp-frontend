@@ -131,6 +131,11 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
     animatedValue.setValue(currentProgress);
   }, [currentProgress, animatedValue]);
 
+  // Precompute circle geometry for clean centering over the track
+  const circleRadius = isDragging ? 12 : 10; // matches 24/20 sizing above
+  const circleTop = 8 + progressBarHeight / 2 - circleRadius; // center on track (track top = 8)
+  const labelTop = Math.max(0, circleTop - 24); // place label above the knob
+
   if (!showControls) return null;
 
   return (
@@ -173,30 +178,51 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
             }}
           />
 
+          {/* Floating time label while dragging/seeking */}
+          {(isDragging || isSeeking) && (
+            <Animated.View
+              className="absolute bg-black/70 px-2 py-1 rounded"
+              style={{
+                top: labelTop,
+                left:
+                  barWidth > 0
+                    ? Animated.subtract(
+                        Animated.multiply(animatedValue, barWidth),
+                        20
+                      )
+                    : 0,
+              }}
+            >
+              <Text className="text-white text-[10px] font-rubik">
+                {formatTime(currentProgress * durationMs)}
+              </Text>
+            </Animated.View>
+          )}
+
           {/* Draggable Orange Indicator - Main Control */}
           <Animated.View
             className="absolute bg-[#FEA74E] rounded-full"
             style={{
-              width: isDragging ? 24 : 20, // Larger when dragging
-              height: isDragging ? 24 : 20, // Larger when dragging
-              top: isDragging ? 0 : 2, // Adjust position when larger
+              width: circleRadius * 2,
+              height: circleRadius * 2,
+              top: circleTop,
               left:
                 barWidth > 0
                   ? Animated.subtract(
                       Animated.multiply(animatedValue, barWidth),
-                      isDragging ? 12 : 10
+                      circleRadius
                     )
                   : 0,
               transform: [
                 {
-                  scale: isDragging ? 1.2 : 1, // Slightly larger when dragging
+                  scale: isDragging ? 1.1 : 1,
                 },
               ],
               shadowColor: "#FEA74E",
-              shadowOffset: { width: 0, height: isDragging ? 4 : 3 },
-              shadowOpacity: isDragging ? 0.6 : 0.4,
-              shadowRadius: isDragging ? 8 : 6,
-              elevation: isDragging ? 8 : 6,
+              shadowOffset: { width: 0, height: isDragging ? 3 : 2 },
+              shadowOpacity: isDragging ? 0.5 : 0.35,
+              shadowRadius: isDragging ? 7 : 5,
+              elevation: isDragging ? 7 : 5,
               zIndex: 10, // Ensure it's on top
             }}
           />
