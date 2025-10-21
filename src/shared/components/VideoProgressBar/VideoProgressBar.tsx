@@ -1,6 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import React, { useRef, useState } from "react";
+import {
+  Animated,
+  PanResponder,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface VideoProgressBarProps {
   progress: number; // 0-1
@@ -8,7 +14,6 @@ interface VideoProgressBarProps {
   durationMs: number;
   isMuted: boolean;
   onToggleMute: () => void;
-  onSeekRelative: (deltaSec: number) => void;
   onSeekToPercent: (percent: number) => void;
   showControls?: boolean;
 }
@@ -19,10 +24,14 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   durationMs,
   isMuted,
   onToggleMute,
-  onSeekRelative,
   onSeekToPercent,
   showControls = true,
 }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragProgress, setDragProgress] = useState(0);
+  const progressBarRef = useRef<View>(null);
+  const animatedValue = useRef(new Animated.Value(0)).current;
+
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -34,16 +43,121 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
     if (!showControls) return;
 
     const { locationX } = event.nativeEvent;
-    const progressBarWidth = 200; // Approximate width
-    const percent = Math.max(0, Math.min(1, locationX / progressBarWidth));
-    onSeekToPercent(percent);
+    progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+      const percent = Math.max(0, Math.min(1, locationX / width));
+      onSeekToPercent(percent);
+    });
   };
+
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (evt) => {
+      setIsDragging(true);
+      progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+        const percent = Math.max(
+          0,
+          Math.min(1, evt.nativeEvent.locationX / width)
+        );
+        setDragProgress(percent);
+        animatedValue.setValue(percent);
+      });
+    },
+    onPanResponderMove: (evt) => {
+      progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+        const percent = Math.max(
+          0,
+          Math.min(1, evt.nativeEvent.locationX / width)
+        );
+        setDragProgress(percent);
+        animatedValue.setValue(percent);
+      });
+    },
+    onPanResponderRelease: () => {
+      setIsDragging(false);
+      onSeekToPercent(dragProgress);
+    },
+  });
+
+  const currentProgress = isDragging ? dragProgress : progress;
+  const progressBarHeight = isDragging ? 8 : 4;
 
   if (!showControls) return null;
 
   return (
     <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-      {/* Mute Button */}
+      {/* Progress Bar */}
+      <View className="flex-1 flex-row items-center">
+        <Text className="text-white text-xs font-rubik mr-2 min-w-[35px]">
+          {formatTime(isDragging ? dragProgress * durationMs : currentMs)}
+        </Text>
+
+        <View
+          ref={progressBarRef}
+          className="flex-1 relative"
+          style={{ height: progressBarHeight + 16 }} // Extra height for touch area
+          {...panResponder.panHandlers}
+        >
+          {/* Background Track */}
+          <View
+            className="absolute bg-white/30 rounded-full"
+            style={{
+              height: progressBarHeight,
+              width: "100%",
+              top: 8, // Center vertically in touch area
+            }}
+          />
+
+          {/* Progress Fill - Orange */}
+          <Animated.View
+            className="absolute bg-[#FEA74E] rounded-full"
+            style={{
+              height: progressBarHeight,
+              width: animatedValue.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0%", "100%"],
+                extrapolate: "clamp",
+              }),
+              top: 8,
+            }}
+          />
+
+          {/* Draggable Indicator */}
+          <Animated.View
+            className="absolute bg-[#FEA74E] rounded-full"
+            style={{
+              width: 16,
+              height: 16,
+              top: 4,
+              left: animatedValue.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, "100%"],
+                extrapolate: "clamp",
+              }),
+              transform: [
+                {
+                  translateX: animatedValue.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-8, 0], // Center the indicator
+                    extrapolate: "clamp",
+                  }),
+                },
+              ],
+              shadowColor: "#FEA74E",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+          />
+        </View>
+
+        <Text className="text-white text-xs font-rubik ml-2 min-w-[35px]">
+          {formatTime(durationMs)}
+        </Text>
+      </View>
+
+      {/* Mute Button - moved to the right */}
       <TouchableOpacity
         onPress={onToggleMute}
         className="bg-black/50 p-2 rounded-full"
@@ -55,47 +169,6 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
           color="#FFFFFF"
         />
       </TouchableOpacity>
-
-      {/* Progress Bar */}
-      <View className="flex-1 flex-row items-center">
-        <Text className="text-white text-xs font-rubik mr-2 min-w-[35px]">
-          {formatTime(currentMs)}
-        </Text>
-
-        <TouchableOpacity
-          onPress={handleProgressBarPress}
-          className="flex-1 h-1 bg-white/30 rounded-full"
-          activeOpacity={0.8}
-        >
-          <View
-            className="h-full bg-white rounded-full"
-            style={{ width: `${progress * 100}%` }}
-          />
-        </TouchableOpacity>
-
-        <Text className="text-white text-xs font-rubik ml-2 min-w-[35px]">
-          {formatTime(durationMs)}
-        </Text>
-      </View>
-
-      {/* Seek Buttons */}
-      <View className="flex-row gap-1">
-        <TouchableOpacity
-          onPress={() => onSeekRelative(-10)}
-          className="bg-black/50 p-1 rounded"
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-        >
-          <Ionicons name="play-skip-back" size={14} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => onSeekRelative(10)}
-          className="bg-black/50 p-1 rounded"
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-        >
-          <Ionicons name="play-skip-forward" size={14} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };

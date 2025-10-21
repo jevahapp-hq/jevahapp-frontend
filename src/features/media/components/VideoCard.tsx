@@ -332,7 +332,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             progress={progress}
             isMuted={isMuted}
             onToggleMute={handleToggleMute}
-            onSeekRelative={seekBySeconds}
             onSeekToPercent={seekToPercent}
             currentMs={
               lastKnownDurationRef.current > 0
