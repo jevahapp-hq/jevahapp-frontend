@@ -28,6 +28,7 @@ import {
     TouchableWithoutFeedback,
     View,
 } from "react-native";
+import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
@@ -184,6 +185,7 @@ export default function VideoComponent() {
   const isAutoPlayEnabled = globalVideoStore.isAutoPlayEnabled;
   const handleVideoVisibilityChange =
     globalVideoStore.handleVideoVisibilityChange;
+  const enableAutoPlay = globalVideoStore.enableAutoPlay;
 
   // 🔧 Fix infinite loop: Memoize uploadedVideos to prevent recreation on every render
   // Accept both `type` and `contentType` from media items
@@ -207,6 +209,30 @@ export default function VideoComponent() {
       loadBatchContentStats(ids as string[]);
     }
   }, [uploadedVideos.length, loadBatchContentStats]);
+
+  // Autoplay disabled - users must manually click to play videos
+  useEffect(() => {
+    console.log("📱 Autoplay disabled for VideoComponent - manual play only");
+  }, []);
+
+  // Start most recent video when videos are loaded
+  useEffect(() => {
+    if (isAutoPlayEnabled && !globalVideoStore.currentlyVisibleVideo && uploadedVideos.length > 0) {
+      // Wait a bit for layouts to be calculated
+      const timer = setTimeout(() => {
+        const videoLayouts = Object.entries(videoLayoutsRef.current)
+          .sort((a, b) => a[1].y - b[1].y);
+        
+        if (videoLayouts.length > 0) {
+          const [mostRecentKey] = videoLayouts[0];
+          console.log(`🎬 VideoComponent: Starting most recent video on load: ${mostRecentKey}`);
+          globalVideoStore.playVideoGlobally(mostRecentKey);
+        }
+      }, 500); // Wait 500ms for layouts to be calculated
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isAutoPlayEnabled, globalVideoStore, uploadedVideos.length]);
 
   const toggleMute = (key: string) => {
     globalVideoStore.toggleVideoMute(key);
@@ -389,6 +415,8 @@ export default function VideoComponent() {
 
   const togglePlay = (key: string, video?: VideoCard) => {
     const isCurrentlyPlaying = playingVideos[key];
+    
+    console.log(`👆 Touch-based togglePlay called for video: ${video?.title || key}`);
 
     Object.keys(miniCardPlaying).forEach((k) => {
       setMiniCardPlaying((prev) => ({ ...prev, [k]: false }));
@@ -404,25 +432,25 @@ export default function VideoComponent() {
       // ✅ Only increment view when replaying a completed video
       if (video && completedBefore) {
         console.log(
-          `🎬 Incrementing view for replay of completed video ${video.title}:`,
+          `🎬 Touch autoplay: Incrementing view for replay of completed video ${video.title}:`,
           {
             key,
             alreadyPlayed,
             completedBefore,
-            action: "Replay after completion",
+            action: "Touch replay after completion",
           }
         );
         incrementView(key, video);
         globalVideoStore.setVideoCompleted(key, false); // Reset completion status for next view
       } else if (video) {
-        console.log(`▶️ Starting video ${video.title} (no view count yet):`, {
+        console.log(`🎬 Touch autoplay: Starting video ${video.title} (no view count yet):`, {
           key,
           alreadyPlayed,
           completedBefore,
-          action: "Initial play or pause/resume",
+          action: "Touch initial play or pause/resume",
         });
       } else {
-        console.log(`⏭️ No video object available for key:`, key);
+        console.log(`🎬 Touch autoplay: No video object available for key:`, key);
       }
 
       setHasPlayed((prev) => ({ ...prev, [key]: true }));
@@ -433,6 +461,7 @@ export default function VideoComponent() {
     }
 
     // ✅ Use global media management to ensure only one media plays at a time
+    // This will automatically pause other videos when this one starts
     globalMediaStore.playMediaGlobally(key, "video");
   };
 
@@ -705,13 +734,112 @@ export default function VideoComponent() {
     });
   };
 
-  // 📱 During scroll: only record position; autoplay triggers on scroll end for smoother UX
+  // 📱 Footer-based scroll behavior for precise video control
+  const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | null>(null);
+  const lastScrollY = useRef<number>(0);
+
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset } = event.nativeEvent;
       lastScrollYRef.current = contentOffset.y;
+      
+      // Footer-based autoplay behavior during scrolling
+      if (isAutoPlayEnabled) {
+        const scrollY = contentOffset.y;
+        const screenHeight = Dimensions.get("window").height;
+        const viewportTop = scrollY;
+        const viewportBottom = scrollY + screenHeight;
+        
+        // Determine scroll direction
+        const currentScrollY = scrollY;
+        if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
+          setScrollDirection(currentScrollY > lastScrollY.current ? 'down' : 'up');
+          lastScrollY.current = currentScrollY;
+        }
+        
+        // Get all video layouts sorted by position
+        const videoLayouts = Object.entries(videoLayoutsRef.current)
+          .sort((a, b) => a[1].y - b[1].y);
+        
+        let targetVideo: string | null = null;
+        
+        // Check if we have any videos
+        if (videoLayouts.length === 0) {
+          console.log("📱 VideoComponent: No videos available, skipping autoplay");
+          return;
+        }
+        
+        if (scrollDirection === 'down') {
+          // Scrolling down: Play next video when footer icons are no longer visible
+          console.log("📱 VideoComponent: Scrolling down - checking footer visibility");
+          
+          for (const [key, layout] of videoLayouts) {
+            const videoTop = layout.y;
+            const videoBottom = layout.y + layout.height;
+            const videoHeight = layout.height;
+            
+            // Check if footer (bottom 20% of video) is visible
+            const footerStart = videoTop + (videoHeight * 0.8); // Footer starts at 80% of video
+            const isFooterVisible = footerStart < viewportBottom && videoBottom > viewportTop;
+            
+            console.log(`📱 VideoComponent: Video ${key}: footerVisible=${isFooterVisible}`);
+            
+            if (!isFooterVisible && videoTop < viewportBottom) {
+              targetVideo = key;
+              console.log(`🎬 VideoComponent: Footer scrolled past for video ${key}, targeting for play`);
+              break;
+            }
+          }
+        } else if (scrollDirection === 'up') {
+          // Scrolling up: Play previous video when current video is half on screen
+          console.log("📱 VideoComponent: Scrolling up - checking half visibility");
+          
+          for (let i = videoLayouts.length - 1; i >= 0; i--) {
+            const [key, layout] = videoLayouts[i];
+            const videoTop = layout.y;
+            const videoBottom = layout.y + layout.height;
+            const videoHeight = layout.height;
+            
+            const intersectionTop = Math.max(viewportTop, videoTop);
+            const intersectionBottom = Math.min(viewportBottom, videoBottom);
+            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+            const visibilityRatio = visibleHeight / videoHeight;
+            
+            console.log(`📱 VideoComponent: Video ${key}: visibility=${Math.round(visibilityRatio * 100)}%`);
+            
+            if (visibilityRatio >= 0.5 && videoTop < viewportBottom) {
+              targetVideo = key;
+              console.log(`🎬 VideoComponent: Video ${key} is half visible, targeting for play`);
+              break;
+            }
+          }
+        } else {
+          // Initial load: Play the first video if visible
+          console.log("📱 VideoComponent: Initial load - checking most recent video");
+          
+          if (videoLayouts.length > 0) {
+            const [firstKey, firstLayout] = videoLayouts[0];
+            const videoTop = firstLayout.y;
+            const videoBottom = firstLayout.y + firstLayout.height;
+            
+            const isVisible = videoTop < viewportBottom && videoBottom > viewportTop;
+            console.log(`📱 VideoComponent: Most recent video ${firstKey}: visible=${isVisible}`);
+            
+            if (isVisible) {
+              targetVideo = firstKey;
+              console.log(`🎬 VideoComponent: Most recent video ${firstKey} is visible, targeting for play`);
+            }
+          }
+        }
+        
+        // Update video playback
+        if (targetVideo && targetVideo !== globalVideoStore.currentlyVisibleVideo) {
+          console.log(`🎬 VideoComponent: Footer-based video change to ${targetVideo} - Direction: ${scrollDirection}`);
+          globalVideoStore.playVideoGlobally(targetVideo);
+        }
+      }
     },
-    []
+    [isAutoPlayEnabled, globalVideoStore, scrollDirection]
   );
 
   const recomputeVisibilityFromLayouts = useCallback(() => {
@@ -1189,7 +1317,18 @@ export default function VideoComponent() {
 
     return (
       <View key={modalKey} className="flex flex-col mb-6">
-        <TouchableWithoutFeedback onPress={handleVideoCardPress}>
+        <TouchableWithoutFeedback 
+          onPress={handleVideoCardPress}
+          onTouchStart={() => {
+            console.log(`👆 Hover started on video: ${video.title}`);
+            // No autoplay - user must manually click to play
+          }}
+          onTouchEnd={() => {
+            console.log(`👆 Hover ended on video: ${video.title}`);
+            // Don't pause on hover end - let it continue playing
+            // Only pause when scrolled past or another video is hovered
+          }}
+        >
           <View
             className="w-full h-[400px] overflow-hidden relative"
             onLayout={(e) => {
@@ -1202,12 +1341,11 @@ export default function VideoComponent() {
                 if (ref) videoRefs.current[modalKey] = ref;
               }}
               source={{
-                uri:
-                  video.fileUrl &&
-                  video.fileUrl.trim() &&
-                  video.fileUrl.trim() !== "https://example.com/placeholder.mp4"
-                    ? video.fileUrl.trim()
-                    : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                uri: getBestVideoUrl(video.fileUrl),
+                headers: {
+                  'User-Agent': 'JevahApp/1.0',
+                  'Accept': 'video/*'
+                }
               }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
@@ -1232,19 +1370,7 @@ export default function VideoComponent() {
                 }
               }}
             />
-            {/* 📱 Auto-play indicator when this card is the active auto-playing video */}
-            {playingVideos[modalKey] &&
-              isAutoPlayEnabled &&
-              globalVideoStore.currentlyVisibleVideo === modalKey && (
-                <View className="absolute top-4 left-4">
-                  <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">
-                    <View className="w-2 h-2 bg-red-500 rounded-full mr-2" />
-                    <Text className="text-white text-xs font-rubik">
-                      Auto-playing
-                    </Text>
-                  </View>
-                </View>
-              )}
+
 
             <View
               className="flex-col absolute mt-[170px] right-4"
@@ -1266,7 +1392,41 @@ export default function VideoComponent() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => showCommentModal(formattedComments, contentId)}
+                onPress={() => {
+                  console.log("🔄 Comment button clicked for video:", video.title);
+                  // INSTANT COMMENT MODAL - No delays, no complex logic
+                  const mockComments = [
+                    {
+                      id: "1",
+                      userName: "John Doe",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                      comment: "Great video! Really enjoyed this content.",
+                      likes: 5,
+                      isLiked: false,
+                    },
+                    {
+                      id: "2",
+                      userName: "Jane Smith",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                      comment: "Amazing! Thanks for sharing.",
+                      likes: 3,
+                      isLiked: true,
+                    },
+                    {
+                      id: "3",
+                      userName: "Mike Johnson",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                      comment: "This is exactly what I needed!",
+                      likes: 1,
+                      isLiked: false,
+                    },
+                  ];
+                  // DIRECT CALL - No wrapper functions, no delays
+                  showCommentModal(mockComments, contentId);
+                }}
                 className="flex-col justify-center items-center mt-6"
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 activeOpacity={0.7}
@@ -1366,11 +1526,11 @@ export default function VideoComponent() {
                   <View
                     className={`${
                       playingVideos[modalKey] ? "bg-black/30" : "bg-white/70"
-                    } p-3 rounded-full`}
+                    } p-4 rounded-full`}
                   >
                     <Ionicons
                       name={playingVideos[modalKey] ? "pause" : "play"}
-                      size={32}
+                      size={40}
                       color={playingVideos[modalKey] ? "#FFFFFF" : "#FEA74E"}
                     />
                   </View>
@@ -1591,6 +1751,7 @@ export default function VideoComponent() {
                 category: "videos",
                 videoList: JSON.stringify(videoListForNavigation),
                 currentIndex: String(index),
+                source: "VideoComponent",
               },
             });
           };
@@ -1619,13 +1780,18 @@ export default function VideoComponent() {
                     if (ref) miniCardRefs.current[key] = ref;
                   }}
                   source={{
-                    uri:
+                    uri: getBestVideoUrl(
                       item.fileUrl &&
                       item.fileUrl.trim() &&
                       item.fileUrl.trim() !==
                         "https://example.com/placeholder.mp4"
                         ? item.fileUrl.trim()
-                        : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                        : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                    ),
+                    headers: {
+                      'User-Agent': 'JevahApp/1.0',
+                      'Accept': 'video/*'
+                    }
                   }}
                   style={{
                     width: "100%",
@@ -2073,7 +2239,7 @@ export default function VideoComponent() {
 
   // 📱 Auto-play initialization disabled - users must click to play media
   useEffect(() => {
-    // No automatic media playback - all media requires user interaction
+    console.log("📱 Auto-play initialization disabled - users must click to play media");
   }, []);
 
   // 📱 Cleanup: Pause all videos when component loses focus
@@ -2114,7 +2280,7 @@ export default function VideoComponent() {
       onMomentumScrollEnd={() => {
         recomputeVisibilityFromLayouts();
       }}
-      scrollEventThrottle={16}
+      scrollEventThrottle={8}
       showsVerticalScrollIndicator={true}
     >
       {uploadedVideos.length > 0 && (

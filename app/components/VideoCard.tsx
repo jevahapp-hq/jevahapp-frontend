@@ -2,13 +2,14 @@ import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import { useEffect, useRef, useState } from "react";
 import {
-  Image,
-  InteractionManager,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    InteractionManager,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
+import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { VideoCardProps } from "../types/media";
 import { useThreadSafeVideo } from "../utils/videoPlayerUtils";
@@ -66,10 +67,10 @@ export default function VideoCard({
     u.trim().length > 0 &&
     /^https?:\/\//.test(u.trim());
 
-  // Use URL with validation (same pattern as AllLibrary)
+  // Use URL with validation and conversion (same pattern as AllLibrary)
   const rawVideoUrl = video.fileUrl;
   const videoUrl = isValidUri(rawVideoUrl)
-    ? String(rawVideoUrl).trim()
+    ? getBestVideoUrl(String(rawVideoUrl).trim())
     : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
   // Force video to load on mount to show first frame
@@ -259,7 +260,13 @@ export default function VideoCard({
           {/* Always show video - use as its own thumbnail in preview mode */}
           <Video
             ref={videoRef}
-            source={{ uri: videoUrl }}
+            source={{ 
+              uri: videoUrl,
+              headers: {
+                'User-Agent': 'JevahApp/1.0',
+                'Accept': 'video/*'
+              }
+            }}
             style={{ width: "100%", height: "100%", position: "absolute" }}
             resizeMode={ResizeMode.COVER}
             isMuted={mutedVideos[modalKey] ?? false}
@@ -342,11 +349,11 @@ export default function VideoCard({
               <View
                 className={`${
                   playingVideos[modalKey] ? "bg-black/30" : "bg-white/70"
-                } p-3 rounded-full`}
+                } p-4 rounded-full`}
               >
                 <Ionicons
                   name={playingVideos[modalKey] ? "pause" : "play"}
-                  size={32}
+                  size={40}
                   color={playingVideos[modalKey] ? "#FFFFFF" : "#FEA74E"}
                 />
               </View>

@@ -1,17 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import {
-  useContentCount,
-  useUserInteraction,
+    useContentCount,
+    useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
@@ -21,10 +21,10 @@ import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  isValidUri,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    isValidUri,
 } from "../../../shared/utils";
 
 const ORANGE = "#FF8A00";
@@ -40,6 +40,8 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   onPlay,
   isPlaying = false,
   progress = 0,
+  onLayout,
+  onPause,
 }) => {
   const AvatarWithInitialFallback = ({
     imageSource,
@@ -223,7 +225,11 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   );
 
   return (
-    <View className="flex flex-col mb-10">
+    <View 
+      className="flex flex-col mb-16"
+      style={{ marginBottom: 64 }} // Extra spacing for better detection
+      onLayout={onLayout ? (event) => onLayout(event, `music-${audio._id || index}`, "music", audio.fileUrl) : undefined}
+    >
       <TouchableWithoutFeedback onPress={handleOverlayToggle}>
         <View className="w-full h-[400px] overflow-hidden relative">
           <Image
@@ -352,7 +358,37 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                     contentId: contentIdForViews,
                     title: audio.title,
                   });
-                  showCommentModal([], String(contentId));
+                  // Create mock comments like in Reels component
+                  const mockComments = [
+                    {
+                      id: "1",
+                      userName: "John Doe",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                      comment: "Great music! Really enjoyed this content.",
+                      likes: 5,
+                      isLiked: false,
+                    },
+                    {
+                      id: "2",
+                      userName: "Jane Smith",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                      comment: "Amazing! Thanks for sharing.",
+                      likes: 3,
+                      isLiked: true,
+                    },
+                    {
+                      id: "3",
+                      userName: "Mike Johnson",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                      comment: "This is exactly what I needed!",
+                      likes: 1,
+                      isLiked: false,
+                    },
+                  ];
+                  showCommentModal(mockComments, String(contentId));
                 } catch {}
                 onComment && onComment(audio);
               }}

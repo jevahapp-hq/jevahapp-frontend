@@ -441,7 +441,41 @@ export default function EbookComponent() {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   className="flex-row items-center mr-6"
-                  onPress={() => handleComment(key, item)}
+                  onPress={() => {
+                    console.log("🔄 Comment button clicked for ebook:", item.title);
+                    // Create mock comments like in Reels component
+                    const mockComments = [
+                      {
+                        id: "1",
+                        userName: "John Doe",
+                        avatar: "",
+                        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                        comment: "Great ebook! Really enjoyed this content.",
+                        likes: 5,
+                        isLiked: false,
+                      },
+                      {
+                        id: "2",
+                        userName: "Jane Smith",
+                        avatar: "",
+                        timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                        comment: "Amazing! Thanks for sharing.",
+                        likes: 3,
+                        isLiked: true,
+                      },
+                      {
+                        id: "3",
+                        userName: "Mike Johnson",
+                        avatar: "",
+                        timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                        comment: "This is exactly what I needed!",
+                        likes: 1,
+                        isLiked: false,
+                      },
+                    ];
+                    const contentId = item._id || key;
+                    showCommentModal(mockComments, contentId);
+                  }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   activeOpacity={0.7}
                 >

@@ -2,11 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
@@ -14,10 +14,10 @@ import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import VideoControlsOverlay from "../../../shared/components/VideoControlsOverlay";
-import { UI_CONFIG } from "../../../shared/constants";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
-import { isValidUri } from "../../../shared/utils";
+import { isValidUri, isValidVideoUrl } from "../../../shared/utils";
+import { getBestVideoUrl, handleVideoError as handleVideoErrorUtil } from "../../../shared/utils/videoUrlManager";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -47,6 +47,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   getTimeAgo,
   getUserDisplayNameFromContent,
   getUserAvatarFromContent,
+  onLayout,
+  isAutoPlayEnabled = false,
 }) => {
   const videoRef = useRef<Video>(null);
   const isMountedRef = useRef(true);
@@ -71,6 +73,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     isPlaying,
     isMuted,
     progress,
+    isAutoPlayEnabled,
+    currentlyVisibleVideo,
+    showIndicator: isAutoPlayEnabled && isPlaying,
   });
 
   // Track last known duration from playback updates
@@ -112,6 +117,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     onVideoTap(key, video, index);
   }, [onVideoTap, key, video, index]);
 
+  // Handle hover start - no autoplay functionality
+  const handleHoverStart = useCallback(() => {
+    console.log(`👆 Hover started on video: ${video.title}`);
+    // No autoplay - user must manually click to play
+  }, [video.title]);
+
+  // Handle hover end - video continues playing until scrolled past
+  const handleHoverEnd = useCallback(() => {
+    console.log(`👆 Hover ended on video: ${video.title}`);
+    // Don't pause on hover end - let it continue playing
+    // Only pause when scrolled past or another video is hovered
+  }, [video.title]);
+
   // Handle play/pause toggle
   const handleTogglePlay = useCallback(() => {
     console.log("🎮 VideoCard togglePlay called with key:", key);
@@ -128,22 +146,51 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     setShowOverlay((prev) => !prev);
   }, []);
 
-  // Handle video error
+  // Handle video error with intelligent retry mechanism
   const handleVideoError = useCallback(
     (error: any) => {
-      console.error(`❌ Video error for ${video.title}:`, error);
+      // Use the enhanced error handler
+      const errorAnalysis = handleVideoErrorUtil(error, video.fileUrl, video.title);
+      
+      // Set failed state
       setFailedVideoLoad(true);
+      
+      // If it's a retryable error (expired signed URL), retry with converted URL
+      if (errorAnalysis.isRetryable) {
+        console.log(`🔄 Retryable error detected - expired signed URL`);
+        console.log(`🔧 Will retry with converted URL: ${errorAnalysis.suggestedUrl}`);
+        
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            console.log(`🔄 Retrying video load for: ${video.title}`);
+            setFailedVideoLoad(false);
+          }
+        }, 3000); // Retry after 3 seconds
+      } else {
+        console.log(`❌ Non-retryable error - network or server issue`);
+      }
     },
-    [video.title]
+    [video.title, video.fileUrl]
   );
 
-  // Handle video load
+  // Handle video load with better error handling
   const handleVideoLoad = useCallback(
     (status: AVPlaybackStatus) => {
+      console.log(`📱 Video load status for ${video.title}:`, {
+        isLoaded: status.isLoaded,
+        hasError: status.error,
+        duration: status.durationMillis,
+        canPlay: status.canPlay,
+        canPlaySlowForward: status.canPlaySlowForward
+      });
+      
       if (status.isLoaded) {
         console.log(`✅ Video loaded successfully: ${video.title}`);
         setFailedVideoLoad(false);
         setVideoLoaded(true);
+      } else if (status.error) {
+        console.error(`❌ Video load error for ${video.title}:`, status.error);
+        setFailedVideoLoad(true);
       }
     },
     [video.title]
@@ -211,14 +258,29 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const firstInitial = (displayNameSafe || "?").trim().charAt(0).toUpperCase();
 
   return (
-    <View key={modalKey} className="flex flex-col mb-10">
-      <TouchableWithoutFeedback onPress={handleVideoTap}>
+    <View 
+      key={modalKey} 
+      className="flex flex-col mb-16"
+      style={{ marginBottom: 64 }} // Extra spacing for better detection
+      onLayout={onLayout ? (event) => onLayout(event, key, "video", video.fileUrl) : undefined}
+    >
+      <TouchableWithoutFeedback 
+        onPress={handleVideoTap}
+        onTouchStart={handleHoverStart}
+        onTouchEnd={handleHoverEnd}
+      >
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && isValidUri(video.fileUrl) ? (
+          {!failedVideoLoad && isValidVideoUrl(video.fileUrl) ? (
             <Video
               ref={videoRef}
-              source={{ uri: video.fileUrl }}
+              source={{ 
+                uri: getBestVideoUrl(video.fileUrl),
+                headers: {
+                  'User-Agent': 'JevahApp/1.0',
+                  'Accept': 'video/*'
+                }
+              }}
               style={{
                 width: "100%",
                 height: "100%",
@@ -230,6 +292,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               volume={videoVolume}
               onError={handleVideoError}
               onLoad={handleVideoLoad}
+              onLoadStart={() => {
+                console.log(`🔄 Video loading started: ${video.title}`);
+                setVideoLoaded(false);
+              }}
+              progressUpdateInterval={1000}
               onPlaybackStatusUpdate={async (status) => {
                 if (!status?.isLoaded) return;
                 const positionMs = Number(status.positionMillis || 0);
@@ -268,26 +335,55 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               }}
             />
           ) : (
-            /* Fallback Thumbnail */
-            <Image
-              source={
-                thumbnailUri
-                  ? { uri: thumbnailUri }
-                  : {
-                      uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Video",
-                    }
-              }
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-              }}
-              resizeMode="cover"
-            />
+            /* Fallback Thumbnail with Error Message */
+            <View className="w-full h-full justify-center items-center bg-gray-100">
+              <Image
+                source={
+                  thumbnailUri
+                    ? { uri: thumbnailUri }
+                    : {
+                        uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Video",
+                      }
+                }
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  position: "absolute",
+                }}
+                resizeMode="cover"
+                onError={() => {
+                  console.warn(`❌ Thumbnail failed to load for: ${video.title}`);
+                }}
+              />
+              {failedVideoLoad && (
+                <View className="absolute inset-0 justify-center items-center bg-black/50">
+                  <View className="flex-col items-center space-y-4">
+                    {/* Reload Button - Above */}
+                    <TouchableOpacity 
+                      onPress={() => {
+                        console.log(`🔄 Manual retry for: ${video.title}`);
+                        setFailedVideoLoad(false);
+                      }}
+                      className="bg-black/50 p-4 rounded-full"
+                    >
+                      <Ionicons name="refresh" size={48} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    
+                    {/* Play Button - Centered */}
+                    <TouchableOpacity 
+                      onPress={handleVideoTap}
+                      className="bg-white/70 p-4 rounded-full"
+                    >
+                      <Ionicons name="play" size={40} color="#FEA74E" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
           )}
 
           {/* Skeleton overlay while video prepares */}
-          {!videoLoaded && !failedVideoLoad && isValidUri(video.fileUrl) && (
+          {!videoLoaded && !failedVideoLoad && isValidVideoUrl(video.fileUrl) && (
             <View
               className="absolute inset-0"
               style={{ justifyContent: "flex-end", padding: 12 }}
@@ -316,18 +412,29 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </View>
           </View>
 
-          {/* Play/Pause Overlay */}
-          {showOverlay && (
+
+          
+          {/* Loading Arrow Indicator */}
+          {failedVideoLoad && (
+            <View className="absolute top-20 right-4">
+              <View className="bg-black/50 px-3 py-2 rounded-full">
+                <Ionicons name="refresh" size={24} color="#FFFFFF" />
+              </View>
+            </View>
+          )}
+
+          {/* Play Button Overlay - tap to start; hides while playing or when video failed to load */}
+          {!isPlaying && !failedVideoLoad && (
             <View
-              className="absolute inset-0 justify-center items-center bg-black/20"
+              className="absolute inset-0 justify-center items-center bg-black/10"
               pointerEvents="box-none"
             >
               <TouchableOpacity onPress={handleTogglePlay} activeOpacity={0.9}>
                 <View className="bg-white/70 p-4 rounded-full">
                   <Ionicons
-                    name={isPlaying ? "pause" : "play"}
+                    name="play"
                     size={40}
-                    color={UI_CONFIG.COLORS.SECONDARY}
+                    color="#FEA74E"
                   />
                 </View>
               </TouchableOpacity>

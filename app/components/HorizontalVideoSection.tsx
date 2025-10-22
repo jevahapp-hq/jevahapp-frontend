@@ -64,6 +64,7 @@ export default function HorizontalVideoSection({
           category: "videos",
           videoList: JSON.stringify(videoListForNavigation),
           currentIndex: String(index),
+          source: "HorizontalVideoSection",
         },
       });
     }

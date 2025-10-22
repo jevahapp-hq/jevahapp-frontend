@@ -12,6 +12,8 @@ interface VideoNavigationOptions {
   getContentKey: (item: MediaItem) => string;
   getTimeAgo: (createdAt: string) => string;
   getDisplayName: (speaker?: string, uploadedBy?: string) => string;
+  source?: string; // Source component that navigated to reels
+  category?: string; // Category context for proper back navigation
 }
 
 export const useVideoNavigation = () => {
@@ -28,6 +30,8 @@ export const useVideoNavigation = () => {
     getContentKey,
     getTimeAgo,
     getDisplayName,
+    source,
+    category,
   }: VideoNavigationOptions) => {
     console.log(`📱 Navigating to reels: ${video.title}`);
     console.log(`📱 Index: ${index}, Total videos: ${allVideos.length}`);
@@ -91,8 +95,9 @@ export const useVideoNavigation = () => {
           ? video.speakerAvatar
           : video.speakerAvatar ||
             require("../../assets/images/Avatar-1.png").toString(),
-      category: "videos",
+      category: category || video.contentType || "ALL",
       currentIndex: String(index),
+      source: source || "useVideoNavigation",
     };
 
     console.log("🚀 About to navigate with params:", navigationParams);

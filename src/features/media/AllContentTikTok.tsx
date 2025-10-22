@@ -1,35 +1,36 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    RefreshControl,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-  categorizeContent,
-  filterContentByType,
-  getContentKey,
-  getMostRecentItem,
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  transformApiResponseToMediaItem,
+    categorizeContent,
+    filterContentByType,
+    getContentKey,
+    getMostRecentItem,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
 // Feature-specific imports
@@ -41,7 +42,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../app/components/SuccessCard";
 import HymnMiniCard, {
-  HymnItem,
+    HymnItem,
 } from "../../../app/home/components/HymnMiniCard";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
@@ -56,12 +57,12 @@ import { useGlobalMediaStore } from "../../../app/store/useGlobalMediaStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-  getPersistedStats,
-  getViewed,
+    getPersistedStats,
+    getViewed,
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -161,6 +162,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     >
   >({});
   const lastScrollYRef = useRef<number>(0);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | null>(null);
+  const [hoverBasedAutoplay, setHoverBasedAutoplay] = useState(false);
+  const [lastHoveredVideo, setLastHoveredVideo] = useState<string | null>(null);
+  const [hoveredVideos, setHoveredVideos] = useState<Set<string>>(new Set());
+  const lastScrollY = useRef<number>(0);
+  const lastSwitchTimeRef = useRef<number>(0);
 
   // Get global media state
   const playingVideos = useGlobalMediaStore((s) => s.playingVideos);
@@ -177,6 +186,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const pauseAllMedia = useGlobalMediaStore((s) => s.pauseAllMedia);
   const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
   const toggleVideoMuteAction = useGlobalMediaStore((s) => s.toggleVideoMute);
+  const enableAutoPlay = useGlobalMediaStore((s) => s.enableAutoPlay);
 
   // Transform and filter content
   const mediaList: MediaItem[] = useMemo(() => {
@@ -219,6 +229,34 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   useEffect(() => {
     soundMapRef.current = soundMap;
   }, [soundMap]);
+
+  // Autoplay disabled - users must manually click to play videos
+  useEffect(() => {
+    console.log("📱 Autoplay disabled for AllContentTikTok - manual play only");
+  }, []);
+
+  // Start most recent video when content is loaded
+  // DISABLED: Initial video start - prevents unwanted video jumping
+  useEffect(() => {
+    if (isAutoPlayEnabled && !currentlyVisibleVideo && filteredMediaList.length > 0) {
+      console.log(`🚫 Initial video start disabled - only hover-based autoplay allowed`);
+      
+      // Removed automatic video start to prevent unwanted video switching
+      // Videos will only play when explicitly hovered by user
+      return () => {};
+    }
+  }, [isAutoPlayEnabled, currentlyVisibleVideo, filteredMediaList.length, playMediaGlobally]);
+
+  // DISABLED: Periodic autoplay check - prevents unwanted video jumping
+  useEffect(() => {
+    if (!isAutoPlayEnabled) return;
+    
+    console.log(`🚫 Periodic autoplay check disabled - only hover-based autoplay allowed`);
+    
+    // Removed periodic check to prevent automatic video switching
+    // Videos will only play when explicitly hovered by user
+    return () => {};
+  }, [isAutoPlayEnabled]);
 
   // Initialize SocketManager for real-time features
   useEffect(() => {
@@ -637,6 +675,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           getContentKey,
           getTimeAgo,
           getDisplayName: buildDisplayName,
+          source: "AllContentTikTok",
+          category: contentType, // Pass the current content type as category
         });
       }
     },
@@ -672,20 +712,41 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const handleComment = useCallback(
     (key: string, item: MediaItem) => {
+      console.log("🔄 Comment button clicked for content:", item.title);
       const contentId = item._id || key;
-      const currentComments = comments[contentId] || [];
-      const formattedComments = currentComments.map((comment: any) => ({
-        id: comment.id,
-        userName: comment.username || "Anonymous",
-        avatar: comment.userAvatar || "",
-        timestamp: comment.timestamp,
-        comment: comment.comment,
-        likes: comment.likes || 0,
-        isLiked: comment.isLiked || false,
-      }));
-      showCommentModal(formattedComments, contentId);
+      // Create mock comments like in Reels component
+      const mockComments = [
+        {
+          id: "1",
+          userName: "John Doe",
+          avatar: "",
+          timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+          comment: "Great content! Really enjoyed this.",
+          likes: 5,
+          isLiked: false,
+        },
+        {
+          id: "2",
+          userName: "Jane Smith",
+          avatar: "",
+          timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+          comment: "Amazing! Thanks for sharing.",
+          likes: 3,
+          isLiked: true,
+        },
+        {
+          id: "3",
+          userName: "Mike Johnson",
+          avatar: "",
+          timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+          comment: "This is exactly what I needed!",
+          likes: 1,
+          isLiked: false,
+        },
+      ];
+      showCommentModal(mockComments, contentId);
     },
-    [comments, showCommentModal]
+    [showCommentModal]
   );
 
   const handleSave = useCallback(
@@ -779,8 +840,312 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const togglePlay = (key: string) => {
     console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
+    
+    // Add this video to hovered videos set
+    setHoveredVideos(prev => new Set(prev).add(key));
+    
+    // No hover-based autoplay - user must manually click to play
+    
+    // Set this as the last hovered video
+    setLastHoveredVideo(key);
+    setHoverBasedAutoplay(true);
+    
+    // Play the new video
     playMediaGlobally(key, "video");
   };
+
+  // Enhanced scroll behavior with auto-pause functionality
+  const handleScroll = useCallback(
+    (event: any) => {
+      const { contentOffset } = event.nativeEvent;
+      const scrollY = contentOffset.y;
+      lastScrollYRef.current = scrollY;
+      
+      
+      // Set scrolling state
+      setIsScrolling(true);
+      
+      // Clear existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Set timeout to detect when scrolling stops (shorter delay for responsiveness)
+      scrollTimeoutRef.current = setTimeout(() => {
+        setIsScrolling(false);
+        
+        // No hover-based autoplay functionality
+      }, 100); // Reduced to 100ms for better responsiveness
+      
+      // Real-time video control during scrolling
+      handleVideoVisibilityChange(scrollY);
+      
+      // Enhanced auto-pause logic for all media types
+      const screenHeight = Dimensions.get("window").height;
+      const viewportTop = scrollY;
+      const viewportBottom = scrollY + screenHeight;
+      
+      const viewportCenter = (viewportTop + viewportBottom) / 2;
+      
+      // Auto-pause videos that are scrolled out of view
+      Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+        if (layout.type === "video") {
+          const videoTop = layout.y;
+          const videoBottom = layout.y + layout.height;
+          const videoCenter = (videoTop + videoBottom) / 2;
+          
+          // Calculate visibility ratio
+          const intersectionTop = Math.max(viewportTop, videoTop);
+          const intersectionBottom = Math.min(viewportBottom, videoBottom);
+          const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+          const visibilityRatio = layout.height > 0 ? visibleHeight / layout.height : 0;
+          
+          // Auto-pause if video is less than 20% visible or completely out of view
+          const shouldPause = visibilityRatio < 0.2 || videoBottom < viewportTop || videoTop > viewportBottom;
+          
+          if (shouldPause && playingVideos[key]) {
+            console.log(`🎬 Auto-pause: Pausing video ${key} - visibility: ${(visibilityRatio * 100).toFixed(1)}%`);
+            pauseAllMedia();
+            
+            // Remove from hovered videos if it was hover-based
+            if (hoveredVideos.has(key)) {
+              setHoveredVideos(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(key);
+                return newSet;
+              });
+            }
+          }
+        }
+      });
+      
+      // Auto-pause audio/music that are scrolled out of view
+      Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+        if (layout.type === "music") {
+          const musicTop = layout.y;
+          const musicBottom = layout.y + layout.height;
+          
+          // Calculate visibility ratio
+          const intersectionTop = Math.max(viewportTop, musicTop);
+          const intersectionBottom = Math.min(viewportBottom, musicBottom);
+          const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+          const visibilityRatio = layout.height > 0 ? visibleHeight / layout.height : 0;
+          
+          // Auto-pause if music is less than 30% visible
+          const shouldPause = visibilityRatio < 0.3;
+          
+          // Check both local audio state and global media store
+          const isLocallyPlaying = playingAudioId === key;
+          const isGloballyPlaying = globalMediaStore.playingAudio[key] || false;
+          
+          if (shouldPause && (isLocallyPlaying || isGloballyPlaying)) {
+            console.log(`🎵 Auto-pause: Pausing music ${key} - visibility: ${(visibilityRatio * 100).toFixed(1)}%`);
+            // Pause both local and global audio
+            pauseAllAudio();
+            globalMediaStore.pauseAudio(key);
+          }
+        }
+      });
+      
+      // No hover-based autoplay functionality
+      
+      // DISABLED: Automatic video switching - only play videos on explicit hover
+      // This prevents unwanted video jumping when URLs fail
+      if (false && isAutoPlayEnabled && !currentlyVisibleVideo && !hoverBasedAutoplay) {
+        console.log(`🚫 Automatic video switching disabled - only hover-based autoplay allowed`);
+        // Removed automatic video detection to prevent unwanted video jumping
+      }
+    },
+    [handleVideoVisibilityChange, isAutoPlayEnabled, currentlyVisibleVideo, playMediaGlobally, playingVideos, playingAudioId, hoverBasedAutoplay, hoveredVideos, pauseAllMedia, pauseAllAudio]
+  );
+
+  const handleScrollEnd = useCallback(() => {
+    console.log("📱 Scroll ended, finalizing auto-pause cleanup");
+    const scrollY = lastScrollYRef.current;
+    const screenHeight = Dimensions.get("window").height;
+    const viewportTop = scrollY;
+    const viewportBottom = scrollY + screenHeight;
+    
+    // Final cleanup for all media types when scrolling stops
+    Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+      if (layout.type === "video") {
+        const videoTop = layout.y;
+        const videoBottom = layout.y + layout.height;
+        
+        // Calculate final visibility ratio
+        const intersectionTop = Math.max(viewportTop, videoTop);
+        const intersectionBottom = Math.min(viewportBottom, videoBottom);
+        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const visibilityRatio = layout.height > 0 ? visibleHeight / layout.height : 0;
+        
+        // Final check: pause videos that are less than 20% visible
+        if (visibilityRatio < 0.2 && playingVideos[key]) {
+          console.log(`🎬 Final cleanup: Pausing video ${key} - visibility: ${(visibilityRatio * 100).toFixed(1)}%`);
+          pauseAllMedia();
+          
+          // Remove from hovered videos
+          if (hoveredVideos.has(key)) {
+            setHoveredVideos(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(key);
+              return newSet;
+            });
+          }
+        }
+      } else if (layout.type === "music") {
+        const musicTop = layout.y;
+        const musicBottom = layout.y + layout.height;
+        
+        // Calculate final visibility ratio
+        const intersectionTop = Math.max(viewportTop, musicTop);
+        const intersectionBottom = Math.min(viewportBottom, musicBottom);
+        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const visibilityRatio = layout.height > 0 ? visibleHeight / layout.height : 0;
+        
+        // Check both local audio state and global media store
+        const isLocallyPlaying = playingAudioId === key;
+        const isGloballyPlaying = globalMediaStore.playingAudio[key] || false;
+        
+        // Final check: pause music that is less than 30% visible
+        if (visibilityRatio < 0.3 && (isLocallyPlaying || isGloballyPlaying)) {
+          console.log(`🎵 Final cleanup: Pausing music ${key} - visibility: ${(visibilityRatio * 100).toFixed(1)}%`);
+          // Pause both local and global audio
+          pauseAllAudio();
+          globalMediaStore.pauseAudio(key);
+        }
+      }
+    });
+    
+    // No hover-based autoplay functionality
+  }, [playingAudioId, pauseAllAudio, playingVideos, hoverBasedAutoplay, hoveredVideos, pauseAllMedia, globalMediaStore]);
+
+  const handleVideoVisibilityChange = useCallback((scrollY: number) => {
+    if (!isAutoPlayEnabled) return;
+    
+    // Strict, non-jumping scroll-based autoplay
+    const screenHeight = Dimensions.get("window").height;
+    const viewportTop = scrollY;
+    const viewportBottom = scrollY + screenHeight;
+
+    // Track direction (for logging only)
+    const currentScrollY = scrollY;
+    if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
+      setScrollDirection(currentScrollY > lastScrollY.current ? "down" : "up");
+      lastScrollY.current = currentScrollY;
+    }
+
+    const videoLayouts = Object.entries(contentLayoutsRef.current)
+      .filter(([_, layout]) => layout.type === "video")
+      .sort((a, b) => a[1].y - b[1].y);
+
+    if (videoLayouts.length === 0) return;
+
+    // Compute max visible ratio video and centerline candidate
+    let bestKey: string | null = null;
+    let bestRatio = 0;
+    let centerKey: string | null = null;
+    let centerDist = Number.POSITIVE_INFINITY;
+    const viewportCenter = (viewportTop + viewportBottom) / 2;
+    const CENTER_BAND_TOP = viewportTop + screenHeight * 0.35; // favor middle 30% band
+    const CENTER_BAND_BOTTOM = viewportTop + screenHeight * 0.65;
+
+    for (const [key, layout] of videoLayouts) {
+      const videoTop = layout.y;
+      const videoBottom = layout.y + layout.height;
+      const intersectionTop = Math.max(viewportTop, videoTop);
+      const intersectionBottom = Math.min(viewportBottom, videoBottom);
+      const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+      const ratio = layout.height > 0 ? visibleHeight / layout.height : 0;
+      if (ratio > bestRatio) {
+        bestRatio = ratio;
+        bestKey = key;
+      }
+
+      // Prefer the video whose center is closest to the screen center (inside band)
+      const center = (videoTop + videoBottom) / 2;
+      const dist = Math.abs(center - viewportCenter);
+      if (center >= CENTER_BAND_TOP && center <= CENTER_BAND_BOTTOM && dist < centerDist) {
+        centerDist = dist;
+        centerKey = key;
+      }
+    }
+
+    // Hysteresis thresholds to prevent jitter/jumps
+    const SWITCH_IN_THRESHOLD = 0.7; // new video must be ≥70% visible
+    const HOLD_THRESHOLD = 0.25;     // keep current while ≥25% visible
+    const PAUSE_THRESHOLD = 0.12;    // pause only when <12% visible
+    const MIN_SWITCH_INTERVAL = 900; // ms between switches
+
+    // Keep current playing if it still has reasonable visibility
+    if (currentlyVisibleVideo) {
+      const cur = contentLayoutsRef.current[currentlyVisibleVideo];
+      if (cur) {
+        const curTop = cur.y;
+        const curBottom = cur.y + cur.height;
+        const iTop = Math.max(viewportTop, curTop);
+        const iBottom = Math.min(viewportBottom, curBottom);
+        const curVisible = Math.max(0, iBottom - iTop);
+        const curRatio = cur.height > 0 ? curVisible / cur.height : 0;
+        // If current is still reasonably visible, do nothing
+        if (curRatio >= HOLD_THRESHOLD) {
+          // Do nothing – avoid jumping while current is still reasonably visible
+          return;
+        }
+      }
+    }
+
+    // Rate-limit switching
+    const now = Date.now();
+    if (now - lastSwitchTimeRef.current < MIN_SWITCH_INTERVAL) {
+      return; // too soon to switch again
+    }
+
+    // Choose the target: prefer the center candidate; if none, fall back to max ratio
+    let targetKey: string | null = null;
+    if (centerKey) {
+      targetKey = centerKey;
+    } else if (bestKey && bestRatio >= SWITCH_IN_THRESHOLD) {
+      targetKey = bestKey;
+    }
+
+    if (targetKey && targetKey !== currentlyVisibleVideo) {
+      // Verify the target exists and has a URL
+      const item = filteredMediaList.find((i) => getContentKey(i) === targetKey);
+      if (!item || !item.fileUrl) return; // do not jump
+
+      console.log(
+        `🎬 Scroll autoplay → ${targetKey} (center-preferred) (dir: ${scrollDirection})`
+      );
+      pauseAllMedia();
+      setCurrentlyVisibleVideo(targetKey);
+      playMediaGlobally(targetKey, "video");
+      lastSwitchTimeRef.current = now;
+      return;
+    }
+
+    // If nothing meets threshold and current is mostly out of view, pause
+    if (!bestKey || bestRatio < PAUSE_THRESHOLD) {
+      if (currentlyVisibleVideo) {
+        console.log("⏸️ Pausing – no sufficiently visible video");
+        pauseAllMedia();
+        setCurrentlyVisibleVideo(null);
+      }
+    }
+  }, [isAutoPlayEnabled, currentlyVisibleVideo, pauseAllMedia, playMediaGlobally, scrollDirection]);
+
+  const handleContentLayout = useCallback((event: any, key: string, type: "video" | "music", uri?: string) => {
+    const { y, height } = event.nativeEvent.layout;
+    contentLayoutsRef.current[key] = { y, height, type, uri };
+    
+    console.log(`📱 Layout tracked: ${key} (${type}) at y=${Math.round(y)}, height=${Math.round(height)}`);
+    
+    
+    // DISABLED: Auto-play on layout - prevents unwanted video jumping
+    if (type === "video" && isAutoPlayEnabled && !currentlyVisibleVideo) {
+      console.log(`🚫 Layout-based autoplay disabled - only hover-based autoplay allowed`);
+      // Removed automatic video start on layout to prevent unwanted video switching
+    }
+  }, [isAutoPlayEnabled, currentlyVisibleVideo, playMediaGlobally]);
 
   // Reusable renderer for Hymn mini-cards (matches mini-card UI in design)
   const renderHymnMiniCards = useCallback(() => {
@@ -952,6 +1317,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               getTimeAgo={getTimeAgo}
               getUserDisplayNameFromContent={getUserDisplayNameFromContent}
               getUserAvatarFromContent={getUserAvatarFromContent}
+              onLayout={handleContentLayout}
+              isAutoPlayEnabled={isAutoPlayEnabled}
             />
           );
 
@@ -970,6 +1337,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onPlay={playAudio}
               isPlaying={playingAudioId === `music-${item._id || index}`}
               progress={audioProgressMap[`music-${item._id || index}`] || 0}
+              onLayout={handleContentLayout}
+              onPause={pauseAllAudio}
             />
           );
 
@@ -1190,6 +1559,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             />
           }
           showsVerticalScrollIndicator={true}
+          onScroll={handleScroll}
+          onScrollEndDrag={handleScrollEnd}
+          onMomentumScrollEnd={handleScrollEnd}
+          scrollEventThrottle={8}
         >
           {/* Most Recent Section */}
           {mostRecentItem && (
@@ -1226,14 +1599,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           </View>
 
           {/* All Content Section (split into first four, then Recommended Live, then rest) */}
-          <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+          <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
             <Text
               style={{
                 fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
                 fontWeight: "600",
                 color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                 paddingHorizontal: UI_CONFIG.SPACING.MD,
-                marginBottom: UI_CONFIG.SPACING.MD,
+                marginBottom: UI_CONFIG.SPACING.LG,
               }}
             >
               {contentType === "ALL" ? "All Content" : `${contentType} Content`}{" "}
@@ -1255,14 +1628,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                   )}
 
                   {/* Insert Recommended Live for you here with red LIVE badge */}
-                  <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+                  <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
                     <Text
                       style={{
                         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
                         fontWeight: "600",
                         color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                         paddingHorizontal: UI_CONFIG.SPACING.MD,
-                        marginBottom: UI_CONFIG.SPACING.MD,
+                        marginBottom: UI_CONFIG.SPACING.LG,
                       }}
                     >
                       Recommended Live for you
@@ -1271,7 +1644,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                   </View>
 
                   {/* Gap before next four cards */}
-                  <View style={{ marginTop: UI_CONFIG.SPACING.XL }} />
+                  <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
 
                   {/* Next four cards */}
                   {nextFour.map((item, index) =>
@@ -1281,7 +1654,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                   {/* Trending Contents temporarily removed */}
 
                   {/* Gap before remaining content */}
-                  <View style={{ marginTop: UI_CONFIG.SPACING.XL }} />
+                  <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
 
                   {/* Render the rest of All Content */}
                   {rest.map((item, index) =>

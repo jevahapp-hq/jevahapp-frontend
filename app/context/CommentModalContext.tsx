@@ -89,19 +89,15 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     contentType: "media" | "devotional" = "media",
     contentOwnerName?: string
   ) => {
-    // Only prevent if already visible; allow immediate first tap
-    if (isVisible) {
-      return;
-    }
+    // INSTANT RESPONSE - No blocking conditions
+    console.log("📣 showCommentModal called INSTANTLY", {
+      contentId,
+      contentType,
+      incomingCount: newComments?.length || 0,
+    });
     
-    try {
-      console.log("📣 showCommentModal called", {
-        contentId,
-        contentType,
-        incomingCount: newComments?.length || 0,
-      });
-    } catch {}
-    
+    // Set modal visible IMMEDIATELY - no delays
+    setIsVisible(true);
     setComments(newComments);
     if (contentId) {
       setCurrentContentId(contentId);
@@ -112,20 +108,20 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     }
     setPage(1);
     setHasMore(true);
-    setIsVisible(true);
-    try {
-      console.log("📣 showCommentModal -> setIsVisible(true)");
-    } catch {}
+    setIsOpening(false);
+    
+    console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
-    // Load latest comments from backend and join realtime room
-    requestAnimationFrame(() => {
+    // Load latest comments from backend and join realtime room ASYNC (non-blocking)
+    setTimeout(() => {
       if (contentId) {
         loadCommentsFromServer(contentId, contentType, 1, sortBy);
         joinRealtimeRoom(contentId, contentType);
       }
-    });
-    // Fetch current user id once
-    (async () => {
+    }, 0);
+    
+    // Fetch current user id ASYNC (non-blocking)
+    setTimeout(async () => {
       try {
         const userStr = await AsyncStorage.getItem("user");
         if (userStr) {
@@ -135,10 +131,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
           currentUserLastNameRef.current = String(u?.lastName || "");
         }
       } catch {}
-    })();
-    
-    // Ensure opening flag is cleared quickly
-    setIsOpening(false);
+    }, 0);
   };
 
   const hideCommentModal = () => {

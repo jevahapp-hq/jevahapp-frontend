@@ -865,7 +865,41 @@ export default function SermonComponent() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleComment(key, video)}
+                onPress={() => {
+                  console.log("🔄 Comment button clicked for sermon:", video.title);
+                  // Create mock comments like in Reels component
+                  const mockComments = [
+                    {
+                      id: "1",
+                      userName: "John Doe",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                      comment: "Great sermon! Really enjoyed this content.",
+                      likes: 5,
+                      isLiked: false,
+                    },
+                    {
+                      id: "2",
+                      userName: "Jane Smith",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                      comment: "Amazing! Thanks for sharing.",
+                      likes: 3,
+                      isLiked: true,
+                    },
+                    {
+                      id: "3",
+                      userName: "Mike Johnson",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                      comment: "This is exactly what I needed!",
+                      likes: 1,
+                      isLiked: false,
+                    },
+                  ];
+                  const contentId = video._id || key;
+                  showCommentModal(mockComments, contentId);
+                }}
                 className="flex-col justify-center items-center mt-6"
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 activeOpacity={0.7}
@@ -904,7 +938,7 @@ export default function SermonComponent() {
                     globalVideoStore.playingVideos[modalKey]
                       ? "bg-black/30"
                       : "bg-white/70"
-                  } p-3 rounded-full`}
+                  } p-4 rounded-full`}
                 >
                   <Ionicons
                     name={
@@ -912,7 +946,7 @@ export default function SermonComponent() {
                         ? "pause"
                         : "play"
                     }
-                    size={32}
+                    size={40}
                     color={
                       globalVideoStore.playingVideos[modalKey]
                         ? "#FFFFFF"

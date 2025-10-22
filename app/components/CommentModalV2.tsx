@@ -44,7 +44,8 @@ export default function CommentModalV2() {
 
   useEffect(() => {
     if (isVisible) {
-      setTimeout(() => inputRef.current?.focus(), 10);
+      // INSTANT FOCUS - No delays
+      inputRef.current?.focus();
     } else {
       setText("");
     }
