@@ -466,6 +466,17 @@ export default function VideoComponent() {
   };
 
   const [hasPlayed, setHasPlayed] = useState<Record<string, boolean>>({});
+  const [videoErrors, setVideoErrors] = useState<Record<string, boolean>>({});
+
+  const handleVideoReload = (key: string) => {
+    console.log(`🔄 Reloading video: ${key}`);
+    setVideoErrors((prev) => ({ ...prev, [key]: false }));
+    // Force video to reload by updating the key
+    const videoRef = videoRefs.current[key];
+    if (videoRef) {
+      videoRef.setPositionAsync(0);
+    }
+  };
 
   const incrementView = (key: string, video: VideoCard) => {
     console.log("🔄 incrementView called for:", video.title, "key:", key);
@@ -1353,6 +1364,15 @@ export default function VideoComponent() {
               volume={mutedVideos[modalKey] ? 0.0 : videoVolume} // 🔊 Add volume control
               shouldPlay={playingVideos[modalKey] ?? false}
               useNativeControls={false}
+              onError={(error) => {
+                console.warn(`❌ Video failed to load: ${video.title}`, error);
+                setVideoErrors((prev) => ({ ...prev, [modalKey]: true }));
+                globalVideoStore.pauseVideo(modalKey);
+              }}
+              onLoad={() => {
+                console.log(`✅ Video loaded successfully: ${video.title}`);
+                setVideoErrors((prev) => ({ ...prev, [modalKey]: false }));
+              }}
               onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
                 const pct = status.durationMillis
@@ -1373,7 +1393,7 @@ export default function VideoComponent() {
 
 
             <View
-              className="flex-col absolute mt-[170px] right-4"
+              className="flex-col absolute mt-[180px] right-4"
               style={{ zIndex: 20 }}
             >
               <TouchableOpacity
@@ -1391,46 +1411,14 @@ export default function VideoComponent() {
                   {globalFavoriteCounts[modalKey] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log("🔄 Comment button clicked for video:", video.title);
-                  // INSTANT COMMENT MODAL - No delays, no complex logic
-                  const mockComments = [
-                    {
-                      id: "1",
-                      userName: "John Doe",
-                      avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-                      comment: "Great video! Really enjoyed this content.",
-                      likes: 5,
-                      isLiked: false,
-                    },
-                    {
-                      id: "2",
-                      userName: "Jane Smith",
-                      avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-                      comment: "Amazing! Thanks for sharing.",
-                      likes: 3,
-                      isLiked: true,
-                    },
-                    {
-                      id: "3",
-                      userName: "Mike Johnson",
-                      avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-                      comment: "This is exactly what I needed!",
-                      likes: 1,
-                      isLiked: false,
-                    },
-                  ];
-                  // DIRECT CALL - No wrapper functions, no delays
-                  showCommentModal(mockComments, contentId);
+              <View 
+                className="flex-col justify-center items-center mt-8"
+                style={{ 
+                  minHeight: 60, // Ensure adequate space
+                  minWidth: 60,
+                  zIndex: 2 // Ensure it's above other elements
                 }}
-                className="flex-col justify-center items-center mt-6"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                activeOpacity={0.7}
-             >
+              >
                 <CommentIcon
                   comments={formattedComments}
                   size={30}
@@ -1442,11 +1430,12 @@ export default function VideoComponent() {
                       : video.comment ?? 0
                   }
                   layout="vertical"
+                  contentId={contentId}
                 />
-              </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 onPress={() => handleSave(modalKey, video)}
-                className="flex-col justify-center items-center mt-6"
+                className="flex-col justify-center items-center mt-8"
               >
                 <MaterialIcons
                   name={isItemSaved ? "bookmark" : "bookmark-border"}
@@ -1472,8 +1461,27 @@ export default function VideoComponent() {
               </View>
             )}
 
-            {/* Controls - always show but change based on playing state */}
-            {playType === "progress" ? (
+            {/* Controls - show reload button when video fails, play button when video works */}
+            {videoErrors[modalKey] ? (
+              // Show only reload button when video fails
+              <View
+                pointerEvents="box-none"
+                className="absolute inset-0 justify-center items-center"
+              >
+                <TouchableOpacity
+                  onPress={() => handleVideoReload(modalKey)}
+                  activeOpacity={0.9}
+                >
+                  <View className="bg-red-500/80 p-4 rounded-full">
+                    <Ionicons
+                      name="refresh"
+                      size={40}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            ) : playType === "progress" ? (
               <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
                 <TouchableOpacity onPress={() => togglePlay(modalKey, video)}>
                   <Ionicons
@@ -1803,6 +1811,16 @@ export default function VideoComponent() {
                   volume={mutedVideos[key] ? 0.0 : videoVolume} // 🔊 Add volume control
                   shouldPlay={isPlaying}
                   useNativeControls={false}
+                  onError={(error) => {
+                    console.warn(`❌ Mini card video failed to load: ${item.title}`, error);
+                    setVideoErrors((prev) => ({ ...prev, [key]: true }));
+                    setPlayingState((prev: any) => ({ ...prev, [key]: false }));
+                    setShowOverlayMini((prev) => ({ ...prev, [key]: true }));
+                  }}
+                  onLoad={() => {
+                    console.log(`✅ Mini card video loaded successfully: ${item.title}`);
+                    setVideoErrors((prev) => ({ ...prev, [key]: false }));
+                  }}
                   onPlaybackStatusUpdate={(status) => {
                     if (!status.isLoaded) return;
                     if (status.didJustFinish) {
@@ -1823,15 +1841,29 @@ export default function VideoComponent() {
                 />
                 {!isPlaying && showOverlayMini[key] && (
                   <>
-                    <TouchableOpacity
-                      onPress={togglePlay}
-                      className="absolute inset-0 justify-center items-center"
-                      activeOpacity={0.9}
-                    >
-                      <View className="bg-white/70 p-3 rounded-full">
-                        <Ionicons name="play" size={32} color="#FEA74E" />
-                      </View>
-                    </TouchableOpacity>
+                    {videoErrors[key] ? (
+                      // Show reload button when video fails
+                      <TouchableOpacity
+                        onPress={() => handleVideoReload(key)}
+                        className="absolute inset-0 justify-center items-center"
+                        activeOpacity={0.9}
+                      >
+                        <View className="bg-red-500/80 p-3 rounded-full">
+                          <Ionicons name="refresh" size={32} color="#FFFFFF" />
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
+                      // Show play button when video is working
+                      <TouchableOpacity
+                        onPress={togglePlay}
+                        className="absolute inset-0 justify-center items-center"
+                        activeOpacity={0.9}
+                      >
+                        <View className="bg-white/70 p-3 rounded-full">
+                          <Ionicons name="play" size={32} color="#FEA74E" />
+                        </View>
+                      </TouchableOpacity>
+                    )}
 
                     <View className="absolute bottom-2 left-2 right-2">
                       <Text

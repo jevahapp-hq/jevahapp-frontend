@@ -250,6 +250,7 @@ const renderMiniCards = (
                     speakerAvatar: Image.resolveAssetSource(
                       require("../../assets/images/Avatar-1.png")
                     ).uri, // Static avatar for now
+                    source: "LiveComponent",
                   },
                 })
               }
@@ -396,6 +397,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                 typeof video.speakerAvatar === "number"
                   ? Image.resolveAssetSource(video.speakerAvatar).uri
                   : video.speakerAvatar,
+              category: "LIVE",
+              source: "LiveComponent",
             },
           })
         }
@@ -587,6 +590,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                       imageUrl,
                       speakerAvatar,
                       isLive: "false",
+                      category: "LIVE",
+                      source: "LiveComponent",
                     },
                   })
                 }

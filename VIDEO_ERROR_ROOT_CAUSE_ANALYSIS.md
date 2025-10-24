@@ -133,3 +133,4 @@ const publicUrl = `https://${bucketName}.r2.cloudflarestorage.com/${bucketPath}/
 
 The root cause is **backend architecture** - signed URLs are not suitable for mobile apps where content is cached and reused.
 
+

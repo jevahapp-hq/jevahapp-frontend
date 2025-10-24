@@ -194,7 +194,7 @@ export default function Reelsviewscroll() {
       
       if (source === "AllContentTikTok") {
         // Navigate back to HomeScreen with the specific category the user was viewing
-        // This preserves the category context instead of defaulting to "videos"
+        // This preserves the category context instead of defaulting to "ALL"
         router.push({
           pathname: "/categories/HomeScreen",
           params: {
@@ -208,6 +208,9 @@ export default function Reelsviewscroll() {
       } else if (source === "SermonComponent") {
         // Navigate back to SermonComponent
         router.push("/categories/SermonComponent");
+      } else if (source === "LiveComponent") {
+        // Navigate back to LiveComponent
+        router.push("/categories/LiveComponent");
       } else if (source === "ExploreSearch") {
         // Navigate back to ExploreSearch
         router.push("/ExploreSearch/ExploreSearch");
@@ -215,10 +218,11 @@ export default function Reelsviewscroll() {
         // Navigate back to home
         router.push("/");
       } else {
-        // Default fallback to AllContentTikTok with the specific category
+        // Default fallback to HomeScreen with the specific category
         router.push({
-          pathname: "/categories/AllContentTikTok",
+          pathname: "/categories/HomeScreen",
           params: {
+            default: "Home",
             defaultCategory: category || "ALL", // Use the actual category or default to "ALL"
           },
         });
@@ -865,6 +869,27 @@ export default function Reelsviewscroll() {
       passedVideoKey || `reel-${videoData.title}-${videoData.speaker}`;
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [videoError, setVideoError] = useState<boolean>(false);
+
+    // 🔄 Handle video reload
+    const handleVideoReload = async () => {
+      console.log(`🔄 Reloading video: ${videoData.title}`);
+      setVideoError(false);
+      setIsRefreshing(true);
+      
+      try {
+        // Try to refresh the URL
+        const refreshed = await tryRefreshMediaUrl(videoData);
+        if (refreshed) {
+          setRefreshedUrl(refreshed);
+        }
+      } catch (error) {
+        console.error("❌ Failed to reload video:", error);
+        setVideoError(true);
+      } finally {
+        setIsRefreshing(false);
+      }
+    };
 
     // 🔁 Refresh URL on mount if needed
     useEffect(() => {
@@ -979,6 +1004,7 @@ export default function Reelsviewscroll() {
                   `❌ Video loading error in reels for ${videoData.title}:`,
                   error
                 );
+                setVideoError(true);
                 try {
                   // Try to refresh URL on error
                   if (!refreshedUrl) {
@@ -986,6 +1012,9 @@ export default function Reelsviewscroll() {
                     const fresh = await tryRefreshMediaUrl(videoData);
                     setRefreshedUrl(fresh);
                     setIsRefreshing(false);
+                    if (fresh) {
+                      setVideoError(false);
+                    }
                   }
                 } catch (refreshError) {
                   console.error(
@@ -993,10 +1022,13 @@ export default function Reelsviewscroll() {
                     refreshError
                   );
                   setIsRefreshing(false);
-                  // Show error state to user
-                  setErrorMessage("Failed to load video");
-                  setHasError(true);
+                  // Keep video error state true
+                  setVideoError(true);
                 }
+              }}
+              onLoad={() => {
+                console.log(`✅ Video loaded successfully: ${videoData.title}`);
+                setVideoError(false);
               }}
               onPlaybackStatusUpdate={(status) => {
                 if (!isActive || !status.isLoaded) return;
@@ -1055,6 +1087,36 @@ export default function Reelsviewscroll() {
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
             />
 
+            {/* Small reload button in top-right corner when video fails */}
+            {isActive && videoError && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: getResponsiveSpacing(12, 16, 20),
+                  right: getResponsiveSpacing(12, 16, 20),
+                  zIndex: 25,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={handleVideoReload}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Reload video"
+                  accessibilityRole="button"
+                  style={{
+                    backgroundColor: "rgba(0, 0, 0, 0.6)",
+                    borderRadius: getResponsiveSize(16, 18, 20),
+                    padding: getResponsiveSpacing(6, 8, 10),
+                  }}
+                >
+                  <Ionicons
+                    name="refresh"
+                    size={getResponsiveSize(16, 18, 20)}
+                    color="rgba(255, 255, 255, 0.9)"
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Skeleton overlay while loading or when source is refreshing */}
             {isActive &&
               (!playingVideos[videoKey] || isRefreshing || !videoDuration) && (
@@ -1096,7 +1158,7 @@ export default function Reelsviewscroll() {
                 </View>
               )}
 
-            {/* Play Overlay - Glass Effect */}
+            {/* Play Overlay or Reload Button - Glass Effect */}
             {isActive && !playingVideos[videoKey] && (
               <View
                 className="absolute inset-0 justify-center items-center"
@@ -1104,25 +1166,57 @@ export default function Reelsviewscroll() {
                   backgroundColor: "rgba(0, 0, 0, 0.1)",
                 }}
               >
-                <TouchableOpacity
-                  onPress={toggleVideoPlay}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Play video"
-                  accessibilityRole="button"
-                  style={{
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 16,
-                    elevation: 8,
-                  }}
-                >
-                  <MaterialIcons
-                    name="play-arrow"
-                    size={getResponsiveSize(50, 60, 70)}
-                    color="rgba(255, 255, 255, 0.6)"
-                  />
-                </TouchableOpacity>
+                {videoError ? (
+                  // Show reload button when video fails
+                  <TouchableOpacity
+                    onPress={handleVideoReload}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Reload video"
+                    accessibilityRole="button"
+                    style={{
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 16,
+                      elevation: 8,
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: "rgba(220, 38, 38, 0.8)",
+                        borderRadius: getResponsiveSize(25, 30, 35),
+                        padding: getResponsiveSize(12, 15, 18),
+                      }}
+                    >
+                      <Ionicons
+                        name="refresh"
+                        size={getResponsiveSize(50, 60, 70)}
+                        color="rgba(255, 255, 255, 0.9)"
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  // Show play button when video is working
+                  <TouchableOpacity
+                    onPress={toggleVideoPlay}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Play video"
+                    accessibilityRole="button"
+                    style={{
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 16,
+                      elevation: 8,
+                    }}
+                  >
+                    <MaterialIcons
+                      name="play-arrow"
+                      size={getResponsiveSize(50, 60, 70)}
+                      color="rgba(255, 255, 255, 0.6)"
+                    />
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 

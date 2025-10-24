@@ -439,45 +439,13 @@ export default function EbookComponent() {
                     {globalFavoriteCounts[key] || 0}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <View 
                   className="flex-row items-center mr-6"
-                  onPress={() => {
-                    console.log("🔄 Comment button clicked for ebook:", item.title);
-                    // Create mock comments like in Reels component
-                    const mockComments = [
-                      {
-                        id: "1",
-                        userName: "John Doe",
-                        avatar: "",
-                        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-                        comment: "Great ebook! Really enjoyed this content.",
-                        likes: 5,
-                        isLiked: false,
-                      },
-                      {
-                        id: "2",
-                        userName: "Jane Smith",
-                        avatar: "",
-                        timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-                        comment: "Amazing! Thanks for sharing.",
-                        likes: 3,
-                        isLiked: true,
-                      },
-                      {
-                        id: "3",
-                        userName: "Mike Johnson",
-                        avatar: "",
-                        timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-                        comment: "This is exactly what I needed!",
-                        likes: 1,
-                        isLiked: false,
-                      },
-                    ];
-                    const contentId = item._id || key;
-                    showCommentModal(mockComments, contentId);
+                  style={{ 
+                    minHeight: 50,
+                    minWidth: 50,
+                    zIndex: 2
                   }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.7}
                 >
                   <CommentIcon 
                     comments={formattedComments}
@@ -486,8 +454,9 @@ export default function EbookComponent() {
                     showCount={true}
                     count={stats.comment === 1 ? (item.comment ?? 0) + 1 : item.comment ?? 0}
                     layout="horizontal"
+                    contentId={contentId}
                   />
-                </TouchableOpacity>
+                </View>
                 <TouchableOpacity onPress={() => handleSave(key, item)} className="flex-row items-center mr-6">
                   <MaterialIcons
                     name={isInLibrary(getContentKey(item)) ? "bookmark" : "bookmark-border"}
