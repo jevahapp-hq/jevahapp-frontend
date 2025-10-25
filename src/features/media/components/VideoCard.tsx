@@ -393,11 +393,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       >
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
-<<<<<<< HEAD
           {!failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermon ? (
-=======
-          {!failedVideoLoad && isValidVideoUrl(video.fileUrl) ? (
->>>>>>> 47666a394f203d2a99f24c9e6385b7c20fc1c515
             <Video
               ref={videoRef}
               source={{ 
@@ -472,7 +468,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               }}
             />
           ) : (
-<<<<<<< HEAD
             /* Thumbnail for audio sermons or fallback */
             <Image
               source={
@@ -514,64 +509,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                   borderRadius={4}
                   style={{ opacity: 0.85 }}
                 />
-=======
-            /* Fallback Thumbnail with Error Message */
-            <View className="w-full h-full justify-center items-center bg-gray-100">
-              <Image
-                source={
-                  thumbnailUri
-                    ? { uri: thumbnailUri }
-                    : {
-                        uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Video",
-                      }
-                }
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  position: "absolute",
-                }}
-                resizeMode="cover"
-                onError={() => {
-                  console.warn(`❌ Thumbnail failed to load for: ${video.title}`);
-                }}
-              />
-              {failedVideoLoad && (
-                <View className="absolute inset-0 justify-center items-center bg-black/50">
-                  <View className="flex-col items-center space-y-4">
-                    {/* Reload Button - Above */}
-                    <TouchableOpacity 
-                      onPress={() => {
-                        console.log(`🔄 Manual retry for: ${video.title}`);
-                        setFailedVideoLoad(false);
-                      }}
-                      className="bg-black/50 p-4 rounded-full"
-                    >
-                      <Ionicons name="refresh" size={48} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    
-                    {/* Play Button - Centered */}
-                    <TouchableOpacity 
-                      onPress={handleVideoTap}
-                      className="bg-white/70 p-4 rounded-full"
-                    >
-                      <Ionicons name="play" size={40} color="#FEA74E" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Skeleton overlay while video prepares */}
-          {!videoLoaded && !failedVideoLoad && isValidVideoUrl(video.fileUrl) && (
-            <View
-              className="absolute inset-0"
-              style={{ justifyContent: "flex-end", padding: 12 }}
-              pointerEvents="none"
-            >
-              <View style={{ marginBottom: 8 }}>
-                <Skeleton dark variant="text" width={"60%"} />
->>>>>>> 47666a394f203d2a99f24c9e6385b7c20fc1c515
               </View>
             )}
 
@@ -582,7 +519,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             size="medium"
           />
 
-<<<<<<< HEAD
           {/* Play/Pause Overlay */}
           <PlayOverlay
             isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
@@ -592,36 +528,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             immediateFeedback={true}
             disabled={isPlayTogglePending}
           />
-=======
-
-          
-          {/* Loading Arrow Indicator */}
-          {failedVideoLoad && (
-            <View className="absolute top-20 right-4">
-              <View className="bg-black/50 px-3 py-2 rounded-full">
-                <Ionicons name="refresh" size={24} color="#FFFFFF" />
-              </View>
-            </View>
-          )}
-
-          {/* Play Button Overlay - tap to start; hides while playing or when video failed to load */}
-          {!isPlaying && !failedVideoLoad && (
-            <View
-              className="absolute inset-0 justify-center items-center bg-black/10"
-              pointerEvents="box-none"
-            >
-              <TouchableOpacity onPress={handleTogglePlay} activeOpacity={0.9}>
-                <View className="bg-white/70 p-4 rounded-full">
-                  <Ionicons
-                    name="play"
-                    size={40}
-                    color="#FEA74E"
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
->>>>>>> 47666a394f203d2a99f24c9e6385b7c20fc1c515
 
           {/* Video/Audio Progress Bar */}
           <VideoProgressBar
