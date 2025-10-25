@@ -211,24 +211,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     onVideoTap(key, video, index);
   }, [onVideoTap, key, video, index]);
 
-<<<<<<< HEAD
   // Handle play/pause toggle with immediate feedback and debounce
-=======
-  // Handle hover start - no autoplay functionality
-  const handleHoverStart = useCallback(() => {
-    console.log(`👆 Hover started on video: ${video.title}`);
-    // No autoplay - user must manually click to play
-  }, [video.title]);
-
-  // Handle hover end - video continues playing until scrolled past
-  const handleHoverEnd = useCallback(() => {
-    console.log(`👆 Hover ended on video: ${video.title}`);
-    // Don't pause on hover end - let it continue playing
-    // Only pause when scrolled past or another video is hovered
-  }, [video.title]);
-
-  // Handle play/pause toggle
->>>>>>> 47666a394f203d2a99f24c9e6385b7c20fc1c515
   const handleTogglePlay = useCallback(() => {
     if (isPlayTogglePending) return; // Prevent double-taps
 
