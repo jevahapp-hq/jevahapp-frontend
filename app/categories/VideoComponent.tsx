@@ -28,6 +28,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { MiniCardSkeleton, VideoCardSkeleton } from "../../src/shared/components/Skeleton";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
@@ -1793,7 +1794,8 @@ export default function VideoComponent() {
     hasCompleted: Record<string, boolean>,
     setHasCompleted: React.Dispatch<
       React.SetStateAction<Record<string, boolean>>
-    >
+    >,
+    isLoading: boolean = false
   ) => (
     <View className="mb-6">
       <Text className="text-[16px] mb-3 font-rubik-semibold text-[#344054] mt-4">
@@ -1804,281 +1806,309 @@ export default function VideoComponent() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 12 }}
       >
-        {items.map((item, index) => {
-          const key = getVideoKey(item.fileUrl);
-          const isPlaying = playingState[key] ?? false;
-          const views = viewsState[key] ?? item.views;
+        {isLoading || items.length === 0
+          ? // Show skeleton loading cards
+            Array.from({ length: 5 }).map((_, index) => (
+              <MiniCardSkeleton key={`skeleton-${index}`} dark={false} />
+            ))
+          : items.map((item, index) => {
+              const key = getVideoKey(item.fileUrl);
+              const isPlaying = playingState[key] ?? false;
+              const views = viewsState[key] ?? item.views;
 
-          const togglePlay = () => {
-            handleMiniCardPlay(
-              key,
-              item,
-              setViewsState,
-              setPlayingState,
-              setHasPlayed,
-              setHasCompleted
-            );
-          };
+              const togglePlay = () => {
+                handleMiniCardPlay(
+                  key,
+                  item,
+                  setViewsState,
+                  setPlayingState,
+                  setHasPlayed,
+                  setHasCompleted
+                );
+              };
 
-          const handleMiniCardPress = () => {
-            // Prepare the full video list for TikTok-style navigation
-            const videoListForNavigation = items.map((v) => ({
-              title: v.title,
-              speaker: v.subTitle || "Unknown",
-              timeAgo: "Recent",
-              views: v.views || 0,
-              sheared: 0,
-              saved: 0,
-              favorite: 0,
-              fileUrl: v.fileUrl,
-              imageUrl: v.fileUrl,
-              speakerAvatar:
-                require("../../assets/images/Avatar-1.png").toString(),
-            }));
+              const handleMiniCardPress = () => {
+                // Prepare the full video list for TikTok-style navigation
+                const videoListForNavigation = items.map((v) => ({
+                  title: v.title,
+                  speaker: v.subTitle || "Unknown",
+                  timeAgo: "Recent",
+                  views: v.views || 0,
+                  sheared: 0,
+                  saved: 0,
+                  favorite: 0,
+                  fileUrl: v.fileUrl,
+                  imageUrl: v.fileUrl,
+                  speakerAvatar:
+                    require("../../assets/images/Avatar-1.png").toString(),
+                }));
 
-            router.push({
-              pathname: "/reels/Reelsviewscroll",
-              params: {
-                title: item.title,
-                speaker: item.subTitle || "Unknown",
-                timeAgo: "Recent",
-                views: String(item.views || 0),
-                sheared: String(0),
-                saved: String(0),
-                favorite: String(0),
-                imageUrl: item.fileUrl,
-                speakerAvatar:
-                  require("../../assets/images/Avatar-1.png").toString(),
-                category: "videos",
-                videoList: JSON.stringify(videoListForNavigation),
-                currentIndex: String(index),
-                source: "VideoComponent",
-              },
-            });
-          };
+                router.push({
+                  pathname: "/reels/Reelsviewscroll",
+                  params: {
+                    title: item.title,
+                    speaker: item.subTitle || "Unknown",
+                    timeAgo: "Recent",
+                    views: String(item.views || 0),
+                    sheared: String(0),
+                    saved: String(0),
+                    favorite: String(0),
+                    imageUrl: item.fileUrl,
+                    speakerAvatar:
+                      require("../../assets/images/Avatar-1.png").toString(),
+                    category: "videos",
+                    videoList: JSON.stringify(videoListForNavigation),
+                    currentIndex: String(index),
+                    source: "VideoComponent",
+                  },
+                });
+              };
 
-          const handleShare = async () => {
-            try {
-              await Share.share({
-                title: item.title,
-                message: `Check out this video: ${item.title}\n${item.fileUrl}`,
-                url: item.fileUrl,
-              });
-            } catch (error) {
-              console.warn("Share error:", error);
-            }
-          };
+              const handleShare = async () => {
+                try {
+                  await Share.share({
+                    title: item.title,
+                    message: `Check out this video: ${item.title}\n${item.fileUrl}`,
+                    url: item.fileUrl,
+                  });
+                } catch (error) {
+                  console.warn("Share error:", error);
+                }
+              };
 
-          return (
-            <View key={key} className="mr-4 w-[154px] flex-col items-center">
-              <TouchableOpacity
-                onPress={handleMiniCardPress}
-                className="w-full h-[232px] rounded-2xl overflow-hidden relative"
-                activeOpacity={0.9}
-              >
-                <Video
-                  ref={(ref) => {
-                    if (ref) miniCardRefs.current[key] = ref;
-                  }}
-                  source={{
-                    uri: getBestVideoUrl(
-                      item.fileUrl &&
-                        item.fileUrl.trim() &&
-                        item.fileUrl.trim() !==
-                          "https://example.com/placeholder.mp4"
-                        ? item.fileUrl.trim()
-                        : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-                    ),
-                    headers: {
-                      "User-Agent": "JevahApp/1.0",
-                      Accept: "video/*",
-                    },
-                  }}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    position: "absolute",
-                  }}
-                  resizeMode={ResizeMode.COVER}
-                  isMuted={mutedVideos[key] ?? false}
-                  volume={mutedVideos[key] ? 0.0 : videoVolume} // 🔊 Add volume control
-                  shouldPlay={isPlaying}
-                  useNativeControls={false}
-                  onError={(error) => {
-                    console.warn(
-                      `❌ Mini card video failed to load: ${item.title}`,
-                      error
-                    );
-                    setVideoErrors((prev) => ({ ...prev, [key]: true }));
-                    setPlayingState((prev: any) => ({ ...prev, [key]: false }));
-                    setShowOverlayMini((prev) => ({ ...prev, [key]: true }));
-                  }}
-                  onLoad={() => {
-                    console.log(
-                      `✅ Mini card video loaded successfully: ${item.title}`
-                    );
-                    setVideoErrors((prev) => ({ ...prev, [key]: false }));
-                  }}
-                  onPlaybackStatusUpdate={(status) => {
-                    if (!status.isLoaded) return;
-                    if (status.didJustFinish) {
-                      setPlayingState((prev: any) => ({
-                        ...prev,
-                        [key]: false,
-                      }));
-                      setMiniCardHasCompleted((prev: any) => ({
-                        ...prev,
-                        [key]: true,
-                      }));
-                      setShowOverlayMini((prev) => ({ ...prev, [key]: true }));
-                      console.log(
-                        `🎬 Mini card video completed: ${item.title} - Ready for view count on replay`
-                      );
-                    }
-                  }}
-                />
-                {!isPlaying && showOverlayMini[key] && (
-                  <>
-                    {videoErrors[key] ? (
-                      // Show reload button when video fails
-                      <TouchableOpacity
-                        onPress={() => handleVideoReload(key)}
-                        className="absolute inset-0 justify-center items-center"
-                        activeOpacity={0.9}
-                      >
-                        <View className="bg-red-500/80 p-3 rounded-full">
-                          <Ionicons name="refresh" size={32} color="#FFFFFF" />
-                        </View>
-                      </TouchableOpacity>
-                    ) : (
-                      // Show play button when video is working
-                      <TouchableOpacity
-                        onPress={togglePlay}
-                        className="absolute inset-0 justify-center items-center"
-                        activeOpacity={0.9}
-                      >
-                        <View className="bg-white/70 p-3 rounded-full">
-                          <Ionicons name="play" size={32} color="#FEA74E" />
-                        </View>
-                      </TouchableOpacity>
-                    )}
-
-                    <View className="absolute bottom-2 left-2 right-2">
-                      <Text
-                        className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
-                        numberOfLines={2}
-                      >
-                        {item.title}
-                      </Text>
-                    </View>
-                  </>
-                )}
-              </TouchableOpacity>
-              {modalIndex === index && (
-                <>
-                  <TouchableWithoutFeedback onPress={closeAllMenus}>
-                    <View className="absolute inset-0 z-40" />
-                  </TouchableWithoutFeedback>
-
-                  {/* ✅ Modal content positioned over the video area */}
-                  <View className="absolute bottom-14 right-3 bg-white shadow-md rounded-lg p-3 z-50 w-[160px] h-[180]">
-                    <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                      <Text className="text-[#1D2939] font-rubik ml-2">
-                        View Details
-                      </Text>
-                      <Ionicons name="eye-outline" size={22} color="#1D2939" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleShare}
-                      className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-                    >
-                      <Text className="text-[#1D2939] font-rubik ml-2">
-                        Share
-                      </Text>
-                      <Feather name="send" size={22} color="#1D2939" />
-                    </TouchableOpacity>
-                    <TouchableOpacity className="flex-row items-center justify-between mt-6">
-                      <Text className="text-[#1D2939] font-rubik ml-2">
-                        Save to Library
-                      </Text>
-                      <MaterialIcons
-                        name="bookmark-border"
-                        size={22}
-                        color="#1D2939"
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      className="py-2 flex-row items-center justify-between mt-2"
-                      onPress={async () => {
-                        const downloadableItem = convertToDownloadableItem(
-                          item,
-                          "video"
+              return (
+                <View
+                  key={key}
+                  className="mr-4 w-[154px] flex-col items-center"
+                >
+                  <TouchableOpacity
+                    onPress={handleMiniCardPress}
+                    className="w-full h-[232px] rounded-2xl overflow-hidden relative"
+                    activeOpacity={0.9}
+                  >
+                    <Video
+                      ref={(ref) => {
+                        if (ref) miniCardRefs.current[key] = ref;
+                      }}
+                      source={{
+                        uri: getBestVideoUrl(
+                          item.fileUrl &&
+                            item.fileUrl.trim() &&
+                            item.fileUrl.trim() !==
+                              "https://example.com/placeholder.mp4"
+                            ? item.fileUrl.trim()
+                            : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                        ),
+                        headers: {
+                          "User-Agent": "JevahApp/1.0",
+                          Accept: "video/*",
+                        },
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        position: "absolute",
+                      }}
+                      resizeMode={ResizeMode.COVER}
+                      isMuted={mutedVideos[key] ?? false}
+                      volume={mutedVideos[key] ? 0.0 : videoVolume} // 🔊 Add volume control
+                      shouldPlay={isPlaying}
+                      useNativeControls={false}
+                      onError={(error) => {
+                        console.warn(
+                          `❌ Mini card video failed to load: ${item.title}`,
+                          error
                         );
-                        const result = await handleDownload(downloadableItem);
-                        if (result.success) {
-                          closeAllMenus();
-                          setSuccessMessage("Downloaded successfully!");
-                          setShowSuccessCard(true);
-                          // Force re-render to update download status
-                          await loadDownloadedItems();
+                        setVideoErrors((prev) => ({ ...prev, [key]: true }));
+                        setPlayingState((prev: any) => ({
+                          ...prev,
+                          [key]: false,
+                        }));
+                        setShowOverlayMini((prev) => ({
+                          ...prev,
+                          [key]: true,
+                        }));
+                      }}
+                      onLoad={() => {
+                        console.log(
+                          `✅ Mini card video loaded successfully: ${item.title}`
+                        );
+                        setVideoErrors((prev) => ({ ...prev, [key]: false }));
+                      }}
+                      onPlaybackStatusUpdate={(status) => {
+                        if (!status.isLoaded) return;
+                        if (status.didJustFinish) {
+                          setPlayingState((prev: any) => ({
+                            ...prev,
+                            [key]: false,
+                          }));
+                          setMiniCardHasCompleted((prev: any) => ({
+                            ...prev,
+                            [key]: true,
+                          }));
+                          setShowOverlayMini((prev) => ({
+                            ...prev,
+                            [key]: true,
+                          }));
+                          console.log(
+                            `🎬 Mini card video completed: ${item.title} - Ready for view count on replay`
+                          );
                         }
                       }}
-                    >
-                      <Text className="text-[#1D2939] font-rubik ml-2">
-                        {checkIfDownloaded(item.fileUrl)
-                          ? "Downloaded"
-                          : "Download"}
-                      </Text>
-                      <Ionicons
-                        name={
-                          checkIfDownloaded(item.fileUrl)
-                            ? "checkmark-circle"
-                            : "download-outline"
-                        }
-                        size={24}
-                        color={
-                          checkIfDownloaded(item.fileUrl)
-                            ? "#256E63"
-                            : "#090E24"
-                        }
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-              <View className="mt-2 flex flex-col w-full">
-                <View className="flex flex-row justify-between items-center">
-                  <Text
-                    className="text-[12px] text-[#98A2B3] font-rubik font-medium"
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {item.subTitle?.split(" ").slice(0, 4).join(" ") + " ..."}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      closeAllMenus();
-                      setModalIndex(modalIndex === index ? null : index);
-                    }}
-                    className="mr-2"
-                  >
-                    <Ionicons
-                      name="ellipsis-vertical"
-                      size={14}
-                      color="#9CA3AF"
                     />
+                    {!isPlaying && showOverlayMini[key] && (
+                      <>
+                        {videoErrors[key] ? (
+                          // Show reload button when video fails
+                          <TouchableOpacity
+                            onPress={() => handleVideoReload(key)}
+                            className="absolute inset-0 justify-center items-center"
+                            activeOpacity={0.9}
+                          >
+                            <View className="bg-red-500/80 p-3 rounded-full">
+                              <Ionicons
+                                name="refresh"
+                                size={32}
+                                color="#FFFFFF"
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        ) : (
+                          // Show play button when video is working
+                          <TouchableOpacity
+                            onPress={togglePlay}
+                            className="absolute inset-0 justify-center items-center"
+                            activeOpacity={0.9}
+                          >
+                            <View className="bg-white/70 p-3 rounded-full">
+                              <Ionicons name="play" size={32} color="#FEA74E" />
+                            </View>
+                          </TouchableOpacity>
+                        )}
+
+                        <View className="absolute bottom-2 left-2 right-2">
+                          <Text
+                            className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                            numberOfLines={2}
+                          >
+                            {item.title}
+                          </Text>
+                        </View>
+                      </>
+                    )}
                   </TouchableOpacity>
+                  {modalIndex === index && (
+                    <>
+                      <TouchableWithoutFeedback onPress={closeAllMenus}>
+                        <View className="absolute inset-0 z-40" />
+                      </TouchableWithoutFeedback>
+
+                      {/* ✅ Modal content positioned over the video area */}
+                      <View className="absolute bottom-14 right-3 bg-white shadow-md rounded-lg p-3 z-50 w-[160px] h-[180]">
+                        <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
+                          <Text className="text-[#1D2939] font-rubik ml-2">
+                            View Details
+                          </Text>
+                          <Ionicons
+                            name="eye-outline"
+                            size={22}
+                            color="#1D2939"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={handleShare}
+                          className="py-2 border-b border-gray-200 flex-row items-center justify-between"
+                        >
+                          <Text className="text-[#1D2939] font-rubik ml-2">
+                            Share
+                          </Text>
+                          <Feather name="send" size={22} color="#1D2939" />
+                        </TouchableOpacity>
+                        <TouchableOpacity className="flex-row items-center justify-between mt-6">
+                          <Text className="text-[#1D2939] font-rubik ml-2">
+                            Save to Library
+                          </Text>
+                          <MaterialIcons
+                            name="bookmark-border"
+                            size={22}
+                            color="#1D2939"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          className="py-2 flex-row items-center justify-between mt-2"
+                          onPress={async () => {
+                            const downloadableItem = convertToDownloadableItem(
+                              item,
+                              "video"
+                            );
+                            const result = await handleDownload(
+                              downloadableItem
+                            );
+                            if (result.success) {
+                              closeAllMenus();
+                              setSuccessMessage("Downloaded successfully!");
+                              setShowSuccessCard(true);
+                              // Force re-render to update download status
+                              await loadDownloadedItems();
+                            }
+                          }}
+                        >
+                          <Text className="text-[#1D2939] font-rubik ml-2">
+                            {checkIfDownloaded(item.fileUrl)
+                              ? "Downloaded"
+                              : "Download"}
+                          </Text>
+                          <Ionicons
+                            name={
+                              checkIfDownloaded(item.fileUrl)
+                                ? "checkmark-circle"
+                                : "download-outline"
+                            }
+                            size={24}
+                            color={
+                              checkIfDownloaded(item.fileUrl)
+                                ? "#256E63"
+                                : "#090E24"
+                            }
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                  <View className="mt-2 flex flex-col w-full">
+                    <View className="flex flex-row justify-between items-center">
+                      <Text
+                        className="text-[12px] text-[#98A2B3] font-rubik font-medium"
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {item.subTitle?.split(" ").slice(0, 4).join(" ") +
+                          " ..."}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          closeAllMenus();
+                          setModalIndex(modalIndex === index ? null : index);
+                        }}
+                        className="mr-2"
+                      >
+                        <Ionicons
+                          name="ellipsis-vertical"
+                          size={14}
+                          color="#9CA3AF"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <View className="flex-row items-center">
+                      <AntDesign name="eye" size={20} color="#98A2B3" />
+                      <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
+                        {views}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View className="flex-row items-center">
-                  <AntDesign name="eye" size={20} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
-                    {views}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          );
-        })}
+              );
+            })}
       </ScrollView>
     </View>
   );
@@ -2415,7 +2445,7 @@ export default function VideoComponent() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={true}
       >
-        {uploadedVideos.length > 0 && (
+        {uploadedVideos.length > 0 ? (
           <>
             <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
               Most Recent
@@ -2442,6 +2472,14 @@ export default function VideoComponent() {
               "progress"
             )}
           </>
+        ) : (
+          // Show skeleton loading for main video when no videos are loaded yet
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              Most Recent
+            </Text>
+            <VideoCardSkeleton dark={false} />
+          </>
         )}
         {renderMiniCards(
           "Previously Viewed",
@@ -2455,9 +2493,10 @@ export default function VideoComponent() {
           miniCardHasPlayed,
           setMiniCardHasPlayed,
           miniCardHasCompleted,
-          setMiniCardHasCompleted
+          setMiniCardHasCompleted,
+          false // isLoading
         )}
-        {firstExploreVideos.length > 0 && (
+        {firstExploreVideos.length > 0 ? (
           <>
             <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
               Explore More Videos
@@ -2488,6 +2527,18 @@ export default function VideoComponent() {
               )}
             </View>
           </>
+        ) : uploadedVideos.length > 0 && (
+          // Show skeleton loading for explore videos when no videos are available yet
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
+              Explore More Videos
+            </Text>
+            <View className="gap-8">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <VideoCardSkeleton key={`explore-skeleton-${index}`} dark={false} />
+              ))}
+            </View>
+          </>
         )}
         {/* 🔥 Trending Section with Enhanced Social Media Features */}
         {trendingItems.length > 0 ? (
@@ -2503,7 +2554,8 @@ export default function VideoComponent() {
             miniCardHasPlayed,
             setMiniCardHasPlayed,
             miniCardHasCompleted,
-            setMiniCardHasCompleted
+            setMiniCardHasCompleted,
+            false // isLoading
           )
         ) : (
           <View className="mt-5 mb-4">
@@ -2523,7 +2575,7 @@ export default function VideoComponent() {
         )}
 
         {/* 🎥 Continue Exploring - More Videos */}
-        {middleExploreVideos.length > 0 && (
+        {middleExploreVideos.length > 0 ? (
           <>
             <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
               Exploring More
@@ -2554,6 +2606,18 @@ export default function VideoComponent() {
               )}
             </View>
           </>
+        ) : uploadedVideos.length > 0 && (
+          // Show skeleton loading for middle explore videos when no videos are available yet
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              Exploring More
+            </Text>
+            <View className="gap-8">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <VideoCardSkeleton key={`middle-skeleton-${index}`} dark={false} />
+              ))}
+            </View>
+          </>
         )}
 
         {/* 🎯 Enhanced Recommendation Sections */}
@@ -2570,10 +2634,11 @@ export default function VideoComponent() {
             miniCardHasPlayed,
             setMiniCardHasPlayed,
             miniCardHasCompleted,
-            setMiniCardHasCompleted
+            setMiniCardHasCompleted,
+            false // isLoading
           )}
 
-        {remainingExploreVideos.length > 0 && (
+        {remainingExploreVideos.length > 0 ? (
           <>
             <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
               More Videos
@@ -2602,6 +2667,18 @@ export default function VideoComponent() {
                   "center"
                 )
               )}
+            </View>
+          </>
+        ) : uploadedVideos.length > 0 && (
+          // Show skeleton loading for remaining videos when no videos are available yet
+          <>
+            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+              More Videos
+            </Text>
+            <View className="gap-8">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <VideoCardSkeleton key={`remaining-skeleton-${index}`} dark={false} />
+              ))}
             </View>
           </>
         )}

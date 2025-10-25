@@ -1,30 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import {
-    useContentCount,
-    useUserInteraction,
+  useContentCount,
+  useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import Skeleton from "../../../shared/components/Skeleton/Skeleton";
+import { AudioCardSkeleton } from "../../../shared/components/Skeleton";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
-    isValidUri,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+  isValidUri,
 } from "../../../shared/utils";
 
 const ORANGE = "#FF8A00";
@@ -225,10 +225,20 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   );
 
   return (
-    <View 
+    <View
       className="flex flex-col mb-16"
       style={{ marginBottom: 64 }} // Extra spacing for better detection
-      onLayout={onLayout ? (event) => onLayout(event, `music-${audio._id || index}`, "music", audio.fileUrl) : undefined}
+      onLayout={
+        onLayout
+          ? (event) =>
+              onLayout(
+                event,
+                `music-${audio._id || index}`,
+                "music",
+                audio.fileUrl
+              )
+          : undefined
+      }
     >
       <TouchableWithoutFeedback onPress={handleOverlayToggle}>
         <View className="w-full h-[400px] overflow-hidden relative">
@@ -246,21 +256,8 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 
           {/* Skeleton overlay during initial audio load after play */}
           {attemptedPlay && !playerState.duration && (
-            <View
-              className="absolute inset-0"
-              style={{ justifyContent: "flex-end", padding: 12 }}
-              pointerEvents="none"
-            >
-              <View style={{ marginBottom: 8 }}>
-                <Skeleton dark variant="text" width={"65%"} />
-              </View>
-              <Skeleton
-                dark
-                height={6}
-                width={"85%"}
-                borderRadius={4}
-                style={{ opacity: 0.85 }}
-              />
+            <View className="absolute inset-0" pointerEvents="none">
+              <AudioCardSkeleton dark={true} />
             </View>
           )}
 
@@ -364,7 +361,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                       id: "1",
                       userName: "John Doe",
                       avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                      timestamp: new Date(
+                        Date.now() - 1000 * 60 * 30
+                      ).toISOString(),
                       comment: "Great music! Really enjoyed this content.",
                       likes: 5,
                       isLiked: false,
@@ -373,7 +372,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                       id: "2",
                       userName: "Jane Smith",
                       avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                      timestamp: new Date(
+                        Date.now() - 1000 * 60 * 15
+                      ).toISOString(),
                       comment: "Amazing! Thanks for sharing.",
                       likes: 3,
                       isLiked: true,
@@ -382,7 +383,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                       id: "3",
                       userName: "Mike Johnson",
                       avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                      timestamp: new Date(
+                        Date.now() - 1000 * 60 * 5
+                      ).toISOString(),
                       comment: "This is exactly what I needed!",
                       likes: 1,
                       isLiked: false,

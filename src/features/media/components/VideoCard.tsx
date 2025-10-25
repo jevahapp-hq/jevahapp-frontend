@@ -15,7 +15,7 @@ import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
-import Skeleton from "../../../shared/components/Skeleton/Skeleton";
+import { VideoCardSkeleton } from "../../../shared/components/Skeleton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
@@ -516,24 +516,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             !failedVideoLoad &&
             isValidUri(video.fileUrl) &&
             !isAudioSermon && (
-              <View
-                className="absolute inset-0"
-                style={{ justifyContent: "flex-end", padding: 12 }}
-                pointerEvents="none"
-              >
-                <View style={{ marginBottom: 8 }}>
-                  <Skeleton dark variant="text" width={"60%"} />
-                </View>
-                <View style={{ marginBottom: 6 }}>
-                  <Skeleton dark variant="text" width={"40%"} />
-                </View>
-                <Skeleton
-                  dark
-                  height={6}
-                  width={"90%"}
-                  borderRadius={4}
-                  style={{ opacity: 0.85 }}
-                />
+              <View className="absolute inset-0" pointerEvents="none">
+                <VideoCardSkeleton dark={true} />
               </View>
             )}
 
