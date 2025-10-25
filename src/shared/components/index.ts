@@ -1,11 +1,10 @@
-// Export all shared components
-export { CommentIcon } from "./CommentIcon";
-export { CompactAudioControls } from "./CompactAudioControls";
-export { InteractionButtons } from "./InteractionButtons";
-export { MediaCard } from "./MediaCard";
+// Performance optimized components
+export { OptimizedImage } from './OptimizedImage';
+export { OptimizedScrollView } from './OptimizedScrollView';
 
-// Re-export default exports
-export { default as CommentIconDefault } from "./CommentIcon";
-export { default as CompactAudioControlsDefault } from "./CompactAudioControls";
-export { default as InteractionButtonsDefault } from "./InteractionButtons";
-export { default as MediaCardDefault } from "./MediaCard";
+// Existing components
+export { VideoCardSkeleton } from './Skeleton/VideoCardSkeleton';
+export { AudioCardSkeleton } from './Skeleton/AudioCardSkeleton';
+export { HymnCardSkeleton } from './Skeleton/HymnCardSkeleton';
+export { MiniCardSkeleton } from './Skeleton/MiniCardSkeleton';
+export { default as Skeleton } from './Skeleton/Skeleton';

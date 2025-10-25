@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, memo } from "react";
 import {
   Image,
   Text,
@@ -15,9 +15,10 @@ import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
-import { VideoCardSkeleton } from "../../../shared/components/Skeleton";
+import { VideoCardSkeleton, OptimizedImage } from "../../../shared/components";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
+import { useStableCallback, useVideoOptimization } from "../../../shared/hooks";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
 import {
@@ -680,4 +681,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   );
 };
 
-export default VideoCard;
+// Memoize the component to prevent unnecessary re-renders
+export default memo(VideoCard, (prevProps, nextProps) => {
+  // Custom comparison function for better performance
+  return (
+    prevProps.video._id === nextProps.video._id &&
+    prevProps.video.title === nextProps.video.title &&
+    prevProps.video.fileUrl === nextProps.video.fileUrl &&
+    prevProps.playingVideos[prevProps.modalKey] === nextProps.playingVideos[nextProps.modalKey] &&
+    prevProps.mutedVideos[prevProps.modalKey] === nextProps.mutedVideos[nextProps.modalKey] &&
+    prevProps.progresses[prevProps.modalKey] === nextProps.progresses[nextProps.modalKey]
+  );
+});
