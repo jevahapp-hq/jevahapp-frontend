@@ -2,11 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
@@ -17,11 +17,13 @@ import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
 import Skeleton from "../../../shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
-import VideoControlsOverlay from "../../../shared/components/VideoControlsOverlay";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
-import { isValidUri, isValidVideoUrl } from "../../../shared/utils";
-import { getBestVideoUrl, handleVideoError as handleVideoErrorUtil } from "../../../shared/utils/videoUrlManager";
+import { isValidUri } from "../../../shared/utils";
+import {
+  getBestVideoUrl,
+  handleVideoError as handleVideoErrorUtil,
+} from "../../../shared/utils/videoUrlManager";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -211,6 +213,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     onVideoTap(key, video, index);
   }, [onVideoTap, key, video, index]);
 
+  // Handle hover start - no autoplay functionality
+  const handleHoverStart = useCallback(() => {
+    console.log(`👆 Hover started on video: ${video.title}`);
+    // No autoplay - user must manually click to play
+  }, [video.title]);
+
+  // Handle hover end - video continues playing until scrolled past
+  const handleHoverEnd = useCallback(() => {
+    console.log(`👆 Hover ended on video: ${video.title}`);
+    // Don't pause on hover end - let it continue playing
+    // Only pause when scrolled past or another video is hovered
+  }, [video.title]);
+
   // Handle play/pause toggle with immediate feedback and debounce
   const handleTogglePlay = useCallback(() => {
     if (isPlayTogglePending) return; // Prevent double-taps
@@ -272,16 +287,22 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const handleVideoError = useCallback(
     (error: any) => {
       // Use the enhanced error handler
-      const errorAnalysis = handleVideoErrorUtil(error, video.fileUrl, video.title);
-      
+      const errorAnalysis = handleVideoErrorUtil(
+        error,
+        video.fileUrl,
+        video.title
+      );
+
       // Set failed state
       setFailedVideoLoad(true);
-      
+
       // If it's a retryable error (expired signed URL), retry with converted URL
       if (errorAnalysis.isRetryable) {
         console.log(`🔄 Retryable error detected - expired signed URL`);
-        console.log(`🔧 Will retry with converted URL: ${errorAnalysis.suggestedUrl}`);
-        
+        console.log(
+          `🔧 Will retry with converted URL: ${errorAnalysis.suggestedUrl}`
+        );
+
         setTimeout(() => {
           if (isMountedRef.current) {
             console.log(`🔄 Retrying video load for: ${video.title}`);
@@ -303,9 +324,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         hasError: status.error,
         duration: status.durationMillis,
         canPlay: status.canPlay,
-        canPlaySlowForward: status.canPlaySlowForward
+        canPlaySlowForward: status.canPlaySlowForward,
       });
-      
+
       if (status.isLoaded) {
         console.log(`✅ Video loaded successfully: ${video.title}`);
         setFailedVideoLoad(false);
@@ -380,13 +401,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const firstInitial = (displayNameSafe || "?").trim().charAt(0).toUpperCase();
 
   return (
-    <View 
-      key={modalKey} 
+    <View
+      key={modalKey}
       className="flex flex-col mb-16"
       style={{ marginBottom: 64 }} // Extra spacing for better detection
-      onLayout={onLayout ? (event) => onLayout(event, key, "video", video.fileUrl) : undefined}
+      onLayout={
+        onLayout
+          ? (event) => onLayout(event, key, "video", video.fileUrl)
+          : undefined
+      }
     >
-      <TouchableWithoutFeedback 
+      <TouchableWithoutFeedback
         onPress={handleVideoTap}
         onTouchStart={handleHoverStart}
         onTouchEnd={handleHoverEnd}
@@ -396,12 +421,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           {!failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermon ? (
             <Video
               ref={videoRef}
-              source={{ 
+              source={{
                 uri: getBestVideoUrl(video.fileUrl),
                 headers: {
-                  'User-Agent': 'JevahApp/1.0',
-                  'Accept': 'video/*'
-                }
+                  "User-Agent": "JevahApp/1.0",
+                  Accept: "video/*",
+                },
               }}
               style={{
                 width: "100%",
