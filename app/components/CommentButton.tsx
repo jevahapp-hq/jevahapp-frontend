@@ -1,12 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Text, TouchableOpacity } from "react-native";
 import {
-  getResponsiveBorderRadius,
-  getResponsiveSpacing,
-  getResponsiveTextStyle,
+    getResponsiveBorderRadius,
+    getResponsiveSpacing,
+    getResponsiveTextStyle,
 } from "../../utils/responsive";
 import { useCommentModal } from "../context/CommentModalContext";
-import { useOptimizedButton } from "../utils/performance";
 
 interface CommentButtonProps {
   contentId: string;
@@ -60,16 +59,10 @@ export default function CommentButton({
     }
   };
 
-  const optimizedCommentHandler = useOptimizedButton(
-    () => {
-      // Use global CommentModalV2 via context; pass empty list and contentId
-      showCommentModal([], contentId);
-    },
-    {
-      debounceMs: 200,
-      key: `comment-${contentId}`,
-    }
-  );
+  const handleOpenComments = () => {
+    // Use global CommentModalV2 via context; pass empty list and contentId
+    showCommentModal([], contentId);
+  };
 
   const handleCommentPosted = (comment: any) => {
     onCommentPosted?.(comment);
@@ -78,7 +71,7 @@ export default function CommentButton({
   return (
     <>
       <TouchableOpacity
-        onPress={optimizedCommentHandler}
+        onPress={handleOpenComments}
         style={{
           flexDirection: "row",
           alignItems: "center",

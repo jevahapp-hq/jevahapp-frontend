@@ -439,9 +439,13 @@ export default function EbookComponent() {
                     {globalFavoriteCounts[key] || 0}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <View 
                   className="flex-row items-center mr-6"
-                  onPress={() => handleComment(key, item)}
+                  style={{ 
+                    minHeight: 50,
+                    minWidth: 50,
+                    zIndex: 2
+                  }}
                 >
                   <CommentIcon 
                     comments={formattedComments}
@@ -450,8 +454,9 @@ export default function EbookComponent() {
                     showCount={true}
                     count={stats.comment === 1 ? (item.comment ?? 0) + 1 : item.comment ?? 0}
                     layout="horizontal"
+                    contentId={contentId}
                   />
-                </TouchableOpacity>
+                </View>
                 <TouchableOpacity onPress={() => handleSave(key, item)} className="flex-row items-center mr-6">
                   <MaterialIcons
                     name={isInLibrary(getContentKey(item)) ? "bookmark" : "bookmark-border"}

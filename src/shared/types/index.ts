@@ -107,6 +107,8 @@ export interface VideoCardProps {
   getTimeAgo: (createdAt: string) => string;
   getUserDisplayNameFromContent: (item: MediaItem) => string;
   getUserAvatarFromContent: (item: MediaItem) => any;
+  onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
+  isAutoPlayEnabled?: boolean;
 }
 
 // Music/Audio-specific interfaces
@@ -121,6 +123,8 @@ export interface MusicCardProps {
   onPlay: (uri: string, id: string) => void;
   isPlaying?: boolean;
   progress?: number;
+  onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
+  onPause?: (id: string) => void;
 }
 
 // Ebook-specific interfaces

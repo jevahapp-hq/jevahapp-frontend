@@ -1,12 +1,69 @@
 import { ContentType, MediaItem } from "../types";
 
-// URL validation utility
+// URL validation utility with enhanced checks
 export const isValidUri = (uri: any): boolean => {
-  return (
-    typeof uri === "string" &&
-    uri.trim().length > 0 &&
-    /^https?:\/\//.test(uri.trim())
-  );
+  if (!uri || typeof uri !== "string" || uri.trim().length === 0) {
+    return false;
+  }
+  
+  const trimmedUri = uri.trim();
+  
+  // Check if it's a valid HTTP/HTTPS URL
+  if (!/^https?:\/\//.test(trimmedUri)) {
+    return false;
+  }
+  
+  // Check for common invalid patterns
+  const invalidPatterns = [
+    /undefined/i,
+    /null/i,
+    /placeholder/i,
+    /example\.com/i,
+    /test\.com/i,
+    /localhost/i,
+    /127\.0\.0\.1/i,
+    /^https?:\/\/$/, // Just protocol
+    /^https?:\/\/\s*$/, // Protocol with whitespace
+  ];
+  
+  for (const pattern of invalidPatterns) {
+    if (pattern.test(trimmedUri)) {
+      console.warn(`⚠️ Invalid URL pattern detected: ${trimmedUri}`);
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+// Enhanced URL validation for video content
+export const isValidVideoUrl = (uri: any): boolean => {
+  if (!isValidUri(uri)) {
+    return false;
+  }
+  
+  const trimmedUri = uri.trim();
+  
+  // Check for video file extensions
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp', '.flv'];
+  const hasVideoExtension = videoExtensions.some(ext => trimmedUri.toLowerCase().includes(ext));
+  
+  // Check for common video hosting domains
+  const videoHostingDomains = [
+    'youtube.com',
+    'youtu.be',
+    'vimeo.com',
+    'dailymotion.com',
+    'twitch.tv',
+    'cloudinary.com',
+    'amazonaws.com',
+    'googleapis.com',
+    'cloudfront.net'
+  ];
+  
+  const hasVideoHosting = videoHostingDomains.some(domain => trimmedUri.toLowerCase().includes(domain));
+  
+  return hasVideoExtension || hasVideoHosting;
 };
 
 // Content key generation

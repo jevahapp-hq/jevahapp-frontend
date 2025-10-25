@@ -18,11 +18,11 @@ export default function PlayOverlay({
         <View
           className={`${
             isPlaying ? "bg-black/30" : "bg-white/70"
-          } p-3 rounded-full`}
+          } p-4 rounded-full`}
         >
           <Ionicons
             name={isPlaying ? "pause" : "play"}
-            size={size}
+            size={size || 40}
             color={isPlaying ? "#FFFFFF" : "#FEA74E"}
           />
         </View>

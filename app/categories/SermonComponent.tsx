@@ -186,12 +186,23 @@ export default function SermonComponent() {
   // Video refs
   const videoRefs = useRef<Record<string, any>>({});
   const [viewCounted, setViewCounted] = useState<Record<string, boolean>>({});
+  const [videoErrors, setVideoErrors] = useState<Record<string, boolean>>({});
 
   // Helper functions
   const getContentKey = (item: any) =>
     `${item.contentType}-${
       item._id || item.fileUrl || Math.random().toString(36).substring(2)
     }`;
+
+  const handleVideoReload = (key: string) => {
+    console.log(`🔄 Reloading video: ${key}`);
+    setVideoErrors((prev) => ({ ...prev, [key]: false }));
+    // Force video to reload by updating the key
+    const videoRef = videoRefs.current[key];
+    if (videoRef) {
+      videoRef.setPositionAsync(0);
+    }
+  };
 
   const handleVideoTap = (key: string, video: any, index: number) => {
     const isCurrentlyPlaying = globalVideoStore.playingVideos[key] ?? false;
@@ -533,7 +544,7 @@ export default function SermonComponent() {
           </View>
 
           {/* Right side actions */}
-          <View className="flex-col absolute mt-[170px] right-4">
+          <View className="flex-col absolute mt-[180px] right-4">
             <TouchableOpacity
               onPress={() => handleFavorite(key, audio)}
               className="flex-col justify-center items-center"
@@ -547,7 +558,14 @@ export default function SermonComponent() {
                 {globalFavoriteCounts[key] || 0}
               </Text>
             </TouchableOpacity>
-            <View className="flex-col justify-center items-center mt-6">
+            <View 
+              className="flex-col justify-center items-center mt-8"
+              style={{ 
+                minHeight: 60,
+                minWidth: 60,
+                zIndex: 2
+              }}
+            >
               <CommentIcon
                 comments={formattedComments}
                 size={30}
@@ -559,11 +577,12 @@ export default function SermonComponent() {
                     : audio.comment ?? 0
                 }
                 layout="vertical"
+                contentId={contentId}
               />
             </View>
             <TouchableOpacity
               onPress={() => handleSave(key, audio)}
-              className="flex-col justify-center items-center mt-6"
+              className="flex-col justify-center items-center mt-8"
             >
               <MaterialIcons
                 name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
@@ -823,7 +842,12 @@ export default function SermonComponent() {
                   video?.title,
                   e
                 );
+                setVideoErrors((prev) => ({ ...prev, [modalKey]: true }));
                 globalVideoStore.pauseVideo(modalKey);
+              }}
+              onLoad={() => {
+                console.log(`✅ Sermon video loaded successfully: ${video?.title}`);
+                setVideoErrors((prev) => ({ ...prev, [modalKey]: false }));
               }}
               onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
@@ -859,7 +883,46 @@ export default function SermonComponent() {
                   {globalFavoriteCounts[key] || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity className="flex-col justify-center items-center mt-6">
+              <TouchableOpacity
+                onPress={() => {
+                  console.log("🔄 Comment button clicked for sermon:", video.title);
+                  // Create mock comments like in Reels component
+                  const mockComments = [
+                    {
+                      id: "1",
+                      userName: "John Doe",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                      comment: "Great sermon! Really enjoyed this content.",
+                      likes: 5,
+                      isLiked: false,
+                    },
+                    {
+                      id: "2",
+                      userName: "Jane Smith",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                      comment: "Amazing! Thanks for sharing.",
+                      likes: 3,
+                      isLiked: true,
+                    },
+                    {
+                      id: "3",
+                      userName: "Mike Johnson",
+                      avatar: "",
+                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                      comment: "This is exactly what I needed!",
+                      likes: 1,
+                      isLiked: false,
+                    },
+                  ];
+                  const contentId = video._id || key;
+                  showCommentModal(mockComments, contentId);
+                }}
+                className="flex-col justify-center items-center mt-6"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="chatbubble-sharp" size={30} color="white" />
                 <Text className="text-[10px] text-white font-rubik-semibold">
                   {stats.comment === 1
@@ -884,33 +947,49 @@ export default function SermonComponent() {
               </TouchableOpacity>
             </View>
 
-            {/* Centered Play/Pause Button */}
+            {/* Centered Play/Pause Button or Reload Button */}
             <View className="absolute inset-0 justify-center items-center">
-              <TouchableOpacity
-                onPress={() => handleVideoTap(modalKey, video, index)}
-              >
-                <View
-                  className={`${
-                    globalVideoStore.playingVideos[modalKey]
-                      ? "bg-black/30"
-                      : "bg-white/70"
-                  } p-3 rounded-full`}
+              {videoErrors[modalKey] ? (
+                // Show reload button when video fails
+                <TouchableOpacity
+                  onPress={() => handleVideoReload(modalKey)}
                 >
-                  <Ionicons
-                    name={
+                  <View className="bg-red-500/80 p-4 rounded-full">
+                    <Ionicons
+                      name="refresh"
+                      size={40}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                // Show play/pause button when video is working
+                <TouchableOpacity
+                  onPress={() => handleVideoTap(modalKey, video, index)}
+                >
+                  <View
+                    className={`${
                       globalVideoStore.playingVideos[modalKey]
-                        ? "pause"
-                        : "play"
-                    }
-                    size={32}
-                    color={
-                      globalVideoStore.playingVideos[modalKey]
-                        ? "#FFFFFF"
-                        : "#FEA74E"
-                    }
-                  />
-                </View>
-              </TouchableOpacity>
+                        ? "bg-black/30"
+                        : "bg-white/70"
+                    } p-4 rounded-full`}
+                  >
+                    <Ionicons
+                      name={
+                        globalVideoStore.playingVideos[modalKey]
+                          ? "pause"
+                          : "play"
+                      }
+                      size={40}
+                      color={
+                        globalVideoStore.playingVideos[modalKey]
+                          ? "#FFFFFF"
+                          : "#FEA74E"
+                      }
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Video Title - show when paused */}

@@ -1,21 +1,21 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons,
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons,
 } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Image,
-  PanResponder,
-  View as RNView,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    PanResponder,
+    View as RNView,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
@@ -25,18 +25,18 @@ import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../utils/downloadUtils";
 import {
-  getPersistedStats,
-  getViewedAudio,
-  persistStats,
-  persistViewedAudio,
+    getPersistedStats,
+    getViewedAudio,
+    persistStats,
+    persistViewedAudio,
 } from "../utils/persistentStorage";
 import {
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../utils/userValidation";
 
 interface AudioCard {
@@ -1218,9 +1218,13 @@ export default function Music() {
                       {globalFavoriteCounts?.[modalKey] || 0}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
+                  <View 
                     className="flex-row items-center mr-6"
-                    onPress={() => handleComment(modalKey, Audio)}
+                    style={{ 
+                      minHeight: 50,
+                      minWidth: 50,
+                      zIndex: 2
+                    }}
                   >
                     <CommentIcon
                       comments={[]}
@@ -1233,8 +1237,9 @@ export default function Music() {
                           : Audio.comment ?? 0
                       }
                       layout="horizontal"
+                      contentId={modalKey}
                     />
-                  </TouchableOpacity>
+                  </View>
                   <TouchableOpacity
                     onPress={() => handleSave(modalKey, Audio)}
                     className="flex-row items-center mr-6"

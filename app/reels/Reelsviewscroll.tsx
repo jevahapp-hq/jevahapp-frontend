@@ -17,7 +17,7 @@ import {
 } from "react-native";
 
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
-import CommentModalV2 from "../components/CommentModalV2";
+import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../context/CommentModalContext";
@@ -50,6 +50,7 @@ type Params = {
   category?: string;
   videoList?: string; // JSON string of video array
   currentIndex?: string; // Current video index in the list
+  source?: string; // Source component that navigated to reels
 };
 
 export default function Reelsviewscroll() {
@@ -82,6 +83,8 @@ export default function Reelsviewscroll() {
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [videoPosition, setVideoPosition] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [showPauseOverlay, setShowPauseOverlay] = useState<boolean>(false);
+  const [userHasManuallyPaused, setUserHasManuallyPaused] = useState<boolean>(false);
 
   // Use library store for saving content
   const libraryStore = useLibraryStore();
@@ -174,6 +177,59 @@ export default function Reelsviewscroll() {
     // Android has built-in haptic feedback for touch events
   };
 
+  // Handle back navigation based on source component
+  const handleBackNavigation = () => {
+    triggerHapticFeedback();
+    
+    console.log(`🔙 Back navigation requested. Source: ${source}, Category: ${category}`);
+    
+    // For all cases, try router.back() first to maintain proper navigation stack
+    // This ensures we go back to the previous screen with proper app structure (bottom nav, header)
+    if (router.canGoBack?.()) {
+      console.log(`🔙 Using router.back() to return to previous screen`);
+      router.back();
+    } else {
+      // Only use replace/push as fallback when canGoBack is not available
+      console.log(`🔙 canGoBack not available, using fallback navigation`);
+      
+      if (source === "AllContentTikTok") {
+        // Navigate back to HomeScreen with the specific category the user was viewing
+        // This preserves the category context instead of defaulting to "ALL"
+        router.push({
+          pathname: "/categories/HomeScreen",
+          params: {
+            default: "Home",
+            defaultCategory: category || "ALL", // Use the actual category or default to "ALL"
+          },
+        });
+      } else if (source === "VideoComponent") {
+        // Navigate back to VideoComponent
+        router.push("/categories/VideoComponent");
+      } else if (source === "SermonComponent") {
+        // Navigate back to SermonComponent
+        router.push("/categories/SermonComponent");
+      } else if (source === "LiveComponent") {
+        // Navigate back to LiveComponent
+        router.push("/categories/LiveComponent");
+      } else if (source === "ExploreSearch") {
+        // Navigate back to ExploreSearch
+        router.push("/ExploreSearch/ExploreSearch");
+      } else if (source === "HorizontalVideoSection") {
+        // Navigate back to home
+        router.push("/");
+      } else {
+        // Default fallback to HomeScreen with the specific category
+        router.push({
+          pathname: "/categories/HomeScreen",
+          params: {
+            default: "Home",
+            defaultCategory: category || "ALL", // Use the actual category or default to "ALL"
+          },
+        });
+      }
+    }
+  };
+
   const {
     title,
     speaker,
@@ -188,6 +244,7 @@ export default function Reelsviewscroll() {
     category,
     videoList,
     currentIndex = "0",
+    source,
   } = useLocalSearchParams() as Params;
 
   const live = isLive === "true";
@@ -614,9 +671,24 @@ export default function Reelsviewscroll() {
     if (isCurrentlyPlaying) {
       console.log(`🎬 Reels: Pausing video ${modalKey}`);
       globalVideoStore.pauseVideo(modalKey);
+      // Mark that user has manually paused the video
+      setUserHasManuallyPaused(true);
     } else {
       console.log(`🎬 Reels: Playing video ${modalKey}`);
       globalVideoStore.playVideoGlobally(modalKey);
+      // Reset the manual pause flag when user manually plays
+      setUserHasManuallyPaused(false);
+    }
+
+    // Show pause overlay temporarily when video is playing
+    if (isCurrentlyPlaying) {
+      setShowPauseOverlay(true);
+      // Hide the pause overlay after 1 second
+      setTimeout(() => {
+        setShowPauseOverlay(false);
+      }, 1000);
+    } else {
+      setShowPauseOverlay(false);
     }
   };
 
@@ -739,6 +811,8 @@ export default function Reelsviewscroll() {
     // Reset progress state for new video
     setVideoDuration(0);
     setVideoPosition(0);
+    setShowPauseOverlay(false); // Reset pause overlay state
+    setUserHasManuallyPaused(false); // Reset manual pause flag for new video
     // Ensure only the active video plays
     globalVideoStore.pauseAllVideos();
     // Add a small delay to ensure the video component is ready
@@ -754,7 +828,7 @@ export default function Reelsviewscroll() {
 
   // Additional effect to ensure video plays on initial mount
   useEffect(() => {
-    if (modalKey && !playingVideos[modalKey]) {
+    if (modalKey && !playingVideos[modalKey] && !userHasManuallyPaused) {
       console.log(
         `🎬 Reels: Ensuring video ${modalKey} starts playing on mount`
       );
@@ -762,7 +836,7 @@ export default function Reelsviewscroll() {
         globalVideoStore.playVideoGlobally(modalKey);
       }, 200);
     }
-  }, [modalKey, playingVideos]);
+  }, [modalKey, playingVideos, userHasManuallyPaused]);
 
   // Function to render a single video item
   const renderVideoItem = (
@@ -795,6 +869,27 @@ export default function Reelsviewscroll() {
       passedVideoKey || `reel-${videoData.title}-${videoData.speaker}`;
     const [refreshedUrl, setRefreshedUrl] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [videoError, setVideoError] = useState<boolean>(false);
+
+    // 🔄 Handle video reload
+    const handleVideoReload = async () => {
+      console.log(`🔄 Reloading video: ${videoData.title}`);
+      setVideoError(false);
+      setIsRefreshing(true);
+      
+      try {
+        // Try to refresh the URL
+        const refreshed = await tryRefreshMediaUrl(videoData);
+        if (refreshed) {
+          setRefreshedUrl(refreshed);
+        }
+      } catch (error) {
+        console.error("❌ Failed to reload video:", error);
+        setVideoError(true);
+      } finally {
+        setIsRefreshing(false);
+      }
+    };
 
     // 🔁 Refresh URL on mount if needed
     useEffect(() => {
@@ -862,12 +957,6 @@ export default function Reelsviewscroll() {
         >
           <View
             className="w-full h-full"
-            onTouchStart={(e) =>
-              isActive && console.log("🎬 Touch start at:", e.nativeEvent.pageY)
-            }
-            onTouchEnd={(e) =>
-              isActive && console.log("🎬 Touch end at:", e.nativeEvent.pageY)
-            }
             accessibilityLabel={`${
               playingVideos[videoKey] ? "Pause" : "Play"
             } video`}
@@ -888,7 +977,13 @@ export default function Reelsviewscroll() {
               ref={(ref) => {
                 if (ref && isActive) videoRefs.current[videoKey] = ref;
               }}
-              source={{ uri: videoUrl || "" }}
+              source={{ 
+                uri: getBestVideoUrl(videoUrl || ""),
+                headers: {
+                  'User-Agent': 'JevahApp/1.0',
+                  'Accept': 'video/*'
+                }
+              }}
               style={{
                 width: "100%",
                 height: "100%",
@@ -909,6 +1004,7 @@ export default function Reelsviewscroll() {
                   `❌ Video loading error in reels for ${videoData.title}:`,
                   error
                 );
+                setVideoError(true);
                 try {
                   // Try to refresh URL on error
                   if (!refreshedUrl) {
@@ -916,6 +1012,9 @@ export default function Reelsviewscroll() {
                     const fresh = await tryRefreshMediaUrl(videoData);
                     setRefreshedUrl(fresh);
                     setIsRefreshing(false);
+                    if (fresh) {
+                      setVideoError(false);
+                    }
                   }
                 } catch (refreshError) {
                   console.error(
@@ -923,10 +1022,13 @@ export default function Reelsviewscroll() {
                     refreshError
                   );
                   setIsRefreshing(false);
-                  // Show error state to user
-                  setErrorMessage("Failed to load video");
-                  setHasError(true);
+                  // Keep video error state true
+                  setVideoError(true);
                 }
+              }}
+              onLoad={() => {
+                console.log(`✅ Video loaded successfully: ${videoData.title}`);
+                setVideoError(false);
               }}
               onPlaybackStatusUpdate={(status) => {
                 if (!isActive || !status.isLoaded) return;
@@ -945,8 +1047,8 @@ export default function Reelsviewscroll() {
                     `🎬 Reels: Video ${videoKey} duration set to ${status.durationMillis}ms`
                   );
 
-                  // Ensure video starts playing when first loaded
-                  if (!status.isPlaying && !playingVideos[videoKey]) {
+                  // Ensure video starts playing when first loaded (only if user hasn't manually paused)
+                  if (!status.isPlaying && !playingVideos[videoKey] && !userHasManuallyPaused) {
                     console.log(
                       `🎬 Reels: Video ${videoKey} loaded but not playing, starting playback`
                     );
@@ -984,6 +1086,36 @@ export default function Reelsviewscroll() {
               shouldCorrectPitch={isIOS}
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
             />
+
+            {/* Small reload button in top-right corner when video fails */}
+            {isActive && videoError && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: getResponsiveSpacing(12, 16, 20),
+                  right: getResponsiveSpacing(12, 16, 20),
+                  zIndex: 25,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={handleVideoReload}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Reload video"
+                  accessibilityRole="button"
+                  style={{
+                    backgroundColor: "rgba(0, 0, 0, 0.6)",
+                    borderRadius: getResponsiveSize(16, 18, 20),
+                    padding: getResponsiveSpacing(6, 8, 10),
+                  }}
+                >
+                  <Ionicons
+                    name="refresh"
+                    size={getResponsiveSize(16, 18, 20)}
+                    color="rgba(255, 255, 255, 0.9)"
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Skeleton overlay while loading or when source is refreshing */}
             {isActive &&
@@ -1026,7 +1158,7 @@ export default function Reelsviewscroll() {
                 </View>
               )}
 
-            {/* Play/Pause Overlay - Glass Effect */}
+            {/* Play Overlay or Reload Button - Glass Effect */}
             {isActive && !playingVideos[videoKey] && (
               <View
                 className="absolute inset-0 justify-center items-center"
@@ -1034,37 +1166,85 @@ export default function Reelsviewscroll() {
                   backgroundColor: "rgba(0, 0, 0, 0.1)",
                 }}
               >
-                <TouchableOpacity
-                  onPress={toggleVideoPlay}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Play video"
-                  accessibilityRole="button"
-                >
-                  <View
+                {videoError ? (
+                  // Show reload button when video fails
+                  <TouchableOpacity
+                    onPress={handleVideoReload}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Reload video"
+                    accessibilityRole="button"
                     style={{
-                      backgroundColor: "rgba(255, 255, 255, 0.15)",
-                      borderRadius: getResponsiveSize(45, 55, 65),
-                      padding: getResponsiveSpacing(16, 20, 24),
-                      borderWidth: 1,
-                      borderColor: "rgba(255, 255, 255, 0.3)",
                       shadowColor: "#000",
                       shadowOffset: { width: 0, height: 8 },
                       shadowOpacity: 0.2,
                       shadowRadius: 16,
                       elevation: 8,
-                      // Glass effect with backdrop blur (iOS)
-                      ...(Platform.OS === "ios" && {
-                        backdropFilter: "blur(20px)",
-                      }),
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: "rgba(220, 38, 38, 0.8)",
+                        borderRadius: getResponsiveSize(25, 30, 35),
+                        padding: getResponsiveSize(12, 15, 18),
+                      }}
+                    >
+                      <Ionicons
+                        name="refresh"
+                        size={getResponsiveSize(50, 60, 70)}
+                        color="rgba(255, 255, 255, 0.9)"
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  // Show play button when video is working
+                  <TouchableOpacity
+                    onPress={toggleVideoPlay}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Play video"
+                    accessibilityRole="button"
+                    style={{
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 16,
+                      elevation: 8,
                     }}
                   >
                     <MaterialIcons
                       name="play-arrow"
                       size={getResponsiveSize(50, 60, 70)}
-                      color="#FFFFFF"
+                      color="rgba(255, 255, 255, 0.6)"
                     />
-                  </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Pause Overlay - Shows temporarily when user taps on playing video */}
+            {isActive && showPauseOverlay && playingVideos[videoKey] && (
+              <View
+                className="absolute inset-0 justify-center items-center"
+                style={{
+                  backgroundColor: "rgba(0, 0, 0, 0.1)",
+                  zIndex: 30,
+                }}
+                pointerEvents="none"
+              >
+                <View
+                  style={{
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 16,
+                    elevation: 8,
+                  }}
+                >
+                <MaterialIcons
+                  name="pause"
+                  size={getResponsiveSize(50, 60, 70)}
+                  color="rgba(255, 255, 255, 0.6)"
+                />
+                </View>
               </View>
             )}
 
@@ -1638,8 +1818,10 @@ export default function Reelsviewscroll() {
         ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
         : `reel-index-${clampedIndex}`;
 
-      // Pause all other videos and play the active one using the global play
-      globalVideoStore.playVideoGlobally(activeKey);
+      // Pause all other videos and play the active one using the global play (only if user hasn't manually paused)
+      if (!userHasManuallyPaused) {
+        globalVideoStore.playVideoGlobally(activeKey);
+      }
 
       console.log(
         `🎬 Active index while scrolling: ${clampedIndex}: ${allVideos[clampedIndex]?.title}`
@@ -1669,11 +1851,14 @@ export default function Reelsviewscroll() {
 
   // Handle scroll end to ensure proper video playback
   const handleScrollEnd = () => {
-    const activeVideo = allVideos[currentIndex_state];
-    const activeKey = activeVideo
-      ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
-      : `reel-index-${currentIndex_state}`;
-    globalVideoStore.playVideoGlobally(activeKey);
+    // Only auto-play if user hasn't manually paused
+    if (!userHasManuallyPaused) {
+      const activeVideo = allVideos[currentIndex_state];
+      const activeKey = activeVideo
+        ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
+        : `reel-index-${currentIndex_state}`;
+      globalVideoStore.playVideoGlobally(activeKey);
+    }
   };
 
   return (
@@ -1762,19 +1947,7 @@ export default function Reelsviewscroll() {
       >
         {/* Back Arrow */}
         <TouchableOpacity
-          onPress={() => {
-            triggerHapticFeedback();
-            if (router.canGoBack?.()) {
-              router.back();
-            } else {
-              router.replace({
-                pathname: "/categories/AllContentTikTok",
-                params: {
-                  defaultCategory: category,
-                },
-              });
-            }
-          }}
+          onPress={handleBackNavigation}
           style={{
             padding: getResponsiveSpacing(8, 10, 12),
             minWidth: getTouchTargetSize(),
@@ -1810,19 +1983,7 @@ export default function Reelsviewscroll() {
 
         {/* Close Icon */}
         <TouchableOpacity
-          onPress={() => {
-            triggerHapticFeedback();
-            if (router.canGoBack?.()) {
-              router.back();
-            } else {
-              router.replace({
-                pathname: "/categories/AllContentTikTok",
-                params: {
-                  defaultCategory: category,
-                },
-              });
-            }
-          }}
+          onPress={handleBackNavigation}
           style={{
             padding: getResponsiveSpacing(8, 10, 12),
             minWidth: getTouchTargetSize(),
@@ -1865,8 +2026,7 @@ export default function Reelsviewscroll() {
         />
       </View>
 
-      {/* Comment Modal */}
-      <CommentModalV2 />
+      {/* Comment Modal removed; global instance in app/_layout handles it */}
     </ErrorBoundary>
   );
 }

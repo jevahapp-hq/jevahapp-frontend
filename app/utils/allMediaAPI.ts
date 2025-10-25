@@ -350,6 +350,54 @@ class AllMediaAPI {
     }
   }
 
+  // Check server health
+  async checkServerHealth(): Promise<{
+    isHealthy: boolean;
+    responseTime?: number;
+    error?: string;
+  }> {
+    const startTime = Date.now();
+    
+    try {
+      // Try a simple health check endpoint first
+      const healthResponse = await fetch(`${this.baseURL}/health`, {
+        method: "GET",
+        timeout: 5000, // 5 second timeout for health check
+      });
+      
+      const responseTime = Date.now() - startTime;
+      
+      if (healthResponse.ok) {
+        return {
+          isHealthy: true,
+          responseTime,
+        };
+      }
+      
+      // If health endpoint doesn't exist, try the main API
+      const apiResponse = await fetch(`${this.baseURL}/api`, {
+        method: "GET",
+        timeout: 5000,
+      });
+      
+      const responseTime2 = Date.now() - startTime;
+      
+      return {
+        isHealthy: apiResponse.ok,
+        responseTime: responseTime2,
+      };
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      console.warn("Server health check failed:", error);
+      
+      return {
+        isHealthy: false,
+        responseTime,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
   // Test method to check available endpoints
   async testAvailableEndpoints(): Promise<void> {
     console.log("🧪 Testing available endpoints...");
@@ -394,8 +442,23 @@ class AllMediaAPI {
   }> {
     try {
       console.log("🌐 Fetching public all content...");
+      
+      // First check if server is reachable
+      const healthCheck = await this.checkServerHealth();
+      if (!healthCheck.isHealthy) {
+        console.warn("⚠️ Server health check failed, proceeding with request anyway...");
+      }
+      
       const response = await fetch(
-        `${this.baseURL}/api/media/public/all-content`
+        `${this.baseURL}/api/media/public/all-content`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          timeout: 15000, // 15 second timeout
+        }
       );
 
       if (!response.ok) {
@@ -415,9 +478,24 @@ class AllMediaAPI {
       };
     } catch (error) {
       console.error("❌ Error fetching public all content:", error);
+      
+      // Enhanced error handling
+      let errorMessage = "Unknown error";
+      if (error instanceof Error) {
+        if (error.message.includes("Network request failed")) {
+          errorMessage = "Unable to connect to server. Please check your internet connection.";
+        } else if (error.message.includes("timeout")) {
+          errorMessage = "Request timed out. The server may be experiencing issues.";
+        } else if (error.message.includes("Failed to fetch")) {
+          errorMessage = "Server is unreachable. Please try again later.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
         media: [],
         total: 0,
       };

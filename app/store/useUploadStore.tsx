@@ -72,8 +72,8 @@ import { GestureResponderEvent } from "react-native";
 import { create } from "zustand";
 import allMediaAPI from "../utils/allMediaAPI";
 import {
-  getPersistedMediaList,
-  persistMediaList,
+    getPersistedMediaList,
+    persistMediaList,
 } from "../utils/persistentStorage";
 import { logUserDataStatus, normalizeUserData } from "../utils/userValidation";
 
@@ -153,8 +153,10 @@ interface MediaState {
   allContentLoading: boolean;
   allContentError: string | null;
   allContentTotal: number;
+  showServerUnavailableModal: boolean;
   fetchAllContent: (useAuth?: boolean) => Promise<void>;
   refreshAllContent: () => Promise<void>;
+  dismissServerUnavailableModal: () => void;
 }
 
 export const useMediaStore = create<MediaState>((set, get) => ({
@@ -163,6 +165,9 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
   // Default content state
   defaultContent: [],
+
+  // Server unavailable modal state
+  showServerUnavailableModal: false,
   defaultContentLoading: false,
   defaultContentError: null,
   defaultContentPagination: {
@@ -534,20 +539,34 @@ export const useMediaStore = create<MediaState>((set, get) => ({
           allContent: response.media || [],
           allContentTotal: response.total || 0,
           allContentLoading: false,
+          allContentError: null,
         });
       } else {
         console.error("❌ Store: Failed to fetch all content:", response.error);
+        
+        // Check if it's a network/server error
+        const isServerError = response.error?.includes("Unable to connect") ||
+                             response.error?.includes("Server is unreachable") ||
+                             response.error?.includes("Network request failed");
+        
         set({
           allContentError: response.error || "Failed to fetch all content",
           allContentLoading: false,
+          showServerUnavailableModal: isServerError,
         });
       }
     } catch (error) {
       console.error("❌ Store: Exception while fetching all content:", error);
+      
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const isServerError = errorMessage.includes("Network request failed") ||
+                           errorMessage.includes("Unable to connect") ||
+                           errorMessage.includes("Server is unreachable");
+      
       set({
-        allContentError:
-          error instanceof Error ? error.message : "Unknown error",
+        allContentError: errorMessage,
         allContentLoading: false,
+        showServerUnavailableModal: isServerError,
       });
     }
   },
@@ -560,6 +579,10 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       console.log("🔄 Auth failed, trying public endpoint...");
       await get().fetchAllContent(false);
     }
+  },
+
+  dismissServerUnavailableModal: () => {
+    set({ showServerUnavailableModal: false });
   },
 }));
 

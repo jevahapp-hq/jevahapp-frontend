@@ -1,9 +1,9 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
 import {
-  Rubik_400Regular,
-  Rubik_600SemiBold,
-  Rubik_700Bold,
-  useFonts,
+    Rubik_400Regular,
+    Rubik_600SemiBold,
+    Rubik_700Bold,
+    useFonts,
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
@@ -83,13 +84,17 @@ export default function RootLayout() {
     Rubik_700Bold,
   });
 
-  // Suppress Clerk telemetry errors
+  // Suppress Clerk telemetry errors and video URL errors
   useEffect(() => {
     const originalError = console.error;
     console.error = (...args) => {
       if (
         args[0]?.includes?.("clerk/telemetry") ||
-        args[0]?.includes?.("Clerk hooks not available")
+        args[0]?.includes?.("Clerk hooks not available") ||
+        args[0]?.includes?.("Video error for") ||
+        args[0]?.includes?.("AVPlayerItem instance has failed") ||
+        args[0]?.includes?.("error code -11819") ||
+        args[0]?.includes?.("AVFoundationErrorDomain")
       ) {
         return; // Suppress these specific errors
       }
@@ -181,21 +186,18 @@ export default function RootLayout() {
     isInitialized,
   ]);
 
-  // Intercept Android hardware back to confirm logout instead of exiting app
+  // Intercept Android hardware back to properly exit app instead of logging out
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const handler = () => {
-      Alert.alert("Logout?", "Do you want to logout and exit?", [
+      Alert.alert("Exit App?", "Do you want to exit the app?", [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Logout",
+          text: "Exit",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await signOut();
-              // Navigate to auth screen or root
-              router.replace("/auth/login");
-            } catch {}
+          onPress: () => {
+            // Properly exit the app without logging out
+            BackHandler.exitApp();
           },
         },
       ]);
@@ -203,7 +205,7 @@ export default function RootLayout() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", handler);
     return () => sub.remove();
-  }, [router, signOut]);
+  }, []);
 
   // ✅ Fonts not loaded
   if (!fontsLoaded) {
@@ -262,6 +264,7 @@ export default function RootLayout() {
                 <CommentModalProvider>
                   <Slot />
                   <CommentModalV2 />
+                  <ServerUnavailableModalWrapper />
                 </CommentModalProvider>
               </NotificationProvider>
             </PersistentNotificationProvider>

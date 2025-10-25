@@ -1,10 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
-  createContext,
-  ReactNode,
-  useContext,
-  useRef,
-  useState,
+    createContext,
+    ReactNode,
+    useContext,
+    useRef,
+    useState,
 } from "react";
 import SocketManager from "../services/SocketManager";
 import { useInteractionStore } from "../store/useInteractionStore";
@@ -29,7 +29,8 @@ interface CommentModalContextType {
   showCommentModal: (
     comments: Comment[],
     contentId?: string,
-    contentType?: "media" | "devotional"
+    contentType?: "media" | "devotional",
+    contentOwnerName?: string
   ) => void;
   hideCommentModal: () => void;
   addComment: (comment: Comment) => void; // local insert (kept for backwards compatibility)
@@ -38,6 +39,7 @@ interface CommentModalContextType {
   replyToComment: (commentId: string, replyText: string) => void;
   submitComment: (text: string) => Promise<void>;
   loadMoreComments: () => Promise<void>;
+  contentOwnerName?: string;
 }
 
 const CommentModalContext = createContext<CommentModalContextType | undefined>(
@@ -67,57 +69,69 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   const [currentContentType, setCurrentContentType] = useState<
     "media" | "devotional"
   >("media");
+  const [currentContentOwnerName, setCurrentContentOwnerName] = useState<string>("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "top">("newest");
   const isLoadingRef = useRef(false);
+  const [isOpening, setIsOpening] = useState(false);
 
   const { addComment: addCommentToStore, toggleCommentLike } =
     useInteractionStore();
   const socketManagerRef = useRef<SocketManager | null>(null);
   const currentUserIdRef = useRef<string>("");
+  const currentUserFirstNameRef = useRef<string>("");
+  const currentUserLastNameRef = useRef<string>("");
 
   const showCommentModal = (
     newComments: Comment[],
     contentId?: string,
-    contentType: "media" | "devotional" = "media"
+    contentType: "media" | "devotional" = "media",
+    contentOwnerName?: string
   ) => {
-    try {
-      console.log("📣 showCommentModal called", {
-        contentId,
-        contentType,
-        incomingCount: newComments?.length || 0,
-      });
-    } catch {}
+    // INSTANT RESPONSE - No blocking conditions
+    console.log("📣 showCommentModal called INSTANTLY", {
+      contentId,
+      contentType,
+      incomingCount: newComments?.length || 0,
+    });
+    
+    // Set modal visible IMMEDIATELY - no delays
+    setIsVisible(true);
     setComments(newComments);
     if (contentId) {
       setCurrentContentId(contentId);
     }
     setCurrentContentType(contentType || "media");
+    if (contentOwnerName) {
+      setCurrentContentOwnerName(contentOwnerName);
+    }
     setPage(1);
     setHasMore(true);
-    setIsVisible(true);
-    try {
-      console.log("📣 showCommentModal -> setIsVisible(true)");
-    } catch {}
+    setIsOpening(false);
+    
+    console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
-    // Load latest comments from backend and join realtime room
-    requestAnimationFrame(() => {
+    // Load latest comments from backend and join realtime room ASYNC (non-blocking)
+    setTimeout(() => {
       if (contentId) {
         loadCommentsFromServer(contentId, contentType, 1, sortBy);
         joinRealtimeRoom(contentId, contentType);
       }
-    });
-    // Fetch current user id once
-    (async () => {
+    }, 0);
+    
+    // Fetch current user id ASYNC (non-blocking)
+    setTimeout(async () => {
       try {
         const userStr = await AsyncStorage.getItem("user");
         if (userStr) {
           const u = JSON.parse(userStr);
           currentUserIdRef.current = String(u?._id || u?.id || "");
+          currentUserFirstNameRef.current = String(u?.firstName || "");
+          currentUserLastNameRef.current = String(u?.lastName || "");
         }
       } catch {}
-    })();
+    }, 0);
   };
 
   const hideCommentModal = () => {
@@ -125,8 +139,10 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       console.log("📣 hideCommentModal called");
     } catch {}
     setIsVisible(false);
+    setIsOpening(false); // Reset opening state
     setComments([]);
     setCurrentContentId("");
+    setCurrentContentOwnerName("");
     setHasMore(true);
     // Leave realtime room
     try {
@@ -185,11 +201,21 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   const replyToComment = async (commentId: string, replyText: string) => {
     try {
       if (!currentContentId) return;
+      
+      // Check if user is authenticated before allowing reply
+      const token = await AsyncStorage.getItem("userToken") || 
+                   await AsyncStorage.getItem("token");
+      
+      if (!token) {
+        console.warn("⚠️ User not authenticated. Cannot submit reply.");
+        return;
+      }
+
       // Optimistic local reply
       const tempId = `temp-${Date.now()}`;
       const optimisticReply: Comment = {
         id: tempId,
-        userName: "You",
+        userName: `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() || "You",
         avatar: "",
         timestamp: new Date().toISOString(),
         comment: replyText,
@@ -216,17 +242,36 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       // Re-fetch replies or top-level if needed
     } catch (error) {
       console.error("Error adding reply:", error);
+      // Remove optimistic reply if API call failed
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, replies: (c.replies || []).filter(reply => !reply.id.startsWith('temp-')) }
+            : c
+        )
+      );
     }
   };
 
   const submitComment = async (text: string) => {
     try {
       if (!currentContentId || !text.trim()) return;
+      
+      // Check if user is authenticated before allowing comment submission
+      const token = await AsyncStorage.getItem("userToken") || 
+                   await AsyncStorage.getItem("token");
+      
+      if (!token) {
+        console.warn("⚠️ User not authenticated. Cannot submit comment.");
+        // You could show an alert here to prompt user to login
+        return;
+      }
+
       // Optimistic insert
       const tempId = `temp-${Date.now()}`;
       const optimistic: Comment = {
         id: tempId,
-        userName: "You",
+        userName: `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() || "You",
         avatar: "",
         timestamp: new Date().toISOString(),
         comment: text.trim(),
@@ -250,16 +295,19 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         text.trim(),
         currentContentType
       );
-      // Optionally refresh from server for canonical data
+      // Refresh from server without overwriting optimistic comment immediately.
+      // Merge results to avoid the just-posted comment "disappearing" due to eventual consistency.
       await loadCommentsFromServer(
         currentContentId,
         currentContentType,
         1,
         sortBy,
-        true
+        false
       );
     } catch (e) {
       console.error("Error submitting comment:", e);
+      // Remove optimistic comment if API call failed
+      setComments((prev) => prev.filter(comment => !comment.id.startsWith('temp-')));
     }
   };
 
@@ -273,34 +321,67 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
     try {
+      // Check if user is authenticated before making API call
+      const token = await AsyncStorage.getItem("userToken") || 
+                   await AsyncStorage.getItem("token");
+      
+      if (!token) {
+        console.warn("⚠️ No authentication token found. Skipping comment load from server.");
+        // Set empty comments instead of throwing error
+        if (replace) {
+          setComments([]);
+        }
+        return;
+      }
+
       const res = await contentInteractionAPI.getComments(
         contentId,
         contentType,
         pageNum,
         20
       );
-      const myId = currentUserIdRef.current;
-      const mapped: Comment[] = (res.comments || []).map((c: any) => ({
-        id: c.id,
-        // Prefer "You" label for the current user's comments
-        userName:
-          c.userId && myId && String(c.userId) === String(myId)
-            ? "You"
-            : c.username || "User",
-        avatar: c.userAvatar || "",
-        timestamp: c.timestamp,
-        comment: c.comment,
-        likes: c.likes || 0,
-        isLiked: false,
-        replies: [],
-        // @ts-ignore optional
-        userId: c.userId,
-      }));
-      setComments((prev) => (replace ? mapped : [...prev, ...mapped]));
+      let mapped: Comment[] = (res.comments || []).map((c: any) => {
+        const first = c.firstName || c.userFirstName || c.user?.firstName || "";
+        const last = c.lastName || c.userLastName || c.user?.lastName || "";
+        const fullName = `${String(first).trim()} ${String(last).trim()}`.trim();
+        const name = fullName || c.username || "User";
+        return {
+          id: c.id,
+          userName: name,
+          avatar: c.userAvatar || c.avatar || c.user?.avatar || "",
+          timestamp: c.timestamp,
+          comment: c.comment,
+          likes: c.likes || 0,
+          isLiked: false,
+          replies: [],
+          // @ts-ignore optional
+          userId: c.userId,
+        };
+      });
+      setComments((prev) => {
+        if (replace) return mapped;
+        // Merge by id to keep any optimistic items not yet returned by server
+        const existingById = new Map(prev.map((p) => [p.id, p] as const));
+        const merged: Comment[] = [];
+        // Keep current items first to preserve optimistic at the top
+        for (const p of prev) {
+          merged.push(p);
+        }
+        for (const m of mapped) {
+          if (!existingById.has(m.id)) {
+            merged.push(m);
+          }
+        }
+        return merged;
+      });
       setHasMore(Boolean(res.hasMore));
       setPage(pageNum);
     } catch (e) {
       console.warn("Failed loading comments from server:", e);
+      // Don't throw error, just log it and continue with empty state
+      if (replace) {
+        setComments([]);
+      }
     } finally {
       isLoadingRef.current = false;
     }
@@ -367,6 +448,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     replyToComment,
     submitComment,
     loadMoreComments,
+    contentOwnerName: currentContentOwnerName,
   };
 
   return (

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Text, TouchableOpacity } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import { useCommentModal } from '../context/CommentModalContext';
 
 interface Comment {
@@ -20,6 +20,7 @@ interface CommentIconProps {
   count?: number;
   style?: any;
   layout?: 'horizontal' | 'vertical';
+  contentId?: string;
 }
 
 export default function CommentIcon({ 
@@ -29,27 +30,47 @@ export default function CommentIcon({
   showCount = false, 
   count,
   style,
-  layout = 'horizontal'
+  layout = 'horizontal',
+  contentId
 }: CommentIconProps) {
   const { showCommentModal } = useCommentModal();
 
   const handlePress = () => {
-    showCommentModal(comments);
+    console.log("🎯 CommentIcon touched - contentId:", contentId);
+    showCommentModal(comments, contentId);
   };
 
   return (
-    <TouchableOpacity 
+    <Pressable 
       onPress={handlePress}
-      style={[
+      onPressIn={() => console.log('👆 onPressIn CommentIcon', contentId)}
+      onPressOut={() => console.log('👇 onPressOut CommentIcon', contentId)}
+      pointerEvents="box-only"
+      collapsable={false}
+      hitSlop={{ top: 24, bottom: 24, left: 24, right: 24 }}
+      style={({ pressed }) => [
         { 
           flexDirection: layout === 'vertical' ? 'column' : 'row', 
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          minHeight: size + 44, // Even larger touch area
+          minWidth: size + 44,
+          padding: 12,
+          backgroundColor: 'rgba(0,0,0,0.001)', // ensure native hitbox
+          position: 'relative',
+          zIndex: 10,
+          elevation: 10, // Android
+          opacity: pressed ? 0.7 : 1
         }, 
         style
       ]}
     >
-      <Ionicons name="chatbubble-outline" size={size} color={color} />
+      <Ionicons 
+        name="chatbubble-outline" 
+        size={size} 
+        color={color}
+        style={{ pointerEvents: 'none' }}
+      />
       {showCount && (
         <Text style={{ 
           marginLeft: layout === 'vertical' ? 0 : 4,
@@ -57,12 +78,13 @@ export default function CommentIcon({
           fontSize: layout === 'vertical' ? 10 : 12, 
           color: color,
           fontWeight: '500',
-          textAlign: 'center'
+          textAlign: 'center',
+          pointerEvents: 'none'
         }}>
           {count || comments.length}
         </Text>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 

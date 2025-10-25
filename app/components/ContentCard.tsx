@@ -902,8 +902,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
             {!isVideoPlaying && showVideoOverlay && (
               <>
                 <View className="absolute inset-0 justify-center items-center">
-                  <View className="bg-white/70 p-3 rounded-full">
-                    <Ionicons name="play" size={32} color="#FEA74E" />
+                  <View className="bg-white/70 p-4 rounded-full">
+                    <Ionicons name="play" size={40} color="#FEA74E" />
                   </View>
                 </View>
 
