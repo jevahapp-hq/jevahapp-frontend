@@ -70,22 +70,6 @@ class ContentInteractionService {
         }
       }
 
-      // DEBUG: Log token status
-      console.log("🔍 AUTH DEBUG: userStr exists:", !!userStr);
-      console.log("🔍 AUTH DEBUG: token exists:", !!token);
-      console.log(
-        "🔍 AUTH DEBUG: token value:",
-        token ? `${token.substring(0, 20)}...` : "null"
-      );
-      console.log(
-        "🔍 AUTH DEBUG: token source:",
-        (await AsyncStorage.getItem("userToken"))
-          ? "userToken"
-          : (await AsyncStorage.getItem("token"))
-          ? "token"
-          : "jwt/none"
-      );
-
       if (token) {
         return {
           "Content-Type": "application/json",
@@ -552,7 +536,6 @@ class ContentInteractionService {
       }
 
       const result = await response.json();
-      console.log(`✅ Content metadata loaded for ${contentId}:`, result);
 
       return {
         contentId,

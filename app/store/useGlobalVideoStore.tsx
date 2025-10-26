@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
+// ⚠️ DEPRECATED: This store is being replaced by useMediaPlaybackStore.tsx
+// Please use the unified store for new components.
+// This store will be removed once all components are migrated.
+
 interface VideoPlayerState {
   // Global video state - only one video can play at a time
   currentlyPlayingVideo: string | null;
@@ -17,6 +21,7 @@ interface VideoPlayerState {
   // Actions
   playVideo: (videoKey: string) => void;
   pauseVideo: (videoKey: string) => void;
+  toggleVideo: (videoKey: string) => void;
   pauseAllVideos: () => void;
   cleanupAllVideos: () => void;
   toggleVideoMute: (videoKey: string) => void;
@@ -43,8 +48,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     progresses: {},
     hasCompleted: {},
 
-    // Auto-play initial state (disabled by default - user must click to play)
-    isAutoPlayEnabled: false,
+    // Auto-play initial state (enabled for manual play functionality)
+    isAutoPlayEnabled: true,
     currentlyVisibleVideo: null,
 
     // Individual video actions
@@ -125,28 +130,53 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       }));
     },
 
-    // ✅ Global play function - the main function for playing videos
+    // ✅ Global play function - ALWAYS plays the video (no toggle)
     playVideoGlobally: (videoKey: string) => {
       console.log("🌍 playVideoGlobally called with:", videoKey);
       set((state) => {
-        const isCurrentlyPlaying = state.playingVideos[videoKey] ?? false;
-        console.log("🌍 Current state:", {
-          videoKey,
-          isCurrentlyPlaying,
-          allPlayingVideos: state.playingVideos,
-          currentlyPlayingVideo: state.currentlyPlayingVideo,
+        // ALWAYS play the video - no toggle behavior
+        const newPlayingVideos: Record<string, boolean> = {};
+        const newShowOverlay: Record<string, boolean> = {};
+
+        // Pause all other videos
+        Object.keys(state.playingVideos).forEach((key) => {
+          newPlayingVideos[key] = false;
+          newShowOverlay[key] = true;
         });
+
+        // Play the selected video
+        newPlayingVideos[videoKey] = true;
+        newShowOverlay[videoKey] = false;
+
+        console.log("🌍 Playing video:", videoKey);
+        console.log("🌍 New playing videos:", newPlayingVideos);
+
+        return {
+          currentlyPlayingVideo: videoKey,
+          playingVideos: newPlayingVideos,
+          showOverlay: newShowOverlay,
+        };
+      });
+    },
+
+    // ✅ Toggle function - for cases where toggle behavior is needed
+    toggleVideo: (videoKey: string) => {
+      console.log("🔄 toggleVideo called with:", videoKey);
+      set((state) => {
+        const isCurrentlyPlaying = state.playingVideos[videoKey] ?? false;
 
         if (isCurrentlyPlaying) {
           // If video is already playing, pause it
-          console.log("🌍 Pausing video:", videoKey);
+          console.log("🔄 Toggling to pause:", videoKey);
           return {
             currentlyPlayingVideo: null,
             playingVideos: { ...state.playingVideos, [videoKey]: false },
             showOverlay: { ...state.showOverlay, [videoKey]: true },
           };
         } else {
-          // Pause all other videos and play this one
+          // If video is paused, play it
+          console.log("🔄 Toggling to play:", videoKey);
+          // Use the same logic as playVideoGlobally
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
 
@@ -159,9 +189,6 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           // Play the selected video
           newPlayingVideos[videoKey] = true;
           newShowOverlay[videoKey] = false;
-
-          console.log("🌍 Playing video:", videoKey);
-          console.log("🌍 New playing videos:", newPlayingVideos);
 
           return {
             currentlyPlayingVideo: videoKey,

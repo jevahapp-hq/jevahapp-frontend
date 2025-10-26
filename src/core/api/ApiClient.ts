@@ -56,7 +56,6 @@ class ApiClient {
       }
 
       const data = await response.json();
-      console.log(`✅ API Success: ${options.method || "GET"} ${url}`);
 
       return {
         success: true,
@@ -72,9 +71,11 @@ class ApiClient {
       let errorMessage = "Network error";
       if (error instanceof Error) {
         if (error.message.includes("Network request failed")) {
-          errorMessage = "Unable to connect to server. Please check your internet connection and try again.";
+          errorMessage =
+            "Unable to connect to server. Please check your internet connection and try again.";
         } else if (error.message.includes("timeout")) {
-          errorMessage = "Request timed out. The server may be experiencing issues.";
+          errorMessage =
+            "Request timed out. The server may be experiencing issues.";
         } else if (error.message.includes("Failed to fetch")) {
           errorMessage = "Server is unreachable. Please try again later.";
         } else {
@@ -226,31 +227,31 @@ class ApiClient {
     error?: string;
   }> {
     const startTime = Date.now();
-    
+
     try {
       // Try a simple health check endpoint first
       const healthResponse = await fetch(`${this.baseURL}/health`, {
         method: "GET",
         timeout: 5000, // 5 second timeout for health check
       });
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       if (healthResponse.ok) {
         return {
           isHealthy: true,
           responseTime,
         };
       }
-      
+
       // If health endpoint doesn't exist, try the main API
       const apiResponse = await fetch(`${this.baseURL}/api`, {
         method: "GET",
         timeout: 5000,
       });
-      
+
       const responseTime2 = Date.now() - startTime;
-      
+
       return {
         isHealthy: apiResponse.ok,
         responseTime: responseTime2,
@@ -258,7 +259,7 @@ class ApiClient {
     } catch (error) {
       const responseTime = Date.now() - startTime;
       console.warn("Server health check failed:", error);
-      
+
       return {
         isHealthy: false,
         responseTime,

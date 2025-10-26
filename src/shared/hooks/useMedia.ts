@@ -60,12 +60,6 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       }
 
       if (response.success) {
-        console.log(
-          "✅ useMedia: Successfully fetched all content:",
-          response.media?.length || 0,
-          "items"
-        );
-
         const transformedMedia = (response.media || []).map(
           transformApiResponseToMediaItem
         );
@@ -119,12 +113,6 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         const response = await mediaApi.getDefaultContent(filter);
 
         if (response.success) {
-          console.log(
-            "✅ useMedia: Successfully fetched default content:",
-            response.media?.length || 0,
-            "items"
-          );
-
           const transformedMedia = (response.media || []).map(
             transformApiResponseToMediaItem
           );

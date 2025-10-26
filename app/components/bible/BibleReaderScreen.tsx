@@ -1,0 +1,359 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  BibleBook,
+  BibleChapter,
+  BibleVerse,
+} from "../../services/bibleApiService";
+import BibleBookSelector from "./BibleBookSelector";
+import BibleChapterSelector from "./BibleChapterSelector";
+import BibleReader from "./BibleReader";
+import BibleSearch from "./BibleSearch";
+
+type ViewMode = "books" | "chapters" | "reader" | "search";
+
+interface BibleReaderScreenProps {
+  onBack?: () => void;
+}
+
+export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>("books");
+  const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<BibleChapter | null>(
+    null
+  );
+
+  const handleBookSelect = (book: BibleBook) => {
+    setSelectedBook(book);
+    setSelectedChapter(null);
+    setViewMode("chapters");
+  };
+
+  const handleChapterSelect = (chapter: BibleChapter) => {
+    setSelectedChapter(chapter);
+    setViewMode("reader");
+  };
+
+  const handleVerseSelect = (verse: BibleVerse) => {
+    // Navigate to the verse in the reader
+    const book = {
+      _id: verse._id,
+      name: verse.bookName,
+      testament: "old" as const,
+      chapterCount: 0,
+      verseCount: 0,
+    };
+    const chapter = {
+      _id: verse._id,
+      bookName: verse.bookName,
+      chapterNumber: verse.chapterNumber,
+      verseCount: 0,
+    };
+
+    setSelectedBook(book);
+    setSelectedChapter(chapter);
+    setViewMode("reader");
+  };
+
+  const handleNavigateChapter = (direction: "prev" | "next") => {
+    if (!selectedBook || !selectedChapter) return;
+
+    const newChapterNumber =
+      direction === "prev"
+        ? selectedChapter.chapterNumber - 1
+        : selectedChapter.chapterNumber + 1;
+
+    if (newChapterNumber < 1 || newChapterNumber > selectedBook.chapterCount)
+      return;
+
+    const newChapter: BibleChapter = {
+      _id: `${selectedBook.name}-${newChapterNumber}`,
+      bookName: selectedBook.name,
+      chapterNumber: newChapterNumber,
+      verseCount: 0,
+    };
+
+    setSelectedChapter(newChapter);
+  };
+
+  const canNavigatePrev = selectedChapter
+    ? selectedChapter.chapterNumber > 1
+    : false;
+  const canNavigateNext =
+    selectedBook && selectedChapter
+      ? selectedChapter.chapterNumber < selectedBook.chapterCount
+      : false;
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => {
+          if (viewMode === "reader") {
+            setViewMode("chapters");
+          } else if (viewMode === "chapters") {
+            setViewMode("books");
+          } else if (viewMode === "search") {
+            setViewMode("books");
+          } else if (onBack) {
+            onBack();
+          }
+        }}
+      >
+        <Ionicons name="arrow-back" size={24} color="#256E63" />
+      </TouchableOpacity>
+
+      <View style={styles.headerTitleContainer}>
+        <Text style={styles.headerTitle}>
+          {viewMode === "books" && "Select Book"}
+          {viewMode === "chapters" && `Chapters in ${selectedBook?.name}`}
+          {viewMode === "reader" &&
+            `${selectedBook?.name} ${selectedChapter?.chapterNumber}`}
+          {viewMode === "search" && "Search Bible"}
+        </Text>
+        {viewMode === "reader" && (
+          <Text style={styles.headerSubtitle}>
+            {selectedChapter?.verseCount || 0} verses
+          </Text>
+        )}
+      </View>
+
+      <TouchableOpacity
+        style={styles.searchButton}
+        onPress={() => setViewMode("search")}
+      >
+        <Ionicons name="search-outline" size={24} color="#256E63" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderContent = () => {
+    switch (viewMode) {
+      case "books":
+        return (
+          <BibleBookSelector
+            onBookSelect={handleBookSelect}
+            selectedBook={selectedBook}
+          />
+        );
+
+      case "chapters":
+        return selectedBook ? (
+          <BibleChapterSelector
+            bookName={selectedBook.name}
+            onChapterSelect={handleChapterSelect}
+            selectedChapter={selectedChapter}
+          />
+        ) : null;
+
+      case "reader":
+        return selectedBook && selectedChapter ? (
+          <BibleReader
+            bookName={selectedBook.name}
+            chapterNumber={selectedChapter.chapterNumber}
+            onNavigateChapter={handleNavigateChapter}
+            canNavigatePrev={canNavigatePrev}
+            canNavigateNext={canNavigateNext}
+          />
+        ) : null;
+
+      case "search":
+        return <BibleSearch onVerseSelect={handleVerseSelect} />;
+
+      default:
+        return null;
+    }
+  };
+
+  const renderBottomNavigation = () => (
+    <View style={styles.bottomNav}>
+      <TouchableOpacity
+        style={[styles.navItem, viewMode === "books" && styles.activeNavItem]}
+        onPress={() => setViewMode("books")}
+      >
+        <Ionicons
+          name="library-outline"
+          size={20}
+          color={viewMode === "books" ? "#256E63" : "#9CA3AF"}
+        />
+        <Text
+          style={[
+            styles.navItemText,
+            viewMode === "books" && styles.activeNavItemText,
+          ]}
+        >
+          Books
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.navItem, viewMode === "search" && styles.activeNavItem]}
+        onPress={() => setViewMode("search")}
+      >
+        <Ionicons
+          name="search-outline"
+          size={20}
+          color={viewMode === "search" ? "#256E63" : "#9CA3AF"}
+        />
+        <Text
+          style={[
+            styles.navItemText,
+            viewMode === "search" && styles.activeNavItemText,
+          ]}
+        >
+          Search
+        </Text>
+      </TouchableOpacity>
+
+      {selectedBook && (
+        <TouchableOpacity
+          style={[
+            styles.navItem,
+            viewMode === "chapters" && styles.activeNavItem,
+          ]}
+          onPress={() => setViewMode("chapters")}
+        >
+          <Ionicons
+            name="list-outline"
+            size={20}
+            color={viewMode === "chapters" ? "#256E63" : "#9CA3AF"}
+          />
+          <Text
+            style={[
+              styles.navItemText,
+              viewMode === "chapters" && styles.activeNavItemText,
+            ]}
+          >
+            Chapters
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {selectedChapter && (
+        <TouchableOpacity
+          style={[
+            styles.navItem,
+            viewMode === "reader" && styles.activeNavItem,
+          ]}
+          onPress={() => setViewMode("reader")}
+        >
+          <Ionicons
+            name="book-outline"
+            size={20}
+            color={viewMode === "reader" ? "#256E63" : "#9CA3AF"}
+          />
+          <Text
+            style={[
+              styles.navItemText,
+              viewMode === "reader" && styles.activeNavItemText,
+            ]}
+          >
+            Read
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {renderHeader()}
+      <View style={styles.content}>{renderContent()}</View>
+      {renderBottomNavigation()}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#FCFCFD",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: "Rubik_600SemiBold",
+    color: "#1F2937",
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontFamily: "Rubik_400Regular",
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  searchButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  content: {
+    flex: 1,
+  },
+  bottomNav: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  activeNavItem: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 8,
+  },
+  navItemText: {
+    fontSize: 12,
+    fontFamily: "Rubik_500Medium",
+    color: "#9CA3AF",
+    marginTop: 4,
+  },
+  activeNavItemText: {
+    color: "#256E63",
+  },
+});
+
+

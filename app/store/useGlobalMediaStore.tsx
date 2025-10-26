@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
+// ⚠️ DEPRECATED: This store is being replaced by useMediaPlaybackStore.tsx
+// Please use the unified store for new components.
+// This store will be removed once all components are migrated.
+
 interface GlobalMediaState {
   // Currently playing media (video or audio)
   currentlyPlayingMedia: string | null;
@@ -332,7 +336,3 @@ export const useGlobalMediaStore = create<GlobalMediaState>()(
 export default function UseGlobalMediaStore() {
   return null;
 }
-
-
-
-

@@ -28,7 +28,7 @@ export const MiniCardSkeleton: React.FC<MiniCardSkeletonProps> = ({
             dark={dark}
             width={40}
             height={40}
-            borderRadius={20}
+            borderRadius={0}
             style={{
               backgroundColor: dark
                 ? "rgba(255,255,255,0.2)"
@@ -53,18 +53,18 @@ export const MiniCardSkeleton: React.FC<MiniCardSkeletonProps> = ({
       {/* Footer Section */}
       <View className="mt-2 flex flex-col w-full">
         <View className="flex flex-row justify-between items-center">
-          <Skeleton dark={dark} width={80} height={10} borderRadius={5} />
-          <Skeleton dark={dark} width={14} height={14} borderRadius={7} />
+          <Skeleton dark={dark} width={80} height={10} borderRadius={0} />
+          <Skeleton dark={dark} width={14} height={14} borderRadius={0} />
         </View>
 
         {/* Stats */}
         <View className="flex-row items-center mt-1">
-          <Skeleton dark={dark} width={16} height={16} borderRadius={8} />
+          <Skeleton dark={dark} width={16} height={16} borderRadius={0} />
           <Skeleton
             dark={dark}
             width={25}
             height={8}
-            borderRadius={4}
+            borderRadius={0}
             style={{ marginLeft: 4 }}
           />
         </View>

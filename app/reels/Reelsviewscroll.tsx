@@ -23,6 +23,7 @@ import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
+import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
 import { useReelsStore } from "../store/useReelsStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
@@ -60,6 +61,7 @@ export default function Reelsviewscroll() {
 
   // Global video store for video management
   const globalVideoStore = useGlobalVideoStore();
+  const mediaStore = useMediaPlaybackStore();
   const reelsStore = useReelsStore();
 
   // Comment modal hook
@@ -84,7 +86,8 @@ export default function Reelsviewscroll() {
   const [videoPosition, setVideoPosition] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [showPauseOverlay, setShowPauseOverlay] = useState<boolean>(false);
-  const [userHasManuallyPaused, setUserHasManuallyPaused] = useState<boolean>(false);
+  const [userHasManuallyPaused, setUserHasManuallyPaused] =
+    useState<boolean>(false);
 
   // Use library store for saving content
   const libraryStore = useLibraryStore();
@@ -180,9 +183,11 @@ export default function Reelsviewscroll() {
   // Handle back navigation based on source component
   const handleBackNavigation = () => {
     triggerHapticFeedback();
-    
-    console.log(`🔙 Back navigation requested. Source: ${source}, Category: ${category}`);
-    
+
+    console.log(
+      `🔙 Back navigation requested. Source: ${source}, Category: ${category}`
+    );
+
     // For all cases, try router.back() first to maintain proper navigation stack
     // This ensures we go back to the previous screen with proper app structure (bottom nav, header)
     if (router.canGoBack?.()) {
@@ -191,7 +196,7 @@ export default function Reelsviewscroll() {
     } else {
       // Only use replace/push as fallback when canGoBack is not available
       console.log(`🔙 canGoBack not available, using fallback navigation`);
-      
+
       if (source === "AllContentTikTok") {
         // Navigate back to HomeScreen with the specific category the user was viewing
         // This preserves the category context instead of defaulting to "ALL"
@@ -435,20 +440,27 @@ export default function Reelsviewscroll() {
     initializeData();
   }, [modalKey, title]);
 
-  // Cleanup function for video refs
+  // Smarter cleanup - pause instead of unload to prevent constant reloading
   useEffect(() => {
     return () => {
-      // Clean up video refs when component unmounts
+      // Instead of unloading videos (which causes reload), just pause them
       Object.values(videoRefs.current).forEach((ref) => {
         if (ref) {
           try {
-            ref.unloadAsync();
+            // Pause the video but keep it loaded for faster resume
+            ref.pauseAsync();
+            console.log(
+              "🎬 Video paused on cleanup (keeping loaded for optimization)"
+            );
           } catch (error) {
-            console.log("Error unloading video ref:", error);
+            console.log("Error pausing video ref:", error);
           }
         }
       });
-      videoRefs.current = {};
+      // Don't clear the refs - keep them for faster resume
+      console.log(
+        "🚀 Reels cleanup: Videos paused but kept loaded for optimization"
+      );
     };
   }, []);
 
@@ -668,6 +680,9 @@ export default function Reelsviewscroll() {
       `🎬 Reels: Toggle video play - modalKey: ${modalKey}, isCurrentlyPlaying: ${isCurrentlyPlaying}`
     );
 
+    // 🚀 Update last accessed time for cache optimization
+    mediaStore.updateLastAccessed(modalKey);
+
     if (isCurrentlyPlaying) {
       console.log(`🎬 Reels: Pausing video ${modalKey}`);
       globalVideoStore.pauseVideo(modalKey);
@@ -806,6 +821,16 @@ export default function Reelsviewscroll() {
     initializeAudio();
   }, []);
 
+  // 🚀 Periodic video cache cleanup for memory optimization
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      mediaStore.cleanupVideoCache();
+      console.log("🧹 Periodic video cache cleanup performed");
+    }, 5 * 60 * 1000); // Every 5 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, [mediaStore]);
+
   // Auto-play or switch play target immediately when the active key changes
   useEffect(() => {
     // Reset progress state for new video
@@ -815,6 +840,10 @@ export default function Reelsviewscroll() {
     setUserHasManuallyPaused(false); // Reset manual pause flag for new video
     // Ensure only the active video plays
     globalVideoStore.pauseAllVideos();
+
+    // 🚀 Update last accessed time for cache optimization
+    mediaStore.updateLastAccessed(modalKey);
+
     // Add a small delay to ensure the video component is ready
     setTimeout(() => {
       globalVideoStore.playVideoGlobally(modalKey);
@@ -824,7 +853,7 @@ export default function Reelsviewscroll() {
     }, 100);
     // Close action menu when switching videos
     setMenuVisible(false);
-  }, [modalKey]);
+  }, [modalKey, mediaStore]);
 
   // Additional effect to ensure video plays on initial mount
   useEffect(() => {
@@ -876,7 +905,7 @@ export default function Reelsviewscroll() {
       console.log(`🔄 Reloading video: ${videoData.title}`);
       setVideoError(false);
       setIsRefreshing(true);
-      
+
       try {
         // Try to refresh the URL
         const refreshed = await tryRefreshMediaUrl(videoData);
@@ -910,6 +939,10 @@ export default function Reelsviewscroll() {
     }, [videoData.fileUrl]);
 
     const videoUrl = refreshedUrl || videoData.fileUrl || videoData.imageUrl;
+
+    // 🚀 Check video cache status for optimization
+    const cacheStatus = mediaStore.getVideoCacheStatus(videoKey);
+    console.log(`📱 Video cache status for ${videoKey}:`, cacheStatus);
 
     // Validate video URL
     if (!videoUrl || String(videoUrl).trim() === "") {
@@ -977,12 +1010,12 @@ export default function Reelsviewscroll() {
               ref={(ref) => {
                 if (ref && isActive) videoRefs.current[videoKey] = ref;
               }}
-              source={{ 
+              source={{
                 uri: getBestVideoUrl(videoUrl || ""),
                 headers: {
-                  'User-Agent': 'JevahApp/1.0',
-                  'Accept': 'video/*'
-                }
+                  "User-Agent": "JevahApp/1.0",
+                  Accept: "video/*",
+                },
               }}
               style={{
                 width: "100%",
@@ -1029,6 +1062,10 @@ export default function Reelsviewscroll() {
               onLoad={() => {
                 console.log(`✅ Video loaded successfully: ${videoData.title}`);
                 setVideoError(false);
+
+                // 🚀 Mark video as loaded in cache for optimization
+                mediaStore.setVideoLoaded(videoKey, true);
+                console.log(`📱 Video cached for faster loading: ${videoKey}`);
               }}
               onPlaybackStatusUpdate={(status) => {
                 if (!isActive || !status.isLoaded) return;
@@ -1048,7 +1085,11 @@ export default function Reelsviewscroll() {
                   );
 
                   // Ensure video starts playing when first loaded (only if user hasn't manually paused)
-                  if (!status.isPlaying && !playingVideos[videoKey] && !userHasManuallyPaused) {
+                  if (
+                    !status.isPlaying &&
+                    !playingVideos[videoKey] &&
+                    !userHasManuallyPaused
+                  ) {
                     console.log(
                       `🎬 Reels: Video ${videoKey} loaded but not playing, starting playback`
                     );
@@ -1135,7 +1176,7 @@ export default function Reelsviewscroll() {
                       dark
                       height={getResponsiveSize(20, 22, 24)}
                       width={"65%"}
-                      borderRadius={8}
+                      borderRadius={0}
                     />
                   </View>
                   <View
@@ -1145,14 +1186,14 @@ export default function Reelsviewscroll() {
                       dark
                       height={getResponsiveSize(14, 16, 18)}
                       width={"40%"}
-                      borderRadius={8}
+                      borderRadius={0}
                     />
                   </View>
                   <Skeleton
                     dark
                     height={getResponsiveSize(6, 7, 8)}
                     width={"90%"}
-                    borderRadius={4}
+                    borderRadius={0}
                     style={{ opacity: 0.8 }}
                   />
                 </View>
@@ -1239,11 +1280,11 @@ export default function Reelsviewscroll() {
                     elevation: 8,
                   }}
                 >
-                <MaterialIcons
-                  name="pause"
-                  size={getResponsiveSize(50, 60, 70)}
-                  color="rgba(255, 255, 255, 0.6)"
-                />
+                  <MaterialIcons
+                    name="pause"
+                    size={getResponsiveSize(50, 60, 70)}
+                    color="rgba(255, 255, 255, 0.6)"
+                  />
                 </View>
               </View>
             )}
@@ -1817,6 +1858,9 @@ export default function Reelsviewscroll() {
       const activeKey = activeVideo
         ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
         : `reel-index-${clampedIndex}`;
+
+      // 🚀 Update last accessed time for active video
+      mediaStore.updateLastAccessed(activeKey);
 
       // Pause all other videos and play the active one using the global play (only if user hasn't manually paused)
       if (!userHasManuallyPaused) {

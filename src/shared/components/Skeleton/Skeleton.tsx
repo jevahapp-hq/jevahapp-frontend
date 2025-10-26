@@ -15,7 +15,7 @@ type SkeletonProps = {
 export default function Skeleton({
   width = "100%",
   height = 16,
-  borderRadius = 8,
+  borderRadius = 0,
   style,
   dark = false,
   variant = "none",
@@ -49,36 +49,36 @@ export default function Skeleton({
     : UI_CONFIG.COLORS.SKELETON_HIGHLIGHT;
 
   // Apply variant presets for perfect alignment with cards
-  // - card: matches typical media cards (rounded corners, fixed height)
-  // - thumbnail: for small image tiles
-  // - text: small height bars
-  // - avatar: circle
+  // - card: matches typical media cards (no rounded corners for sharp edges)
+  // - thumbnail: for small image tiles (no rounded corners)
+  // - text: small height bars (no rounded corners)
+  // - avatar: circle (keep rounded for profile pics)
   let presetStyle: Partial<ViewStyle> = {};
   if (variant === "card") {
     presetStyle = {
       width: "100%",
       height: 400, // matches typical card heights used across the app
-      borderRadius: UI_CONFIG.BORDER_RADIUS.XL,
+      borderRadius: 0, // Removed border radius for sharp video card edges
       backgroundColor: baseColor,
     };
   } else if (variant === "thumbnail") {
     presetStyle = {
       width: "100%",
       height: 232, // matches mini card heights
-      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
+      borderRadius: 0, // Removed border radius for sharp thumbnail edges
       backgroundColor: baseColor,
     };
   } else if (variant === "text") {
     presetStyle = {
       height: 14,
-      borderRadius: UI_CONFIG.BORDER_RADIUS.SM,
+      borderRadius: 0, // Removed border radius for sharp text skeleton edges
       backgroundColor: baseColor,
     };
   } else if (variant === "avatar") {
     presetStyle = {
       width: 40,
       height: 40,
-      borderRadius: UI_CONFIG.BORDER_RADIUS.FULL,
+      borderRadius: UI_CONFIG.BORDER_RADIUS.FULL, // Keep rounded for avatars
       backgroundColor: baseColor,
     };
   }

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
-import React, { useCallback, useEffect, useRef, useState, memo } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
   Text,
@@ -11,14 +11,13 @@ import {
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
+import { VideoCardSkeleton } from "../../../shared/components";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
-import { VideoCardSkeleton, OptimizedImage } from "../../../shared/components";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
-import { useStableCallback, useVideoOptimization } from "../../../shared/hooks";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
 import {
@@ -64,6 +63,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
+  const [overlayVisible, setOverlayVisible] = useState(true);
+  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
 
   // Media type detection for sermon content
@@ -98,6 +99,60 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const isMuted = mutedVideos[key] || false;
   const progress = progresses[key] || 0;
 
+  // Overlay management functions
+  const showOverlayTemporarily = useCallback(() => {
+    setOverlayVisible(true);
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+    }
+
+    // Hide overlay after 3 seconds
+    overlayTimeoutRef.current = setTimeout(() => {
+      setOverlayVisible(false);
+    }, 3000) as any;
+  }, []);
+
+  const hideOverlay = useCallback(() => {
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+    }
+    setOverlayVisible(false);
+  }, []);
+
+  const showOverlayPermanently = useCallback(() => {
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+    }
+    setOverlayVisible(true);
+  }, []);
+
+  // Handle external playing state changes (e.g., from scrolling)
+  useEffect(() => {
+    console.log(
+      `🎬 VideoCard ${video.title} playing state changed externally:`,
+      {
+        key,
+        isPlaying,
+        playingVideos: Object.keys(playingVideos).filter(
+          (k) => playingVideos[k]
+        ),
+        videoLoaded,
+        videoRefExists: !!videoRef.current,
+      }
+    );
+
+    // When video is paused externally (like from scrolling), show overlay
+    if (!isPlaying) {
+      showOverlayPermanently();
+    }
+    // Don't auto-hide overlay when playing - let user control it manually
+  }, [isPlaying, video.title, key, videoLoaded, showOverlayPermanently]);
+
+  // Initialize overlay state on mount - always show overlay initially
+  useEffect(() => {
+    showOverlayPermanently(); // Always show controls on mount
+  }, []); // Only run on mount
+
   // Audio player for audio sermons
   const audioUrl =
     isAudioSermon && isValidUri(video.fileUrl) ? video.fileUrl : null;
@@ -118,22 +173,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       setFailedVideoLoad(true);
     },
     onFinished: () => {
-      console.log(`🏁 Audio sermon finished: ${video.title}`);
+      // Audio playback completed
     },
-  });
-
-  // Debug logging
-  console.log(`🎬 VideoCard rendering: ${video.title}`, {
-    key,
-    contentId,
-    fileUrl: video.fileUrl,
-    isValidUrl: isValidUri(video.fileUrl),
-    isPlaying,
-    isMuted,
-    progress,
-    isAutoPlayEnabled,
-    currentlyVisibleVideo,
-    showIndicator: isAutoPlayEnabled && isPlaying,
   });
 
   // Track last known duration from playback updates
@@ -209,16 +250,45 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     [isAudioSermon, audioState.duration, audioControls]
   );
 
-  // Handle video tap
-  const handleVideoTap = useCallback(() => {
-    onVideoTap(key, video, index);
-  }, [onVideoTap, key, video, index]);
-
   // Handle hover start - no autoplay functionality
   const handleHoverStart = useCallback(() => {
     console.log(`👆 Hover started on video: ${video.title}`);
     // No autoplay - user must manually click to play
   }, [video.title]);
+
+  // Handle video area tap - pause if playing, otherwise navigate to fullscreen
+  const handleVideoTap = useCallback(async () => {
+    if (isPlaying) {
+      console.log(
+        "👆 Video tapped while playing - pausing and showing controls"
+      );
+
+      // Pause the video directly and show overlay
+      onTogglePlay(key); // Update global state
+
+      try {
+        if (videoRef.current) {
+          await videoRef.current.pauseAsync();
+        }
+      } catch (error) {
+        console.error("❌ Direct video pause failed:", error);
+      }
+
+      showOverlayPermanently(); // Show pause controls
+    } else {
+      // If not playing, navigate to fullscreen
+      console.log("👆 Video tapped while paused - navigating to fullscreen");
+      onVideoTap(key, video, index);
+    }
+  }, [
+    isPlaying,
+    onTogglePlay,
+    key,
+    onVideoTap,
+    video,
+    index,
+    showOverlayPermanently,
+  ]);
 
   // Handle hover end - video continues playing until scrolled past
   const handleHoverEnd = useCallback(() => {
@@ -227,36 +297,59 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // Only pause when scrolled past or another video is hovered
   }, [video.title]);
 
-  // Handle play/pause toggle with immediate feedback and debounce
-  const handleTogglePlay = useCallback(() => {
+  // Handle play/pause toggle with direct video control and immediate overlay hide/show
+  const handleTogglePlay = useCallback(async () => {
     if (isPlayTogglePending) return; // Prevent double-taps
 
     console.log(
       "🎮 VideoCard togglePlay called with key:",
       key,
       "isAudioSermon:",
-      isAudioSermon
+      isAudioSermon,
+      "currentlyPlaying:",
+      isPlaying
     );
     setIsPlayTogglePending(true);
-
-    // Immediate visual feedback - toggle overlay state instantly
-    setShowOverlay(false);
 
     if (isAudioSermon) {
       // Handle audio sermon play/pause
       if (audioState.isPlaying) {
         audioControls.pause();
+        showOverlayPermanently(); // Show controls when paused
       } else {
         audioControls.play();
+        hideOverlay(); // Hide overlay immediately when playing
       }
     } else {
-      // Call the actual video toggle
+      // First update the global state
       onTogglePlay(key);
+
+      // Then directly control the video to ensure it plays
+      try {
+        if (videoRef.current) {
+          if (isPlaying) {
+            console.log("⏸️ Pausing video and showing overlay:", key);
+            await videoRef.current.pauseAsync();
+            showOverlayPermanently(); // Show pause controls
+          } else {
+            console.log(
+              "▶️ Playing video and hiding overlay immediately:",
+              key
+            );
+            await videoRef.current.playAsync();
+            // Hide overlay immediately for clean viewing
+            hideOverlay();
+          }
+        } else {
+          console.warn("❌ Video ref not available for direct control:", key);
+        }
+      } catch (error) {
+        console.error("❌ Direct video control failed:", error);
+      }
     }
 
-    // Show overlay again after a brief delay and reset pending state
+    // Reset pending state
     setTimeout(() => {
-      setShowOverlay(true);
       setIsPlayTogglePending(false);
     }, 150);
   }, [
@@ -266,6 +359,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     isAudioSermon,
     audioState.isPlaying,
     audioControls,
+    isPlaying,
+    showOverlayPermanently,
+    hideOverlay,
   ]);
 
   // Handle mute toggle
@@ -320,30 +416,81 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   // Handle video load with better error handling
   const handleVideoLoad = useCallback(
     (status: AVPlaybackStatus) => {
-      console.log(`📱 Video load status for ${video.title}:`, {
-        isLoaded: status.isLoaded,
-        hasError: status.error,
-        duration: status.durationMillis,
-        canPlay: status.canPlay,
-        canPlaySlowForward: status.canPlaySlowForward,
-      });
-
       if (status.isLoaded) {
-        console.log(`✅ Video loaded successfully: ${video.title}`);
+        console.log(`📱 Video load status for ${video.title}:`, {
+          isLoaded: status.isLoaded,
+          duration: status.durationMillis,
+          key,
+          shouldPlay: isPlaying,
+        });
+
+        console.log(
+          `✅ Video loaded successfully and ready for playback: ${video.title}`
+        );
         setFailedVideoLoad(false);
         setVideoLoaded(true);
-      } else if (status.error) {
-        console.error(`❌ Video load error for ${video.title}:`, status.error);
+
+        // If the video should be playing according to state, start it now
+        if (isPlaying && videoRef.current) {
+          console.log(
+            "🚀 Video loaded and should be playing - starting playback immediately:",
+            key
+          );
+          videoRef.current.playAsync().catch((error) => {
+            console.error("❌ Failed to start playback after load:", error);
+          });
+        }
+      } else {
+        console.error(`❌ Video load error for ${video.title}:`, status);
         setFailedVideoLoad(true);
       }
     },
-    [video.title]
+    [video.title, key, isPlaying]
   );
+
+  // Watch for playing state changes and directly control video
+  useEffect(() => {
+    const handleVideoPlayStateChange = async () => {
+      if (!videoRef.current || isAudioSermon) return;
+
+      try {
+        const status = await videoRef.current.getStatusAsync();
+        if (!status.isLoaded) {
+          console.log("📱 Video not loaded yet, waiting...", key);
+          return;
+        }
+
+        if (isPlaying && !status.isPlaying) {
+          console.log(
+            "▶️ State says playing but video is paused - starting playback:",
+            key
+          );
+          await videoRef.current.playAsync();
+        } else if (!isPlaying && status.isPlaying) {
+          console.log(
+            "⏸️ State says paused but video is playing - pausing:",
+            key
+          );
+          await videoRef.current.pauseAsync();
+        }
+      } catch (error) {
+        console.error("❌ Error syncing video playback state:", error);
+      }
+    };
+
+    // Small delay to ensure video is ready
+    const timeoutId = setTimeout(handleVideoPlayStateChange, 100);
+    return () => clearTimeout(timeoutId);
+  }, [isPlaying, key, isAudioSermon]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      // Clear overlay timeout
+      if (overlayTimeoutRef.current) {
+        clearTimeout(overlayTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -414,8 +561,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     >
       <TouchableWithoutFeedback
         onPress={handleVideoTap}
-        onTouchStart={handleHoverStart}
-        onTouchEnd={handleHoverEnd}
+        onPressIn={handleHoverStart}
+        onPressOut={handleHoverEnd}
       >
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
@@ -441,10 +588,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               onError={handleVideoError}
               onLoad={handleVideoLoad}
               onLoadStart={() => {
-                console.log(`🔄 Video loading started: ${video.title}`);
+                console.log(`🔄 Video loading started: ${video.title}`, {
+                  key,
+                  shouldPlay: isPlaying,
+                  videoUrl: getBestVideoUrl(video.fileUrl),
+                });
                 setVideoLoaded(false);
               }}
-              progressUpdateInterval={1000}
+              progressUpdateIntervalMillis={1000}
               onPlaybackStatusUpdate={async (status) => {
                 if (!status?.isLoaded) return;
                 const positionMs = Number(status.positionMillis || 0);
@@ -533,7 +684,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           <PlayOverlay
             isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
             onPress={handleTogglePlay}
-            showOverlay={showOverlay}
+            showOverlay={overlayVisible}
             size="medium"
             immediateFeedback={true}
             disabled={isPlayTogglePending}
@@ -688,8 +839,11 @@ export default memo(VideoCard, (prevProps, nextProps) => {
     prevProps.video._id === nextProps.video._id &&
     prevProps.video.title === nextProps.video.title &&
     prevProps.video.fileUrl === nextProps.video.fileUrl &&
-    prevProps.playingVideos[prevProps.modalKey] === nextProps.playingVideos[nextProps.modalKey] &&
-    prevProps.mutedVideos[prevProps.modalKey] === nextProps.mutedVideos[nextProps.modalKey] &&
-    prevProps.progresses[prevProps.modalKey] === nextProps.progresses[nextProps.modalKey]
+    prevProps.playingVideos[prevProps.modalKey] ===
+      nextProps.playingVideos[nextProps.modalKey] &&
+    prevProps.mutedVideos[prevProps.modalKey] ===
+      nextProps.mutedVideos[nextProps.modalKey] &&
+    prevProps.progresses[prevProps.modalKey] ===
+      nextProps.progresses[nextProps.modalKey]
   );
 });

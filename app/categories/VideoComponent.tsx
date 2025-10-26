@@ -28,13 +28,15 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { MiniCardSkeleton, VideoCardSkeleton } from "../../src/shared/components/Skeleton";
+import {
+  MiniCardSkeleton,
+  VideoCardSkeleton,
+} from "../../src/shared/components/Skeleton";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
-import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
@@ -180,23 +182,16 @@ export default function VideoComponent() {
   // ✅ Use global comment modal
   const { showCommentModal } = useCommentModal();
 
-  // ✅ Use global video store for cross-component video management
+  // ✅ Use unified media store for cross-component media management
   const globalVideoStore = useGlobalVideoStore();
-  const globalMediaStore = useGlobalMediaStore();
 
   // ✅ Use library store for saving content
   const libraryStore = useLibraryStore();
 
-  // ✅ Get video state from global store
-  const playingVideos = globalVideoStore.playingVideos;
-  const mutedVideos = globalVideoStore.mutedVideos;
-  const progresses = globalVideoStore.progresses;
-  const showOverlay = globalVideoStore.showOverlay;
-  const hasCompleted = globalVideoStore.hasCompleted;
+  // ✅ Get media state from global video store
   const isAutoPlayEnabled = globalVideoStore.isAutoPlayEnabled;
-  const handleVideoVisibilityChange =
-    globalVideoStore.handleVideoVisibilityChange;
-  const enableAutoPlay = globalVideoStore.enableAutoPlay;
+  const currentlyPlaying = globalVideoStore.currentlyPlayingVideo;
+  const globalVolume = 1.0; // Default volume
 
   // 🔧 Fix infinite loop: Memoize uploadedVideos to prevent recreation on every render
   // Accept both `type` and `contentType` from media items
@@ -223,7 +218,7 @@ export default function VideoComponent() {
 
   // Autoplay disabled - users must manually click to play videos
   useEffect(() => {
-    console.log("📱 Autoplay disabled for VideoComponent - manual play only");
+    // Videos require manual play interaction
   }, []);
 
   // Start most recent video when videos are loaded
@@ -252,7 +247,7 @@ export default function VideoComponent() {
     }
   }, [isAutoPlayEnabled, globalVideoStore, uploadedVideos.length]);
 
-  const toggleMute = (key: string) => {
+  const toggleMuteVideo = (key: string) => {
     globalVideoStore.toggleVideoMute(key);
   };
 
@@ -306,12 +301,6 @@ export default function VideoComponent() {
 
       setUserFavorites(favoriteStates);
       setGlobalFavoriteCounts(favoriteCounts);
-
-      console.log(
-        `✅ VideoComponent: Loaded ${
-          uploadedVideos.length
-        } videos and stats for ${Object.keys(stats).length} items`
-      );
     };
 
     loadPersistedData();
@@ -321,8 +310,6 @@ export default function VideoComponent() {
   useEffect(() => {
     const initializeAudio = async () => {
       try {
-        console.log("🔊 VideoComponent: Initializing audio settings...");
-
         // 🎵 Configure audio session for video playback
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
@@ -343,10 +330,6 @@ export default function VideoComponent() {
             globalVideoStore.toggleVideoMute(key);
           }
         });
-
-        console.log(
-          "✅ VideoComponent: Audio session configured, all videos unmuted with volume 1.0"
-        );
       } catch (error) {
         console.error(
           "❌ VideoComponent: Failed to initialize audio session:",
@@ -432,7 +415,7 @@ export default function VideoComponent() {
   };
 
   const togglePlay = (key: string, video?: VideoCard) => {
-    const isCurrentlyPlaying = playingVideos[key];
+    const isCurrentlyPlaying = globalVideoStore.playingVideos[key] || false;
 
     console.log(
       `👆 Touch-based togglePlay called for video: ${video?.title || key}`
@@ -447,7 +430,7 @@ export default function VideoComponent() {
 
     if (shouldStartPlaying) {
       const alreadyPlayed = hasPlayed[key];
-      const completedBefore = hasCompleted[key];
+      const completedBefore = globalVideoStore.hasCompleted[key] || false;
 
       // ✅ Only increment view when replaying a completed video
       if (video && completedBefore) {
@@ -481,14 +464,17 @@ export default function VideoComponent() {
 
       setHasPlayed((prev) => ({ ...prev, [key]: true }));
 
-      if (mutedVideos[key]) {
+      if (globalVideoStore.mutedVideos[key]) {
         globalVideoStore.toggleVideoMute(key);
       }
     }
 
-    // ✅ Use global media management to ensure only one media plays at a time
+    // ✅ Use unified media management to ensure only one media plays at a time
     // This will automatically pause other videos when this one starts
-    globalMediaStore.playMediaGlobally(key, "video");
+    console.log(
+      `🎬 [TOGGLE] Calling playVideoGlobally for key: ${key}, video: ${video?.title}`
+    );
+    globalVideoStore.playVideoGlobally(key);
   };
 
   const [hasPlayed, setHasPlayed] = useState<Record<string, boolean>>({});
@@ -945,11 +931,11 @@ export default function VideoComponent() {
 
     // Auto-play globally disabled; do not trigger visibility-based play
     // handleVideoVisibilityChange(mostVisibleKey);
-  }, [isAutoPlayEnabled, uploadedVideos, handleVideoVisibilityChange]);
+  }, [isAutoPlayEnabled, uploadedVideos]);
 
   const handleVideoTap = (key: string, video?: VideoCard) => {
-    const isCurrentlyPlaying = playingVideos[key] ?? false;
-    const wasCompleted = hasCompleted[key] ?? false;
+    const isCurrentlyPlaying = globalVideoStore.playingVideos[key] ?? false;
+    const wasCompleted = globalVideoStore.hasCompleted[key] ?? false;
 
     // Also pause mini card videos
     Object.keys(miniCardPlaying).forEach((k) => {
@@ -1209,12 +1195,6 @@ export default function VideoComponent() {
   useEffect(() => {
     const initializeVideoStats = async () => {
       if (uploadedVideos && uploadedVideos.length > 0) {
-        console.log(
-          "📚 VideoComponent: Initializing video stats for",
-          uploadedVideos.length,
-          "videos"
-        );
-
         const persistedStats = await getPersistedStats();
         const newStats: Record<string, any> = {};
 
@@ -1236,7 +1216,6 @@ export default function VideoComponent() {
         }
 
         setVideoStats(newStats);
-        console.log("✅ VideoComponent: Finished initializing video stats");
       }
     };
 
@@ -1266,7 +1245,7 @@ export default function VideoComponent() {
     const stats = videoStats[modalKey] || {};
     const isItemSaved = libraryStore.isItemSaved(modalKey);
     const videoRef = videoRefs.current[modalKey];
-    const progress = progresses[modalKey] ?? 0;
+    const progress = globalVideoStore.progresses[modalKey] ?? 0;
 
     // Get existing comments for this video
     const contentId = modalKey; // Use modalKey since VideoCard doesn't have _id
@@ -1373,7 +1352,7 @@ export default function VideoComponent() {
       onPanResponderMove: (evt, gestureState) => {
         const barWidth = 260;
         const x = Math.max(0, Math.min(gestureState.moveX - 50, barWidth));
-        const pct = (x / barWidth) * 100;
+        const pct = x / barWidth; // Store as 0-1 ratio
 
         globalVideoStore.setVideoProgress(modalKey, pct);
 
@@ -1382,7 +1361,7 @@ export default function VideoComponent() {
             .getStatusAsync()
             .then((status: { isLoaded: any; durationMillis: number }) => {
               if (status.isLoaded && status.durationMillis) {
-                videoRef.setPositionAsync((pct / 100) * status.durationMillis);
+                videoRef.setPositionAsync(pct * status.durationMillis);
               }
             });
         }
@@ -1391,18 +1370,7 @@ export default function VideoComponent() {
 
     return (
       <View key={modalKey} className="flex flex-col mb-6">
-        <TouchableWithoutFeedback
-          onPress={handleVideoCardPress}
-          onTouchStart={() => {
-            console.log(`👆 Hover started on video: ${video.title}`);
-            // No autoplay - user must manually click to play
-          }}
-          onTouchEnd={() => {
-            console.log(`👆 Hover ended on video: ${video.title}`);
-            // Don't pause on hover end - let it continue playing
-            // Only pause when scrolled past or another video is hovered
-          }}
-        >
+        <TouchableWithoutFeedback onPress={handleVideoCardPress}>
           <View
             className="w-full h-[400px] overflow-hidden relative"
             onLayout={(e) => {
@@ -1423,18 +1391,22 @@ export default function VideoComponent() {
               }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
               resizeMode={ResizeMode.COVER}
-              isMuted={mutedVideos[modalKey] ?? false}
-              volume={mutedVideos[modalKey] ? 0.0 : videoVolume} // 🔊 Add volume control
-              shouldPlay={playingVideos[modalKey] ?? false}
+              isMuted={globalVideoStore.mutedVideos[modalKey] ?? false}
+              volume={
+                globalVideoStore.mutedVideos[modalKey] ? 0.0 : globalVolume
+              }
+              shouldPlay={globalVideoStore.playingVideos[modalKey] ?? false}
               useNativeControls={false}
               onError={(error) => {
                 console.warn(`❌ Video failed to load: ${video.title}`, error);
                 setVideoErrors((prev) => ({ ...prev, [modalKey]: true }));
+                // TODO: Add error handling to globalVideoStore
                 globalVideoStore.pauseVideo(modalKey);
               }}
               onLoad={() => {
                 console.log(`✅ Video loaded successfully: ${video.title}`);
                 setVideoErrors((prev) => ({ ...prev, [modalKey]: false }));
+                // Video loaded successfully
               }}
               onPlaybackStatusUpdate={(status) => {
                 if (!status.isLoaded) return;
@@ -1453,6 +1425,7 @@ export default function VideoComponent() {
                     ...prev,
                     [modalKey]: status.durationMillis || 0,
                   }));
+                  // TODO: Add duration tracking to globalVideoStore
                 }
                 const ref = videoRefs.current[modalKey];
                 if (status.didJustFinish) {
@@ -1524,19 +1497,20 @@ export default function VideoComponent() {
               </TouchableOpacity>
             </View>
             {/* Video title - show when paused (only for non-progress layout) */}
-            {!playingVideos[modalKey] && playType !== "progress" && (
-              <View
-                className="absolute left-3 right-3 px-4 py-2 rounded-md"
-                style={{ bottom: 40 }}
-              >
-                <Text
-                  className="text-white font-rubik-semibold text-[14px]"
-                  numberOfLines={2}
+            {!globalVideoStore.playingVideos[modalKey] &&
+              playType !== "progress" && (
+                <View
+                  className="absolute left-3 right-3 px-4 py-2 rounded-md"
+                  style={{ bottom: 40 }}
                 >
-                  {video.title}
-                </Text>
-              </View>
-            )}
+                  <Text
+                    className="text-white font-rubik-semibold text-[14px]"
+                    numberOfLines={2}
+                  >
+                    {video.title}
+                  </Text>
+                </View>
+              )}
 
             {/* Controls - show reload button when video fails, play button when video works */}
             {videoErrors[modalKey] ? (
@@ -1568,7 +1542,11 @@ export default function VideoComponent() {
                 <View className="flex-row items-center gap-2 mt-2">
                   <TouchableOpacity onPress={() => togglePlay(modalKey, video)}>
                     <Ionicons
-                      name={playingVideos[modalKey] ? "pause" : "play"}
+                      name={
+                        globalVideoStore.playingVideos[modalKey]
+                          ? "pause"
+                          : "play"
+                      }
                       size={24}
                       color="#FEA74E"
                     />
@@ -1579,12 +1557,14 @@ export default function VideoComponent() {
                   >
                     <View
                       className="h-full bg-[#FEA74E] rounded-full"
-                      style={{ width: `${progress}%` }}
+                      style={{
+                        width: `${globalVideoStore.progresses[modalKey] || 0}%`,
+                      }}
                     />
                     <View
                       style={{
                         position: "absolute",
-                        left: `${progress}%`,
+                        left: `${globalVideoStore.progresses[modalKey] || 0}%`,
                         transform: [{ translateX: -6 }],
                         top: -5,
                         width: 12,
@@ -1596,10 +1576,12 @@ export default function VideoComponent() {
                       }}
                     />
                   </View>
-                  <TouchableOpacity onPress={() => toggleMute(modalKey)}>
+                  <TouchableOpacity onPress={() => toggleMuteVideo(modalKey)}>
                     <Ionicons
                       name={
-                        mutedVideos[modalKey] ? "volume-mute" : "volume-high"
+                        globalVideoStore.mutedVideos[modalKey]
+                          ? "volume-mute"
+                          : "volume-high"
                       }
                       size={20}
                       color="#FEA74E"
@@ -1627,13 +1609,23 @@ export default function VideoComponent() {
                 >
                   <View
                     className={`${
-                      playingVideos[modalKey] ? "bg-black/30" : "bg-white/70"
+                      globalVideoStore.playingVideos[modalKey]
+                        ? "bg-black/30"
+                        : "bg-white/70"
                     } p-4 rounded-full`}
                   >
                     <Ionicons
-                      name={playingVideos[modalKey] ? "pause" : "play"}
+                      name={
+                        globalVideoStore.playingVideos[modalKey]
+                          ? "pause"
+                          : "play"
+                      }
                       size={40}
-                      color={playingVideos[modalKey] ? "#FFFFFF" : "#FEA74E"}
+                      color={
+                        globalVideoStore.playingVideos[modalKey]
+                          ? "#FFFFFF"
+                          : "#FEA74E"
+                      }
                     />
                   </View>
                 </TouchableOpacity>
@@ -1910,8 +1902,10 @@ export default function VideoComponent() {
                         position: "absolute",
                       }}
                       resizeMode={ResizeMode.COVER}
-                      isMuted={mutedVideos[key] ?? false}
-                      volume={mutedVideos[key] ? 0.0 : videoVolume} // 🔊 Add volume control
+                      isMuted={globalVideoStore.mutedVideos[key] ?? false}
+                      volume={
+                        globalVideoStore.mutedVideos[key] ? 0.0 : videoVolume
+                      } // 🔊 Add volume control
                       shouldPlay={isPlaying}
                       useNativeControls={false}
                       onError={(error) => {
@@ -2450,6 +2444,7 @@ export default function VideoComponent() {
             <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
               Most Recent
             </Text>
+
             {renderVideoCard(
               {
                 fileUrl: uploadedVideos[0].fileUrl,
@@ -2527,18 +2522,23 @@ export default function VideoComponent() {
               )}
             </View>
           </>
-        ) : uploadedVideos.length > 0 && (
-          // Show skeleton loading for explore videos when no videos are available yet
-          <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
-              Explore More Videos
-            </Text>
-            <View className="gap-8">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <VideoCardSkeleton key={`explore-skeleton-${index}`} dark={false} />
-              ))}
-            </View>
-          </>
+        ) : (
+          uploadedVideos.length > 0 && (
+            // Show skeleton loading for explore videos when no videos are available yet
+            <>
+              <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
+                Explore More Videos
+              </Text>
+              <View className="gap-8">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <VideoCardSkeleton
+                    key={`explore-skeleton-${index}`}
+                    dark={false}
+                  />
+                ))}
+              </View>
+            </>
+          )
         )}
         {/* 🔥 Trending Section with Enhanced Social Media Features */}
         {trendingItems.length > 0 ? (
@@ -2606,18 +2606,23 @@ export default function VideoComponent() {
               )}
             </View>
           </>
-        ) : uploadedVideos.length > 0 && (
-          // Show skeleton loading for middle explore videos when no videos are available yet
-          <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-              Exploring More
-            </Text>
-            <View className="gap-8">
-              {Array.from({ length: 2 }).map((_, index) => (
-                <VideoCardSkeleton key={`middle-skeleton-${index}`} dark={false} />
-              ))}
-            </View>
-          </>
+        ) : (
+          uploadedVideos.length > 0 && (
+            // Show skeleton loading for middle explore videos when no videos are available yet
+            <>
+              <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+                Exploring More
+              </Text>
+              <View className="gap-8">
+                {Array.from({ length: 2 }).map((_, index) => (
+                  <VideoCardSkeleton
+                    key={`middle-skeleton-${index}`}
+                    dark={false}
+                  />
+                ))}
+              </View>
+            </>
+          )
         )}
 
         {/* 🎯 Enhanced Recommendation Sections */}
@@ -2669,18 +2674,23 @@ export default function VideoComponent() {
               )}
             </View>
           </>
-        ) : uploadedVideos.length > 0 && (
-          // Show skeleton loading for remaining videos when no videos are available yet
-          <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
-              More Videos
-            </Text>
-            <View className="gap-8">
-              {Array.from({ length: 2 }).map((_, index) => (
-                <VideoCardSkeleton key={`remaining-skeleton-${index}`} dark={false} />
-              ))}
-            </View>
-          </>
+        ) : (
+          uploadedVideos.length > 0 && (
+            // Show skeleton loading for remaining videos when no videos are available yet
+            <>
+              <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+                More Videos
+              </Text>
+              <View className="gap-8">
+                {Array.from({ length: 2 }).map((_, index) => (
+                  <VideoCardSkeleton
+                    key={`remaining-skeleton-${index}`}
+                    dark={false}
+                  />
+                ))}
+              </View>
+            </>
+          )
         )}
       </ScrollView>
     </View>
