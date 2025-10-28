@@ -15,7 +15,6 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
-import { PlayOverlay } from "../../../shared/components/PlayOverlay";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
@@ -64,6 +63,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(true);
+  const [localModalVisible, setLocalModalVisible] = useState(false);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
 
@@ -709,7 +709,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 position: "absolute",
               }}
               resizeMode={ResizeMode.COVER}
-              shouldPlay={isPlaying}
+              shouldPlay={false}
               isMuted={isMuted}
               volume={videoVolume}
               onError={handleVideoError}
@@ -808,14 +808,55 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           />
 
           {/* Play/Pause Overlay */}
-          <PlayOverlay
-            isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
-            onPress={handleTogglePlay}
-            showOverlay={overlayVisible}
-            size="medium"
-            immediateFeedback={true}
-            disabled={isPlayTogglePending}
-          />
+          {overlayVisible && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                justifyContent: "center",
+                alignItems: "center",
+                pointerEvents: "box-none",
+              }}
+            >
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleTogglePlay();
+                }}
+                activeOpacity={0.7}
+                disabled={isPlayTogglePending}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                style={{
+                  opacity: isPlayTogglePending ? 0.6 : 1,
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: "rgba(255, 255, 255, 0.7)",
+                    padding: 16,
+                    borderRadius: 999,
+                  }}
+                >
+                  <Ionicons
+                    name={
+                      isAudioSermon
+                        ? audioState.isPlaying
+                          ? "pause"
+                          : "play"
+                        : isPlaying
+                        ? "pause"
+                        : "play"
+                    }
+                    size={40}
+                    color="#FEA74E"
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Title Overlay - positioned above progress bar */}
           <View
@@ -977,7 +1018,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               {/* Three dots menu - far right */}
               <TouchableOpacity
                 onPress={() => {
-                  onModalToggle(modalKey);
+                  setLocalModalVisible(true);
+                  // Also update parent if callback exists
+                  if (onModalToggle) {
+                    onModalToggle(modalKey);
+                  }
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ marginLeft: 8 }}
@@ -1106,8 +1151,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       {/* Slide-up Content Action Modal */}
       <ContentActionModal
-        isVisible={modalVisible === modalKey}
-        onClose={() => onModalToggle(null)}
+        isVisible={localModalVisible || modalVisible === modalKey}
+        onClose={() => {
+          setLocalModalVisible(false);
+          if (onModalToggle) {
+            onModalToggle(null);
+          }
+        }}
         onViewDetails={() => {}}
         onSaveToLibrary={() => onSave(modalKey, video)}
         onShare={() => onShare(modalKey, video)}

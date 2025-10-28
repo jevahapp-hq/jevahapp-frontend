@@ -1,12 +1,11 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Dimensions,
   Modal,
   ScrollView,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import {
@@ -50,9 +49,11 @@ export default function ContentActionModal({
 }: ContentActionModalProps) {
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
+  const [internalVisible, setInternalVisible] = useState(isVisible);
 
   useEffect(() => {
     if (isVisible) {
+      setInternalVisible(true);
       translateY.value = withSpring(0, {
         damping: 20,
         stiffness: 100,
@@ -60,12 +61,8 @@ export default function ContentActionModal({
         overshootClamping: true,
       });
     } else {
-      translateY.value = withSpring(SCREEN_HEIGHT, {
-        damping: 20,
-        stiffness: 100,
-        mass: 1,
-        overshootClamping: true,
-      });
+      // When parent sets isVisible to false, hide modal immediately
+      setInternalVisible(false);
     }
   }, [isVisible, translateY]);
 
@@ -81,6 +78,11 @@ export default function ContentActionModal({
     }
   };
 
+  const closeModal = useCallback(() => {
+    setInternalVisible(false);
+    onClose();
+  }, [onClose]);
+
   const onGestureEnd = (
     _event: HandlerStateChangeEvent<Record<string, unknown>>
   ) => {
@@ -91,7 +93,7 @@ export default function ContentActionModal({
         mass: 1,
         overshootClamping: true,
       });
-      runOnJS(onClose)();
+      runOnJS(closeModal)();
     } else {
       translateY.value = withSpring(0, {
         damping: 20,
@@ -102,15 +104,10 @@ export default function ContentActionModal({
     }
   };
 
-  const handleClose = () => {
-    translateY.value = withSpring(SCREEN_HEIGHT, {
-      damping: 20,
-      stiffness: 100,
-      mass: 1,
-      overshootClamping: true,
-    });
-    onClose();
-  };
+  const handleClose = useCallback(() => {
+    // Close immediately so backdrop disappears
+    closeModal();
+  }, [closeModal]);
 
   const handleAction = (action: () => void) => {
     try {
@@ -130,29 +127,31 @@ export default function ContentActionModal({
     handleClose();
   };
 
-  if (!isVisible) return null;
+  if (!internalVisible) return null;
 
   return (
     <Modal
-      visible={isVisible}
+      visible={internalVisible}
       transparent={true}
       animationType="none"
       onRequestClose={handleClose}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={handleClose}>
-          <View
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0, 0, 0, 0.3)",
-            }}
-          />
-        </TouchableWithoutFeedback>
+        {/* Backdrop - can be tapped to close */}
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={handleClose}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.3)",
+          }}
+        />
 
+        {/* Modal content */}
         <PanGestureHandler
           onGestureEvent={onGestureEvent}
           onHandlerStateChange={onGestureEnd}

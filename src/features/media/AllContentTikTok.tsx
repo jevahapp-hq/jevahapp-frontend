@@ -149,7 +149,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const toggleModal = useCallback((val: string | null) => {
-    console.log("🔧 toggleModal called with:", val);
     setModalVisible(val);
   }, []);
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
@@ -1356,6 +1355,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     (item: MediaItem, index: number) => {
       const key = getContentKey(item);
       const contentId = item._id || key;
+      const modalKey = key; // Use the same key for modalKey to ensure consistency
 
       switch (item.contentType) {
         case "video":
@@ -1371,7 +1371,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               key={key}
               video={item}
               index={index}
-              modalKey={`video-${item._id || item.fileUrl || index}`}
+              modalKey={modalKey}
               contentStats={contentStats}
               userFavorites={backendUserFavorites}
               globalFavoriteCounts={backendGlobalFavoriteCounts}

@@ -1340,9 +1340,17 @@ export default function VideoComponent() {
           handleDownload(downloadableItem);
         }}
         onShare={(key) => handleShare(key, video)}
-        onModalToggle={(key) =>
-          setModalVisible(modalVisible === key ? null : key)
-        }
+        onModalToggle={(key) => {
+          console.log(
+            "🔄 Parent onModalToggle called with key:",
+            key,
+            "current modalVisible:",
+            modalVisible
+          );
+          const newValue = modalVisible === key ? null : key;
+          console.log("🔄 Setting modalVisible to:", newValue);
+          setModalVisible(newValue);
+        }}
         modalVisible={modalVisible}
         comments={comments}
         checkIfDownloaded={checkIfDownloaded}
