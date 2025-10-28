@@ -5,6 +5,15 @@ import { subscribeWithSelector } from "zustand/middleware";
 // Please use the unified store for new components.
 // This store will be removed once all components are migrated.
 
+// Professional video player registry - stores refs to all active video players
+type VideoPlayerRef = {
+  pause: () => Promise<void>;
+  showOverlay: () => void;
+  key: string;
+};
+
+const videoPlayerRegistry = new Map<string, VideoPlayerRef>();
+
 interface VideoPlayerState {
   // Global video state - only one video can play at a time
   currentlyPlayingVideo: string | null;
@@ -28,6 +37,10 @@ interface VideoPlayerState {
   setVideoProgress: (videoKey: string, progress: number) => void;
   setVideoCompleted: (videoKey: string, completed: boolean) => void;
   setOverlayVisible: (videoKey: string, visible: boolean) => void;
+
+  // Video player registry - professional imperative control
+  registerVideoPlayer: (key: string, player: VideoPlayerRef) => void;
+  unregisterVideoPlayer: (key: string) => void;
 
   // Global play function - pauses all others and plays selected video
   playVideoGlobally: (videoKey: string) => void;
@@ -130,27 +143,54 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       }));
     },
 
-    // ✅ Global play function - ALWAYS plays the video (no toggle)
+    // Video player registry management
+    registerVideoPlayer: (key: string, player: VideoPlayerRef) => {
+      videoPlayerRegistry.set(key, player);
+      console.log(
+        `📝 Registered video player: ${key}, total: ${videoPlayerRegistry.size}`
+      );
+    },
+
+    unregisterVideoPlayer: (key: string) => {
+      videoPlayerRegistry.delete(key);
+      console.log(
+        `🗑️ Unregistered video player: ${key}, total: ${videoPlayerRegistry.size}`
+      );
+    },
+
+    // ✅ Global play function - PROFESSIONAL IMPERATIVE CONTROL (like Instagram/TikTok)
     playVideoGlobally: (videoKey: string) => {
       console.log("🌍 playVideoGlobally called with:", videoKey);
+
+      // STEP 1: Imperatively pause ALL other videos DIRECTLY (no state waiting)
+      const pausedKeys: string[] = [];
+      videoPlayerRegistry.forEach((player, key) => {
+        if (key !== videoKey) {
+          console.log(`⏸️ Imperatively pausing video: ${key}`);
+          player
+            .pause()
+            .catch((err) => console.warn(`Failed to pause ${key}:`, err));
+          player.showOverlay();
+          pausedKeys.push(key);
+        }
+      });
+
+      // STEP 2: Update state to reflect the change
       set((state) => {
-        // ALWAYS play the video - no toggle behavior
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
 
-        // Pause all other videos
         Object.keys(state.playingVideos).forEach((key) => {
           newPlayingVideos[key] = false;
           newShowOverlay[key] = true;
         });
 
-        // Play the selected video
         newPlayingVideos[videoKey] = true;
         newShowOverlay[videoKey] = false;
 
-        console.log("🌍 Playing video:", videoKey);
-        console.log("🌍 New playing videos:", newPlayingVideos);
-
+        console.log(
+          `🎬 Playing video: ${videoKey}, paused ${pausedKeys.length} others`
+        );
         return {
           currentlyPlayingVideo: videoKey,
           playingVideos: newPlayingVideos,

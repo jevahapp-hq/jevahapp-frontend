@@ -833,6 +833,9 @@ export default function Reelsviewscroll() {
 
   // Auto-play or switch play target immediately when the active key changes
   useEffect(() => {
+    // Early return if modalKey is not available yet
+    if (!modalKey) return;
+
     // Reset progress state for new video
     setVideoDuration(0);
     setVideoPosition(0);
@@ -845,15 +848,26 @@ export default function Reelsviewscroll() {
     mediaStore.updateLastAccessed(modalKey);
 
     // Add a small delay to ensure the video component is ready
-    setTimeout(() => {
-      globalVideoStore.playVideoGlobally(modalKey);
-      console.log(
-        `🎬 Reels: Auto-playing video ${modalKey} in full screen mode`
-      );
+    const timeoutId = setTimeout(() => {
+      try {
+        globalVideoStore.playVideoGlobally(modalKey);
+        console.log(
+          `🎬 Reels: Auto-playing video ${modalKey} in full screen mode`
+        );
+      } catch (error) {
+        console.error("Error playing video:", error);
+      }
     }, 100);
+
     // Close action menu when switching videos
     setMenuVisible(false);
-  }, [modalKey, mediaStore]);
+
+    // Cleanup timeout on unmount or dependency change
+    return () => {
+      clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalKey]); // Only depend on modalKey, not mediaStore (which can change frequently)
 
   // Additional effect to ensure video plays on initial mount
   useEffect(() => {
@@ -861,9 +875,18 @@ export default function Reelsviewscroll() {
       console.log(
         `🎬 Reels: Ensuring video ${modalKey} starts playing on mount`
       );
-      setTimeout(() => {
-        globalVideoStore.playVideoGlobally(modalKey);
+      const timeoutId = setTimeout(() => {
+        try {
+          globalVideoStore.playVideoGlobally(modalKey);
+        } catch (error) {
+          console.error("Error playing video on mount:", error);
+        }
       }, 200);
+
+      // Cleanup timeout on unmount or dependency change
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
   }, [modalKey, playingVideos, userHasManuallyPaused]);
 

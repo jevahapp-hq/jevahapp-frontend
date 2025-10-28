@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
+import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -67,12 +68,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
 
-  // Media type detection for sermon content
+  // Double-tap detection
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTapRef = useRef<number>(0);
+  const tapCountRef = useRef<number>(0);
+
+  // Media type detection - supports video, sermon (video/audio), and live
   const getMediaType = useCallback(() => {
     const contentType = video.contentType?.toLowerCase() || "";
 
+    // Handle sermons - can be audio or video based on file extension
     if (contentType === "sermon") {
-      // Sermons can be audio or video, check file extension
       const fileUrl = video.fileUrl?.toLowerCase() || "";
       if (
         fileUrl.includes(".mp4") ||
@@ -86,7 +92,16 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       return "audio";
     }
 
-    // For non-sermon content, assume video
+    // Live, videos, and other video content types are all videos
+    if (
+      contentType === "live" ||
+      contentType === "video" ||
+      contentType === "videos"
+    ) {
+      return "video";
+    }
+
+    // Default to video for any other content type with a video file
     return "video";
   }, [video.contentType, video.fileUrl]);
 
@@ -98,6 +113,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const isPlaying = playingVideos[key] || false;
   const isMuted = mutedVideos[key] || false;
   const progress = progresses[key] || 0;
+
+  // Get store functions for registry
+  const { registerVideoPlayer, unregisterVideoPlayer } = useGlobalVideoStore();
 
   // Overlay management functions
   const showOverlayTemporarily = useCallback(() => {
@@ -256,30 +274,82 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // No autoplay - user must manually click to play
   }, [video.title]);
 
-  // Handle video area tap - pause if playing, otherwise navigate to fullscreen
+  // Handle video area tap - SIMPLIFIED & RELIABLE
   const handleVideoTap = useCallback(async () => {
-    if (isPlaying) {
-      console.log(
-        "👆 Video tapped while playing - pausing and showing controls"
-      );
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
+    const isCurrentlyPlaying =
+      isPlaying || (isAudioSermon && audioState.isPlaying);
 
-      // Pause the video directly and show overlay
-      onTogglePlay(key); // Update global state
+    // Reset if too much time passed (400ms window for double-tap)
+    if (timeSinceLastTap > 400) {
+      tapCountRef.current = 0;
+    }
 
-      try {
-        if (videoRef.current) {
-          await videoRef.current.pauseAsync();
+    tapCountRef.current += 1;
+    lastTapRef.current = now;
+
+    // Clear any existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+      tapTimeoutRef.current = null;
+    }
+
+    // Double-tap detected (2 taps within time window)
+    if (tapCountRef.current === 2 && timeSinceLastTap <= 400) {
+      console.log("👆👆 Double tap - navigating to reels");
+      tapCountRef.current = 0;
+
+      // Pause if playing
+      if (isCurrentlyPlaying) {
+        if (isAudioSermon) {
+          audioControls.pause();
+        } else {
+          onTogglePlay(key);
+          if (videoRef.current) {
+            try {
+              await videoRef.current.pauseAsync();
+            } catch (error) {
+              console.error("❌ Pause failed:", error);
+            }
+          }
         }
-      } catch (error) {
-        console.error("❌ Direct video pause failed:", error);
       }
 
-      showOverlayPermanently(); // Show pause controls
-    } else {
-      // If not playing, navigate to fullscreen
-      console.log("👆 Video tapped while paused - navigating to fullscreen");
+      // Navigate to reels
       onVideoTap(key, video, index);
+      return;
     }
+
+    // Single tap - wait to confirm it's not a double-tap, then toggle (like reels mode)
+    tapTimeoutRef.current = setTimeout(async () => {
+      if (tapCountRef.current === 1) {
+        if (isCurrentlyPlaying) {
+          console.log("👆 Single tap - pausing video");
+          showOverlayPermanently();
+
+          if (isAudioSermon) {
+            audioControls.pause();
+          } else {
+            onTogglePlay(key);
+            if (videoRef.current) {
+              try {
+                await videoRef.current.pauseAsync();
+              } catch (error) {
+                console.error("❌ Pause failed:", error);
+              }
+            }
+          }
+        } else {
+          console.log(
+            "👆 Single tap on paused video - no action (play icon handles it)"
+          );
+        }
+      }
+
+      tapCountRef.current = 0;
+      tapTimeoutRef.current = null;
+    }, 400) as any; // 400ms to detect double-tap
   }, [
     isPlaying,
     onTogglePlay,
@@ -288,6 +358,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     video,
     index,
     showOverlayPermanently,
+    isAudioSermon,
+    audioControls,
+    audioState.isPlaying,
   ]);
 
   // Handle hover end - video continues playing until scrolled past
@@ -309,6 +382,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       "currentlyPlaying:",
       isPlaying
     );
+
+    // Clear any pending tap detection when play icon is clicked
+    // This ensures play icon takes priority and no video tap conflicts occur
+    tapCountRef.current = 0;
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+      tapTimeoutRef.current = null;
+    }
+
     setIsPlayTogglePending(true);
 
     if (isAudioSermon) {
@@ -317,8 +399,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         audioControls.pause();
         showOverlayPermanently(); // Show controls when paused
       } else {
+        // Hide overlay FIRST before playing to give immediate feedback
+        hideOverlay();
         audioControls.play();
-        hideOverlay(); // Hide overlay immediately when playing
       }
     } else {
       // First update the global state
@@ -336,15 +419,23 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               "▶️ Playing video and hiding overlay immediately:",
               key
             );
-            await videoRef.current.playAsync();
-            // Hide overlay immediately for clean viewing
+            // Hide overlay FIRST for immediate visual feedback
             hideOverlay();
+            await videoRef.current.playAsync();
           }
         } else {
           console.warn("❌ Video ref not available for direct control:", key);
+          // Still update overlay state even if video ref is missing
+          if (!isPlaying) {
+            hideOverlay();
+          }
         }
       } catch (error) {
         console.error("❌ Direct video control failed:", error);
+        // On error, show overlay to allow user to retry
+        if (!isPlaying) {
+          showOverlayPermanently();
+        }
       }
     }
 
@@ -448,40 +539,73 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     [video.title, key, isPlaying]
   );
 
-  // Watch for playing state changes and directly control video
+  // PROFESSIONAL: Register video player with store for imperative control (like Instagram/TikTok)
   useEffect(() => {
+    if (isAudioSermon) return; // Audio sermons handle their own playback
+
+    const playerRef = {
+      pause: async () => {
+        if (videoRef.current) {
+          try {
+            await videoRef.current.pauseAsync();
+            showOverlayPermanently();
+          } catch (err) {
+            console.warn(`Failed to pause ${key}:`, err);
+          }
+        }
+      },
+      showOverlay: () => {
+        showOverlayPermanently();
+      },
+      key,
+    };
+
+    // Register this video player
+    registerVideoPlayer(key, playerRef);
+    console.log(`📝 VideoCard registered player: ${key}`);
+
+    // Cleanup: unregister on unmount
+    return () => {
+      unregisterVideoPlayer(key);
+      console.log(`🗑️ VideoCard unregistered player: ${key}`);
+    };
+  }, [
+    key,
+    isAudioSermon,
+    registerVideoPlayer,
+    unregisterVideoPlayer,
+    showOverlayPermanently,
+  ]);
+
+  // Sync video playback state with global store
+  useEffect(() => {
+    if (isAudioSermon) return;
+
     const handleVideoPlayStateChange = async () => {
-      if (!videoRef.current || isAudioSermon) return;
+      if (!videoRef.current) return;
 
       try {
         const status = await videoRef.current.getStatusAsync();
-        if (!status.isLoaded) {
-          console.log("📱 Video not loaded yet, waiting...", key);
-          return;
-        }
+        if (!status.isLoaded) return;
 
         if (isPlaying && !status.isPlaying) {
-          console.log(
-            "▶️ State says playing but video is paused - starting playback:",
-            key
-          );
+          console.log(`▶️ Starting playback for ${key}`);
           await videoRef.current.playAsync();
         } else if (!isPlaying && status.isPlaying) {
-          console.log(
-            "⏸️ State says paused but video is playing - pausing:",
-            key
-          );
+          console.log(`⏸️ Pausing video ${key} (state changed)`);
           await videoRef.current.pauseAsync();
+          showOverlayPermanently();
         }
       } catch (error) {
-        console.error("❌ Error syncing video playback state:", error);
+        console.error(
+          `❌ Error syncing video playback state for ${key}:`,
+          error
+        );
       }
     };
 
-    // Small delay to ensure video is ready
-    const timeoutId = setTimeout(handleVideoPlayStateChange, 100);
-    return () => clearTimeout(timeoutId);
-  }, [isPlaying, key, isAudioSermon]);
+    handleVideoPlayStateChange();
+  }, [isPlaying, key, isAudioSermon, showOverlayPermanently]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -490,6 +614,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       // Clear overlay timeout
       if (overlayTimeoutRef.current) {
         clearTimeout(overlayTimeoutRef.current);
+      }
+      // Clear tap timeout
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
       }
     };
   }, []);

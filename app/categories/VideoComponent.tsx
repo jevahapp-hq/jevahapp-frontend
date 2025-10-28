@@ -16,11 +16,9 @@ import React, {
 } from "react";
 import {
   Dimensions,
-  Image,
   ImageSourcePropType,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  PanResponder,
   ScrollView,
   Share,
   Text,
@@ -28,12 +26,13 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import VideoCard from "../../src/features/media/components/VideoCard";
 import {
   MiniCardSkeleton,
   VideoCardSkeleton,
 } from "../../src/shared/components/Skeleton";
+import { MediaItem } from "../../src/shared/types";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
-import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
@@ -61,7 +60,6 @@ import {
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
 import useVideoViewport from "../hooks/useVideoViewport";
-import { getDisplayName } from "../utils/userValidation";
 
 interface VideoCard {
   fileUrl: string;
@@ -1191,6 +1189,34 @@ export default function VideoComponent() {
     });
   }, [uploadedVideos, trendingItems, previouslyViewedState]);
 
+  // Watch for playing state changes and pause videos that are no longer playing
+  useEffect(() => {
+    const playingVideos = globalVideoStore.playingVideos;
+
+    // Check all video refs and pause any that aren't in the playing state
+    Object.keys(videoRefs.current).forEach(async (key) => {
+      const videoRef = videoRefs.current[key];
+      const shouldBePlaying = playingVideos[key] ?? false;
+
+      if (videoRef) {
+        try {
+          const status = await videoRef.getStatusAsync();
+          if (status.isLoaded) {
+            if (shouldBePlaying && !status.isPlaying) {
+              console.log("▶️ Starting playback:", key);
+              await videoRef.playAsync();
+            } else if (!shouldBePlaying && status.isPlaying) {
+              console.log("⏸️ Pausing video (another video started):", key);
+              await videoRef.pauseAsync();
+            }
+          }
+        } catch (error) {
+          console.error("❌ Error syncing video playback:", error);
+        }
+      }
+    });
+  }, [globalVideoStore.playingVideos]);
+
   // Initialize video stats from persisted data and library store
   useEffect(() => {
     const initializeVideoStats = async () => {
@@ -1235,6 +1261,49 @@ export default function VideoComponent() {
     return `${days}DAYS AGO`;
   };
 
+  // Helper to convert VideoCard to MediaItem for shared component
+  const convertToMediaItem = (video: VideoCard): MediaItem => {
+    return {
+      _id: getVideoKey(video.fileUrl),
+      contentType: "videos",
+      fileUrl: video.fileUrl,
+      title: video.title,
+      speaker: video.speaker,
+      uploadedBy: video.uploadedBy,
+      description: video.title,
+      speakerAvatar: video.speakerAvatar,
+      views: video.views,
+      sheared: video.sheared,
+      saved: video.saved,
+      comment: video.comment,
+      favorite: video.favorite,
+      imageUrl: video.fileUrl,
+      createdAt: video.createdAt || new Date().toISOString(),
+    };
+  };
+
+  // getContentKey helper for shared component
+  const getContentKey = (video: VideoCard | MediaItem): string => {
+    if ("fileUrl" in video && typeof video === "object" && video !== null) {
+      return getVideoKey((video as VideoCard).fileUrl);
+    }
+    if (video && typeof video === "object" && "_id" in video) {
+      return (
+        (video as MediaItem)._id || getVideoKey((video as MediaItem).fileUrl)
+      );
+    }
+    return "";
+  };
+
+  const handleVideoTapWrapper = (
+    key: string,
+    video: MediaItem,
+    index: number
+  ) => {
+    // Convert MediaItem back to VideoCard format for compatibility
+    handleVideoTap(key);
+  };
+
   const renderVideoCard = (
     video: VideoCard,
     index: number,
@@ -1243,530 +1312,50 @@ export default function VideoComponent() {
   ) => {
     const modalKey = getVideoKey(video.fileUrl);
     const stats = videoStats[modalKey] || {};
-    const isItemSaved = libraryStore.isItemSaved(modalKey);
-    const videoRef = videoRefs.current[modalKey];
-    const progress = globalVideoStore.progresses[modalKey] ?? 0;
+    const mediaItem = convertToMediaItem(video);
 
-    // Get existing comments for this video
-    const contentId = modalKey; // Use modalKey since VideoCard doesn't have _id
-    const currentComments = comments[contentId] || [];
-
-    // If no comments exist, add some sample comments for testing
-    const sampleComments = [
-      {
-        id: "1",
-        userName: "Joseph Eluwa",
-        avatar: "",
-        timestamp: "3HRS AGO",
-        comment: "Wow!! My Faith has just been renewed.",
-        likes: 193,
-        isLiked: false,
-      },
-      {
-        id: "2",
-        userName: "Liz Elizabeth",
-        avatar: "",
-        timestamp: "24HRS",
-        comment: "This video really touched my heart. God is working!",
-        likes: 45,
-        isLiked: false,
-      },
-      {
-        id: "3",
-        userName: "Chris Evans",
-        avatar: "",
-        timestamp: "3 DAYS AGO",
-        comment: "Amazing message! Thank you for sharing this.",
-        likes: 23,
-        isLiked: false,
-      },
-    ];
-
-    const formattedComments =
-      currentComments.length > 0
-        ? currentComments.map((comment: any) => ({
-            id: comment.id,
-            userName: comment.username || "Anonymous",
-            avatar: comment.userAvatar || "",
-            timestamp: comment.timestamp,
-            comment: comment.comment,
-            likes: comment.likes || 0,
-            isLiked: comment.isLiked || false,
-          }))
-        : sampleComments;
-
-    const handleVideoCardPress = () => {
-      // Prepare the full video list for TikTok-style navigation
-      const videoListForNavigation = uploadedVideos.map((v, vIndex) => ({
-        title: v.title,
-        speaker:
-          v.speaker || v.uploadedBy || getDisplayName(v.speaker, v.uploadedBy),
-        timeAgo:
-          v.timeAgo || getTimeAgo(v.createdAt || new Date().toISOString()),
-        views: videoStats[getVideoKey(v.fileUrl)]?.views || v.viewCount || 0,
-        sheared: videoStats[getVideoKey(v.fileUrl)]?.sheared || v.sheared || 0,
-        saved:
-          (videoStats[getVideoKey(v.fileUrl)] as any)?.totalSaves ||
-          v.saved ||
-          0,
-        favorite: globalFavoriteCounts[getVideoKey(v.fileUrl)] || 0,
-        fileUrl: v.fileUrl,
-        imageUrl: v.fileUrl,
-        speakerAvatar:
-          typeof v.speakerAvatar === "string"
-            ? v.speakerAvatar
-            : require("../../assets/images/Avatar-1.png").toString(),
-      }));
-
-      router.push({
-        pathname: "/reels/Reelsviewscroll",
-        params: {
-          title: video.title,
-          speaker:
-            video.speaker ||
-            video.uploadedBy ||
-            getDisplayName(video.speaker, video.uploadedBy),
-          timeAgo:
-            video.timeAgo ||
-            getTimeAgo(video.createdAt || new Date().toISOString()),
-          views: String(stats.views || video.views || 0),
-          sheared: String(stats.sheared || video.sheared || 0),
-          saved: String(
-            (videoStats[modalKey] as any)?.totalSaves || video.saved || 0
-          ),
-          favorite: String(globalFavoriteCounts[modalKey] || 0),
-          imageUrl: video.fileUrl,
-          speakerAvatar:
-            typeof video.speakerAvatar === "string"
-              ? video.speakerAvatar
-              : require("../../assets/images/Avatar-1.png").toString(),
-          category: "videos",
-          videoList: JSON.stringify(videoListForNavigation),
-          currentIndex: String(index),
-        },
-      });
-    };
-
-    const panResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt, gestureState) => {
-        const barWidth = 260;
-        const x = Math.max(0, Math.min(gestureState.moveX - 50, barWidth));
-        const pct = x / barWidth; // Store as 0-1 ratio
-
-        globalVideoStore.setVideoProgress(modalKey, pct);
-
-        if (videoRef?.setPositionAsync && videoRef.getStatusAsync) {
-          videoRef
-            .getStatusAsync()
-            .then((status: { isLoaded: any; durationMillis: number }) => {
-              if (status.isLoaded && status.durationMillis) {
-                videoRef.setPositionAsync(pct * status.durationMillis);
-              }
-            });
-        }
-      },
-    });
-
+    // Use the shared VideoCard component
     return (
-      <View key={modalKey} className="flex flex-col mb-6">
-        <TouchableWithoutFeedback onPress={handleVideoCardPress}>
-          <View
-            className="w-full h-[400px] overflow-hidden relative"
-            onLayout={(e) => {
-              const { y, height } = e.nativeEvent.layout;
-              videoLayoutsRef.current[modalKey] = { y, height };
-            }}
-          >
-            <Video
-              ref={(ref) => {
-                if (ref) videoRefs.current[modalKey] = ref;
-              }}
-              source={{
-                uri: getBestVideoUrl(video.fileUrl),
-                headers: {
-                  "User-Agent": "JevahApp/1.0",
-                  Accept: "video/*",
-                },
-              }}
-              style={{ width: "100%", height: "100%", position: "absolute" }}
-              resizeMode={ResizeMode.COVER}
-              isMuted={globalVideoStore.mutedVideos[modalKey] ?? false}
-              volume={
-                globalVideoStore.mutedVideos[modalKey] ? 0.0 : globalVolume
-              }
-              shouldPlay={globalVideoStore.playingVideos[modalKey] ?? false}
-              useNativeControls={false}
-              onError={(error) => {
-                console.warn(`❌ Video failed to load: ${video.title}`, error);
-                setVideoErrors((prev) => ({ ...prev, [modalKey]: true }));
-                // TODO: Add error handling to globalVideoStore
-                globalVideoStore.pauseVideo(modalKey);
-              }}
-              onLoad={() => {
-                console.log(`✅ Video loaded successfully: ${video.title}`);
-                setVideoErrors((prev) => ({ ...prev, [modalKey]: false }));
-                // Video loaded successfully
-              }}
-              onPlaybackStatusUpdate={(status) => {
-                if (!status.isLoaded) return;
-                const pct = status.durationMillis
-                  ? (status.positionMillis / status.durationMillis) * 100
-                  : 0;
-                globalVideoStore.setVideoProgress(modalKey, pct);
-                if (typeof status.positionMillis === "number") {
-                  setPositions((prev) => ({
-                    ...prev,
-                    [modalKey]: status.positionMillis || 0,
-                  }));
-                }
-                if (typeof status.durationMillis === "number") {
-                  setDurations((prev) => ({
-                    ...prev,
-                    [modalKey]: status.durationMillis || 0,
-                  }));
-                  // TODO: Add duration tracking to globalVideoStore
-                }
-                const ref = videoRefs.current[modalKey];
-                if (status.didJustFinish) {
-                  ref?.setPositionAsync(0);
-                  globalVideoStore.pauseVideo(modalKey);
-                  globalVideoStore.setVideoCompleted(modalKey, true);
-                  console.log(
-                    `🎬 Video completed: ${video.title} - Ready for view count on replay`
-                  );
-                }
-              }}
-            />
-
-            <View
-              className="flex-col absolute mt-[180px] right-4"
-              style={{ zIndex: 20 }}
-            >
-              <TouchableOpacity
-                onPress={() => handleFavorite(modalKey, video)}
-                className="flex-col justify-center items-center"
-              >
-                <MaterialIcons
-                  name={
-                    userFavorites[modalKey] ? "favorite" : "favorite-border"
-                  }
-                  size={30}
-                  color={userFavorites[modalKey] ? "#D22A2A" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {globalFavoriteCounts[modalKey] || 0}
-                </Text>
-              </TouchableOpacity>
-              <View
-                className="flex-col justify-center items-center mt-8"
-                style={{
-                  minHeight: 60, // Ensure adequate space
-                  minWidth: 60,
-                  zIndex: 2, // Ensure it's above other elements
-                }}
-              >
-                <CommentIcon
-                  comments={formattedComments}
-                  size={30}
-                  color="white"
-                  showCount={true}
-                  count={
-                    stats.comment === 1
-                      ? (video.comment ?? 0) + 1
-                      : video.comment ?? 0
-                  }
-                  layout="vertical"
-                  contentId={contentId}
-                />
-              </View>
-              <TouchableOpacity
-                onPress={() => handleSave(modalKey, video)}
-                className="flex-col justify-center items-center mt-8"
-              >
-                <MaterialIcons
-                  name={isItemSaved ? "bookmark" : "bookmark-border"}
-                  size={30}
-                  color={isItemSaved ? "#FEA74E" : "#FFFFFF"}
-                />
-                <Text className="text-[10px] text-white font-rubik-semibold">
-                  {(videoStats[modalKey] as any)?.totalSaves ||
-                    video.saved ||
-                    0}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {/* Video title - show when paused (only for non-progress layout) */}
-            {!globalVideoStore.playingVideos[modalKey] &&
-              playType !== "progress" && (
-                <View
-                  className="absolute left-3 right-3 px-4 py-2 rounded-md"
-                  style={{ bottom: 40 }}
-                >
-                  <Text
-                    className="text-white font-rubik-semibold text-[14px]"
-                    numberOfLines={2}
-                  >
-                    {video.title}
-                  </Text>
-                </View>
-              )}
-
-            {/* Controls - show reload button when video fails, play button when video works */}
-            {videoErrors[modalKey] ? (
-              // Show only reload button when video fails
-              <View
-                pointerEvents="box-none"
-                className="absolute inset-0 justify-center items-center"
-              >
-                <TouchableOpacity
-                  onPress={() => handleVideoReload(modalKey)}
-                  activeOpacity={0.9}
-                >
-                  <View className="bg-red-500/80 p-4 rounded-full">
-                    <Ionicons name="refresh" size={40} color="#FFFFFF" />
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ) : playType === "progress" ? (
-              <View
-                className="absolute left-3 right-3 px-3"
-                style={{ bottom: 12 }}
-              >
-                <Text
-                  className="text-white font-rubik-semibold text-[14px]"
-                  numberOfLines={2}
-                >
-                  {video.title}
-                </Text>
-                <View className="flex-row items-center gap-2 mt-2">
-                  <TouchableOpacity onPress={() => togglePlay(modalKey, video)}>
-                    <Ionicons
-                      name={
-                        globalVideoStore.playingVideos[modalKey]
-                          ? "pause"
-                          : "play"
-                      }
-                      size={24}
-                      color="#FEA74E"
-                    />
-                  </TouchableOpacity>
-                  <View
-                    className="flex-1 h-1 bg-white/30 rounded-full relative"
-                    {...panResponder.panHandlers}
-                  >
-                    <View
-                      className="h-full bg-[#FEA74E] rounded-full"
-                      style={{
-                        width: `${globalVideoStore.progresses[modalKey] || 0}%`,
-                      }}
-                    />
-                    <View
-                      style={{
-                        position: "absolute",
-                        left: `${globalVideoStore.progresses[modalKey] || 0}%`,
-                        transform: [{ translateX: -6 }],
-                        top: -5,
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: "#FFFFFF",
-                        borderWidth: 1,
-                        borderColor: "#FEA74E",
-                      }}
-                    />
-                  </View>
-                  <TouchableOpacity onPress={() => toggleMuteVideo(modalKey)}>
-                    <Ionicons
-                      name={
-                        globalVideoStore.mutedVideos[modalKey]
-                          ? "volume-mute"
-                          : "volume-high"
-                      }
-                      size={20}
-                      color="#FEA74E"
-                    />
-                  </TouchableOpacity>
-                </View>
-                <View className="flex-row justify-between mt-1">
-                  <Text className="text-xs text-white font-rubik">
-                    {formatTime(positions[modalKey] || 0)}
-                  </Text>
-                  <Text className="text-xs text-white font-rubik">
-                    {formatTime(durations[modalKey] || 0)}
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              // Center play/pause button inside a non-blocking overlay so side icons stay clickable
-              <View
-                pointerEvents="box-none"
-                className="absolute inset-0 justify-center items-center"
-              >
-                <TouchableOpacity
-                  onPress={() => togglePlay(modalKey, video)}
-                  activeOpacity={0.9}
-                >
-                  <View
-                    className={`${
-                      globalVideoStore.playingVideos[modalKey]
-                        ? "bg-black/30"
-                        : "bg-white/70"
-                    } p-4 rounded-full`}
-                  >
-                    <Ionicons
-                      name={
-                        globalVideoStore.playingVideos[modalKey]
-                          ? "pause"
-                          : "play"
-                      }
-                      size={40}
-                      color={
-                        globalVideoStore.playingVideos[modalKey]
-                          ? "#FFFFFF"
-                          : "#FEA74E"
-                      }
-                    />
-                  </View>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </TouchableWithoutFeedback>
-        <View className="flex-row items-center justify-between mt-1 px-3">
-          <View className="flex flex-row items-center">
-            <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
-              <Image
-                source={getUserAvatarFromContent(video)}
-                style={{ width: 30, height: 30, borderRadius: 999 }}
-                resizeMode={ResizeMode.COVER}
-              />
-            </View>
-            <View className="ml-3">
-              <View className="flex-row items-center">
-                <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                  {getUserDisplayNameFromContent(video)}
-                </Text>
-                <View className="flex flex-row mt-2 ml-2">
-                  <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {video.timeAgo}
-                  </Text>
-                </View>
-              </View>
-              <View className="flex-row mt-2">
-                <View className="flex-row items-center">
-                  <AntDesign name="eye" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
-                    {(() => {
-                      const displayViews = stats.views ?? video.views ?? 0;
-                      console.log(`👁️ Displaying views for ${video.title}:`, {
-                        "stats.views": stats.views,
-                        "video.views": video.views,
-                        displayViews: displayViews,
-                        modalKey: modalKey,
-                        "videoStats[modalKey]": videoStats[modalKey],
-                      });
-                      return displayViews;
-                    })()}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleShare(modalKey, video)}
-                  className="flex-row items-center ml-4"
-                >
-                  <Feather name="send" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {stats.sheared ?? video.sheared ?? 0}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              closeAllMenus();
-              setModalVisible(modalVisible === modalKey ? null : modalKey);
-            }}
-            className="mr-2"
-          >
-            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* ✅ Invisible overlay that covers ENTIRE component for touch-outside-to-close */}
-        {modalVisible === modalKey && (
-          <>
-            <TouchableWithoutFeedback onPress={closeAllMenus}>
-              <View className="absolute inset-0 z-40" />
-            </TouchableWithoutFeedback>
-
-            {/* ✅ Modal content positioned over the video area */}
-            <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
-              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  View Details
-                </Text>
-                <Ionicons name="eye-outline" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleShare(modalKey, video)}
-                className="py-2 border-b border-gray-200 flex-row items-center justify-between"
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
-                <Feather name="send" size={22} color="#1D2939" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center justify-between mt-6"
-                onPress={() => handleSave(modalKey, video)}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  {isItemSaved ? "Remove from Library" : "Save to Library"}
-                </Text>
-                <MaterialIcons
-                  name={isItemSaved ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color="#1D2939"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2"
-                onPress={async () => {
-                  const downloadableItem = convertToDownloadableItem(
-                    video,
-                    "video"
-                  );
-                  const result = await handleDownload(downloadableItem);
-                  if (result.success) {
-                    setModalVisible(null);
-                    setSuccessMessage("Downloaded successfully!");
-                    setShowSuccessCard(true);
-                    // Force re-render to update download status
-                    await loadDownloadedItems();
-                    // Force component re-render by updating a state
-                    setModalVisible(null);
-                  }
-                }}
-              >
-                <Text className="text-[#1D2939] font-rubik ml-2">
-                  {checkIfDownloaded(video.fileUrl) ? "Downloaded" : "Download"}
-                </Text>
-                <Ionicons
-                  name={
-                    checkIfDownloaded(video.fileUrl)
-                      ? "checkmark-circle"
-                      : "download-outline"
-                  }
-                  size={24}
-                  color={
-                    checkIfDownloaded(video.fileUrl) ? "#256E63" : "#090E24"
-                  }
-                />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
+      <VideoCard
+        key={modalKey}
+        video={mediaItem}
+        index={index}
+        modalKey={modalKey}
+        contentStats={contentStats}
+        userFavorites={userFavorites}
+        globalFavoriteCounts={globalFavoriteCounts}
+        playingVideos={globalVideoStore.playingVideos}
+        mutedVideos={globalVideoStore.mutedVideos}
+        progresses={globalVideoStore.progresses}
+        videoVolume={globalVolume}
+        currentlyVisibleVideo={globalVideoStore.currentlyVisibleVideo}
+        onVideoTap={handleVideoTapWrapper}
+        onTogglePlay={(key) => togglePlay(key, video)}
+        onToggleMute={toggleMuteVideo}
+        onFavorite={(key) => handleFavorite(key, video)}
+        onComment={(key) => handleComment(key, video)}
+        onSave={(key) => handleSave(key, video)}
+        onDownload={(item) => {
+          const downloadableItem = convertToDownloadableItem(video, "video");
+          handleDownload(downloadableItem);
+        }}
+        onShare={(key) => handleShare(key, video)}
+        onModalToggle={(key) =>
+          setModalVisible(modalVisible === key ? null : key)
+        }
+        modalVisible={modalVisible === modalKey ? modalKey : null}
+        comments={comments}
+        checkIfDownloaded={checkIfDownloaded}
+        getContentKey={getContentKey}
+        getTimeAgo={getTimeAgo}
+        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+        getUserAvatarFromContent={getUserAvatarFromContent}
+        onLayout={(event, key, type, url) => {
+          const { y, height } = event.nativeEvent.layout;
+          videoLayoutsRef.current[key] = { y, height };
+        }}
+        isAutoPlayEnabled={isAutoPlayEnabled}
+      />
     );
   };
 

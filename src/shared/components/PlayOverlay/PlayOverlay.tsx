@@ -58,7 +58,10 @@ export const PlayOverlay: React.FC<PlayOverlayProps> = ({
       className={`absolute inset-0 justify-center items-center bg-black/20 pointer-events-box-none ${className}`}
     >
       <TouchableOpacity
-        onPress={handlePress}
+        onPress={(e) => {
+          e.stopPropagation?.(); // Stop event propagation to prevent video tap handler
+          handlePress();
+        }}
         activeOpacity={immediateFeedback ? 0.7 : 0.9}
         disabled={disabled}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
