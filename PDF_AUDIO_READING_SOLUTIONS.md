@@ -258,3 +258,4 @@ fetch('https://api.yourserver.com/extract-pdf', {
 
 Your ebook reader now provides **professional-grade accessibility** with **guaranteed audio functionality** for any PDF document! 🎉📚🔊
 
+
