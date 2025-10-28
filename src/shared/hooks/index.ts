@@ -1,6 +1,4 @@
-// Performance optimization hooks
-export { useDebounce, useThrottle, useStableCallback, useStoreSelector, useBatchedUpdates, useVirtualScrolling, useImagePreloader } from './usePerformanceOptimization';
-export { useIntersectionObserver } from './useIntersectionObserver';
-export { useVideoOptimization } from './useVideoOptimization';
-export { useMemoryManagement } from './useMemoryManagement';
-export { usePerformanceMonitoring } from './usePerformanceMonitoring';
+// Export all shared hooks for easy importing
+export { useContentActionModal } from "./useContentActionModal";
+export { useHydrateContentStats } from "./useHydrateContentStats";
+export { useVideoPlaybackControl } from "./useVideoPlaybackControl";

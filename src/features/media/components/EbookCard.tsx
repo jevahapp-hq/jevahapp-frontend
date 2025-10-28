@@ -1,26 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
-import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
-} from "react-native";
+import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
-    useContentCount,
-    useUserInteraction,
+  useContentCount,
+  useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
+import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
 } from "../../../shared/utils";
 
 export const EbookCard: React.FC<EbookCardProps> = ({
@@ -34,6 +30,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   checkIfDownloaded,
 }) => {
   const { showCommentModal } = useCommentModal();
+  const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const AvatarWithInitialFallback = ({
     imageSource,
     name,
@@ -105,9 +102,6 @@ export const EbookCard: React.FC<EbookCardProps> = ({
 
   const handleComment = () => onComment(ebook);
   const handleShare = () => onShare(ebook);
-
-  // Local modal visibility for options (three dots)
-  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Track a qualified view shortly after open (5s) or first interaction
   const [hasTrackedView, setHasTrackedView] = useState(false);
@@ -252,7 +246,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                       id: "1",
                       userName: "John Doe",
                       avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+                      timestamp: new Date(
+                        Date.now() - 1000 * 60 * 30
+                      ).toISOString(),
                       comment: "Great ebook! Really enjoyed this content.",
                       likes: 5,
                       isLiked: false,
@@ -261,7 +257,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                       id: "2",
                       userName: "Jane Smith",
                       avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+                      timestamp: new Date(
+                        Date.now() - 1000 * 60 * 15
+                      ).toISOString(),
                       comment: "Amazing! Thanks for sharing.",
                       likes: 3,
                       isLiked: true,
@@ -270,7 +268,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                       id: "3",
                       userName: "Mike Johnson",
                       avatar: "",
-                      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+                      timestamp: new Date(
+                        Date.now() - 1000 * 60 * 5
+                      ).toISOString(),
                       comment: "This is exactly what I needed!",
                       likes: 1,
                       isLiked: false,
@@ -292,19 +292,13 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             />
           </View>
         </View>
-        <TouchableOpacity
-          className="mr-2"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={() => setIsModalVisible(true)}
-        >
-          <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
+        <ThreeDotsMenuButton onPress={openModal} style={{ marginRight: 8 }} />
       </View>
 
       {/* Slide-up Content Action Modal */}
       <ContentActionModal
         isVisible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
+        onClose={closeModal}
         onViewDetails={() => {}}
         onSaveToLibrary={() => onSave(ebook)}
         onShare={() => onShare(ebook)}

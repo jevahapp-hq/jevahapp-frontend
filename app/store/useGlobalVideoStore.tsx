@@ -61,8 +61,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     progresses: {},
     hasCompleted: {},
 
-    // Auto-play initial state (enabled for manual play functionality)
-    isAutoPlayEnabled: true,
+    // Auto-play initial state (DISABLED by default - manual play only, Instagram/TikTok style)
+    isAutoPlayEnabled: false,
     currentlyVisibleVideo: null,
 
     // Individual video actions

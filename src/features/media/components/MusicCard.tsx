@@ -18,6 +18,8 @@ import AudioControlsOverlay from "../../../shared/components/AudioControlsOverla
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { AudioCardSkeleton } from "../../../shared/components/Skeleton";
+import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
+import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
@@ -66,10 +68,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     );
   };
   const [showOverlay, setShowOverlay] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [attemptedPlay, setAttemptedPlay] = useState(false);
   const { showCommentModal } = useCommentModal();
+  const { isModalVisible, openModal, closeModal } = useContentActionModal();
 
   const modalKey = `music-${audio._id || index}`;
   const contentId = audio._id || `music-${index}`;
@@ -407,18 +409,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
             />
           </View>
         </View>
-        <TouchableOpacity
-          className="ml-2"
-          onPress={() => setModalVisible(true)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
+        <ThreeDotsMenuButton onPress={openModal} />
       </View>
 
       <ContentActionModal
-        isVisible={modalVisible}
-        onClose={() => setModalVisible(false)}
+        isVisible={isModalVisible}
+        onClose={closeModal}
         onViewDetails={() => {}}
         onSaveToLibrary={() => onSave(audio)}
         onShare={() => onShare(audio)}
