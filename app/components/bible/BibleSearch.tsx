@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import {
+  AdvancedSearchResult,
+  AdvancedSearchVerse,
   bibleApiService,
   BibleVerse,
   SearchResult,
@@ -21,13 +23,16 @@ interface BibleSearchProps {
 
 export default function BibleSearch({ onVerseSelect }: BibleSearchProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<BibleVerse[]>([]);
+  const [results, setResults] = useState<AdvancedSearchVerse[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedTestament, setSelectedTestament] = useState<
     "all" | "old" | "new"
   >("all");
   const [selectedBook, setSelectedBook] = useState<string>("");
+  const [queryInterpretation, setQueryInterpretation] = useState<string>("");
+  const [suggestedVerses, setSuggestedVerses] = useState<string[]>([]);
+  const [isAIEnhanced, setIsAIEnhanced] = useState(false);
 
   const searchBible = async () => {
     if (!query.trim()) return;
@@ -39,18 +44,74 @@ export default function BibleSearch({ onVerseSelect }: BibleSearchProps) {
       const searchOptions = {
         ...(selectedTestament !== "all" && { testament: selectedTestament }),
         ...(selectedBook && { book: selectedBook }),
-        limit: 50,
-        offset: 0,
+        limit: 20,
       };
 
-      const searchResult: SearchResult = await bibleApiService.searchBible(
-        query.trim(),
-        searchOptions
-      );
-      setResults(searchResult.verses || []);
+      console.log(`🔍 Searching Bible for: "${query.trim()}"`, searchOptions);
+
+      // Try advanced AI search first, fallback to regular search
+      try {
+        const advancedResult: AdvancedSearchResult =
+          await bibleApiService.searchBibleAdvanced(
+            query.trim(),
+            searchOptions
+          );
+
+        console.log(
+          `✅ AI Search results: ${
+            advancedResult.data?.length || 0
+          } verses found`
+        );
+        console.log(
+          `🧠 AI Interpretation: ${advancedResult.queryInterpretation || "N/A"}`
+        );
+        console.log(
+          `💡 Suggested verses: ${
+            advancedResult.suggestedVerses?.join(", ") || "N/A"
+          }`
+        );
+
+        setResults(advancedResult.data || []);
+        setQueryInterpretation(advancedResult.queryInterpretation || "");
+        setSuggestedVerses(advancedResult.suggestedVerses || []);
+        setIsAIEnhanced(advancedResult.isAIEnhanced || false);
+      } catch (advancedError) {
+        console.warn(
+          "⚠️ Advanced search failed, using regular search:",
+          advancedError
+        );
+        // Fallback to regular search
+        const searchResult: SearchResult = await bibleApiService.searchBible(
+          query.trim(),
+          { ...searchOptions, offset: 0 }
+        );
+        console.log(
+          `✅ Regular search results: ${
+            searchResult.verses?.length || 0
+          } verses found`
+        );
+
+        // Convert regular search results to advanced format
+        const convertedResults: AdvancedSearchVerse[] = searchResult.verses.map(
+          (verse) => ({
+            ...verse,
+            highlightedText: verse.text,
+            relevanceScore: 1,
+            matchedTerms: query.toLowerCase().split(/\s+/),
+          })
+        );
+
+        setResults(convertedResults);
+        setQueryInterpretation("");
+        setSuggestedVerses([]);
+        setIsAIEnhanced(false);
+      }
     } catch (error) {
-      console.error("Search failed:", error);
+      console.error("❌ Bible search failed:", error);
       setResults([]);
+      setQueryInterpretation("");
+      setSuggestedVerses([]);
+      setIsAIEnhanced(false);
     } finally {
       setLoading(false);
     }
@@ -60,25 +121,126 @@ export default function BibleSearch({ onVerseSelect }: BibleSearchProps) {
     setQuery("");
     setResults([]);
     setHasSearched(false);
+    setQueryInterpretation("");
+    setSuggestedVerses([]);
+    setIsAIEnhanced(false);
   };
 
-  const renderSearchResult = ({ item }: { item: BibleVerse }) => (
-    <TouchableOpacity
-      style={styles.resultItem}
-      onPress={() => onVerseSelect(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.resultHeader}>
-        <Text style={styles.reference}>
-          {item.bookName} {item.chapterNumber}:{item.verseNumber}
+  const renderSearchResult = ({ item }: { item: AdvancedSearchVerse }) => {
+    // Parse highlighted text (words wrapped in **)
+    const renderHighlightedText = (text: string) => {
+      const parts = text.split(/(\*\*.*?\*\*)/g);
+      return (
+        <Text style={styles.verseText} numberOfLines={3}>
+          {parts.map((part, i) => {
+            if (part.startsWith("**") && part.endsWith("**")) {
+              const highlightedText = part.slice(2, -2);
+              return (
+                <Text key={i} style={styles.highlightedText}>
+                  {highlightedText}
+                </Text>
+              );
+            }
+            return <Text key={i}>{part}</Text>;
+          })}
         </Text>
-        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-      </View>
-      <Text style={styles.verseText} numberOfLines={3}>
-        {item.text}
-      </Text>
-    </TouchableOpacity>
-  );
+      );
+    };
+
+    // Get testament badge
+    const getTestamentBadge = (bookName: string) => {
+      const oldTestament = [
+        "Genesis",
+        "Exodus",
+        "Leviticus",
+        "Numbers",
+        "Deuteronomy",
+        "Joshua",
+        "Judges",
+        "Ruth",
+        "1 Samuel",
+        "2 Samuel",
+        "1 Kings",
+        "2 Kings",
+        "1 Chronicles",
+        "2 Chronicles",
+        "Ezra",
+        "Nehemiah",
+        "Esther",
+        "Job",
+        "Psalms",
+        "Proverbs",
+        "Ecclesiastes",
+        "Song of Songs",
+        "Isaiah",
+        "Jeremiah",
+        "Lamentations",
+        "Ezekiel",
+        "Daniel",
+        "Hosea",
+        "Joel",
+        "Amos",
+        "Obadiah",
+        "Jonah",
+        "Micah",
+        "Nahum",
+        "Habakkuk",
+        "Zephaniah",
+        "Haggai",
+        "Zechariah",
+        "Malachi",
+      ];
+      return oldTestament.includes(bookName) ? "OT" : "NT";
+    };
+
+    return (
+      <TouchableOpacity
+        style={styles.resultItem}
+        onPress={() => onVerseSelect && onVerseSelect(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.resultHeader}>
+          <View style={styles.referenceContainer}>
+            <Text style={styles.reference}>
+              {item.bookName} {item.chapterNumber}:{item.verseNumber}
+            </Text>
+            <View
+              style={[
+                styles.testamentBadge,
+                getTestamentBadge(item.bookName) === "OT"
+                  ? styles.oldTestamentBadge
+                  : styles.newTestamentBadge,
+              ]}
+            >
+              <Text style={styles.testamentBadgeText}>
+                {getTestamentBadge(item.bookName)}
+              </Text>
+            </View>
+            {item.relevanceScore !== undefined && (
+              <Text style={styles.relevanceScore}>
+                {Math.round(item.relevanceScore * 100)}%
+              </Text>
+            )}
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+        </View>
+
+        {item.highlightedText ? (
+          renderHighlightedText(item.highlightedText)
+        ) : (
+          <Text style={styles.verseText} numberOfLines={3}>
+            {item.text}
+          </Text>
+        )}
+
+        {item.explanation && (
+          <Text style={styles.explanation} numberOfLines={2}>
+            💡 {item.explanation}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmptyState = () => {
     if (loading) {
@@ -214,12 +376,36 @@ export default function BibleSearch({ onVerseSelect }: BibleSearchProps) {
         </View>
       </View>
 
+      {/* AI Interpretation */}
+      {queryInterpretation && (
+        <View style={styles.interpretationContainer}>
+          <Text style={styles.interpretationText}>
+            🧠 {queryInterpretation}
+          </Text>
+        </View>
+      )}
+
+      {/* Suggested Verses */}
+      {suggestedVerses.length > 0 && (
+        <View style={styles.suggestionsContainer}>
+          <Text style={styles.suggestionsLabel}>💡 Suggested:</Text>
+          <View style={styles.suggestionsList}>
+            {suggestedVerses.map((verse, index) => (
+              <View key={index} style={styles.suggestionChip}>
+                <Text style={styles.suggestionText}>{verse}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
       {/* Results */}
       <View style={styles.resultsContainer}>
         {results.length > 0 && (
           <View style={styles.resultsHeader}>
             <Text style={styles.resultsCount}>
               {results.length} result{results.length !== 1 ? "s" : ""} found
+              {isAIEnhanced && " (AI Enhanced)"}
             </Text>
           </View>
         )}
@@ -396,6 +582,87 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+  interpretationContainer: {
+    backgroundColor: "#F0F9FF",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  interpretationText: {
+    fontSize: 14,
+    fontFamily: "Rubik_400Regular",
+    color: "#1F2937",
+    fontStyle: "italic",
+  },
+  suggestionsContainer: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  suggestionsLabel: {
+    fontSize: 14,
+    fontFamily: "Rubik_600SemiBold",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  suggestionsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  suggestionChip: {
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#256E63",
+  },
+  suggestionText: {
+    fontSize: 12,
+    fontFamily: "Rubik_500Medium",
+    color: "#256E63",
+  },
+  referenceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  testamentBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  oldTestamentBadge: {
+    backgroundColor: "#FEF3C7",
+  },
+  newTestamentBadge: {
+    backgroundColor: "#DBEAFE",
+  },
+  testamentBadgeText: {
+    fontSize: 10,
+    fontFamily: "Rubik_600SemiBold",
+    color: "#374151",
+  },
+  relevanceScore: {
+    fontSize: 11,
+    fontFamily: "Rubik_500Medium",
+    color: "#6B7280",
+  },
+  highlightedText: {
+    backgroundColor: "#FEF3C7",
+    fontWeight: "600",
+    color: "#92400E",
+  },
+  explanation: {
+    fontSize: 12,
+    fontFamily: "Rubik_400Regular",
+    color: "#6B7280",
+    fontStyle: "italic",
+    marginTop: 6,
+  },
 });
-
-

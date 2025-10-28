@@ -34,7 +34,33 @@ export default function BibleChapterSelector({
     try {
       setLoading(true);
       const bookChapters = await bibleApiService.getBookChapters(bookName);
-      setChapters(bookChapters);
+
+      // Load verse counts for each chapter
+      const chaptersWithCounts = await Promise.all(
+        bookChapters.map(async (chapter) => {
+          try {
+            const chapterInfo = await bibleApiService.getChapter(
+              bookName,
+              chapter.chapterNumber
+            );
+            return {
+              ...chapter,
+              verseCount:
+                (chapterInfo as any).actualVerseCount ||
+                (chapterInfo as any).verseCount ||
+                chapter.verseCount,
+            };
+          } catch (error) {
+            console.error(
+              `Failed to load verse count for ${bookName} ${chapter.chapterNumber}:`,
+              error
+            );
+            return chapter;
+          }
+        })
+      );
+
+      setChapters(chaptersWithCounts);
     } catch (error) {
       console.error("Failed to load chapters:", error);
       // Fallback to generating chapters based on book name
@@ -142,16 +168,15 @@ export default function BibleChapterSelector({
           >
             {item.chapterNumber}
           </Text>
-          {item.verseCount > 0 && (
-            <Text
-              style={[
-                styles.verseCount,
-                isSelected && styles.selectedVerseCount,
-              ]}
-            >
-              {item.verseCount} verses
-            </Text>
-          )}
+          <Text
+            style={[styles.verseCount, isSelected && styles.selectedVerseCount]}
+          >
+            {item.verseCount > 0
+              ? `${item.verseCount} ${
+                  item.verseCount === 1 ? "verse" : "verses"
+                }`
+              : "—"}
+          </Text>
         </View>
         {isSelected && (
           <Ionicons name="checkmark-circle" size={20} color="#256E63" />
@@ -280,5 +305,3 @@ const styles = StyleSheet.create({
     color: "#059669",
   },
 });
-
-

@@ -54,6 +54,23 @@ export interface SearchResult {
   offset?: number;
 }
 
+export interface AdvancedSearchVerse extends BibleVerse {
+  highlightedText?: string;
+  relevanceScore?: number;
+  matchedTerms?: string[];
+  explanation?: string;
+}
+
+export interface AdvancedSearchResult {
+  success: boolean;
+  data: AdvancedSearchVerse[];
+  count?: number;
+  queryInterpretation?: string;
+  suggestedVerses?: string[];
+  searchTerms?: string[];
+  isAIEnhanced?: boolean;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -247,6 +264,42 @@ class BibleApiService {
       limit: options?.limit,
       offset: options?.offset,
     };
+  }
+
+  /**
+   * Advanced AI-powered Bible search with natural language processing
+   * @param query - Natural language query (e.g., "verse about love", "Pro")
+   * @param options - Search filters
+   * @returns AI-enhanced search results with highlighting and explanations
+   */
+  async searchBibleAdvanced(
+    query: string,
+    options?: {
+      book?: string;
+      testament?: "old" | "new";
+      limit?: number;
+    }
+  ): Promise<AdvancedSearchResult> {
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        limit: (options?.limit || 20).toString(),
+        ...(options?.book && { book: options.book }),
+        ...(options?.testament && { testament: options.testament }),
+      });
+
+      const response = await this.makeRequest<AdvancedSearchResult>(
+        `/api/bible/search/advanced?${params}`
+      );
+
+      return response;
+    } catch (error) {
+      console.warn(
+        "⚠️ Advanced search failed, will use regular search fallback"
+      );
+      // Re-throw so component can handle fallback
+      throw error;
+    }
   }
 
   async getRandomVerse(): Promise<BibleVerse> {
