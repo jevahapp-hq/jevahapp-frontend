@@ -15,7 +15,9 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
+import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
+import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
@@ -63,9 +65,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(true);
-  const [localModalVisible, setLocalModalVisible] = useState(false);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
+  const { isModalVisible, openModal, closeModal } = useContentActionModal();
 
   // Double-tap detection
   const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -808,55 +810,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           />
 
           {/* Play/Pause Overlay */}
-          {overlayVisible && (
-            <View
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                justifyContent: "center",
-                alignItems: "center",
-                pointerEvents: "box-none",
-              }}
-            >
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  handleTogglePlay();
-                }}
-                activeOpacity={0.7}
-                disabled={isPlayTogglePending}
-                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                style={{
-                  opacity: isPlayTogglePending ? 0.6 : 1,
-                }}
-              >
-                <View
-                  style={{
-                    backgroundColor: "rgba(255, 255, 255, 0.7)",
-                    padding: 16,
-                    borderRadius: 999,
-                  }}
-                >
-                  <Ionicons
-                    name={
-                      isAudioSermon
-                        ? audioState.isPlaying
-                          ? "pause"
-                          : "play"
-                        : isPlaying
-                        ? "pause"
-                        : "play"
-                    }
-                    size={40}
-                    color="#FEA74E"
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
+          <MediaPlayButton
+            isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
+            onPress={handleTogglePlay}
+            showOverlay={overlayVisible}
+            size="medium"
+            disabled={isPlayTogglePending}
+          />
 
           {/* Title Overlay - positioned above progress bar */}
           <View
@@ -1018,7 +978,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               {/* Three dots menu - far right */}
               <TouchableOpacity
                 onPress={() => {
-                  setLocalModalVisible(true);
+                  openModal();
                   // Also update parent if callback exists
                   if (onModalToggle) {
                     onModalToggle(modalKey);
@@ -1151,9 +1111,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       {/* Slide-up Content Action Modal */}
       <ContentActionModal
-        isVisible={localModalVisible || modalVisible === modalKey}
+        isVisible={isModalVisible || modalVisible === modalKey}
         onClose={() => {
-          setLocalModalVisible(false);
+          closeModal();
           if (onModalToggle) {
             onModalToggle(null);
           }
