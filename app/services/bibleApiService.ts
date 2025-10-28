@@ -1,7 +1,9 @@
 // Bible API Service - Frontend Integration
 // Connects to your backend Bible endpoints
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+import { getApiBaseUrl } from "../utils/api";
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface BibleBook {
   _id: string;
@@ -20,38 +22,80 @@ export interface BibleChapter {
 
 export interface BibleVerse {
   _id: string;
+  bookId?: string;
   bookName: string;
   chapterNumber: number;
   verseNumber: number;
   text: string;
+  translation?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VerseRangeResponse {
+  success: boolean;
+  data: BibleVerse[];
+  count?: number;
+  reference?: {
+    bookName: string;
+    startChapter: number;
+    startVerse: number;
+    endVerse: number;
+  };
 }
 
 export interface SearchResult {
   verses: BibleVerse[];
   total: number;
   hasMore: boolean;
+  query?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
+  count?: number;
 }
 
 class BibleApiService {
   private async makeRequest<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
-      const data = await response.json();
+      const url = `${API_BASE_URL}${endpoint}`;
+      console.log(`📖 Bible API Request: ${url}`);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error(data.message || "Request failed");
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = {
+            message:
+              errorText || `HTTP ${response.status}: ${response.statusText}`,
+          };
+        }
+        console.error(`❌ Bible API Error [${response.status}]:`, errorData);
+        throw new Error(
+          errorData.message || `Request failed with status ${response.status}`
+        );
       }
 
+      const data = await response.json();
+      console.log(`✅ Bible API Success: ${url}`);
       return data;
     } catch (error) {
       console.error("Bible API Error:", error);
-      throw error;
+      // Re-throw with more context
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Bible API request failed: ${error}`);
     }
   }
 
@@ -128,14 +172,47 @@ class BibleApiService {
     return response.data;
   }
 
-  async getVerseRange(reference: string): Promise<BibleVerse[]> {
-    const response = await this.makeRequest<BibleVerse[]>(
-      `/api/bible/verses/range/${encodeURIComponent(reference)}`
-    );
+  /**
+   * Get a range of Bible verses
+   * @param reference - Bible reference like "John 3:16-18" or "Romans 8:28-31"
+   * @returns Array of verses in the range with metadata
+   * @example
+   * const verses = await bibleApiService.getVerseRange("Romans 8:28-31");
+   */
+  async getVerseRange(reference: string): Promise<VerseRangeResponse> {
+    try {
+      const encodedReference = encodeURIComponent(reference);
+      const response = await this.makeRequest<VerseRangeResponse>(
+        `/api/bible/verses/range/${encodedReference}`
+      );
+
+      // Return full response including metadata (count, reference info)
+      return response;
+    } catch (error) {
+      console.error(`❌ Error fetching verse range "${reference}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get verse range as a simple array (backward compatibility)
+   * @param reference - Bible reference like "John 3:16-18"
+   * @returns Array of verses
+   */
+  async getVerseRangeArray(reference: string): Promise<BibleVerse[]> {
+    const response = await this.getVerseRange(reference);
     return response.data;
   }
 
   // Search endpoints
+  /**
+   * Search Bible text
+   * @param query - Search query string
+   * @param options - Search filters (book, testament, limit, offset)
+   * @returns Search results with verses matching the query
+   * @example
+   * const results = await bibleApiService.searchBible("love", { limit: 10 });
+   */
   async searchBible(
     query: string,
     options?: {
@@ -156,7 +233,18 @@ class BibleApiService {
     const response = await this.makeRequest<SearchResult>(
       `/api/bible/search?${params}`
     );
-    return response.data;
+
+    // Map response data to SearchResult format
+    return {
+      verses: Array.isArray(response.data) ? response.data : [],
+      total: response.total || response.data.length || 0,
+      hasMore: options?.offset
+        ? (response.total || 0) > options.offset + (options.limit || 50)
+        : false,
+      query,
+      limit: options?.limit,
+      offset: options?.offset,
+    };
   }
 
   async getRandomVerse(): Promise<BibleVerse> {
@@ -215,5 +303,3 @@ class BibleApiService {
 }
 
 export const bibleApiService = new BibleApiService();
-
-

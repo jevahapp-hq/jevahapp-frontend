@@ -38,11 +38,14 @@ export default function BibleBookSelector({
     try {
       setLoading(true);
       const allBooks = await bibleApiService.getAllBooks();
+      console.log("✅ Loaded books from API:", allBooks.length);
       setBooks(allBooks);
     } catch (error) {
-      console.error("Failed to load books:", error);
+      console.error("❌ Failed to load books from API:", error);
+      console.log("📚 Using fallback books");
       // Fallback to hardcoded books if API fails
-      setBooks(getFallbackBooks());
+      const fallbackBooks = getFallbackBooks();
+      setBooks(fallbackBooks);
     } finally {
       setLoading(false);
     }
@@ -779,5 +782,3 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
 });
-
-
