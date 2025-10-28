@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: "center",
-    marginBottom: 60,
+    marginBottom: 30, // Reduced from 60 to fit content
   },
   logoContainer: {
     width: 120,
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
-    marginBottom: 20,
+    marginBottom: 12, // Reduced from 20
     overflow: "hidden", // Ensure logo stays within circle
   },
   logo: {
@@ -206,22 +206,24 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     color: "#1F2937",
-    marginBottom: 8,
+    marginBottom: 4, // Reduced from 8
   },
   tagline: {
     fontSize: 16,
     color: "#6B7280",
     textAlign: "center",
+    marginBottom: 0,
   },
   verseSection: {
-    flex: 1,
+    flex: 0, // Changed to flex: 0 so it doesn't take all space
     justifyContent: "center",
+    marginBottom: 0,
   },
   verseHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 16, // Reduced from 24
   },
   verseHeaderText: {
     fontSize: 18,
@@ -245,7 +247,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 24,
-    marginBottom: 16,
+    marginBottom: 8,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -307,8 +309,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   actionSection: {
-    marginTop: 40,
-    marginBottom: 40,
+    marginTop: 0,
+    marginBottom: 20,
   },
   primaryButton: {
     backgroundColor: "#256E63",
