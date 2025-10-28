@@ -13,7 +13,6 @@ import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPl
 import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
-import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { PlayOverlay } from "../../../shared/components/PlayOverlay";
@@ -818,6 +817,36 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             disabled={isPlayTogglePending}
           />
 
+          {/* Title Overlay - positioned above progress bar */}
+          <View
+            style={{
+              position: "absolute",
+              bottom: 52,
+              left: 12,
+              right: 12,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 6,
+              backgroundColor: "rgba(0, 0, 0, 0.65)",
+              pointerEvents: "none",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: "Rubik_600SemiBold",
+                color: "#FFFFFF",
+                lineHeight: 16,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {video.title && video.title.length > 70
+                ? `${video.title.substring(0, 70)}...`
+                : video.title}
+            </Text>
+          </View>
+
           {/* Video/Audio Progress Bar */}
           <VideoProgressBar
             progress={isAudioSermon ? audioState.progress : progress}
@@ -848,94 +877,227 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         </View>
       </TouchableWithoutFeedback>
 
-      {/* Footer */}
-      <View className="px-3 mt-1">
-        {/* Interaction Bar - positioned above author info */}
-        <View className="flex-row items-center justify-between mb-3">
-          <CardFooterActions
-            viewCount={viewCount}
-            liked={!!userLikeState}
-            likeCount={likeCount}
-            likeBurstKey={likeBurstKey}
-            likeColor="#FF1744"
-            onLike={() => {
-              setLikeBurstKey((k) => k + 1);
-              onFavorite(key, video);
+      {/* Footer - Restructured layout */}
+      <View
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          backgroundColor: "#F9FAFB",
+        }}
+      >
+        {/* Parent Container: Two Views Side by Side */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "stretch", // Make both children same height
+          }}
+        >
+          {/* View 1: Avatar Circle - Takes full height of parent */}
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: "#E5E7EB",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 10,
             }}
-            commentCount={commentCount || video.comment || 0}
-            onComment={() => {
-              try {
-                console.log("🗨️ Comment icon pressed (video)", {
-                  key,
-                  contentId,
-                  title: video.title,
-                });
-                showCommentModal([], String(contentId));
-              } catch {}
-              onComment(key, video);
-            }}
-            saved={!!userSaveState}
-            saveCount={saveCount}
-            onSave={() => {
-              onSave(modalKey, video);
-            }}
-            onShare={() => onShare(modalKey, video)}
-            contentType="media"
-            contentId={contentId}
-            useEnhancedComponents={false}
-          />
-          {/* Right: options (three dots) */}
-          <TouchableOpacity
-            onPress={() => {
-              console.log("⋯ More pressed for", modalKey);
-              onModalToggle(modalVisible === modalKey ? null : modalKey);
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Author Information - below interaction bar */}
-        <View className="flex-row items-center mb-2">
-          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative">
             {!avatarErrored ? (
               <Image
                 source={getUserAvatarFromContent(video)}
-                style={{ width: 24, height: 24, borderRadius: 999 }}
+                style={{ width: 48, height: 48, borderRadius: 24 }}
                 resizeMode="cover"
                 onError={(error) => {
                   setAvatarErrored(true);
-                  console.warn(
-                    "❌ Failed to load video speaker avatar:",
-                    error.nativeEvent.error
-                  );
                 }}
               />
             ) : (
-              <Text className="text-[12px] font-rubik-semibold text-[#344054]">
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontFamily: "Rubik_600SemiBold",
+                  color: "#344054",
+                }}
+              >
                 {firstInitial}
               </Text>
             )}
           </View>
-          <View className="ml-3 flex-1">
-            <View className="flex-row items-center">
-              <Text className="text-[13px] font-rubik-semibold text-[#344054]">
-                {getUserDisplayNameFromContent(video)}
-              </Text>
-              <View className="w-1 h-1 bg-orange-400 rounded-full mx-2" />
-              <Text className="text-[10px] text-gray-500 font-rubik">
-                {getTimeAgo(video.createdAt)}
-              </Text>
+
+          {/* View 2: Name/Date and Interactions - Stacked Column */}
+          <View style={{ flex: 1, justifyContent: "space-between" }}>
+            {/* Top: Author Name + Orange Dot + Date + Three Dots */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              {/* Author Name + Orange Dot + Date */}
+              <View
+                style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontFamily: "Rubik_700Bold",
+                    color: "#1F2937",
+                  }}
+                  numberOfLines={1}
+                >
+                  {getUserDisplayNameFromContent(video)}
+                </Text>
+                <View
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: "#FF8A00",
+                    marginHorizontal: 8,
+                  }}
+                />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "Rubik_400Regular",
+                    color: "#6B7280",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {getTimeAgo(video.createdAt)}
+                </Text>
+              </View>
+
+              {/* Three dots menu - far right */}
+              <TouchableOpacity
+                onPress={() => {
+                  onModalToggle(modalVisible === modalKey ? null : modalKey);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginLeft: 8 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom: Interaction Icons */}
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {/* Views */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginRight: 16,
+                }}
+              >
+                <Ionicons name="eye-outline" size={22} color="#6B7280" />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "Rubik_500Medium",
+                    color: "#374151",
+                    marginLeft: 5,
+                  }}
+                >
+                  {viewCount}
+                </Text>
+              </View>
+
+              {/* Likes */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginRight: 16,
+                }}
+                onPress={() => {
+                  setLikeBurstKey((k) => k + 1);
+                  onFavorite(key, video);
+                }}
+              >
+                <Ionicons
+                  name={userLikeState ? "heart" : "heart-outline"}
+                  size={22}
+                  color={userLikeState ? "#FF1744" : "#6B7280"}
+                />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "Rubik_500Medium",
+                    color: "#374151",
+                    marginLeft: 5,
+                  }}
+                >
+                  {likeCount}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Comments */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginRight: 16,
+                }}
+                onPress={() => {
+                  try {
+                    showCommentModal([], String(contentId));
+                  } catch {}
+                  onComment(key, video);
+                }}
+              >
+                <Ionicons name="chatbubble-outline" size={22} color="#6B7280" />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "Rubik_500Medium",
+                    color: "#374151",
+                    marginLeft: 5,
+                  }}
+                >
+                  {commentCount || video.comment || 0}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Saves */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginRight: 16,
+                }}
+                onPress={() => onSave(modalKey, video)}
+              >
+                <Ionicons
+                  name={userSaveState ? "bookmark" : "bookmark-outline"}
+                  size={22}
+                  color={userSaveState ? "#FEA74E" : "#6B7280"}
+                />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "Rubik_500Medium",
+                    color: "#374151",
+                    marginLeft: 5,
+                  }}
+                >
+                  {saveCount || 0}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Share */}
+              <TouchableOpacity onPress={() => onShare(modalKey, video)}>
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={22}
+                  color="#6B7280"
+                />
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
-
-        {/* Video Title/Description - below author info */}
-        <View className="ml-13">
-          <Text className="text-[12px] font-rubik text-[#344054] leading-5">
-            {video.title}
-          </Text>
         </View>
       </View>
 
