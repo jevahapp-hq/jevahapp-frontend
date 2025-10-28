@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   SafeAreaView,
   StyleSheet,
@@ -8,12 +8,14 @@ import {
   View,
 } from "react-native";
 import {
+  bibleApiService,
   BibleBook,
   BibleChapter,
   BibleVerse,
 } from "../../services/bibleApiService";
 import BibleBookSelector from "./BibleBookSelector";
 import BibleChapterSelector from "./BibleChapterSelector";
+import BibleFloatingNav from "./BibleFloatingNav";
 import BibleReader from "./BibleReader";
 import BibleSearch from "./BibleSearch";
 
@@ -29,6 +31,38 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   const [selectedChapter, setSelectedChapter] = useState<BibleChapter | null>(
     null
   );
+  const [chapters, setChapters] = useState<BibleChapter[]>([]);
+
+  // Load chapters when book is selected
+  useEffect(() => {
+    if (selectedBook) {
+      loadChapters();
+    }
+  }, [selectedBook]);
+
+  const loadChapters = async () => {
+    if (!selectedBook) return;
+
+    try {
+      const bookChapters = await bibleApiService.getBookChapters(
+        selectedBook.name
+      );
+      setChapters(bookChapters);
+    } catch (error) {
+      console.error("Failed to load chapters:", error);
+      // Generate fallback chapters
+      const fallbackChapters: BibleChapter[] = Array.from(
+        { length: selectedBook.chapterCount },
+        (_, i) => ({
+          _id: `${selectedBook.name}-${i + 1}`,
+          bookName: selectedBook.name,
+          chapterNumber: i + 1,
+          verseCount: 0,
+        })
+      );
+      setChapters(fallbackChapters);
+    }
+  };
 
   const handleBookSelect = (book: BibleBook) => {
     setSelectedBook(book);
@@ -155,13 +189,25 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
 
       case "reader":
         return selectedBook && selectedChapter ? (
-          <BibleReader
-            bookName={selectedBook.name}
-            chapterNumber={selectedChapter.chapterNumber}
-            onNavigateChapter={handleNavigateChapter}
-            canNavigatePrev={canNavigatePrev}
-            canNavigateNext={canNavigateNext}
-          />
+          <>
+            <BibleReader
+              bookName={selectedBook.name}
+              chapterNumber={selectedChapter.chapterNumber}
+              onNavigateChapter={handleNavigateChapter}
+              canNavigatePrev={canNavigatePrev}
+              canNavigateNext={canNavigateNext}
+            />
+            <BibleFloatingNav
+              book={selectedBook}
+              currentChapter={selectedChapter.chapterNumber}
+              chapters={chapters}
+              onChapterSelect={handleChapterSelect}
+              onNavigatePrev={() => handleNavigateChapter("prev")}
+              onNavigateNext={() => handleNavigateChapter("next")}
+              canNavigatePrev={canNavigatePrev}
+              canNavigateNext={canNavigateNext}
+            />
+          </>
         ) : null;
 
       case "search":
@@ -263,11 +309,13 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {renderHeader()}
-      <View style={styles.content}>{renderContent()}</View>
-      {renderBottomNavigation()}
-    </SafeAreaView>
+    <View style={styles.container}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        {renderHeader()}
+        <View style={styles.content}>{renderContent()}</View>
+        {renderBottomNavigation()}
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -280,7 +328,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginTop: 4, // Even less margin
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
@@ -355,5 +405,3 @@ const styles = StyleSheet.create({
     color: "#256E63",
   },
 });
-
-

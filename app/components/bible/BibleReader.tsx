@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   versesContainer: {
     paddingHorizontal: 16,
     paddingVertical: 20,
-    paddingBottom: 100,
+    paddingBottom: 180, // More padding to avoid floating nav
   },
   verseContainer: {
     flexDirection: "row",
