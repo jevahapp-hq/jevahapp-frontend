@@ -96,24 +96,63 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     setViewMode("reader");
   };
 
-  const handleNavigateChapter = (direction: "prev" | "next") => {
-    if (!selectedBook || !selectedChapter) return;
+  const handleNavigateChapter = async (direction: "prev" | "next") => {
+    if (!selectedBook || !selectedChapter) {
+      console.log("❌ Cannot navigate: missing book or chapter");
+      return;
+    }
 
     const newChapterNumber =
       direction === "prev"
         ? selectedChapter.chapterNumber - 1
         : selectedChapter.chapterNumber + 1;
 
-    if (newChapterNumber < 1 || newChapterNumber > selectedBook.chapterCount)
+    console.log(
+      `📖 Attempting to navigate ${direction} from chapter ${selectedChapter.chapterNumber} to ${newChapterNumber}`
+    );
+    console.log(
+      `📚 Book: ${selectedBook.name}, Total chapters: ${selectedBook.chapterCount}`
+    );
+
+    // Validate chapter number
+    if (newChapterNumber < 1) {
+      console.log("❌ Cannot navigate: chapter number below 1");
       return;
+    }
+    if (newChapterNumber > selectedBook.chapterCount) {
+      console.log(
+        `❌ Cannot navigate: chapter ${newChapterNumber} exceeds book's ${selectedBook.chapterCount} chapters`
+      );
+      return;
+    }
+
+    // Try to get actual verse count from API
+    let verseCount = 0;
+    try {
+      const chapterInfo = await bibleApiService.getChapter(
+        selectedBook.name,
+        newChapterNumber
+      );
+      verseCount =
+        (chapterInfo as any).actualVerseCount ||
+        (chapterInfo as any).verseCount ||
+        0;
+      console.log(`✅ Loaded chapter info: ${verseCount} verses`);
+    } catch (error) {
+      console.error("⚠️ Error loading chapter info:", error);
+      // Continue anyway
+    }
 
     const newChapter: BibleChapter = {
       _id: `${selectedBook.name}-${newChapterNumber}`,
       bookName: selectedBook.name,
       chapterNumber: newChapterNumber,
-      verseCount: 0,
+      verseCount: verseCount,
     };
 
+    console.log(
+      `✅ Navigating to ${selectedBook.name} ${newChapterNumber} (${verseCount} verses)`
+    );
     setSelectedChapter(newChapter);
   };
 
@@ -152,9 +191,12 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
             `${selectedBook?.name} ${selectedChapter?.chapterNumber}`}
           {viewMode === "search" && "Search Bible"}
         </Text>
-        {viewMode === "reader" && (
+        {viewMode === "reader" && selectedChapter && (
           <Text style={styles.headerSubtitle}>
-            {selectedChapter?.verseCount || 0} verses
+            Chapter {selectedChapter.chapterNumber}
+            {selectedChapter.verseCount > 0
+              ? ` • ${selectedChapter.verseCount} verses`
+              : ""}
           </Text>
         )}
       </View>

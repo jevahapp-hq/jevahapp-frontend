@@ -308,18 +308,6 @@ export default function Welcome() {
             </Text>
           </TouchableOpacity>
 
-          {/* Sign in link */}
-          <TouchableOpacity
-            onPress={fastPress(() => router.push("/auth/login"), {
-              key: "login_button",
-              priority: "high",
-            })}
-            activeOpacity={0.7}
-            style={{ marginTop: 36, padding: 8 }}
-          >
-            <Text className="font-rubik-bold text-[#344054]">Sign In</Text>
-          </TouchableOpacity>
-
           {/* Loading and error states */}
           {loginLoading && (
             <ActivityIndicator className="mt-4" color="#090E24" />

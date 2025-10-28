@@ -137,8 +137,10 @@ class BibleApiService {
   async getChapter(
     bookName: string,
     chapterNumber: number
-  ): Promise<BibleChapter> {
-    const response = await this.makeRequest<BibleChapter>(
+  ): Promise<BibleChapter & { actualVerseCount?: number }> {
+    const response = await this.makeRequest<
+      BibleChapter & { actualVerseCount?: number }
+    >(
       `/api/bible/books/${encodeURIComponent(
         bookName
       )}/chapters/${chapterNumber}`

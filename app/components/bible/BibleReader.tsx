@@ -26,12 +26,30 @@ export default function BibleReader({
   canNavigateNext,
 }: BibleReaderProps) {
   const [verses, setVerses] = useState<BibleVerse[]>([]);
+  const [verseCount, setVerseCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadVerses();
+    loadChapterInfo();
   }, [bookName, chapterNumber]);
+
+  const loadChapterInfo = async () => {
+    try {
+      // Get chapter info with verse count
+      const chapter = await bibleApiService.getChapter(bookName, chapterNumber);
+      // Use actualVerseCount if available, otherwise use verseCount or verses length
+      setVerseCount(
+        (chapter as any).actualVerseCount ||
+          (chapter as any).verseCount ||
+          verses.length
+      );
+    } catch (err) {
+      console.error("Error loading chapter info:", err);
+      // Will be set when verses load
+    }
+  };
 
   const loadVerses = async () => {
     setLoading(true);
@@ -42,6 +60,10 @@ export default function BibleReader({
         chapterNumber
       );
       setVerses(chapterVerses);
+      // Update verse count from loaded verses if not already set
+      if (chapterVerses.length > 0 && verseCount === 0) {
+        setVerseCount(chapterVerses.length);
+      }
     } catch (err) {
       setError("Failed to load verses. Please try again.");
       console.error("Error loading verses:", err);
