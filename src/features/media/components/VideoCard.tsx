@@ -826,8 +826,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               right: 12,
               paddingHorizontal: 10,
               paddingVertical: 6,
-              borderRadius: 6,
-              backgroundColor: "rgba(0, 0, 0, 0.65)",
               pointerEvents: "none",
             }}
           >
@@ -837,6 +835,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 fontFamily: "Rubik_600SemiBold",
                 color: "#FFFFFF",
                 lineHeight: 16,
+                textShadowColor: "rgba(0, 0, 0, 0.75)",
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 3,
               }}
               numberOfLines={1}
               ellipsizeMode="tail"
@@ -882,7 +883,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         style={{
           paddingHorizontal: 12,
           paddingVertical: 10,
-          backgroundColor: "#F9FAFB",
+          backgroundColor: "transparent",
         }}
       >
         {/* Parent Container: Two Views Side by Side */}
@@ -902,12 +903,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               alignItems: "center",
               justifyContent: "center",
               marginRight: 10,
+              borderWidth: 3,
+              borderColor: "#D1D5DB",
             }}
           >
             {!avatarErrored ? (
               <Image
                 source={getUserAvatarFromContent(video)}
-                style={{ width: 48, height: 48, borderRadius: 24 }}
+                style={{ width: 42, height: 42, borderRadius: 21 }}
                 resizeMode="cover"
                 onError={(error) => {
                   setAvatarErrored(true);
@@ -974,7 +977,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               {/* Three dots menu - far right */}
               <TouchableOpacity
                 onPress={() => {
-                  onModalToggle(modalVisible === modalKey ? null : modalKey);
+                  onModalToggle(modalKey);
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ marginLeft: 8 }}

@@ -1343,7 +1343,7 @@ export default function VideoComponent() {
         onModalToggle={(key) =>
           setModalVisible(modalVisible === key ? null : key)
         }
-        modalVisible={modalVisible === modalKey ? modalKey : null}
+        modalVisible={modalVisible}
         comments={comments}
         checkIfDownloaded={checkIfDownloaded}
         getContentKey={getContentKey}
