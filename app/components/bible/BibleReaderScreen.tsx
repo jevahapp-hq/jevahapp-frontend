@@ -14,9 +14,10 @@ import {
   BibleVerse,
 } from "../../services/bibleApiService";
 import BibleBookSelector from "./BibleBookSelector";
+import BibleBookSelectorModal from "./BibleBookSelectorModal";
 import BibleChapterSelector from "./BibleChapterSelector";
 import BibleFloatingNav from "./BibleFloatingNav";
-import BibleReader from "./BibleReader";
+import BibleReaderRedesigned from "./BibleReaderRedesigned";
 import BibleSearch from "./BibleSearch";
 
 type ViewMode = "books" | "chapters" | "reader" | "search";
@@ -32,6 +33,10 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     null
   );
   const [chapters, setChapters] = useState<BibleChapter[]>([]);
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [translation, setTranslation] = useState("NIV");
+  const [showTranslationPicker, setShowTranslationPicker] = useState(false);
+  const [isFloatingAudioPlaying, setIsFloatingAudioPlaying] = useState(false);
 
   // Load chapters when book is selected
   useEffect(() => {
@@ -67,10 +72,15 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   const handleBookSelect = (book: BibleBook) => {
     setSelectedBook(book);
     setSelectedChapter(null);
-    setViewMode("chapters");
+    setShowBookModal(false);
+    // If in reader mode, switch to chapters to select chapter
+    if (viewMode === "reader" && !selectedChapter) {
+      setViewMode("chapters");
+    }
   };
 
-  const handleChapterSelect = (chapter: BibleChapter) => {
+  const handleChapterSelect = (book: BibleBook, chapter: BibleChapter) => {
+    setSelectedBook(book);
     setSelectedChapter(chapter);
     setViewMode("reader");
   };
@@ -91,6 +101,17 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
       verseCount: 0,
     };
 
+    setSelectedBook(book);
+    setSelectedChapter(chapter);
+    setViewMode("reader");
+  };
+
+  const handleVerseSelectFromModal = (
+    book: BibleBook,
+    chapter: BibleChapter,
+    verse: BibleVerse
+  ) => {
+    // Set the book and chapter, then navigate to reader
     setSelectedBook(book);
     setSelectedChapter(chapter);
     setViewMode("reader");
@@ -216,6 +237,7 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         return (
           <BibleBookSelector
             onBookSelect={handleBookSelect}
+            onChapterSelect={handleChapterSelect}
             selectedBook={selectedBook}
           />
         );
@@ -224,33 +246,46 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         return selectedBook ? (
           <BibleChapterSelector
             bookName={selectedBook.name}
-            onChapterSelect={handleChapterSelect}
+            onChapterSelect={(chapter) =>
+              selectedBook && handleChapterSelect(selectedBook, chapter)
+            }
             selectedChapter={selectedChapter}
           />
         ) : null;
 
       case "reader":
         return selectedBook && selectedChapter ? (
-          <>
-            <BibleReader
-              bookName={selectedBook.name}
-              chapterNumber={selectedChapter.chapterNumber}
-              onNavigateChapter={handleNavigateChapter}
-              canNavigatePrev={canNavigatePrev}
-              canNavigateNext={canNavigateNext}
-            />
-            <BibleFloatingNav
-              book={selectedBook}
-              currentChapter={selectedChapter.chapterNumber}
-              chapters={chapters}
-              onChapterSelect={handleChapterSelect}
-              onNavigatePrev={() => handleNavigateChapter("prev")}
-              onNavigateNext={() => handleNavigateChapter("next")}
-              canNavigatePrev={canNavigatePrev}
-              canNavigateNext={canNavigateNext}
-            />
-          </>
-        ) : null;
+          <BibleReaderRedesigned
+            bookName={selectedBook.name}
+            chapterNumber={selectedChapter.chapterNumber}
+            onBack={() => {
+              if (selectedChapter) {
+                setViewMode("chapters");
+              } else {
+                setViewMode("books");
+              }
+            }}
+            onNavigateChapter={handleNavigateChapter}
+            canNavigatePrev={canNavigatePrev}
+            canNavigateNext={canNavigateNext}
+            onBookChapterPress={() => setShowBookModal(true)}
+            onTranslationPress={() => setShowTranslationPicker(true)}
+            translation={translation}
+          />
+        ) : (
+          <View style={styles.emptyReaderContainer}>
+            <Ionicons name="book-outline" size={64} color="#D1D5DB" />
+            <Text style={styles.emptyReaderText}>
+              Select a book to begin reading
+            </Text>
+            <TouchableOpacity
+              style={styles.selectBookButton}
+              onPress={() => setShowBookModal(true)}
+            >
+              <Text style={styles.selectBookButtonText}>Open Bible</Text>
+            </TouchableOpacity>
+          </View>
+        );
 
       case "search":
         return <BibleSearch onVerseSelect={handleVerseSelect} />;
@@ -352,11 +387,43 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-        {renderHeader()}
+      <SafeAreaView style={{ flex: 1 }}>
+        {viewMode !== "reader" && renderHeader()}
         <View style={styles.content}>{renderContent()}</View>
-        {renderBottomNavigation()}
+        {viewMode !== "reader" && renderBottomNavigation()}
       </SafeAreaView>
+
+      {/* Book Selector Modal */}
+      <BibleBookSelectorModal
+        visible={showBookModal}
+        onClose={() => setShowBookModal(false)}
+        onBookSelect={handleBookSelect}
+        onChapterSelect={(book, chapter) => {
+          handleBookSelect(book);
+          handleChapterSelect(book, chapter);
+        }}
+        onVerseSelect={handleVerseSelectFromModal}
+        selectedBook={selectedBook}
+      />
+
+      {/* Floating Bible Navigation (visible in reader) */}
+      {viewMode === "reader" && selectedBook && selectedChapter && (
+        <BibleFloatingNav
+          book={selectedBook}
+          currentChapter={selectedChapter.chapterNumber}
+          chapters={chapters}
+          onChapterSelect={(chapter) =>
+            handleChapterSelect(selectedBook, chapter)
+          }
+          onNavigatePrev={() => handleNavigateChapter("prev")}
+          onNavigateNext={() => handleNavigateChapter("next")}
+          canNavigatePrev={canNavigatePrev}
+          canNavigateNext={canNavigateNext}
+          onOpenBookModal={() => setShowBookModal(true)}
+          isPlaying={isFloatingAudioPlaying}
+          onTogglePlay={() => setIsFloatingAudioPlaying((p) => !p)}
+        />
+      )}
     </View>
   );
 }
@@ -445,5 +512,30 @@ const styles = StyleSheet.create({
   },
   activeNavItemText: {
     color: "#256E63",
+  },
+  emptyReaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  emptyReaderText: {
+    fontSize: 18,
+    fontFamily: "Rubik_500Medium",
+    color: "#6B7280",
+    marginTop: 24,
+    marginBottom: 32,
+    textAlign: "center",
+  },
+  selectBookButton: {
+    backgroundColor: "#256E63",
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  selectBookButtonText: {
+    fontSize: 16,
+    fontFamily: "Rubik_600SemiBold",
+    color: "#FFFFFF",
   },
 });

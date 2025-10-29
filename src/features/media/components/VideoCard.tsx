@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
@@ -19,6 +18,7 @@ import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
+import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
 import { VideoCardProps } from "../../../shared/types";
 import { isValidUri } from "../../../shared/utils";
 import {
@@ -111,12 +111,21 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   const contentId = video._id || getContentKey(video);
   const key = getContentKey(video);
-  const isPlaying = playingVideos[key] || false;
   const isMuted = mutedVideos[key] || false;
   const progress = progresses[key] || 0;
 
-  // Get store functions for registry
-  const { registerVideoPlayer, unregisterVideoPlayer } = useGlobalVideoStore();
+  // Use modular video playback control hook
+  const {
+    isPlaying,
+    toggle: togglePlayback,
+    shouldPlayThisVideo,
+  } = useVideoPlaybackControl({
+    videoKey: key,
+    videoRef,
+    enableAutoPlay: false, // Manual play only - Instagram/TikTok style
+  });
+
+  // Video player registry is now handled by useVideoPlaybackControl hook
 
   // Overlay management functions
   const showOverlayTemporarily = useCallback(() => {
@@ -306,7 +315,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         if (isAudioSermon) {
           audioControls.pause();
         } else {
-          onTogglePlay(key);
+          // Use modular hook for pause
+          togglePlayback();
           if (videoRef.current) {
             try {
               await videoRef.current.pauseAsync();
@@ -332,7 +342,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           if (isAudioSermon) {
             audioControls.pause();
           } else {
-            onTogglePlay(key);
+            // Use modular hook for pause
+            togglePlayback();
             if (videoRef.current) {
               try {
                 await videoRef.current.pauseAsync();
@@ -362,6 +373,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     isAudioSermon,
     audioControls,
     audioState.isPlaying,
+    togglePlayback,
   ]);
 
   // Handle hover end - video continues playing until scrolled past
@@ -371,7 +383,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // Only pause when scrolled past or another video is hovered
   }, [video.title]);
 
-  // Handle play/pause toggle with direct video control and immediate overlay hide/show
+  // Handle play/pause toggle - now using modular hook
   const handleTogglePlay = useCallback(async () => {
     if (isPlayTogglePending) return; // Prevent double-taps
 
@@ -385,7 +397,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     );
 
     // Clear any pending tap detection when play icon is clicked
-    // This ensures play icon takes priority and no video tap conflicts occur
     tapCountRef.current = 0;
     if (tapTimeoutRef.current) {
       clearTimeout(tapTimeoutRef.current);
@@ -398,45 +409,20 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       // Handle audio sermon play/pause
       if (audioState.isPlaying) {
         audioControls.pause();
-        showOverlayPermanently(); // Show controls when paused
+        showOverlayPermanently();
       } else {
-        // Hide overlay FIRST before playing to give immediate feedback
         hideOverlay();
         audioControls.play();
       }
     } else {
-      // First update the global state
-      onTogglePlay(key);
+      // Use modular hook for video playback control
+      togglePlayback();
 
-      // Then directly control the video to ensure it plays
-      try {
-        if (videoRef.current) {
-          if (isPlaying) {
-            console.log("⏸️ Pausing video and showing overlay:", key);
-            await videoRef.current.pauseAsync();
-            showOverlayPermanently(); // Show pause controls
-          } else {
-            console.log(
-              "▶️ Playing video and hiding overlay immediately:",
-              key
-            );
-            // Hide overlay FIRST for immediate visual feedback
-            hideOverlay();
-            await videoRef.current.playAsync();
-          }
-        } else {
-          console.warn("❌ Video ref not available for direct control:", key);
-          // Still update overlay state even if video ref is missing
-          if (!isPlaying) {
-            hideOverlay();
-          }
-        }
-      } catch (error) {
-        console.error("❌ Direct video control failed:", error);
-        // On error, show overlay to allow user to retry
-        if (!isPlaying) {
-          showOverlayPermanently();
-        }
+      // Update overlay state
+      if (isPlaying) {
+        showOverlayPermanently();
+      } else {
+        hideOverlay();
       }
     }
 
@@ -445,13 +431,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       setIsPlayTogglePending(false);
     }, 150);
   }, [
-    onTogglePlay,
     key,
     isPlayTogglePending,
     isAudioSermon,
     audioState.isPlaying,
     audioControls,
     isPlaying,
+    togglePlayback,
     showOverlayPermanently,
     hideOverlay,
   ]);
@@ -540,73 +526,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     [video.title, key, isPlaying]
   );
 
-  // PROFESSIONAL: Register video player with store for imperative control (like Instagram/TikTok)
-  useEffect(() => {
-    if (isAudioSermon) return; // Audio sermons handle their own playback
+  // Note: Video player registration is now handled by useVideoPlaybackControl hook
+  // This ensures proper registration/unregistration and prevents duplicate registrations
 
-    const playerRef = {
-      pause: async () => {
-        if (videoRef.current) {
-          try {
-            await videoRef.current.pauseAsync();
-            showOverlayPermanently();
-          } catch (err) {
-            console.warn(`Failed to pause ${key}:`, err);
-          }
-        }
-      },
-      showOverlay: () => {
-        showOverlayPermanently();
-      },
-      key,
-    };
-
-    // Register this video player
-    registerVideoPlayer(key, playerRef);
-    console.log(`📝 VideoCard registered player: ${key}`);
-
-    // Cleanup: unregister on unmount
-    return () => {
-      unregisterVideoPlayer(key);
-      console.log(`🗑️ VideoCard unregistered player: ${key}`);
-    };
-  }, [
-    key,
-    isAudioSermon,
-    registerVideoPlayer,
-    unregisterVideoPlayer,
-    showOverlayPermanently,
-  ]);
-
-  // Sync video playback state with global store
-  useEffect(() => {
-    if (isAudioSermon) return;
-
-    const handleVideoPlayStateChange = async () => {
-      if (!videoRef.current) return;
-
-      try {
-        const status = await videoRef.current.getStatusAsync();
-        if (!status.isLoaded) return;
-
-        if (isPlaying && !status.isPlaying) {
-          console.log(`▶️ Starting playback for ${key}`);
-          await videoRef.current.playAsync();
-        } else if (!isPlaying && status.isPlaying) {
-          console.log(`⏸️ Pausing video ${key} (state changed)`);
-          await videoRef.current.pauseAsync();
-          showOverlayPermanently();
-        }
-      } catch (error) {
-        console.error(
-          `❌ Error syncing video playback state for ${key}:`,
-          error
-        );
-      }
-    };
-
-    handleVideoPlayStateChange();
-  }, [isPlaying, key, isAudioSermon, showOverlayPermanently]);
+  // Note: Video playback sync is now handled by useVideoPlaybackControl hook
+  // This useEffect is removed to prevent auto-play issues
 
   // Cleanup on unmount
   useEffect(() => {

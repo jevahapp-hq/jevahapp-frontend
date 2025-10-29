@@ -21,6 +21,9 @@ interface BibleFloatingNavProps {
   onNavigateNext?: () => void;
   canNavigatePrev: boolean;
   canNavigateNext: boolean;
+  onOpenBookModal?: () => void;
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
 }
 
 export default function BibleFloatingNav({
@@ -32,6 +35,9 @@ export default function BibleFloatingNav({
   onNavigateNext,
   canNavigatePrev,
   canNavigateNext,
+  onOpenBookModal,
+  isPlaying = false,
+  onTogglePlay,
 }: BibleFloatingNavProps) {
   const [showChapterPicker, setShowChapterPicker] = useState(false);
 
@@ -139,10 +145,11 @@ export default function BibleFloatingNav({
           />
         </TouchableOpacity>
 
-        {/* Current Chapter Display (tappable to open picker) */}
+        {/* Current Book/Chapter Display (tap to pick chapter, long-press to pick book) */}
         <TouchableOpacity
           style={styles.currentChapterButton}
           onPress={() => setShowChapterPicker(true)}
+          onLongPress={onOpenBookModal}
           activeOpacity={0.7}
         >
           <Text style={styles.bookName} numberOfLines={1}>
@@ -167,21 +174,49 @@ export default function BibleFloatingNav({
             color={canNavigateNext ? "#FFFFFF" : "#9CA3AF"}
           />
         </TouchableOpacity>
+
+        {/* Play Button with green dot indicator */}
+        <TouchableOpacity
+          style={styles.playButton}
+          onPress={onTogglePlay}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={isPlaying ? "pause" : "play"}
+            size={18}
+            color="#FFFFFF"
+          />
+          <View style={styles.greenDot} />
+        </TouchableOpacity>
       </View>
     );
 
     // Use BlurView on native, regular View on web
     if (Platform.OS !== "web") {
       return (
-        <BlurView intensity={80} tint="light" style={styles.blurContainer}>
-          {floatingContent}
+        <BlurView
+          intensity={80}
+          tint="light"
+          style={styles.blurContainer}
+          pointerEvents="box-none"
+        >
+          <View
+            style={{ pointerEvents: "auto", width: "100%", height: "100%" }}
+          >
+            {floatingContent}
+          </View>
         </BlurView>
       );
     }
 
     return (
-      <View style={[styles.blurContainer, styles.webContainer]}>
-        {floatingContent}
+      <View
+        style={[styles.blurContainer, styles.webContainer]}
+        pointerEvents="box-none"
+      >
+        <View style={{ pointerEvents: "auto", width: "100%", height: "100%" }}>
+          {floatingContent}
+        </View>
       </View>
     );
   };
@@ -197,10 +232,10 @@ export default function BibleFloatingNav({
 const styles = StyleSheet.create({
   blurContainer: {
     position: "absolute",
-    bottom: 95, // Position above bottom nav and FAB
+    bottom: 188, // Raised further to clear expanded FAB (Upload/Live)
     left: "50%",
-    transform: [{ translateX: -135 }], // Center the component (half of 270px width)
-    width: 270,
+    transform: [{ translateX: -160 }], // Center the component (half of width)
+    width: 320,
     height: 56,
     borderRadius: 28,
     overflow: "hidden",
@@ -248,6 +283,30 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     marginLeft: 8,
+  },
+  playButton: {
+    marginLeft: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#10B981", // emerald
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  greenDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#22C55E",
   },
   navButtonDisabled: {
     backgroundColor: "#E5E7EB",
