@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { BibleVerse, bibleApiService } from "../../services/bibleApiService";
+import BibleSettingsModal from "./BibleSettingsModal";
 
 interface BibleReaderRedesignedProps {
   bookName: string;
@@ -38,6 +39,7 @@ export default function BibleReaderRedesigned({
   const [error, setError] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [chapterTitle, setChapterTitle] = useState<string>("");
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     loadVerses();
@@ -132,7 +134,10 @@ export default function BibleReaderRedesigned({
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="search-outline" size={24} color="#256E63" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setShowSettings(true)}
+          >
             <Ionicons name="settings-outline" size={24} color="#256E63" />
           </TouchableOpacity>
         </View>
@@ -212,6 +217,12 @@ export default function BibleReaderRedesigned({
           />
         </TouchableOpacity>
       </View>
+
+      {/* Settings Modal */}
+      <BibleSettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </View>
   );
 }

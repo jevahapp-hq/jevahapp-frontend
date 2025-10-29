@@ -232,7 +232,7 @@ export default function BibleFloatingNav({
 const styles = StyleSheet.create({
   blurContainer: {
     position: "absolute",
-    bottom: 188, // Raised further to clear expanded FAB (Upload/Live)
+    bottom: 168, // Fine-tuned to sit just above expanded FAB actions
     left: "50%",
     transform: [{ translateX: -160 }], // Center the component (half of width)
     width: 320,
