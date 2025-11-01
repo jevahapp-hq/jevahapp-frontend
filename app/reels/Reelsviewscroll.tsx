@@ -3,17 +3,17 @@ import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
-  Image,
-  PanResponder,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    Image,
+    PanResponder,
+    Platform,
+    ScrollView,
+    Share,
+    StatusBar,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
@@ -29,10 +29,10 @@ import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
 import { navigateMainTab } from "../utils/navigation";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  persistStats,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    persistStats,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
 
@@ -188,8 +188,27 @@ export default function Reelsviewscroll() {
       `🔙 Back navigation requested. Source: ${source}, Category: ${category}`
     );
 
-    // For all cases, try router.back() first to maintain proper navigation stack
-    // This ensures we go back to the previous screen with proper app structure (bottom nav, header)
+    // Special handling for AllContentTikTok: Always use explicit navigation
+    // to preserve category context (even if router.canGoBack() is true)
+    // This ensures we return to the correct category (VIDEO, E-BOOKS, etc.) not ALL
+    if (source === "AllContentTikTok") {
+      // Navigate back to HomeScreen with the specific category the user was viewing
+      // This preserves the category context instead of defaulting to "ALL"
+      const categoryToPass = category || "ALL";
+      console.log(`🔙 Reelsviewscroll: Navigating back to HomeScreen`);
+      console.log(`🔙 Reelsviewscroll: Source: ${source}, Category received: "${category}", Category to pass: "${categoryToPass}"`);
+      // Use replace instead of push to ensure params update properly
+      router.replace({
+        pathname: "/categories/HomeScreen",
+        params: {
+          default: "Home",
+          defaultCategory: categoryToPass, // Category is in ContentType format (videos, music, e-books, etc.)
+        },
+      });
+      return;
+    }
+
+    // For other sources, try router.back() first to maintain proper navigation stack
     if (router.canGoBack?.()) {
       console.log(`🔙 Using router.back() to return to previous screen`);
       router.back();
@@ -197,17 +216,7 @@ export default function Reelsviewscroll() {
       // Only use replace/push as fallback when canGoBack is not available
       console.log(`🔙 canGoBack not available, using fallback navigation`);
 
-      if (source === "AllContentTikTok") {
-        // Navigate back to HomeScreen with the specific category the user was viewing
-        // This preserves the category context instead of defaulting to "ALL"
-        router.push({
-          pathname: "/categories/HomeScreen",
-          params: {
-            default: "Home",
-            defaultCategory: category || "ALL", // Use the actual category or default to "ALL"
-          },
-        });
-      } else if (source === "VideoComponent") {
+      if (source === "VideoComponent") {
         // Navigate back to VideoComponent
         router.push("/categories/VideoComponent");
       } else if (source === "SermonComponent") {
@@ -223,12 +232,12 @@ export default function Reelsviewscroll() {
         // Navigate back to home
         router.push("/");
       } else {
-        // Default fallback to HomeScreen with the specific category
+        // Default fallback to HomeScreen with the specific category if available
         router.push({
           pathname: "/categories/HomeScreen",
           params: {
             default: "Home",
-            defaultCategory: category || "ALL", // Use the actual category or default to "ALL"
+            defaultCategory: category || "ALL",
           },
         });
       }

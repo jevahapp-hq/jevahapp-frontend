@@ -34,10 +34,11 @@ export default function HymnDetail() {
 
   const readAllVerses = useCallback(async () => {
     if (!hymn) return;
-    for (let i = 0; i < (hymn.verses || []).length; i++) {
-      const verse = (hymn.verses || [])[i];
-      await speak(`Verse ${i + 1}. ${verse}`);
-    }
+    // Combine all verses into a single text to be read sequentially
+    const combinedText = (hymn.verses || [])
+      .map((verse, i) => `Verse ${i + 1}. ${verse}`)
+      .join(" ");
+    await speak(combinedText);
   }, [hymn, speak]);
 
   useEffect(() => {
@@ -135,7 +136,7 @@ export default function HymnDetail() {
         </View>
       </View>
     );
-  }, [hymn]);
+  }, [hymn, isSpeaking, isPaused, readAllVerses, resume, pause, stop]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>

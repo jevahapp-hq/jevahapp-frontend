@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { useLocalSearchParams } from "expo-router";
 import {
@@ -16,13 +16,141 @@ import AllContentTikTok from "./AllContentTikTok";
 
 const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
+// Map uppercase category names to ContentType format expected by AllContentTikTok
+const mapCategoryToContentType = (category: string): "ALL" | "video" | "videos" | "audio" | "music" | "sermon" | "image" | "ebook" | "books" | "live" | "teachings" | "e-books" => {
+  const categoryUpper = category.toUpperCase();
+  switch (categoryUpper) {
+    case "VIDEO":
+      return "videos";
+    case "MUSIC":
+      return "music";
+    case "SERMON":
+      return "sermon";
+    case "E-BOOKS":
+      return "e-books";
+    case "LIVE":
+      return "live";
+    case "ALL":
+    default:
+      return "ALL";
+  }
+};
+
+// Map ContentType values back to uppercase category names for UI
+const mapContentTypeToCategory = (contentType: string): string => {
+  const contentTypeLower = contentType.toLowerCase();
+  // Map ContentType values to uppercase category names
+  if (contentTypeLower === "videos" || contentTypeLower === "video") {
+    return "VIDEO";
+  }
+  if (contentTypeLower === "music" || contentTypeLower === "audio") {
+    return "MUSIC";
+  }
+  if (contentTypeLower === "sermon" || contentTypeLower === "teachings") {
+    return "SERMON";
+  }
+  if (contentTypeLower === "e-books" || contentTypeLower === "ebook" || contentTypeLower === "books") {
+    return "E-BOOKS";
+  }
+  if (contentTypeLower === "live") {
+    return "LIVE";
+  }
+  // If it's already uppercase and matches a category, return it
+  const contentTypeUpper = contentType.toUpperCase();
+  if (categories.includes(contentTypeUpper)) {
+    return contentTypeUpper;
+  }
+  return "ALL";
+};
+
 export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
-  const [selectedCategory, setSelectedCategory] = useState(
-    (defaultCategory as string) || "ALL"
-  );
+  
+  // Handle defaultCategory as string or array (expo-router can return arrays)
+  const defaultCategoryValue = Array.isArray(defaultCategory)
+    ? defaultCategory[0]
+    : defaultCategory;
+  
+  const [selectedCategory, setSelectedCategory] = useState(() => {
+    if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
+      const mapped = mapContentTypeToCategory(defaultCategoryValue);
+      console.log(`🏠 HomeTabContent: Initial category from param "${defaultCategoryValue}" mapped to "${mapped}"`);
+      return mapped;
+    }
+    return "ALL";
+  });
+
+  // Update selected category when defaultCategory param changes
+  // This ensures that when navigating back from reels with a specific category,
+  // the category is properly restored instead of defaulting to "ALL"
+  useEffect(() => {
+    if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
+      const mappedCategory = mapContentTypeToCategory(defaultCategoryValue);
+      console.log(`🏠 HomeTabContent: Category param changed "${defaultCategoryValue}" -> "${mappedCategory}"`);
+      if (categories.includes(mappedCategory)) {
+        setSelectedCategory(mappedCategory);
+        console.log(`🏠 HomeTabContent: Updated selectedCategory to "${mappedCategory}"`);
+      } else {
+        console.warn(`🏠 HomeTabContent: Mapped category "${mappedCategory}" not in categories list`);
+      }
+    } else {
+      console.log(`🏠 HomeTabContent: No valid defaultCategory param, keeping current category`);
+    }
+  }, [defaultCategoryValue]);
 
   const { fastPress } = useFastPerformance();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
+
+  // Scroll to selected category button when category changes
+  useEffect(() => {
+    if (selectedCategory && scrollViewRef.current) {
+      // Small delay to ensure layout is complete
+      setTimeout(() => {
+        const selectedIndex = categories.indexOf(selectedCategory);
+        if (selectedIndex !== -1 && scrollViewRef.current) {
+          const scrollView = scrollViewRef.current;
+          const screenWidth = Dimensions.get('window').width;
+          const parentPadding = getResponsiveSpacing(16, 20, 24, 32);
+          const scrollViewWidth = screenWidth - parentPadding * 2;
+          
+          // Try to use stored position if available
+          if (buttonLayouts.current[selectedCategory]) {
+            const buttonLayout = buttonLayouts.current[selectedCategory];
+            // Calculate scroll position to center the button in the viewport
+            // buttonLayout.x is the position relative to ScrollView content
+            // We want to center it: scroll to (buttonX - viewportCenter) + (buttonWidth / 2)
+            const buttonCenter = buttonLayout.x + (buttonLayout.width / 2);
+            const viewportCenter = scrollViewWidth / 2;
+            const scrollPosition = buttonCenter - viewportCenter;
+            
+            scrollView.scrollTo({
+              x: Math.max(0, scrollPosition),
+              animated: true,
+            });
+          } else {
+            // Fallback: scroll based on approximate position
+            const buttonWidth = 100; // Approximate button width including padding
+            const buttonMargin = getResponsiveSpacing(4, 6, 8, 10) * 2; // Left + right margin
+            
+            // Calculate approximate button position
+            let accumulatedWidth = 0;
+            for (let i = 0; i < selectedIndex; i++) {
+              accumulatedWidth += buttonWidth + buttonMargin;
+            }
+            
+            // Center the button
+            const scrollPosition = accumulatedWidth - (scrollViewWidth / 2) + (buttonWidth / 2) - parentPadding;
+            
+            scrollView.scrollTo({
+              x: Math.max(0, scrollPosition),
+              animated: true,
+            });
+          }
+        }
+      }, 200);
+    }
+  }, [selectedCategory]);
 
   const handleCategoryPress = useCallback(
     (category: string) => {
@@ -50,7 +178,7 @@ export default function HomeTabContent() {
   );
 
   const renderContent = () => {
-    return <AllContentTikTok contentType={selectedCategory} />;
+    return <AllContentTikTok contentType={mapCategoryToContentType(selectedCategory)} />;
 
    
   };
@@ -69,6 +197,7 @@ export default function HomeTabContent() {
         }}
       >
         <ScrollView
+          ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{
@@ -83,6 +212,10 @@ export default function HomeTabContent() {
                 key: `category_${category}`,
                 priority: "high",
               })}
+              onLayout={(event) => {
+                const { x, width } = event.nativeEvent.layout;
+                buttonLayouts.current[category] = { x, width };
+              }}
               activeOpacity={0.7}
               style={{
                 paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),

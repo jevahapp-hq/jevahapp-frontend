@@ -1,14 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
+  Animated,
+  Dimensions,
   Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { BibleBook, BibleChapter } from "../../services/bibleApiService";
 
@@ -34,6 +36,18 @@ export default function BibleFloatingNav({
   canNavigateNext,
 }: BibleFloatingNavProps) {
   const [showChapterPicker, setShowChapterPicker] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
+  const slideX = useRef(new Animated.Value(0)).current;
+
+  const toggleHide = () => {
+    const nextHidden = !isHidden;
+    setIsHidden(nextHidden);
+    Animated.timing(slideX, {
+      toValue: nextHidden ? Dimensions.get("window").width : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const handleChapterPress = (chapter: BibleChapter) => {
     onChapterSelect(chapter);
@@ -170,18 +184,32 @@ export default function BibleFloatingNav({
       </View>
     );
 
-    // Use BlurView on native, regular View on web
+    // Use BlurView on native, regular View on web, with inline slide toggle
     if (Platform.OS !== "web") {
       return (
-        <BlurView intensity={80} tint="light" style={styles.blurContainer}>
-          {floatingContent}
-        </BlurView>
+        <View style={styles.outerRow}>
+          <Animated.View style={{ transform: [{ translateX: slideX }] }}>
+            <BlurView intensity={80} tint="light" style={styles.blurContainer}>
+              {floatingContent}
+            </BlurView>
+          </Animated.View>
+          <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8}>
+            <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       );
     }
 
     return (
-      <View style={[styles.blurContainer, styles.webContainer]}>
-        {floatingContent}
+      <View style={styles.outerRow}>
+        <Animated.View style={{ transform: [{ translateX: slideX }] }}>
+          <View style={[styles.blurContainer, styles.webContainer]}>
+            {floatingContent}
+          </View>
+        </Animated.View>
+        <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8}>
+          <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
     );
   };
@@ -195,11 +223,18 @@ export default function BibleFloatingNav({
 }
 
 const styles = StyleSheet.create({
-  blurContainer: {
+  outerRow: {
     position: "absolute",
-    bottom: 95, // Position above bottom nav and FAB
-    left: "50%",
-    transform: [{ translateX: -135 }], // Center the component (half of 270px width)
+    bottom: 95,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    zIndex: 9999,
+  },
+  blurContainer: {
     width: 270,
     height: 56,
     borderRadius: 28,
@@ -212,7 +247,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 10,
-    zIndex: 9999,
   },
   webContainer: {
     backgroundColor: "rgba(255, 255, 255, 0.95)",
@@ -226,6 +260,24 @@ const styles = StyleSheet.create({
     height: "100%",
     paddingHorizontal: 8,
     backgroundColor: "rgba(37, 110, 99, 0.15)", // Semi-transparent teal
+  },
+  inlineSlideToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#256E63",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineSlideToggleRight: {
+    position: "absolute",
+    left: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#256E63",
+    alignItems: "center",
+    justifyContent: "center",
   },
   navButton: {
     width: 40,
