@@ -1,36 +1,36 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  RefreshControl,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    RefreshControl,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-  categorizeContent,
-  filterContentByType,
-  getContentKey,
-  getMostRecentItem,
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  transformApiResponseToMediaItem,
+    categorizeContent,
+    filterContentByType,
+    getContentKey,
+    getMostRecentItem,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
 // Feature-specific imports
@@ -43,7 +43,7 @@ import { ContentErrorBoundary } from "../../../app/components/ContentErrorBounda
 import CopyrightFreeSongs from "../../../app/components/CopyrightFreeSongs";
 import SuccessCard from "../../../app/components/SuccessCard";
 import HymnMiniCard, {
-  HymnItem,
+    HymnItem,
 } from "../../../app/home/components/HymnMiniCard";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
@@ -59,12 +59,12 @@ import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-  getPersistedStats,
-  getViewed,
+    getPersistedStats,
+    getViewed,
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -1675,21 +1675,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             {renderHymnMiniCards()}
           </View>
 
-          {/* Copyright-Free Songs Section */}
-          <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-            <Text
-              style={{
-                fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                fontWeight: "600",
-                color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                paddingHorizontal: UI_CONFIG.SPACING.MD,
-                marginBottom: UI_CONFIG.SPACING.MD,
-              }}
-            >
-              Copyright-Free Songs
-            </Text>
-            <CopyrightFreeSongs />
-          </View>
+          {/* Copyright-Free Songs Section - Hide for VIDEO content type */}
+          {contentType !== "videos" && (
+            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+              <Text
+                style={{
+                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                  fontWeight: "600",
+                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                  paddingHorizontal: UI_CONFIG.SPACING.MD,
+                  marginBottom: UI_CONFIG.SPACING.MD,
+                }}
+              >
+                Copyright-Free Songs
+              </Text>
+              <CopyrightFreeSongs />
+            </View>
+          )}
 
           {/* All Content Section (split into first four, then Recommended Live, then rest) */}
           <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
