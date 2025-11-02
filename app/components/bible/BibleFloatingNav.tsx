@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -23,12 +23,15 @@ interface BibleFloatingNavProps {
   onNavigateNext?: () => void;
   canNavigatePrev: boolean;
   canNavigateNext: boolean;
-  onOpenBookModal?: () => void;
-  isPlaying?: boolean;
-  onTogglePlay?: () => void;
+  onScreenTap?: () => void;
 }
 
-export default function BibleFloatingNav({
+export interface BibleFloatingNavRef {
+  showArrow: () => void;
+  toggleArrow: () => void;
+}
+
+const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(({
   book,
   currentChapter,
   chapters,
@@ -37,13 +40,13 @@ export default function BibleFloatingNav({
   onNavigateNext,
   canNavigatePrev,
   canNavigateNext,
-  onOpenBookModal,
-  isPlaying = false,
-  onTogglePlay,
-}: BibleFloatingNavProps) {
+  onScreenTap,
+}, ref) => {
   const [showChapterPicker, setShowChapterPicker] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const slideX = useRef(new Animated.Value(0)).current;
+  const arrowOpacity = useRef(new Animated.Value(1)).current;
+  const [isArrowVisible, setIsArrowVisible] = useState(true);
 
   const toggleHide = () => {
     const nextHidden = !isHidden;
@@ -53,7 +56,46 @@ export default function BibleFloatingNav({
       duration: 220,
       useNativeDriver: true,
     }).start();
+    
+    // Hide arrow when nav bar is hidden, show when nav bar is shown
+    if (nextHidden) {
+      setIsArrowVisible(false);
+      Animated.timing(arrowOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      setIsArrowVisible(true);
+      Animated.timing(arrowOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
   };
+
+  const toggleArrow = () => {
+    const shouldShow = !isArrowVisible;
+    setIsArrowVisible(shouldShow);
+    Animated.timing(arrowOpacity, {
+      toValue: shouldShow ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const showArrow = () => {
+    if (!isArrowVisible) {
+      toggleArrow();
+    }
+  };
+
+  // Expose showArrow and toggleArrow via ref
+  useImperativeHandle(ref, () => ({
+    showArrow,
+    toggleArrow,
+  }));
 
   const handleChapterPress = (chapter: BibleChapter) => {
     onChapterSelect(chapter);
@@ -159,11 +201,10 @@ export default function BibleFloatingNav({
           />
         </TouchableOpacity>
 
-        {/* Current Book/Chapter Display (tap to pick chapter, long-press to pick book) */}
+        {/* Current Chapter Display (tappable to open picker) */}
         <TouchableOpacity
           style={styles.currentChapterButton}
           onPress={() => setShowChapterPicker(true)}
-          onLongPress={onOpenBookModal}
           activeOpacity={0.7}
         >
           <Text style={styles.bookName} numberOfLines={1}>
@@ -188,20 +229,6 @@ export default function BibleFloatingNav({
             color={canNavigateNext ? "#FFFFFF" : "#9CA3AF"}
           />
         </TouchableOpacity>
-
-        {/* Play Button with green dot indicator */}
-        <TouchableOpacity
-          style={styles.playButton}
-          onPress={onTogglePlay}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={isPlaying ? "pause" : "play"}
-            size={18}
-            color="#FFFFFF"
-          />
-          <View style={styles.greenDot} />
-        </TouchableOpacity>
       </View>
     );
 
@@ -214,9 +241,11 @@ export default function BibleFloatingNav({
               {floatingContent}
             </BlurView>
           </Animated.View>
-          <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8}>
-            <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <Animated.View style={{ opacity: arrowOpacity }}>
+            <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8} disabled={!isArrowVisible}>
+              <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       );
     }
@@ -228,9 +257,11 @@ export default function BibleFloatingNav({
             {floatingContent}
           </View>
         </Animated.View>
-        <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8}>
-          <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        <Animated.View style={{ opacity: arrowOpacity }}>
+          <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8} disabled={!isArrowVisible}>
+            <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </Animated.View>
       </View>
     );
   };
@@ -241,12 +272,16 @@ export default function BibleFloatingNav({
       {renderChapterPicker()}
     </>
   );
-}
+});
+
+BibleFloatingNav.displayName = "BibleFloatingNav";
+
+export default BibleFloatingNav;
 
 const styles = StyleSheet.create({
   outerRow: {
     position: "absolute",
-    bottom: 168, // Fine-tuned to sit just above expanded FAB actions
+    bottom: 95,
     left: 0,
     right: 0,
     flexDirection: "row",
@@ -321,30 +356,6 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     marginLeft: 8,
-  },
-  playButton: {
-    marginLeft: 8,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#10B981", // emerald
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  greenDot: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#22C55E",
   },
   navButtonDisabled: {
     backgroundColor: "#E5E7EB",

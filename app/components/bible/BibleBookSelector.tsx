@@ -8,21 +8,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  bibleApiService,
-  BibleBook,
-  BibleChapter,
-} from "../../services/bibleApiService";
+import { bibleApiService, BibleBook } from "../../services/bibleApiService";
 
 interface BibleBookSelectorProps {
   onBookSelect: (book: BibleBook) => void;
-  onChapterSelect?: (book: BibleBook, chapter: BibleChapter) => void;
   selectedBook?: BibleBook | null;
 }
 
 export default function BibleBookSelector({
   onBookSelect,
-  onChapterSelect,
   selectedBook,
 }: BibleBookSelectorProps) {
   const [books, setBooks] = useState<BibleBook[]>([]);
@@ -31,13 +25,6 @@ export default function BibleBookSelector({
     "all" | "old" | "new"
   >("all");
   const [filteredBooks, setFilteredBooks] = useState<BibleBook[]>([]);
-  const [expandedBooks, setExpandedBooks] = useState<Set<string>>(new Set());
-  const [bookChapters, setBookChapters] = useState<
-    Record<string, BibleChapter[]>
-  >({});
-  const [loadingChapters, setLoadingChapters] = useState<
-    Record<string, boolean>
-  >({});
 
   useEffect(() => {
     loadBooks();
@@ -71,56 +58,6 @@ export default function BibleBookSelector({
       setFilteredBooks(
         books.filter((book) => book.testament === selectedTestament)
       );
-    }
-  };
-
-  const handleBookChevronPress = async (book: BibleBook) => {
-    const isExpanded = expandedBooks.has(book._id);
-
-    if (isExpanded) {
-      // Collapse
-      const newExpanded = new Set(expandedBooks);
-      newExpanded.delete(book._id);
-      setExpandedBooks(newExpanded);
-    } else {
-      // Expand - load chapters if not already loaded
-      const newExpanded = new Set(expandedBooks);
-      newExpanded.add(book._id);
-      setExpandedBooks(newExpanded);
-
-      if (!bookChapters[book._id]) {
-        setLoadingChapters((prev) => ({ ...prev, [book._id]: true }));
-        try {
-          const chapters = await bibleApiService.getBookChapters(book.name);
-          setBookChapters((prev) => ({ ...prev, [book._id]: chapters }));
-        } catch (error) {
-          console.error("Failed to load chapters:", error);
-          // Generate fallback chapters
-          const fallbackChapters: BibleChapter[] = Array.from(
-            { length: book.chapterCount },
-            (_, i) => ({
-              _id: `${book.name}-${i + 1}`,
-              bookName: book.name,
-              chapterNumber: i + 1,
-              verseCount: 0,
-            })
-          );
-          setBookChapters((prev) => ({
-            ...prev,
-            [book._id]: fallbackChapters,
-          }));
-        } finally {
-          setLoadingChapters((prev) => ({ ...prev, [book._id]: false }));
-        }
-      }
-    }
-  };
-
-  const handleChapterSelect = (book: BibleBook, chapter: BibleChapter) => {
-    if (onChapterSelect) {
-      onChapterSelect(book, chapter);
-    } else {
-      onBookSelect(book);
     }
   };
 
@@ -650,79 +587,52 @@ export default function BibleBookSelector({
 
   const renderBookItem = ({ item }: { item: BibleBook }) => {
     const isSelected = selectedBook?._id === item._id;
-    const isExpanded = expandedBooks.has(item._id);
-    const chapters = bookChapters[item._id] || [];
-    const isLoading = loadingChapters[item._id];
 
     return (
-      <View style={styles.bookItemContainer}>
-        <TouchableOpacity
-          style={[styles.bookItem, isSelected && styles.selectedBookItem]}
-          onPress={() => handleBookChevronPress(item)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.bookContent}>
-            <View style={styles.bookHeader}>
-              <Text
-                style={[styles.bookName, isSelected && styles.selectedBookName]}
-              >
-                {item.name}
+      <TouchableOpacity
+        style={[styles.bookItem, isSelected && styles.selectedBookItem]}
+        onPress={() => onBookSelect(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.bookContent}>
+          <View style={styles.bookHeader}>
+            <Text
+              style={[styles.bookName, isSelected && styles.selectedBookName]}
+            >
+              {item.name}
+            </Text>
+            <View
+              style={[
+                styles.testamentBadge,
+                item.testament === "old"
+                  ? styles.oldTestamentBadge
+                  : styles.newTestamentBadge,
+              ]}
+            >
+              <Text style={styles.testamentBadgeText}>
+                {item.testament === "old" ? "OT" : "NT"}
               </Text>
-              <TouchableOpacity
-                onPress={() => handleBookChevronPress(item)}
-                style={styles.chevronButton}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color="#9CA3AF"
-                />
-              </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
-
-        {/* Expanded Chapters List */}
-        {isExpanded && (
-          <View style={styles.chaptersContainer}>
-            {isLoading ? (
-              <View style={styles.loadingChapters}>
-                <ActivityIndicator size="small" color="#256E63" />
-                <Text style={styles.loadingChaptersText}>
-                  Loading chapters...
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.chaptersGrid}>
-                {chapters.map((chapter, index) => (
-                  <TouchableOpacity
-                    key={chapter._id}
-                    style={[
-                      styles.chapterButton,
-                      (index + 1) % 5 === 0 && styles.lastInRow,
-                    ]}
-                    onPress={() => handleChapterSelect(item, chapter)}
-                    activeOpacity={0.7}
-                  >
-                    {chapter.chapterNumber === 1 ? (
-                      <Ionicons
-                        name="information-circle"
-                        size={20}
-                        color="#6B7280"
-                      />
-                    ) : (
-                      <Text style={styles.chapterButtonText}>
-                        {chapter.chapterNumber}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+          <View style={styles.bookStats}>
+            <View style={styles.statItem}>
+              <Ionicons name="book-outline" size={14} color="#6B7280" />
+              <Text style={styles.statText}>{item.chapterCount} chapters</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons
+                name="document-text-outline"
+                size={14}
+                color="#6B7280"
+              />
+              <Text style={styles.statText}>{item.verseCount} verses</Text>
+            </View>
           </View>
+        </View>
+        {isSelected && (
+          <Ionicons name="checkmark-circle" size={24} color="#256E63" />
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -753,7 +663,7 @@ export default function BibleBookSelector({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FCFCFD",
   },
   loadingContainer: {
     flex: 1,
@@ -797,29 +707,31 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   booksList: {
-    padding: 0,
-  },
-  bookItemContainer: {
-    marginBottom: 0,
+    padding: 16,
   },
   bookItem: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 0,
+    borderRadius: 12,
     padding: 16,
-    borderWidth: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  chevronButton: {
-    padding: 4,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   selectedBookItem: {
     backgroundColor: "#F0FDF4",
-    borderLeftWidth: 4,
-    borderLeftColor: "#256E63",
+    borderColor: "#256E63",
+    borderWidth: 2,
   },
   bookContent: {
     flex: 1,
@@ -839,53 +751,32 @@ const styles = StyleSheet.create({
   selectedBookName: {
     color: "#256E63",
   },
-  chaptersContainer: {
-    backgroundColor: "#FFFFFF",
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+  testamentBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  chaptersGrid: {
+  oldTestamentBadge: {
+    backgroundColor: "#FEF3C7",
+  },
+  newTestamentBadge: {
+    backgroundColor: "#DBEAFE",
+  },
+  testamentBadgeText: {
+    fontSize: 12,
+    fontFamily: "Rubik_600SemiBold",
+    color: "#374151",
+  },
+  bookStats: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+    gap: 16,
   },
-  chapterButton: {
-    width: "18%", // 5 buttons per row with 2.5% gaps
-    aspectRatio: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    marginRight: "2.5%",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  lastInRow: {
-    marginRight: 0,
-  },
-  chapterButtonText: {
-    fontSize: 16,
-    fontFamily: "Rubik_500Medium",
-    color: "#1F2937",
-  },
-  loadingChapters: {
+  statItem: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 20,
-    gap: 8,
+    gap: 4,
   },
-  loadingChaptersText: {
+  statText: {
     fontSize: 14,
     fontFamily: "Rubik_400Regular",
     color: "#6B7280",

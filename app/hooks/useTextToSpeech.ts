@@ -94,9 +94,6 @@ export function useTextToSpeech(
   const speak = useCallback(
     async (text: string) => {
       try {
-        console.log(`🗣️ TTS Hook - speak() called with text length: ${text?.length || 0}`);
-        console.log(`🗣️ Text preview: "${text.substring(0, 100)}..."`);
-        
         // Stop any ongoing speech
         await Speech.stop();
 
@@ -145,30 +142,22 @@ export function useTextToSpeech(
             setIsPaused(false);
             onError?.(error);
           },
-          // Enhanced word boundary callback for better progress tracking
+          // Word boundary callback for progress tracking
           onBoundary: (event) => {
             if (isMountedRef.current && event.charIndex !== undefined) {
-              // More accurate word index calculation
+              // Estimate word index from character index
               const textUpToNow = text.substring(0, event.charIndex);
-              const wordsSpoken = textUpToNow.split(/\s+/).filter(word => word.length > 0).length;
-              
-              // Ensure we don't exceed total words
-              const clampedIndex = Math.min(wordsSpoken, words.length - 1);
-              setCurrentWordIndex(clampedIndex);
-              
+              const wordsSpoken = textUpToNow.split(/\s+/).length;
+              setCurrentWordIndex(wordsSpoken);
               onProgress?.({
-                currentWord: clampedIndex,
+                currentWord: wordsSpoken,
                 totalWords: words.length,
               });
-              
-              console.log(`🎯 Word boundary: ${clampedIndex}/${words.length} - "${words[clampedIndex] || 'END'}"`);
             }
           },
         };
 
-        console.log(`🔊 About to call Speech.speak with options:`, speechOptions);
         await Speech.speak(text, speechOptions);
-        console.log(`🔊 Speech.speak called successfully`);
       } catch (error) {
         console.error("❌ Error in speak:", error);
         setIsSpeaking(false);

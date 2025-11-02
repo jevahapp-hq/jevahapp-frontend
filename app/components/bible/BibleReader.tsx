@@ -7,10 +7,11 @@ import {
     Dimensions,
     FlatList,
     Platform,
+    Pressable,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from "react-native";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 import { BibleVerse, bibleApiService } from "../../services/bibleApiService";
@@ -21,6 +22,7 @@ interface BibleReaderProps {
   onNavigateChapter: (direction: "prev" | "next") => void;
   canNavigatePrev: boolean;
   canNavigateNext: boolean;
+  onScreenTap?: () => void;
 }
 
 interface WordPosition {
@@ -35,6 +37,7 @@ export default function BibleReader({
   onNavigateChapter,
   canNavigatePrev,
   canNavigateNext,
+  onScreenTap,
 }: BibleReaderProps) {
   const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [verseCount, setVerseCount] = useState<number>(0);
@@ -48,6 +51,8 @@ export default function BibleReader({
   const screenWidth = Dimensions.get("window").width;
   const topSlideX = useRef(new Animated.Value(0)).current;
   const [isTopHidden, setIsTopHidden] = useState(false);
+  const topArrowOpacity = useRef(new Animated.Value(1)).current;
+  const [isTopArrowVisible, setIsTopArrowVisible] = useState(true);
 
   const slideTop = (hide: boolean) => {
     setIsTopHidden(hide);
@@ -56,6 +61,37 @@ export default function BibleReader({
       duration: 220,
       useNativeDriver: true,
     }).start();
+    
+    // Hide arrow when bar is hidden, show when bar is shown
+    if (hide) {
+      setIsTopArrowVisible(false);
+      Animated.timing(topArrowOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      setIsTopArrowVisible(true);
+      Animated.timing(topArrowOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const toggleTopArrow = () => {
+    const shouldShow = !isTopArrowVisible;
+    setIsTopArrowVisible(shouldShow);
+    Animated.timing(topArrowOpacity, {
+      toValue: shouldShow ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+    // Notify parent to toggle bottom nav arrow too
+    if (onScreenTap) {
+      onScreenTap();
+    }
   };
 
   // bottom nav removed
@@ -402,35 +438,45 @@ export default function BibleReader({
                 </View>
               </Animated.View>
             )}
-            <TouchableOpacity
-              style={styles.inlineSlideToggle}
-              onPress={() => slideTop(!isTopHidden)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={isTopHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
-            </TouchableOpacity>
+            <Animated.View style={{ opacity: topArrowOpacity }}>
+              <TouchableOpacity
+                style={styles.inlineSlideToggle}
+                onPress={() => slideTop(!isTopHidden)}
+                activeOpacity={0.8}
+                disabled={!isTopArrowVisible}
+              >
+                <Ionicons name={isTopHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </Animated.View>
           </View>
         </View>
       )}
 
-      <FlatList
-        ref={flatListRef}
-        data={verses}
-        renderItem={renderVerse}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={[styles.versesContainer, { paddingTop: 88 }]}
-        showsVerticalScrollIndicator={false}
-        ListFooterComponent={renderNavigationControls}
-        onScrollToIndexFailed={(info) => {
-          // Handle scroll errors gracefully
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({
-              index: info.index,
-              animated: true,
-            });
-          }, 100);
-        }}
-      />
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={flatListRef}
+          data={verses}
+          renderItem={renderVerse}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={[styles.versesContainer, { paddingTop: 88 }]}
+          showsVerticalScrollIndicator={false}
+          ListFooterComponent={renderNavigationControls}
+          onScrollToIndexFailed={(info) => {
+            // Handle scroll errors gracefully
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+              });
+            }, 100);
+          }}
+        />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={toggleTopArrow}
+          pointerEvents="auto"
+        />
+      </View>
 
       {/* bottom prev/next removed */}
     </View>
