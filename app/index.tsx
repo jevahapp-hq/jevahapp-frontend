@@ -2,13 +2,13 @@ import { useAuth, useOAuth, useUser } from "@clerk/clerk-expo";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Image,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Image,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import "../global.css";
 import { mediaApi } from "../src/core/api/MediaApi";
@@ -305,6 +305,29 @@ export default function Welcome() {
           >
             <Text className="text-white font-semibold">
               Get Started with Email
+            </Text>
+          </TouchableOpacity>
+
+          {/* Sign In button */}
+          <TouchableOpacity
+            onPress={fastPress(() => router.push("/auth/login"), {
+              key: "signin_button",
+              priority: "high",
+            })}
+            activeOpacity={0.8}
+            style={{
+              width: "90%",
+              maxWidth: 400,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: "transparent",
+              justifyContent: "center",
+              alignItems: "center",
+              marginTop: 16,
+            }}
+          >
+            <Text className="text-[#090E24] font-semibold">
+              Sign In
             </Text>
           </TouchableOpacity>
 
