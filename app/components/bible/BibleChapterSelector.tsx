@@ -33,39 +33,58 @@ export default function BibleChapterSelector({
   const loadChapters = async () => {
     try {
       setLoading(true);
+      
+      // Get chapters from API - show immediately for fast UI
       const bookChapters = await bibleApiService.getBookChapters(bookName);
-
-      // Load verse counts for each chapter
-      const chaptersWithCounts = await Promise.all(
-        bookChapters.map(async (chapter) => {
-          try {
-            const chapterInfo = await bibleApiService.getChapter(
-              bookName,
-              chapter.chapterNumber
-            );
-            return {
-              ...chapter,
-              verseCount:
-                (chapterInfo as any).actualVerseCount ||
-                (chapterInfo as any).verseCount ||
-                chapter.verseCount,
-            };
-          } catch (error) {
-            console.error(
-              `Failed to load verse count for ${bookName} ${chapter.chapterNumber}:`,
-              error
-            );
-            return chapter;
-          }
-        })
+      
+      // Show chapters immediately (optimistic UI)
+      // Most API responses already include verseCount, so we can use it right away
+      setChapters(bookChapters);
+      setLoading(false);
+      
+      // Only fetch additional verse counts if they're missing from the initial response
+      const chaptersMissingCounts = bookChapters.filter(
+        (ch) => !ch.verseCount || ch.verseCount === 0
       );
-
-      setChapters(chaptersWithCounts);
+      
+      if (chaptersMissingCounts.length > 0) {
+        // Load verse counts in background for chapters that don't have them
+        // This runs asynchronously and updates UI progressively
+        Promise.all(
+          chaptersMissingCounts.map(async (chapter) => {
+            try {
+              const chapterInfo = await bibleApiService.getChapter(
+                bookName,
+                chapter.chapterNumber
+              );
+              return {
+                chapterId: chapter._id,
+                verseCount:
+                  (chapterInfo as any).actualVerseCount ||
+                  (chapterInfo as any).verseCount ||
+                  chapter.verseCount,
+              };
+            } catch (error) {
+              // Silently fail - chapter already shown with default count
+              return { chapterId: chapter._id, verseCount: chapter.verseCount };
+            }
+          })
+        ).then((updates) => {
+          // Update chapters with verse counts in background
+          setChapters((prevChapters) =>
+            prevChapters.map((chapter) => {
+              const update = updates.find((u) => u.chapterId === chapter._id);
+              return update && update.verseCount > 0
+                ? { ...chapter, verseCount: update.verseCount }
+                : chapter;
+            })
+          );
+        });
+      }
     } catch (error) {
       console.error("Failed to load chapters:", error);
       // Fallback to generating chapters based on book name
       setChapters(generateFallbackChapters(bookName));
-    } finally {
       setLoading(false);
     }
   };

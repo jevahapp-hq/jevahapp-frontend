@@ -137,3 +137,11 @@ Videos now behave exactly like Instagram/TikTok:
 - **Clean, maintainable code**
 
 The video auto-play issue is **completely resolved**! 🎉
+
+
+
+
+
+
+
+

@@ -748,18 +748,29 @@ class ContentInteractionService {
         payload?.total || payload?.totalCount || serverComments.length || 0
       );
       const hasMore = Boolean(payload?.hasMore || page * limit < total);
-      const comments: CommentData[] = serverComments.map((c: any) => ({
+      // Helper function to transform a single comment (including nested replies)
+      const transformComment = (c: any): CommentData => ({
         id: String(c?._id || c?.id),
         contentId: String(contentId),
         userId: String(c?.userId || c?.authorId || ""),
-        username: String(c?.username || c?.user?.username || "User"),
-        userAvatar: c?.userAvatar || c?.user?.avatarUrl,
+        username: String(
+          c?.username || 
+          c?.user?.username || 
+          (c?.author?.firstName && c?.author?.lastName ? `${c.author.firstName} ${c.author.lastName}` : null) ||
+          "User"
+        ),
+        userAvatar: c?.userAvatar || c?.user?.avatarUrl || c?.author?.avatar,
         comment: String(c?.content || c?.comment || ""),
         timestamp: String(
           c?.createdAt || c?.timestamp || new Date().toISOString()
         ),
         likes: Number(c?.reactionsCount || c?.likes || 0),
-      }));
+        replies: Array.isArray(c?.replies)
+          ? c.replies.map((r: any) => transformComment(r))
+          : undefined,
+      });
+
+      const comments: CommentData[] = serverComments.map(transformComment);
       return { comments, totalComments: total, hasMore };
     } catch (error) {
       console.error("Error getting comments:", error);

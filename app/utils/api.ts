@@ -47,7 +47,7 @@ if (!process.env.EXPO_PUBLIC_API_URL) {
 console.log("🌐 Final API Base URL:", API_BASE_URL);
 
 // Configure axios defaults for better timeout handling
-axios.defaults.timeout = 15000; // 15 seconds timeout
+axios.defaults.timeout = 30000; // 30 seconds timeout to handle Render cold starts
 
 // Add retry interceptor with proper typing
 axios.interceptors.response.use(
@@ -80,7 +80,7 @@ axios.interceptors.response.use(
 // Create a configured axios instance for API calls
 export const apiAxios = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000, // 30 seconds for Render cold starts
   headers: {
     "Content-Type": "application/json",
     "expo-platform": Platform.OS,
@@ -188,7 +188,7 @@ export class APIClient {
       body,
       headers: customHeaders = {},
       requireAuth = true,
-      timeoutMs = 15000,
+      timeoutMs = 30000, // 30 seconds for Render cold starts
       retryOnAbort = false,
     } = options;
 
@@ -237,7 +237,7 @@ export class APIClient {
           const retryController = new AbortController();
           const retryTimeoutId = setTimeout(
             () => retryController.abort(),
-            15000
+            30000
           );
           const retry = await fetch(`${this.baseURL}${endpoint}`, {
             ...retryConfig,

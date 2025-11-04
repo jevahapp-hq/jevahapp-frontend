@@ -24,6 +24,7 @@ import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { PerformanceOptimizer } from "./utils/performance";
+import { warmupBackend } from "./utils/apiWarmup";
 
 // ✅ Initialize Sentry
 Sentry.init({
@@ -164,6 +165,16 @@ export default function RootLayout() {
             "⚠️ Critical data preloading failed (continuing anyway):",
             preloadErr
           );
+        }
+
+        // Warm up backend to prevent Render cold starts
+        try {
+          console.log("🔥 Warming up backend...");
+          warmupBackend().catch((warmupErr) => {
+            console.warn("⚠️ Backend warmup failed:", warmupErr);
+          });
+        } catch (warmupErr) {
+          console.warn("⚠️ Backend warmup error (continuing anyway):", warmupErr);
         }
 
         console.log("✅ App initialization complete");
