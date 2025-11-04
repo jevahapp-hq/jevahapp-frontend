@@ -7,12 +7,12 @@ import {
     Dimensions,
     FlatList,
     Platform,
-    Pressable,
     StyleSheet,
     Text,
     TouchableOpacity,
     View
 } from "react-native";
+import { TapGestureHandler } from "react-native-gesture-handler";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 import { BibleVerse, bibleApiService } from "../../services/bibleApiService";
 
@@ -51,8 +51,6 @@ export default function BibleReader({
   const screenWidth = Dimensions.get("window").width;
   const topSlideX = useRef(new Animated.Value(0)).current;
   const [isTopHidden, setIsTopHidden] = useState(false);
-  const topArrowOpacity = useRef(new Animated.Value(1)).current;
-  const [isTopArrowVisible, setIsTopArrowVisible] = useState(true);
 
   const slideTop = (hide: boolean) => {
     setIsTopHidden(hide);
@@ -62,36 +60,14 @@ export default function BibleReader({
       useNativeDriver: true,
     }).start();
     
-    // Hide arrow when bar is hidden, show when bar is shown
-    if (hide) {
-      setIsTopArrowVisible(false);
-      Animated.timing(topArrowOpacity, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      setIsTopArrowVisible(true);
-      Animated.timing(topArrowOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    }
   };
 
-  const toggleTopArrow = () => {
-    const shouldShow = !isTopArrowVisible;
-    setIsTopArrowVisible(shouldShow);
-    Animated.timing(topArrowOpacity, {
-      toValue: shouldShow ? 1 : 0,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-    // Notify parent to toggle bottom nav arrow too
-    if (onScreenTap) {
-      onScreenTap();
-    }
+  const toggleTopControls = () => {
+    // Toggle the visibility of the top play controls
+    const nextHidden = !isTopHidden;
+    slideTop(nextHidden);
+    // Notify parent to toggle bottom nav bar too
+    if (onScreenTap) onScreenTap();
   };
 
   // bottom nav removed
@@ -438,44 +414,34 @@ export default function BibleReader({
                 </View>
               </Animated.View>
             )}
-            <Animated.View style={{ opacity: topArrowOpacity }}>
-              <TouchableOpacity
-                style={styles.inlineSlideToggle}
-                onPress={() => slideTop(!isTopHidden)}
-                activeOpacity={0.8}
-                disabled={!isTopArrowVisible}
-              >
-                <Ionicons name={isTopHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-            </Animated.View>
+            {/* Arrow removed; double-tap anywhere to toggle */}
           </View>
         </View>
       )}
 
       <View style={{ flex: 1 }}>
-        <FlatList
-          ref={flatListRef}
-          data={verses}
-          renderItem={renderVerse}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={[styles.versesContainer, { paddingTop: 88 }]}
-          showsVerticalScrollIndicator={false}
-          ListFooterComponent={renderNavigationControls}
-          onScrollToIndexFailed={(info) => {
-            // Handle scroll errors gracefully
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: info.index,
-                animated: true,
-              });
-            }, 100);
-          }}
-        />
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={toggleTopArrow}
-          pointerEvents="auto"
-        />
+        <TapGestureHandler numberOfTaps={2} onActivated={toggleTopControls}>
+          <View style={{ flex: 1 }}>
+            <FlatList
+              ref={flatListRef}
+              data={verses}
+              renderItem={renderVerse}
+              keyExtractor={(item) => item._id}
+              contentContainerStyle={[styles.versesContainer, { paddingTop: 88 }]}
+              showsVerticalScrollIndicator={false}
+              ListFooterComponent={renderNavigationControls}
+              onScrollToIndexFailed={(info) => {
+                // Handle scroll errors gracefully
+                setTimeout(() => {
+                  flatListRef.current?.scrollToIndex({
+                    index: info.index,
+                    animated: true,
+                  });
+                }, 100);
+              }}
+            />
+          </View>
+        </TapGestureHandler>
       </View>
 
       {/* bottom prev/next removed */}

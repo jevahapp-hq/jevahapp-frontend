@@ -27,8 +27,7 @@ interface BibleFloatingNavProps {
 }
 
 export interface BibleFloatingNavRef {
-  showArrow: () => void;
-  toggleArrow: () => void;
+  toggleHide: () => void;
 }
 
 const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(({
@@ -45,8 +44,7 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
   const [showChapterPicker, setShowChapterPicker] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const slideX = useRef(new Animated.Value(0)).current;
-  const arrowOpacity = useRef(new Animated.Value(1)).current;
-  const [isArrowVisible, setIsArrowVisible] = useState(true);
+  // Arrow removed; we only slide the bar itself
 
   const toggleHide = () => {
     const nextHidden = !isHidden;
@@ -56,45 +54,11 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
       duration: 220,
       useNativeDriver: true,
     }).start();
-    
-    // Hide arrow when nav bar is hidden, show when nav bar is shown
-    if (nextHidden) {
-      setIsArrowVisible(false);
-      Animated.timing(arrowOpacity, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      setIsArrowVisible(true);
-      Animated.timing(arrowOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    }
   };
 
-  const toggleArrow = () => {
-    const shouldShow = !isArrowVisible;
-    setIsArrowVisible(shouldShow);
-    Animated.timing(arrowOpacity, {
-      toValue: shouldShow ? 1 : 0,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const showArrow = () => {
-    if (!isArrowVisible) {
-      toggleArrow();
-    }
-  };
-
-  // Expose showArrow and toggleArrow via ref
+  // Expose toggleHide via ref
   useImperativeHandle(ref, () => ({
-    showArrow,
-    toggleArrow,
+    toggleHide,
   }));
 
   const handleChapterPress = (chapter: BibleChapter) => {
@@ -241,11 +205,6 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
               {floatingContent}
             </BlurView>
           </Animated.View>
-          <Animated.View style={{ opacity: arrowOpacity }}>
-            <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8} disabled={!isArrowVisible}>
-              <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </Animated.View>
         </View>
       );
     }
@@ -256,11 +215,6 @@ const BibleFloatingNav = forwardRef<BibleFloatingNavRef, BibleFloatingNavProps>(
           <View style={[styles.blurContainer, styles.webContainer]}>
             {floatingContent}
           </View>
-        </Animated.View>
-        <Animated.View style={{ opacity: arrowOpacity }}>
-          <TouchableOpacity style={styles.inlineSlideToggleRight} onPress={toggleHide} activeOpacity={0.8} disabled={!isArrowVisible}>
-            <Ionicons name={isHidden ? "chevron-back" : "chevron-forward"} size={20} color="#FFFFFF" />
-          </TouchableOpacity>
         </Animated.View>
       </View>
     );

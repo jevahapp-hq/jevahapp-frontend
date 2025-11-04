@@ -240,8 +240,8 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
               canNavigatePrev={canNavigatePrev}
               canNavigateNext={canNavigateNext}
               onScreenTap={() => {
-                // Toggle bottom nav arrow when screen is tapped
-                floatingNavRef.current?.toggleArrow();
+                // Toggle bottom nav bar when screen is double tapped
+                floatingNavRef.current?.toggleHide();
               }}
             />
             <BibleFloatingNav
