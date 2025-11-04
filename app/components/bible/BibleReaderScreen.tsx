@@ -115,14 +115,15 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
       `📚 Book: ${selectedBook.name}, Total chapters: ${selectedBook.chapterCount}`
     );
 
-    // Validate chapter number
+    // Validate chapter number (upper bound only if we know it)
     if (newChapterNumber < 1) {
       console.log("❌ Cannot navigate: chapter number below 1");
       return;
     }
-    if (newChapterNumber > selectedBook.chapterCount) {
+    const effectiveChapterCount = selectedBook.chapterCount || chapters.length || 0;
+    if (effectiveChapterCount > 0 && newChapterNumber > effectiveChapterCount) {
       console.log(
-        `❌ Cannot navigate: chapter ${newChapterNumber} exceeds book's ${selectedBook.chapterCount} chapters`
+        `❌ Cannot navigate: chapter ${newChapterNumber} exceeds book's ${effectiveChapterCount} chapters`
       );
       return;
     }
@@ -157,13 +158,10 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     setSelectedChapter(newChapter);
   };
 
-  const canNavigatePrev = selectedChapter
-    ? selectedChapter.chapterNumber > 1
+  const canNavigatePrev = selectedChapter ? selectedChapter.chapterNumber > 1 : false;
+  const canNavigateNext = selectedBook && selectedChapter
+    ? selectedChapter.chapterNumber < (selectedBook.chapterCount || chapters.length || Number.MAX_SAFE_INTEGER)
     : false;
-  const canNavigateNext =
-    selectedBook && selectedChapter
-      ? selectedChapter.chapterNumber < selectedBook.chapterCount
-      : false;
 
   const renderHeader = () => (
     <View style={styles.header}>
