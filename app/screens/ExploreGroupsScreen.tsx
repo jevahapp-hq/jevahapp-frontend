@@ -2,15 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import CreateGroupModal from "../components/CreateGroupModal";
+import { addMyGroup } from "../utils/groupStorage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -28,6 +30,7 @@ export default function ExploreGroupsScreen() {
   const [selectedTab, setSelectedTab] = useState<
     "MY GROUPS" | "EXPLORE GROUPS"
   >("EXPLORE GROUPS");
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const router = useRouter();
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
@@ -101,13 +104,15 @@ export default function ExploreGroupsScreen() {
     });
   };
 
-  const handleJoinGroup = (group: Group) => {
+  const handleJoinGroup = async (group: Group) => {
     // Slide out animation to the right, then navigate
     Animated.timing(slideAnim, {
       toValue: Dimensions.get("window").width,
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
+      // Persist to My Groups
+      addMyGroup({ id: group.id, title: group.title, description: group.description, members: group.members, imageUri: null });
       router.push({
         pathname: "/screens/GroupChatScreen",
         params: {
@@ -199,16 +204,16 @@ export default function ExploreGroupsScreen() {
         style={{
           backgroundColor: "#FFFFFF",
           borderWidth: 1,
-          borderColor: "#E5E5E5",
-          paddingHorizontal: 16,
+          borderColor: "#000",
+          paddingHorizontal: 18,
           paddingVertical: 8,
-          borderRadius: 8,
+          borderRadius: 999,
         }}
         activeOpacity={0.8}
       >
         <Text
           style={{
-            color: "#333",
+            color: "#000",
             fontSize: 14,
             fontWeight: "bold",
             fontFamily: "Rubik-Bold",
@@ -366,10 +371,39 @@ export default function ExploreGroupsScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 200 }}
         >
           {groups.map(renderGroupCard)}
         </ScrollView>
+
+        {/* Floating Action Button */}
+        <TouchableOpacity
+          onPress={() => { setShowCreateModal(true); }}
+          activeOpacity={0.8}
+          style={{
+            position: "absolute",
+            right: 24,
+            bottom: 64,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: "#1C8E79",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 6,
+            elevation: 6,
+          }}
+        >
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <CreateGroupModal
+          visible={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+        />
       </SafeAreaView>
     </Animated.View>
   );
