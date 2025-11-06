@@ -716,7 +716,7 @@ export default function ForumScreen() {
 
               <View style={styles.createForumModalActions}>
                 <TouchableOpacity
-                  style={[styles.createForumButton, styles.cancelForumButton]}
+                  style={styles.cancelForumButton}
                   onPress={() => {
                     setShowCreateForumModal(false);
                     setForumTitle("");
@@ -728,7 +728,6 @@ export default function ForumScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
-                    styles.createForumButton,
                     styles.submitForumButton,
                     (!forumTitle.trim() || !forumDescription.trim() || isCreatingForum) && styles.submitForumButtonDisabled,
                   ]}
