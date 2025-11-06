@@ -1,7 +1,8 @@
 // Media Deletion API Service
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { apiClient } from "./api";
+import { apiAxios, getApiBaseUrl } from "./api";
+import TokenUtils from "./tokenUtils";
 
 export interface DeleteMediaResponse {
   success: boolean;
@@ -22,117 +23,246 @@ export interface DeleteMediaError {
 export const deleteMedia = async (
   mediaId: string
 ): Promise<DeleteMediaResponse> => {
+  // 1. Get authentication token - use same method as upload
+  // Check in same order as upload: userToken -> token -> jwt
+  let token = await AsyncStorage.getItem("userToken");
+  if (!token) {
+    token = await AsyncStorage.getItem("token");
+  }
+  if (!token) {
+    try {
+      const { default: SecureStore } = await import("expo-secure-store");
+      token = await SecureStore.getItemAsync("jwt");
+    } catch (secureStoreError) {
+      // Silent fallback
+    }
+  }
+  
+  if (!token) {
+    throw new Error("Please log in to delete media.");
+  }
+
+  // 2. Validate mediaId format (MongoDB ObjectId is 24 hex characters)
+  if (!mediaId || typeof mediaId !== "string") {
+    throw new Error("Invalid media ID");
+  }
+  
+  // Validate ObjectId format
+  const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+  if (!objectIdPattern.test(mediaId.trim())) {
+    console.error("❌ Invalid media ID format:", {
+      mediaId,
+      length: mediaId.length,
+      pattern: objectIdPattern.test(mediaId.trim()),
+    });
+    throw new Error("Invalid media ID format. Please try again.");
+  }
+  
+  // Trim the ID to ensure no whitespace
+  const trimmedMediaId = mediaId.trim();
+
+  // 3. Get API base URL and construct full URL
+  const baseURL = getApiBaseUrl();
+  const fullURL = `${baseURL}/api/media/${trimmedMediaId}`;
+  
+  // Log token info for debugging
+  console.log("🗑️ Delete request token info:", {
+    hasToken: !!token,
+    tokenLength: token?.length,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : "none",
+    mediaId: trimmedMediaId,
+    mediaIdLength: trimmedMediaId.length,
+    fullURL,
+  });
+  
+  // 4. Make DELETE request - simple and direct (same as upload)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  
   try {
-    // 1. Get authentication token
-    let token = await AsyncStorage.getItem("userToken");
-    if (!token) {
-      token = await AsyncStorage.getItem("token");
-    }
-    if (!token) {
-      try {
-        const { default: SecureStore } = await import("expo-secure-store");
-        token = await SecureStore.getItemAsync("jwt");
-      } catch (secureStoreError) {
-        console.log("SecureStore not available or no JWT token");
-      }
-    }
-
-    if (!token) {
-      throw new Error("Authentication required. Please log in.");
-    }
-
-    // 2. Validate mediaId
-    if (!mediaId || typeof mediaId !== "string") {
-      throw new Error("Invalid media ID");
-    }
-
-    // 3. Make DELETE request
-    const { getApiBaseUrl } = await import("./api");
-    const baseURL = getApiBaseUrl();
-    const response = await fetch(`${baseURL}/api/media/${mediaId}`, {
+    const response = await fetch(fullURL, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
       },
-      timeout: 30000, // 30 seconds
-    } as any);
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // Log full response for debugging
+    console.log("📥 Delete response:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+    
+    // Parse response
+    let data: any;
+    try {
+      const text = await response.text();
+      console.log("📥 Delete response text:", text);
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error("❌ Failed to parse delete response:", parseError);
+      throw new Error("Invalid response from server");
+    }
 
-    // 4. Parse response
-    const data = await response.json();
-
-    // 5. Check response status
+    // Check if successful
     if (response.ok && data.success) {
+      console.log("✅ Delete successful:", data);
       return {
         success: true,
         message: data.message || "Media deleted successfully",
       };
-    } else {
-      // Handle different error status codes
-      const status = response.status;
-      switch (status) {
-        case 401:
-          throw new Error("Authentication failed. Please log in again.");
-        case 403:
-          throw new Error(
-            "You do not have permission to delete this media. Only the creator can delete it."
-          );
-        case 404:
-          throw new Error("Media not found. It may have already been deleted.");
-        case 400:
-          throw new Error(
-            data.message || "Invalid request. Please check the media ID."
-          );
-        default:
-          throw new Error(
-            data.message || "Failed to delete media. Please try again."
-          );
-      }
     }
+    
+    // Handle errors - log full error details
+    const errorMessage = data.message || data.error || "Failed to delete media";
+    console.error("❌ Delete failed - full error:", {
+      status: response.status,
+      statusText: response.statusText,
+      errorMessage,
+      fullResponse: data,
+      tokenWasSent: !!token,
+      tokenLength: token?.length,
+    });
+    
+    if (response.status === 401) {
+      // Log what token was sent vs what backend expects
+      console.error("❌ 401 Unauthorized - Backend rejected token:", {
+        tokenPreview: token ? `${token.substring(0, 30)}...` : "none",
+        tokenLength: token?.length,
+        backendMessage: errorMessage,
+        fullResponse: data,
+      });
+      throw new Error(errorMessage || "Your session has expired. Please log in again.");
+    }
+    
+    if (response.status === 403) {
+      throw new Error(errorMessage || "You don't have permission to delete this media.");
+    }
+    
+    if (response.status === 404) {
+      // Log detailed info for debugging
+      console.error("❌ 404 Media not found:", {
+        mediaId: trimmedMediaId,
+        originalMediaId: mediaId,
+        fullURL,
+        backendMessage: errorMessage,
+        fullResponse: data,
+      });
+      throw new Error(errorMessage || "Media not found. It may have already been deleted or the ID is incorrect.");
+    }
+    
+    throw new Error(errorMessage);
+    
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    
     // Handle network errors
-    if (error.message && error.message.includes("Network")) {
-      throw new Error(
-        "Network error. Please check your internet connection and try again."
-      );
+    if (error.name === 'AbortError') {
+      throw new Error("Request timed out. Please try again.");
     }
-    // Re-throw other errors
+    
+    if (error.message?.includes('Network') || error.message === 'Network request failed') {
+      throw new Error("Network error. Please check your connection and try again.");
+    }
+    
+    // Re-throw if it's already a formatted error
+    if (error.message) {
     throw error;
+    }
+    
+    throw new Error("Failed to delete media. Please try again.");
   }
 };
 
 /**
  * Check if current user is the owner of the media
- * @param uploadedBy - The user ID or user object who uploaded the media
- * @returns Promise<boolean> - True if current user is the owner
+ * @param uploadedBy - The user ID, user object, or full name who uploaded the media
+ * @param mediaItem - Optional media item to check additional fields like authorInfo
+ * @returns Promise<boolean> - True if current user is likely the owner (backend will verify)
  */
-export const isMediaOwner = async (uploadedBy: string | { _id: string } | undefined): Promise<boolean> => {
+export const isMediaOwner = async (
+  uploadedBy: string | { _id: string } | undefined,
+  mediaItem?: any
+): Promise<boolean> => {
   try {
     // Get current user ID
     const userStr = await AsyncStorage.getItem("user");
     if (!userStr) {
+      console.log("❌ isMediaOwner: No user found in AsyncStorage");
       return false;
     }
 
     const user = JSON.parse(userStr);
-    const currentUserId = user._id || user.id || user.email;
-
-    if (!currentUserId || !uploadedBy) {
+    // Try multiple possible user ID fields
+    const currentUserId = String(user._id || user.id || user.userId || "").trim();
+    
+    if (!currentUserId) {
+      console.log("❌ isMediaOwner: No current user ID found", { user });
       return false;
     }
 
-    // Handle different uploadedBy formats
-    if (typeof uploadedBy === "string") {
-      return uploadedBy === currentUserId;
-    } else if (uploadedBy && typeof uploadedBy === "object" && uploadedBy._id) {
-      return uploadedBy._id === currentUserId;
+    if (!uploadedBy && !mediaItem?.authorInfo?._id && !mediaItem?.author?._id) {
+      console.log("❌ isMediaOwner: No uploadedBy or author info provided");
+      return false;
     }
 
-    return false;
+    // Extract uploadedBy ID - handle multiple formats
+    let uploadedById: string = "";
+    
+    // First, try to get from mediaItem authorInfo/author (most reliable)
+    if (mediaItem?.authorInfo?._id) {
+      uploadedById = String(mediaItem.authorInfo._id).trim();
+    } else if (mediaItem?.author?._id) {
+      uploadedById = String(mediaItem.author._id).trim();
+    } else if (typeof uploadedBy === "string") {
+      // Check if it's an ObjectId (24 hex characters) or a full name
+      const trimmed = String(uploadedBy).trim();
+      // ObjectId format: 24 hex characters
+      if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
+        uploadedById = trimmed;
+      } else {
+        // It's likely a full name, so we can't reliably check ownership
+        // But we'll assume ownership if user is logged in (backend will verify)
+        console.log("⚠️ isMediaOwner: uploadedBy appears to be a name, not an ID:", trimmed);
+        // Return true to show delete button - backend will verify actual ownership
+        return true;
+      }
+    } else if (uploadedBy && typeof uploadedBy === "object") {
+      uploadedById = String(uploadedBy._id || uploadedBy.id || uploadedBy.userId || "").trim();
+    }
+
+    if (!uploadedById) {
+      console.log("❌ isMediaOwner: Could not extract uploadedBy ID", { uploadedBy, mediaItem });
+      // If we can't determine, assume ownership (backend will verify)
+      return true;
+    }
+
+    // Compare IDs (convert both to strings for comparison)
+    const isOwner = String(currentUserId) === String(uploadedById);
+    
+    console.log("🔍 isMediaOwner check:", {
+      currentUserId,
+      uploadedById,
+      isOwner,
+      currentUserIdType: typeof currentUserId,
+      uploadedByIdType: typeof uploadedById,
+      uploadedByValue: uploadedBy,
+      hasAuthorInfo: !!mediaItem?.authorInfo,
+      hasAuthor: !!mediaItem?.author,
+    });
+
+    return isOwner;
   } catch (error) {
-    console.error("Error checking media ownership:", error);
-    return false;
+    console.error("❌ Error checking media ownership:", error);
+    // On error, assume ownership (backend will verify)
+    return true;
   }
 };
 

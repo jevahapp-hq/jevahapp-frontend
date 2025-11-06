@@ -81,9 +81,33 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   // Check ownership when modal opens
   useEffect(() => {
     if (isModalVisible || modalVisible === modalKey) {
-      checkOwnership(video.uploadedBy || video.author?._id || video.authorInfo?._id).then(setIsOwner);
+      const uploadedByValue = video.uploadedBy || video.author?._id || video.authorInfo?._id;
+      console.log("🔍 VideoCard: Checking ownership for video:", {
+        videoId: video._id,
+        videoTitle: video.title,
+        uploadedBy: uploadedByValue,
+        uploadedByType: typeof uploadedByValue,
+        hasAuthor: !!video.author,
+        hasAuthorInfo: !!video.authorInfo,
+        authorId: video.author?._id,
+        authorInfoId: video.authorInfo?._id,
+        fullVideo: video,
+      });
+      // Pass the full video object so isMediaOwner can check authorInfo/author
+      checkOwnership(uploadedByValue, video)
+        .then((isOwnerResult) => {
+          console.log("🔍 VideoCard: Ownership check result:", isOwnerResult);
+          setIsOwner(isOwnerResult);
+        })
+        .catch((error) => {
+          console.error("❌ VideoCard: Ownership check failed:", error);
+          setIsOwner(false);
+        });
+    } else {
+      // Reset when modal closes
+      setIsOwner(false);
     }
-  }, [isModalVisible, modalVisible, modalKey, video.uploadedBy, video.author, video.authorInfo, checkOwnership]);
+  }, [isModalVisible, modalVisible, modalKey, video, checkOwnership]);
 
   // Handle delete button press
   const handleDeletePress = useCallback(() => {
@@ -920,13 +944,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         }}
         onViewDetails={() => {}}
         onSaveToLibrary={() => onSave(modalKey, video)}
-        onShare={() => onShare(modalKey, video)}
         onDownload={() => onDownload(video)}
         isSaved={!!contentStats[contentId]?.userInteractions?.saved}
         isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
         contentTitle={video.title}
         mediaId={video._id}
         uploadedBy={video.uploadedBy || video.author?._id || video.authorInfo?._id}
+        mediaItem={video}
         onDelete={handleDeletePress}
         showDelete={isOwner}
       />

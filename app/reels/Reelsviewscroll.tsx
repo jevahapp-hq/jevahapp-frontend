@@ -547,39 +547,8 @@ export default function Reelsviewscroll() {
   const handleComment = async (key: string) => {
     console.log("🔄 Comment button clicked for reel:", title);
 
-    // Create mock comments for the reel (you can replace this with actual comments from your backend)
-    const mockComments = [
-      {
-        id: "1",
-        userName: "John Doe",
-        avatar: "",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-        comment: "Great video! Really enjoyed this content.",
-        likes: 5,
-        isLiked: false,
-      },
-      {
-        id: "2",
-        userName: "Jane Smith",
-        avatar: "",
-        timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 minutes ago
-        comment: "Amazing! Thanks for sharing.",
-        likes: 3,
-        isLiked: true,
-      },
-      {
-        id: "3",
-        userName: "Mike Johnson",
-        avatar: "",
-        timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
-        comment: "This is exactly what I needed!",
-        likes: 1,
-        isLiked: false,
-      },
-    ];
-
-    // Show the comment modal with the reel's comments
-    showCommentModal(mockComments, key);
+    // Open modal with empty array - backend will load comments immediately
+    showCommentModal([], key);
 
     // Update comment count (optional - you might want to do this after actually posting a comment)
     const currentStats = videoStats[key] || {};

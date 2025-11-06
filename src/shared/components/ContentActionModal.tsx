@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useDeleteMedia } from "../../../app/hooks/useDeleteMedia";
 import {
   GestureHandlerRootView,
   HandlerStateChangeEvent,
@@ -29,7 +30,6 @@ interface ContentActionModalProps {
   onClose: () => void;
   onViewDetails: () => void;
   onSaveToLibrary: () => void;
-  onShare: () => void;
   onDownload: () => void;
   isSaved: boolean;
   isDownloaded: boolean;
@@ -37,8 +37,9 @@ interface ContentActionModalProps {
   // Delete functionality props
   mediaId?: string;
   uploadedBy?: string | { _id: string };
+  mediaItem?: any; // Full media item for ownership checking (optional)
   onDelete?: () => void;
-  showDelete?: boolean;
+  showDelete?: boolean; // If provided, use it; otherwise check ownership internally
 }
 
 export default function ContentActionModal({
@@ -46,19 +47,56 @@ export default function ContentActionModal({
   onClose,
   onViewDetails,
   onSaveToLibrary,
-  onShare,
   onDownload,
   isSaved,
   isDownloaded,
   contentTitle = "Content",
   mediaId,
   uploadedBy,
+  mediaItem,
   onDelete,
-  showDelete = false,
+  showDelete,
 }: ContentActionModalProps) {
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
   const [internalVisible, setInternalVisible] = useState(isVisible);
+  const [isOwner, setIsOwner] = useState(false);
+  const { checkOwnership } = useDeleteMedia();
+
+  // Check ownership when modal opens
+  useEffect(() => {
+    if (internalVisible && onDelete) {
+      // If showDelete is explicitly provided, use it
+      if (showDelete !== undefined) {
+        setIsOwner(showDelete);
+        console.log("🔍 ContentActionModal: Using showDelete prop:", showDelete);
+      } else {
+        // Otherwise, check ownership internally
+        if (uploadedBy || mediaItem) {
+          console.log("🔍 ContentActionModal: Checking ownership internally for:", {
+            uploadedBy,
+            hasMediaItem: !!mediaItem,
+            hasAuthorInfo: !!mediaItem?.authorInfo,
+            hasAuthor: !!mediaItem?.author,
+          });
+          checkOwnership(uploadedBy, mediaItem)
+            .then((isOwnerResult) => {
+              console.log("🔍 ContentActionModal: Ownership check result:", isOwnerResult);
+              setIsOwner(isOwnerResult);
+            })
+            .catch((error) => {
+              console.error("❌ ContentActionModal: Ownership check failed:", error);
+              setIsOwner(false);
+            });
+        } else {
+          console.log("⚠️ ContentActionModal: No uploadedBy or mediaItem provided");
+          setIsOwner(false);
+        }
+      }
+    } else {
+      setIsOwner(false);
+    }
+  }, [internalVisible, onDelete, showDelete, uploadedBy, mediaItem, checkOwnership]);
 
   useEffect(() => {
     if (isVisible) {
@@ -127,14 +165,6 @@ export default function ContentActionModal({
     handleClose();
   };
 
-  const handleShareAction = () => {
-    try {
-      onShare();
-    } catch (error) {
-      console.error("ContentActionModal: share failed", error);
-    }
-    handleClose();
-  };
 
   if (!internalVisible) return null;
 
@@ -331,45 +361,53 @@ export default function ContentActionModal({
                 <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={handleShareAction}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  backgroundColor: "#F9FAFB",
-                  borderRadius: 12,
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      backgroundColor: "#FEF3E2",
-                      borderRadius: 18,
-                      justifyContent: "center",
-                      alignItems: "center",
-                      marginRight: 12,
-                    }}
-                  >
-                    <Feather name="send" size={18} color="#FEA74E" />
+              {/* Delete button - only show if user is the owner */}
+              {onDelete && isOwner && (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onDelete) {
+                      onDelete();
+                    }
+                    handleClose();
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 12,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        backgroundColor: "#FEE2E2",
+                        borderRadius: 18,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 12,
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontFamily: "Rubik-SemiBold",
+                        color: "#DC2626",
+                      }}
+                    >
+                      Delete
+                    </Text>
                   </View>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontFamily: "Rubik-SemiBold",
-                      color: "#1D2939",
-                    }}
-                  >
-                    Share
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-              </TouchableOpacity>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 onPress={() => handleAction(onDownload)}
@@ -417,54 +455,6 @@ export default function ContentActionModal({
                 <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
               </TouchableOpacity>
 
-              {/* Delete button - only show if user is the owner */}
-              {showDelete && onDelete && mediaId && (
-                <TouchableOpacity
-                  onPress={() => {
-                    if (onDelete) {
-                      onDelete();
-                    }
-                    handleClose();
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    backgroundColor: "#FEF2F2",
-                    borderRadius: 12,
-                    marginTop: 8,
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        backgroundColor: "#FEE2E2",
-                        borderRadius: 18,
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginRight: 12,
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontFamily: "Rubik-SemiBold",
-                        color: "#DC2626",
-                      }}
-                    >
-                      Delete
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-                </TouchableOpacity>
-              )}
             </ScrollView>
           </Animated.View>
         </PanGestureHandler>

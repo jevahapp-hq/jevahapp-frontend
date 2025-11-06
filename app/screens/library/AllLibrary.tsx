@@ -1,5 +1,6 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -14,11 +15,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import SuccessCard from "../../components/SuccessCard";
+import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
 import allMediaAPI from "../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../utils/downloadUtils";
+import { useDeleteMedia } from "../../hooks/useDeleteMedia";
 
 const sampleMedia = [
   {
@@ -72,6 +75,7 @@ const pastSearchesInitial = [
 ];
 
 export default function AllLibrary({ contentType }: { contentType?: string }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
 
   // Success card state
@@ -125,6 +129,12 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   // Like state
   const [likedItems, setLikedItems] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+
+  // Delete media functionality
+  const { deleteMediaItem, checkOwnership } = useDeleteMedia();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedItemForDelete, setSelectedItemForDelete] = useState<any>(null);
+  const [isOwnerMap, setIsOwnerMap] = useState<Record<string, boolean>>({});
 
   // Reset UI state when user changes (detect via token changes)
   useEffect(() => {
@@ -962,6 +972,32 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     });
   }, [bookAnimation]);
 
+  // Open book in PDF viewer
+  const openBookInPdfViewer = useCallback(
+    (book: any) => {
+      try {
+        const pdfUrl = book.mediaUrl || book.fileUrl || "";
+        if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
+          router.push({
+            pathname: "/reader/PdfViewer",
+            params: {
+              url: pdfUrl,
+              title: book.title || "Untitled",
+              desc: book.description || "",
+            },
+          });
+          closeBook();
+        } else {
+          Alert.alert("Error", "PDF URL is not available for this book");
+        }
+      } catch (error) {
+        console.error("Error opening book in PDF viewer:", error);
+        Alert.alert("Error", "Failed to open book. Please try again.");
+      }
+    },
+    [router, closeBook]
+  );
+
   // Enhanced Like handler using interaction store with notifications
   const handleLike = useCallback(
     async (itemId: string, itemTitle?: string, thumbnailUrl?: string) => {
@@ -995,7 +1031,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       case "audio":
         return "musical-notes";
       case "sermon":
-        return "book";
+        return "mic"; // Microphone icon for sermons (spoken content)
       case "e-books":
       case "ebook":
       case "books":
@@ -1113,12 +1149,88 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     }
   }, []);
 
+  // Detectors for video/audio based on URL/mime or contentType
+  const isVideoContent = useCallback((item: any): boolean => {
+    const url: string = (item.mediaUrl || item.fileUrl || "").toLowerCase();
+    const mime: string = String(item.mimeType || "").toLowerCase();
+    const type = String(item.contentType || "").toLowerCase();
+    const videoExts = [".mp4", ".mov", ".avi", ".mkv", ".m3u8", ".webm"];
+    const byExt = videoExts.some((ext) => url.includes(ext));
+    const byMime = mime.startsWith("video/");
+    const byType = type.includes("video");
+    return Boolean(byExt || byMime || byType);
+  }, []);
+
+  const isAudioContent = useCallback((item: any): boolean => {
+    const url: string = (item.mediaUrl || item.fileUrl || "").toLowerCase();
+    const mime: string = String(item.mimeType || "").toLowerCase();
+    const type = String(item.contentType || "").toLowerCase();
+    const audioExts = [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"];
+    const byExt = audioExts.some((ext) => url.includes(ext));
+    const byMime = mime.startsWith("audio/");
+    const byType = type.includes("audio") || type.includes("music");
+    return Boolean(byExt || byMime || byType);
+  }, []);
+
+  // Check ownership when menu opens
+  const checkItemOwnership = useCallback(
+    async (item: any) => {
+      const itemId = item._id || item.id;
+      if (!isOwnerMap[itemId]) {
+        const uploadedBy = item.uploadedBy || item.author?._id || item.authorInfo?._id;
+        const isOwner = await checkOwnership(uploadedBy);
+        setIsOwnerMap((prev) => ({ ...prev, [itemId]: isOwner }));
+      }
+    },
+    [checkOwnership, isOwnerMap]
+  );
+
+  // Handle delete press
+  const handleDeletePress = useCallback((item: any) => {
+    setSelectedItemForDelete(item);
+    setShowDeleteModal(true);
+    setMenuOpenId(null);
+  }, []);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!selectedItemForDelete) return;
+
+    const itemId = selectedItemForDelete._id || selectedItemForDelete.id;
+    const success = await deleteMediaItem(itemId);
+
+    if (success) {
+      // Remove from local state
+      setSavedItems((prev) =>
+        prev.filter((savedItem) => {
+          const savedItemId = savedItem._id || savedItem.id;
+          return savedItemId !== itemId;
+        })
+      );
+
+      // Update saved items set
+      setSavedItemIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+
+      // Remove from library store
+      await libraryStore.removeFromLibrary(itemId);
+
+      setShowDeleteModal(false);
+      setSelectedItemForDelete(null);
+      setSuccessMessage("Media deleted successfully!");
+      setShowSuccessCard(true);
+    }
+  }, [selectedItemForDelete, deleteMediaItem, libraryStore]);
+
   const renderMediaCard = useCallback(
     ({ item }: any) => {
       const itemId = item._id || item.id;
-      const isVideo = item.contentType === "videos";
-      const isAudio =
-        item.contentType === "music" || item.contentType === "audio";
+      // Smarter detection so that sermon items render as video/audio when appropriate
+      const isVideo = isVideoContent(item);
+      const isAudio = isAudioContent(item);
       const isBook =
         item.contentType === "e-books" ||
         item.contentType === "ebook" ||
@@ -1158,7 +1270,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       }
 
       return (
-        <View className="w-[48%] mb-6 h-[232px] rounded-xl overflow-hidden bg-[#E5E5EA]">
+        <View className="w-[48%] mb-6 h-[232px] rounded-xl bg-[#E5E5EA]" style={{ overflow: 'visible' }}>
           {isVideo ? (
             <TouchableOpacity
               onPress={() => togglePlay(itemId)}
@@ -1271,9 +1383,25 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
               </View>
             </TouchableOpacity>
           ) : isBook ? (
-            // Book content with thumbnail
+            // Book content with thumbnail - opens directly in PDF viewer
             <TouchableOpacity
-              onPress={() => openBook(item)}
+              onPress={() => {
+                // Open book directly in PDF viewer (same as EbookCard)
+                const pdfUrl = item.mediaUrl || item.fileUrl || "";
+                if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
+                  router.push({
+                    pathname: "/reader/PdfViewer",
+                    params: {
+                      url: pdfUrl,
+                      title: item.title || "Untitled",
+                      desc: item.description || "",
+                    },
+                  });
+                } else {
+                  // Fallback to modal if URL is not available
+                  openBook(item);
+                }
+              }}
               className="w-full h-full"
               activeOpacity={0.9}
             >
@@ -1351,12 +1479,15 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
               if (ref) dotsRefs.current[itemId] = ref;
             }}
             collapsable={false}
-            className="absolute bottom-2 right-2"
+            className="absolute bottom-2 right-2 z-50"
+            style={{ zIndex: 50 }}
           >
             <TouchableOpacity
               className="bg-white rounded-full p-1"
-              onPress={() => {
-                if (isVideo) return; // avoid toggling during video press bubbling
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={(e) => {
+                e.stopPropagation(); // Prevent event bubbling
+                checkItemOwnership(item); // Check ownership when opening menu
                 const node = dotsRefs.current[itemId];
                 try {
                   node?.measureInWindow?.((x: number, y: number) => {
@@ -1376,19 +1507,21 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           {menuOpenId === itemId && (
             <>
               <TouchableOpacity
-                className="absolute inset-0 z-40"
+                className="absolute inset-0"
+                style={{ zIndex: 100 }}
                 activeOpacity={1}
                 onPress={() => setMenuOpenId(null)}
               />
               <View
-                pointerEvents="box-none"
                 style={{
                   position: "absolute",
-                  zIndex: 50,
+                  zIndex: 101,
+                  elevation: 101, // Android
                   // Position relative to trigger; clamp within card bounds
                   bottom: 36,
                   right: 4,
                 }}
+                pointerEvents="box-none"
               >
                 <View
                   style={{
@@ -1398,12 +1531,14 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                     paddingVertical: 4,
                     backgroundColor: "#FFFFFF",
                     shadowColor: "#000",
-                    shadowOpacity: 0.12,
-                    shadowRadius: 8,
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
                     shadowOffset: { width: 0, height: 4 },
                     borderWidth: 1,
                     borderColor: "#E5E7EB",
+                    elevation: 8, // Android shadow
                   }}
+                  pointerEvents="auto"
                 >
                   <TouchableOpacity
                     style={{
@@ -1492,6 +1627,27 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                     </Text>
                     <MaterialIcons name="bookmark" size={16} color="#1D2939" />
                   </TouchableOpacity>
+                  {/* Delete option - only show if user is the owner */}
+                  {isOwnerMap[itemId] && (
+                    <>
+                      <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
+                      <TouchableOpacity
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                        onPress={() => handleDeletePress(item)}
+                      >
+                        <Text className="text-[#EF4444] font-rubik text-xs">
+                          Delete
+                        </Text>
+                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               </View>
             </>
@@ -1533,10 +1689,15 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       seekVideo,
       audioMuted,
       openBook,
+      openBookInPdfViewer,
+      router,
       likedItems,
       likeCounts,
       handleLike,
       globalVideoStore,
+      checkItemOwnership,
+      handleDeletePress,
+      isOwnerMap,
     ]
   );
 
@@ -1604,6 +1765,20 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
         )}
       </ScrollView>
 
+      {/* Delete Confirmation Modal */}
+      {selectedItemForDelete && (
+        <DeleteMediaConfirmation
+          visible={showDeleteModal}
+          mediaId={selectedItemForDelete._id || selectedItemForDelete.id || ""}
+          mediaTitle={selectedItemForDelete.title || "this media"}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedItemForDelete(null);
+          }}
+          onSuccess={handleDeleteConfirm}
+        />
+      )}
+
       {/* Fancy Book Opening Modal */}
       {bookModalVisible && selectedBook && (
         <View className="absolute inset-0 bg-black/50 z-50 justify-center items-center">
@@ -1661,16 +1836,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => {
-                  // Open book in external viewer or navigate to book reader
-                  console.log("📚 Opening book:", selectedBook.title);
-                  console.log(
-                    "📚 Book media URL:",
-                    selectedBook.mediaUrl || selectedBook.fileUrl
-                  );
-                  // TODO: Implement PDF opening with react-native-pdf
-                  closeBook();
-                }}
+                onPress={() => openBookInPdfViewer(selectedBook)}
                 className="flex-1 bg-[#FEA74E] py-3 rounded-lg items-center"
               >
                 <Text className="text-white font-rubik-bold">Read Now</Text>

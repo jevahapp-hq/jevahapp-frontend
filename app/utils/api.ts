@@ -91,13 +91,18 @@ export const apiAxios = axios.create({
 apiAxios.interceptors.request.use(
   async (config) => {
     try {
-      const token =
-        (await AsyncStorage.getItem("token")) ||
-        (await AsyncStorage.getItem("userToken")) ||
-        (await AsyncStorage.getItem("authToken"));
+      // Skip interceptor if token is already set manually (e.g., after refresh)
+      if (config.headers.Authorization && config._skipInterceptor) {
+        return config;
+      }
+      
+      // Use TokenUtils to get token from all sources (AsyncStorage + SecureStore)
+      const token = await TokenUtils.getAuthToken();
 
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        console.warn("⚠️ No auth token found in interceptor");
       }
     } catch (error) {
       console.warn("Failed to get auth token:", error);
@@ -106,6 +111,141 @@ apiAxios.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle 401 errors and refresh token
+apiAxios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If we get a 401 and haven't already retried
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        console.log("🔄 Token expired, attempting to refresh...");
+        
+        // Get current token
+        const currentToken = await TokenUtils.getAuthToken();
+        if (!currentToken) {
+          console.error("❌ No token to refresh");
+          throw new Error("No token to refresh");
+        }
+
+        console.log("🔄 Refreshing token:", {
+          currentTokenPreview: TokenUtils.getTokenPreview(currentToken),
+          refreshEndpoint: `${API_BASE_URL}/api/auth/refresh`,
+        });
+
+        // Try to refresh the token
+        const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentToken}`,
+          },
+          body: JSON.stringify({ token: currentToken }),
+        });
+
+        console.log("🔄 Refresh response:", {
+          status: refreshResponse.status,
+          ok: refreshResponse.ok,
+        });
+
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          const newToken = refreshData?.data?.token || refreshData?.token;
+          
+          console.log("🔄 Refresh data:", {
+            hasNewToken: !!newToken,
+            newTokenPreview: newToken ? TokenUtils.getTokenPreview(newToken) : "none",
+            refreshDataKeys: Object.keys(refreshData),
+            fullResponse: refreshData,
+          });
+          
+          if (newToken) {
+            // Validate the new token format
+            if (!TokenUtils.isValidJWTFormat(newToken)) {
+              console.error("❌ New token has invalid format");
+              throw new Error("Token refresh returned invalid token format");
+            }
+            
+            // Store the new token
+            await TokenUtils.storeAuthToken(newToken);
+            
+            // Verify the token was stored
+            const verifyToken = await TokenUtils.getAuthToken();
+            console.log("✅ Token stored and verified:", {
+              stored: !!verifyToken,
+              matches: verifyToken === newToken,
+              tokenPreview: verifyToken ? TokenUtils.getTokenPreview(verifyToken) : "none",
+            });
+            
+            if (verifyToken !== newToken) {
+              console.error("❌ Token mismatch after storage");
+              throw new Error("Token storage verification failed");
+            }
+            
+            // Update the original request with the new token
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            
+            // Mark that we've already set the token manually
+            originalRequest._skipInterceptor = true;
+            
+            console.log("✅ Token refreshed successfully, retrying request with new token...");
+            console.log("🔄 Retry request config:", {
+              url: originalRequest.url,
+              method: originalRequest.method,
+              hasAuthHeader: !!originalRequest.headers.Authorization,
+              authHeaderPreview: originalRequest.headers.Authorization 
+                ? originalRequest.headers.Authorization.substring(0, 30) + "..." 
+                : "none",
+            });
+            
+            // Retry the original request with the new token
+            // Create a new config to ensure the token is used
+            const retryConfig = {
+              ...originalRequest,
+              headers: {
+                ...originalRequest.headers,
+                Authorization: `Bearer ${newToken}`,
+              },
+            };
+            
+            return apiAxios(retryConfig);
+          } else {
+            console.error("❌ Token refresh succeeded but no token in response");
+            console.error("❌ Refresh response data:", refreshData);
+            throw new Error("Token refresh succeeded but no token in response");
+          }
+        } else {
+          const errorText = await refreshResponse.text().catch(() => "Could not read error");
+          console.error("❌ Token refresh failed:", {
+            status: refreshResponse.status,
+            statusText: refreshResponse.statusText,
+            error: errorText,
+          });
+          
+          // If refresh fails with 401, the session is truly invalid
+          if (refreshResponse.status === 401) {
+            console.error("❌ Token refresh also returned 401 - session is invalid");
+            await TokenUtils.clearAuthTokens();
+            throw new Error("Session expired. Please log in again.");
+          }
+          
+          throw new Error(`Token refresh failed: ${refreshResponse.status}`);
+        }
+      } catch (refreshError) {
+        console.error("❌ Token refresh error:", refreshError);
+        // Clear tokens and redirect to login if needed
+        await TokenUtils.clearAuthTokens();
+        return Promise.reject(error);
+      }
+    }
+
     return Promise.reject(error);
   }
 );

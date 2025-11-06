@@ -1,4 +1,5 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
     FlatList,
@@ -67,6 +68,7 @@ const pastSearchesInitial = [
 ];
 
 export default function EbooksLibrary () {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const libraryStore = useLibraryStore();
   const [savedEbooks, setSavedEbooks] = useState<any[]>([]);
@@ -113,22 +115,45 @@ export default function EbooksLibrary () {
 
   const renderMediaCard = ({ item }: any) => (
     <View className="w-[48%] mb-6 h-[232px] rounded-xl overflow-hidden bg-[#E5E5EA]">
-      <Image
-        source={
-          item.thumbnailUrl 
-            ? { uri: item.thumbnailUrl }
-            : item.imageUrl 
-            ? (typeof item.imageUrl === 'string' ? { uri: item.imageUrl } : item.imageUrl)
-            : require("../../../assets/images/image (10).png")
-        }
-        className="h-full w-full rounded-xl"
-        resizeMode="cover"
-      />
-      <View className="absolute bottom-2 left-2 right-2">
-        <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
-          {item.title}
-        </Text>
-      </View>
+      <TouchableOpacity
+        onPress={() => {
+          // Open book in PDF viewer (same as EbookCard and AllLibrary)
+          try {
+            const pdfUrl = item.mediaUrl || item.fileUrl || "";
+            if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
+              router.push({
+                pathname: "/reader/PdfViewer",
+                params: {
+                  url: pdfUrl,
+                  title: item.title || "Untitled",
+                  desc: item.description || "",
+                },
+              });
+            }
+          } catch (error) {
+            console.error("Error opening book:", error);
+          }
+        }}
+        activeOpacity={0.9}
+        className="w-full h-full"
+      >
+        <Image
+          source={
+            item.thumbnailUrl 
+              ? { uri: item.thumbnailUrl }
+              : item.imageUrl 
+              ? (typeof item.imageUrl === 'string' ? { uri: item.imageUrl } : item.imageUrl)
+              : require("../../../assets/images/image (10).png")
+          }
+          className="h-full w-full rounded-xl"
+          resizeMode="cover"
+        />
+        <View className="absolute bottom-2 left-2 right-2">
+          <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+            {item.title}
+          </Text>
+        </View>
+      </TouchableOpacity>
       {/* Ellipsis Menu Trigger */}
       <TouchableOpacity 
         className="absolute bottom-2 right-2 bg-white rounded-full p-1"

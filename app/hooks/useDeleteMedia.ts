@@ -6,7 +6,7 @@ import { Alert } from "react-native";
 
 interface UseDeleteMediaReturn {
   deleteMediaItem: (mediaId: string) => Promise<boolean>;
-  checkOwnership: (uploadedBy: string | { _id: string } | undefined) => Promise<boolean>;
+  checkOwnership: (uploadedBy: string | { _id: string } | undefined, mediaItem?: any) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   success: boolean;
@@ -19,9 +19,9 @@ export const useDeleteMedia = (): UseDeleteMediaReturn => {
   const [success, setSuccess] = useState(false);
 
   const checkOwnership = useCallback(
-    async (uploadedBy: string | { _id: string } | undefined): Promise<boolean> => {
+    async (uploadedBy: string | { _id: string } | undefined, mediaItem?: any): Promise<boolean> => {
       try {
-        return await isMediaOwner(uploadedBy);
+        return await isMediaOwner(uploadedBy, mediaItem);
       } catch (err) {
         console.error("Error checking ownership:", err);
         return false;

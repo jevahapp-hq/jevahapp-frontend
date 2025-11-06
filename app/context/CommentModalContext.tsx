@@ -98,7 +98,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     
     // Set modal visible IMMEDIATELY - no delays
     setIsVisible(true);
-    setComments(newComments);
+    setComments(newComments || []);
     if (contentId) {
       setCurrentContentId(contentId);
     }
@@ -113,25 +113,24 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
     // Load latest comments from backend and join realtime room ASYNC (non-blocking)
-    setTimeout(() => {
-      if (contentId) {
-        loadCommentsFromServer(contentId, contentType, 1, sortBy);
-        joinRealtimeRoom(contentId, contentType);
-      }
-    }, 0);
-    
-    // Fetch current user id ASYNC (non-blocking)
-    setTimeout(async () => {
-      try {
-        const userStr = await AsyncStorage.getItem("user");
+    // Use requestAnimationFrame for immediate execution without setTimeout delay
+    if (contentId) {
+      // Fetch user data first (fast, non-blocking)
+      AsyncStorage.getItem("user").then((userStr) => {
         if (userStr) {
-          const u = JSON.parse(userStr);
-          currentUserIdRef.current = String(u?._id || u?.id || "");
-          currentUserFirstNameRef.current = String(u?.firstName || "");
-          currentUserLastNameRef.current = String(u?.lastName || "");
+          try {
+            const u = JSON.parse(userStr);
+            currentUserIdRef.current = String(u?._id || u?.id || "");
+            currentUserFirstNameRef.current = String(u?.firstName || "");
+            currentUserLastNameRef.current = String(u?.lastName || "");
+          } catch {}
         }
-      } catch {}
-    }, 0);
+      }).catch(() => {});
+      
+      // Load comments and join room immediately (non-blocking)
+      loadCommentsFromServer(contentId, contentType, 1, sortBy).catch(() => {});
+      joinRealtimeRoom(contentId, contentType).catch(() => {});
+    }
   };
 
   const hideCommentModal = () => {
@@ -400,7 +399,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   const joinRealtimeRoom = async (
     contentId: string,
     contentType: "media" | "devotional"
-  ) => {
+  ): Promise<void> => {
     try {
       if (!socketManagerRef.current) {
         const token = await TokenUtils.getAuthToken();

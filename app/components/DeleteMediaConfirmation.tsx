@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { deleteMedia } from "../utils/mediaDeleteAPI";
+import TopToast from "./TopToast";
 
 interface DeleteMediaConfirmationProps {
   visible: boolean;
@@ -29,6 +30,7 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const handleDelete = async () => {
     setIsLoading(true);
@@ -37,8 +39,13 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
     try {
       const result = await deleteMedia(mediaId);
       if (result.success) {
-        onSuccess();
-        onClose();
+        // Show success notification
+        setShowSuccessToast(true);
+        // Close modal after a short delay
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 500);
       }
     } catch (err: any) {
       setError(err.message || "Failed to delete media");
@@ -101,6 +108,15 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
           </View>
         </View>
       </View>
+      
+      {/* Success Toast Notification */}
+      <TopToast
+        visible={showSuccessToast}
+        text="Media deleted successfully"
+        type="success"
+        topOffset={20}
+        onClose={() => setShowSuccessToast(false)}
+      />
     </Modal>
   );
 };
