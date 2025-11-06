@@ -504,45 +504,36 @@ export default function ForumScreen() {
               ) : null
             }
             contentContainerStyle={{ paddingBottom: 100 }}
-            renderItem={({ item, index }) => (
-              <View>
-                {renderForumPost(item)}
-
-                {/* Start Conversation Input - appears after second post */}
-                {index === 1 && (
-                  <View style={styles.startConversationContainer}>
-                    <TouchableOpacity style={styles.plusButton}>
-                      <Ionicons name="add" size={20} color="#666" />
-                    </TouchableOpacity>
-
-                    <TextInput
-                      style={styles.conversationInput}
-                      placeholder="Start a conversation"
-                      placeholderTextColor="#9CA3AF"
-                      value={newPostText}
-                      onChangeText={setNewPostText}
-                      multiline
-                      onSubmitEditing={handleStartConversation}
-                    />
-
-                    {newPostText.trim().length > 0 && (
-                      <TouchableOpacity
-                        style={styles.sendButton}
-                        onPress={handleStartConversation}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="send" size={20} color="#DF930E" />
-                      </TouchableOpacity>
-                    )}
-                    {newPostText.trim().length === 0 && (
-                      <TouchableOpacity style={styles.micButton}>
-                        <Ionicons name="mic-outline" size={20} color="#666" />
-                      </TouchableOpacity>
-                    )}
+            ListHeaderComponent={
+              selectedForumId ? (
+                <View style={styles.startConversationContainer}>
+                  <View style={styles.plusButton}>
+                    <Ionicons name="chatbubbles-outline" size={20} color="#666" />
                   </View>
-                )}
-              </View>
-            )}
+
+                  <TextInput
+                    style={styles.conversationInput}
+                    placeholder={`Start a conversation in ${forums.find(f => f._id === selectedForumId)?.title || "this forum"}...`}
+                    placeholderTextColor="#9CA3AF"
+                    value={newPostText}
+                    onChangeText={setNewPostText}
+                    multiline
+                    maxLength={5000}
+                  />
+
+                  {newPostText.trim().length > 0 && (
+                    <TouchableOpacity
+                      style={styles.sendButton}
+                      onPress={handleStartConversation}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="send" size={20} color="#256E63" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : null
+            }
+            renderItem={({ item }) => renderForumPost(item)}
           />
         )}
 
@@ -880,7 +871,7 @@ const styles = {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#E8F8F5",
     alignItems: "center" as const,
     justifyContent: "center" as const,
     marginLeft: 12,
