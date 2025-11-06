@@ -370,24 +370,47 @@ class CommunityAPIService {
       if (params?.sortOrder)
         queryParams.append("sortOrder", params.sortOrder);
 
-      const response = await fetch(
-        `${this.baseURL}/api/community/prayer-wall?${queryParams.toString()}`,
-        {
-          method: "GET",
-          headers,
-        }
-      );
+      const url = `${this.baseURL}/api/community/prayer-wall?${queryParams.toString()}`;
+      console.log("🌐 Fetching prayers from:", url);
+      console.log("🌐 Using baseURL:", this.baseURL);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+      });
+
+      console.log("📡 Response status:", response.status, response.statusText);
 
       return await this.handleResponse<{
         prayers: PrayerRequest[];
         pagination: any;
       }>(response);
     } catch (error) {
-      console.error("Error getting prayers:", error);
+      console.error("❌ Error getting prayers:", error);
+      console.error("❌ Error details:", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        baseURL: this.baseURL,
+        endpoint: "/api/community/prayer-wall",
+      });
+
+      // Provide more specific error messages
+      let errorMessage = "Failed to fetch prayers";
+      if (error instanceof Error) {
+        if (error.message.includes("Network request failed") || 
+            error.message.includes("fetch failed") ||
+            error.message.includes("ECONNREFUSED")) {
+          errorMessage = `Cannot connect to server. Please check:\n1. Backend server is running\n2. API URL is correct: ${this.baseURL}\n3. Your internet connection`;
+        } else if (error.message.includes("timeout")) {
+          errorMessage = "Request timed out. The server may be slow or unreachable.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to fetch prayers",
+        error: errorMessage,
         code: "NETWORK_ERROR",
       };
     }
