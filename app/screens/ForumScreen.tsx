@@ -476,17 +476,9 @@ export default function ForumScreen() {
 
           <Text style={styles.headerTitle}>Forum</Text>
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.createForumButton}
-              onPress={() => setShowCreateForumModal(true)}
-            >
-              <Ionicons name="add-circle-outline" size={24} color="#256E63" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.filterButton}>
-              <Ionicons name="options-outline" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.filterButton}>
+            <Ionicons name="options-outline" size={24} color="#000" />
+          </TouchableOpacity>
         </View>
 
         {/* Forum Category Selector */}
@@ -546,6 +538,14 @@ export default function ForumScreen() {
             <Text style={styles.emptyText}>
               Be the first to start a conversation in the forum!
             </Text>
+            <TouchableOpacity
+              style={styles.createForumButtonInEmpty}
+              onPress={() => setShowCreateForumModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle" size={20} color="#fff" />
+              <Text style={styles.createForumButtonText}>Create Forum</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
@@ -783,14 +783,6 @@ const styles = {
     fontWeight: "bold" as const,
     color: "#000",
     fontFamily: "Rubik-Bold",
-  },
-  headerActions: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-  },
-  createForumButton: {
-    padding: 8,
   },
   filterButton: {
     padding: 8,
@@ -1095,8 +1087,25 @@ const styles = {
     color: "#6B7280",
     textAlign: "center" as const,
     marginTop: 12,
+    marginBottom: 32,
     lineHeight: 24,
     fontFamily: "Rubik-Regular",
+  },
+  createForumButtonInEmpty: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: "#256E63",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    gap: 8,
+  },
+  createForumButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600" as const,
+    fontFamily: "Rubik-SemiBold",
   },
   footerLoader: {
     paddingVertical: 20,
