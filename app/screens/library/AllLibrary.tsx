@@ -1545,7 +1545,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   }, []);
 
   return (
-    <SafeAreaView className="flex-1  bg-[#98a2b318]">
+    <SafeAreaView className="flex-1 bg-white">
       {showSuccessCard && (
         <SuccessCard
           message={successMessage}

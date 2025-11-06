@@ -79,7 +79,7 @@ export default function LibraryScreen() {
           paddingBottom: 50,
         }}
         showsVerticalScrollIndicator={false}
-        className="bg-[#98a2b318] mt-6"
+        className="bg-white mt-6"
       >
         <ScrollView
           horizontal
