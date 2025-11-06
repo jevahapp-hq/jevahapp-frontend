@@ -7,20 +7,26 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Modal,
   SafeAreaView,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { usePolls } from "../hooks/usePolls";
+import { usePolls, isPollOwner } from "../hooks/usePolls";
 import { Poll as PollType } from "../utils/communityAPI";
 import { formatTimestamp } from "../utils/communityHelpers";
+import { CreatePollForm } from "../components/CreatePollForm";
 
 export default function PollsScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [editingPoll, setEditingPoll] = useState<PollType | null>(null);
+  const [selectedPollOwners, setSelectedPollOwners] = useState<Record<string, boolean>>({});
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
@@ -33,8 +39,25 @@ export default function PollsScreen() {
     hasMore,
     loadMore,
     refresh: refreshPolls,
+    createPoll,
     voteOnPoll,
-  } = usePolls({ status: "active", sortBy: "createdAt", sortOrder: "desc" });
+    updatePoll,
+    deletePoll,
+  } = usePolls({ status: statusFilter, sortBy: "createdAt", sortOrder: "desc" });
+
+  // Check ownership for each poll
+  useEffect(() => {
+    const checkOwnership = async () => {
+      const ownershipMap: Record<string, boolean> = {};
+      for (const poll of polls) {
+        ownershipMap[poll._id] = await isPollOwner(poll);
+      }
+      setSelectedPollOwners(ownershipMap);
+    };
+    if (polls.length > 0) {
+      checkOwnership();
+    }
+  }, [polls]);
 
   useEffect(() => {
     // Slide in animation from right to left
@@ -62,9 +85,9 @@ export default function PollsScreen() {
     setRefreshing(false);
   };
 
-  const handleVote = async (poll: PollType, optionId: string) => {
-    // Check if already voted
-    if (poll.userVoted) {
+  const handleVote = async (poll: PollType, optionIndex: number) => {
+    // Check if already voted (for single-select polls)
+    if (poll.userVoted && !poll.multiSelect) {
       Alert.alert("Already Voted", "You have already voted on this poll");
       return;
     }
@@ -75,93 +98,186 @@ export default function PollsScreen() {
       return;
     }
 
-    // Vote on poll
-    const result = await voteOnPoll(poll._id, optionId);
-    if (result) {
-      // Success - poll state updated automatically
-      Alert.alert("Success", "Your vote has been recorded!");
+    // Handle multi-select voting
+    if (poll.multiSelect) {
+      // For multi-select, we need to track selected options
+      // This is a simplified version - you may want to track selected options in state
+      const result = await voteOnPoll(poll._id, [optionIndex]);
+      if (result) {
+        // Success - poll state updated automatically
+      }
+    } else {
+      // Single-select voting
+      const result = await voteOnPoll(poll._id, optionIndex);
+      if (result) {
+        // Success - poll state updated automatically
+      }
     }
   };
 
-  const renderPoll = (poll: PollType) => (
-    <View key={poll._id} style={styles.pollContainer}>
-      <View style={styles.pollHeader}>
-        <Text style={styles.pollTitle}>{poll.title || poll.question}</Text>
-        {poll.description && (
-          <Text style={styles.pollDescription}>{poll.description}</Text>
-        )}
-        <View style={styles.pollMeta}>
-          <Text style={styles.pollTimestamp}>
-            {formatTimestamp(poll.createdAt)}
-          </Text>
-          <Text style={styles.pollVotes}>{poll.totalVotes || 0} votes</Text>
+  const handleCreatePoll = async (pollData: any) => {
+    const result = await createPoll(pollData);
+    if (result) {
+      setShowCreateForm(false);
+      Alert.alert("Success", "Poll created successfully!");
+    } else {
+      Alert.alert("Error", "Failed to create poll. Please try again.");
+    }
+  };
+
+  const handleUpdatePoll = async (pollData: any) => {
+    if (!editingPoll) return;
+    
+    const result = await updatePoll(editingPoll._id, pollData);
+    if (result) {
+      setEditingPoll(null);
+      Alert.alert("Success", "Poll updated successfully!");
+    } else {
+      Alert.alert("Error", "Failed to update poll. Please try again.");
+    }
+  };
+
+  const handleDeletePoll = async (pollId: string) => {
+    Alert.alert(
+      "Delete Poll",
+      "Are you sure you want to delete this poll? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const result = await deletePoll(pollId);
+            if (result) {
+              Alert.alert("Success", "Poll deleted successfully!");
+            } else {
+              Alert.alert("Error", "Failed to delete poll. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderPoll = (poll: PollType) => {
+    const isOwner = selectedPollOwners[poll._id] || false;
+    const userVoteOptionIds = Array.isArray(poll.userVoteOptionId)
+      ? poll.userVoteOptionId
+      : poll.userVoteOptionId
+      ? [poll.userVoteOptionId]
+      : [];
+
+    return (
+      <View key={poll._id} style={styles.pollContainer}>
+        <View style={styles.pollHeader}>
+          <View style={styles.pollTitleRow}>
+            <Text style={styles.pollTitle}>{poll.question || poll.title}</Text>
+            {isOwner && (
+              <View style={styles.ownerActions}>
+                <TouchableOpacity
+                  onPress={() => setEditingPoll(poll)}
+                  style={styles.actionButton}
+                >
+                  <Ionicons name="create-outline" size={18} color="#256E63" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDeletePoll(poll._id)}
+                  style={styles.actionButton}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          {poll.description && (
+            <Text style={styles.pollDescription}>{poll.description}</Text>
+          )}
+          <View style={styles.pollMeta}>
+            <Text style={styles.pollTimestamp}>
+              {formatTimestamp(poll.createdAt)}
+            </Text>
+            <Text style={styles.pollVotes}>{poll.totalVotes || 0} votes</Text>
+          </View>
+          {poll.multiSelect && (
+            <View style={styles.multiSelectBadge}>
+              <Text style={styles.multiSelectText}>Multiple choices allowed</Text>
+            </View>
+          )}
+          {!poll.isActive && (
+            <View style={styles.expiredBadge}>
+              <Text style={styles.expiredText}>Expired</Text>
+            </View>
+          )}
         </View>
-        {!poll.isActive && (
-          <View style={styles.expiredBadge}>
-            <Text style={styles.expiredText}>Expired</Text>
+
+        <View style={styles.pollOptions}>
+          {poll.options.map((option, index) => {
+            const isSelected = userVoteOptionIds.includes(option._id) || 
+              (poll.userVoted && !poll.multiSelect && poll.userVoteOptionId === option._id);
+            
+            return (
+              <TouchableOpacity
+                key={option._id}
+                style={[
+                  styles.pollOption,
+                  isSelected && styles.selectedOption,
+                  !poll.isActive && styles.disabledOption,
+                ]}
+                onPress={() => handleVote(poll, index)}
+                activeOpacity={0.7}
+                disabled={(!poll.multiSelect && poll.userVoted) || !poll.isActive}
+              >
+                <View style={styles.optionContent}>
+                  {poll.multiSelect && (
+                    <View style={styles.checkbox}>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={16} color="#256E63" />
+                      )}
+                    </View>
+                  )}
+                  <Text
+                    style={[
+                      styles.optionText,
+                      isSelected && styles.selectedOptionText,
+                    ]}
+                  >
+                    {option.text}
+                  </Text>
+                  {poll.userVoted && typeof option.percentage === "number" && (
+                    <Text style={styles.optionPercentage}>
+                      {option.percentage.toFixed(1)}%
+                    </Text>
+                  )}
+                </View>
+                {poll.userVoted && typeof option.percentage === "number" && (
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${option.percentage}%` },
+                      ]}
+                    />
+                  </View>
+                )}
+                {isSelected && (
+                  <View style={styles.voteCheckmark}>
+                    <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {poll.userVoted && (
+          <View style={styles.votedIndicator}>
+            <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+            <Text style={styles.votedText}>You voted</Text>
           </View>
         )}
       </View>
-
-      <View style={styles.pollOptions}>
-        {poll.options.map((option) => (
-          <TouchableOpacity
-            key={option._id}
-            style={[
-              styles.pollOption,
-              poll.userVoted &&
-                poll.userVoteOptionId === option._id &&
-                styles.selectedOption,
-              !poll.isActive && styles.disabledOption,
-            ]}
-            onPress={() => handleVote(poll, option._id)}
-            activeOpacity={0.7}
-            disabled={poll.userVoted || !poll.isActive}
-          >
-            <View style={styles.optionContent}>
-              <Text
-                style={[
-                  styles.optionText,
-                  poll.userVoted &&
-                    poll.userVoteOptionId === option._id &&
-                    styles.selectedOptionText,
-                ]}
-              >
-                {option.text}
-              </Text>
-              {poll.userVoted && typeof option.percentage === "number" && (
-                <Text style={styles.optionPercentage}>
-                  {option.percentage.toFixed(1)}%
-                </Text>
-              )}
-            </View>
-            {poll.userVoted && typeof option.percentage === "number" && (
-              <View style={styles.progressBar}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${option.percentage}%` },
-                  ]}
-                />
-              </View>
-            )}
-            {poll.userVoted && poll.userVoteOptionId === option._id && (
-              <View style={styles.voteCheckmark}>
-                <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {poll.userVoted && (
-        <View style={styles.votedIndicator}>
-          <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-          <Text style={styles.votedText}>You voted</Text>
-        </View>
-      )}
-    </View>
-  );
+    );
+  };
 
   return (
     <Animated.View
@@ -181,16 +297,36 @@ export default function PollsScreen() {
 
           <Text style={styles.headerTitle}>Polls & Surveys</Text>
 
-          <TouchableOpacity style={styles.filterButton}>
-            <Ionicons name="options-outline" size={24} color="#000" />
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => setShowCreateForm(true)}
+          >
+            <Ionicons name="add" size={24} color="#256E63" />
           </TouchableOpacity>
         </View>
 
-        {/* Today Button */}
-        <View style={styles.todayButtonContainer}>
-          <TouchableOpacity style={styles.todayButton} activeOpacity={0.8}>
-            <Text style={styles.todayButtonText}>Today</Text>
-          </TouchableOpacity>
+        {/* Filter Buttons */}
+        <View style={styles.filterContainer}>
+          {(["all", "open", "closed"] as const).map((status) => (
+            <TouchableOpacity
+              key={status}
+              style={[
+                styles.filterButton,
+                statusFilter === status && styles.filterButtonActive,
+              ]}
+              onPress={() => setStatusFilter(status)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  statusFilter === status && styles.filterButtonTextActive,
+                ]}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Polls List */}
@@ -245,6 +381,48 @@ export default function PollsScreen() {
             renderItem={({ item }) => renderPoll(item)}
           />
         )}
+
+        {/* Create/Edit Poll Modal */}
+        <Modal
+          visible={showCreateForm || !!editingPoll}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            setShowCreateForm(false);
+            setEditingPoll(null);
+          }}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingPoll ? "Edit Poll" : "Create Poll"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCreateForm(false);
+                  setEditingPoll(null);
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <CreatePollForm
+              initialPoll={editingPoll || undefined}
+              onSuccess={(pollData) => {
+                if (editingPoll) {
+                  handleUpdatePoll(pollData);
+                } else {
+                  handleCreatePoll(pollData);
+                }
+              }}
+              onCancel={() => {
+                setShowCreateForm(false);
+                setEditingPoll(null);
+              }}
+            />
+          </SafeAreaView>
+        </Modal>
       </SafeAreaView>
     </Animated.View>
   );
@@ -279,21 +457,35 @@ const styles = {
   filterButton: {
     padding: 8,
   },
-  todayButtonContainer: {
-    alignItems: "center" as const,
-    paddingBottom: 16,
+  createButton: {
+    padding: 8,
   },
-  todayButton: {
-    backgroundColor: "#FEF3C7",
+  filterContainer: {
+    flexDirection: "row" as const,
     paddingHorizontal: 20,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
   },
-  todayButtonText: {
+  filterButtonActive: {
+    backgroundColor: "#256E63",
+    borderColor: "#256E63",
+  },
+  filterButtonText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: "#374151",
-    fontFamily: "Rubik-Medium",
+    color: "#6B7280",
+    fontFamily: "Rubik-SemiBold",
+  },
+  filterButtonTextActive: {
+    color: "#fff",
   },
   pollsContainer: {
     flex: 1,
@@ -313,12 +505,26 @@ const styles = {
   pollHeader: {
     marginBottom: 16,
   },
+  pollTitleRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "flex-start" as const,
+    marginBottom: 8,
+  },
   pollTitle: {
     fontSize: 18,
     fontWeight: "bold" as const,
     color: "#111827",
     fontFamily: "Rubik-Bold",
-    marginBottom: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  ownerActions: {
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  actionButton: {
+    padding: 4,
   },
   pollDescription: {
     fontSize: 14,
@@ -362,6 +568,17 @@ const styles = {
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
     marginBottom: 8,
+    gap: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: "#D1D5DB",
+    borderRadius: 4,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    backgroundColor: "#fff",
   },
   optionText: {
     fontSize: 14,
@@ -496,5 +713,39 @@ const styles = {
   footerLoader: {
     paddingVertical: 20,
     alignItems: "center" as const,
+  },
+  multiSelectBadge: {
+    backgroundColor: "#E8F8F5",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  multiSelectText: {
+    fontSize: 12,
+    color: "#256E63",
+    fontFamily: "Rubik-Medium",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  modalHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold" as const,
+    color: "#111827",
+    fontFamily: "Rubik-Bold",
+  },
+  closeButton: {
+    padding: 4,
   },
 };
