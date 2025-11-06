@@ -99,6 +99,7 @@ export interface VideoCardProps {
   onSave: (key: string, item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
   onShare: (key: string, item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
   onModalToggle: (key: string | null) => void;
   modalVisible: string | null;
   comments: Record<string, any[]>;

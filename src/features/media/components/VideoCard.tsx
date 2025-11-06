@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
+import { useDeleteMedia } from "../../../../app/hooks/useDeleteMedia";
+import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -47,6 +49,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onSave,
   onDownload,
   onShare,
+  onDelete,
   onModalToggle,
   modalVisible,
   comments,
@@ -69,6 +72,38 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  
+  // Delete media functionality
+  const { deleteMediaItem, checkOwnership, isLoading: isDeleting } = useDeleteMedia();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  
+  // Check ownership when modal opens
+  useEffect(() => {
+    if (isModalVisible || modalVisible === modalKey) {
+      checkOwnership(video.uploadedBy || video.author?._id || video.authorInfo?._id).then(setIsOwner);
+    }
+  }, [isModalVisible, modalVisible, modalKey, video.uploadedBy, video.author, video.authorInfo, checkOwnership]);
+
+  // Handle delete button press
+  const handleDeletePress = useCallback(() => {
+    setShowDeleteModal(true);
+  }, []);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!video._id) return;
+    
+    const success = await deleteMediaItem(video._id);
+    if (success) {
+      setShowDeleteModal(false);
+      closeModal();
+      // Call parent's onDelete callback to remove from list
+      if (onDelete) {
+        onDelete(video);
+      }
+    }
+  }, [video, deleteMediaItem, closeModal, onDelete]);
 
   // Double-tap detection
   const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -890,6 +925,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         isSaved={!!contentStats[contentId]?.userInteractions?.saved}
         isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
         contentTitle={video.title}
+        mediaId={video._id}
+        uploadedBy={video.uploadedBy || video.author?._id || video.authorInfo?._id}
+        onDelete={handleDeletePress}
+        showDelete={isOwner}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteMediaConfirmation
+        visible={showDeleteModal}
+        mediaId={video._id || ""}
+        mediaTitle={video.title || "this media"}
+        onClose={() => setShowDeleteModal(false)}
+        onSuccess={handleDeleteConfirm}
       />
 
       {/* AI Description Box removed in src version; exists only in app layer */}

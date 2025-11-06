@@ -34,6 +34,11 @@ interface ContentActionModalProps {
   isSaved: boolean;
   isDownloaded: boolean;
   contentTitle?: string;
+  // Delete functionality props
+  mediaId?: string;
+  uploadedBy?: string | { _id: string };
+  onDelete?: () => void;
+  showDelete?: boolean;
 }
 
 export default function ContentActionModal({
@@ -46,6 +51,10 @@ export default function ContentActionModal({
   isSaved,
   isDownloaded,
   contentTitle = "Content",
+  mediaId,
+  uploadedBy,
+  onDelete,
+  showDelete = false,
 }: ContentActionModalProps) {
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
@@ -407,6 +416,55 @@ export default function ContentActionModal({
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
               </TouchableOpacity>
+
+              {/* Delete button - only show if user is the owner */}
+              {showDelete && onDelete && mediaId && (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onDelete) {
+                      onDelete();
+                    }
+                    handleClose();
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 12,
+                    marginTop: 8,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        backgroundColor: "#FEE2E2",
+                        borderRadius: 18,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 12,
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontFamily: "Rubik-SemiBold",
+                        color: "#DC2626",
+                      }}
+                    >
+                      Delete
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </Animated.View>
         </PanGestureHandler>

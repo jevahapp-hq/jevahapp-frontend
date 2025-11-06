@@ -151,6 +151,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const toggleModal = useCallback((val: string | null) => {
     setModalVisible(val);
   }, []);
+  
+  // Track deleted media IDs
+  const [deletedMediaIds, setDeletedMediaIds] = useState<Set<string>>(new Set());
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [hymns, setHymns] = useState<HymnItem[]>([]);
@@ -230,8 +233,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       return [];
     }
 
-    return sourceData.map(transformApiResponseToMediaItem);
-  }, [allContent, defaultContent]);
+    const transformed = sourceData.map(transformApiResponseToMediaItem);
+    // Filter out deleted items
+    return transformed.filter(item => !deletedMediaIds.has(item._id || ""));
+  }, [allContent, defaultContent, deletedMediaIds]);
 
   // Filter content based on contentType
   const filteredMediaList = useMemo(() => {
@@ -1350,6 +1355,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     );
   }, [hymns, loadingHymns, router]);
 
+  // Handle media deletion
+  const handleDeleteMedia = useCallback((item: MediaItem) => {
+    if (item._id) {
+      setDeletedMediaIds(prev => new Set([...prev, item._id!]));
+      setSuccessMessage("Media deleted successfully");
+      setShowSuccessCard(true);
+    }
+  }, []);
+
   // Render content by type
   const renderContentByType = useCallback(
     (item: MediaItem, index: number) => {
@@ -1388,6 +1402,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={handleSave}
               onDownload={handleDownloadPress}
               onShare={handleShare}
+              onDelete={handleDeleteMedia}
               onModalToggle={toggleModal}
               modalVisible={modalVisible}
               comments={comments}
@@ -1469,6 +1484,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       handleSave,
       handleShare,
       handleDownloadPress,
+      handleDeleteMedia,
       modalVisible,
       comments,
       checkIfDownloaded,
