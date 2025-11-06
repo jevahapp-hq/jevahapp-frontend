@@ -180,7 +180,7 @@ export default function PollsScreen() {
     }
 
     return (
-      <View key={poll._id} style={styles.pollContainer}>
+      <View style={styles.pollContainer}>
         <View style={styles.pollHeader}>
           <View style={styles.pollTitleRow}>
             <Text style={styles.pollTitle}>{poll.question || poll.title}</Text>
@@ -383,7 +383,7 @@ export default function PollsScreen() {
           <FlatList
             style={styles.pollsContainer}
             data={polls}
-            keyExtractor={(item) => item._id}
+            keyExtractor={(item, index) => String(item?._id || index)}
             showsVerticalScrollIndicator={false}
             refreshing={refreshing}
             onRefresh={handleRefresh}
