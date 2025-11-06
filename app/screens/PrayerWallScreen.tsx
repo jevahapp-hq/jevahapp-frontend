@@ -329,12 +329,12 @@ export default function PrayerWallScreen() {
         </View>
 
         {/* Prayer Requests Section */}
-        {loading && prayers.length === 0 ? (
+        {loading && (!prayers || prayers.length === 0) ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#DF930E" />
             <Text style={styles.loadingText}>Loading prayers...</Text>
           </View>
-        ) : error && prayers.length === 0 ? (
+        ) : error && (!prayers || prayers.length === 0) ? (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
             <Text style={styles.errorTitle}>Error loading prayers</Text>
@@ -347,7 +347,7 @@ export default function PrayerWallScreen() {
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
-        ) : displayPrayers.length === 0 ? (
+        ) : (!displayPrayers || displayPrayers.length === 0) ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="heart-outline" size={80} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>
@@ -389,7 +389,7 @@ export default function PrayerWallScreen() {
               </Text>
             }
             ListFooterComponent={
-              loading && prayers.length > 0 ? (
+              loading && prayers && prayers.length > 0 ? (
                 <View style={styles.footerLoader}>
                   <ActivityIndicator size="small" color="#DF930E" />
                 </View>
