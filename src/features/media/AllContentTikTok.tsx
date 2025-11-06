@@ -1428,6 +1428,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
+              onDelete={handleDeleteMedia}
               onPlay={playAudio}
               isPlaying={playingAudioId === `music-${item._id || index}`}
               progress={audioProgressMap[`music-${item._id || index}`] || 0}
@@ -1449,6 +1450,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
+              onDelete={handleDeleteMedia}
               checkIfDownloaded={checkIfDownloaded}
             />
           );
@@ -1465,6 +1467,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
+              onDelete={handleDeleteMedia}
               checkIfDownloaded={checkIfDownloaded}
             />
           );
