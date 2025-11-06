@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
+import { useDeleteMedia } from "../../../../app/hooks/useDeleteMedia";
+import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import {
   useContentCount,
   useUserInteraction,
@@ -27,10 +29,42 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onSave,
   onShare,
   onDownload,
+  onDelete,
   checkIfDownloaded,
 }) => {
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  
+  // Delete media functionality
+  const { deleteMediaItem, checkOwnership } = useDeleteMedia();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  
+  // Check ownership when modal opens
+  useEffect(() => {
+    if (isModalVisible) {
+      checkOwnership(ebook.uploadedBy || ebook.author?._id || ebook.authorInfo?._id).then(setIsOwner);
+    }
+  }, [isModalVisible, ebook.uploadedBy, ebook.author, ebook.authorInfo, checkOwnership]);
+
+  // Handle delete button press
+  const handleDeletePress = useCallback(() => {
+    setShowDeleteModal(true);
+  }, []);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!ebook._id) return;
+    
+    const success = await deleteMediaItem(ebook._id);
+    if (success) {
+      setShowDeleteModal(false);
+      closeModal();
+      if (onDelete) {
+        onDelete(ebook);
+      }
+    }
+  }, [ebook, deleteMediaItem, closeModal, onDelete]);
   const AvatarWithInitialFallback = ({
     imageSource,
     name,
@@ -306,6 +340,19 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         isSaved={!!(ebook as any)?.saved}
         isDownloaded={checkIfDownloaded(ebook._id || ebook.fileUrl)}
         contentTitle={ebook.title}
+        mediaId={ebook._id}
+        uploadedBy={ebook.uploadedBy || ebook.author?._id || ebook.authorInfo?._id}
+        onDelete={handleDeletePress}
+        showDelete={isOwner}
+      />
+      
+      {/* Delete Confirmation Modal */}
+      <DeleteMediaConfirmation
+        visible={showDeleteModal}
+        mediaId={ebook._id || ""}
+        mediaTitle={ebook.title || "this media"}
+        onClose={() => setShowDeleteModal(false)}
+        onSuccess={handleDeleteConfirm}
       />
     </View>
   );

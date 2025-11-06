@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
+import { useDeleteMedia } from "../../../../app/hooks/useDeleteMedia";
+import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import {
   useContentCount,
   useUserInteraction,
@@ -39,6 +41,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   onSave,
   onShare,
   onDownload,
+  onDelete,
   onPlay,
   isPlaying = false,
   progress = 0,
@@ -72,6 +75,37 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const [attemptedPlay, setAttemptedPlay] = useState(false);
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  
+  // Delete media functionality
+  const { deleteMediaItem, checkOwnership } = useDeleteMedia();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  
+  // Check ownership when modal opens
+  useEffect(() => {
+    if (isModalVisible) {
+      checkOwnership(audio.uploadedBy || audio.author?._id || audio.authorInfo?._id).then(setIsOwner);
+    }
+  }, [isModalVisible, audio.uploadedBy, audio.author, audio.authorInfo, checkOwnership]);
+
+  // Handle delete button press
+  const handleDeletePress = useCallback(() => {
+    setShowDeleteModal(true);
+  }, []);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!audio._id) return;
+    
+    const success = await deleteMediaItem(audio._id);
+    if (success) {
+      setShowDeleteModal(false);
+      closeModal();
+      if (onDelete) {
+        onDelete(audio);
+      }
+    }
+  }, [audio, deleteMediaItem, closeModal, onDelete]);
 
   const modalKey = `music-${audio._id || index}`;
   const contentId = audio._id || `music-${index}`;
@@ -422,6 +456,19 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         isSaved={!!audio.saves}
         isDownloaded={false}
         contentTitle={audio.title}
+        mediaId={audio._id}
+        uploadedBy={audio.uploadedBy || audio.author?._id || audio.authorInfo?._id}
+        onDelete={handleDeletePress}
+        showDelete={isOwner}
+      />
+      
+      {/* Delete Confirmation Modal */}
+      <DeleteMediaConfirmation
+        visible={showDeleteModal}
+        mediaId={audio._id || ""}
+        mediaTitle={audio.title || "this media"}
+        onClose={() => setShowDeleteModal(false)}
+        onSuccess={handleDeleteConfirm}
       />
     </View>
   );

@@ -121,6 +121,7 @@ export interface MusicCardProps {
   onSave: (item: MediaItem) => void;
   onShare: (item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
   onPlay: (uri: string, id: string) => void;
   isPlaying?: boolean;
   progress?: number;
@@ -137,6 +138,7 @@ export interface EbookCardProps {
   onSave: (item: MediaItem) => void;
   onShare: (item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
   checkIfDownloaded: (itemId: string) => boolean;
 }
 
