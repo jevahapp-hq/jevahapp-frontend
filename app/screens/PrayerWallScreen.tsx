@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
+  FlatList,
+  Image,
   SafeAreaView,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -13,23 +15,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-interface PrayerRequest {
-  id: string;
-  name: string;
-  time: string;
-  date: string;
-  prayer: string;
-  color: string;
-  shape:
-    | "rectangle"
-    | "circle"
-    | "scalloped"
-    | "square"
-    | "square2"
-    | "square3"
-    | "square4";
-}
+import { usePrayers, useSearchPrayers } from "../hooks/usePrayers";
+import { formatTimestamp } from "../utils/communityHelpers";
+import { PrayerRequest as PrayerRequestType } from "../utils/communityAPI";
 
 export default function PrayerWallScreen() {
   const router = useRouter();
@@ -37,6 +25,18 @@ export default function PrayerWallScreen() {
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
+
+  // Use hooks for prayers and search
+  const { prayers, loading, error, hasMore, loadMore, refresh, likePrayer } =
+    usePrayers();
+  const { query, setQuery, results: searchResults, loading: searchLoading } =
+    useSearchPrayers();
+
+  const [isSearching, setIsSearching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Determine which prayers to display (search results or all prayers)
+  const displayPrayers = isSearching && query.trim() ? searchResults : prayers;
 
   useEffect(() => {
     // Slide in animation from right to left
@@ -46,6 +46,14 @@ export default function PrayerWallScreen() {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  // Handle refresh from PostAPrayer
+  useEffect(() => {
+    if (params.refresh === "true") {
+      refresh();
+      router.replace("/screens/PrayerWallScreen");
+    }
+  }, [params.refresh]);
 
   const handleBackToCommunity = () => {
     // Slide out animation to the right
@@ -57,137 +65,25 @@ export default function PrayerWallScreen() {
       router.push("/screens/CommunityScreen");
     });
   };
-  const initialRequests: PrayerRequest[] = [
-    {
-      id: "1",
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Today",
-      prayer:
-        "Prayer for my InJob Interview today. That I find favour in the sight of the empliyers",
-      color: "#A16CE5",
-      shape: "square",
-    },
-    {
-      id: "2",
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Yesterday",
-      prayer:
-        "Prayer for my InJob Interview today. That I find favour in the sight of the empliyers",
-      color: "#1078B2",
-      shape: "square2",
-    },
-    {
-      id: "3",
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Yesterday",
-      prayer:
-        "Prayer for my InJob Interview today. That I find favour in the sight of the empliyers",
-      color: "#6360DE",
-      shape: "square3",
-    },
-    {
-      id: "4",
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Today",
-      prayer:
-        "Prayer for my InJob Interview today. That I find favour in the sight of the empliyers",
-      color: "#DFCC21",
-      shape: "square4",
-    },
-    {
-      id: "5",
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Today",
-      prayer:
-        "Prayer for my InJob Interview today. That I find favour in the sight of the empliyers",
-      color: "#FF69B4",
-      shape: "scalloped",
-    },
-    {
-      id: "6",
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Yesterday",
-      prayer:
-        "Prayer for my InJob Interview today. That I find favour in the sight of the empliyers",
-      color: "#1078B2",
-      shape: "square2",
-    },
-  ];
 
-  const [prayerRequests, setPrayerRequests] =
-    useState<PrayerRequest[]>(initialRequests);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
 
-  // If navigated back from PostAPrayer with a new post, append it once
-  const pendingNewPrayer = useMemo(() => {
-    const prayerText =
-      typeof params.prayer === "string" ? params.prayer : undefined;
-    const color = typeof params.color === "string" ? params.color : undefined;
-    const shape = (
-      typeof params.shape === "string" ? params.shape : undefined
-    ) as PrayerRequest["shape"] | undefined;
-    return prayerText && color && shape
-      ? { prayerText, color, shape }
-      : undefined;
-  }, [params]);
+  const handleSearch = (text: string) => {
+    setQuery(text);
+    setIsSearching(text.trim().length > 0);
+  };
 
-  useEffect(() => {
-    if (!pendingNewPrayer) return;
-    const newItem: PrayerRequest = {
-      id: String(Date.now()),
-      name: "-ABIDEMI JOHN",
-      time: "6am",
-      date: "Today",
-      prayer: pendingNewPrayer.prayerText,
-      color: pendingNewPrayer.color,
-      shape: pendingNewPrayer.shape,
-    };
-    setPrayerRequests((prev) => [newItem, ...prev]);
-    // clear params by replacing route without params
-    router.replace("/screens/PrayerWallScreen");
-  }, [pendingNewPrayer]);
-
-  // If navigated back from PostAPrayer with an updated prayer, update it
-  const pendingUpdatedPrayer = useMemo(() => {
-    const prayerText =
-      typeof params.updatedPrayer === "string"
-        ? params.updatedPrayer
-        : undefined;
-    const color =
-      typeof params.updatedColor === "string" ? params.updatedColor : undefined;
-    const shape = (
-      typeof params.updatedShape === "string" ? params.updatedShape : undefined
-    ) as PrayerRequest["shape"] | undefined;
-    const id =
-      typeof params.updatedId === "string" ? params.updatedId : undefined;
-    return prayerText && color && shape && id
-      ? { prayerText, color, shape, id }
-      : undefined;
-  }, [params]);
-
-  useEffect(() => {
-    if (pendingUpdatedPrayer) {
-      setPrayerRequests((prev) =>
-        prev.map((prayer) =>
-          prayer.id === pendingUpdatedPrayer.id
-            ? {
-                ...prayer,
-                prayer: pendingUpdatedPrayer.prayerText,
-                color: pendingUpdatedPrayer.color,
-                shape: pendingUpdatedPrayer.shape,
-              }
-            : prayer
-        )
-      );
-      // clear params by replacing route without params
-      router.replace("/screens/PrayerWallScreen");
-    }
-  }, [pendingUpdatedPrayer]);
+  const handleLike = async (prayer: PrayerRequestType) => {
+    await likePrayer(
+      prayer._id,
+      prayer.userLiked || false,
+      prayer.likesCount || 0
+    );
+  };
 
   const getCardStyle = (shape: string, color: string) => {
     const baseStyle = {
@@ -296,40 +192,43 @@ export default function PrayerWallScreen() {
       <View style={styles.scallopContainer}>
         {blobs}
         <View style={[styles.scallopCenter, { backgroundColor: prayer.color }]}>
-          <Text style={styles.prayerName}>{prayer.name}</Text>
+          <Text style={styles.prayerName}>{getAuthorName(prayer)}</Text>
           <Text style={styles.prayerTime}>
-            {prayer.time}, {prayer.date}
+            {formatTimestamp(prayer.createdAt)}
           </Text>
-          <Text style={styles.prayerText}>{prayer.prayer}</Text>
+          <Text style={styles.prayerText}>{prayer.prayerText}</Text>
         </View>
       </View>
     );
   };
 
-  const handlePrayerCardPress = (prayer: PrayerRequest) => {
+  const handlePrayerCardPress = (prayer: PrayerRequestType) => {
     router.push({
       pathname: "/screens/PostAPrayer",
       params: {
-        id: prayer.id,
-        name: prayer.name,
-        time: prayer.time,
-        date: prayer.date,
-        prayer: prayer.prayer,
+        id: prayer._id,
+        prayer: prayer.prayerText,
         color: prayer.color,
         shape: prayer.shape,
-        mode: "edit", // Indicates this is editing an existing prayer
+        mode: "edit",
       },
     });
   };
 
-  const renderPrayerCard = (prayer: PrayerRequest, index: number) => (
-    <View
-      key={prayer.id}
-      style={[
-        styles.cardContainer,
-        prayer.id === "6" ? styles.sixthCardOffset : undefined,
-      ]}
-    >
+  // Helper to format author name
+  const getAuthorName = (prayer: PrayerRequestType): string => {
+    if (prayer.anonymous) return "-Anonymous";
+    if (prayer.author?.firstName && prayer.author?.lastName) {
+      return `-${prayer.author.firstName} ${prayer.author.lastName}`.toUpperCase();
+    }
+    if (prayer.author?.username) {
+      return `-${prayer.author.username}`.toUpperCase();
+    }
+    return "-User";
+  };
+
+  const renderPrayerCard = (prayer: PrayerRequestType, index: number) => (
+    <View key={prayer._id}>
       <TouchableOpacity
         style={getCardStyle(prayer.shape, prayer.color)}
         activeOpacity={0.8}
@@ -361,11 +260,11 @@ export default function PrayerWallScreen() {
                 <View style={styles.triangle4} />
               </View>
             )}
-            <Text style={styles.prayerName}>{prayer.name}</Text>
+            <Text style={styles.prayerName}>{getAuthorName(prayer)}</Text>
             <Text style={styles.prayerTime}>
-              {prayer.time}, {prayer.date}
+              {formatTimestamp(prayer.createdAt)}
             </Text>
-            <Text style={styles.prayerText}>{prayer.prayer}</Text>
+            <Text style={styles.prayerText}>{prayer.prayerText}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -408,7 +307,16 @@ export default function PrayerWallScreen() {
               placeholder="search ,for prayers."
               placeholderTextColor="#9CA3AF"
               style={styles.searchInput}
+              value={query}
+              onChangeText={handleSearch}
             />
+            {searchLoading && (
+              <ActivityIndicator
+                size="small"
+                color="#DF930E"
+                style={{ marginLeft: 8 }}
+              />
+            )}
           </View>
           <TouchableOpacity
             style={styles.addButton}
@@ -420,27 +328,84 @@ export default function PrayerWallScreen() {
         </View>
 
         {/* Prayer Requests Section */}
-        <ScrollView
-          style={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.sectionTitle}>This week</Text>
-
-          <View style={styles.prayersGrid}>
-            <View style={styles.leftColumn}>
-              {prayerRequests
-                .filter((_, index) => index % 2 === 0)
-                .map((prayer, index) => renderPrayerCard(prayer, index * 2))}
-            </View>
-            <View style={styles.rightColumn}>
-              {prayerRequests
-                .filter((_, index) => index % 2 === 1)
-                .map((prayer, index) =>
-                  renderPrayerCard(prayer, index * 2 + 1)
-                )}
-            </View>
+        {loading && prayers.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#DF930E" />
+            <Text style={styles.loadingText}>Loading prayers...</Text>
           </View>
-        </ScrollView>
+        ) : error && prayers.length === 0 ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+            <Text style={styles.errorTitle}>Error loading prayers</Text>
+            <Text style={styles.errorText}>{error.error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={refresh}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : displayPrayers.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="heart-outline" size={80} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>
+              {isSearching ? "No prayers found" : "No prayers yet"}
+            </Text>
+            <Text style={styles.emptyText}>
+              {isSearching
+                ? "Try a different search term"
+                : "Be the first to post a prayer and share your heart with the community"}
+            </Text>
+            {!isSearching && (
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => router.push("/screens/PostAPrayer")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={20} color="white" />
+                <Text style={styles.emptyButtonText}>Post a Prayer</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            style={styles.contentContainer}
+            data={displayPrayers}
+            keyExtractor={(item) => item._id}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            onEndReached={() => {
+              if (!loading && hasMore && !isSearching) {
+                loadMore();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              <Text style={styles.sectionTitle}>
+                {isSearching ? "Search Results" : "This week"}
+              </Text>
+            }
+            ListFooterComponent={
+              loading && prayers.length > 0 ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator size="small" color="#DF930E" />
+                </View>
+              ) : null
+            }
+            renderItem={({ item, index }) => {
+              return (
+                <View style={styles.cardContainer}>
+                  {renderPrayerCard(item, index)}
+                </View>
+              );
+            }}
+            numColumns={2}
+            columnWrapperStyle={styles.prayersGrid}
+            contentContainerStyle={styles.flatListContent}
+          />
+        )}
       </SafeAreaView>
     </Animated.View>
   );
@@ -687,5 +652,98 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "center",
     padding: 12,
+  },
+  // Loading, Error, and Empty States
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+    fontFamily: "Rubik-Regular",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1F2937",
+    marginTop: 16,
+    fontFamily: "Rubik-Bold",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 8,
+    fontFamily: "Rubik-Regular",
+  },
+  retryButton: {
+    marginTop: 24,
+    backgroundColor: "#DF930E",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    fontFamily: "Rubik-SemiBold",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#1F2937",
+    marginTop: 24,
+    fontFamily: "Rubik-Bold",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 12,
+    lineHeight: 24,
+    fontFamily: "Rubik-Regular",
+  },
+  emptyButton: {
+    marginTop: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DF930E",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    fontFamily: "Rubik-SemiBold",
+  },
+  flatListContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: "center",
   },
 });

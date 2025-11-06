@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
   ScrollView,
   StyleSheet,
@@ -10,6 +12,8 @@ import {
   View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
+import { communityAPI } from "../utils/communityAPI";
+import { validatePrayerForm } from "../utils/communityHelpers";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -51,6 +55,9 @@ export default function PostAPrayer() {
   const [isTyping, setIsTyping] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [prayerId, setPrayerId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verseText, setVerseText] = useState("");
+  const [verseReference, setVerseReference] = useState("");
 
   // Check if we're in edit mode and initialize with existing prayer data
   useEffect(() => {
@@ -87,30 +94,85 @@ export default function PostAPrayer() {
     router.push("/screens/PrayerWallScreen");
   };
 
-  const handlePost = () => {
-    if (!prayerText.trim()) return;
+  const handlePost = async () => {
+    if (!prayerText.trim()) {
+      Alert.alert("Error", "Please enter your prayer text");
+      return;
+    }
 
-    if (isEditMode) {
-      // In edit mode, navigate back to prayer wall with updated prayer data
-      router.push({
-        pathname: "/screens/PrayerWallScreen",
-        params: {
-          updatedPrayer: prayerText,
-          updatedColor: selectedColor,
-          updatedShape: selectedShape,
-          updatedId: prayerId,
-        },
-      });
-    } else {
-      // In create mode, navigate back to prayer wall with the new prayer data
-      router.push({
-        pathname: "/screens/PrayerWallScreen",
-        params: {
-          prayer: prayerText,
+    // Validate form
+    const validation = validatePrayerForm({
+      prayerText,
+      color: selectedColor,
+      shape: selectedShape,
+      verse: verseText || verseReference
+        ? {
+            text: verseText,
+            reference: verseReference,
+          }
+        : undefined,
+    });
+
+    if (!validation.valid) {
+      Alert.alert("Validation Error", validation.errors.join("\n"));
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      if (isEditMode && prayerId) {
+        // Update existing prayer
+        const response = await communityAPI.updatePrayer(prayerId, {
+          prayerText,
           color: selectedColor,
           shape: selectedShape,
-        },
-      });
+          verse: verseText || verseReference
+            ? {
+                text: verseText,
+                reference: verseReference,
+              }
+            : undefined,
+        });
+
+        if (response.success) {
+          router.push({
+            pathname: "/screens/PrayerWallScreen",
+            params: { refresh: "true" },
+          });
+        } else {
+          Alert.alert("Error", response.error || "Failed to update prayer");
+        }
+      } else {
+        // Create new prayer
+        const response = await communityAPI.createPrayer({
+          prayerText,
+          color: selectedColor,
+          shape: selectedShape,
+          verse: verseText || verseReference
+            ? {
+                text: verseText,
+                reference: verseReference,
+              }
+            : undefined,
+        });
+
+        if (response.success) {
+          router.push({
+            pathname: "/screens/PrayerWallScreen",
+            params: { refresh: "true" },
+          });
+        } else {
+          Alert.alert("Error", response.error || "Failed to create prayer");
+        }
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Error",
+        error.message || "An error occurred. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -545,23 +607,27 @@ export default function PostAPrayer() {
             <TouchableOpacity
               style={[
                 styles.postButton,
-                !prayerText.trim()
+                (!prayerText.trim() || isSubmitting)
                   ? styles.disabledButton
                   : styles.activeButton,
               ]}
               onPress={handlePost}
-              disabled={!prayerText.trim()}
+              disabled={!prayerText.trim() || isSubmitting}
             >
-              <Text
-                style={[
-                  styles.postButtonText,
-                  !prayerText.trim()
-                    ? styles.disabledButtonText
-                    : styles.activeButtonText,
-                ]}
-              >
-                Post
-              </Text>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text
+                  style={[
+                    styles.postButtonText,
+                    (!prayerText.trim() || isSubmitting)
+                      ? styles.disabledButtonText
+                      : styles.activeButtonText,
+                  ]}
+                >
+                  {isEditMode ? "Update" : "Post"}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

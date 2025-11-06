@@ -37,6 +37,11 @@ export const communityService = {
   },
 };
 
+// Re-export types and services from communityAPI for convenience
+export * from "../utils/communityAPI";
+export { communityAPI } from "../utils/communityAPI";
+export { ApiErrorHandler, type ApiError } from "../utils/apiErrorHandler";
+
 export default communityService;
 
 
