@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -58,15 +58,21 @@ export default function PostAPrayer() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verseText, setVerseText] = useState("");
   const [verseReference, setVerseReference] = useState("");
+  const textInputRef = useRef<TextInput | null>(null);
+  const scallopedTextInputRef = useRef<TextInput | null>(null);
 
   // Check if we're in edit mode and initialize with existing prayer data
   useEffect(() => {
     if (params.mode === "edit" && params.prayer) {
       setIsEditMode(true);
-      setPrayerId(params.id as string);
-      setPrayerText(params.prayer as string);
+      setPrayerId((params.id as string) || null);
+      setPrayerText((params.prayer as string) || "");
       setSelectedColor((params.color as string) || availableColors[0]);
       setSelectedShape((params.shape as ShapeType) || "square");
+      // If there's existing text, show typing state
+      if (params.prayer) {
+        setIsTyping(true);
+      }
     }
   }, [params]);
 
@@ -135,10 +141,11 @@ export default function PostAPrayer() {
             : undefined,
         });
 
-        if (response.success) {
+        if (response.success && response.data) {
+          // Success - redirect to prayer wall
           router.push({
             pathname: "/screens/PrayerWallScreen",
-            params: { refresh: "true" },
+            params: { refresh: "true", highlightPrayerId: response.data._id },
           });
         } else {
           Alert.alert("Error", response.error || "Failed to update prayer");
@@ -157,10 +164,12 @@ export default function PostAPrayer() {
             : undefined,
         });
 
-        if (response.success) {
+        if (response.success && response.data) {
+          // Success - redirect to prayer wall
+          // The prayer wall will refresh and show the new prayer
           router.push({
             pathname: "/screens/PrayerWallScreen",
-            params: { refresh: "true" },
+            params: { refresh: "true", highlightPrayerId: response.data._id },
           });
         } else {
           Alert.alert("Error", response.error || "Failed to create prayer");
@@ -289,9 +298,35 @@ export default function PostAPrayer() {
         <View
           style={[styles.scallopCenter, { backgroundColor: selectedColor }]}
         >
-          <Text style={[styles.previewText, { opacity: prayerText ? 1 : 0.7 }]}>
-            {prayerText || "Tap to write your prayer"}
-          </Text>
+          <TextInput
+            ref={scallopedTextInputRef}
+            style={styles.scallopedTextInput}
+            placeholder=""
+            placeholderTextColor="rgba(255,255,255,0.7)"
+            value={prayerText}
+            onChangeText={(text) => {
+              setPrayerText(text);
+              if (text.trim().length > 0 && !isTyping) {
+                setIsTyping(true);
+              }
+            }}
+            multiline
+            maxLength={2000}
+            textAlignVertical="top"
+            onFocus={() => setIsTyping(true)}
+            onBlur={() => {
+              if (!prayerText.trim()) {
+                setIsTyping(false);
+              }
+            }}
+          />
+          {!prayerText.trim() && (
+            <View style={styles.scallopedPlaceholderOverlay} pointerEvents="none">
+              <Text style={styles.scallopedPlaceholder}>
+                Tap to write your prayer
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -302,24 +337,16 @@ export default function PostAPrayer() {
       return (
         <TouchableOpacity
           style={styles.previewTouchable}
-          onPress={() => setIsTyping(true)}
+          onPress={() => {
+            setIsTyping(true);
+            // Focus the input when tapped
+            if (scallopedTextInputRef.current) {
+              scallopedTextInputRef.current.focus();
+            }
+          }}
           activeOpacity={0.8}
         >
           {renderScallopedCard()}
-          {isTyping && (
-            <TextInput
-              style={styles.scallopedTextInput}
-              placeholder="Type your prayer here..."
-              placeholderTextColor="rgba(255,255,255,0.7)"
-              value={prayerText}
-              onChangeText={setPrayerText}
-              multiline
-              maxLength={40}
-              textAlignVertical="top"
-              autoFocus
-              onBlur={() => setIsTyping(false)}
-            />
-          )}
         </TouchableOpacity>
       );
     }
@@ -327,7 +354,13 @@ export default function PostAPrayer() {
     return (
       <TouchableOpacity
         style={styles.previewTouchable}
-        onPress={() => setIsTyping(true)}
+        onPress={() => {
+          setIsTyping(true);
+          // Focus the input when tapped
+          if (textInputRef.current) {
+            textInputRef.current.focus();
+          }
+        }}
         activeOpacity={0.8}
       >
         <View style={getCardStyle(selectedShape, selectedColor)}>
@@ -374,25 +407,35 @@ export default function PostAPrayer() {
             </View>
           )}
           <View style={styles.textContainer}>
-            {isTyping ? (
-              <TextInput
-                style={styles.previewTextInput}
-                placeholder="Type your prayer here..."
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                value={prayerText}
-                onChangeText={setPrayerText}
-                multiline
-                maxLength={40}
-                textAlignVertical="top"
-                autoFocus
-                onBlur={() => setIsTyping(false)}
-              />
-            ) : (
-              <Text
-                style={[styles.previewText, { opacity: prayerText ? 1 : 0.7 }]}
-              >
-                {prayerText || "Tap to write your prayer"}
-              </Text>
+            <TextInput
+              ref={textInputRef}
+              style={styles.previewTextInput}
+              placeholder=""
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              value={prayerText}
+              onChangeText={(text) => {
+                setPrayerText(text);
+                if (text.trim().length > 0 && !isTyping) {
+                  setIsTyping(true);
+                }
+              }}
+              multiline
+              maxLength={2000}
+              textAlignVertical="top"
+              onFocus={() => setIsTyping(true)}
+              onBlur={() => {
+                // Don't auto-blur if there's text
+                if (!prayerText.trim()) {
+                  setIsTyping(false);
+                }
+              }}
+            />
+            {!prayerText.trim() && (
+              <View style={styles.placeholderOverlay} pointerEvents="none">
+                <Text style={styles.previewPlaceholder}>
+                  Tap to write your prayer
+                </Text>
+              </View>
             )}
           </View>
         </View>
@@ -602,34 +645,36 @@ export default function PostAPrayer() {
           <Text style={styles.bibleReference}>- 1 John 5:14</Text>
           <View style={styles.previewContainer}>{renderPreview()}</View>
 
-          {/* Post Button */}
-          <View style={styles.postButtonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.postButton,
-                (!prayerText.trim() || isSubmitting)
-                  ? styles.disabledButton
-                  : styles.activeButton,
-              ]}
-              onPress={handlePost}
-              disabled={!prayerText.trim() || isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text
-                  style={[
-                    styles.postButtonText,
-                    (!prayerText.trim() || isSubmitting)
-                      ? styles.disabledButtonText
-                      : styles.activeButtonText,
-                  ]}
-                >
-                  {isEditMode ? "Update" : "Post"}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          {/* Post Button - Only show when user has typed */}
+          {prayerText.trim().length > 0 && (
+            <View style={styles.postButtonContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.postButton,
+                  isSubmitting
+                    ? styles.disabledButton
+                    : styles.activeButton,
+                ]}
+                onPress={handlePost}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text
+                    style={[
+                      styles.postButtonText,
+                      isSubmitting
+                        ? styles.disabledButtonText
+                        : styles.activeButtonText,
+                    ]}
+                  >
+                    {isEditMode ? "Update Prayer" : "Post Prayer"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Color Selection */}
@@ -963,7 +1008,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
     width: "100%",
     minHeight: 60,
-    textAlignVertical: "center",
+    textAlignVertical: "top",
+    padding: 8,
   },
   scallopedTextInput: {
     position: "absolute",
@@ -985,6 +1031,39 @@ const styles = StyleSheet.create({
     fontFamily: "Rubik-Regular",
     textAlign: "center",
     paddingHorizontal: 8,
+  },
+  placeholderOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewPlaceholder: {
+    color: "white",
+    fontSize: 14,
+    fontFamily: "Rubik-Regular",
+    textAlign: "center",
+    opacity: 0.7,
+  },
+  scallopedPlaceholderOverlay: {
+    position: "absolute",
+    top: 28,
+    left: 28,
+    width: 160,
+    height: 160,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 80,
+  },
+  scallopedPlaceholder: {
+    color: "white",
+    fontSize: 14,
+    fontFamily: "Rubik-Regular",
+    textAlign: "center",
+    opacity: 0.7,
   },
   // Shape styles (copied from PrayerWallScreen)
   diagonalCut: {

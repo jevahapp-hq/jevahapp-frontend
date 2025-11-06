@@ -51,6 +51,7 @@ export default function PrayerWallScreen() {
   useEffect(() => {
     if (params.refresh === "true") {
       refresh();
+      // Clear params after refresh
       router.replace("/screens/PrayerWallScreen");
     }
   }, [params.refresh]);
