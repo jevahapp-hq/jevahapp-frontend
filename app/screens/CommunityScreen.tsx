@@ -1,18 +1,15 @@
 // CommunityScreen.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, SafeAreaView, Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import { SafeAreaView, Text, TouchableOpacity, View } from "react-native";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { navigateMainTab } from "../utils/navigation";
-import communityService, { CommunityModuleDescriptor, CommunityModuleKey } from "../services/communityService";
 
 interface CommunityCard {
   id: string;
   title: string;
   color: string;
-  key: CommunityModuleKey;
-  route?: string;
 }
 
 export default function CommunityScreen() {
@@ -21,82 +18,25 @@ export default function CommunityScreen() {
   const PADDING_X = 20; // matches screen paddingHorizontal
   const ITEM_GAP = 16;
 
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [modules, setModules] = useState<CommunityModuleDescriptor[]>([]);
-
-  useEffect(() => {
-    let mounted = true;
-    setError(null);
-    setLoading(true);
-    communityService
-      .fetchModules()
-      .then((res) => {
-        if (!mounted) return;
-        if ((res as any)?.success && Array.isArray(res.modules)) {
-          const visible = res.modules
-            .filter((m) => m.visible !== false)
-            .sort((a, b) => (a.order || 0) - (b.order || 0));
-          setModules(visible);
-        } else {
-          setError("Failed to load modules");
-        }
-      })
-      .catch((e) => {
-        if (!mounted) return;
-        setError(String(e?.message || e || "Failed to load modules"));
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const communityCards: CommunityCard[] = useMemo(() => {
-    if (!modules || !modules.length) return [] as CommunityCard[];
-    return modules.map((m) => ({
-      id: m.id,
-      title: m.title,
-      color: m.color || mapColorForKey(m.key),
-      key: m.key,
-      route: m.route,
-    }));
-  }, [modules]);
-
-  function mapColorForKey(key: CommunityModuleKey): string {
-    switch (key) {
-      case "prayer_wall":
-        return "#279CCA";
-      case "forum":
-        return "#CC1CC0";
-      case "polls":
-        return "#DF930E";
-      case "groups":
-        return "#666AF6";
-      default:
-        return "#279CCA";
-    }
-  }
+  const communityCards: CommunityCard[] = [
+    { id: "1", title: "Prayer Wall", color: "#279CCA" },
+    { id: "2", title: "Forum", color: "#CC1CC0" },
+    { id: "3", title: "Polls/surveys", color: "#DF930E" },
+    { id: "4", title: "Groups", color: "#666AF6" },
+  ];
 
   const handleCardPress = (card: CommunityCard) => {
-    if (card.route) {
-      router.push(card.route as any);
-      return;
-    }
-    switch (card.key) {
-      case "prayer_wall":
+    switch (card.title) {
+      case "Prayer Wall":
         router.push("/screens/PrayerWallScreen");
         break;
-      case "forum":
+      case "Forum":
         router.push("/screens/ForumScreen");
         break;
-      case "polls":
+      case "Polls/surveys":
         router.push("/screens/PollsScreen");
         break;
-      case "groups":
+      case "Groups":
         router.push("/screens/GroupsScreen");
         break;
       default:
@@ -153,34 +93,6 @@ export default function CommunityScreen() {
           paddingBottom: 100,
         }}
       >
-        {loading ? (
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ActivityIndicator size="small" color="#666" />
-          </View>
-        ) : error ? (
-          <View
-            style={{
-              paddingHorizontal: 8,
-              paddingVertical: 12,
-            }}
-          >
-            <Text
-              style={{
-                color: "#C00",
-                textAlign: "center",
-                fontFamily: "Rubik-Regular",
-              }}
-            >
-              {error}
-            </Text>
-          </View>
-        ) : null}
         <View
           style={{
             flexDirection: "row",
@@ -188,7 +100,7 @@ export default function CommunityScreen() {
             justifyContent: "space-between",
           }}
         >
-          {communityCards.map((card, idx) => (
+          {communityCards.map((card) => (
             <TouchableOpacity
               key={card.id}
               onPress={() => handleCardPress(card)}
