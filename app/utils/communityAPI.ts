@@ -630,7 +630,18 @@ class CommunityAPIService {
         }
       );
 
-      return await this.handleResponse<Forum>(response);
+      const result = await this.handleResponse<{ data: Forum } | Forum>(response);
+      
+      // Handle different response formats
+      if (result.success && result.data) {
+        const forumData = (result.data as any).data || result.data;
+        return {
+          success: true,
+          data: forumData as Forum,
+        };
+      }
+
+      return result as ApiResponse<Forum>;
     } catch (error) {
       console.error("Error creating forum:", error);
       return {
