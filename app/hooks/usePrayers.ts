@@ -12,12 +12,15 @@ export function usePrayers() {
 
   const loadPrayers = useCallback(
     async (reset = false) => {
-      if (loading || (!hasMore && !reset)) return;
+      // Allow reset to bypass loading and hasMore checks
+      if (!reset && (loading || !hasMore)) return;
 
       try {
         setLoading(true);
         setError(null);
         const currentPage = reset ? 1 : page;
+        console.log("🔄 Loading prayers - page:", currentPage, "reset:", reset);
+        
         const response = await communityAPI.getPrayers({
           page: currentPage,
           limit: 20,
@@ -25,25 +28,39 @@ export function usePrayers() {
           sortOrder: "desc",
         });
 
+        console.log("📥 Prayer API response:", {
+          success: response.success,
+          hasData: !!response.data,
+          prayersCount: response.data?.prayers?.length || 0,
+          error: response.error,
+        });
+
         if (response.success && response.data) {
           const { prayers: newPrayers, pagination } = response.data;
+          console.log("✅ Setting prayers:", newPrayers.length, "items");
+          console.log("📊 Pagination:", pagination);
+          
           if (reset) {
             setPrayers(newPrayers);
           } else {
             setPrayers((prev) => [...prev, ...newPrayers]);
           }
 
-          setHasMore(pagination.hasMore);
+          // Ensure hasMore is properly set (default to true if undefined)
+          setHasMore(pagination.hasMore !== undefined ? pagination.hasMore : true);
           setPage(currentPage + 1);
         } else {
+          console.error("❌ Failed to load prayers:", response.error);
           const apiError = ApiErrorHandler.handle(response);
           setError(apiError);
         }
       } catch (err: any) {
+        console.error("❌ Exception loading prayers:", err);
         const apiError = ApiErrorHandler.handle(err);
         setError(apiError);
       } finally {
         setLoading(false);
+        console.log("✅ Loading complete, loading set to false");
       }
     },
     [page, loading, hasMore]
@@ -58,18 +75,35 @@ export function usePrayers() {
   const createPrayer = useCallback(
     async (prayerData: CreatePrayerRequest) => {
       try {
+        console.log("📝 Creating prayer with data:", {
+          prayerText: prayerData.prayerText?.substring(0, 50) + "...",
+          color: prayerData.color,
+          shape: prayerData.shape,
+        });
+        
         setLoading(true);
         setError(null);
         const response = await communityAPI.createPrayer(prayerData);
+        
+        console.log("📥 Create prayer API response:", {
+          success: response.success,
+          hasData: !!response.data,
+          prayerId: response.data?._id,
+          error: response.error,
+        });
+        
         if (response.success && response.data) {
+          console.log("✅ Prayer created successfully:", response.data._id);
           setPrayers((prev) => [response.data!, ...prev]);
           return response.data;
         } else {
+          console.error("❌ Failed to create prayer:", response.error);
           const apiError = ApiErrorHandler.handle(response);
           setError(apiError);
           return null;
         }
       } catch (err: any) {
+        console.error("❌ Exception creating prayer:", err);
         const apiError = ApiErrorHandler.handle(err);
         setError(apiError);
         return null;

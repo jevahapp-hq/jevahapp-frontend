@@ -356,19 +356,26 @@ export default function GroupsScreen() {
                 <ActivityIndicator size="large" color="#1C8E79" />
                 <Text style={{ marginTop: 16, fontSize: 16, color: '#6B7280', fontFamily: 'Rubik-Regular' }}>Loading groups...</Text>
               </View>
-            ) : error && (!groups || groups.length === 0) ? (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
-                <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2937', marginTop: 16, fontFamily: 'Rubik-Bold' }}>Error loading groups</Text>
-                <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 8, fontFamily: 'Rubik-Regular' }}>{error.error}</Text>
-                <TouchableOpacity
-                  style={{ backgroundColor: '#1C8E79', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, marginTop: 16 }}
-                  onPress={refresh}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ color: 'white', fontSize: 16, fontWeight: '600', fontFamily: 'Rubik-SemiBold' }}>Retry</Text>
-                </TouchableOpacity>
-              </View>
+            ) : error && (!groups || groups.length === 0) && loading === false ? (
+              // Only show error if we're not loading and we have an actual error (not just empty result)
+              // Check if it's a real error vs just no groups
+              error.code === "HTTP_ERROR" && error.error?.includes("404") ? (
+                // Treat 404 as empty state, not error
+                renderEmptyState()
+              ) : (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
+                  <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2937', marginTop: 16, fontFamily: 'Rubik-Bold' }}>Error loading groups</Text>
+                  <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 8, fontFamily: 'Rubik-Regular' }}>{error.error}</Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#1C8E79', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, marginTop: 16 }}
+                    onPress={refresh}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: 'white', fontSize: 16, fontWeight: '600', fontFamily: 'Rubik-SemiBold' }}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              )
             ) : (!groups || groups.length === 0) ? (
               renderEmptyState()
             ) : (

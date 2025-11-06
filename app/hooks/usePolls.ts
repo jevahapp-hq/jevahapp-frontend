@@ -33,6 +33,31 @@ export function usePolls(params?: {
 
         if (response.success && response.data) {
           const items = response.data.items || response.data.polls || [];
+          
+          // Log polls data to debug missing options
+          console.log("📊 Polls loaded:", {
+            count: items.length,
+            status: params?.status || "all",
+            samplePoll: items.length > 0 ? {
+              id: items[0]._id,
+              question: items[0].question || items[0].title,
+              hasOptions: !!items[0].options,
+              optionsCount: items[0].options?.length || 0,
+              isActive: items[0].isActive,
+            } : null,
+          });
+          
+          // Log if any polls are missing options
+          items.forEach((poll: any) => {
+            if (!poll.options || poll.options.length === 0) {
+              console.warn("⚠️ Poll missing options:", {
+                id: poll._id,
+                question: poll.question || poll.title,
+                fullPoll: JSON.stringify(poll, null, 2).substring(0, 1000),
+              });
+            }
+          });
+          
           const pagination = response.data.pagination || {
             hasMore: (response.data.page || 1) * (response.data.pageSize || 20) < (response.data.total || 0),
           };

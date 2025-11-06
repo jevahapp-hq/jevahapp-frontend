@@ -24,7 +24,8 @@ export default function PollsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  // Default to showing only active/open polls (not expired)
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("open");
   const [editingPoll, setEditingPoll] = useState<PollType | null>(null);
   const [selectedPollOwners, setSelectedPollOwners] = useState<Record<string, boolean>>({});
   const slideAnim = useRef(
@@ -167,8 +168,19 @@ export default function PollsScreen() {
       ? [poll.userVoteOptionId]
       : [];
 
+    // Debug logging for missing options
+    if (!poll.options || poll.options.length === 0) {
+      console.warn("⚠️ Poll missing options:", {
+        pollId: poll._id,
+        question: poll.question || poll.title,
+        hasOptions: !!poll.options,
+        optionsLength: poll.options?.length || 0,
+        pollData: JSON.stringify(poll, null, 2).substring(0, 500),
+      });
+    }
+
     return (
-      <View key={poll._id} style={styles.pollContainer}>
+      <View style={styles.pollContainer}>
         <View style={styles.pollHeader}>
           <View style={styles.pollTitleRow}>
             <Text style={styles.pollTitle}>{poll.question || poll.title}</Text>
@@ -211,62 +223,73 @@ export default function PollsScreen() {
         </View>
 
         <View style={styles.pollOptions}>
-          {poll.options.map((option, index) => {
-            const isSelected = userVoteOptionIds.includes(option._id) || 
-              (poll.userVoted && !poll.multiSelect && poll.userVoteOptionId === option._id);
-            
-            return (
-              <TouchableOpacity
-                key={option._id}
-                style={[
-                  styles.pollOption,
-                  isSelected && styles.selectedOption,
-                  !poll.isActive && styles.disabledOption,
-                ]}
-                onPress={() => handleVote(poll, index)}
-                activeOpacity={0.7}
-                disabled={(!poll.multiSelect && poll.userVoted) || !poll.isActive}
-              >
-                <View style={styles.optionContent}>
-                  {poll.multiSelect && (
-                    <View style={styles.checkbox}>
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={16} color="#256E63" />
-                      )}
+          {(!poll.options || poll.options.length === 0) ? (
+            <View style={styles.noOptionsContainer}>
+              <Text style={styles.noOptionsText}>
+                No options available for this poll
+              </Text>
+            </View>
+          ) : (
+            poll.options.map((option, index) => {
+              const isSelected = userVoteOptionIds.includes(option._id) || 
+                (poll.userVoted && !poll.multiSelect && poll.userVoteOptionId === option._id);
+              
+              // Use option._id if available, otherwise fallback to index
+              const optionKey = option._id || `option-${index}`;
+              
+              return (
+                <TouchableOpacity
+                  key={optionKey}
+                  style={[
+                    styles.pollOption,
+                    isSelected && styles.selectedOption,
+                    !poll.isActive && styles.disabledOption,
+                  ]}
+                  onPress={() => handleVote(poll, index)}
+                  activeOpacity={0.7}
+                  disabled={(!poll.multiSelect && poll.userVoted) || !poll.isActive}
+                >
+                  <View style={styles.optionContent}>
+                    {poll.multiSelect && (
+                      <View style={styles.checkbox}>
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={16} color="#256E63" />
+                        )}
+                      </View>
+                    )}
+                    <Text
+                      style={[
+                        styles.optionText,
+                        isSelected && styles.selectedOptionText,
+                      ]}
+                    >
+                      {option.text || `Option ${index + 1}`}
+                    </Text>
+                    {poll.userVoted && typeof option.percentage === "number" && (
+                      <Text style={styles.optionPercentage}>
+                        {option.percentage.toFixed(1)}%
+                      </Text>
+                    )}
+                  </View>
+                  {poll.userVoted && typeof option.percentage === "number" && (
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${option.percentage}%` },
+                        ]}
+                      />
                     </View>
                   )}
-                  <Text
-                    style={[
-                      styles.optionText,
-                      isSelected && styles.selectedOptionText,
-                    ]}
-                  >
-                    {option.text}
-                  </Text>
-                  {poll.userVoted && typeof option.percentage === "number" && (
-                    <Text style={styles.optionPercentage}>
-                      {option.percentage.toFixed(1)}%
-                    </Text>
+                  {isSelected && (
+                    <View style={styles.voteCheckmark}>
+                      <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
+                    </View>
                   )}
-                </View>
-                {poll.userVoted && typeof option.percentage === "number" && (
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: `${option.percentage}%` },
-                      ]}
-                    />
-                  </View>
-                )}
-                {isSelected && (
-                  <View style={styles.voteCheckmark}>
-                    <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
         {poll.userVoted && (
@@ -550,6 +573,20 @@ const styles = {
   },
   pollOptions: {
     marginBottom: 12,
+  },
+  noOptionsContainer: {
+    padding: 16,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    marginBottom: 8,
+  },
+  noOptionsText: {
+    fontSize: 14,
+    color: "#92400E",
+    fontFamily: "Rubik-Regular",
+    textAlign: "center" as const,
   },
   pollOption: {
     backgroundColor: "#F9FAFB",

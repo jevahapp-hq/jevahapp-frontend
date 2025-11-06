@@ -18,30 +18,71 @@ export function useMyGroups() {
         setLoading(true);
         setError(null);
         const currentPage = reset ? 1 : page;
+        
+        console.log("🔄 Loading my groups - page:", currentPage, "reset:", reset);
+        
         const response = await communityAPI.getMyGroups({
           page: currentPage,
           limit: 20,
         });
 
-        if (response.success && response.data) {
-          const { groups: newGroups, pagination } = response.data;
+        console.log("📥 My groups API response:", {
+          success: response.success,
+          hasData: !!response.data,
+          groupsCount: response.data?.groups?.length || 0,
+          error: response.error,
+          code: response.code,
+        });
+
+        // Handle successful response - even if groups array is empty
+        if (response.success) {
+          // Handle different response structures
+          const responseData = response.data || {};
+          const newGroups = responseData.groups || responseData.items || [];
+          const pagination = responseData.pagination || {
+            hasMore: false,
+            page: currentPage,
+            limit: 20,
+            total: newGroups.length,
+          };
+
+          console.log("✅ Groups loaded:", newGroups.length, "items");
+          console.log("📊 Pagination:", pagination);
+
           if (reset) {
             setGroups(newGroups);
           } else {
             setGroups((prev) => [...prev, ...newGroups]);
           }
 
-          setHasMore(pagination.hasMore);
+          setHasMore(pagination.hasMore !== undefined ? pagination.hasMore : newGroups.length >= 20);
           setPage(currentPage + 1);
+          
+          // Clear error if we got a successful response (even with empty array)
+          setError(null);
         } else {
-          const apiError = ApiErrorHandler.handle(response);
-          setError(apiError);
+          // Only set error for actual failures (not 404 which might mean no groups)
+          // Check if it's a 404 - might just mean no groups exist
+          if (response.code === "HTTP_ERROR" && response.error?.includes("404")) {
+            console.log("ℹ️ No groups found (404) - treating as empty result");
+            if (reset) {
+              setGroups([]);
+            }
+            setHasMore(false);
+            setError(null); // Don't treat 404 as an error - just empty result
+          } else {
+            console.error("❌ Failed to load groups:", response.error);
+            const apiError = ApiErrorHandler.handle(response);
+            setError(apiError);
+          }
         }
       } catch (err: any) {
+        console.error("❌ Exception loading groups:", err);
         const apiError = ApiErrorHandler.handle(err);
         setError(apiError);
       } finally {
         setLoading(false);
+        console.log("✅ Loading complete, loading set to false");
       }
     },
     [page, loading, hasMore]

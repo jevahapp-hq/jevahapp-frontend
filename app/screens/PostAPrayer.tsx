@@ -165,6 +165,7 @@ export default function PostAPrayer() {
         });
 
         if (response.success && response.data) {
+          console.log("✅ Prayer created successfully in PostAPrayer:", response.data._id);
           // Success - redirect to prayer wall
           // The prayer wall will refresh and show the new prayer
           router.push({
@@ -172,6 +173,7 @@ export default function PostAPrayer() {
             params: { refresh: "true", highlightPrayerId: response.data._id },
           });
         } else {
+          console.error("❌ Failed to create prayer in PostAPrayer:", response.error);
           Alert.alert("Error", response.error || "Failed to create prayer");
         }
       }

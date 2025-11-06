@@ -154,7 +154,7 @@ export default function ForumScreen() {
     });
 
     if (result) {
-      setNewPostText("");
+    setNewPostText("");
       Alert.alert("Success", "Post created successfully!");
     }
   };
@@ -321,10 +321,10 @@ export default function ForumScreen() {
 
     return (
       <View key={post._id} style={styles.postContainer}>
-        {/* User Info */}
-        <View style={styles.userInfo}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
+      {/* User Info */}
+      <View style={styles.userInfo}>
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar}>
               {(post.author?.avatarUrl || post.user?.avatar) ? (
                 <Image
                   source={{ uri: post.author?.avatarUrl || post.user?.avatar }}
@@ -333,14 +333,14 @@ export default function ForumScreen() {
               ) : (
                 <Text style={styles.avatarText}>{getAuthorInitials(post)}</Text>
               )}
-            </View>
           </View>
-          <View style={styles.userDetails}>
+        </View>
+        <View style={styles.userDetails}>
             <Text style={styles.userName}>{getAuthorName(post)}</Text>
             {post.forum?.title && (
               <Text style={styles.forumBadge}>{post.forum.title}</Text>
             )}
-          </View>
+        </View>
           {isOwner && (
             <View style={styles.postActions}>
               <TouchableOpacity
@@ -360,7 +360,7 @@ export default function ForumScreen() {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+      </View>
 
       {/* Post Content */}
       <View style={styles.postContent}>
@@ -371,25 +371,25 @@ export default function ForumScreen() {
         {post.embeddedLinks && post.embeddedLinks.length > 0 && (
           <View style={styles.embeddedLinksContainer}>
             {post.embeddedLinks.map((link, index) => (
-              <TouchableOpacity
+          <TouchableOpacity
                 key={index}
-                style={styles.videoContainer}
+            style={styles.videoContainer}
                 onPress={() => handleVideoPress(link.url)}
-                activeOpacity={0.8}
-              >
+            activeOpacity={0.8}
+          >
                 {link.thumbnail && (
-                  <View style={styles.videoThumbnail}>
+            <View style={styles.videoThumbnail}>
                     <Text style={styles.videoThumbnailText}>
                       {link.type === "video" ? "VIDEO" : "LINK"}
                     </Text>
-                    <View style={styles.playButton}>
+              <View style={styles.playButton}>
                       <Ionicons
                         name={link.type === "video" ? "play" : "link"}
                         size={24}
                         color="white"
                       />
-                    </View>
-                  </View>
+              </View>
+            </View>
                 )}
                 {link.title && (
                   <Text style={styles.videoTitle}>{link.title}</Text>
@@ -400,7 +400,7 @@ export default function ForumScreen() {
                   </Text>
                 )}
                 <Text style={styles.videoUrl}>{link.url}</Text>
-              </TouchableOpacity>
+          </TouchableOpacity>
             ))}
           </View>
         )}
@@ -454,8 +454,8 @@ export default function ForumScreen() {
           <Text style={styles.greaterThanIcon}>{">"}</Text>
         </TouchableOpacity>
       </View>
-      </View>
-    );
+    </View>
+  );
   };
 
   return (
@@ -507,10 +507,10 @@ export default function ForumScreen() {
                   >
                     {item.title}
                   </Text>
-                </TouchableOpacity>
+          </TouchableOpacity>
               )}
             />
-          </View>
+        </View>
         )}
 
         {/* Forum Posts */}
@@ -549,10 +549,10 @@ export default function ForumScreen() {
           </View>
         ) : (
           <FlatList
-            style={styles.postsContainer}
+          style={styles.postsContainer}
             data={posts}
             keyExtractor={(item) => item._id}
-            showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
             refreshing={refreshing}
             onRefresh={handleRefresh}
             onEndReached={() => {
@@ -593,7 +593,7 @@ export default function ForumScreen() {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="send" size={20} color="#256E63" />
-                    </TouchableOpacity>
+                  </TouchableOpacity>
                   )}
                 </View>
               ) : null
@@ -625,7 +625,7 @@ export default function ForumScreen() {
                 >
                   <Ionicons name="close" size={24} color="#000" />
                 </TouchableOpacity>
-              </View>
+            </View>
               <TextInput
                 style={styles.editInput}
                 value={editPostText}

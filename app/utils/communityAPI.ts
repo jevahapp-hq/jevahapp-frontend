@@ -15,7 +15,14 @@ export interface PrayerRequest {
     reference: string;
   };
   color: string;
-  shape: "rectangle" | "circle" | "scalloped" | "square" | "square2" | "square3" | "square4";
+  shape:
+    | "rectangle"
+    | "circle"
+    | "scalloped"
+    | "square"
+    | "square2"
+    | "square3"
+    | "square4";
   createdAt: string;
   updatedAt: string;
   likesCount: number;
@@ -40,7 +47,14 @@ export interface CreatePrayerRequest {
     reference: string;
   };
   color: string;
-  shape: "rectangle" | "circle" | "scalloped" | "square" | "square2" | "square3" | "square4";
+  shape:
+    | "rectangle"
+    | "circle"
+    | "scalloped"
+    | "square"
+    | "square2"
+    | "square3"
+    | "square4";
   anonymous?: boolean;
   media?: string[];
 }
@@ -68,12 +82,14 @@ export interface Forum {
   _id: string;
   title: string;
   description: string;
-  createdBy?: string | {
-    _id: string;
-    firstName: string;
-    lastName: string;
-    username: string;
-  };
+  createdBy?:
+    | string
+    | {
+        _id: string;
+        firstName: string;
+        lastName: string;
+        username: string;
+      };
   createdAt: string;
   updatedAt?: string;
   isActive: boolean;
@@ -334,21 +350,44 @@ class CommunityAPIService {
   ): Promise<ApiResponse<PrayerRequest>> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await fetch(
-        `${this.baseURL}/api/community/prayer-wall/create`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify(prayerData),
-        }
+      const url = `${this.baseURL}/api/community/prayer-wall/create`;
+
+      console.log("📤 Creating prayer at:", url);
+      console.log("📤 Request body:", {
+        prayerText: prayerData.prayerText?.substring(0, 50) + "...",
+        color: prayerData.color,
+        shape: prayerData.shape,
+        hasVerse: !!(prayerData.verse?.text || prayerData.verse?.reference),
+      });
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(prayerData),
+      });
+
+      console.log(
+        "📡 Create prayer response status:",
+        response.status,
+        response.statusText
       );
 
-      return await this.handleResponse<PrayerRequest>(response);
+      const result = await this.handleResponse<PrayerRequest>(response);
+
+      console.log("📥 Create prayer result:", {
+        success: result.success,
+        hasData: !!result.data,
+        prayerId: result.data?._id,
+        error: result.error,
+      });
+
+      return result;
     } catch (error) {
-      console.error("Error creating prayer:", error);
+      console.error("❌ Error creating prayer:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create prayer",
+        error:
+          error instanceof Error ? error.message : "Failed to create prayer",
         code: "NETWORK_ERROR",
       };
     }
@@ -367,10 +406,11 @@ class CommunityAPIService {
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
       if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
-      if (params?.sortOrder)
-        queryParams.append("sortOrder", params.sortOrder);
+      if (params?.sortOrder) queryParams.append("sortOrder", params.sortOrder);
 
-      const url = `${this.baseURL}/api/community/prayer-wall?${queryParams.toString()}`;
+      const url = `${
+        this.baseURL
+      }/api/community/prayer-wall?${queryParams.toString()}`;
       console.log("🌐 Fetching prayers from:", url);
       console.log("🌐 Using baseURL:", this.baseURL);
 
@@ -381,32 +421,60 @@ class CommunityAPIService {
 
       console.log("📡 Response status:", response.status, response.statusText);
 
-      const result = await this.handleResponse<{
-        prayers: PrayerRequest[];
-        pagination: any;
-      } | {
-        items: PrayerRequest[];
-        data: {
-          prayers: PrayerRequest[];
-          pagination: any;
-        };
-      }>(response);
+      const result = await this.handleResponse<
+        | {
+            prayers: PrayerRequest[];
+            pagination: any;
+          }
+        | {
+            items: PrayerRequest[];
+            data: {
+              prayers: PrayerRequest[];
+              pagination: any;
+            };
+          }
+      >(response);
+
+      console.log("📥 Raw getPrayers result:", {
+        success: result.success,
+        hasData: !!result.data,
+        dataKeys: result.data ? Object.keys(result.data as any) : [],
+        error: result.error,
+      });
 
       // Handle different response formats
       if (result.success && result.data) {
         const data = result.data as any;
         // Check for different response structures
-        let prayers = data.prayers || data.items || data.data?.prayers || data.data?.items || [];
-        let pagination = data.pagination || data.data?.pagination || {
-          page: params?.page || 1,
-          limit: params?.limit || 20,
-          total: prayers.length,
-          totalPages: 1,
-          hasMore: false,
-        };
+        let prayers =
+          data.prayers ||
+          data.items ||
+          data.data?.prayers ||
+          data.data?.items ||
+          [];
+        let pagination = data.pagination ||
+          data.data?.pagination || {
+            page: params?.page || 1,
+            limit: params?.limit || 20,
+            total: prayers.length,
+            totalPages: 1,
+            hasMore: false,
+          };
+
+        // Ensure hasMore is properly set
+        if (pagination.hasMore === undefined) {
+          pagination.hasMore = prayers.length >= (params?.limit || 20);
+        }
 
         console.log("✅ Parsed prayers:", prayers.length, "prayers");
-        console.log("✅ Pagination:", pagination);
+        console.log("✅ Pagination:", JSON.stringify(pagination, null, 2));
+        if (prayers.length > 0) {
+          console.log("📋 Sample prayer:", {
+            id: prayers[0]._id,
+            text: prayers[0].prayerText?.substring(0, 30) + "...",
+            author: prayers[0].author?.username || "anonymous",
+          });
+        }
 
         return {
           success: true,
@@ -414,7 +482,11 @@ class CommunityAPIService {
         };
       }
 
-      return result as ApiResponse<{ prayers: PrayerRequest[]; pagination: any }>;
+      console.warn("⚠️ Unexpected response format:", result);
+      return result as ApiResponse<{
+        prayers: PrayerRequest[];
+        pagination: any;
+      }>;
     } catch (error) {
       console.error("❌ Error getting prayers:", error);
       console.error("❌ Error details:", {
@@ -427,12 +499,15 @@ class CommunityAPIService {
       // Provide more specific error messages
       let errorMessage = "Failed to fetch prayers";
       if (error instanceof Error) {
-        if (error.message.includes("Network request failed") || 
-            error.message.includes("fetch failed") ||
-            error.message.includes("ECONNREFUSED")) {
+        if (
+          error.message.includes("Network request failed") ||
+          error.message.includes("fetch failed") ||
+          error.message.includes("ECONNREFUSED")
+        ) {
           errorMessage = `Cannot connect to server. Please check:\n1. Backend server is running\n2. API URL is correct: ${this.baseURL}\n3. Your internet connection`;
         } else if (error.message.includes("timeout")) {
-          errorMessage = "Request timed out. The server may be slow or unreachable.";
+          errorMessage =
+            "Request timed out. The server may be slow or unreachable.";
         } else {
           errorMessage = error.message;
         }
@@ -460,7 +535,9 @@ class CommunityAPIService {
       if (params.limit) queryParams.append("limit", params.limit.toString());
 
       const response = await fetch(
-        `${this.baseURL}/api/community/prayer-wall/search?${queryParams.toString()}`,
+        `${
+          this.baseURL
+        }/api/community/prayer-wall/search?${queryParams.toString()}`,
         {
           method: "GET",
           headers,
@@ -537,7 +614,9 @@ class CommunityAPIService {
       if (params?.limit) queryParams.append("limit", params.limit.toString());
 
       const response = await fetch(
-        `${this.baseURL}/api/community/prayer-wall/${prayerId}/comments?${queryParams.toString()}`,
+        `${
+          this.baseURL
+        }/api/community/prayer-wall/${prayerId}/comments?${queryParams.toString()}`,
         {
           method: "GET",
           headers,
@@ -553,9 +632,7 @@ class CommunityAPIService {
       return {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch comments",
+          error instanceof Error ? error.message : "Failed to fetch comments",
         code: "NETWORK_ERROR",
       };
     }
@@ -590,8 +667,7 @@ class CommunityAPIService {
       console.error("Error commenting on prayer:", error);
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to add comment",
+        error: error instanceof Error ? error.message : "Failed to add comment",
         code: "NETWORK_ERROR",
       };
     }
@@ -683,8 +759,10 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ data: Forum } | Forum>(response);
-      
+      const result = await this.handleResponse<{ data: Forum } | Forum>(
+        response
+      );
+
       // Handle different response formats
       if (result.success && result.data) {
         const forumData = (result.data as any).data || result.data;
@@ -699,7 +777,8 @@ class CommunityAPIService {
       console.error("Error creating forum:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create forum",
+        error:
+          error instanceof Error ? error.message : "Failed to create forum",
         code: "NETWORK_ERROR",
       };
     }
@@ -734,21 +813,23 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ data: { forums: Forum[]; pagination: any } } | { forums: Forum[]; pagination: any }>(
-        response
-      );
+      const result = await this.handleResponse<
+        | { data: { forums: Forum[]; pagination: any } }
+        | { forums: Forum[]; pagination: any }
+      >(response);
 
       // Handle different response formats
       if (result.success && result.data) {
         const data = result.data as any;
         const forums = data.forums || data.data?.forums || [];
-        const pagination = data.pagination || data.data?.pagination || {
-          page: params?.page || 1,
-          limit: params?.limit || 20,
-          total: forums.length,
-          totalPages: 1,
-          hasMore: false,
-        };
+        const pagination = data.pagination ||
+          data.data?.pagination || {
+            page: params?.page || 1,
+            limit: params?.limit || 20,
+            total: forums.length,
+            totalPages: 1,
+            hasMore: false,
+          };
 
         return {
           success: true,
@@ -761,7 +842,8 @@ class CommunityAPIService {
       console.error("Error getting forums:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch forums",
+        error:
+          error instanceof Error ? error.message : "Failed to fetch forums",
         code: "NETWORK_ERROR",
       };
     }
@@ -801,32 +883,35 @@ class CommunityAPIService {
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
       if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
-      if (params?.sortOrder)
-        queryParams.append("sortOrder", params.sortOrder);
+      if (params?.sortOrder) queryParams.append("sortOrder", params.sortOrder);
 
       const response = await fetch(
-        `${this.baseURL}/api/community/forum/${forumId}/posts?${queryParams.toString()}`,
+        `${
+          this.baseURL
+        }/api/community/forum/${forumId}/posts?${queryParams.toString()}`,
         {
           method: "GET",
           headers,
         }
       );
 
-      const result = await this.handleResponse<{ data: { posts: ForumPost[]; pagination: any } } | { posts: ForumPost[]; pagination: any }>(
-        response
-      );
+      const result = await this.handleResponse<
+        | { data: { posts: ForumPost[]; pagination: any } }
+        | { posts: ForumPost[]; pagination: any }
+      >(response);
 
       // Handle different response formats
       if (result.success && result.data) {
         const data = result.data as any;
         const posts = data.posts || data.data?.posts || [];
-        const pagination = data.pagination || data.data?.pagination || {
-          page: params?.page || 1,
-          limit: params?.limit || 20,
-          total: posts.length,
-          totalPages: 1,
-          hasMore: false,
-        };
+        const pagination = data.pagination ||
+          data.data?.pagination || {
+            page: params?.page || 1,
+            limit: params?.limit || 20,
+            total: posts.length,
+            totalPages: 1,
+            hasMore: false,
+          };
 
         return {
           success: true,
@@ -882,8 +967,10 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ data: ForumPost } | ForumPost>(response);
-      
+      const result = await this.handleResponse<{ data: ForumPost } | ForumPost>(
+        response
+      );
+
       // Handle different response formats
       if (result.success && result.data) {
         const postData = (result.data as any).data || result.data;
@@ -941,8 +1028,10 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ data: ForumPost } | ForumPost>(response);
-      
+      const result = await this.handleResponse<{ data: ForumPost } | ForumPost>(
+        response
+      );
+
       // Handle different response formats
       if (result.success && result.data) {
         const postData = (result.data as any).data || result.data;
@@ -1029,8 +1118,7 @@ class CommunityAPIService {
       console.error("Error liking forum post:", error);
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to like post",
+        error: error instanceof Error ? error.message : "Failed to like post",
         code: "NETWORK_ERROR",
       };
     }
@@ -1065,37 +1153,40 @@ class CommunityAPIService {
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
       if (params?.includeReplies !== undefined)
-        queryParams.append(
-          "includeReplies",
-          params.includeReplies.toString()
-        );
+        queryParams.append("includeReplies", params.includeReplies.toString());
 
       const response = await fetch(
-        `${this.baseURL}/api/community/forum/posts/${postId}/comments?${queryParams.toString()}`,
+        `${
+          this.baseURL
+        }/api/community/forum/posts/${postId}/comments?${queryParams.toString()}`,
         {
           method: "GET",
           headers,
         }
       );
 
-      const result = await this.handleResponse<{
-        data: { comments: ForumComment[]; pagination: any };
-      } | {
-        comments: ForumComment[];
-        pagination: any;
-      }>(response);
+      const result = await this.handleResponse<
+        | {
+            data: { comments: ForumComment[]; pagination: any };
+          }
+        | {
+            comments: ForumComment[];
+            pagination: any;
+          }
+      >(response);
 
       // Handle different response formats
       if (result.success && result.data) {
         const data = result.data as any;
         const comments = data.comments || data.data?.comments || [];
-        const pagination = data.pagination || data.data?.pagination || {
-          page: params?.page || 1,
-          limit: params?.limit || 20,
-          total: comments.length,
-          totalPages: 1,
-          hasMore: false,
-        };
+        const pagination = data.pagination ||
+          data.data?.pagination || {
+            page: params?.page || 1,
+            limit: params?.limit || 20,
+            total: comments.length,
+            totalPages: 1,
+            hasMore: false,
+          };
 
         return {
           success: true,
@@ -1103,15 +1194,16 @@ class CommunityAPIService {
         };
       }
 
-      return result as ApiResponse<{ comments: ForumComment[]; pagination: any }>;
+      return result as ApiResponse<{
+        comments: ForumComment[];
+        pagination: any;
+      }>;
     } catch (error) {
       console.error("Error getting forum post comments:", error);
       return {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch comments",
+          error instanceof Error ? error.message : "Failed to fetch comments",
         code: "NETWORK_ERROR",
       };
     }
@@ -1141,8 +1233,10 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ data: ForumComment } | ForumComment>(response);
-      
+      const result = await this.handleResponse<
+        { data: ForumComment } | ForumComment
+      >(response);
+
       // Handle different response formats
       if (result.success && result.data) {
         const commentData = (result.data as any).data || result.data;
@@ -1157,8 +1251,7 @@ class CommunityAPIService {
       console.error("Error commenting on forum post:", error);
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to add comment",
+        error: error instanceof Error ? error.message : "Failed to add comment",
         code: "NETWORK_ERROR",
       };
     }
@@ -1244,7 +1337,8 @@ class CommunityAPIService {
       console.error("Error creating group:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create group",
+        error:
+          error instanceof Error ? error.message : "Failed to create group",
         code: "NETWORK_ERROR",
       };
     }
@@ -1261,25 +1355,58 @@ class CommunityAPIService {
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
 
-      const response = await fetch(
-        `${this.baseURL}/api/community/groups/my-groups?${queryParams.toString()}`,
-        {
-          method: "GET",
-          headers,
-        }
+      const url = `${
+        this.baseURL
+      }/api/community/groups/my-groups?${queryParams.toString()}`;
+      console.log("🌐 Fetching my groups from:", url);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+      });
+
+      console.log(
+        "📡 My groups response status:",
+        response.status,
+        response.statusText
       );
 
-      return await this.handleResponse<{ groups: Group[]; pagination: any }>(
-        response
-      );
+      // Handle 404 as empty result (no groups) rather than error
+      if (response.status === 404) {
+        console.log("ℹ️ 404 response - no groups found, returning empty array");
+        return {
+          success: true,
+          data: {
+            groups: [],
+            pagination: {
+              page: params?.page || 1,
+              limit: params?.limit || 20,
+              total: 0,
+              hasMore: false,
+            },
+          },
+        };
+      }
+
+      const result = await this.handleResponse<{
+        groups: Group[];
+        pagination: any;
+      }>(response);
+
+      console.log("📥 My groups result:", {
+        success: result.success,
+        hasData: !!result.data,
+        groupsCount: result.data?.groups?.length || 0,
+        error: result.error,
+      });
+
+      return result;
     } catch (error) {
-      console.error("Error getting my groups:", error);
+      console.error("❌ Error getting my groups:", error);
       return {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch my groups",
+          error instanceof Error ? error.message : "Failed to fetch my groups",
         code: "NETWORK_ERROR",
       };
     }
@@ -1300,11 +1427,12 @@ class CommunityAPIService {
       if (params?.limit) queryParams.append("limit", params.limit.toString());
       if (params?.search) queryParams.append("search", params.search);
       if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
-      if (params?.sortOrder)
-        queryParams.append("sortOrder", params.sortOrder);
+      if (params?.sortOrder) queryParams.append("sortOrder", params.sortOrder);
 
       const response = await fetch(
-        `${this.baseURL}/api/community/groups/explore?${queryParams.toString()}`,
+        `${
+          this.baseURL
+        }/api/community/groups/explore?${queryParams.toString()}`,
         {
           method: "GET",
           headers,
@@ -1319,9 +1447,7 @@ class CommunityAPIService {
       return {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to explore groups",
+          error instanceof Error ? error.message : "Failed to explore groups",
         code: "NETWORK_ERROR",
       };
     }
@@ -1401,10 +1527,7 @@ class CommunityAPIService {
       console.error("Error adding group members:", error);
       return {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to add members",
+        error: error instanceof Error ? error.message : "Failed to add members",
         code: "NETWORK_ERROR",
       };
     }
@@ -1501,9 +1624,7 @@ class CommunityAPIService {
       return {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to remove member",
+          error instanceof Error ? error.message : "Failed to remove member",
         code: "NETWORK_ERROR",
       };
     }
@@ -1522,7 +1643,7 @@ class CommunityAPIService {
   }): Promise<ApiResponse<Poll>> {
     try {
       const headers = await this.getAuthHeaders();
-      
+
       // Normalize data - use closesAt if provided, otherwise expiresAt
       const normalizedData = {
         question: pollData.question,
@@ -1549,7 +1670,7 @@ class CommunityAPIService {
       }
 
       const result = await this.handleResponse<{ poll: Poll } | Poll>(response);
-      
+
       // Handle different response formats
       if (result.success && result.data) {
         // Check if response has nested poll object
@@ -1559,7 +1680,7 @@ class CommunityAPIService {
           data: pollData as Poll,
         };
       }
-      
+
       return result as ApiResponse<Poll>;
     } catch (error) {
       console.error("Error creating poll:", error);
@@ -1578,7 +1699,16 @@ class CommunityAPIService {
     status?: "all" | "open" | "closed" | "active" | "expired";
     sortBy?: "createdAt" | "totalVotes";
     sortOrder?: "asc" | "desc";
-  }): Promise<ApiResponse<{ items: Poll[]; polls?: Poll[]; page: number; pageSize: number; total: number; pagination?: any }>> {
+  }): Promise<
+    ApiResponse<{
+      items: Poll[];
+      polls?: Poll[];
+      page: number;
+      pageSize: number;
+      total: number;
+      pagination?: any;
+    }>
+  > {
     try {
       // Try to get auth headers, but don't fail if not available (public endpoint)
       let headers: HeadersInit;
@@ -1594,16 +1724,15 @@ class CommunityAPIService {
       const queryParams = new URLSearchParams();
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
-      
+
       // Normalize status: active -> open, expired -> closed
       let status = params?.status;
       if (status === "active") status = "open";
       if (status === "expired") status = "closed";
       if (status) queryParams.append("status", status);
-      
+
       if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
-      if (params?.sortOrder)
-        queryParams.append("sortOrder", params.sortOrder);
+      if (params?.sortOrder) queryParams.append("sortOrder", params.sortOrder);
 
       const response = await fetch(
         `${this.baseURL}/api/community/polls?${queryParams.toString()}`,
@@ -1613,11 +1742,11 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ 
-        items: Poll[]; 
-        polls?: Poll[]; 
-        page: number; 
-        pageSize: number; 
+      const result = await this.handleResponse<{
+        items: Poll[];
+        polls?: Poll[];
+        page: number;
+        pageSize: number;
         total: number;
         pagination?: any;
       }>(response);
@@ -1627,18 +1756,53 @@ class CommunityAPIService {
         const data = result.data as any;
         // Support both formats: { items: [] } or { polls: [] }
         const items = data.items || data.polls || [];
+
+        // Log raw response to debug missing options
+        console.log("📥 Raw polls API response:", {
+          hasData: !!result.data,
+          dataKeys: Object.keys(data),
+          itemsCount: items.length,
+          sampleItem:
+            items.length > 0
+              ? {
+                  id: items[0]._id,
+                  hasOptions: !!items[0].options,
+                  optionsCount: items[0].options?.length || 0,
+                  keys: Object.keys(items[0]),
+                }
+              : null,
+        });
+
+        // Ensure options array exists on each poll
+        const normalizedItems = items.map((poll: any) => {
+          if (!poll.options || !Array.isArray(poll.options)) {
+            console.warn("⚠️ Poll missing options array:", {
+              pollId: poll._id,
+              question: poll.question || poll.title,
+              existingKeys: Object.keys(poll),
+            });
+            return {
+              ...poll,
+              options: [], // Ensure options is always an array
+            };
+          }
+          return poll;
+        });
+
         const pagination = data.pagination || {
           page: data.page || 1,
           limit: data.pageSize || params?.limit || 20,
           total: data.total || 0,
-          hasMore: (data.page || 1) * (data.pageSize || params?.limit || 20) < (data.total || 0),
+          hasMore:
+            (data.page || 1) * (data.pageSize || params?.limit || 20) <
+            (data.total || 0),
         };
-        
+
         return {
           success: true,
           data: {
-            items,
-            polls: items, // Backward compatibility
+            items: normalizedItems,
+            polls: normalizedItems, // Backward compatibility
             page: data.page || 1,
             pageSize: data.pageSize || params?.limit || 20,
             total: data.total || 0,
@@ -1659,10 +1823,15 @@ class CommunityAPIService {
   }
 
   // Get My Polls (Authenticated users only)
-  async getMyPolls(params?: {
-    page?: number;
-    limit?: number;
-  }): Promise<ApiResponse<{ items: Poll[]; page: number; pageSize: number; total: number; pagination: any }>> {
+  async getMyPolls(params?: { page?: number; limit?: number }): Promise<
+    ApiResponse<{
+      items: Poll[];
+      page: number;
+      pageSize: number;
+      total: number;
+      pagination: any;
+    }>
+  > {
     try {
       const headers = await this.getAuthHeaders();
       const queryParams = new URLSearchParams();
@@ -1677,10 +1846,10 @@ class CommunityAPIService {
         }
       );
 
-      const result = await this.handleResponse<{ 
-        items: Poll[]; 
-        page: number; 
-        pageSize: number; 
+      const result = await this.handleResponse<{
+        items: Poll[];
+        page: number;
+        pageSize: number;
         total: number;
         pagination: any;
       }>(response);
@@ -1691,8 +1860,12 @@ class CommunityAPIService {
           page: data.page || 1,
           limit: data.pageSize || params?.limit || 20,
           total: data.total || 0,
-          pages: Math.ceil((data.total || 0) / (data.pageSize || params?.limit || 20)),
-          hasMore: (data.page || 1) * (data.pageSize || params?.limit || 20) < (data.total || 0),
+          pages: Math.ceil(
+            (data.total || 0) / (data.pageSize || params?.limit || 20)
+          ),
+          hasMore:
+            (data.page || 1) * (data.pageSize || params?.limit || 20) <
+            (data.total || 0),
         };
 
         return {
@@ -1712,7 +1885,8 @@ class CommunityAPIService {
       console.error("Error getting my polls:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch my polls",
+        error:
+          error instanceof Error ? error.message : "Failed to fetch my polls",
         code: "NETWORK_ERROR",
       };
     }
@@ -1749,7 +1923,7 @@ class CommunityAPIService {
       );
 
       const result = await this.handleResponse<{ poll: Poll } | Poll>(response);
-      
+
       // Handle different response formats
       if (result.success && result.data) {
         const pollData = (result.data as any).poll || result.data;
@@ -1788,7 +1962,7 @@ class CommunityAPIService {
       }
 
       const headers = await this.getAuthHeaders();
-      
+
       // Try both endpoints (vote and votes)
       let response = await fetch(
         `${this.baseURL}/api/community/polls/${pollId}/vote`,
@@ -1812,7 +1986,7 @@ class CommunityAPIService {
       }
 
       const result = await this.handleResponse<{ poll: Poll } | Poll>(response);
-      
+
       // Handle different response formats
       if (result.success && result.data) {
         const pollData = (result.data as any).poll || result.data;
@@ -1857,17 +2031,25 @@ class CommunityAPIService {
       }
 
       const headers = await this.getAuthHeaders();
-      
+
       // Normalize updates
       const normalizedUpdates: any = {};
-      if (updates.question !== undefined) normalizedUpdates.question = updates.question;
-      if (updates.title !== undefined && !updates.question) normalizedUpdates.question = updates.title;
-      if (updates.description !== undefined) normalizedUpdates.description = updates.description;
-      if (updates.options !== undefined) normalizedUpdates.options = updates.options;
-      if (updates.multiSelect !== undefined) normalizedUpdates.multiSelect = updates.multiSelect;
-      if (updates.closesAt !== undefined) normalizedUpdates.closesAt = updates.closesAt;
-      if (updates.expiresAt !== undefined && !updates.closesAt) normalizedUpdates.closesAt = updates.expiresAt;
-      if (updates.isActive !== undefined) normalizedUpdates.isActive = updates.isActive;
+      if (updates.question !== undefined)
+        normalizedUpdates.question = updates.question;
+      if (updates.title !== undefined && !updates.question)
+        normalizedUpdates.question = updates.title;
+      if (updates.description !== undefined)
+        normalizedUpdates.description = updates.description;
+      if (updates.options !== undefined)
+        normalizedUpdates.options = updates.options;
+      if (updates.multiSelect !== undefined)
+        normalizedUpdates.multiSelect = updates.multiSelect;
+      if (updates.closesAt !== undefined)
+        normalizedUpdates.closesAt = updates.closesAt;
+      if (updates.expiresAt !== undefined && !updates.closesAt)
+        normalizedUpdates.closesAt = updates.expiresAt;
+      if (updates.isActive !== undefined)
+        normalizedUpdates.isActive = updates.isActive;
 
       const response = await fetch(
         `${this.baseURL}/api/community/polls/${pollId}`,
@@ -1879,7 +2061,7 @@ class CommunityAPIService {
       );
 
       const result = await this.handleResponse<{ data: Poll } | Poll>(response);
-      
+
       // Handle different response formats
       if (result.success && result.data) {
         const pollData = (result.data as any).data || result.data;
@@ -1935,4 +2117,3 @@ class CommunityAPIService {
 // Export singleton instance
 export const communityAPI = new CommunityAPIService();
 export default communityAPI;
-
