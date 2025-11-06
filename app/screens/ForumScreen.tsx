@@ -33,12 +33,16 @@ export default function ForumScreen() {
   const [editingPost, setEditingPost] = useState<ForumPostType | null>(null);
   const [editPostText, setEditPostText] = useState("");
   const [selectedPostOwners, setSelectedPostOwners] = useState<Record<string, boolean>>({});
+  const [showCreateForumModal, setShowCreateForumModal] = useState(false);
+  const [forumTitle, setForumTitle] = useState("");
+  const [forumDescription, setForumDescription] = useState("");
+  const [isCreatingForum, setIsCreatingForum] = useState(false);
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
 
   // Get forums and posts
-  const { forums, loading: forumsLoading, error: forumsError } = useForums();
+  const { forums, loading: forumsLoading, error: forumsError, createForum, loadForums } = useForums();
   const {
     posts,
     loading: postsLoading,
@@ -231,6 +235,59 @@ export default function ForumScreen() {
     );
   };
 
+  const handleCreateForum = async () => {
+    // Validation
+    if (!forumTitle.trim() || forumTitle.trim().length < 3) {
+      Alert.alert("Validation Error", "Forum title must be at least 3 characters");
+      return;
+    }
+
+    if (forumTitle.trim().length > 100) {
+      Alert.alert("Validation Error", "Forum title must be less than 100 characters");
+      return;
+    }
+
+    if (!forumDescription.trim() || forumDescription.trim().length < 10) {
+      Alert.alert("Validation Error", "Forum description must be at least 10 characters");
+      return;
+    }
+
+    if (forumDescription.trim().length > 500) {
+      Alert.alert("Validation Error", "Forum description must be less than 500 characters");
+      return;
+    }
+
+    setIsCreatingForum(true);
+
+    try {
+      const result = await createForum({
+        title: forumTitle.trim(),
+        description: forumDescription.trim(),
+      });
+
+      if (result) {
+        // Clear form
+        setForumTitle("");
+        setForumDescription("");
+        setShowCreateForumModal(false);
+        
+        // Select the newly created forum
+        setSelectedForumId(result._id);
+        
+        // Refresh forums list
+        await loadForums();
+        
+        Alert.alert("Success", "Forum created successfully!");
+      } else {
+        Alert.alert("Error", "Failed to create forum. Please try again.");
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to create forum. Please try again.");
+    } finally {
+      setIsCreatingForum(false);
+    }
+  };
+
   // Helper to get author name
   const getAuthorName = (post: ForumPostType): string => {
     if (post.author?.firstName && post.author?.lastName) {
@@ -419,9 +476,17 @@ export default function ForumScreen() {
 
           <Text style={styles.headerTitle}>Forum</Text>
 
-          <TouchableOpacity style={styles.filterButton}>
-            <Ionicons name="options-outline" size={24} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.createForumButton}
+              onPress={() => setShowCreateForumModal(true)}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#256E63" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.filterButton}>
+              <Ionicons name="options-outline" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Forum Category Selector */}
@@ -592,6 +657,99 @@ export default function ForumScreen() {
           </View>
         </Modal>
 
+        {/* Create Forum Modal */}
+        <Modal
+          visible={showCreateForumModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => {
+            setShowCreateForumModal(false);
+            setForumTitle("");
+            setForumDescription("");
+          }}
+        >
+          <View style={styles.createForumModal}>
+            <View style={styles.createForumModalContent}>
+              <View style={styles.createForumModalHeader}>
+                <Text style={styles.createForumModalTitle}>Create Forum</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowCreateForumModal(false);
+                    setForumTitle("");
+                    setForumDescription("");
+                  }}
+                  style={styles.closeButton}
+                  disabled={isCreatingForum}
+                >
+                  <Ionicons name="close" size={24} color="#000" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.createForumForm}>
+                <Text style={styles.createForumLabel}>Forum Title *</Text>
+                <TextInput
+                  style={styles.createForumInput}
+                  value={forumTitle}
+                  onChangeText={setForumTitle}
+                  placeholder="Enter forum title (3-100 characters)"
+                  maxLength={100}
+                  editable={!isCreatingForum}
+                />
+                <Text style={styles.createForumHelperText}>
+                  {forumTitle.length}/100 characters
+                </Text>
+
+                <Text style={styles.createForumLabel}>Description *</Text>
+                <TextInput
+                  style={[styles.createForumInput, styles.createForumTextArea]}
+                  value={forumDescription}
+                  onChangeText={setForumDescription}
+                  placeholder="Enter forum description (10-500 characters)"
+                  multiline
+                  maxLength={500}
+                  editable={!isCreatingForum}
+                />
+                <Text style={styles.createForumHelperText}>
+                  {forumDescription.length}/500 characters
+                </Text>
+              </View>
+
+              <View style={styles.createForumModalActions}>
+                <TouchableOpacity
+                  style={[styles.createForumButton, styles.cancelForumButton]}
+                  onPress={() => {
+                    setShowCreateForumModal(false);
+                    setForumTitle("");
+                    setForumDescription("");
+                  }}
+                  disabled={isCreatingForum}
+                >
+                  <Text style={styles.cancelForumButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.createForumButton,
+                    styles.submitForumButton,
+                    (!forumTitle.trim() || !forumDescription.trim() || isCreatingForum) && styles.submitForumButtonDisabled,
+                  ]}
+                  onPress={handleCreateForum}
+                  disabled={
+                    !forumTitle.trim() ||
+                    !forumDescription.trim() ||
+                    isCreatingForum
+                  }
+                >
+                  {isCreatingForum ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.submitForumButtonText}>Create</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <BottomNavOverlay
           selectedTab={activeTab}
           onTabChange={(tab) => {
@@ -625,6 +783,14 @@ const styles = {
     fontWeight: "bold" as const,
     color: "#000",
     fontFamily: "Rubik-Bold",
+  },
+  headerActions: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  createForumButton: {
+    padding: 8,
   },
   filterButton: {
     padding: 8,
@@ -1009,6 +1175,101 @@ const styles = {
     color: "#fff",
     fontWeight: "600" as const,
     fontSize: 14,
+    fontFamily: "Rubik-SemiBold",
+  },
+  createForumModal: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end" as const,
+  },
+  createForumModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: "90%",
+  },
+  createForumModalHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  createForumModalTitle: {
+    fontSize: 22,
+    fontWeight: "bold" as const,
+    color: "#111827",
+    fontFamily: "Rubik-Bold",
+  },
+  createForumForm: {
+    marginBottom: 24,
+  },
+  createForumLabel: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: "#1F2937",
+    fontFamily: "Rubik-SemiBold",
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  createForumInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: "#111827",
+    fontFamily: "Rubik-Regular",
+    backgroundColor: "#F9FAFB",
+  },
+  createForumTextArea: {
+    minHeight: 120,
+    textAlignVertical: "top" as const,
+  },
+  createForumHelperText: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontFamily: "Rubik-Regular",
+    marginTop: 4,
+  },
+  createForumModalActions: {
+    flexDirection: "row" as const,
+    gap: 12,
+  },
+  cancelForumButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  cancelForumButtonText: {
+    color: "#374151",
+    fontWeight: "600" as const,
+    fontSize: 16,
+    fontFamily: "Rubik-SemiBold",
+  },
+  submitForumButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: "#256E63",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  submitForumButtonDisabled: {
+    backgroundColor: "#9CA3AF",
+    opacity: 0.6,
+  },
+  submitForumButtonText: {
+    color: "#fff",
+    fontWeight: "600" as const,
+    fontSize: 16,
     fontFamily: "Rubik-SemiBold",
   },
 };
