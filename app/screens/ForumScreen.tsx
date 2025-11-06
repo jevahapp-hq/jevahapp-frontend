@@ -2,11 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
+  FlatList,
+  Image,
   Linking,
   SafeAreaView,
-  ScrollView,
   StatusBar,
   Text,
   TextInput,
@@ -15,29 +18,43 @@ import {
 } from "react-native";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { navigateMainTab } from "../utils/navigation";
-
-interface ForumPost {
-  id: string;
-  userName: string;
-  userAvatar?: string;
-  content: string;
-  timestamp: string;
-  likes: number;
-  comments: number;
-  hasVideo?: boolean;
-  videoThumbnail?: string;
-  videoTitle?: string;
-  videoUrl?: string;
-  videoDescription?: string;
-}
+import { useForums, useForumPosts } from "../hooks/useForums";
+import { formatTimestamp } from "../utils/communityHelpers";
+import { ForumPost as ForumPostType } from "../utils/communityAPI";
+import { extractLinkMetadata, validateForumPostForm } from "../utils/communityHelpers";
 
 export default function ForumScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const router = useRouter();
   const [newPostText, setNewPostText] = useState("");
+  const [selectedForumId, setSelectedForumId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
+
+  // Get forums and posts
+  const { forums, loading: forumsLoading, error: forumsError } = useForums();
+  const {
+    posts,
+    loading: postsLoading,
+    error: postsError,
+    hasMore,
+    loadMore,
+    refresh: refreshPosts,
+    createPost,
+    likePost,
+  } = useForumPosts(selectedForumId || "");
+  
+  // Only load posts when we have a forum selected
+  const shouldLoadPosts = !!selectedForumId;
+
+  // Set default forum when forums load
+  useEffect(() => {
+    if (forums.length > 0 && !selectedForumId) {
+      setSelectedForumId(forums[0]._id);
+    }
+  }, [forums, selectedForumId]);
 
   useEffect(() => {
     // Slide in animation from right to left
@@ -48,71 +65,11 @@ export default function ForumScreen() {
     }).start();
   }, []);
 
-  const forumPosts: ForumPost[] = [
-    {
-      id: "1",
-      userName: "Joseph Eluwa",
-      content: "Hey, Joesph here. I am willing to learn from you all",
-      timestamp: "10:00 AM",
-      likes: 1200,
-      comments: 1200,
-    },
-    {
-      id: "2",
-      userName: "Lizzy Dahunsi",
-      content: `I have a testimony to share! 🙏 Last week, I was struggling with a difficult decision at work, and I felt so lost. I reached out to our prayer group here, and the support and prayers I received were incredible. 
-
-Matthew 18:19 says, "Again I say to you, if two of you agree on earth about anything they ask, it will be done for them by my Father in heaven." 
-
-The guidance I received through your prayers and the peace that came over me was truly a blessing. I made the right decision, and I can see God's hand in it all. Thank you all for being such a wonderful community! 💕`,
-      timestamp: "9:45 AM",
-      likes: 1200,
-      comments: 1200,
-    },
-    {
-      id: "3",
-      userName: "Lizzy Dahunsi",
-      content: `👋 Good morning everyone! ☀️
-
-Just wanted to remind you all about our community study this week: "Week 2: Foundations of Faith" 📖
-
-We'll be diving deep into understanding how the Holy Spirit works in our lives and how we can build stronger foundations in our walk with Christ. 
-
-Scriptures we'll be covering:
-- Romans 8:26-27
-- 1 Corinthians 12:4-11
-- Galatians 5:22-23
-
-Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨`,
-      timestamp: "9:30 AM",
-      likes: 1200,
-      comments: 1200,
-    },
-    {
-      id: "4",
-      userName: "Lizzy Dahunsi",
-      content: "This message inspired me, thought to share",
-      timestamp: "9:15 AM",
-      likes: 1200,
-      comments: 1200,
-      hasVideo: true,
-      videoThumbnail:
-        "https://via.placeholder.com/300x200/8B4513/FFFFFF?text=PROOF+of+Faith",
-      videoTitle:
-        "God is Good by Apostle Emmanuel Iren | Accelerate Conference 2025 | Shine: Unleash His Glory",
-      videoUrl: "https://www.tevah.com/watch?v=0omiX-5T5xk",
-      videoDescription: "This message inspired me, thought to share",
-    },
-    {
-      id: "5",
-      userName: "Lizzy Dahunsi",
-      content:
-        "I have just shared a prayer in the prayer room... Please join me in prayers 🙏",
-      timestamp: "9:00 AM",
-      likes: 1200,
-      comments: 1200,
-    },
-  ];
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshPosts();
+    setRefreshing(false);
+  };
 
   const handleBackToCommunity = () => {
     // Slide out animation to the right
@@ -129,55 +86,147 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
     Linking.openURL(url);
   };
 
-  const handleStartConversation = () => {
-    // TODO: Implement post creation functionality
-    console.log("Starting new conversation:", newPostText);
-    setNewPostText("");
+  const handleStartConversation = async () => {
+    if (!newPostText.trim()) {
+      Alert.alert("Error", "Please enter your message");
+      return;
+    }
+
+    if (!selectedForumId) {
+      Alert.alert("Error", "No forum selected");
+      return;
+    }
+
+    // Extract links from text
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = newPostText.match(urlRegex) || [];
+    const embeddedLinks: any[] = [];
+
+    // Process each URL
+    for (const url of urls.slice(0, 5)) {
+      // Remove URL from text (we'll show it in the embedded link)
+      const linkMetadata = await extractLinkMetadata(url);
+      embeddedLinks.push({
+        url,
+        ...linkMetadata,
+      });
+    }
+
+    // Validate form
+    const validation = validateForumPostForm({
+      content: newPostText,
+      embeddedLinks: embeddedLinks.length > 0 ? embeddedLinks : undefined,
+    });
+
+    if (!validation.valid) {
+      Alert.alert("Validation Error", validation.errors.join("\n"));
+      return;
+    }
+
+    // Create post
+    const result = await createPost({
+      content: newPostText,
+      embeddedLinks: embeddedLinks.length > 0 ? embeddedLinks : undefined,
+    });
+
+    if (result) {
+      setNewPostText("");
+      Alert.alert("Success", "Post created successfully!");
+    }
   };
 
-  const renderForumPost = (post: ForumPost) => (
-    <View key={post.id} style={styles.postContainer}>
+  const handleLikePost = async (post: ForumPostType) => {
+    await likePost(
+      post._id,
+      post.userLiked || false,
+      post.likesCount || 0
+    );
+  };
+
+  // Helper to get author name
+  const getAuthorName = (post: ForumPostType): string => {
+    if (post.author?.firstName && post.author?.lastName) {
+      return `${post.author.firstName} ${post.author.lastName}`;
+    }
+    if (post.author?.username) {
+      return post.author.username;
+    }
+    return "User";
+  };
+
+  // Helper to get author initials
+  const getAuthorInitials = (post: ForumPostType): string => {
+    const name = getAuthorName(post);
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const renderForumPost = (post: ForumPostType) => (
+    <View key={post._id} style={styles.postContainer}>
       {/* User Info */}
       <View style={styles.userInfo}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {post.userName
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .toUpperCase()}
-            </Text>
+            {post.author?.avatarUrl ? (
+              <Image
+                source={{ uri: post.author.avatarUrl }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{getAuthorInitials(post)}</Text>
+            )}
           </View>
         </View>
         <View style={styles.userDetails}>
-          <Text style={styles.userName}>{post.userName}</Text>
+          <Text style={styles.userName}>{getAuthorName(post)}</Text>
         </View>
       </View>
 
       {/* Post Content */}
       <View style={styles.postContent}>
         <Text style={styles.postText}>{post.content}</Text>
-        <Text style={styles.timestamp}>{post.timestamp}</Text>
+        <Text style={styles.timestamp}>{formatTimestamp(post.createdAt)}</Text>
 
-        {/* Video Content */}
-        {post.hasVideo && post.videoThumbnail && (
-          <TouchableOpacity
-            style={styles.videoContainer}
-            onPress={() => post.videoUrl && handleVideoPress(post.videoUrl)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.videoThumbnail}>
-              <Text style={styles.videoThumbnailText}>PROOF of Faith</Text>
-              <View style={styles.playButton}>
-                <Ionicons name="play" size={24} color="white" />
-              </View>
-            </View>
-            <Text style={styles.videoTitle}>{post.videoTitle}</Text>
-            {post.videoUrl && (
-              <Text style={styles.videoUrl}>{post.videoUrl}</Text>
-            )}
-          </TouchableOpacity>
+        {/* Embedded Links */}
+        {post.embeddedLinks && post.embeddedLinks.length > 0 && (
+          <View style={styles.embeddedLinksContainer}>
+            {post.embeddedLinks.map((link, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.videoContainer}
+                onPress={() => handleVideoPress(link.url)}
+                activeOpacity={0.8}
+              >
+                {link.thumbnail && (
+                  <View style={styles.videoThumbnail}>
+                    <Text style={styles.videoThumbnailText}>
+                      {link.type === "video" ? "VIDEO" : "LINK"}
+                    </Text>
+                    <View style={styles.playButton}>
+                      <Ionicons
+                        name={link.type === "video" ? "play" : "link"}
+                        size={24}
+                        color="white"
+                      />
+                    </View>
+                  </View>
+                )}
+                {link.title && (
+                  <Text style={styles.videoTitle}>{link.title}</Text>
+                )}
+                {link.description && (
+                  <Text style={styles.videoDescription}>
+                    {link.description}
+                  </Text>
+                )}
+                <Text style={styles.videoUrl}>{link.url}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
       </View>
 
@@ -187,24 +236,44 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
           <TouchableOpacity
             style={styles.interactionButton}
             activeOpacity={0.7}
+            onPress={() => handleLikePost(post)}
           >
-            <Ionicons name="heart-outline" size={20} color="#666" />
-            <Text style={styles.interactionText}>{post.likes}</Text>
+            <Ionicons
+              name={post.userLiked ? "heart" : "heart-outline"}
+              size={20}
+              color={post.userLiked ? "#EF4444" : "#666"}
+            />
+            <Text style={styles.interactionText}>
+              {post.likesCount || 0}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.interactionButton}
             activeOpacity={0.7}
+            onPress={() =>
+              router.push({
+                pathname: "/screens/ThreadScreen",
+                params: { postId: post._id },
+              })
+            }
           >
             <Ionicons name="chatbubble-outline" size={20} color="#666" />
-            <Text style={styles.interactionText}>{post.comments}</Text>
+            <Text style={styles.interactionText}>
+              {post.commentsCount || 0}
+            </Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity
           style={styles.interactionButton}
           activeOpacity={0.7}
-          onPress={() => router.push("/screens/ThreadScreen")}
+          onPress={() =>
+            router.push({
+              pathname: "/screens/ThreadScreen",
+              params: { postId: post._id },
+            })
+          }
         >
           <Text style={styles.greaterThanIcon}>{">"}</Text>
         </TouchableOpacity>
@@ -243,39 +312,94 @@ Join us in the study room at 7 PM tonight! Let's grow together in faith! 🙏✨
         </View>
 
         {/* Forum Posts */}
-        <ScrollView
-          style={styles.postsContainer}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {forumPosts.map((post, index) => (
-            <View key={post.id}>
-              {renderForumPost(post)}
-
-              {/* Start Conversation Input - appears after second post */}
-              {index === 1 && (
-                <View style={styles.startConversationContainer}>
-                  <TouchableOpacity style={styles.plusButton}>
-                    <Ionicons name="add" size={20} color="#666" />
-                  </TouchableOpacity>
-
-                  <TextInput
-                    style={styles.conversationInput}
-                    placeholder="Start a converstation"
-                    placeholderTextColor="#9CA3AF"
-                    value={newPostText}
-                    onChangeText={setNewPostText}
-                    multiline
-                  />
-
-                  <TouchableOpacity style={styles.micButton}>
-                    <Ionicons name="mic-outline" size={20} color="#666" />
-                  </TouchableOpacity>
+        {forumsLoading || postsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#DF930E" />
+            <Text style={styles.loadingText}>Loading forum posts...</Text>
+          </View>
+        ) : forumsError && forums.length === 0 ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+            <Text style={styles.errorTitle}>Error loading forums</Text>
+            <Text style={styles.errorText}>{forumsError.error}</Text>
+          </View>
+        ) : postsError && posts.length === 0 ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+            <Text style={styles.errorTitle}>Error loading posts</Text>
+            <Text style={styles.errorText}>{postsError.error}</Text>
+          </View>
+        ) : posts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={80} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>No posts yet</Text>
+            <Text style={styles.emptyText}>
+              Be the first to start a conversation in the forum!
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            style={styles.postsContainer}
+            data={posts}
+            keyExtractor={(item) => item._id}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            onEndReached={() => {
+              if (!postsLoading && hasMore) {
+                loadMore();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              postsLoading && posts.length > 0 ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator size="small" color="#DF930E" />
                 </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+              ) : null
+            }
+            contentContainerStyle={{ paddingBottom: 100 }}
+            renderItem={({ item, index }) => (
+              <View>
+                {renderForumPost(item)}
+
+                {/* Start Conversation Input - appears after second post */}
+                {index === 1 && (
+                  <View style={styles.startConversationContainer}>
+                    <TouchableOpacity style={styles.plusButton}>
+                      <Ionicons name="add" size={20} color="#666" />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={styles.conversationInput}
+                      placeholder="Start a conversation"
+                      placeholderTextColor="#9CA3AF"
+                      value={newPostText}
+                      onChangeText={setNewPostText}
+                      multiline
+                      onSubmitEditing={handleStartConversation}
+                    />
+
+                    {newPostText.trim().length > 0 && (
+                      <TouchableOpacity
+                        style={styles.sendButton}
+                        onPress={handleStartConversation}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="send" size={20} color="#DF930E" />
+                      </TouchableOpacity>
+                    )}
+                    {newPostText.trim().length === 0 && (
+                      <TouchableOpacity style={styles.micButton}>
+                        <Ionicons name="mic-outline" size={20} color="#666" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          />
+        )}
 
         <BottomNavOverlay
           selectedTab={activeTab}
@@ -509,5 +633,88 @@ const styles = {
     right: 0,
     zIndex: 100,
     backgroundColor: "transparent",
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  embeddedLinksContainer: {
+    marginTop: 12,
+  },
+  videoDescription: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontFamily: "Rubik-Regular",
+    marginTop: 4,
+  },
+  sendButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginLeft: 12,
+  },
+  // Loading, Error, and Empty States
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+    fontFamily: "Rubik-Regular",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "bold" as const,
+    color: "#1F2937",
+    marginTop: 16,
+    fontFamily: "Rubik-Bold",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    marginTop: 8,
+    fontFamily: "Rubik-Regular",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "bold" as const,
+    color: "#1F2937",
+    marginTop: 24,
+    fontFamily: "Rubik-Bold",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    marginTop: 12,
+    lineHeight: 24,
+    fontFamily: "Rubik-Regular",
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: "center" as const,
   },
 };
