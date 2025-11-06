@@ -180,7 +180,7 @@ export default function PollsScreen() {
     }
 
     return (
-      <View style={styles.pollContainer}>
+      <View key={poll._id} style={styles.pollContainer}>
         <View style={styles.pollHeader}>
           <View style={styles.pollTitleRow}>
             <Text style={styles.pollTitle}>{poll.question || poll.title}</Text>
