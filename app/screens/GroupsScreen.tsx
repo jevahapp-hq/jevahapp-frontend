@@ -351,12 +351,12 @@ export default function GroupsScreen() {
       <View style={{ flex: 1 }}>
         {selectedTab === "MY GROUPS" ? (
           <>
-            {loading && groups.length === 0 ? (
+            {loading && (!groups || groups.length === 0) ? (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
                 <ActivityIndicator size="large" color="#1C8E79" />
                 <Text style={{ marginTop: 16, fontSize: 16, color: '#6B7280', fontFamily: 'Rubik-Regular' }}>Loading groups...</Text>
               </View>
-            ) : error && groups.length === 0 ? (
+            ) : error && (!groups || groups.length === 0) ? (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
                 <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
                 <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2937', marginTop: 16, fontFamily: 'Rubik-Bold' }}>Error loading groups</Text>
@@ -369,7 +369,7 @@ export default function GroupsScreen() {
                   <Text style={{ color: 'white', fontSize: 16, fontWeight: '600', fontFamily: 'Rubik-SemiBold' }}>Retry</Text>
                 </TouchableOpacity>
               </View>
-            ) : groups.length === 0 ? (
+            ) : (!groups || groups.length === 0) ? (
               renderEmptyState()
             ) : (
               <FlatList
@@ -386,7 +386,7 @@ export default function GroupsScreen() {
                 }}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={
-                  loading && groups.length > 0 ? (
+                  loading && groups && groups.length > 0 ? (
                     <View style={{ paddingVertical: 20, alignItems: 'center' }}>
                       <ActivityIndicator size="small" color="#1C8E79" />
                     </View>

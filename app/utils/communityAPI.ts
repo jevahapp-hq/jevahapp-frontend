@@ -381,10 +381,40 @@ class CommunityAPIService {
 
       console.log("📡 Response status:", response.status, response.statusText);
 
-      return await this.handleResponse<{
+      const result = await this.handleResponse<{
         prayers: PrayerRequest[];
         pagination: any;
+      } | {
+        items: PrayerRequest[];
+        data: {
+          prayers: PrayerRequest[];
+          pagination: any;
+        };
       }>(response);
+
+      // Handle different response formats
+      if (result.success && result.data) {
+        const data = result.data as any;
+        // Check for different response structures
+        let prayers = data.prayers || data.items || data.data?.prayers || data.data?.items || [];
+        let pagination = data.pagination || data.data?.pagination || {
+          page: params?.page || 1,
+          limit: params?.limit || 20,
+          total: prayers.length,
+          totalPages: 1,
+          hasMore: false,
+        };
+
+        console.log("✅ Parsed prayers:", prayers.length, "prayers");
+        console.log("✅ Pagination:", pagination);
+
+        return {
+          success: true,
+          data: { prayers, pagination },
+        };
+      }
+
+      return result as ApiResponse<{ prayers: PrayerRequest[]; pagination: any }>;
     } catch (error) {
       console.error("❌ Error getting prayers:", error);
       console.error("❌ Error details:", {
