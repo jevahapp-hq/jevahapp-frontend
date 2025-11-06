@@ -68,9 +68,14 @@ export interface Forum {
   _id: string;
   title: string;
   description: string;
-  createdBy: string;
+  createdBy?: string | {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+  };
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   isActive: boolean;
   postsCount: number;
   participantsCount: number;
@@ -79,7 +84,7 @@ export interface Forum {
 export interface ForumPost {
   _id: string;
   forumId: string;
-  userId: string;
+  userId?: string;
   content: string;
   embeddedLinks?: Array<{
     url: string;
@@ -88,34 +93,55 @@ export interface ForumPost {
     thumbnail?: string;
     type: "video" | "article" | "resource" | "other";
   }>;
+  tags?: string[];
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   likesCount: number;
   commentsCount: number;
   userLiked?: boolean;
-  author: {
+  author?: {
     _id: string;
     username: string;
     firstName?: string;
     lastName?: string;
     avatarUrl?: string;
   };
+  user?: {
+    _id: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+  forum?: {
+    _id: string;
+    title: string;
+  };
 }
 
 export interface ForumComment {
   _id: string;
   postId: string;
-  userId: string;
+  userId?: string;
   content: string;
   parentCommentId?: string;
   createdAt: string;
   likesCount: number;
   userLiked?: boolean;
   replies?: ForumComment[];
-  author: {
+  author?: {
     _id: string;
     username: string;
+    firstName?: string;
+    lastName?: string;
     avatarUrl?: string;
+  };
+  user?: {
+    _id: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
   };
 }
 
@@ -615,13 +641,23 @@ class CommunityAPIService {
     }
   }
 
-  // Get All Forums
+  // Get All Forums (Public - no auth required)
   async getForums(params?: {
     page?: number;
     limit?: number;
   }): Promise<ApiResponse<{ forums: Forum[]; pagination: any }>> {
     try {
-      const headers = await this.getAuthHeaders();
+      // Try to get auth headers, but don't fail if not available (public endpoint)
+      let headers: HeadersInit;
+      try {
+        headers = await this.getAuthHeaders();
+      } catch {
+        headers = {
+          "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
+        };
+      }
+
       const queryParams = new URLSearchParams();
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
@@ -634,9 +670,29 @@ class CommunityAPIService {
         }
       );
 
-      return await this.handleResponse<{ forums: Forum[]; pagination: any }>(
+      const result = await this.handleResponse<{ data: { forums: Forum[]; pagination: any } } | { forums: Forum[]; pagination: any }>(
         response
       );
+
+      // Handle different response formats
+      if (result.success && result.data) {
+        const data = result.data as any;
+        const forums = data.forums || data.data?.forums || [];
+        const pagination = data.pagination || data.data?.pagination || {
+          page: params?.page || 1,
+          limit: params?.limit || 20,
+          total: forums.length,
+          totalPages: 1,
+          hasMore: false,
+        };
+
+        return {
+          success: true,
+          data: { forums, pagination },
+        };
+      }
+
+      return result as ApiResponse<{ forums: Forum[]; pagination: any }>;
     } catch (error) {
       console.error("Error getting forums:", error);
       return {
@@ -647,7 +703,7 @@ class CommunityAPIService {
     }
   }
 
-  // Get Forum Posts
+  // Get Forum Posts (Public - no auth required)
   async getForumPosts(
     forumId: string,
     params?: {
@@ -666,7 +722,17 @@ class CommunityAPIService {
         };
       }
 
-      const headers = await this.getAuthHeaders();
+      // Try to get auth headers, but don't fail if not available (public endpoint)
+      let headers: HeadersInit;
+      try {
+        headers = await this.getAuthHeaders();
+      } catch {
+        headers = {
+          "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
+        };
+      }
+
       const queryParams = new URLSearchParams();
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
@@ -682,9 +748,29 @@ class CommunityAPIService {
         }
       );
 
-      return await this.handleResponse<{ posts: ForumPost[]; pagination: any }>(
+      const result = await this.handleResponse<{ data: { posts: ForumPost[]; pagination: any } } | { posts: ForumPost[]; pagination: any }>(
         response
       );
+
+      // Handle different response formats
+      if (result.success && result.data) {
+        const data = result.data as any;
+        const posts = data.posts || data.data?.posts || [];
+        const pagination = data.pagination || data.data?.pagination || {
+          page: params?.page || 1,
+          limit: params?.limit || 20,
+          total: posts.length,
+          totalPages: 1,
+          hasMore: false,
+        };
+
+        return {
+          success: true,
+          data: { posts, pagination },
+        };
+      }
+
+      return result as ApiResponse<{ posts: ForumPost[]; pagination: any }>;
     } catch (error) {
       console.error("Error getting forum posts:", error);
       return {
@@ -710,6 +796,7 @@ class CommunityAPIService {
         thumbnail?: string;
         type: "video" | "article" | "resource" | "other";
       }>;
+      tags?: string[];
     }
   ): Promise<ApiResponse<ForumPost>> {
     try {
@@ -731,7 +818,18 @@ class CommunityAPIService {
         }
       );
 
-      return await this.handleResponse<ForumPost>(response);
+      const result = await this.handleResponse<{ data: ForumPost } | ForumPost>(response);
+      
+      // Handle different response formats
+      if (result.success && result.data) {
+        const postData = (result.data as any).data || result.data;
+        return {
+          success: true,
+          data: postData as ForumPost,
+        };
+      }
+
+      return result as ApiResponse<ForumPost>;
     } catch (error) {
       console.error("Error creating forum post:", error);
       return {
@@ -740,6 +838,99 @@ class CommunityAPIService {
           error instanceof Error
             ? error.message
             : "Failed to create forum post",
+        code: "NETWORK_ERROR",
+      };
+    }
+  }
+
+  // Update Forum Post (Creator only)
+  async updateForumPost(
+    postId: string,
+    postData: {
+      content?: string;
+      embeddedLinks?: Array<{
+        url: string;
+        title?: string;
+        description?: string;
+        thumbnail?: string;
+        type: "video" | "article" | "resource" | "other";
+      }>;
+      tags?: string[];
+    }
+  ): Promise<ApiResponse<ForumPost>> {
+    try {
+      if (!this.isValidObjectId(postId)) {
+        return {
+          success: false,
+          error: "Invalid post ID",
+          code: "VALIDATION_ERROR",
+        };
+      }
+
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(
+        `${this.baseURL}/api/community/forum/posts/${postId}`,
+        {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(postData),
+        }
+      );
+
+      const result = await this.handleResponse<{ data: ForumPost } | ForumPost>(response);
+      
+      // Handle different response formats
+      if (result.success && result.data) {
+        const postData = (result.data as any).data || result.data;
+        return {
+          success: true,
+          data: postData as ForumPost,
+        };
+      }
+
+      return result as ApiResponse<ForumPost>;
+    } catch (error) {
+      console.error("Error updating forum post:", error);
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update forum post",
+        code: "NETWORK_ERROR",
+      };
+    }
+  }
+
+  // Delete Forum Post (Creator only)
+  async deleteForumPost(postId: string): Promise<ApiResponse<void>> {
+    try {
+      if (!this.isValidObjectId(postId)) {
+        return {
+          success: false,
+          error: "Invalid post ID",
+          code: "VALIDATION_ERROR",
+        };
+      }
+
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(
+        `${this.baseURL}/api/community/forum/posts/${postId}`,
+        {
+          method: "DELETE",
+          headers,
+        }
+      );
+
+      return await this.handleResponse<void>(response);
+    } catch (error) {
+      console.error("Error deleting forum post:", error);
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete forum post",
         code: "NETWORK_ERROR",
       };
     }
@@ -781,7 +972,7 @@ class CommunityAPIService {
     }
   }
 
-  // Get Forum Post Comments
+  // Get Forum Post Comments (Public - no auth required)
   async getForumPostComments(
     postId: string,
     params?: { page?: number; limit?: number; includeReplies?: boolean }
@@ -795,7 +986,17 @@ class CommunityAPIService {
         };
       }
 
-      const headers = await this.getAuthHeaders();
+      // Try to get auth headers, but don't fail if not available (public endpoint)
+      let headers: HeadersInit;
+      try {
+        headers = await this.getAuthHeaders();
+      } catch {
+        headers = {
+          "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
+        };
+      }
+
       const queryParams = new URLSearchParams();
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
@@ -813,10 +1014,32 @@ class CommunityAPIService {
         }
       );
 
-      return await this.handleResponse<{
+      const result = await this.handleResponse<{
+        data: { comments: ForumComment[]; pagination: any };
+      } | {
         comments: ForumComment[];
         pagination: any;
       }>(response);
+
+      // Handle different response formats
+      if (result.success && result.data) {
+        const data = result.data as any;
+        const comments = data.comments || data.data?.comments || [];
+        const pagination = data.pagination || data.data?.pagination || {
+          page: params?.page || 1,
+          limit: params?.limit || 20,
+          total: comments.length,
+          totalPages: 1,
+          hasMore: false,
+        };
+
+        return {
+          success: true,
+          data: { comments, pagination },
+        };
+      }
+
+      return result as ApiResponse<{ comments: ForumComment[]; pagination: any }>;
     } catch (error) {
       console.error("Error getting forum post comments:", error);
       return {
@@ -854,7 +1077,18 @@ class CommunityAPIService {
         }
       );
 
-      return await this.handleResponse<ForumComment>(response);
+      const result = await this.handleResponse<{ data: ForumComment } | ForumComment>(response);
+      
+      // Handle different response formats
+      if (result.success && result.data) {
+        const commentData = (result.data as any).data || result.data;
+        return {
+          success: true,
+          data: commentData as ForumComment,
+        };
+      }
+
+      return result as ApiResponse<ForumComment>;
     } catch (error) {
       console.error("Error commenting on forum post:", error);
       return {

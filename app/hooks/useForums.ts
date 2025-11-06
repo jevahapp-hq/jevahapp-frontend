@@ -1,5 +1,6 @@
 // Forum Hooks
 import { useState, useEffect, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   communityAPI,
   Forum,
@@ -228,6 +229,69 @@ export function useForumPosts(forumId: string) {
     }
   }, [forumId]);
 
+  const updatePost = useCallback(
+    async (
+      postId: string,
+      postData: {
+        content?: string;
+        embeddedLinks?: Array<{
+          url: string;
+          title?: string;
+          description?: string;
+          thumbnail?: string;
+          type: "video" | "article" | "resource" | "other";
+        }>;
+        tags?: string[];
+      }
+    ) => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await communityAPI.updateForumPost(postId, postData);
+        if (response.success && response.data) {
+          setPosts((prev) => prev.map((p) => (p._id === postId ? response.data! : p)));
+          return response.data;
+        } else {
+          const apiError = ApiErrorHandler.handle(response);
+          setError(apiError);
+          return null;
+        }
+      } catch (err: any) {
+        const apiError = ApiErrorHandler.handle(err);
+        setError(apiError);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const deletePost = useCallback(
+    async (postId: string) => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await communityAPI.deleteForumPost(postId);
+        if (response.success) {
+          setPosts((prev) => prev.filter((p) => p._id !== postId));
+          return true;
+        } else {
+          const apiError = ApiErrorHandler.handle(response);
+          setError(apiError);
+          return false;
+        }
+      } catch (err: any) {
+        const apiError = ApiErrorHandler.handle(err);
+        setError(apiError);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   return {
     posts,
     loading,
@@ -236,6 +300,8 @@ export function useForumPosts(forumId: string) {
     loadMore: () => loadPosts(false),
     refresh,
     createPost,
+    updatePost,
+    deletePost,
     likePost,
   };
 }
@@ -456,5 +522,33 @@ export function useForumPostComments(postId: string) {
     addComment,
     likeComment,
   };
+}
+
+// Helper to check if current user is post owner
+export async function isForumPostOwner(post: ForumPost): Promise<boolean> {
+  try {
+    const userStr = await AsyncStorage.getItem("user");
+    if (!userStr || !post) {
+      return false;
+    }
+
+    const user = JSON.parse(userStr);
+    const currentUserId = user._id || user.id || user.email;
+
+    if (!currentUserId) {
+      return false;
+    }
+
+    // Check different fields for author ID
+    const authorId = 
+      post.userId || 
+      post.author?._id || 
+      post.user?._id;
+
+    return authorId === currentUserId;
+  } catch (error) {
+    console.error("Error checking forum post ownership:", error);
+    return false;
+  }
 }
 

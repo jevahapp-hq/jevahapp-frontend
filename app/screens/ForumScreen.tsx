@@ -9,6 +9,7 @@ import {
   FlatList,
   Image,
   Linking,
+  Modal,
   SafeAreaView,
   StatusBar,
   Text,
@@ -18,9 +19,9 @@ import {
 } from "react-native";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { navigateMainTab } from "../utils/navigation";
-import { useForums, useForumPosts } from "../hooks/useForums";
+import { useForums, useForumPosts, isForumPostOwner } from "../hooks/useForums";
 import { formatTimestamp } from "../utils/communityHelpers";
-import { ForumPost as ForumPostType } from "../utils/communityAPI";
+import { ForumPost as ForumPostType, Forum } from "../utils/communityAPI";
 import { extractLinkMetadata, validateForumPostForm } from "../utils/communityHelpers";
 
 export default function ForumScreen() {
@@ -29,6 +30,9 @@ export default function ForumScreen() {
   const [newPostText, setNewPostText] = useState("");
   const [selectedForumId, setSelectedForumId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingPost, setEditingPost] = useState<ForumPostType | null>(null);
+  const [editPostText, setEditPostText] = useState("");
+  const [selectedPostOwners, setSelectedPostOwners] = useState<Record<string, boolean>>({});
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
@@ -43,11 +47,27 @@ export default function ForumScreen() {
     loadMore,
     refresh: refreshPosts,
     createPost,
+    updatePost,
+    deletePost,
     likePost,
   } = useForumPosts(selectedForumId || "");
   
   // Only load posts when we have a forum selected
   const shouldLoadPosts = !!selectedForumId;
+
+  // Check ownership for each post
+  useEffect(() => {
+    const checkOwnership = async () => {
+      const ownershipMap: Record<string, boolean> = {};
+      for (const post of posts) {
+        ownershipMap[post._id] = await isForumPostOwner(post);
+      }
+      setSelectedPostOwners(ownershipMap);
+    };
+    if (posts.length > 0) {
+      checkOwnership();
+    }
+  }, [posts]);
 
   // Set default forum when forums load
   useEffect(() => {
@@ -143,13 +163,87 @@ export default function ForumScreen() {
     );
   };
 
+  const handleEditPost = async () => {
+    if (!editingPost || !editPostText.trim()) {
+      Alert.alert("Error", "Please enter your message");
+      return;
+    }
+
+    // Extract links from text
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = editPostText.match(urlRegex) || [];
+    const embeddedLinks: any[] = [];
+
+    // Process each URL
+    for (const url of urls.slice(0, 5)) {
+      const linkMetadata = await extractLinkMetadata(url);
+      embeddedLinks.push({
+        url,
+        ...linkMetadata,
+      });
+    }
+
+    // Validate form
+    const validation = validateForumPostForm({
+      content: editPostText,
+      embeddedLinks: embeddedLinks.length > 0 ? embeddedLinks : undefined,
+    });
+
+    if (!validation.valid) {
+      Alert.alert("Validation Error", validation.errors.join("\n"));
+      return;
+    }
+
+    // Update post
+    const result = await updatePost(editingPost._id, {
+      content: editPostText,
+      embeddedLinks: embeddedLinks.length > 0 ? embeddedLinks : undefined,
+    });
+
+    if (result) {
+      setEditingPost(null);
+      setEditPostText("");
+      Alert.alert("Success", "Post updated successfully!");
+    } else {
+      Alert.alert("Error", "Failed to update post. Please try again.");
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to delete this post? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const result = await deletePost(postId);
+            if (result) {
+              Alert.alert("Success", "Post deleted successfully!");
+            } else {
+              Alert.alert("Error", "Failed to delete post. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Helper to get author name
   const getAuthorName = (post: ForumPostType): string => {
     if (post.author?.firstName && post.author?.lastName) {
       return `${post.author.firstName} ${post.author.lastName}`;
     }
+    if (post.user?.firstName && post.user?.lastName) {
+      return `${post.user.firstName} ${post.user.lastName}`;
+    }
     if (post.author?.username) {
       return post.author.username;
+    }
+    if (post.user?.username) {
+      return post.user.username;
     }
     return "User";
   };
@@ -165,26 +259,51 @@ export default function ForumScreen() {
       .slice(0, 2);
   };
 
-  const renderForumPost = (post: ForumPostType) => (
-    <View key={post._id} style={styles.postContainer}>
-      {/* User Info */}
-      <View style={styles.userInfo}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            {post.author?.avatarUrl ? (
-              <Image
-                source={{ uri: post.author.avatarUrl }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <Text style={styles.avatarText}>{getAuthorInitials(post)}</Text>
+  const renderForumPost = (post: ForumPostType) => {
+    const isOwner = selectedPostOwners[post._id] || false;
+
+    return (
+      <View key={post._id} style={styles.postContainer}>
+        {/* User Info */}
+        <View style={styles.userInfo}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              {(post.author?.avatarUrl || post.user?.avatar) ? (
+                <Image
+                  source={{ uri: post.author?.avatarUrl || post.user?.avatar }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Text style={styles.avatarText}>{getAuthorInitials(post)}</Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.userDetails}>
+            <Text style={styles.userName}>{getAuthorName(post)}</Text>
+            {post.forum?.title && (
+              <Text style={styles.forumBadge}>{post.forum.title}</Text>
             )}
           </View>
+          {isOwner && (
+            <View style={styles.postActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  setEditingPost(post);
+                  setEditPostText(post.content);
+                }}
+                style={styles.actionButton}
+              >
+                <Ionicons name="create-outline" size={18} color="#256E63" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleDeletePost(post._id)}
+                style={styles.actionButton}
+              >
+                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-        <View style={styles.userDetails}>
-          <Text style={styles.userName}>{getAuthorName(post)}</Text>
-        </View>
-      </View>
 
       {/* Post Content */}
       <View style={styles.postContent}>
@@ -278,8 +397,9 @@ export default function ForumScreen() {
           <Text style={styles.greaterThanIcon}>{">"}</Text>
         </TouchableOpacity>
       </View>
-    </View>
-  );
+      </View>
+    );
+  };
 
   return (
     <Animated.View
@@ -304,12 +424,37 @@ export default function ForumScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Today Button */}
-        <View style={styles.todayButtonContainer}>
-          <TouchableOpacity style={styles.todayButton} activeOpacity={0.8}>
-            <Text style={styles.todayButtonText}>Today</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Forum Category Selector */}
+        {forums.length > 0 && (
+          <View style={styles.forumSelectorContainer}>
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={forums}
+              keyExtractor={(item) => item._id}
+              contentContainerStyle={styles.forumSelectorContent}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.forumChip,
+                    selectedForumId === item._id && styles.forumChipActive,
+                  ]}
+                  onPress={() => setSelectedForumId(item._id)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.forumChipText,
+                      selectedForumId === item._id && styles.forumChipTextActive,
+                    ]}
+                  >
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
 
         {/* Forum Posts */}
         {forumsLoading || postsLoading ? (
@@ -401,6 +546,61 @@ export default function ForumScreen() {
           />
         )}
 
+        {/* Edit Post Modal */}
+        <Modal
+          visible={!!editingPost}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setEditingPost(null);
+            setEditPostText("");
+          }}
+        >
+          <View style={styles.editModal}>
+            <View style={styles.editModalContent}>
+              <View style={styles.editModalHeader}>
+                <Text style={styles.editModalTitle}>Edit Post</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditingPost(null);
+                    setEditPostText("");
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#000" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.editInput}
+                value={editPostText}
+                onChangeText={setEditPostText}
+                placeholder="Edit your post..."
+                multiline
+                maxLength={5000}
+                autoFocus
+              />
+              <View style={styles.editModalActions}>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.cancelEditButton]}
+                  onPress={() => {
+                    setEditingPost(null);
+                    setEditPostText("");
+                  }}
+                >
+                  <Text style={styles.cancelEditButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.saveEditButton]}
+                  onPress={handleEditPost}
+                  disabled={!editPostText.trim()}
+                >
+                  <Text style={styles.saveEditButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <BottomNavOverlay
           selectedTab={activeTab}
           onTabChange={(tab) => {
@@ -438,21 +638,36 @@ const styles = {
   filterButton: {
     padding: 8,
   },
-  todayButtonContainer: {
-    alignItems: "center" as const,
-    paddingBottom: 16,
+  forumSelectorContainer: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
-  todayButton: {
-    backgroundColor: "#FEF3C7",
+  forumSelectorContent: {
     paddingHorizontal: 20,
+    gap: 8,
+  },
+  forumChip: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    marginRight: 8,
   },
-  todayButtonText: {
+  forumChipActive: {
+    backgroundColor: "#256E63",
+    borderColor: "#256E63",
+  },
+  forumChipText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: "#374151",
-    fontFamily: "Rubik-Medium",
+    color: "#6B7280",
+    fontFamily: "Rubik-SemiBold",
+  },
+  forumChipTextActive: {
+    color: "#fff",
   },
   postsContainer: {
     flex: 1,
@@ -499,6 +714,19 @@ const styles = {
     fontWeight: "600" as const,
     color: "#111827",
     fontFamily: "Rubik-Medium",
+  },
+  forumBadge: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontFamily: "Rubik-Regular",
+    marginTop: 2,
+  },
+  postActions: {
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  actionButton: {
+    padding: 4,
   },
   postContent: {
     marginBottom: 12,
@@ -716,5 +944,80 @@ const styles = {
   footerLoader: {
     paddingVertical: 20,
     alignItems: "center" as const,
+  },
+  editModal: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    zIndex: 1000,
+  },
+  editModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    width: "90%",
+    maxHeight: "80%",
+  },
+  editModalHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: 16,
+  },
+  editModalTitle: {
+    fontSize: 20,
+    fontWeight: "bold" as const,
+    color: "#111827",
+    fontFamily: "Rubik-Bold",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: "#374151",
+    fontFamily: "Rubik-Regular",
+    minHeight: 100,
+    textAlignVertical: "top" as const,
+    marginBottom: 16,
+  },
+  editModalActions: {
+    flexDirection: "row" as const,
+    justifyContent: "flex-end" as const,
+    gap: 12,
+  },
+  editButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: "center" as const,
+  },
+  cancelEditButton: {
+    backgroundColor: "#F3F4F6",
+  },
+  cancelEditButtonText: {
+    color: "#374151",
+    fontWeight: "600" as const,
+    fontSize: 14,
+    fontFamily: "Rubik-SemiBold",
+  },
+  saveEditButton: {
+    backgroundColor: "#256E63",
+  },
+  saveEditButtonText: {
+    color: "#fff",
+    fontWeight: "600" as const,
+    fontSize: 14,
+    fontFamily: "Rubik-SemiBold",
   },
 };
