@@ -614,7 +614,7 @@ class CommunityAPIService {
 
   // ============= FORUM API =============
 
-  // Create Forum (Admin Only)
+  // Create Forum (Authenticated users only)
   async createForum(forumData: {
     title: string;
     description: string;
