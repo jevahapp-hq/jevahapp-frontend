@@ -2,72 +2,39 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
+  FlatList,
   SafeAreaView,
-  ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-
-interface Poll {
-  id: string;
-  title: string;
-  description: string;
-  options: PollOption[];
-  totalVotes: number;
-  timestamp: string;
-  hasVoted: boolean;
-  userVote?: string;
-}
-
-interface PollOption {
-  id: string;
-  text: string;
-  votes: number;
-  percentage: number;
-}
+import { usePolls } from "../hooks/usePolls";
+import { Poll as PollType } from "../utils/communityAPI";
+import { formatTimestamp } from "../utils/communityHelpers";
 
 export default function PollsScreen() {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
 
-  const polls: Poll[] = [
-    {
-      id: "1",
-      title: "What is your favorite time to pray?",
-      description: "Help us understand the community's prayer habits",
-      totalVotes: 245,
-      timestamp: "2 hours ago",
-      hasVoted: false,
-      options: [
-        { id: "1", text: "Early morning (5-7 AM)", votes: 89, percentage: 36 },
-        { id: "2", text: "Mid-morning (8-10 AM)", votes: 67, percentage: 27 },
-        { id: "3", text: "Evening (6-8 PM)", votes: 54, percentage: 22 },
-        { id: "4", text: "Late night (9-11 PM)", votes: 35, percentage: 15 },
-      ],
-    },
-    {
-      id: "2",
-      title: "Which Bible study topic interests you most?",
-      description: "Let us know what you'd like to study next",
-      totalVotes: 189,
-      timestamp: "5 hours ago",
-      hasVoted: true,
-      userVote: "2",
-      options: [
-        { id: "1", text: "The Book of Psalms", votes: 45, percentage: 24 },
-        { id: "2", text: "The Book of Proverbs", votes: 67, percentage: 35 },
-        { id: "3", text: "The Book of Romans", votes: 41, percentage: 22 },
-        { id: "4", text: "The Book of Revelation", votes: 36, percentage: 19 },
-      ],
-    },
-  ];
+  // Get polls from backend
+  const {
+    polls,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    refresh: refreshPolls,
+    voteOnPoll,
+  } = usePolls({ status: "active", sortBy: "createdAt", sortOrder: "desc" });
 
   useEffect(() => {
     // Slide in animation from right to left
@@ -89,54 +56,86 @@ export default function PollsScreen() {
     });
   };
 
-  const handleVote = (pollId: string, optionId: string) => {
-    // TODO: Implement voting functionality
-    console.log("Voting for poll:", pollId, "option:", optionId);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshPolls();
+    setRefreshing(false);
   };
 
-  const renderPoll = (poll: Poll) => (
-    <View key={poll.id} style={styles.pollContainer}>
+  const handleVote = async (poll: PollType, optionId: string) => {
+    // Check if already voted
+    if (poll.userVoted) {
+      Alert.alert("Already Voted", "You have already voted on this poll");
+      return;
+    }
+
+    // Check if poll is active
+    if (!poll.isActive) {
+      Alert.alert("Poll Expired", "This poll has expired");
+      return;
+    }
+
+    // Vote on poll
+    const result = await voteOnPoll(poll._id, optionId);
+    if (result) {
+      // Success - poll state updated automatically
+      Alert.alert("Success", "Your vote has been recorded!");
+    }
+  };
+
+  const renderPoll = (poll: PollType) => (
+    <View key={poll._id} style={styles.pollContainer}>
       <View style={styles.pollHeader}>
-        <Text style={styles.pollTitle}>{poll.title}</Text>
-        <Text style={styles.pollDescription}>{poll.description}</Text>
+        <Text style={styles.pollTitle}>{poll.title || poll.question}</Text>
+        {poll.description && (
+          <Text style={styles.pollDescription}>{poll.description}</Text>
+        )}
         <View style={styles.pollMeta}>
-          <Text style={styles.pollTimestamp}>{poll.timestamp}</Text>
-          <Text style={styles.pollVotes}>{poll.totalVotes} votes</Text>
+          <Text style={styles.pollTimestamp}>
+            {formatTimestamp(poll.createdAt)}
+          </Text>
+          <Text style={styles.pollVotes}>{poll.totalVotes || 0} votes</Text>
         </View>
+        {!poll.isActive && (
+          <View style={styles.expiredBadge}>
+            <Text style={styles.expiredText}>Expired</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.pollOptions}>
         {poll.options.map((option) => (
           <TouchableOpacity
-            key={option.id}
+            key={option._id}
             style={[
               styles.pollOption,
-              poll.hasVoted &&
-                poll.userVote === option.id &&
+              poll.userVoted &&
+                poll.userVoteOptionId === option._id &&
                 styles.selectedOption,
+              !poll.isActive && styles.disabledOption,
             ]}
-            onPress={() => !poll.hasVoted && handleVote(poll.id, option.id)}
+            onPress={() => handleVote(poll, option._id)}
             activeOpacity={0.7}
-            disabled={poll.hasVoted}
+            disabled={poll.userVoted || !poll.isActive}
           >
             <View style={styles.optionContent}>
               <Text
                 style={[
                   styles.optionText,
-                  poll.hasVoted &&
-                    poll.userVote === option.id &&
+                  poll.userVoted &&
+                    poll.userVoteOptionId === option._id &&
                     styles.selectedOptionText,
                 ]}
               >
                 {option.text}
               </Text>
-              {poll.hasVoted && (
+              {poll.userVoted && typeof option.percentage === "number" && (
                 <Text style={styles.optionPercentage}>
-                  {option.percentage}%
+                  {option.percentage.toFixed(1)}%
                 </Text>
               )}
             </View>
-            {poll.hasVoted && (
+            {poll.userVoted && typeof option.percentage === "number" && (
               <View style={styles.progressBar}>
                 <View
                   style={[
@@ -146,11 +145,16 @@ export default function PollsScreen() {
                 />
               </View>
             )}
+            {poll.userVoted && poll.userVoteOptionId === option._id && (
+              <View style={styles.voteCheckmark}>
+                <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
+              </View>
+            )}
           </TouchableOpacity>
         ))}
       </View>
 
-      {poll.hasVoted && (
+      {poll.userVoted && (
         <View style={styles.votedIndicator}>
           <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
           <Text style={styles.votedText}>You voted</Text>
@@ -190,13 +194,57 @@ export default function PollsScreen() {
         </View>
 
         {/* Polls List */}
-        <ScrollView
-          style={styles.pollsContainer}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {polls.map(renderPoll)}
-        </ScrollView>
+        {loading && polls.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#DF930E" />
+            <Text style={styles.loadingText}>Loading polls...</Text>
+          </View>
+        ) : error && polls.length === 0 ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+            <Text style={styles.errorTitle}>Error loading polls</Text>
+            <Text style={styles.errorText}>{error.error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={refreshPolls}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : polls.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="stats-chart-outline" size={80} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>No polls available</Text>
+            <Text style={styles.emptyText}>
+              There are no active polls at the moment. Check back later!
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            style={styles.pollsContainer}
+            data={polls}
+            keyExtractor={(item) => item._id}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            onEndReached={() => {
+              if (!loading && hasMore) {
+                loadMore();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loading && polls.length > 0 ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator size="small" color="#DF930E" />
+                </View>
+              ) : null
+            }
+            contentContainerStyle={{ paddingBottom: 100 }}
+            renderItem={({ item }) => renderPoll(item)}
+          />
+        )}
       </SafeAreaView>
     </Animated.View>
   );
@@ -354,5 +402,99 @@ const styles = {
     color: "#22C55E",
     fontFamily: "Rubik-Medium",
     marginLeft: 4,
+  },
+  expiredBadge: {
+    backgroundColor: "#FEF2F2",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  expiredText: {
+    fontSize: 12,
+    color: "#DC2626",
+    fontFamily: "Rubik-Medium",
+  },
+  disabledOption: {
+    opacity: 0.6,
+  },
+  voteCheckmark: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+  },
+  // Loading, Error, and Empty States
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+    fontFamily: "Rubik-Regular",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "bold" as const,
+    color: "#1F2937",
+    marginTop: 16,
+    fontFamily: "Rubik-Bold",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    marginTop: 8,
+    marginBottom: 16,
+    fontFamily: "Rubik-Regular",
+  },
+  retryButton: {
+    backgroundColor: "#DF930E",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600" as const,
+    fontFamily: "Rubik-SemiBold",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "bold" as const,
+    color: "#1F2937",
+    marginTop: 24,
+    fontFamily: "Rubik-Bold",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    marginTop: 12,
+    lineHeight: 24,
+    fontFamily: "Rubik-Regular",
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: "center" as const,
   },
 };
