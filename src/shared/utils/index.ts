@@ -148,20 +148,24 @@ export const filterContentByType = (
 ): MediaItem[] => {
   if (contentType === "ALL") return items;
 
+  // Normalize contentType to uppercase for matching
+  const normalizedContentType = contentType.toUpperCase();
+  
   const typeMap: Record<string, string[]> = {
     LIVE: ["live"],
     SERMON: ["sermon", "teachings"],
     MUSIC: ["music", "audio"],
-    "E-BOOKS": ["e-books", "ebook", "image", "books"],
+    "E-BOOKS": ["e-books", "ebook", "image", "books", "pdf"],
     VIDEO: ["videos", "video"],
   };
 
-  const allowedTypes = typeMap[contentType] || [contentType.toLowerCase()];
-  return items.filter((item) =>
-    allowedTypes.some((allowedType) =>
-      item.contentType?.toLowerCase().includes(allowedType.toLowerCase())
-    )
-  );
+  const allowedTypes = typeMap[normalizedContentType] || [contentType.toLowerCase()];
+  return items.filter((item) => {
+    const itemContentType = (item.contentType || "").toLowerCase();
+    return allowedTypes.some((allowedType) =>
+      itemContentType.includes(allowedType.toLowerCase())
+    );
+  });
 };
 
 // Transform API response to MediaItem
@@ -237,10 +241,17 @@ export const categorizeContent = (items: MediaItem[]) => {
     (item) => item.contentType === "audio" || item.contentType === "music"
   );
   const ebooks = items.filter(
-    (item) =>
-      item.contentType === "image" ||
-      item.contentType === "ebook" ||
-      item.contentType === "books"
+    (item) => {
+      const contentType = (item.contentType || "").toLowerCase();
+      return (
+        contentType === "image" ||
+        contentType === "ebook" ||
+        contentType === "e-books" ||
+        contentType === "books" ||
+        contentType === "pdf" ||
+        (item.fileUrl && /\.pdf$/i.test(item.fileUrl))
+      );
+    }
   );
   const sermons = items.filter((item) => item.contentType === "sermon");
 
