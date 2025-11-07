@@ -326,7 +326,7 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
               {isSubmitting ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>Create</Text>
+              <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>Create</Text>
               )}
             </TouchableOpacity>
           </ScrollView>

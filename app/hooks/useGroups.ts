@@ -99,7 +99,10 @@ export function useMyGroups() {
         setError(null);
         const response = await communityAPI.createGroup(groupData);
         if (response.success && response.data) {
-          const createdGroup = response.data;
+          const createdGroup = {
+            ...response.data,
+            _id: response.data._id || response.data.id || Date.now().toString(),
+          };
           setGroups((prev) => [createdGroup, ...prev]);
           return createdGroup;
         } else {

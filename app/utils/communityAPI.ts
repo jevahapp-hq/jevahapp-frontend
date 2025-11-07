@@ -269,6 +269,31 @@ class CommunityAPIService {
     return typeof id === "string" && /^[a-f\d]{24}$/i.test(id);
   }
 
+  private normalizeGroup(group: Partial<Group> & Record<string, any>): Group {
+    const id = group._id || group.id || group.groupId;
+    return {
+      _id: String(id || ""),
+      name: group.name || "Untitled Group",
+      description: group.description || "",
+      profileImageUrl: group.profileImageUrl || group.imageUrl,
+      createdBy: group.createdBy || group.ownerId || "",
+      isPublic:
+        typeof group.isPublic === "boolean"
+          ? group.isPublic
+          : (group.visibility || "public") === "public",
+      visibility: group.visibility || (group.isPublic ? "public" : "private"),
+      membersCount: group.membersCount ?? group.totalMembers ?? 0,
+      createdAt: group.createdAt || new Date().toISOString(),
+      updatedAt: group.updatedAt || group.createdAt || new Date().toISOString(),
+      members: group.members || [],
+      creator: group.creator || group.owner,
+      isMember: group.isMember ?? true,
+      userRole: group.userRole || group.role,
+      role: group.role,
+      joinedAt: group.joinedAt,
+    };
+  }
+
   // Get authorization header with user token
   private async getAuthHeaders(): Promise<HeadersInit> {
     try {
@@ -1325,22 +1350,15 @@ class CommunityAPIService {
       const apiResponse = await this.handleResponse<{ group: Group }>(response);
 
       if (apiResponse.success) {
-        const group =
+        const rawGroup =
           (apiResponse.data && "group" in apiResponse.data
             ? apiResponse.data.group
             : (apiResponse.data as unknown as Group)) || null;
 
-        if (group) {
+        if (rawGroup) {
           return {
             success: true,
-            data: {
-              ...group,
-              visibility: group.visibility || payload.visibility,
-              isPublic:
-                group.visibility
-                  ? group.visibility === "public"
-                  : payload.visibility === "public",
-            },
+            data: this.normalizeGroup({ ...rawGroup, visibility: rawGroup.visibility || payload.visibility }),
             message: apiResponse.message,
           };
         }
@@ -1413,6 +1431,12 @@ class CommunityAPIService {
         groupsCount: result.data?.groups?.length || 0,
         error: result.error,
       });
+
+      if (result.success && result.data?.groups) {
+        result.data.groups = result.data.groups.map((group: any) =>
+          this.normalizeGroup(group)
+        );
+      }
 
       return result;
     } catch (error) {
