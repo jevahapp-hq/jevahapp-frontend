@@ -21,7 +21,7 @@ import FlagGroupModal from "../components/FlagGroupModal";
 import TopToast from "../components/TopToast";
 import { useMyGroups } from "../hooks/useGroups";
 import { Group } from "../utils/communityAPI";
-import { pickAndResizeImage, validateGroupForm } from "../utils/communityHelpers";
+import { validateGroupForm } from "../utils/communityHelpers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -81,38 +81,36 @@ export default function GroupsScreen() {
   };
 
   const handleCreateFromModal = async (group: {
-    id: string;
-    title: string;
-    description: string;
-    imageUri: string | null;
+    name: string;
+    description?: string;
     visibility: "public" | "private";
+    imageUri?: string | null;
   }) => {
-    // Validate form
     const validation = validateGroupForm({
-      name: group.title,
+      name: group.name,
       description: group.description,
       visibility: group.visibility,
     });
 
     if (!validation.valid) {
       Alert.alert("Validation Error", validation.errors.join("\n"));
-      return;
+      return false;
     }
 
-    // Create group via backend
     const result = await createGroup({
-      name: group.title,
+      name: group.name,
       description: group.description,
       visibility: group.visibility,
-      imageUri: group.imageUri ?? undefined,
     });
 
     if (result) {
       setToast({ visible: true, text: "Group created successfully!", type: "success" });
       setShowCreateModal(false);
-    } else {
-      setToast({ visible: true, text: "Failed to create group", type: "error" });
+      return true;
     }
+
+    setToast({ visible: true, text: "Failed to create group", type: "error" });
+    return false;
   };
 
   const handleLeaveGroup = async (groupId: string) => {

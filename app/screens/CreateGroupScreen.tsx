@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Animated,
     Dimensions,
     SafeAreaView,
@@ -12,6 +13,9 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import TopToast from "../components/TopToast";
+import { communityAPI } from "../utils/communityAPI";
+import { validateGroupForm } from "../utils/communityHelpers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -22,6 +26,8 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [toast, setToast] = useState<{ visible: boolean; text: string; type: "success" | "error" }>({ visible: false, text: "", type: "success" });
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -39,9 +45,54 @@ export default function CreateGroupScreen() {
     }).start(() => router.back());
   };
 
-  const handleCreate = () => {
-    // Placeholder: integrate with backend later
-    router.back();
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToast({ visible: true, text, type });
+  };
+
+  const handleCreate = async () => {
+    if (isCreating) {
+      return;
+    }
+
+    const name = groupName.trim();
+    const descriptionValue = description.trim();
+    const visibility = isPublic ? "public" : "private";
+
+    const validation = validateGroupForm({
+      name,
+      description: descriptionValue,
+      visibility,
+    });
+
+    if (!validation.valid) {
+      showToast(validation.errors[0], "error");
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      const response = await communityAPI.createGroup({
+        name,
+        description: descriptionValue || undefined,
+        visibility,
+      });
+
+      if (response.success && response.data) {
+        showToast("Group created successfully!", "success");
+        setGroupName("");
+        setDescription("");
+        setIsPublic(true);
+        setTimeout(() => {
+          router.replace("/screens/GroupsScreen");
+        }, 800);
+      } else {
+        showToast(response.error || "Failed to create group", "error");
+      }
+    } catch (error: any) {
+      showToast(error?.message || "Failed to create group", "error");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const descriptionLimit = 50;
@@ -167,7 +218,8 @@ export default function CreateGroupScreen() {
           {/* Create Button */}
           <TouchableOpacity
             onPress={handleCreate}
-            activeOpacity={0.8}
+            activeOpacity={isCreating ? 1 : 0.8}
+            disabled={isCreating}
             style={{
               backgroundColor: "#0C1529",
               height: 54,
@@ -175,12 +227,24 @@ export default function CreateGroupScreen() {
               alignItems: "center",
               justifyContent: "center",
               marginBottom: 20,
+              opacity: isCreating ? 0.7 : 1,
             }}
           >
-            <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>Create</Text>
+            {isCreating ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>Create</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
+      <TopToast
+        visible={toast.visible}
+        text={toast.text}
+        type={toast.type}
+        topOffset={20}
+        onClose={() => setToast((prev) => ({ ...prev, visible: false }))}
+      />
     </Animated.View>
   );
 }

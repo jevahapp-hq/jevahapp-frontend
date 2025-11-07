@@ -169,6 +169,7 @@ export interface Group {
   profileImageUrl?: string;
   createdBy: string;
   isPublic: boolean;
+  visibility?: "public" | "private";
   membersCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1300,53 +1301,52 @@ class CommunityAPIService {
     name: string;
     description?: string;
     visibility?: "public" | "private";
-    isPublic?: boolean;
-    imageUri?: string;
   }): Promise<ApiResponse<Group>> {
     try {
       const headers = await this.getAuthHeaders();
-
-      const visibility =
-        groupData.visibility ??
-        (typeof groupData.isPublic === "boolean"
-          ? groupData.isPublic
-            ? "public"
-            : "private"
-          : "public");
-
       const payload: Record<string, any> = {
-        name: groupData.name,
-        description: groupData.description ?? "",
-        visibility,
+        name: groupData.name?.trim(),
+        visibility: groupData.visibility || "public",
       };
 
-      if (
-        groupData.imageUri &&
-        (groupData.imageUri.startsWith("http://") ||
-          groupData.imageUri.startsWith("https://"))
-      ) {
-        payload.imageUrl = groupData.imageUri;
+      if (groupData.description && groupData.description.trim().length > 0) {
+        payload.description = groupData.description.trim();
       }
 
-      const response = await fetch(`${this.baseURL}/api/community/groups`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `${this.baseURL}/api/community/groups`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        }
+      );
 
-      const result = await this.handleResponse<Group>(response);
+      const apiResponse = await this.handleResponse<{ group: Group }>(response);
 
-      if (!result.success) {
-        console.error("❌ Create group failed:", {
-          url: `${this.baseURL}/api/community/groups`,
-          status: response.status,
-          statusText: response.statusText,
-          error: result.error,
-          payload,
-        });
+      if (apiResponse.success) {
+        const group =
+          (apiResponse.data && "group" in apiResponse.data
+            ? apiResponse.data.group
+            : (apiResponse.data as unknown as Group)) || null;
+
+        if (group) {
+          return {
+            success: true,
+            data: {
+              ...group,
+              visibility: group.visibility || payload.visibility,
+              isPublic:
+                group.visibility
+                  ? group.visibility === "public"
+                  : payload.visibility === "public",
+            },
+            message: apiResponse.message,
+          };
+        }
       }
 
-      return result;
+      return apiResponse as unknown as ApiResponse<Group>;
     } catch (error) {
       console.error("Error creating group:", error);
       return {

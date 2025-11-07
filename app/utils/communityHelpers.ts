@@ -97,33 +97,34 @@ export const validateForumPostForm = (data: {
 
 export const validateGroupForm = (data: {
   name: string;
-  description: string;
-  isPublic?: boolean;
+  description?: string;
   visibility?: "public" | "private";
 }): ValidationResult => {
   const errors: string[] = [];
 
-  if (!data.name || data.name.trim().length === 0) {
+  const trimmedName = data.name ? data.name.trim() : "";
+  if (!trimmedName) {
     errors.push("Group name is required");
-  } else if (data.name.length < 3) {
+  } else if (trimmedName.length < 3) {
     errors.push("Group name must be at least 3 characters");
-  } else if (data.name.length > 100) {
+  } else if (trimmedName.length > 100) {
     errors.push("Group name must be less than 100 characters");
   }
 
-  if (!data.description || data.description.trim().length === 0) {
-    errors.push("Group description is required");
-  } else if (data.description.length < 10) {
-    errors.push("Group description must be at least 10 characters");
-  } else if (data.description.length > 500) {
-    errors.push("Group description must be less than 500 characters");
+  if (data.description !== undefined) {
+    const trimmedDescription = data.description.trim();
+    if (trimmedDescription && trimmedDescription.length < 3) {
+      errors.push("Group description must be at least 3 characters");
+    } else if (trimmedDescription.length > 500) {
+      errors.push("Group description must be less than 500 characters");
+    }
   }
 
-  const visibility =
-    data.visibility ??
-    (typeof data.isPublic === "boolean" ? (data.isPublic ? "public" : "private") : undefined);
-
-  if (visibility && visibility !== "public" && visibility !== "private") {
+  if (
+    data.visibility !== undefined &&
+    data.visibility !== "public" &&
+    data.visibility !== "private"
+  ) {
     errors.push("Group visibility must be either public or private");
   }
 

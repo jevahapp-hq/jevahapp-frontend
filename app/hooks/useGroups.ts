@@ -91,22 +91,17 @@ export function useMyGroups() {
   const createGroup = useCallback(
     async (groupData: {
       name: string;
-      description: string;
+      description?: string;
       visibility?: "public" | "private";
-      imageUri?: string | null;
     }) => {
       try {
         setLoading(true);
         setError(null);
-        const response = await communityAPI.createGroup({
-          name: groupData.name,
-          description: groupData.description,
-          visibility: groupData.visibility,
-          imageUri: groupData.imageUri ?? undefined,
-        });
+        const response = await communityAPI.createGroup(groupData);
         if (response.success && response.data) {
-          setGroups((prev) => [response.data!, ...prev]);
-          return response.data;
+          const createdGroup = response.data;
+          setGroups((prev) => [createdGroup, ...prev]);
+          return createdGroup;
         } else {
           const apiError = ApiErrorHandler.handle(response);
           setError(apiError);
