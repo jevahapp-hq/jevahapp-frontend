@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   getResponsiveBorderRadius,
   getResponsiveShadow,
@@ -65,6 +65,7 @@ const mapContentTypeToCategory = (contentType: string): string => {
 
 export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
+  const router = useRouter();
   
   // Handle defaultCategory as string or array (expo-router can return arrays)
   const defaultCategoryValue = Array.isArray(defaultCategory)
@@ -157,6 +158,14 @@ export default function HomeTabContent() {
       // Immediate visual feedback
       setSelectedCategory(category);
 
+      // Update route params so navigation back restores this category
+      try {
+        const contentTypeParam = mapCategoryToContentType(category);
+        router.setParams({ defaultCategory: contentTypeParam });
+      } catch (error) {
+        console.warn("🏠 HomeTabContent: Failed to set defaultCategory param", error);
+      }
+
       // Only stop media if actually switching to a different category
       if (category !== selectedCategory) {
         // Defer heavy operations to prevent blocking UI
@@ -174,7 +183,7 @@ export default function HomeTabContent() {
         });
       }
     },
-    [selectedCategory, fastPress]
+    [selectedCategory, fastPress, router]
   );
 
   const renderContent = () => {
