@@ -160,12 +160,39 @@ export const filterContentByType = (
   };
 
   const allowedTypes = typeMap[normalizedContentType] || [contentType.toLowerCase()];
-  return items.filter((item) => {
+  
+  // Debug logging for e-books
+  if (normalizedContentType === "E-BOOKS") {
+    console.log(`🔍 filterContentByType: Filtering for E-BOOKS`);
+    console.log(`🔍 filterContentByType: Allowed types:`, allowedTypes);
+    console.log(`🔍 filterContentByType: Total items: ${items.length}`);
+    console.log(`🔍 filterContentByType: Items with contentType:`, 
+      items.map(item => ({ title: item.title, contentType: item.contentType }))
+    );
+  }
+  
+  const filtered = items.filter((item) => {
     const itemContentType = (item.contentType || "").toLowerCase();
-    return allowedTypes.some((allowedType) =>
+    const matches = allowedTypes.some((allowedType) =>
       itemContentType.includes(allowedType.toLowerCase())
     );
+    
+    // Debug logging for e-books
+    if (normalizedContentType === "E-BOOKS" && !matches && (itemContentType === "ebook" || itemContentType === "e-books")) {
+      console.log(`⚠️ filterContentByType: Item "${item.title}" with contentType="${item.contentType}" did not match allowedTypes:`, allowedTypes);
+    }
+    
+    return matches;
   });
+  
+  if (normalizedContentType === "E-BOOKS") {
+    console.log(`🔍 filterContentByType: Filtered items: ${filtered.length}`);
+    console.log(`🔍 filterContentByType: Filtered ebook items:`, 
+      filtered.map(item => ({ title: item.title, contentType: item.contentType }))
+    );
+  }
+  
+  return filtered;
 };
 
 // Transform API response to MediaItem
@@ -196,11 +223,16 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem => {
     }
   }
 
+  // Debug logging for ebooks
+  if ((item.contentType || "").toLowerCase() === "ebook") {
+    console.log(`📖 transformApiResponseToMediaItem: Transforming ebook "${item.title}" with contentType="${item.contentType}"`);
+  }
+
   return {
     _id: item._id,
     title: item.title,
     description: item.description,
-    contentType: item.contentType,
+    contentType: item.contentType, // Preserve original contentType
     fileUrl: videoUrl,
     thumbnailUrl: thumbnailUrl,
     speaker:

@@ -240,12 +240,27 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // Filter content based on contentType
   const filteredMediaList = useMemo(() => {
-    return filterContentByType(mediaList, contentType);
+    const filtered = filterContentByType(mediaList, contentType);
+    console.log(`📚 AllContentTikTok: Filtering for contentType="${contentType}"`);
+    console.log(`📚 AllContentTikTok: Total media items: ${mediaList.length}`);
+    console.log(`📚 AllContentTikTok: Filtered items: ${filtered.length}`);
+    console.log(`📚 AllContentTikTok: Ebook items in filtered list:`, 
+      filtered.filter(item => {
+        const ct = (item.contentType || "").toLowerCase();
+        return ct === "ebook" || ct === "e-books" || ct === "books" || ct === "pdf" || (item.fileUrl && /\.pdf$/i.test(item.fileUrl));
+      }).map(item => ({ title: item.title, contentType: item.contentType }))
+    );
+    return filtered;
   }, [mediaList, contentType]);
 
   // Categorize content
   const categorizedContent = useMemo(() => {
-    return categorizeContent(filteredMediaList);
+    const categorized = categorizeContent(filteredMediaList);
+    console.log(`📚 AllContentTikTok: Categorized content - ebooks: ${categorized.ebooks.length}, videos: ${categorized.videos.length}, music: ${categorized.music.length}, sermons: ${categorized.sermons.length}`);
+    if (categorized.ebooks.length > 0) {
+      console.log(`📚 AllContentTikTok: Ebook items:`, categorized.ebooks.map(e => ({ title: e.title, contentType: e.contentType })));
+    }
+    return categorized;
   }, [filteredMediaList]);
 
   // Most recent item
