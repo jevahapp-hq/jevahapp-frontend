@@ -1664,24 +1664,26 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Hymns section (mini cards) */}
-          <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-            <Text
-              style={{
-                fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                fontWeight: "600",
-                color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                paddingHorizontal: UI_CONFIG.SPACING.MD,
-                marginBottom: UI_CONFIG.SPACING.MD,
-              }}
-            >
-              Hymns
-            </Text>
-            {renderHymnMiniCards()}
-          </View>
+          {/* Hymns section (mini cards) - Only show in MUSIC tab */}
+          {(contentType === "MUSIC" || contentType === "music" || contentType === "ALL") && (
+            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+              <Text
+                style={{
+                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                  fontWeight: "600",
+                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                  paddingHorizontal: UI_CONFIG.SPACING.MD,
+                  marginBottom: UI_CONFIG.SPACING.MD,
+                }}
+              >
+                Hymns
+              </Text>
+              {renderHymnMiniCards()}
+            </View>
+          )}
 
-          {/* Copyright-Free Songs Section - Hide for VIDEO content type */}
-          {contentType !== "videos" && (
+          {/* Copyright-Free Songs Section - Only show in MUSIC tab */}
+          {(contentType === "MUSIC" || contentType === "music" || contentType === "ALL") && contentType !== "videos" && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{
@@ -1727,21 +1729,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                     renderContentByType(item, index)
                   )}
 
-                  {/* Insert Recommended Live for you here with red LIVE badge */}
-                  <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
-                    <Text
-                      style={{
-                        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                        fontWeight: "600",
-                        color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                        paddingHorizontal: UI_CONFIG.SPACING.MD,
-                        marginBottom: UI_CONFIG.SPACING.LG,
-                      }}
-                    >
-                      Recommended Live for you
-                    </Text>
-                    {renderRecommendedLiveCards()}
-                  </View>
+                  {/* Insert Recommended Live for you here with red LIVE badge - Hide for E-BOOKS */}
+                  {contentType !== "e-books" && contentType?.toUpperCase() !== "E-BOOKS" && (
+                    <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
+                      <Text
+                        style={{
+                          fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                          fontWeight: "600",
+                          color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                          paddingHorizontal: UI_CONFIG.SPACING.MD,
+                          marginBottom: UI_CONFIG.SPACING.LG,
+                        }}
+                      >
+                        Recommended Live for you
+                      </Text>
+                      {renderRecommendedLiveCards()}
+                    </View>
+                  )}
 
                   {/* Gap before next four cards */}
                   <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
