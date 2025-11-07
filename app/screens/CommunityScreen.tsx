@@ -124,7 +124,7 @@ export default function CommunityScreen() {
                 style={{
                   color: "white",
                   fontSize: 18,
-                  fontWeight: "bold",
+                  fontWeight: "700",
                   textAlign: "center",
                   fontFamily: "Rubik-Bold",
                   paddingHorizontal: 10,
