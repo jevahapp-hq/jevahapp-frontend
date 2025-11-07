@@ -123,11 +123,12 @@ export default function CommunityScreen() {
               <Text
                 style={{
                   color: "white",
-                  fontSize: 18,
-                  fontWeight: "700",
+                  fontSize: 20,
+                  fontWeight: "900",
                   textAlign: "center",
                   fontFamily: "Rubik-Bold",
                   paddingHorizontal: 10,
+                  letterSpacing: 0.5,
                 }}
               >
                 {card.title}
