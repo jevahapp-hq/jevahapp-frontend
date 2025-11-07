@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
-import { useDeleteMedia } from "../../../../app/hooks/useDeleteMedia";
+import { useMediaDeletion } from "../../../shared/hooks";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import {
   useContentCount,
@@ -35,36 +35,36 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   
-  // Delete media functionality
-  const { deleteMediaItem, checkOwnership } = useDeleteMedia();
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
-  
-  // Check ownership when modal opens
-  useEffect(() => {
-    if (isModalVisible) {
-      checkOwnership(ebook.uploadedBy || ebook.author?._id || ebook.authorInfo?._id).then(setIsOwner);
-    }
-  }, [isModalVisible, ebook.uploadedBy, ebook.author, ebook.authorInfo, checkOwnership]);
+  // Delete media functionality - using reusable hook
+  const {
+    isOwner,
+    showDeleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+  } = useMediaDeletion({
+    mediaItem: ebook,
+    isModalVisible,
+    onDeleteSuccess: (deletedEbook) => {
+      closeModal();
+      if (onDelete) {
+        onDelete(deletedEbook);
+      }
+    },
+  });
 
   // Handle delete button press
   const handleDeletePress = useCallback(() => {
-    setShowDeleteModal(true);
-  }, []);
+    openDeleteModal();
+  }, [openDeleteModal]);
 
-  // Handle delete confirmation
+  // Handle delete confirmation - DeleteMediaConfirmation handles deletion, this just updates UI
   const handleDeleteConfirm = useCallback(async () => {
-    if (!ebook._id) return;
-    
-    const success = await deleteMediaItem(ebook._id);
-    if (success) {
-      setShowDeleteModal(false);
-      closeModal();
-      if (onDelete) {
-        onDelete(ebook);
-      }
+    closeDeleteModal();
+    closeModal();
+    if (onDelete) {
+      onDelete(ebook);
     }
-  }, [ebook, deleteMediaItem, closeModal, onDelete]);
+  }, [ebook, closeDeleteModal, closeModal, onDelete]);
   const AvatarWithInitialFallback = ({
     imageSource,
     name,

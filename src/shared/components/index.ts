@@ -2,6 +2,9 @@
 export { OptimizedImage } from './OptimizedImage';
 export { OptimizedScrollView } from './OptimizedScrollView';
 
+// Shared UI components
+export { AvatarWithInitialFallback } from './AvatarWithInitialFallback';
+
 // Existing components
 export { VideoCardSkeleton } from './Skeleton/VideoCardSkeleton';
 export { AudioCardSkeleton } from './Skeleton/AudioCardSkeleton';

@@ -14,6 +14,14 @@ export interface DeleteMediaError {
   message: string;
 }
 
+// Track successfully deleted media IDs to suppress redundant 404 errors
+const successfullyDeletedIds = new Set<string>();
+
+// Clean up old IDs after 5 minutes (media might be re-uploaded with same ID)
+setInterval(() => {
+  successfullyDeletedIds.clear();
+}, 5 * 60 * 1000);
+
 /**
  * Delete a media item
  * @param mediaId - The ID of the media item to delete
@@ -113,6 +121,8 @@ export const deleteMedia = async (
 
     // Check if successful
     if (response.ok && data.success) {
+      // Track this as successfully deleted to suppress future 404 errors
+      successfullyDeletedIds.add(trimmedMediaId);
       console.log("✅ Delete successful:", data);
       return {
         success: true,
@@ -147,7 +157,16 @@ export const deleteMedia = async (
     }
     
     if (response.status === 404) {
-      // Log detailed info for debugging
+      // If we just successfully deleted this media, suppress the error (it's expected)
+      if (successfullyDeletedIds.has(trimmedMediaId)) {
+        console.log("✅ Media already deleted successfully (suppressing redundant 404)");
+        return {
+          success: true,
+          message: "Media deleted successfully",
+        };
+      }
+      
+      // Log detailed info for debugging (only if it's a real error)
       console.error("❌ 404 Media not found:", {
         mediaId: trimmedMediaId,
         originalMediaId: mediaId,

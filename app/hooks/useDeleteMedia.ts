@@ -32,6 +32,12 @@ export const useDeleteMedia = (): UseDeleteMediaReturn => {
 
   const deleteMediaItem = useCallback(
     async (mediaId: string): Promise<boolean> => {
+      // Prevent duplicate calls
+      if (isLoading) {
+        console.log("⚠️ Delete already in progress, ignoring duplicate call");
+        return false;
+      }
+
       setIsLoading(true);
       setError(null);
       setSuccess(false);
@@ -45,14 +51,21 @@ export const useDeleteMedia = (): UseDeleteMediaReturn => {
         return false;
       } catch (err: any) {
         const errorMessage = err.message || "Failed to delete media";
-        setError(errorMessage);
-        Alert.alert("Delete Failed", errorMessage);
+        // Don't show alert for 404 if media was already deleted (handled in deleteMedia)
+        if (!errorMessage.includes("already been deleted") && !errorMessage.includes("not found")) {
+          setError(errorMessage);
+          Alert.alert("Delete Failed", errorMessage);
+        } else {
+          // Media was already deleted, treat as success
+          setSuccess(true);
+          return true;
+        }
         return false;
       } finally {
         setIsLoading(false);
       }
     },
-    []
+    [isLoading]
   );
 
   const reset = useCallback(() => {

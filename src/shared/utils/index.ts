@@ -1,5 +1,14 @@
 import { ContentType, MediaItem } from "../types";
 
+// Export media helper utilities
+export {
+  getUploadedBy,
+  getMediaId,
+  getMediaTitle,
+  hasAuthorInfo,
+  getAuthorId,
+} from "./mediaHelpers";
+
 // URL validation utility with enhanced checks
 export const isValidUri = (uri: any): boolean => {
   if (!uri || typeof uri !== "string" || uri.trim().length === 0) {

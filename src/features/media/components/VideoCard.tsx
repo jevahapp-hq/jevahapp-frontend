@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import { useDeleteMedia } from "../../../../app/hooks/useDeleteMedia";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
@@ -20,10 +19,11 @@ import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
+import { useMediaDeletion } from "../../../shared/hooks";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
 import { VideoCardProps } from "../../../shared/types";
-import { isValidUri } from "../../../shared/utils";
+import { isValidUri, getUploadedBy } from "../../../shared/utils";
 import {
     getBestVideoUrl,
     handleVideoError as handleVideoErrorUtil,
@@ -73,61 +73,37 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   
-  // Delete media functionality
-  const { deleteMediaItem, checkOwnership, isLoading: isDeleting } = useDeleteMedia();
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
-  
-  // Check ownership when modal opens
-  useEffect(() => {
-    if (isModalVisible || modalVisible === modalKey) {
-      const uploadedByValue = video.uploadedBy || video.author?._id || video.authorInfo?._id;
-      console.log("🔍 VideoCard: Checking ownership for video:", {
-        videoId: video._id,
-        videoTitle: video.title,
-        uploadedBy: uploadedByValue,
-        uploadedByType: typeof uploadedByValue,
-        hasAuthor: !!video.author,
-        hasAuthorInfo: !!video.authorInfo,
-        authorId: video.author?._id,
-        authorInfoId: video.authorInfo?._id,
-        fullVideo: video,
-      });
-      // Pass the full video object so isMediaOwner can check authorInfo/author
-      checkOwnership(uploadedByValue, video)
-        .then((isOwnerResult) => {
-          console.log("🔍 VideoCard: Ownership check result:", isOwnerResult);
-          setIsOwner(isOwnerResult);
-        })
-        .catch((error) => {
-          console.error("❌ VideoCard: Ownership check failed:", error);
-          setIsOwner(false);
-        });
-    } else {
-      // Reset when modal closes
-      setIsOwner(false);
-    }
-  }, [isModalVisible, modalVisible, modalKey, video, checkOwnership]);
+  // Delete media functionality - using reusable hook
+  const {
+    isOwner,
+    showDeleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleDeleteConfirm: handleDeleteConfirmInternal,
+  } = useMediaDeletion({
+    mediaItem: video,
+    isModalVisible: isModalVisible || modalVisible === modalKey,
+    onDeleteSuccess: (deletedVideo) => {
+      closeModal();
+      if (onDelete) {
+        onDelete(deletedVideo);
+      }
+    },
+  });
 
   // Handle delete button press
   const handleDeletePress = useCallback(() => {
-    setShowDeleteModal(true);
-  }, []);
+    openDeleteModal();
+  }, [openDeleteModal]);
 
-  // Handle delete confirmation
+  // Handle delete confirmation - DeleteMediaConfirmation handles deletion, this just updates UI
   const handleDeleteConfirm = useCallback(async () => {
-    if (!video._id) return;
-    
-    const success = await deleteMediaItem(video._id);
-    if (success) {
-      setShowDeleteModal(false);
-      closeModal();
-      // Call parent's onDelete callback to remove from list
-      if (onDelete) {
-        onDelete(video);
-      }
+    closeDeleteModal();
+    closeModal();
+    if (onDelete) {
+      onDelete(video);
     }
-  }, [video, deleteMediaItem, closeModal, onDelete]);
+  }, [video, closeDeleteModal, closeModal, onDelete]);
 
   // Double-tap detection
   const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -949,7 +925,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
         contentTitle={video.title}
         mediaId={video._id}
-        uploadedBy={video.uploadedBy || video.author?._id || video.authorInfo?._id}
+        uploadedBy={getUploadedBy(video)}
         mediaItem={video}
         onDelete={handleDeletePress}
         showDelete={isOwner}
@@ -960,7 +936,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         visible={showDeleteModal}
         mediaId={video._id || ""}
         mediaTitle={video.title || "this media"}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}
       />
 

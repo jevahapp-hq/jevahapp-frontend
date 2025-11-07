@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import { useDeleteMedia } from "../../../../app/hooks/useDeleteMedia";
+import { useMediaDeletion } from "../../../shared/hooks";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import {
   useContentCount,
@@ -76,36 +76,36 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   
-  // Delete media functionality
-  const { deleteMediaItem, checkOwnership } = useDeleteMedia();
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
-  
-  // Check ownership when modal opens
-  useEffect(() => {
-    if (isModalVisible) {
-      checkOwnership(audio.uploadedBy || audio.author?._id || audio.authorInfo?._id).then(setIsOwner);
-    }
-  }, [isModalVisible, audio.uploadedBy, audio.author, audio.authorInfo, checkOwnership]);
+  // Delete media functionality - using reusable hook
+  const {
+    isOwner,
+    showDeleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+  } = useMediaDeletion({
+    mediaItem: audio,
+    isModalVisible,
+    onDeleteSuccess: (deletedAudio) => {
+      closeModal();
+      if (onDelete) {
+        onDelete(deletedAudio);
+      }
+    },
+  });
 
   // Handle delete button press
   const handleDeletePress = useCallback(() => {
-    setShowDeleteModal(true);
-  }, []);
+    openDeleteModal();
+  }, [openDeleteModal]);
 
-  // Handle delete confirmation
+  // Handle delete confirmation - DeleteMediaConfirmation handles deletion, this just updates UI
   const handleDeleteConfirm = useCallback(async () => {
-    if (!audio._id) return;
-    
-    const success = await deleteMediaItem(audio._id);
-    if (success) {
-      setShowDeleteModal(false);
-      closeModal();
-      if (onDelete) {
-        onDelete(audio);
-      }
+    closeDeleteModal();
+    closeModal();
+    if (onDelete) {
+      onDelete(audio);
     }
-  }, [audio, deleteMediaItem, closeModal, onDelete]);
+  }, [audio, closeDeleteModal, closeModal, onDelete]);
 
   const modalKey = `music-${audio._id || index}`;
   const contentId = audio._id || `music-${index}`;

@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useDeleteMedia } from "../../../app/hooks/useDeleteMedia";
+import { useMediaOwnership } from "../hooks/useMediaOwnership";
+import { getUploadedBy } from "../utils/mediaHelpers";
 import {
   GestureHandlerRootView,
   HandlerStateChangeEvent,
@@ -60,43 +61,16 @@ export default function ContentActionModal({
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
   const [internalVisible, setInternalVisible] = useState(isVisible);
-  const [isOwner, setIsOwner] = useState(false);
-  const { checkOwnership } = useDeleteMedia();
-
-  // Check ownership when modal opens
-  useEffect(() => {
-    if (internalVisible && onDelete) {
-      // If showDelete is explicitly provided, use it
-      if (showDelete !== undefined) {
-        setIsOwner(showDelete);
-        console.log("🔍 ContentActionModal: Using showDelete prop:", showDelete);
-      } else {
-        // Otherwise, check ownership internally
-        if (uploadedBy || mediaItem) {
-          console.log("🔍 ContentActionModal: Checking ownership internally for:", {
-            uploadedBy,
-            hasMediaItem: !!mediaItem,
-            hasAuthorInfo: !!mediaItem?.authorInfo,
-            hasAuthor: !!mediaItem?.author,
-          });
-          checkOwnership(uploadedBy, mediaItem)
-            .then((isOwnerResult) => {
-              console.log("🔍 ContentActionModal: Ownership check result:", isOwnerResult);
-              setIsOwner(isOwnerResult);
-            })
-            .catch((error) => {
-              console.error("❌ ContentActionModal: Ownership check failed:", error);
-              setIsOwner(false);
-            });
-        } else {
-          console.log("⚠️ ContentActionModal: No uploadedBy or mediaItem provided");
-          setIsOwner(false);
-        }
-      }
-    } else {
-      setIsOwner(false);
-    }
-  }, [internalVisible, onDelete, showDelete, uploadedBy, mediaItem, checkOwnership]);
+  
+  // Use ownership hook if mediaItem is provided, otherwise use showDelete prop
+  const { isOwner: isOwnerFromHook } = useMediaOwnership({
+    mediaItem: mediaItem || (uploadedBy ? { uploadedBy } : undefined),
+    isModalVisible: internalVisible && onDelete !== undefined,
+    checkOnModalOpen: showDelete === undefined, // Only check if showDelete not provided
+  });
+  
+  // Determine final isOwner value
+  const isOwner = showDelete !== undefined ? showDelete : isOwnerFromHook;
 
   useEffect(() => {
     if (isVisible) {

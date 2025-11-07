@@ -31,25 +31,45 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [hasDeleted, setHasDeleted] = useState(false);
 
   const handleDelete = async () => {
+    // Prevent duplicate calls
+    if (isLoading || hasDeleted) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       const result = await deleteMedia(mediaId);
       if (result.success) {
+        setHasDeleted(true);
         // Show success notification
         setShowSuccessToast(true);
-        // Close modal after a short delay
+        // Close modal immediately and call onSuccess (smooth like TikTok/Instagram)
+        // onSuccess will handle removing from UI, so we don't need to wait
         setTimeout(() => {
           onSuccess();
           onClose();
-        }, 500);
+        }, 300); // Short delay for smooth UX
       }
     } catch (err: any) {
-      setError(err.message || "Failed to delete media");
-      console.error("Delete failed:", err);
+      // Only show error if it's not a 404 for an already-deleted item
+      const errorMessage = err.message || "Failed to delete media";
+      if (!errorMessage.includes("already been deleted") && !errorMessage.includes("not found")) {
+        setError(errorMessage);
+        console.error("Delete failed:", err);
+      } else {
+        // Media was already deleted, treat as success (suppress redundant error)
+        setHasDeleted(true);
+        setShowSuccessToast(true);
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 300);
+      }
     } finally {
       setIsLoading(false);
     }
