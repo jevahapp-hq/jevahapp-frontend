@@ -1729,7 +1729,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                     renderContentByType(item, index)
                   )}
 
-                  {/* Insert Recommended Live for you here with red LIVE badge - Hide for E-BOOKS */}
+                  {/* Insert Recommended Live for you here with red LIVE badge - Show in LIVE tab, hide in E-BOOKS */}
                   {contentType !== "e-books" && contentType?.toUpperCase() !== "E-BOOKS" && (
                     <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
                       <Text
