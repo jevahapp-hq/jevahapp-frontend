@@ -17,7 +17,13 @@ import {
 type CreateGroupModalProps = {
   visible: boolean;
   onClose: () => void;
-  onCreate?: (group: { id: string; title: string; description: string; imageUri: string | null }) => void;
+  onCreate?: (group: {
+    id: string;
+    title: string;
+    description: string;
+    imageUri: string | null;
+    visibility: "public" | "private";
+  }) => void;
 };
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -57,11 +63,19 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
 
   const handleCreate = () => {
     if (onCreate && groupName.trim()) {
-      onCreate({ id: Date.now().toString(), title: groupName.trim(), description: description.trim(), imageUri });
+      onCreate({
+        id: Date.now().toString(),
+        title: groupName.trim(),
+        description: description.trim(),
+        imageUri,
+        visibility: isPublic ? "public" : "private",
+      });
     }
     handleClose();
     setGroupName("");
     setDescription("");
+    setIsPublic(true);
+    setImageUri(null);
   };
 
   const pickImage = async () => {

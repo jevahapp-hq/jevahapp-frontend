@@ -80,12 +80,18 @@ export default function GroupsScreen() {
     router.push("/screens/ExploreGroupsScreen");
   };
 
-  const handleCreateFromModal = async (group: { id: string; title: string; description: string; imageUri: string | null; isPublic?: boolean }) => {
+  const handleCreateFromModal = async (group: {
+    id: string;
+    title: string;
+    description: string;
+    imageUri: string | null;
+    visibility: "public" | "private";
+  }) => {
     // Validate form
     const validation = validateGroupForm({
       name: group.title,
       description: group.description,
-      isPublic: group.isPublic ?? true,
+      visibility: group.visibility,
     });
 
     if (!validation.valid) {
@@ -93,27 +99,12 @@ export default function GroupsScreen() {
       return;
     }
 
-    // Prepare image if provided - format it for FormData
-    let profileImage = null;
-    if (group.imageUri) {
-      // Extract filename from URI or use default
-      const filename = group.imageUri.split('/').pop() || 'groupImage.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      
-      profileImage = {
-        uri: group.imageUri,
-        type: type,
-        name: filename,
-      } as any;
-    }
-
     // Create group via backend
     const result = await createGroup({
       name: group.title,
       description: group.description,
-      isPublic: group.isPublic ?? true,
-      profileImage,
+      visibility: group.visibility,
+      imageUri: group.imageUri ?? undefined,
     });
 
     if (result) {

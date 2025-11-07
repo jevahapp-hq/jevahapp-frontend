@@ -1298,41 +1298,55 @@ class CommunityAPIService {
   // Create Group
   async createGroup(groupData: {
     name: string;
-    description: string;
-    isPublic: boolean;
-    profileImage?: any; // File or Blob for FormData
+    description?: string;
+    visibility?: "public" | "private";
+    isPublic?: boolean;
+    imageUri?: string;
   }): Promise<ApiResponse<Group>> {
     try {
-      const headers: any = await this.getAuthHeaders();
-      // Remove Content-Type for FormData (browser will set it with boundary)
-      delete headers["Content-Type"];
+      const headers = await this.getAuthHeaders();
 
-      const formData = new FormData();
-      formData.append("name", groupData.name);
-      formData.append("description", groupData.description);
-      formData.append("isPublic", String(groupData.isPublic));
+      const visibility =
+        groupData.visibility ??
+        (typeof groupData.isPublic === "boolean"
+          ? groupData.isPublic
+            ? "public"
+            : "private"
+          : "public");
 
-      if (groupData.profileImage) {
-        formData.append("profileImage", {
-          uri: groupData.profileImage.uri,
-          type: groupData.profileImage.type || "image/jpeg",
-          name: "profileImage.jpg",
-        } as any);
+      const payload: Record<string, any> = {
+        name: groupData.name,
+        description: groupData.description ?? "",
+        visibility,
+      };
+
+      if (
+        groupData.imageUri &&
+        (groupData.imageUri.startsWith("http://") ||
+          groupData.imageUri.startsWith("https://"))
+      ) {
+        payload.imageUrl = groupData.imageUri;
       }
 
-      const response = await fetch(
-        `${this.baseURL}/api/community/groups/create`,
-        {
-          method: "POST",
-          headers: {
-            ...headers,
-            "Content-Type": "multipart/form-data",
-          },
-          body: formData,
-        }
-      );
+      const response = await fetch(`${this.baseURL}/api/community/groups`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
 
-      return await this.handleResponse<Group>(response);
+      const result = await this.handleResponse<Group>(response);
+
+      if (!result.success) {
+        console.error("❌ Create group failed:", {
+          url: `${this.baseURL}/api/community/groups`,
+          status: response.status,
+          statusText: response.statusText,
+          error: result.error,
+          payload,
+        });
+      }
+
+      return result;
     } catch (error) {
       console.error("Error creating group:", error);
       return {

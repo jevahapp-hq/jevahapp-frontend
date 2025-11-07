@@ -98,7 +98,8 @@ export const validateForumPostForm = (data: {
 export const validateGroupForm = (data: {
   name: string;
   description: string;
-  isPublic: boolean;
+  isPublic?: boolean;
+  visibility?: "public" | "private";
 }): ValidationResult => {
   const errors: string[] = [];
 
@@ -116,6 +117,14 @@ export const validateGroupForm = (data: {
     errors.push("Group description must be at least 10 characters");
   } else if (data.description.length > 500) {
     errors.push("Group description must be less than 500 characters");
+  }
+
+  const visibility =
+    data.visibility ??
+    (typeof data.isPublic === "boolean" ? (data.isPublic ? "public" : "private") : undefined);
+
+  if (visibility && visibility !== "public" && visibility !== "private") {
+    errors.push("Group visibility must be either public or private");
   }
 
   return {
