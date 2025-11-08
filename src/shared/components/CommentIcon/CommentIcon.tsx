@@ -124,7 +124,7 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
       accessibilityRole="button"
       accessibilityLabel="Open comments"
     >
-      <Ionicons name="chatbubble-sharp" size={iconSize} color={color} />
+      <Ionicons name="chatbubble-outline" size={iconSize} color={color} />
       {showCount && (
         <Text style={textStyle}>
           {count !== undefined ? count : comments.length}
