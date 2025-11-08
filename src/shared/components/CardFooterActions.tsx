@@ -97,20 +97,16 @@ export default function CardFooterActions({
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity
-        className="flex-row items-center mr-6"
+      <CommentIcon
+        comments={[]}
+        size={26}
+        color={commentColor}
+        showCount={true}
+        count={commentCount}
+        layout="horizontal"
         onPress={onComment}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <CommentIcon
-          comments={[]}
-          size={26}
-          color={commentColor}
-          showCount={true}
-          count={commentCount}
-          layout="horizontal"
-        />
-      </TouchableOpacity>
+        style={{ marginRight: 24 }}
+      />
 
       {useEnhancedComponents && contentId ? (
         <View className="flex-row items-center mr-6">

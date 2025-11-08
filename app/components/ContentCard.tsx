@@ -1,21 +1,21 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons,
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons,
 } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Animated,
+    Dimensions,
+    Image,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
-import { useCommentModal } from "../context/CommentModalContext";
 import { useSafeLibraryStore } from "../hooks/useSafeLibraryStore";
 import SocketManager from "../services/SocketManager";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
@@ -309,7 +309,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const globalVideoStore = useGlobalVideoStore();
   const globalMediaStore = useGlobalMediaStore();
   const { comments } = useInteractionStore();
-  const { showCommentModal } = useCommentModal();
 
   // Refs
   const videoRef = useRef<Video>(null);
@@ -580,6 +579,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
   };
 
   const handleComment = () => {
+    animateComment();
+
     // Call the onComment prop to let the parent handle the modal
     onComment(content._id);
   };
@@ -801,13 +802,14 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const renderMediaContent = () => {
     if (content.contentType === "video") {
       return (
-        <TouchableWithoutFeedback
-          onPress={toggleVideoPlay}
-          onLongPress={handleLongPress}
-        >
-          <View className="w-full h-[400px] overflow-hidden relative">
-            {/* Video player - EXACT same as library */}
-            <Video
+        <View className="w-full h-[400px] overflow-hidden relative">
+          <TouchableWithoutFeedback
+            onPress={toggleVideoPlay}
+            onLongPress={handleLongPress}
+          >
+            <View style={StyleSheet.absoluteFillObject}>
+              {/* Video player - EXACT same as library */}
+              <Video
               ref={videoRef}
               source={{ uri: safeVideoUri }}
               style={{ width: "100%", height: "100%", position: "absolute" }}
@@ -851,9 +853,11 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 }
               }}
             />
+          </View>
+        </TouchableWithoutFeedback>
 
-            {/* Right side actions */}
-            <View className="flex-col absolute mt-[170px] ml-[360px]">
+        {/* Right side actions */}
+        <View className="flex-col absolute mt-[170px] ml-[360px]">
               <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
                 <TouchableOpacity
                   onPress={handleFavorite}
@@ -869,19 +873,18 @@ const ContentCard: React.FC<ContentCardProps> = ({
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
-              <Animated.View
-                style={{ transform: [{ scale: commentAnimation }] }}
-              >
-                <View className="flex-col justify-center items-center mt-6">
-                  <CommentIcon
-                    comments={formattedComments}
-                    size={30}
-                    color="white"
-                    showCount={true}
-                    count={commentCount}
-                    layout="vertical"
-                  />
-                </View>
+              <Animated.View style={{ transform: [{ scale: commentAnimation }] }}>
+                <CommentIcon
+                  comments={formattedComments}
+                  size={30}
+                  color="#FFFFFF"
+                  showCount={true}
+                  count={commentCount}
+                  layout="vertical"
+                  contentId={content._id || modalKey}
+                  onPress={handleComment}
+                  style={{ marginTop: 24 }}
+                />
               </Animated.View>
               <TouchableOpacity
                 onPress={handleSaveToLibrary}
@@ -1026,29 +1029,31 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       );
     } else if (content.contentType === "audio") {
       return (
-        <TouchableWithoutFeedback onPress={() => {}}>
-          <View className="w-full h-[400px] overflow-hidden relative">
-            <Image
-              source={{
-                uri: mappedContent.thumbnailUrl || mappedContent.mediaUrl,
-              }}
-              style={{ width: "100%", height: "100%", position: "absolute" }}
-              resizeMode="cover"
-              onError={(error) => {
+        <View className="w-full h-[400px] overflow-hidden relative">
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={StyleSheet.absoluteFillObject}>
+              <Image
+                source={{
+                  uri: mappedContent.thumbnailUrl || mappedContent.mediaUrl,
+                }}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+                onError={(error) => {
                 console.warn(
                   `❌ Audio thumbnail load error for ${content.title}:`,
                   error
                 );
-              }}
-            />
+                }}
+              />
+            </View>
+          </TouchableWithoutFeedback>
 
-            {/* Right side actions */}
-            <View className="flex-col absolute mt-[170px] ml-[360px]">
+          {/* Right side actions */}
+          <View className="flex-col absolute mt-[170px] ml-[360px]">
               <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
                 <TouchableOpacity
                   onPress={handleFavorite}
@@ -1064,19 +1069,18 @@ const ContentCard: React.FC<ContentCardProps> = ({
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
-              <Animated.View
-                style={{ transform: [{ scale: commentAnimation }] }}
-              >
-                <View className="flex-col justify-center items-center mt-6">
-                  <CommentIcon
-                    comments={formattedComments}
-                    size={30}
-                    color="white"
-                    showCount={true}
-                    count={commentCount}
-                    layout="vertical"
-                  />
-                </View>
+              <Animated.View style={{ transform: [{ scale: commentAnimation }] }}>
+                <CommentIcon
+                  comments={formattedComments}
+                  size={30}
+                  color="#FFFFFF"
+                  showCount={true}
+                  count={commentCount}
+                  layout="vertical"
+                  contentId={content._id || modalKey}
+                  onPress={handleComment}
+                  style={{ marginTop: 24 }}
+                />
               </Animated.View>
               <TouchableOpacity
                 onPress={handleSaveToLibrary}
@@ -1118,32 +1122,34 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 {content.title}
               </Text>
             </View>
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       );
     } else {
       // Image content
       return (
-        <TouchableWithoutFeedback
-          onPress={() => console.log("Open image:", content.title)}
-        >
-          <View className="w-full h-[400px] overflow-hidden relative">
-            <Image
-              source={{
-                uri: mappedContent.thumbnailUrl || mappedContent.mediaUrl,
-              }}
-              style={{ width: "100%", height: "100%", position: "absolute" }}
-              resizeMode="cover"
-              onError={(error) => {
-                console.warn(
-                  `❌ Image load error for ${content.title}:`,
-                  error
-                );
-              }}
-            />
+        <View className="w-full h-[400px] overflow-hidden relative">
+          <TouchableWithoutFeedback
+            onPress={() => console.log("Open image:", content.title)}
+          >
+            <View style={StyleSheet.absoluteFillObject}>
+              <Image
+                source={{
+                  uri: mappedContent.thumbnailUrl || mappedContent.mediaUrl,
+                }}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+                onError={(error) => {
+                  console.warn(
+                    `❌ Image load error for ${content.title}:`,
+                    error
+                  );
+                }}
+              />
+            </View>
+          </TouchableWithoutFeedback>
 
-            {/* Right side actions */}
-            <View className="flex-col absolute mt-[170px] ml-[360px]">
+          {/* Right side actions */}
+          <View className="flex-col absolute mt-[170px] ml-[360px]">
               <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
                 <TouchableOpacity
                   onPress={handleFavorite}
@@ -1159,19 +1165,18 @@ const ContentCard: React.FC<ContentCardProps> = ({
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
-              <Animated.View
-                style={{ transform: [{ scale: commentAnimation }] }}
-              >
-                <View className="flex-col justify-center items-center mt-6">
-                  <CommentIcon
-                    comments={formattedComments}
-                    size={30}
-                    color="white"
-                    showCount={true}
-                    count={commentCount}
-                    layout="vertical"
-                  />
-                </View>
+              <Animated.View style={{ transform: [{ scale: commentAnimation }] }}>
+                <CommentIcon
+                  comments={formattedComments}
+                  size={30}
+                  color="#FFFFFF"
+                  showCount={true}
+                  count={commentCount}
+                  layout="vertical"
+                  contentId={content._id || modalKey}
+                  onPress={handleComment}
+                  style={{ marginTop: 24 }}
+                />
               </Animated.View>
               <TouchableOpacity
                 onPress={handleSaveToLibrary}
@@ -1204,8 +1209,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 {content.title}
               </Text>
             </View>
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       );
     }
   };
