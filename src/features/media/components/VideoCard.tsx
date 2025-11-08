@@ -7,9 +7,9 @@ import {
     TouchableWithoutFeedback,
     View
 } from "react-native";
+import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -18,12 +18,12 @@ import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
-import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useMediaDeletion } from "../../../shared/hooks";
+import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
 import { VideoCardProps } from "../../../shared/types";
-import { isValidUri, getUploadedBy } from "../../../shared/utils";
+import { getUploadedBy, isValidUri } from "../../../shared/utils";
 import {
     getBestVideoUrl,
     handleVideoError as handleVideoErrorUtil,
@@ -584,17 +584,48 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   }, []);
 
   // Get interaction state
-  const userLikeState =
-    contentStats[contentId]?.userInteractions?.liked ||
-    userFavorites[key] ||
-    false;
-  const userSaveState =
-    contentStats[contentId]?.userInteractions?.saved || false;
+  const bookmarkCount =
+    typeof (video as any)?.bookmarkCount === "number"
+      ? (video as any).bookmarkCount
+      : undefined;
+  const backendUserLiked =
+    contentStats[contentId]?.userInteractions?.liked ??
+    (video as any)?.hasLiked ??
+    (video as any)?.userHasLiked ??
+    userFavorites[key];
+  const backendUserSaved =
+    contentStats[contentId]?.userInteractions?.saved ??
+    (video as any)?.hasBookmarked ??
+    (video as any)?.isBookmarked;
+  const userLikeState = Boolean(backendUserLiked);
+  const userSaveState = Boolean(backendUserSaved);
   const likeCount =
-    contentStats[contentId]?.likes || globalFavoriteCounts[key] || 0;
-  const saveCount = contentStats[contentId]?.saves || 0;
-  const commentCount = contentStats[contentId]?.comments || 0;
-  const viewCount = contentStats[contentId]?.views || video.views || 0;
+    contentStats[contentId]?.likes ??
+    globalFavoriteCounts[key] ??
+    video.likeCount ??
+    video.totalLikes ??
+    video.likes ??
+    video.favorite ??
+    0;
+  const saveCount =
+    contentStats[contentId]?.saves ??
+    video.saves ??
+    video.saved ??
+    (video as any)?.saveCount ??
+    bookmarkCount ??
+    0;
+  const commentCount =
+    contentStats[contentId]?.comments ??
+    video.commentCount ??
+    video.comments ??
+    video.comment ??
+    0;
+  const viewCount =
+    contentStats[contentId]?.views ??
+    video.viewCount ??
+    video.totalViews ??
+    video.views ??
+    0;
   const stats = contentStats[contentId] || {};
   useHydrateContentStats(contentId, "media");
 
@@ -948,18 +979,5 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   );
 };
 
-// Memoize the component to prevent unnecessary re-renders
-export default memo(VideoCard, (prevProps, nextProps) => {
-  // Custom comparison function for better performance
-  return (
-    prevProps.video._id === nextProps.video._id &&
-    prevProps.video.title === nextProps.video.title &&
-    prevProps.video.fileUrl === nextProps.video.fileUrl &&
-    prevProps.playingVideos[prevProps.modalKey] ===
-      nextProps.playingVideos[nextProps.modalKey] &&
-    prevProps.mutedVideos[prevProps.modalKey] ===
-      nextProps.mutedVideos[nextProps.modalKey] &&
-    prevProps.progresses[prevProps.modalKey] ===
-      nextProps.progresses[nextProps.modalKey]
-  );
-});
+// Memoize the component to prevent unnecessary re-renders while still responding to interaction updates
+export default memo(VideoCard);

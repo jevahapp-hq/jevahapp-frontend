@@ -427,33 +427,70 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, []);
 
   // Load content stats for all visible items so user-liked/bookmarked states persist
+  const mapContentTypeToBackend = useCallback((type?: string) => {
+    const normalized = (type || "").toLowerCase();
+    switch (normalized) {
+      case "sermon":
+      case "devotional":
+        return "devotional";
+      case "ebook":
+      case "e-books":
+      case "books":
+      case "image":
+        return "ebook";
+      case "music":
+      case "audio":
+      case "live":
+      case "video":
+      case "videos":
+      default:
+        return "media";
+    }
+  }, []);
+
   useEffect(() => {
     const loadStatsForVisibleContent = async () => {
       const items = filteredMediaList || [];
       if (items.length === 0) return;
 
-      // Prefer batch metadata when available
-      const ids = items.map((i) => i._id).filter(Boolean) as string[];
-      try {
-        await useInteractionStore
-          .getState()
-          .loadBatchContentStats(ids, "media");
-      } catch (e) {
-        for (const item of items) {
-          const id = item?._id;
-          const type = item?.contentType as any;
-          if (!id) continue;
-          try {
-            await loadContentStats(id, type);
-          } catch (error) {
-            console.warn(`⚠️ Failed to load stats for ${type} ${id}:`, error);
+      const groupedIds = items.reduce((acc, item) => {
+        const id = item?._id;
+        if (!id) return acc;
+        const backendType = mapContentTypeToBackend(item?.contentType);
+        if (!acc[backendType]) {
+          acc[backendType] = [];
+        }
+        acc[backendType].push(id);
+        return acc;
+      }, {} as Record<string, string[]>);
+
+      const store = useInteractionStore.getState();
+
+      for (const [backendType, ids] of Object.entries(groupedIds)) {
+        if (!ids?.length) continue;
+        try {
+          await store.loadBatchContentStats(ids, backendType);
+        } catch (error) {
+          console.warn(
+            `⚠️ Batch stats failed for type="${backendType}", falling back to per-item`,
+            error
+          );
+          for (const id of ids) {
+            try {
+              await loadContentStats(id, backendType);
+            } catch (fallbackError) {
+              console.warn(
+                `⚠️ Failed to load stats for ${backendType} ${id}:`,
+                fallbackError
+              );
+            }
           }
         }
       }
     };
 
     loadStatsForVisibleContent();
-  }, [filteredMediaList, loadContentStats]);
+  }, [filteredMediaList, loadContentStats, mapContentTypeToBackend]);
 
   // Load persisted data
   useEffect(() => {
@@ -768,10 +805,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        await toggleSave(contentId, contentType);
+        const result = await toggleSave(contentId, contentType);
 
-        const isSaved = getUserSaveState(contentId);
-        if (!isSaved) {
+        if (result?.saved) {
           const libraryItem = {
             id: contentId,
             contentType: item.contentType || "content",
@@ -815,7 +851,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
       setModalVisible(null);
     },
-    [toggleSave, getUserSaveState, getLikeCount, getCommentCount, libraryStore]
+    [toggleSave, getLikeCount, getCommentCount, libraryStore]
   );
 
   const handleShare = useCallback(async (key: string, item: MediaItem) => {

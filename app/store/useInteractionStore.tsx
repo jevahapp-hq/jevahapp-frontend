@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import contentInteractionAPI, {
-  CommentData,
-  ContentStats,
+    CommentData,
+    ContentStats,
 } from "../utils/contentInteractionAPI";
 
 // Types for the interaction store
@@ -94,7 +94,10 @@ export const useInteractionStore = create<InteractionState>()(
     savedContentLoading: false,
 
     // ============= LIKE ACTIONS =============
-    toggleLike: async (contentId: string, contentType: string) => {
+    toggleLike: async (
+      contentId: string,
+      contentType: string
+    ): Promise<{ liked: boolean; totalLikes: number }> => {
       const key = `${contentId}_like`;
       // Optimistic UI
       set((state) => {
@@ -153,6 +156,11 @@ export const useInteractionStore = create<InteractionState>()(
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
+        const latest = get().contentStats[contentId];
+        return {
+          liked: latest?.userInteractions?.liked ?? result.liked,
+          totalLikes: latest?.likes ?? result.totalLikes,
+        };
       } catch (error) {
         console.error("Error toggling like:", error);
         // Revert on failure
@@ -173,11 +181,19 @@ export const useInteractionStore = create<InteractionState>()(
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
+        return {
+          liked:
+            get().contentStats[contentId]?.userInteractions?.liked ?? false,
+          totalLikes: get().contentStats[contentId]?.likes ?? 0,
+        };
       }
     },
 
     // ============= SAVE ACTIONS =============
-    toggleSave: async (contentId: string, contentType: string) => {
+    toggleSave: async (
+      contentId: string,
+      contentType: string
+    ): Promise<{ saved: boolean; totalSaves: number }> => {
       const key = `${contentId}_save`;
 
       set((state) => ({
@@ -219,11 +235,22 @@ export const useInteractionStore = create<InteractionState>()(
         if (result.saved) {
           get().loadUserSavedContent();
         }
+
+        const latest = get().contentStats[contentId];
+        return {
+          saved: latest?.userInteractions?.saved ?? result.saved,
+          totalSaves: latest?.saves ?? result.totalSaves,
+        };
       } catch (error) {
         console.error("Error toggling save:", error);
         set((state) => ({
           loadingInteraction: { ...state.loadingInteraction, [key]: false },
         }));
+        return {
+          saved:
+            get().contentStats[contentId]?.userInteractions?.saved ?? false,
+          totalSaves: get().contentStats[contentId]?.saves ?? 0,
+        };
       }
     },
 
