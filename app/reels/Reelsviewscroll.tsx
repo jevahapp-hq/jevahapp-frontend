@@ -1362,7 +1362,7 @@ export default function Reelsviewscroll() {
                     accessibilityRole="button"
                   >
                     <Ionicons
-                      name="chatbubble-sharp"
+                      name="chatbubble-outline"
                       size={getResponsiveSize(28, 32, 36)}
                       color="white"
                     />
