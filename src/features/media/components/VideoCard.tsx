@@ -588,6 +588,30 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     typeof (video as any)?.bookmarkCount === "number"
       ? (video as any).bookmarkCount
       : undefined;
+  const stats = contentStats[contentId] || {};
+  const fallbackLikeCount =
+    globalFavoriteCounts[key] ??
+    video.likeCount ??
+    video.totalLikes ??
+    video.likes ??
+    video.favorite ??
+    0;
+  const fallbackSaveCount =
+    video.saves ??
+    video.saved ??
+    (video as any)?.saveCount ??
+    bookmarkCount ??
+    0;
+  const fallbackCommentCount =
+    video.commentCount ??
+    video.comments ??
+    video.comment ??
+    0;
+  const fallbackViewCount =
+    video.viewCount ??
+    video.totalViews ??
+    video.views ??
+    0;
   const backendUserLiked =
     contentStats[contentId]?.userInteractions?.liked ??
     (video as any)?.hasLiked ??
@@ -600,33 +624,21 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const userLikeState = Boolean(backendUserLiked);
   const userSaveState = Boolean(backendUserSaved);
   const likeCount =
-    contentStats[contentId]?.likes ??
-    globalFavoriteCounts[key] ??
-    video.likeCount ??
-    video.totalLikes ??
-    video.likes ??
-    video.favorite ??
-    0;
+    stats?.likes != null
+      ? Math.max(stats.likes, fallbackLikeCount)
+      : fallbackLikeCount;
   const saveCount =
-    contentStats[contentId]?.saves ??
-    video.saves ??
-    video.saved ??
-    (video as any)?.saveCount ??
-    bookmarkCount ??
-    0;
+    stats?.saves != null
+      ? Math.max(stats.saves, fallbackSaveCount)
+      : fallbackSaveCount;
   const commentCount =
-    contentStats[contentId]?.comments ??
-    video.commentCount ??
-    video.comments ??
-    video.comment ??
-    0;
+    stats?.comments != null
+      ? Math.max(stats.comments, fallbackCommentCount)
+      : fallbackCommentCount;
   const viewCount =
-    contentStats[contentId]?.views ??
-    video.viewCount ??
-    video.totalViews ??
-    video.views ??
-    0;
-  const stats = contentStats[contentId] || {};
+    stats?.views != null
+      ? Math.max(stats.views, fallbackViewCount)
+      : fallbackViewCount;
   useHydrateContentStats(contentId, "media");
 
   // View tracking state (thresholds: 3s or 25%, or completion) & avatar fallback initial

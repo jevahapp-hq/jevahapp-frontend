@@ -320,8 +320,15 @@ export interface InteractionStoreState {
   loadingComments: Record<string, boolean>;
   savedContent: MediaItem[];
   savedContentLoading: boolean;
-  toggleLike: (contentId: string, contentType: string) => Promise<void>;
-  toggleSave: (contentId: string, contentType: string) => Promise<void>;
+  toggleLike: (
+    contentId: string,
+    contentType: string
+  ) => Promise<{ liked: boolean; totalLikes: number }>;
+  toggleSave: (
+    contentId: string,
+    contentType: string,
+    options?: ToggleSaveOptions
+  ) => Promise<{ saved: boolean; totalSaves: number }>;
   recordShare: (
     contentId: string,
     contentType: string,
@@ -360,6 +367,18 @@ export interface InteractionStoreState {
   ) => number;
   clearCache: () => void;
   refreshContentStats: (contentId: string) => Promise<void>;
+}
+
+export interface ToggleSaveOptions {
+  initialSaves?: number;
+  initialLikes?: number;
+  initialViews?: number;
+  initialComments?: number;
+  initialShares?: number;
+  initialLiked?: boolean;
+  initialShared?: boolean;
+  initialViewed?: boolean;
+  initialSaved?: boolean;
 }
 
 // Hook interfaces

@@ -805,7 +805,56 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        const result = await toggleSave(contentId, contentType);
+        const stats = contentStats[contentId];
+        const fallbackOptions = {
+          initialSaves:
+            stats?.saves ??
+            getSaveCount(contentId) ??
+            item.saves ??
+            item.saved ??
+            (item as any)?.bookmarkCount ??
+            0,
+          initialLikes:
+            stats?.likes ??
+            getLikeCount(contentId) ??
+            item.likeCount ??
+            item.totalLikes ??
+            item.likes ??
+            item.favorite ??
+            0,
+          initialComments:
+            stats?.comments ??
+            getCommentCount(contentId) ??
+            item.commentCount ??
+            item.comments ??
+            item.comment ??
+            0,
+          initialViews:
+            stats?.views ??
+            item.viewCount ??
+            item.totalViews ??
+            item.views ??
+            0,
+          initialShares:
+            stats?.shares ??
+            item.shareCount ??
+            item.totalShares ??
+            item.shares ??
+            0,
+          initialLiked:
+            stats?.userInteractions?.liked ??
+            getUserLikeState(contentId) ??
+            false,
+          initialShared:
+            stats?.userInteractions?.shared ?? false,
+          initialViewed:
+            stats?.userInteractions?.viewed ?? false,
+          initialSaved:
+            stats?.userInteractions?.saved ??
+            getUserSaveState(contentId) ??
+            false,
+        };
+        const result = await toggleSave(contentId, contentType, fallbackOptions);
 
         if (result?.saved) {
           const libraryItem = {

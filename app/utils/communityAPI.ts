@@ -271,11 +271,23 @@ class CommunityAPIService {
 
   private normalizeGroup(group: Partial<Group> & Record<string, any>): Group {
     const id = group._id || group.id || group.groupId;
+    const resolvedProfileImage =
+      group.profileImageUrl ||
+      group.profileImage ||
+      group.imageUrl ||
+      group.image ||
+      group.coverImageUrl ||
+      group.displayImageUrl ||
+      group.avatarUrl ||
+      group.thumbnailUrl ||
+      group.logoUrl ||
+      group.photoUrl;
+
     return {
       _id: String(id || ""),
       name: group.name || "Untitled Group",
       description: group.description || "",
-      profileImageUrl: group.profileImageUrl || group.imageUrl,
+      profileImageUrl: resolvedProfileImage || undefined,
       createdBy: group.createdBy || group.ownerId || "",
       isPublic:
         typeof group.isPublic === "boolean"
@@ -1326,16 +1338,23 @@ class CommunityAPIService {
     name: string;
     description?: string;
     visibility?: "public" | "private";
+    imageBase64?: string | null;
+    imageUri?: string | null;
   }): Promise<ApiResponse<Group>> {
     try {
       const headers = await this.getAuthHeaders();
       const payload: Record<string, any> = {
         name: groupData.name?.trim(),
         visibility: groupData.visibility || "public",
+        isPublic: (groupData.visibility || "public") === "public",
       };
 
       if (groupData.description && groupData.description.trim().length > 0) {
         payload.description = groupData.description.trim();
+      }
+
+      if (groupData.imageBase64) {
+        payload.profileImage = groupData.imageBase64;
       }
 
       const response = await fetch(
@@ -1371,6 +1390,96 @@ class CommunityAPIService {
         success: false,
         error:
           error instanceof Error ? error.message : "Failed to create group",
+        code: "NETWORK_ERROR",
+      };
+    }
+  }
+
+  async updateGroup(
+    groupId: string,
+    updateData: {
+      name?: string;
+      description?: string;
+      visibility?: "public" | "private";
+      imageBase64?: string | null;
+    }
+  ): Promise<ApiResponse<Group>> {
+    if (!this.isValidObjectId(groupId)) {
+      return {
+        success: false,
+        error: "Invalid group ID",
+        code: "VALIDATION_ERROR",
+      };
+    }
+
+    try {
+      const headers = await this.getAuthHeaders();
+      const payload: Record<string, any> = {};
+
+      if (typeof updateData.name === "string") {
+        const trimmed = updateData.name.trim();
+        if (trimmed.length > 0) {
+          payload.name = trimmed;
+        }
+      }
+
+      if (typeof updateData.description === "string") {
+        const trimmedDescription = updateData.description.trim();
+        payload.description = trimmedDescription;
+      }
+
+      if (updateData.visibility) {
+        payload.visibility = updateData.visibility;
+        payload.isPublic = updateData.visibility === "public";
+      }
+
+      if (updateData.imageBase64) {
+        payload.profileImage = updateData.imageBase64;
+      }
+
+      if (Object.keys(payload).length === 0) {
+        return {
+          success: false,
+          error: "No update fields provided",
+          code: "VALIDATION_ERROR",
+        };
+      }
+
+      const response = await fetch(
+        `${this.baseURL}/api/community/groups/${groupId}`,
+        {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const apiResponse = await this.handleResponse<{ group: Group }>(response);
+
+      if (apiResponse.success) {
+        const rawGroup =
+          (apiResponse.data && "group" in apiResponse.data
+            ? apiResponse.data.group
+            : (apiResponse.data as unknown as Group)) || null;
+
+        if (rawGroup) {
+          return {
+            success: true,
+            data: this.normalizeGroup({
+              ...rawGroup,
+              visibility: rawGroup.visibility || payload.visibility,
+            }),
+            message: apiResponse.message,
+          };
+        }
+      }
+
+      return apiResponse as unknown as ApiResponse<Group>;
+    } catch (error) {
+      console.error("Error updating group:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update group",
         code: "NETWORK_ERROR",
       };
     }

@@ -5,6 +5,18 @@ import contentInteractionAPI, {
     ContentStats,
 } from "../utils/contentInteractionAPI";
 
+type ToggleSaveOptions = {
+  initialSaves?: number;
+  initialLikes?: number;
+  initialViews?: number;
+  initialComments?: number;
+  initialShares?: number;
+  initialLiked?: boolean;
+  initialShared?: boolean;
+  initialViewed?: boolean;
+  initialSaved?: boolean;
+};
+
 // Types for the interaction store
 interface InteractionState {
   // Content stats cache
@@ -24,7 +36,11 @@ interface InteractionState {
 
   // Actions
   toggleLike: (contentId: string, contentType: string) => Promise<void>;
-  toggleSave: (contentId: string, contentType: string) => Promise<void>;
+  toggleSave: (
+    contentId: string,
+    contentType: string,
+    options?: ToggleSaveOptions
+  ) => Promise<{ saved: boolean; totalSaves: number }>;
   recordShare: (
     contentId: string,
     contentType: string,
@@ -192,15 +208,92 @@ export const useInteractionStore = create<InteractionState>()(
     // ============= SAVE ACTIONS =============
     toggleSave: async (
       contentId: string,
-      contentType: string
+      contentType: string,
+      options: ToggleSaveOptions = {}
     ): Promise<{ saved: boolean; totalSaves: number }> => {
       const key = `${contentId}_save`;
+      const previousStats = get().contentStats[contentId];
+      const previousSaved =
+        previousStats?.userInteractions?.saved ?? options.initialSaved ?? false;
+      const previousSaves =
+        previousStats?.saves ?? options.initialSaves ?? 0;
 
       set((state) => ({
         loadingInteraction: { ...state.loadingInteraction, [key]: true },
       }));
 
       try {
+        set((state) => {
+          const existing = state.contentStats[contentId];
+          const currentlySaved =
+            existing?.userInteractions?.saved ??
+            options.initialSaved ??
+            false;
+          const baseSaves =
+            existing?.saves ?? options.initialSaves ?? 0;
+          const baseLikes =
+            existing?.likes ?? options.initialLikes ?? 0;
+          const baseViews =
+            existing?.views ?? options.initialViews ?? 0;
+          const baseComments =
+            existing?.comments ?? options.initialComments ?? 0;
+          const baseShares =
+            existing?.shares ?? options.initialShares ?? 0;
+          const baseLiked =
+            existing?.userInteractions?.liked ??
+            options.initialLiked ??
+            false;
+          const baseShared =
+            existing?.userInteractions?.shared ??
+            options.initialShared ??
+            false;
+          const baseViewed =
+            existing?.userInteractions?.viewed ??
+            options.initialViewed ??
+            false;
+
+          const nextSaved = !currentlySaved;
+          const nextSaves = Math.max(
+            0,
+            baseSaves + (nextSaved ? 1 : -1)
+          );
+
+          const baseStats: ContentStats =
+            existing ||
+            ({
+              contentId,
+              likes: baseLikes,
+              saves: baseSaves,
+              shares: baseShares,
+              views: baseViews,
+              comments: baseComments,
+              userInteractions: {
+                liked: baseLiked,
+                saved: currentlySaved,
+                shared: baseShared,
+                viewed: baseViewed,
+              },
+            } as ContentStats);
+
+          return {
+            contentStats: {
+              ...state.contentStats,
+              [contentId]: {
+                ...baseStats,
+                saves: nextSaves,
+                userInteractions: {
+                  ...baseStats.userInteractions,
+                  saved: nextSaved,
+                },
+              },
+            },
+            loadingInteraction: {
+              ...state.loadingInteraction,
+              [key]: true,
+            },
+          };
+        });
+
         const result = await contentInteractionAPI.toggleSave(
           contentId,
           contentType
@@ -211,17 +304,37 @@ export const useInteractionStore = create<InteractionState>()(
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
-            likes: currentStats?.likes || 0,
+            likes:
+              currentStats?.likes ??
+              options.initialLikes ??
+              0,
             saves: result.totalSaves,
-            shares: currentStats?.shares || 0,
-            views: currentStats?.views || 0,
-            comments: currentStats?.comments || 0,
+            shares:
+              currentStats?.shares ??
+              options.initialShares ??
+              0,
+            views:
+              currentStats?.views ??
+              options.initialViews ??
+              0,
+            comments:
+              currentStats?.comments ??
+              options.initialComments ??
+              0,
             userInteractions: {
-              ...currentStats?.userInteractions,
-              liked: currentStats?.userInteractions?.liked || false,
+              liked:
+                currentStats?.userInteractions?.liked ??
+                options.initialLiked ??
+                false,
               saved: result.saved,
-              shared: currentStats?.userInteractions?.shared || false,
-              viewed: currentStats?.userInteractions?.viewed || false,
+              shared:
+                currentStats?.userInteractions?.shared ??
+                options.initialShared ??
+                false,
+              viewed:
+                currentStats?.userInteractions?.viewed ??
+                options.initialViewed ??
+                false,
             },
           };
 
@@ -231,7 +344,6 @@ export const useInteractionStore = create<InteractionState>()(
           };
         });
 
-        // If item was saved, refresh saved content list
         if (result.saved) {
           get().loadUserSavedContent();
         }
@@ -243,13 +355,21 @@ export const useInteractionStore = create<InteractionState>()(
         };
       } catch (error) {
         console.error("Error toggling save:", error);
-        set((state) => ({
-          loadingInteraction: { ...state.loadingInteraction, [key]: false },
-        }));
+        set((state) => {
+          const nextContentStats = { ...state.contentStats };
+          if (previousStats) {
+            nextContentStats[contentId] = previousStats;
+          } else {
+            delete nextContentStats[contentId];
+          }
+          return {
+            contentStats: nextContentStats,
+            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+          };
+        });
         return {
-          saved:
-            get().contentStats[contentId]?.userInteractions?.saved ?? false,
-          totalSaves: get().contentStats[contentId]?.saves ?? 0,
+          saved: previousSaved,
+          totalSaves: previousSaves,
         };
       }
     },

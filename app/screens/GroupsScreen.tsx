@@ -3,7 +3,6 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     Dimensions,
     FlatList,
@@ -33,6 +32,7 @@ export default function GroupsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuGroup, setMenuGroup] = useState<Group | null>(null);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [showFlag, setShowFlag] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +48,7 @@ export default function GroupsScreen() {
     loadMore,
     refresh,
     createGroup,
+    updateGroup,
   } = useMyGroups();
 
   useEffect(() => {
@@ -80,11 +81,13 @@ export default function GroupsScreen() {
     router.push("/screens/ExploreGroupsScreen");
   };
 
-  const handleCreateFromModal = async (group: {
+  const handleGroupModalSubmit = async (group: {
+    id?: string;
     name: string;
     description?: string;
     visibility: "public" | "private";
     imageUri?: string | null;
+    imageBase64?: string | null;
   }) => {
     const validation = validateGroupForm({
       name: group.name,
@@ -93,7 +96,26 @@ export default function GroupsScreen() {
     });
 
     if (!validation.valid) {
-      Alert.alert("Validation Error", validation.errors.join("\n"));
+      setToast({ visible: true, text: validation.errors[0], type: "error" });
+      return false;
+    }
+
+    if (editingGroup && group.id) {
+      const result = await updateGroup(group.id, {
+        name: group.name,
+        description: group.description,
+        visibility: group.visibility,
+        imageBase64: group.imageBase64,
+        imageUri: group.imageUri,
+      });
+
+      if (result) {
+        setToast({ visible: true, text: "Group updated successfully!", type: "success" });
+        await refresh();
+        return true;
+      }
+
+      setToast({ visible: true, text: "Failed to update group", type: "error" });
       return false;
     }
 
@@ -101,16 +123,23 @@ export default function GroupsScreen() {
       name: group.name,
       description: group.description,
       visibility: group.visibility,
+      imageBase64: group.imageBase64,
+      imageUri: group.imageUri,
     });
 
     if (result) {
       setToast({ visible: true, text: "Group created successfully!", type: "success" });
-      setShowCreateModal(false);
+      await refresh();
       return true;
     }
 
     setToast({ visible: true, text: "Failed to create group", type: "error" });
     return false;
+  };
+
+  const handleModalClose = () => {
+    setShowCreateModal(false);
+    setEditingGroup(null);
   };
 
   const handleLeaveGroup = async (groupId: string) => {
@@ -417,29 +446,51 @@ export default function GroupsScreen() {
             )}
 
             {/* FAB */}
-            <TouchableOpacity onPress={() => setShowCreateModal(true)} activeOpacity={0.8} style={{ position: 'absolute', right: 24, bottom: 64, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1C8E79', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 }}>
+            <TouchableOpacity onPress={() => { setEditingGroup(null); setShowCreateModal(true); }} activeOpacity={0.8} style={{ position: 'absolute', right: 24, bottom: 64, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1C8E79', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 }}>
               <Ionicons name="add" size={28} color="#FFFFFF" />
             </TouchableOpacity>
 
             {/* Menu Modal */}
             <Modal transparent visible={menuVisible} animationType="fade" onRequestClose={() => setMenuVisible(false)}>
               <TouchableOpacity activeOpacity={1} onPress={() => setMenuVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)', justifyContent: 'center', alignItems: 'center' }}>
-                <View style={{ width: 260, backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 8 }}>
+                <View style={{ width: 168, height: 208, backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 8 }}>
                   {menuGroup ? (
                     <>
-                      <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 12, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); router.push({ pathname: '/screens/GroupChatScreen', params: { groupId: menuGroup._id, groupTitle: menuGroup.name, groupDescription: menuGroup.description, groupMembers: String(menuGroup.membersCount || 0) } }); }}>
-                        <Text style={{ fontFamily: 'Rubik-Bold', color: '#0F172A' }}>Group Details</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8 }}>
+                        <View style={{ width: 40, height: 40, borderRadius: 20, overflow: 'hidden', backgroundColor: '#CBD5D1', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                          {menuGroup.profileImageUrl ? (
+                            <Image source={{ uri: menuGroup.profileImageUrl }} style={{ width: 40, height: 40 }} />
+                          ) : (
+                            <Ionicons name="people" size={20} color="#FFFFFF" />
+                          )}
+                        </View>
+                        <Text style={{ flex: 1, fontFamily: 'Rubik-Bold', color: '#0F172A', fontSize: 12 }} numberOfLines={2}>
+                          {menuGroup.name}
+                        </Text>
+                      </View>
+                      <View style={{ height: 1, backgroundColor: '#E4E7EC', marginHorizontal: 12, marginBottom: 4 }} />
+                      <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 10, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); router.push({ pathname: '/screens/GroupChatScreen', params: { groupId: menuGroup._id, groupTitle: menuGroup.name, groupDescription: menuGroup.description, groupMembers: String(menuGroup.membersCount || 0) } }); }}>
+                        <Text style={{ fontFamily: 'Rubik-Bold', color: '#0F172A', fontSize: 12 }}>Group Details</Text>
                       </TouchableOpacity>
-                      {menuGroup.userRole === 'admin' && (
-                        <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 12, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); setShowCreateModal(true); }}>
-                          <Text style={{ fontFamily: 'Rubik-Bold', color: '#0F172A' }}>Edit group details</Text>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 12, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); setShowDelete(true); }}>
-                        <Text style={{ fontFamily: 'Rubik-Bold', color: '#DC2626' }}>Exit group</Text>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        disabled={(menuGroup.userRole || menuGroup.role || "").toLowerCase() !== 'admin'}
+                        style={{ paddingVertical: 10, paddingHorizontal: 16, opacity: (menuGroup.userRole || menuGroup.role || "").toLowerCase() === 'admin' ? 1 : 0.5 }}
+                        onPress={() => {
+                          if ((menuGroup.userRole || menuGroup.role || "").toLowerCase() === 'admin') {
+                            setMenuVisible(false);
+                            setEditingGroup(menuGroup);
+                            setShowCreateModal(true);
+                          }
+                        }}
+                      >
+                        <Text style={{ fontFamily: 'Rubik-Bold', fontSize: 12, color: (menuGroup.userRole || menuGroup.role || "").toLowerCase() === 'admin' ? '#0F172A' : '#98A2B3' }}>Edit group Details</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 12, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); setShowFlag(true); }}>
-                        <Text style={{ fontFamily: 'Rubik-Bold', color: '#DC2626' }}>Flag group</Text>
+                      <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 10, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); setShowDelete(true); }}>
+                        <Text style={{ fontFamily: 'Rubik-Bold', color: '#DC2626', fontSize: 12 }}>Delete group</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity activeOpacity={0.8} style={{ paddingVertical: 10, paddingHorizontal: 16 }} onPress={() => { setMenuVisible(false); setShowFlag(true); }}>
+                        <Text style={{ fontFamily: 'Rubik-Bold', color: '#DC2626', fontSize: 12 }}>Flag group</Text>
                       </TouchableOpacity>
                     </>
                   ) : null}
@@ -447,7 +498,23 @@ export default function GroupsScreen() {
               </TouchableOpacity>
             </Modal>
 
-              <CreateGroupModal visible={showCreateModal} onClose={() => setShowCreateModal(false)} onCreate={handleCreateFromModal} />
+              <CreateGroupModal
+                visible={showCreateModal}
+                onClose={handleModalClose}
+                mode={editingGroup ? "edit" : "create"}
+                initialGroup={
+                  editingGroup
+                    ? {
+                        id: editingGroup._id,
+                        name: editingGroup.name,
+                        description: editingGroup.description,
+                        visibility: editingGroup.visibility || (editingGroup.isPublic ? "public" : "private"),
+                        profileImageUrl: editingGroup.profileImageUrl,
+                      }
+                    : undefined
+                }
+                onSubmit={handleGroupModalSubmit}
+              />
             <DeleteGroupModal visible={showDelete} onClose={() => setShowDelete(false)} onDelete={async () => { if (menuGroup) { await handleLeaveGroup(menuGroup._id); } }} />
             <FlagGroupModal visible={showFlag} onClose={() => setShowFlag(false)} onSubmit={() => { setShowFlag(false); setToast({ visible: true, text: 'Submitted. Thank you', type: 'success' }); }} />
             <TopToast visible={toast.visible} text={toast.text} type={toast.type} topOffset={headerOffset} onClose={() => setToast({ ...toast, visible: false })} />

@@ -6,7 +6,9 @@ import {
     Animated,
     Dimensions,
     Image,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     Text,
     TextInput,
@@ -16,26 +18,45 @@ import {
 } from "react-native";
 import { validateGroupForm } from "../utils/communityHelpers";
 
+type GroupFormPayload = {
+  id?: string;
+  name: string;
+  description?: string;
+  visibility: "public" | "private";
+  imageUri?: string | null;
+  imageBase64?: string | null;
+};
+
 type CreateGroupModalProps = {
   visible: boolean;
   onClose: () => void;
-  onCreate?: (group: {
-    name: string;
+  mode?: "create" | "edit";
+  initialGroup?: {
+    id: string;
+    name?: string;
     description?: string;
-    visibility: "public" | "private";
-    imageUri?: string | null;
-  }) => Promise<boolean> | boolean;
+    visibility?: "public" | "private";
+    profileImageUrl?: string | null;
+  };
+  onSubmit?: (group: GroupFormPayload) => Promise<boolean> | boolean;
 };
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-export default function CreateGroupModal({ visible, onClose, onCreate }: CreateGroupModalProps) {
+export default function CreateGroupModal({
+  visible,
+  onClose,
+  mode = "create",
+  initialGroup,
+  onSubmit,
+}: CreateGroupModalProps) {
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const [groupName, setGroupName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const descriptionLimit = 50;
@@ -45,8 +66,24 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
     setDescription("");
     setIsPublic(true);
     setImageUri(null);
+    setImageBase64(null);
     setError(null);
     setIsSubmitting(false);
+  };
+
+  const loadInitialValues = () => {
+    if (mode === "edit" && initialGroup) {
+      setGroupName(initialGroup.name ?? "");
+      setDescription(initialGroup.description ?? "");
+      const initialVisibility = initialGroup.visibility ?? "public";
+      setIsPublic(initialVisibility === "public");
+      setImageUri(initialGroup.profileImageUrl ?? null);
+      setImageBase64(null);
+      setError(null);
+      setIsSubmitting(false);
+    } else {
+      resetForm();
+    }
   };
 
   useEffect(() => {
@@ -65,6 +102,12 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
     }
   }, [visible]);
 
+  useEffect(() => {
+    if (visible) {
+      loadInitialValues();
+    }
+  }, [visible, mode, initialGroup]);
+
   const handleClose = (force = false) => {
     if (isSubmitting && !force) {
       return;
@@ -80,7 +123,7 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
     });
   };
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     if (isSubmitting) {
       return;
     }
@@ -100,7 +143,7 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
       return;
     }
 
-    if (!onCreate) {
+    if (!onSubmit) {
       handleClose(true);
       return;
     }
@@ -108,11 +151,13 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
     try {
       setIsSubmitting(true);
       setError(null);
-      const result = await onCreate({
+      const result = await onSubmit({
+        id: initialGroup?.id,
         name,
         description: descriptionValue || undefined,
         visibility,
         imageUri,
+        imageBase64,
       });
 
       if (result !== false) {
@@ -138,9 +183,17 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      if (asset.base64) {
+        const mimeType = asset.mimeType || "image/jpeg";
+        setImageBase64(`data:${mimeType};base64,${asset.base64}`);
+      } else {
+        setImageBase64(null);
+      }
     }
   };
 
@@ -150,34 +203,46 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" }} />
       </TouchableWithoutFeedback>
 
-      <Animated.View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          transform: [{ translateY }],
-        }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        style={{ flex: 1 }}
       >
-        <View
+        <Animated.View
           style={{
-            backgroundColor: "#FFFFFF",
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            paddingTop: 12,
-            paddingBottom: 24,
-            maxHeight: SCREEN_HEIGHT * 0.9,
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            transform: [{ translateY }],
           }}
         >
           {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 8 }}>
-            <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000", fontFamily: "Rubik-Bold", flex: 1 }}>Create A Group</Text>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={24} color="#1D2939" />
-            </TouchableOpacity>
-          </View>
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingTop: 12,
+              paddingBottom: 24,
+              maxHeight: SCREEN_HEIGHT * 0.9,
+            }}
+          >
+            {/* Header */}
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000", fontFamily: "Rubik-Bold", flex: 1 }}>
+                {mode === "edit" ? "Edit Group" : "Create A Group"}
+              </Text>
+              <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
+                <Ionicons name="close" size={24} color="#1D2939" />
+              </TouchableOpacity>
+            </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}
+            >
             {/* Display Picture Uploader */}
             <Text style={{ fontSize: 10, color: "#667085", marginBottom: 4, fontFamily: "Rubik-Bold" }}>GROUP DISPLAY PICTURE</Text>
             <View style={{
@@ -258,7 +323,7 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
                 placeholder="Type here"
                 placeholderTextColor="#98A2B3"
                 multiline
-                maxLength={50}
+                maxLength={descriptionLimit}
                 value={description}
                 onChangeText={setDescription}
                 style={{
@@ -275,7 +340,7 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
               />
             </View>
             <Text style={{ alignSelf: "flex-end", color: "#667085", fontSize: 10, marginBottom: 16, fontFamily: "Rubik-Regular" }}>
-              {`${description.length}/50`}
+              {`${description.length}/${descriptionLimit}`}
             </Text>
 
             {/* Public Checkbox */}
@@ -310,7 +375,7 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
 
             {/* Create Button */}
             <TouchableOpacity
-              onPress={handleCreate}
+              onPress={handleSubmit}
               activeOpacity={isSubmitting ? 1 : 0.8}
               disabled={isSubmitting}
               style={{
@@ -326,12 +391,15 @@ export default function CreateGroupModal({ visible, onClose, onCreate }: CreateG
               {isSubmitting ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-              <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>Create</Text>
+                <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>
+                  {mode === "edit" ? "Save Changes" : "Create"}
+                </Text>
               )}
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </Animated.View>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

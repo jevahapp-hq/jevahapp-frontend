@@ -1,7 +1,7 @@
 // Groups Hooks
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ApiError, ApiErrorHandler } from "../utils/apiErrorHandler";
 import { communityAPI, Group } from "../utils/communityAPI";
-import { ApiErrorHandler, ApiError } from "../utils/apiErrorHandler";
 
 export function useMyGroups() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -93,6 +93,8 @@ export function useMyGroups() {
       name: string;
       description?: string;
       visibility?: "public" | "private";
+      imageUri?: string | null;
+      imageBase64?: string | null;
     }) => {
       try {
         setLoading(true);
@@ -102,6 +104,12 @@ export function useMyGroups() {
           const createdGroup = {
             ...response.data,
             _id: response.data._id || response.data.id || Date.now().toString(),
+            profileImageUrl:
+              response.data.profileImageUrl ||
+              response.data.imageUrl ||
+              groupData.imageUri ||
+              undefined,
+            userRole: response.data.userRole || "admin",
           };
           setGroups((prev) => [createdGroup, ...prev]);
           return createdGroup;
@@ -121,10 +129,64 @@ export function useMyGroups() {
     []
   );
 
+  const updateGroup = useCallback(
+    async (
+      groupId: string,
+      updateData: {
+        name?: string;
+        description?: string;
+        visibility?: "public" | "private";
+        imageBase64?: string | null;
+        imageUri?: string | null;
+      }
+    ) => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await communityAPI.updateGroup(groupId, updateData);
+        if (response.success && response.data) {
+          const updatedGroup = {
+            ...response.data,
+            _id: response.data._id || response.data.id || groupId,
+            profileImageUrl:
+              response.data.profileImageUrl ||
+              response.data.imageUrl ||
+              updateData.imageUri ||
+              undefined,
+            userRole: response.data.userRole,
+          };
+          setGroups((prev) =>
+            prev.map((group) =>
+              group._id === updatedGroup._id
+                ? {
+                    ...group,
+                    ...updatedGroup,
+                    userRole: updatedGroup.userRole || group.userRole,
+                  }
+                : group
+            )
+          );
+          return updatedGroup;
+        } else {
+          const apiError = ApiErrorHandler.handle(response);
+          setError(apiError);
+          return null;
+        }
+      } catch (err: any) {
+        const apiError = ApiErrorHandler.handle(err);
+        setError(apiError);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   const refresh = useCallback(() => {
     setPage(1);
     setHasMore(true);
-    loadGroups(true);
+    return loadGroups(true);
   }, [loadGroups]);
 
   useEffect(() => {
@@ -139,6 +201,7 @@ export function useMyGroups() {
     loadMore: () => loadGroups(false),
     refresh,
     createGroup,
+    updateGroup,
   };
 }
 

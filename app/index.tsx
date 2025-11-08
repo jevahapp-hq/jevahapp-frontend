@@ -308,7 +308,15 @@ export default function Welcome() {
             </Text>
           </TouchableOpacity>
 
-          {/* Removed redundant Sign In button; users can sign in from Sign Up page */}
+          <TouchableOpacity
+            onPress={fastPress(() => router.push("/auth/login"), {
+              key: "signin_button",
+              priority: "high",
+            })}
+            className="mt-9"
+          >
+            <Text className="text-[#344054] text-sm font-medium">Sign In</Text>
+          </TouchableOpacity>
 
           {/* Loading and error states */}
           {loginLoading && (
