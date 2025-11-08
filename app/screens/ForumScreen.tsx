@@ -11,6 +11,7 @@ import {
   Linking,
   Modal,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   Text,
   TextInput,
@@ -29,6 +30,7 @@ export default function ForumScreen() {
   const router = useRouter();
   const [newPostText, setNewPostText] = useState("");
   const [selectedForumId, setSelectedForumId] = useState<string | null>(null);
+  const [pendingForumId, setPendingForumId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [editingPost, setEditingPost] = useState<ForumPostType | null>(null);
   const [editPostText, setEditPostText] = useState("");
@@ -36,13 +38,24 @@ export default function ForumScreen() {
   const [showCreateForumModal, setShowCreateForumModal] = useState(false);
   const [forumTitle, setForumTitle] = useState("");
   const [forumDescription, setForumDescription] = useState("");
+  const [selectedCategoryForCreation, setSelectedCategoryForCreation] = useState<string | null>(null);
   const [isCreatingForum, setIsCreatingForum] = useState(false);
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
 
   // Get forums and posts
-  const { forums, loading: forumsLoading, error: forumsError, createForum, loadForums } = useForums();
+  const {
+    categories,
+    discussions,
+    selectedCategoryId,
+    selectCategory,
+    categoriesLoading,
+    discussionsLoading,
+    categoriesError,
+    discussionsError,
+    createForum,
+  } = useForums();
   const {
     posts,
     loading: postsLoading,
@@ -55,7 +68,14 @@ export default function ForumScreen() {
     deletePost,
     likePost,
   } = useForumPosts(selectedForumId || "");
-  
+
+  const isInitialLoading =
+    (categoriesLoading && categories.length === 0) ||
+    (discussionsLoading && discussions.length === 0) ||
+    (postsLoading && posts.length === 0);
+  const activeDiscussion = selectedForumId
+    ? discussions.find((discussion) => discussion._id === selectedForumId)
+    : null;
   // Only load posts when we have a forum selected
   const shouldLoadPosts = !!selectedForumId;
 
@@ -73,12 +93,34 @@ export default function ForumScreen() {
     }
   }, [posts]);
 
-  // Set default forum when forums load
+  // Set default discussion when discussions change
   useEffect(() => {
-    if (forums.length > 0 && !selectedForumId) {
-      setSelectedForumId(forums[0]._id);
+    if (!discussions || discussions.length === 0) {
+      if (!pendingForumId) {
+        setSelectedForumId(null);
+      }
+      return;
     }
-  }, [forums, selectedForumId]);
+
+    if (pendingForumId) {
+      const matchingDiscussion = discussions.find(
+        (discussion) => discussion._id === pendingForumId
+      );
+      if (matchingDiscussion) {
+        setSelectedForumId(pendingForumId);
+        setPendingForumId(null);
+        return;
+      }
+      return;
+    }
+
+    if (
+      !selectedForumId ||
+      !discussions.some((discussion) => discussion._id === selectedForumId)
+    ) {
+      setSelectedForumId(discussions[0]._id);
+    }
+  }, [discussions, selectedForumId, pendingForumId]);
 
   useEffect(() => {
     // Slide in animation from right to left
@@ -93,6 +135,31 @@ export default function ForumScreen() {
     setRefreshing(true);
     await refreshPosts();
     setRefreshing(false);
+  };
+
+  const handleCategorySelect = (categoryId: string) => {
+    if (!categoryId) return;
+    selectCategory(categoryId);
+    setSelectedForumId(null);
+    setPendingForumId(null);
+  };
+
+  const openCreateForumModal = () => {
+    if (categories.length === 0) {
+      Alert.alert(
+        "No Categories Available",
+        "Forum categories are not available yet. Please contact an administrator."
+      );
+      return;
+    }
+
+    const defaultCategoryId =
+      selectedCategoryId && categories.some((category) => category._id === selectedCategoryId)
+        ? selectedCategoryId
+        : categories[0]._id;
+
+    setSelectedCategoryForCreation(defaultCategoryId);
+    setShowCreateForumModal(true);
   };
 
   const handleBackToCommunity = () => {
@@ -257,10 +324,16 @@ export default function ForumScreen() {
       return;
     }
 
+    if (!selectedCategoryForCreation) {
+      Alert.alert("Validation Error", "Please select a forum category.");
+      return;
+    }
+
     setIsCreatingForum(true);
 
     try {
       const result = await createForum({
+        categoryId: selectedCategoryForCreation,
         title: forumTitle.trim(),
         description: forumDescription.trim(),
       });
@@ -270,13 +343,16 @@ export default function ForumScreen() {
         setForumTitle("");
         setForumDescription("");
         setShowCreateForumModal(false);
-        
-        // Select the newly created forum
+        setSelectedCategoryForCreation(null);
+        setPendingForumId(result._id);
+
+        const targetCategoryId = result.categoryId || selectedCategoryForCreation;
+        if (!selectedCategoryId || selectedCategoryId !== targetCategoryId) {
+          selectCategory(targetCategoryId);
+        }
+
         setSelectedForumId(result._id);
-        
-        // Refresh forums list
-        await loadForums();
-        
+
         Alert.alert("Success", "Forum created successfully!");
       } else {
         Alert.alert("Error", "Failed to create forum. Please try again.");
@@ -482,65 +558,114 @@ export default function ForumScreen() {
         </View>
 
         {/* Forum Category Selector */}
-        {forums.length > 0 && (
-          <View style={styles.forumSelectorContainer}>
+        {categories.length > 0 && (
+          <View style={styles.categorySelectorContainer}>
             <FlatList
               horizontal
               showsHorizontalScrollIndicator={false}
-              data={forums}
+              data={categories}
               keyExtractor={(item) => item._id}
-              contentContainerStyle={styles.forumSelectorContent}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.forumChip,
-                    selectedForumId === item._id && styles.forumChipActive,
-                  ]}
-                  onPress={() => setSelectedForumId(item._id)}
-                  activeOpacity={0.7}
-                >
-                  <Text
+              contentContainerStyle={styles.categorySelectorContent}
+              renderItem={({ item }) => {
+                const isActive = selectedCategoryId === item._id;
+                return (
+                  <TouchableOpacity
                     style={[
-                      styles.forumChipText,
-                      selectedForumId === item._id && styles.forumChipTextActive,
+                      styles.categoryChip,
+                      isActive && styles.categoryChipActive,
                     ]}
+                    onPress={() => handleCategorySelect(item._id)}
+                    activeOpacity={0.7}
                   >
-                    {item.title}
-                  </Text>
-          </TouchableOpacity>
-              )}
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        isActive && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
             />
-        </View>
+          </View>
         )}
 
         {/* Forum Posts */}
-        {forumsLoading || postsLoading ? (
+        {isInitialLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#DF930E" />
             <Text style={styles.loadingText}>Loading forum posts...</Text>
           </View>
-        ) : forumsError && forums.length === 0 ? (
+        ) : categoriesError && categories.length === 0 ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+            <Text style={styles.errorTitle}>Error loading categories</Text>
+            <Text style={styles.errorText}>
+              {categoriesError?.error || "Unable to load forum categories."}
+            </Text>
+          </View>
+        ) : categories.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="layers-outline" size={80} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>No forum categories yet</Text>
+            <Text style={styles.emptyText}>
+              Forum categories are required before discussions can begin. Please
+              check back soon.
+            </Text>
+          </View>
+        ) : discussionsError && discussions.length === 0 ? (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
             <Text style={styles.errorTitle}>Error loading forums</Text>
-            <Text style={styles.errorText}>{forumsError.error}</Text>
+            <Text style={styles.errorText}>
+              {discussionsError?.error || "Unable to load forums for this category."}
+            </Text>
+          </View>
+        ) : discussions.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="people-circle-outline" size={80} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>No forums in this category</Text>
+            <Text style={styles.emptyText}>
+              Be the first to create a discussion in{" "}
+              {categories.find((category) => category._id === selectedCategoryId)?.title ||
+                "this category"}
+              .
+            </Text>
+            <TouchableOpacity
+              style={styles.createForumButtonInEmpty}
+              onPress={openCreateForumModal}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle" size={20} color="#fff" />
+              <Text style={styles.createForumButtonText}>Create Forum</Text>
+            </TouchableOpacity>
           </View>
         ) : postsError && posts.length === 0 ? (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
             <Text style={styles.errorTitle}>Error loading posts</Text>
-            <Text style={styles.errorText}>{postsError.error}</Text>
+            <Text style={styles.errorText}>
+              {postsError?.error || "Unable to load posts right now."}
+            </Text>
+          </View>
+        ) : !selectedForumId ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#DF930E" />
+            <Text style={styles.loadingText}>Select a forum to view posts</Text>
           </View>
         ) : posts.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="chatbubbles-outline" size={80} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>No posts yet</Text>
             <Text style={styles.emptyText}>
-              Be the first to start a conversation in the forum!
+              Be the first to start a conversation in{" "}
+              {activeDiscussion?.title || "this forum"}!
             </Text>
             <TouchableOpacity
               style={styles.createForumButtonInEmpty}
-              onPress={() => setShowCreateForumModal(true)}
+              onPress={openCreateForumModal}
               activeOpacity={0.7}
             >
               <Ionicons name="add-circle" size={20} color="#fff" />
@@ -578,7 +703,9 @@ export default function ForumScreen() {
 
                   <TextInput
                     style={styles.conversationInput}
-                    placeholder={`Start a conversation in ${forums.find(f => f._id === selectedForumId)?.title || "this forum"}...`}
+                    placeholder={`Start a conversation in ${
+                      activeDiscussion?.title || "this forum"
+                    }...`}
                     placeholderTextColor="#9CA3AF"
                     value={newPostText}
                     onChangeText={setNewPostText}
@@ -666,6 +793,7 @@ export default function ForumScreen() {
             setShowCreateForumModal(false);
             setForumTitle("");
             setForumDescription("");
+          setSelectedCategoryForCreation(null);
           }}
         >
           <View style={styles.createForumModal}>
@@ -677,6 +805,7 @@ export default function ForumScreen() {
                     setShowCreateForumModal(false);
                     setForumTitle("");
                     setForumDescription("");
+                    setSelectedCategoryForCreation(null);
                   }}
                   style={styles.closeButton}
                   disabled={isCreatingForum}
@@ -685,34 +814,86 @@ export default function ForumScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.createForumForm}>
-                <Text style={styles.createForumLabel}>Forum Title *</Text>
-                <TextInput
-                  style={styles.createForumInput}
-                  value={forumTitle}
-                  onChangeText={setForumTitle}
-                  placeholder="Enter forum title (3-100 characters)"
-                  maxLength={100}
-                  editable={!isCreatingForum}
-                />
-                <Text style={styles.createForumHelperText}>
-                  {forumTitle.length}/100 characters
-                </Text>
+              <ScrollView
+                style={styles.createForumScroll}
+                contentContainerStyle={styles.createForumScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.createForumForm}>
+                  <Text style={styles.createForumLabel}>Forum Title *</Text>
+                  <TextInput
+                    style={styles.createForumInput}
+                    value={forumTitle}
+                    onChangeText={setForumTitle}
+                    placeholder="Enter forum title (3-100 characters)"
+                    maxLength={100}
+                    editable={!isCreatingForum}
+                  />
+                  <Text style={styles.createForumHelperText}>
+                    {forumTitle.length}/100 characters
+                  </Text>
 
-                <Text style={styles.createForumLabel}>Description *</Text>
-                <TextInput
-                  style={[styles.createForumInput, styles.createForumTextArea]}
-                  value={forumDescription}
-                  onChangeText={setForumDescription}
-                  placeholder="Enter forum description (10-500 characters)"
-                  multiline
-                  maxLength={500}
-                  editable={!isCreatingForum}
-                />
-                <Text style={styles.createForumHelperText}>
-                  {forumDescription.length}/500 characters
-                </Text>
-              </View>
+                  <Text style={styles.createForumLabel}>Description *</Text>
+                  <TextInput
+                    style={[styles.createForumInput, styles.createForumTextArea]}
+                    value={forumDescription}
+                    onChangeText={setForumDescription}
+                    placeholder="Enter forum description (10-500 characters)"
+                    multiline
+                    maxLength={500}
+                    editable={!isCreatingForum}
+                  />
+                  <Text style={styles.createForumHelperText}>
+                    {forumDescription.length}/500 characters
+                  </Text>
+
+                  <Text style={styles.createForumLabel}>Category *</Text>
+                  {categoriesLoading ? (
+                    <View style={styles.createForumCategoryLoading}>
+                      <ActivityIndicator size="small" color="#256E63" />
+                      <Text style={styles.createForumCategoryLoadingText}>
+                        Loading categories...
+                      </Text>
+                    </View>
+                  ) : categories.length === 0 ? (
+                    <Text style={styles.createForumHelperText}>
+                      No categories available. Please contact an administrator.
+                    </Text>
+                  ) : (
+                    <View style={styles.createForumCategoryList}>
+                      {categories.map((category) => {
+                        const isActive =
+                          selectedCategoryForCreation === category._id;
+                        return (
+                          <TouchableOpacity
+                            key={category._id}
+                            style={[
+                              styles.createForumCategoryChip,
+                              isActive && styles.createForumCategoryChipActive,
+                            ]}
+                            onPress={() =>
+                              setSelectedCategoryForCreation(category._id)
+                            }
+                            activeOpacity={0.8}
+                            disabled={isCreatingForum}
+                          >
+                            <Text
+                              style={[
+                                styles.createForumCategoryChipText,
+                                isActive &&
+                                  styles.createForumCategoryChipTextActive,
+                              ]}
+                            >
+                              {category.title}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
 
               <View style={styles.createForumModalActions}>
                 <TouchableOpacity
@@ -721,6 +902,7 @@ export default function ForumScreen() {
                     setShowCreateForumModal(false);
                     setForumTitle("");
                     setForumDescription("");
+                    setSelectedCategoryForCreation(null);
                   }}
                   disabled={isCreatingForum}
                 >
@@ -729,12 +911,16 @@ export default function ForumScreen() {
                 <TouchableOpacity
                   style={[
                     styles.submitForumButton,
-                    (!forumTitle.trim() || !forumDescription.trim() || isCreatingForum) && styles.submitForumButtonDisabled,
+                    (!forumTitle.trim() ||
+                      !forumDescription.trim() ||
+                      !selectedCategoryForCreation ||
+                      isCreatingForum) && styles.submitForumButtonDisabled,
                   ]}
                   onPress={handleCreateForum}
                   disabled={
                     !forumTitle.trim() ||
                     !forumDescription.trim() ||
+                    !selectedCategoryForCreation ||
                     isCreatingForum
                   }
                 >
@@ -786,16 +972,17 @@ const styles = {
   filterButton: {
     padding: 8,
   },
-  forumSelectorContainer: {
+  categorySelectorContainer: {
     paddingVertical: 12,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
-  forumSelectorContent: {
-    paddingHorizontal: 20,
+  categorySelectorContent: {
+    paddingRight: 20,
     gap: 8,
   },
-  forumChip: {
+  categoryChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -804,18 +991,18 @@ const styles = {
     borderColor: "#D1D5DB",
     marginRight: 8,
   },
-  forumChipActive: {
-    backgroundColor: "#256E63",
-    borderColor: "#256E63",
+  categoryChipActive: {
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
   },
-  forumChipText: {
+  categoryChipText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: "#6B7280",
+    color: "#1F2937",
     fontFamily: "Rubik-SemiBold",
   },
-  forumChipTextActive: {
-    color: "#fff",
+  categoryChipTextActive: {
+    color: "#FFFFFF",
   },
   postsContainer: {
     flex: 1,
@@ -1214,7 +1401,7 @@ const styles = {
     fontFamily: "Rubik-Bold",
   },
   createForumForm: {
-    marginBottom: 24,
+    paddingBottom: 16,
   },
   createForumLabel: {
     fontSize: 16,
@@ -1243,6 +1430,52 @@ const styles = {
     color: "#6B7280",
     fontFamily: "Rubik-Regular",
     marginTop: 4,
+  },
+  createForumScroll: {
+    maxHeight: 360,
+    marginBottom: 24,
+  },
+  createForumScrollContent: {
+    paddingBottom: 16,
+  },
+  createForumCategoryLoading: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    marginTop: 8,
+  },
+  createForumCategoryLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#4B5563",
+    fontFamily: "Rubik-Regular",
+  },
+  createForumCategoryList: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    marginTop: 8,
+  },
+  createForumCategoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#F9FAFB",
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  createForumCategoryChipActive: {
+    borderColor: "#256E63",
+    backgroundColor: "#E8F8F5",
+  },
+  createForumCategoryChipText: {
+    fontSize: 14,
+    color: "#374151",
+    fontFamily: "Rubik-Regular",
+  },
+  createForumCategoryChipTextActive: {
+    color: "#0F766E",
+    fontFamily: "Rubik-SemiBold",
   },
   createForumModalActions: {
     flexDirection: "row" as const,
