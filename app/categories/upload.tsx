@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ResizeMode, Video } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
@@ -911,6 +911,37 @@ export default function UploadScreen() {
 
             {/* Upload Button */}
             <View className="items-center mt-4">
+              <View
+                className="flex-row items-center px-4 py-3 mb-3 rounded-lg border"
+                style={{
+                  backgroundColor: "rgba(223, 147, 14, 0.12)",
+                  borderColor: "#DF930E",
+                  borderStyle: "dashed",
+                  maxWidth: Math.min(
+                    getScreenDimensions().width -
+                      getResponsiveSpacing(16, 20, 24, 32) * 2,
+                    320
+                  ),
+                }}
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#8C5A00"
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  className="flex-1 text-xs"
+                  style={{
+                    color: "#4B2C00",
+                    fontFamily: "Rubik-Regular",
+                    lineHeight: 16,
+                  }}
+                >
+                  By uploading, you confirm you own or have the right to
+                  distribute this content.
+                </Text>
+              </View>
               <TouchableOpacity
                 onPress={async () => {
                   const stopAudio = useMediaStore.getState().stopAudioFn;

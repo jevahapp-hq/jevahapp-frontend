@@ -254,7 +254,7 @@ export default function GroupsScreen() {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 10,
+        paddingTop: 36,
         paddingBottom: 20,
       }}>
         <TouchableOpacity
@@ -400,7 +400,11 @@ export default function GroupsScreen() {
               <FlatList
                 style={{ flex: 1 }}
                 data={groups}
-                keyExtractor={(item) => item._id}
+                keyExtractor={(item, index) => {
+                  if (item?._id) return item._id;
+                  if (item?.id) return String(item.id);
+                  return `group-${index}`;
+                }}
                 showsVerticalScrollIndicator={false}
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
@@ -419,7 +423,7 @@ export default function GroupsScreen() {
                 }
                 contentContainerStyle={{ paddingBottom: 120 }}
                 renderItem={({ item }) => (
-                  <View key={item._id} style={{ backgroundColor: '#E9F1EF', borderRadius: 16, padding: 16, marginHorizontal: 20, marginBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ backgroundColor: '#E9F1EF', borderRadius: 16, padding: 16, marginHorizontal: 20, marginBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
                     {/* Icon/Image */}
                     <View style={{ width: 60, height: 60, borderRadius: 30, overflow: 'hidden', backgroundColor: '#CBD5D1', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                       {item.profileImageUrl ? (

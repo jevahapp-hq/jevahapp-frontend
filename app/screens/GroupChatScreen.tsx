@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import JoinGroupModal from "../components/JoinGroupModal";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Message {
   id: string;
@@ -37,6 +38,7 @@ export default function GroupChatScreen() {
   const slideAnim = useRef(
     new Animated.Value(Dimensions.get("window").width)
   ).current;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     // Slide in animation from right to left
@@ -305,7 +307,7 @@ export default function GroupChatScreen() {
             flexDirection: "row",
             alignItems: "center",
             paddingHorizontal: 20,
-            paddingTop: 10,
+            paddingTop: 36,
             paddingBottom: 20,
             borderBottomWidth: 1,
             borderBottomColor: "#E5E5E5",
@@ -394,6 +396,7 @@ export default function GroupChatScreen() {
               alignItems: "center",
               paddingHorizontal: 20,
               paddingVertical: 16,
+              paddingBottom: 16 + insets.bottom,
               backgroundColor: "#FFFFFF",
               borderTopWidth: 1,
               borderTopColor: "#E5E5E5",

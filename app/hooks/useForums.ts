@@ -1,5 +1,5 @@
 // Forum Hooks
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   communityAPI,
@@ -10,60 +10,172 @@ import {
 import { ApiErrorHandler, ApiError } from "../utils/apiErrorHandler";
 
 export function useForums() {
-  const [forums, setForums] = useState<Forum[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [categories, setCategories] = useState<Forum[]>([]);
+  const [discussions, setDiscussions] = useState<Forum[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null
+  );
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [discussionsLoading, setDiscussionsLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<ApiError | null>(null);
+  const [discussionsError, setDiscussionsError] = useState<ApiError | null>(
+    null
+  );
+  const lastFetchedCategoryIdRef = useRef<string | null>(null);
 
-  const loadForums = useCallback(async () => {
+  const loadCategories = useCallback(async (): Promise<Forum[]> => {
     try {
-      setLoading(true);
-      setError(null);
-      const response = await communityAPI.getForums({ page: 1, limit: 50 });
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+      const response = await communityAPI.getForums({
+        page: 1,
+        limit: 100,
+        view: "categories",
+      });
 
       if (response.success && response.data) {
-        setForums(response.data.forums);
+        const fetchedCategories = response.data.forums;
+        setCategories(fetchedCategories);
+        return fetchedCategories;
       } else {
         const apiError = ApiErrorHandler.handle(response);
-        setError(apiError);
+        setCategoriesError(apiError);
       }
     } catch (err: any) {
       const apiError = ApiErrorHandler.handle(err);
-      setError(apiError);
+      setCategoriesError(apiError);
     } finally {
-      setLoading(false);
+      setCategoriesLoading(false);
     }
+
+    setCategories([]);
+    return [];
   }, []);
 
-  const createForum = useCallback(
-    async (forumData: { title: string; description: string }) => {
+  const loadDiscussions = useCallback(
+    async (categoryId: string): Promise<Forum[]> => {
+      if (!categoryId) {
+        setDiscussions([]);
+        return [];
+      }
+
       try {
-        setLoading(true);
-        setError(null);
-        const response = await communityAPI.createForum(forumData);
+        setDiscussionsLoading(true);
+        setDiscussionsError(null);
+        const response = await communityAPI.getForums({
+          page: 1,
+          limit: 100,
+          view: "discussions",
+          categoryId,
+        });
+
         if (response.success && response.data) {
-          setForums((prev) => [response.data!, ...prev]);
-          return response.data;
+          const fetchedDiscussions = response.data.forums;
+          const filteredDiscussions = fetchedDiscussions.filter(
+            (forum) => forum.isCategory !== true
+          );
+          setDiscussions(filteredDiscussions);
+          return filteredDiscussions;
         } else {
           const apiError = ApiErrorHandler.handle(response);
-          setError(apiError);
-          return null;
+          setDiscussionsError(apiError);
         }
       } catch (err: any) {
         const apiError = ApiErrorHandler.handle(err);
-        setError(apiError);
-        return null;
+        setDiscussionsError(apiError);
       } finally {
-        setLoading(false);
+        setDiscussionsLoading(false);
       }
+
+      setDiscussions([]);
+      return [];
     },
     []
   );
 
-  useEffect(() => {
-    loadForums();
-  }, [loadForums]);
+  const selectCategory = useCallback((categoryId: string) => {
+    setSelectedCategoryId(categoryId);
+  }, []);
 
-  return { forums, loading, error, loadForums, createForum };
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    if (categories.length === 0) {
+      setSelectedCategoryId(null);
+      setDiscussions([]);
+      lastFetchedCategoryIdRef.current = null;
+      return;
+    }
+
+    if (
+      !selectedCategoryId ||
+      !categories.some((category) => category._id === selectedCategoryId)
+    ) {
+      setSelectedCategoryId(categories[0]._id);
+    }
+  }, [categories, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!selectedCategoryId) {
+      setDiscussions([]);
+      lastFetchedCategoryIdRef.current = null;
+      return;
+    }
+
+    if (lastFetchedCategoryIdRef.current === selectedCategoryId) {
+      return;
+    }
+
+    lastFetchedCategoryIdRef.current = selectedCategoryId;
+    void loadDiscussions(selectedCategoryId);
+  }, [selectedCategoryId, loadDiscussions]);
+
+  const createForum = useCallback(
+    async (forumData: {
+      categoryId: string;
+      title: string;
+      description: string;
+    }) => {
+      try {
+        setDiscussionsError(null);
+        const response = await communityAPI.createForum(forumData);
+        if (response.success && response.data) {
+          if (forumData.categoryId === selectedCategoryId) {
+            lastFetchedCategoryIdRef.current = forumData.categoryId;
+            await loadDiscussions(forumData.categoryId);
+          } else {
+            void loadCategories();
+          }
+          return response.data;
+        } else {
+          const apiError = ApiErrorHandler.handle(response);
+          setDiscussionsError(apiError);
+          return null;
+        }
+      } catch (err: any) {
+        const apiError = ApiErrorHandler.handle(err);
+        setDiscussionsError(apiError);
+        return null;
+      }
+    },
+    [loadDiscussions, loadCategories, selectedCategoryId]
+  );
+
+  return {
+    categories,
+    discussions,
+    selectedCategoryId,
+    categoriesLoading,
+    discussionsLoading,
+    categoriesError,
+    discussionsError,
+    loadCategories,
+    loadDiscussions,
+    selectCategory,
+    createForum,
+  };
 }
 
 export function useForumPosts(forumId: string) {

@@ -19,6 +19,77 @@ import { usePrayers, useSearchPrayers } from "../hooks/usePrayers";
 import { formatTimestamp } from "../utils/communityHelpers";
 import { PrayerRequest as PrayerRequestType } from "../utils/communityAPI";
 
+const DEFAULT_PRAYER_CARD_COLOR = "#256E63";
+const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
+
+type PrayerCardTheme = {
+  color: string;
+  textColor: string;
+  subtleTextColor: string;
+  borderColor: string;
+  isLight: boolean;
+};
+
+const normalizeCardColor = (value?: string): string => {
+  if (!value) {
+    return DEFAULT_PRAYER_CARD_COLOR;
+  }
+
+  const trimmed = value.trim();
+  if (!HEX_COLOR_REGEX.test(trimmed)) {
+    return DEFAULT_PRAYER_CARD_COLOR;
+  }
+
+  let hex = trimmed.toUpperCase();
+  if (hex.length === 4) {
+    hex =
+      "#" +
+      hex
+        .slice(1)
+        .split("")
+        .map((char) => char + char)
+        .join("");
+  }
+
+  return hex;
+};
+
+const hexToRgb = (hex: string) => {
+  const sanitized = hex.replace("#", "");
+  const numeric = parseInt(sanitized, 16);
+  return {
+    r: (numeric >> 16) & 255,
+    g: (numeric >> 8) & 255,
+    b: numeric & 255,
+  };
+};
+
+const getRelativeLuminance = (hex: string): number => {
+  const { r, g, b } = hexToRgb(hex);
+  const [rl, gl, bl] = [r, g, b].map((channel) => {
+    const ratio = channel / 255;
+    return ratio <= 0.03928
+      ? ratio / 12.92
+      : Math.pow((ratio + 0.055) / 1.055, 2.4);
+  });
+
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+};
+
+const buildPrayerCardTheme = (rawColor?: string): PrayerCardTheme => {
+  const color = normalizeCardColor(rawColor);
+  const luminance = getRelativeLuminance(color);
+  const isLight = luminance > 0.65;
+
+  return {
+    color,
+    textColor: isLight ? "#1F2937" : "#FFFFFF",
+    subtleTextColor: isLight ? "#4B5563" : "#F9FAFB",
+    borderColor: isLight ? "rgba(15, 118, 110, 0.25)" : "transparent",
+    isLight,
+  };
+};
+
 export default function PrayerWallScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -86,13 +157,15 @@ export default function PrayerWallScreen() {
     );
   };
 
-  const getCardStyle = (shape: string, color: string) => {
+  const getCardStyle = (shape: string, theme: PrayerCardTheme) => {
     const baseStyle = {
-      backgroundColor: color,
+      backgroundColor: theme.color,
       padding: 16,
       marginBottom: 12,
       justifyContent: "center" as const,
       position: "relative" as const,
+      borderWidth: theme.isLight ? 1 : 0,
+      borderColor: theme.borderColor,
     };
 
     switch (shape) {
@@ -146,10 +219,10 @@ export default function PrayerWallScreen() {
           borderRadius: 20,
           width: 216,
           height: 216,
-          alignSelf: "center" as const,
           backgroundColor: "transparent",
           padding: 0,
           justifyContent: "flex-start" as const,
+          borderWidth: 0,
         };
       default: // rectangle
         return {
@@ -161,7 +234,10 @@ export default function PrayerWallScreen() {
     }
   };
 
-  const renderScallopedCard = (prayer: PrayerRequest) => {
+  const renderScallopedCard = (
+    prayer: PrayerRequestType,
+    theme: PrayerCardTheme
+  ) => {
     const numBlobs = 13;
     const containerSize = 216;
     const center = containerSize / 2;
@@ -182,7 +258,7 @@ export default function PrayerWallScreen() {
               width: blobRadius * 2,
               height: blobRadius * 2,
               borderRadius: blobRadius,
-              backgroundColor: prayer.color,
+              backgroundColor: theme.color,
             },
           ]}
         />
@@ -192,12 +268,16 @@ export default function PrayerWallScreen() {
     return (
       <View style={styles.scallopContainer}>
         {blobs}
-        <View style={[styles.scallopCenter, { backgroundColor: prayer.color }]}>
-          <Text style={styles.prayerName}>{getAuthorName(prayer)}</Text>
-          <Text style={styles.prayerTime}>
+        <View style={[styles.scallopCenter, { backgroundColor: theme.color }]}>
+          <Text style={[styles.prayerName, { color: theme.textColor }]}>
+            {getAuthorName(prayer)}
+          </Text>
+          <Text style={[styles.prayerTime, { color: theme.subtleTextColor }]}>
             {formatTimestamp(prayer.createdAt)}
           </Text>
-          <Text style={styles.prayerText}>{prayer.prayerText}</Text>
+          <Text style={[styles.prayerText, { color: theme.textColor }]}>
+            {prayer.prayerText}
+          </Text>
         </View>
       </View>
     );
@@ -228,49 +308,59 @@ export default function PrayerWallScreen() {
     return "-User";
   };
 
-  const renderPrayerCard = (prayer: PrayerRequestType, index: number) => (
-    <View key={prayer._id}>
-      <TouchableOpacity
-        style={getCardStyle(prayer.shape, prayer.color)}
-        activeOpacity={0.8}
-        onPress={() => handlePrayerCardPress(prayer)}
-      >
-        {prayer.shape === "scalloped" ? (
-          renderScallopedCard(prayer)
-        ) : (
-          <>
-            {prayer.shape === "square" && (
-              <View style={styles.diagonalCut}>
-                <View style={styles.triangle} />
-              </View>
-            )}
-            {prayer.shape === "square2" && (
-              <View style={styles.diagonalCut2}>
-                <View style={styles.diagonalMask2} />
-                <View style={styles.triangle2} />
-              </View>
-            )}
-            {prayer.shape === "square3" && (
-              <View style={styles.diagonalCut3}>
-                <View style={styles.diagonalMask3} />
-                <View style={styles.triangle3} />
-              </View>
-            )}
-            {prayer.shape === "square4" && (
-              <View style={styles.diagonalCut4}>
-                <View style={styles.triangle4} />
-              </View>
-            )}
-            <Text style={styles.prayerName}>{getAuthorName(prayer)}</Text>
-            <Text style={styles.prayerTime}>
-              {formatTimestamp(prayer.createdAt)}
-            </Text>
-            <Text style={styles.prayerText}>{prayer.prayerText}</Text>
-          </>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
+  const renderPrayerCard = (prayer: PrayerRequestType, index: number) => {
+    const cardTheme = buildPrayerCardTheme(prayer.color);
+
+    return (
+      <View key={prayer._id}>
+        <TouchableOpacity
+          style={getCardStyle(prayer.shape, cardTheme)}
+          activeOpacity={0.8}
+          onPress={() => handlePrayerCardPress(prayer)}
+        >
+          {prayer.shape === "scalloped" ? (
+            renderScallopedCard(prayer, cardTheme)
+          ) : (
+            <>
+              {prayer.shape === "square" && (
+                <View style={styles.diagonalCut}>
+                  <View style={styles.triangle} />
+                </View>
+              )}
+              {prayer.shape === "square2" && (
+                <View style={styles.diagonalCut2}>
+                  <View style={styles.diagonalMask2} />
+                  <View style={styles.triangle2} />
+                </View>
+              )}
+              {prayer.shape === "square3" && (
+                <View style={styles.diagonalCut3}>
+                  <View style={styles.diagonalMask3} />
+                  <View style={styles.triangle3} />
+                </View>
+              )}
+              {prayer.shape === "square4" && (
+                <View style={styles.diagonalCut4}>
+                  <View style={styles.triangle4} />
+                </View>
+              )}
+              <Text style={[styles.prayerName, { color: cardTheme.textColor }]}>
+                {getAuthorName(prayer)}
+              </Text>
+              <Text
+                style={[styles.prayerTime, { color: cardTheme.subtleTextColor }]}
+              >
+                {formatTimestamp(prayer.createdAt)}
+              </Text>
+              <Text style={[styles.prayerText, { color: cardTheme.textColor }]}>
+                {prayer.prayerText}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <Animated.View

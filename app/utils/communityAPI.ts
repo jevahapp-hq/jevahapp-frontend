@@ -95,6 +95,15 @@ export interface Forum {
   isActive: boolean;
   postsCount: number;
   participantsCount: number;
+  isCategory?: boolean;
+  categoryId?: string;
+  category?: {
+    id?: string;
+    _id?: string;
+    title: string;
+    description?: string;
+  };
+  forumsCount?: number; // For category-level forum counts
 }
 
 export interface ForumPost {
@@ -783,10 +792,19 @@ class CommunityAPIService {
 
   // Create Forum (Authenticated users only)
   async createForum(forumData: {
+    categoryId: string;
     title: string;
     description: string;
   }): Promise<ApiResponse<Forum>> {
     try {
+      if (!forumData.categoryId || !this.isValidObjectId(forumData.categoryId)) {
+        return {
+          success: false,
+          error: "Invalid category ID",
+          code: "VALIDATION_ERROR",
+        };
+      }
+
       const headers = await this.getAuthHeaders();
       const response = await fetch(
         `${this.baseURL}/api/community/forum/create`,
@@ -803,10 +821,10 @@ class CommunityAPIService {
 
       // Handle different response formats
       if (result.success && result.data) {
-        const forumData = (result.data as any).data || result.data;
+        const createdForum = (result.data as any).data || result.data;
         return {
           success: true,
-          data: forumData as Forum,
+          data: createdForum as Forum,
         };
       }
 
@@ -826,8 +844,21 @@ class CommunityAPIService {
   async getForums(params?: {
     page?: number;
     limit?: number;
+    view?: "categories" | "discussions" | "all";
+    categoryId?: string;
   }): Promise<ApiResponse<{ forums: Forum[]; pagination: any }>> {
     try {
+      if (
+        params?.categoryId &&
+        !this.isValidObjectId(params.categoryId)
+      ) {
+        return {
+          success: false,
+          error: "Invalid category ID",
+          code: "VALIDATION_ERROR",
+        };
+      }
+
       // Try to get auth headers, but don't fail if not available (public endpoint)
       let headers: HeadersInit;
       try {
@@ -842,6 +873,8 @@ class CommunityAPIService {
       const queryParams = new URLSearchParams();
       if (params?.page) queryParams.append("page", params.page.toString());
       if (params?.limit) queryParams.append("limit", params.limit.toString());
+      if (params?.view) queryParams.append("view", params.view);
+      if (params?.categoryId) queryParams.append("categoryId", params.categoryId);
 
       const response = await fetch(
         `${this.baseURL}/api/community/forum?${queryParams.toString()}`,
