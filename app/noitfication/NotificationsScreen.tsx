@@ -122,69 +122,78 @@ export default function NotificationsScreen() {
     <TouchableOpacity
       key={notification._id}
       onPress={() => handleNotificationPress(notification)}
-      className={`bg-white rounded-[10px] shadow-sm p-3 h-[215px] mb-4 ${
+      className={`bg-white rounded-[12px] shadow-sm p-4 mb-4 ${
         !notification.isRead ? "border-l-4 border-[#256E63]" : ""
       }`}
     >
-      <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-[#475467] mb-1 font-medium">
-          {getNotificationIcon(notification.type)} {notification.title}
-        </Text>
-        {!notification.isRead && (
-          <View className="w-2 h-2 bg-[#256E63] rounded-full" />
-        )}
-      </View>
-
-      <View className="flex-row items-center mb-2">
-        <SafeImage
-          uri={notification.metadata?.actorAvatar}
-          className="w-6 h-6 rounded-full mr-2"
-          fallbackText={
-            notification.metadata?.actorName?.[0]?.toUpperCase() || "U"
-          }
-          showFallback={true}
-        />
-        <Text className="font-rubik-semibold text-[#667085] text-[12px]">
-          {notification.metadata?.actorName || "Someone"}
-        </Text>
-        <View className="flex-row items-center ml-3">
-          <Text className="text-[#FFD9B3] text-[18px] text-xs font-rubik">
-            •
-          </Text>
-          <Text className="text-xs text-[#667085] font-rubik ml-1">
-            {formatTimeAgo(notification.createdAt)}
-          </Text>
-        </View>
-      </View>
-
-      <Text className="mb-2 ml-8 text-[#1D2939] font-rubik">
-        {notification.message}
-      </Text>
-
-      <TouchableOpacity>
-        <Text className="text-[#256E63] font-bold text-xs ml-8">REPLY</Text>
-      </TouchableOpacity>
-
-      {notification.metadata?.thumbnailUrl && (
-        <View className="mt-3 flex-row items-start space-x-3 bg-[#F3F3F4] rounded-md p-3">
-          <Image
-            source={{ uri: notification.metadata.thumbnailUrl }}
-            className="w-14 h-14 rounded-md"
+      <View className="flex-row items-start">
+        {/* Circle Avatar */}
+        <View className="relative mr-3">
+          <SafeImage
+            uri={notification.metadata?.actorAvatar}
+            className="w-14 h-14 rounded-full"
+            fallbackText={
+              notification.metadata?.actorName?.[0]?.toUpperCase() || "U"
+            }
+            showFallback={true}
           />
-          <View className="flex-1 ml-3">
-            <Text className="font-rubik-semibold text-[#1D2939]">
-              {notification.metadata.contentTitle || "Content"}
+          {!notification.isRead && (
+            <View className="absolute -top-1 -right-1 w-4 h-4 bg-[#256E63] rounded-full border-2 border-white" />
+          )}
+        </View>
+
+        {/* Content */}
+        <View className="flex-1">
+          {/* Name and Time Row */}
+          <View className="flex-row items-center justify-between mb-1">
+            <Text className="font-rubik-semibold text-[#1D2939] text-[15px]">
+              {notification.metadata?.actorName || "Someone"}
             </Text>
-            <Text
-              className="text-[#667085] font-rubik text-sm"
-              numberOfLines={2}
-              ellipsizeMode="tail"
-            >
-              {notification.metadata.contentType || "media"}
+            <Text className="text-[#98A2B3] font-rubik text-[12px]">
+              {formatTimeAgo(notification.createdAt)}
             </Text>
           </View>
+
+          {/* What they did */}
+          <Text className="text-[#475467] font-rubik text-[14px] leading-5 mb-2">
+            {notification.message || notification.title}
+          </Text>
+
+          {/* Content Preview if available */}
+          {notification.metadata?.thumbnailUrl && (
+            <View className="mt-2 flex-row items-center bg-[#F9FAFB] rounded-lg p-2 border border-[#E4E7EC]">
+              <Image
+                source={{ uri: notification.metadata.thumbnailUrl }}
+                className="w-12 h-12 rounded-md"
+                resizeMode="cover"
+              />
+              <View className="flex-1 ml-2">
+                <Text 
+                  className="font-rubik-semibold text-[#1D2939] text-[13px]"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {notification.metadata.contentTitle || "Content"}
+                </Text>
+                <Text
+                  className="text-[#667085] font-rubik text-[11px] mt-0.5"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {notification.metadata.contentType || "media"}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Action Button */}
+          <TouchableOpacity className="mt-2 self-start">
+            <Text className="text-[#256E63] font-rubik-bold text-[12px]">
+              REPLY
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
     </TouchableOpacity>
   );
 
