@@ -128,17 +128,49 @@ export default function NotificationsScreen() {
     >
       <View className="flex-row items-start">
         {/* Circle Avatar */}
-        <View className="relative mr-3">
+        <View 
+          className="mr-3" 
+          style={{ 
+            width: 40, 
+            height: 40,
+            overflow: 'hidden',
+            borderRadius: 20,
+          }}
+        >
           <SafeImage
             uri={notification.metadata?.actorAvatar}
-            className="w-14 h-14 rounded-full"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+            }}
+            fallbackStyle={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#E4E7EC',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
             fallbackText={
               notification.metadata?.actorName?.[0]?.toUpperCase() || "U"
             }
             showFallback={true}
           />
           {!notification.isRead && (
-            <View className="absolute -top-1 -right-1 w-4 h-4 bg-[#256E63] rounded-full border-2 border-white" />
+            <View 
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 14,
+                height: 14,
+                backgroundColor: '#256E63',
+                borderRadius: 7,
+                borderWidth: 2,
+                borderColor: '#FFFFFF',
+              }}
+            />
           )}
         </View>
 
