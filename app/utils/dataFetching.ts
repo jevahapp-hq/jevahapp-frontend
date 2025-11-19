@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 import { PerformanceMonitor, PerformanceOptimizer } from "./performance";
 
 // API Configuration
-const API_BASE_URL = "https://jevahapp-backend.onrender.com/api";
+const API_BASE_URL = "https://jevahapp-backend-rped.onrender.com/api";
 
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes

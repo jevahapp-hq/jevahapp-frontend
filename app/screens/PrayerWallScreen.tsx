@@ -90,6 +90,26 @@ const buildPrayerCardTheme = (rawColor?: string): PrayerCardTheme => {
   };
 };
 
+// Helper function to darken a hex color (from PostAPrayer.tsx)
+const darkenColor = (hex: string, percent: number = 30) => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = (num >> 16) - amt;
+  const G = ((num >> 8) & 0x00ff) - amt;
+  const B = (num & 0x0000ff) - amt;
+  return (
+    "#" +
+    (
+      0x1000000 +
+      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 1 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)
+  );
+};
+
 export default function PrayerWallScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -166,6 +186,11 @@ export default function PrayerWallScreen() {
       position: "relative" as const,
       borderWidth: theme.isLight ? 1 : 0,
       borderColor: theme.borderColor,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
     };
 
     switch (shape) {
@@ -311,10 +336,12 @@ export default function PrayerWallScreen() {
   const renderPrayerCard = (prayer: PrayerRequestType, index: number) => {
     const cardTheme = buildPrayerCardTheme(prayer.color);
 
+    // Wrap the card in a container that matches the shape used when creating the prayer
+    // This matches the previewTouchable style from PostAPrayer
     return (
-      <View key={prayer._id}>
+      <View key={prayer._id} style={styles.cardWrapper}>
         <TouchableOpacity
-          style={getCardStyle(prayer.shape, cardTheme)}
+          style={[getCardStyle(prayer.shape, cardTheme), styles.prayerCardTouchable]}
           activeOpacity={0.8}
           onPress={() => handlePrayerCardPress(prayer)}
         >
@@ -323,38 +350,40 @@ export default function PrayerWallScreen() {
           ) : (
             <>
               {prayer.shape === "square" && (
-                <View style={styles.diagonalCut}>
+                <View style={[styles.diagonalCut, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.triangle} />
                 </View>
               )}
               {prayer.shape === "square2" && (
-                <View style={styles.diagonalCut2}>
+                <View style={[styles.diagonalCut2, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.diagonalMask2} />
                   <View style={styles.triangle2} />
                 </View>
               )}
               {prayer.shape === "square3" && (
-                <View style={styles.diagonalCut3}>
+                <View style={[styles.diagonalCut3, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.diagonalMask3} />
                   <View style={styles.triangle3} />
                 </View>
               )}
               {prayer.shape === "square4" && (
-                <View style={styles.diagonalCut4}>
+                <View style={[styles.diagonalCut4, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.triangle4} />
                 </View>
               )}
-              <Text style={[styles.prayerName, { color: cardTheme.textColor }]}>
-                {getAuthorName(prayer)}
-              </Text>
-              <Text
-                style={[styles.prayerTime, { color: cardTheme.subtleTextColor }]}
-              >
-                {formatTimestamp(prayer.createdAt)}
-              </Text>
-              <Text style={[styles.prayerText, { color: cardTheme.textColor }]}>
-                {prayer.prayerText}
-              </Text>
+              <View style={styles.textContainer}>
+                <Text style={[styles.prayerName, { color: cardTheme.textColor }]}>
+                  {getAuthorName(prayer)}
+                </Text>
+                <Text
+                  style={[styles.prayerTime, { color: cardTheme.subtleTextColor }]}
+                >
+                  {formatTimestamp(prayer.createdAt)}
+                </Text>
+                <Text style={[styles.prayerText, { color: cardTheme.textColor }]}>
+                  {prayer.prayerText}
+                </Text>
+              </View>
             </>
           )}
         </TouchableOpacity>
@@ -488,7 +517,9 @@ export default function PrayerWallScreen() {
             renderItem={({ item, index }) => {
               return (
                 <View style={styles.cardContainer}>
-                  {renderPrayerCard(item, index)}
+                  <View style={styles.cardShapeWrapper}>
+                    {renderPrayerCard(item, index)}
+                  </View>
                 </View>
               );
             }}
@@ -584,15 +615,37 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     marginBottom: 16,
+    flex: 1,
+  },
+  cardShapeWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  cardWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  prayerCardTouchable: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   sixthCardOffset: {
     marginLeft: 20,
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "flex-start",
+    padding: 16,
   },
   prayerName: {
     fontSize: 10,
     color: "white",
     marginBottom: 4,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "Rubik-SemiBold",
+    fontWeight: "600",
     textAlign: "left",
   },
   prayerTime: {
@@ -606,7 +659,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "white",
     lineHeight: 16,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "Rubik-SemiBold",
+    fontWeight: "600",
     textAlign: "left",
   },
   diagonalCut: {
@@ -615,7 +669,6 @@ const styles = StyleSheet.create({
     right: 0,
     width: 56,
     height: 56,
-    backgroundColor: "#8B5DDD",
     zIndex: 1,
   },
   triangle: {
@@ -636,7 +689,6 @@ const styles = StyleSheet.create({
     right: 0,
     width: 91,
     height: 91,
-    backgroundColor: "#0D608E",
     borderBottomLeftRadius: 91,
     zIndex: 1,
   },
@@ -659,7 +711,6 @@ const styles = StyleSheet.create({
     right: 0,
     width: 91,
     height: 91,
-    backgroundColor: "#4F4DB2",
     borderBottomLeftRadius: 91,
     zIndex: 1,
   },
@@ -695,7 +746,6 @@ const styles = StyleSheet.create({
     right: 0,
     width: 56,
     height: 56,
-    backgroundColor: "#B2A31A",
     zIndex: 1,
   },
   triangle4: {

@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: "https://jevahapp-backend.onrender.com",
+  BASE_URL: "https://jevahapp-backend-rped.onrender.com",
   ENDPOINTS: {
     ALL_CONTENT: "/api/media/public/all-content",
     ALL_CONTENT_AUTH: "/api/media/all-content",
@@ -154,7 +154,7 @@ export const PAGINATION_CONFIG = {
 
 // Socket Configuration
 export const SOCKET_CONFIG = {
-  SERVER_URL: "https://jevahapp-backend.onrender.com",
+  SERVER_URL: "https://jevahapp-backend-rped.onrender.com",
   RECONNECT_ATTEMPTS: 5,
   RECONNECT_DELAY: 1000,
   HEARTBEAT_INTERVAL: 30000,

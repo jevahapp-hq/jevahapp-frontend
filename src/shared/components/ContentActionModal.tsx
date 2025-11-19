@@ -63,14 +63,23 @@ export default function ContentActionModal({
   const [internalVisible, setInternalVisible] = useState(isVisible);
   
   // Use ownership hook if mediaItem is provided, otherwise use showDelete prop
+  // Always check ownership when modal opens if mediaItem is provided (as fallback/verification)
   const { isOwner: isOwnerFromHook } = useMediaOwnership({
     mediaItem: mediaItem || (uploadedBy ? { uploadedBy } : undefined),
     isModalVisible: internalVisible && onDelete !== undefined,
-    checkOnModalOpen: showDelete === undefined, // Only check if showDelete not provided
+    checkOnModalOpen: !!mediaItem, // Always check if mediaItem is provided
   });
   
   // Determine final isOwner value
-  const isOwner = showDelete !== undefined ? showDelete : isOwnerFromHook;
+  // Priority: 
+  // 1. If showDelete is explicitly true, show delete
+  // 2. If showDelete is explicitly false, don't show delete  
+  // 3. Otherwise, use hook result (which checks ownership)
+  const isOwner = showDelete === true 
+    ? true 
+    : showDelete === false 
+    ? false 
+    : isOwnerFromHook;
 
   useEffect(() => {
     if (isVisible) {

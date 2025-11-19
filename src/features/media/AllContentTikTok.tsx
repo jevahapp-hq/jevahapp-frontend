@@ -332,7 +332,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         }
 
         const manager = new SocketManager({
-          serverUrl: "https://jevahapp-backend.onrender.com",
+          serverUrl: "https://jevahapp-backend-rped.onrender.com",
           authToken,
         });
 
@@ -1143,7 +1143,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                 visibilityRatio * 100
               ).toFixed(1)}%`
             );
-            pauseAllMedia();
+            // Pause only this specific video, not all videos
+            pauseMedia(key);
 
             // Remove from hovered videos if it was hover-based
             if (hoveredVideos.has(key)) {
@@ -1234,7 +1235,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               visibilityRatio * 100
             ).toFixed(1)}%`
           );
-          pauseAllMedia();
+          // Pause only this specific video, not all videos
+          pauseMedia(key);
 
           // Remove from hovered videos
           if (hoveredVideos.has(key)) {

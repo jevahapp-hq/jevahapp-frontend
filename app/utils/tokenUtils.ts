@@ -156,7 +156,7 @@ export class TokenUtils {
    */
   static async validateTokenWithBackend(
     token: string,
-    baseUrl: string = "https://jevahapp-backend.onrender.com"
+    baseUrl: string = "https://jevahapp-backend-rped.onrender.com"
   ): Promise<boolean> {
     try {
       if (!this.isValidJWTFormat(token)) {

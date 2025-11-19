@@ -53,7 +53,7 @@ export const testAPIConnectivity = async () => {
   console.log('🌐 Testing API Connectivity...');
   
   try {
-    const API_BASE_URL = "https://jevahapp-backend.onrender.com";
+    const API_BASE_URL = "https://jevahapp-backend-rped.onrender.com";
     
     // Test basic connectivity
     const response = await fetch(`${API_BASE_URL}/api/auth/login`, {

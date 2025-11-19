@@ -5,7 +5,7 @@
 echo "🌐 Environment Switcher"
 echo "======================"
 echo "1. Local Development (localhost:4000)"
-echo "2. Production (jevahapp-backend.onrender.com)"
+echo "2. Production (jevahapp-backend-rped.onrender.com)"
 echo "3. Check current environment"
 echo ""
 
@@ -20,8 +20,8 @@ case $choice in
         ;;
     2)
         echo "🔄 Switching to PRODUCTION..."
-        echo "EXPO_PUBLIC_API_URL=https://jevahapp-backend.onrender.com" > .env.local
-        echo "✅ Set to production: https://jevahapp-backend.onrender.com"
+        echo "EXPO_PUBLIC_API_URL=https://jevahapp-backend-rped.onrender.com" > .env.local
+        echo "✅ Set to production: https://jevahapp-backend-rped.onrender.com"
         ;;
     3)
         echo "📋 Current environment:"

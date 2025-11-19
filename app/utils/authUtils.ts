@@ -5,7 +5,7 @@ import { Alert, Platform } from "react-native";
 
 const API_BASE_URL =
   Constants.expoConfig?.extra?.API_URL ||
-  (__DEV__ ? "http://localhost:8081" : "https://jevahapp-backend.onrender.com");
+  (__DEV__ ? "http://localhost:8081" : "https://jevahapp-backend-rped.onrender.com");
 
 export interface UserInfo {
   firstName: string;

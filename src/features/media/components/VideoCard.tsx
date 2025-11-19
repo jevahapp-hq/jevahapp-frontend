@@ -853,6 +853,30 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           </View>
 
           {/* Video/Audio Progress Bar */}
+          {/* 
+            To use the new modular TikTok-style progress bar with debug mode:
+            import { TikTokProgressBar } from '@/shared/components/VideoProgressBar';
+            Replace VideoProgressBar with TikTokProgressBar and use config prop:
+            
+            <TikTokProgressBar
+              progress={isAudioSermon ? audioState.progress : progress}
+              currentMs={...}
+              durationMs={...}
+              isMuted={isAudioSermon ? audioState.isMuted : isMuted}
+              onToggleMute={handleToggleMute}
+              onSeekToPercent={seekToPercent}
+              debug={true}  // Enable debug logging
+              config={{
+                trackHeight: 4,
+                trackHeightDragging: 8,
+                knobSize: 20,
+                knobSizeDragging: 24,
+                seekSyncTicks: 4,
+                seekMsTolerance: 200,
+                minProgressEpsilon: 0.005,
+              }}
+            />
+          */}
           <VideoProgressBar
             progress={isAudioSermon ? audioState.progress : progress}
             isMuted={isAudioSermon ? audioState.isMuted : isMuted}

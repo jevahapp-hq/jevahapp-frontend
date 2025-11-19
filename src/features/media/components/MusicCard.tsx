@@ -422,6 +422,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         contentTitle={audio.title}
         mediaId={audio._id}
         uploadedBy={audio.uploadedBy || audio.author?._id || audio.authorInfo?._id}
+        mediaItem={audio}
         onDelete={handleDeletePress}
         showDelete={isOwner}
       />

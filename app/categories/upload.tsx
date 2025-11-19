@@ -42,7 +42,7 @@ import {
 } from "../utils/userValidation";
 
 // Use the correct API base URL for uploads
-const API_BASE_URL = "https://jevahapp-backend.onrender.com";
+const API_BASE_URL = "https://jevahapp-backend-rped.onrender.com";
 
 const categories = [
   "Worship",
@@ -974,3 +974,4 @@ export default function UploadScreen() {
     </>
   );
 }
+

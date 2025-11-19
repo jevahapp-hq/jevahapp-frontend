@@ -766,12 +766,42 @@ export default function VideoComponent() {
       const { contentOffset } = event.nativeEvent;
       lastScrollYRef.current = contentOffset.y;
 
+      // Auto-pause videos that are scrolled out of view (TikTok/Instagram behavior)
+      const scrollY = contentOffset.y;
+      const screenHeight = Dimensions.get("window").height;
+      const viewportTop = scrollY;
+      const viewportBottom = scrollY + screenHeight;
+
+      Object.entries(videoLayoutsRef.current).forEach(([key, layout]) => {
+        const videoTop = layout.y;
+        const videoBottom = layout.y + layout.height;
+
+        // Calculate visibility ratio
+        const intersectionTop = Math.max(viewportTop, videoTop);
+        const intersectionBottom = Math.min(viewportBottom, videoBottom);
+        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const visibilityRatio =
+          layout.height > 0 ? visibleHeight / layout.height : 0;
+
+        // Auto-pause if video is less than 20% visible or completely out of view
+        const shouldPause =
+          visibilityRatio < 0.2 ||
+          videoBottom < viewportTop ||
+          videoTop > viewportBottom;
+
+        const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
+        if (shouldPause && isVideoPlaying) {
+          console.log(
+            `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
+              visibilityRatio * 100
+            ).toFixed(1)}%`
+          );
+          globalVideoStore.pauseVideo(key);
+        }
+      });
+
       // Footer-based autoplay behavior during scrolling
       if (isAutoPlayEnabled) {
-        const scrollY = contentOffset.y;
-        const screenHeight = Dimensions.get("window").height;
-        const viewportTop = scrollY;
-        const viewportBottom = scrollY + screenHeight;
 
         // Determine scroll direction
         const currentScrollY = scrollY;
