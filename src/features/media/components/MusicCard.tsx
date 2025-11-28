@@ -19,6 +19,7 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import { AudioCardSkeleton } from "../../../shared/components/Skeleton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
@@ -73,6 +74,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const [showOverlay, setShowOverlay] = useState(true);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [attemptedPlay, setAttemptedPlay] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   
@@ -425,6 +427,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         mediaItem={audio}
         onDelete={handleDeletePress}
         showDelete={isOwner}
+        onReport={() => setShowReportModal(true)}
       />
       
       {/* Delete Confirmation Modal */}
@@ -434,6 +437,14 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         mediaTitle={audio.title || "this media"}
         onClose={() => setShowDeleteModal(false)}
         onSuccess={handleDeleteConfirm}
+      />
+
+      {/* Report Modal */}
+      <ReportMediaModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        mediaId={audio._id || ""}
+        mediaTitle={audio.title}
       />
     </View>
   );

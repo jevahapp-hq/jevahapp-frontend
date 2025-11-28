@@ -27,6 +27,7 @@ export default {
           "This app needs access to your photo and video library.",
         NSCameraUsageDescription:
           "This app needs access to your camera for media upload.",
+        UIBackgroundModes: ["audio"], // Enable background audio playback
       },
     },
     android: {

@@ -4,12 +4,14 @@ import {
   Dimensions,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -33,7 +35,6 @@ import {
   isSmallScreen,
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
-import LoadingOverlay from "../components/LoadingOverlay";
 import { useMediaStore } from "../store/useUploadStore";
 
 import {
@@ -72,6 +73,26 @@ export default function UploadScreen() {
   const [selectedType, setSelectedType] = useState("");
   const [isSermonContent, setIsSermonContent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadState, setUploadState] = useState<{
+    status: "idle" | "verifying" | "uploading" | "success" | "error";
+    progress: number;
+    message: string;
+  }>({
+    status: "idle",
+    progress: 0,
+    message: "",
+  });
+  const [moderationError, setModerationError] = useState<{
+    message: string;
+    reason?: string;
+    flags?: string[];
+    status?: string;
+  } | null>(null);
+  const [eligibilityStatus, setEligibilityStatus] = useState<{
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
     getOrientation()
   );
@@ -115,6 +136,119 @@ export default function UploadScreen() {
     return "application/octet-stream";
   };
 
+  // Validate media eligibility before upload
+  const validateMediaEligibility = (): {
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  } => {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Check required fields
+    if (!file) {
+      errors.push("Please select a media file");
+    }
+
+    if (!title || title.trim().length === 0) {
+      errors.push("Title is required");
+    } else if (title.length > 100) {
+      errors.push("Title must be 100 characters or less");
+    }
+
+    if (!selectedCategory) {
+      errors.push("Please select a category");
+    }
+
+    if (!selectedType) {
+      errors.push("Please select a content type");
+    }
+
+    // Validate file type
+    if (file) {
+      const fileExtension = file.name?.split(".").pop()?.toLowerCase() || "";
+      const mimeType = file.mimeType || "";
+
+      // Check file type based on selected content type
+      if (selectedType === "music" || selectedType === "sermon") {
+        const validAudioFormats = ["mp3", "wav", "aac", "m4a", "ogg", "flac"];
+        const validAudioMimes = [
+          "audio/mpeg",
+          "audio/wav",
+          "audio/aac",
+          "audio/mp4",
+          "audio/ogg",
+          "audio/flac",
+        ];
+        if (
+          !validAudioFormats.includes(fileExtension) &&
+          !validAudioMimes.some((mime) => mimeType.includes(mime))
+        ) {
+          errors.push(
+            "Invalid audio format. Supported: MP3, WAV, AAC, M4A, OGG, FLAC"
+          );
+        }
+      } else if (selectedType === "videos") {
+        const validVideoFormats = ["mp4"];
+        const validVideoMimes = ["video/mp4"];
+        if (
+          !validVideoFormats.includes(fileExtension) &&
+          !validVideoMimes.some((mime) => mimeType.includes(mime))
+        ) {
+          errors.push("Invalid video format. Supported: MP4");
+        }
+      } else if (selectedType === "books" || selectedType === "ebook") {
+        const validBookFormats = ["pdf", "epub"];
+        const validBookMimes = [
+          "application/pdf",
+          "application/epub+zip",
+        ];
+        if (
+          !validBookFormats.includes(fileExtension) &&
+          !validBookMimes.some((mime) => mimeType.includes(mime))
+        ) {
+          errors.push("Invalid book format. Supported: PDF, EPUB");
+        }
+      }
+    }
+
+    // Validate file size
+    if (file && file.size) {
+      const maxVideoSize = 100 * 1024 * 1024; // 100MB
+      const maxAudioSize = 50 * 1024 * 1024; // 50MB
+      const maxBookSize = 50 * 1024 * 1024; // 50MB
+
+      if (selectedType === "videos" && file.size > maxVideoSize) {
+        errors.push("Video file size exceeds 100MB limit");
+      } else if (
+        (selectedType === "music" || selectedType === "sermon") &&
+        file.size > maxAudioSize
+      ) {
+        errors.push("Audio file size exceeds 50MB limit");
+      } else if (
+        (selectedType === "books" || selectedType === "ebook") &&
+        file.size > maxBookSize
+      ) {
+        errors.push("Book file size exceeds 50MB limit");
+      }
+    }
+
+    // Warnings
+    if (!thumbnail && (selectedType === "music" || selectedType === "videos")) {
+      warnings.push("Thumbnail recommended for better visibility");
+    }
+
+    if (description && description.length > 500) {
+      warnings.push("Description should be 500 characters or less");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+    };
+  };
+
   const pickMedia = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: [
@@ -155,12 +289,21 @@ export default function UploadScreen() {
       uri: uri?.substring(0, 50) + "...",
     });
 
-    setFile({
+    const selectedFile = {
       uri,
       name,
       mimeType: guessedMime,
       size: fileSize, // Add size property
-    });
+    };
+
+    setFile(selectedFile);
+
+    // Validate eligibility when file is selected
+    if (title && selectedCategory && selectedType) {
+      const tempFile = file || selectedFile;
+      const validation = validateMediaEligibility();
+      setEligibilityStatus(validation);
+    }
   };
 
   const pickThumbnail = async () => {
@@ -179,7 +322,7 @@ export default function UploadScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [16, 9],
+        aspect: [1, 1], // Square crop like Instagram
         quality: 0.8,
       });
 
@@ -246,6 +389,19 @@ export default function UploadScreen() {
   };
 
   const handleUpload = async () => {
+    // Validate eligibility before proceeding
+    const validation = validateMediaEligibility();
+    setEligibilityStatus(validation);
+
+    if (!validation.isValid) {
+      Alert.alert(
+        "Upload Not Eligible",
+        validation.errors.join("\n\n"),
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     if (!file || !title || !selectedCategory || !selectedType) {
       Alert.alert("Missing fields", "Please complete all required fields.");
       return;
@@ -297,6 +453,12 @@ export default function UploadScreen() {
   const proceedWithUpload = async () => {
     try {
       setLoading(true);
+      setModerationError(null);
+      setUploadState({
+        status: "verifying",
+        progress: 0,
+        message: "Analyzing content...",
+      });
 
       // Check authentication status first
       const authStatus = await checkAuthenticationStatus();
@@ -457,6 +619,13 @@ export default function UploadScreen() {
       console.log("📤 Starting upload request...");
       const uploadStartTime = Date.now();
 
+      // Update state to show verification in progress
+      setUploadState({
+        status: "verifying",
+        progress: 30,
+        message: "Analyzing content... This may take 10-30 seconds.",
+      });
+
       const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
         method: "POST",
         headers: {
@@ -486,15 +655,64 @@ export default function UploadScreen() {
           rawText = await res.text();
         } catch {}
       }
-      setLoading(false);
 
+      // Handle different response statuses
       if (!res.ok) {
+        setLoading(false);
+        setUploadState({
+          status: "error",
+          progress: 0,
+          message: "",
+        });
+
         console.error("❌ Upload failed:", {
           status: res.status,
           contentType,
           result,
           rawTextPreview: rawText ? rawText.slice(0, 300) : null,
         });
+
+        // Handle 403 Forbidden - Content Rejected or Requires Review
+        if (res.status === 403 && result) {
+          const moderationResult = result.moderationResult || {};
+          const errorMessage = result.message || "Content does not meet our community guidelines.";
+
+          setModerationError({
+            message: errorMessage,
+            reason: moderationResult.reason,
+            flags: moderationResult.flags || [],
+            status: moderationResult.status,
+          });
+
+          // Show detailed rejection message
+          let alertMessage = errorMessage;
+          if (moderationResult.reason) {
+            alertMessage += `\n\nReason: ${moderationResult.reason}`;
+          }
+          if (moderationResult.flags && moderationResult.flags.length > 0) {
+            alertMessage += `\n\nIssues found:\n${moderationResult.flags.map((flag: string) => `• ${flag.replace(/_/g, " ")}`).join("\n")}`;
+          }
+
+          Alert.alert(
+            moderationResult.status === "under_review"
+              ? "Review Required"
+              : "Content Rejected",
+            alertMessage,
+            [
+              { text: "OK", onPress: () => setModerationError(null) },
+              {
+                text: "Retry",
+                onPress: () => {
+                  setModerationError(null);
+                  setUploadState({ status: "idle", progress: 0, message: "" });
+                },
+              },
+            ]
+          );
+          return;
+        }
+
+        // Handle other errors
         const message =
           (result && (result.message || result.error)) ||
           (rawText
@@ -503,6 +721,13 @@ export default function UploadScreen() {
         Alert.alert("Upload failed", message || "Please try again.");
         return;
       }
+
+      // Update state to show upload success
+      setUploadState({
+        status: "success",
+        progress: 100,
+        message: "Content uploaded successfully!",
+      });
 
       if (!result) {
         console.error("❌ Upload response not JSON:", {
@@ -556,25 +781,49 @@ export default function UploadScreen() {
 
       console.log(`🎬 Successfully uploaded and persisted: ${uploaded.title}`);
 
-      Alert.alert("Upload successful");
+      setLoading(false);
+      setUploadState({
+        status: "success",
+        progress: 100,
+        message: "Content has been verified and approved!",
+      });
 
-      // Reset
-      setTitle("");
-      setDescription("");
-      setSelectedCategory("");
-      setSelectedType("");
-      setIsSermonContent(false);
-      setFile(null);
-      setThumbnail(null);
+      Alert.alert(
+        "Upload Successful",
+        "Your content has been verified and approved. It is now live!",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              // Reset
+              setTitle("");
+              setDescription("");
+              setSelectedCategory("");
+              setSelectedType("");
+              setIsSermonContent(false);
+              setFile(null);
+              setThumbnail(null);
+              setModerationError(null);
+              setEligibilityStatus(null);
+              setUploadState({ status: "idle", progress: 0, message: "" });
 
-      const destination =
-        selectedType.toUpperCase() === "BOOKS"
-          ? "E-BOOKS"
-          : selectedType.toUpperCase();
+              const destination =
+                selectedType.toUpperCase() === "BOOKS"
+                  ? "E-BOOKS"
+                  : selectedType.toUpperCase();
 
-      router.push(`/categories/HomeScreen?default=${destination}`);
+              router.push(`/categories/HomeScreen?default=${destination}`);
+            },
+          },
+        ]
+      );
     } catch (error: any) {
       setLoading(false);
+      setUploadState({
+        status: "error",
+        progress: 0,
+        message: "",
+      });
       console.error("❌ Upload error:", error?.message ?? error);
       console.error("❌ Upload error details:", {
         name: error?.name,
@@ -627,6 +876,11 @@ export default function UploadScreen() {
           } else {
             setIsSermonContent(false);
           }
+          // Re-validate eligibility when selection changes
+          setTimeout(() => {
+            const validation = validateMediaEligibility();
+            setEligibilityStatus(validation);
+          }, 100);
         }}
         className={`rounded-full mr-2 mb-2 border ${
           isSelected ? "bg-black border-black" : "bg-white border-gray-300"
@@ -822,9 +1076,121 @@ export default function UploadScreen() {
     );
   };
 
+  // Get loading message based on upload state
+  const getLoadingMessage = () => {
+    if (uploadState.status === "verifying") {
+      return uploadState.message || "Analyzing content...";
+    }
+    if (uploadState.status === "uploading") {
+      return "Uploading approved content...";
+    }
+    return "Processing...";
+  };
+
   return (
     <>
-      {loading && <LoadingOverlay />}
+      {/* Upload Progress Modal */}
+      <Modal
+        visible={loading}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          // Prevent closing during upload
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 20,
+              padding: getResponsiveSpacing(24, 32, 40),
+              alignItems: "center",
+              minWidth: 280,
+              maxWidth: "85%",
+              shadowColor: "#000",
+              shadowOffset: {
+                width: 0,
+                height: 2,
+              },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000" />
+            <Text
+              style={{
+                marginTop: getResponsiveSpacing(16, 20, 24),
+                fontSize: getResponsiveFontSize(16, 18, 20),
+                fontWeight: "600",
+                textAlign: "center",
+                color: "#333",
+              }}
+            >
+              {getLoadingMessage()}
+            </Text>
+            {uploadState.progress > 0 && (
+              <View
+                style={{
+                  width: "100%",
+                  marginTop: getResponsiveSpacing(16, 20, 24),
+                }}
+              >
+                <View
+                  style={{
+                    width: "100%",
+                    height: 4,
+                    backgroundColor: "#e0e0e0",
+                    borderRadius: 2,
+                    overflow: "hidden",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: `${uploadState.progress}%`,
+                      height: "100%",
+                      backgroundColor: "#000",
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+                {uploadState.progress < 100 && (
+                  <Text
+                    style={{
+                      marginTop: 8,
+                      fontSize: getResponsiveFontSize(12, 14, 16),
+                      color: "#666",
+                      textAlign: "center",
+                    }}
+                  >
+                    {uploadState.progress}%
+                  </Text>
+                )}
+              </View>
+            )}
+            {uploadState.status === "verifying" && (
+              <Text
+                style={{
+                  marginTop: getResponsiveSpacing(12, 16, 20),
+                  fontSize: getResponsiveFontSize(12, 14, 16),
+                  color: "#666",
+                  textAlign: "center",
+                  fontStyle: "italic",
+                }}
+              >
+                This may take 10-30 seconds
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
       <KeyboardAvoidingView
         {...getKeyboardAdjustment()}
         className="flex-1 bg-white"
@@ -855,7 +1221,16 @@ export default function UploadScreen() {
               <TextInput
                 placeholder="Enter title..."
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(text) => {
+                  setTitle(text);
+                  // Re-validate when title changes
+                  if (file && selectedCategory && selectedType) {
+                    setTimeout(() => {
+                      const validation = validateMediaEligibility();
+                      setEligibilityStatus(validation);
+                    }, 100);
+                  }
+                }}
                 multiline
                 textAlignVertical="top"
                 className="border border-gray-300 rounded-md mb-4 px-3 py-3 bg-white"
@@ -897,7 +1272,7 @@ export default function UploadScreen() {
               <Text className="text-xs text-gray-600 mb-2 font-medium">
                 CONTENT TYPE
               </Text>
-              <View className="flex-row flex-wrap mb-6">
+              <View className="flex-row flex-wrap mb-4">
                 {contentTypes.map((item) =>
                   renderTag(
                     item.label,
@@ -907,7 +1282,230 @@ export default function UploadScreen() {
                   )
                 )}
               </View>
+
+              {/* Eligibility Status Indicator */}
+              {eligibilityStatus && (
+                <View
+                  className="mb-4 p-3 rounded-lg border"
+                  style={{
+                    backgroundColor: eligibilityStatus.isValid
+                      ? "rgba(34, 197, 94, 0.1)"
+                      : "rgba(239, 68, 68, 0.1)",
+                    borderColor: eligibilityStatus.isValid ? "#22c55e" : "#ef4444",
+                  }}
+                >
+                  {eligibilityStatus.isValid ? (
+                    <View className="flex-row items-center">
+                      <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                      <Text
+                        className="ml-2 font-medium"
+                        style={{
+                          fontSize: getResponsiveFontSize(12, 14, 16),
+                          color: "#166534",
+                        }}
+                      >
+                        ✓ Ready to upload - Content will be verified automatically
+                      </Text>
+                    </View>
+                  ) : (
+                    <View>
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="close-circle" size={20} color="#ef4444" />
+                        <Text
+                          className="ml-2 font-semibold"
+                          style={{
+                            fontSize: getResponsiveFontSize(14, 16, 18),
+                            color: "#991b1b",
+                          }}
+                        >
+                          Please fix the following issues:
+                        </Text>
+                      </View>
+                      {eligibilityStatus.errors.map((error, index) => (
+                        <Text
+                          key={index}
+                          className="ml-7 mb-1"
+                          style={{
+                            fontSize: getResponsiveFontSize(12, 14, 16),
+                            color: "#991b1b",
+                          }}
+                        >
+                          • {error}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {eligibilityStatus.warnings.length > 0 && (
+                    <View className="mt-2">
+                      {eligibilityStatus.warnings.map((warning, index) => (
+                        <View key={index} className="flex-row items-center mt-1">
+                          <Ionicons
+                            name="information-circle"
+                            size={16}
+                            color="#f59e0b"
+                          />
+                          <Text
+                            className="ml-2"
+                            style={{
+                              fontSize: getResponsiveFontSize(11, 13, 15),
+                              color: "#92400e",
+                            }}
+                          >
+                            {warning}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Multilingual Support Hint */}
+              {eligibilityStatus?.isValid && (
+                <View
+                  className="mb-4 p-3 rounded-lg"
+                  style={{
+                    backgroundColor: "rgba(59, 130, 246, 0.1)",
+                    borderWidth: 1,
+                    borderColor: "#3b82f6",
+                  }}
+                >
+                  <View className="flex-row items-center">
+                    <Ionicons name="language" size={18} color="#3b82f6" />
+                    <Text
+                      className="ml-2 flex-1"
+                      style={{
+                        fontSize: getResponsiveFontSize(11, 13, 15),
+                        color: "#1e40af",
+                      }}
+                    >
+                      <Text className="font-semibold">Multilingual Support: </Text>
+                      Your content will be automatically detected and verified in any
+                      language (English, Yoruba, Hausa, Igbo, and more).
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
+
+            {/* Moderation Error Display */}
+            {moderationError && (
+              <View
+                className="mt-4 p-4 rounded-lg border"
+                style={{
+                  backgroundColor:
+                    moderationError.status === "under_review"
+                      ? "rgba(255, 193, 7, 0.1)"
+                      : "rgba(220, 53, 69, 0.1)",
+                  borderColor:
+                    moderationError.status === "under_review"
+                      ? "#ffc107"
+                      : "#dc3545",
+                }}
+              >
+                <View className="flex-row items-center mb-2">
+                  <Ionicons
+                    name={
+                      moderationError.status === "under_review"
+                        ? "warning-outline"
+                        : "close-circle-outline"
+                    }
+                    size={24}
+                    color={
+                      moderationError.status === "under_review"
+                        ? "#ffc107"
+                        : "#dc3545"
+                    }
+                  />
+                  <Text
+                    className="ml-2 font-semibold"
+                    style={{
+                      fontSize: getResponsiveFontSize(16, 18, 20),
+                      color:
+                        moderationError.status === "under_review"
+                          ? "#856404"
+                          : "#721c24",
+                    }}
+                  >
+                    {moderationError.status === "under_review"
+                      ? "Review Required"
+                      : "Content Rejected"}
+                  </Text>
+                </View>
+                <Text
+                  className="mb-2"
+                  style={{
+                    fontSize: getResponsiveFontSize(14, 16, 18),
+                    color: "#333",
+                  }}
+                >
+                  {moderationError.message}
+                </Text>
+                {moderationError.reason && (
+                  <View className="mb-2">
+                    <Text
+                      className="font-medium mb-1"
+                      style={{
+                        fontSize: getResponsiveFontSize(12, 14, 16),
+                        color: "#666",
+                      }}
+                    >
+                      Reason:
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: getResponsiveFontSize(12, 14, 16),
+                        color: "#666",
+                      }}
+                    >
+                      {moderationError.reason}
+                    </Text>
+                  </View>
+                )}
+                {moderationError.flags && moderationError.flags.length > 0 && (
+                  <View>
+                    <Text
+                      className="font-medium mb-1"
+                      style={{
+                        fontSize: getResponsiveFontSize(12, 14, 16),
+                        color: "#666",
+                      }}
+                    >
+                      Issues found:
+                    </Text>
+                    {moderationError.flags.map((flag, index) => (
+                      <Text
+                        key={index}
+                        className="ml-2"
+                        style={{
+                          fontSize: getResponsiveFontSize(12, 14, 16),
+                          color: "#666",
+                        }}
+                      >
+                        • {flag.replace(/_/g, " ")}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                <TouchableOpacity
+                  onPress={() => {
+                    setModerationError(null);
+                    setUploadState({ status: "idle", progress: 0, message: "" });
+                  }}
+                  className="mt-3 bg-gray-200 rounded-lg py-2 px-4 items-center"
+                >
+                  <Text
+                    className="font-medium"
+                    style={{
+                      fontSize: getResponsiveFontSize(14, 16, 18),
+                      color: "#333",
+                    }}
+                  >
+                    Dismiss
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Upload Button */}
             <View className="items-center mt-4">
@@ -957,14 +1555,16 @@ export default function UploadScreen() {
                   ),
                   height: getButtonSize().height,
                   minHeight: getTouchTargetSize(), // Ensure minimum touch target
+                  opacity: uploadState.status === "verifying" ? 0.5 : 1,
                 }}
                 activeOpacity={0.8}
+                disabled={uploadState.status === "verifying"}
               >
                 <Text
                   className="text-white font-semibold"
                   style={{ fontSize: getResponsiveFontSize(16, 18, 20) }}
                 >
-                  Post
+                  {uploadState.status === "verifying" ? "Verifying..." : "Post"}
                 </Text>
               </TouchableOpacity>
             </View>

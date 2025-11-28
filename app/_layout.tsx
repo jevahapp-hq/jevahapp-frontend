@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
+import FloatingAudioPlayer from "./components/FloatingAudioPlayer";
 import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -275,6 +276,7 @@ export default function RootLayout() {
                 <CommentModalProvider>
                   <Slot />
                   <CommentModalV2 />
+                  <FloatingAudioPlayer />
                   <ServerUnavailableModalWrapper />
                 </CommentModalProvider>
               </NotificationProvider>

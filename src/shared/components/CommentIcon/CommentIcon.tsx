@@ -4,10 +4,10 @@ import {
     Dimensions,
     Platform,
     Text,
-    TouchableOpacity,
     ViewStyle,
 } from "react-native";
 import { UI_CONFIG } from "../../constants";
+import { AnimatedButton } from "../AnimatedButton";
 
 interface Comment {
   id: string;
@@ -116,9 +116,8 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
   };
 
   return (
-    <TouchableOpacity
+    <AnimatedButton
       onPress={handlePress}
-      activeOpacity={0.7}
       hitSlop={{ top: 24, bottom: 24, left: 24, right: 24 }}
       style={[containerStyle, style]}
       accessibilityRole="button"
@@ -130,7 +129,7 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
           {count !== undefined ? count : comments.length}
         </Text>
       )}
-    </TouchableOpacity>
+    </AnimatedButton>
   );
 };
 

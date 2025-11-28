@@ -11,6 +11,7 @@ import {
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
@@ -34,6 +35,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
 }) => {
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  const [showReportModal, setShowReportModal] = useState(false);
   
   // Delete media functionality - using reusable hook
   const {
@@ -308,6 +310,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         uploadedBy={ebook.uploadedBy || ebook.author?._id || ebook.authorInfo?._id}
         onDelete={handleDeletePress}
         showDelete={isOwner}
+        onReport={() => setShowReportModal(true)}
       />
       
       {/* Delete Confirmation Modal */}
@@ -317,6 +320,14 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         mediaTitle={ebook.title || "this media"}
         onClose={() => setShowDeleteModal(false)}
         onSuccess={handleDeleteConfirm}
+      />
+
+      {/* Report Modal */}
+      <ReportMediaModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        mediaId={ebook._id || ""}
+        mediaTitle={ebook.title}
       />
     </View>
   );

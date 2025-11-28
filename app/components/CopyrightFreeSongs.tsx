@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
 interface CopyrightFreeSongsProps {
   onSongSelect?: (song: any) => void;
@@ -24,7 +26,7 @@ export default function CopyrightFreeSongs({
     {}
   );
   const [audioMuted, setAudioMuted] = useState<Record<string, boolean>>({});
-  const [showFullPlayer, setShowFullPlayer] = useState(false);
+  const [showSongModal, setShowSongModal] = useState(false);
   const [selectedSong, setSelectedSong] = useState<any>(null);
   const audioRefs = useRef<Record<string, Audio.Sound>>({});
 
@@ -304,23 +306,44 @@ export default function CopyrightFreeSongs({
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   }, []);
 
+  const { setTrack, currentTrack, isPlaying: globalIsPlaying, togglePlayPause } = useGlobalAudioPlayerStore();
+
   const handlePlayIconPress = useCallback(
-    (song: any) => {
+    async (song: any) => {
       console.log("🎵 Play button pressed for:", song.title);
-      console.log("🎵 Audio URL:", song.audioUrl);
-      toggleAudioPlay(song.id, song.audioUrl);
+      
+      // Use global audio player
+      if (currentTrack?.id === song.id && globalIsPlaying) {
+        // If same song is playing, just pause
+        await togglePlayPause();
+      } else {
+        // Set new track in global player
+        await setTrack({
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          audioUrl: song.audioUrl,
+          thumbnailUrl: song.thumbnailUrl,
+          duration: song.duration,
+          category: song.category,
+          description: song.description,
+        });
+        // Play the track after it's loaded
+        const { play } = useGlobalAudioPlayerStore.getState();
+        await play();
+      }
     },
-    [toggleAudioPlay]
+    [currentTrack, globalIsPlaying, setTrack, togglePlayPause]
   );
 
   const handleCardPress = useCallback((song: any) => {
     setSelectedSong(song);
-    setShowFullPlayer(true);
+    setShowSongModal(true);
   }, []);
 
   const renderSongCard = useCallback(
     (item: any) => {
-      const isPlaying = playingSong === item.id;
+      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
 
       return (
         <View className="mr-4 w-[154px] flex-col items-center">
@@ -399,134 +422,7 @@ export default function CopyrightFreeSongs({
     [playingSong, handleCardPress, handlePlayIconPress]
   );
 
-  const renderFullPlayer = useCallback(() => {
-    if (!selectedSong) return null;
-
-    const isPlaying = playingSong === selectedSong.id;
-    const progress = audioProgress[selectedSong.id] || 0;
-    const duration =
-      audioDuration[selectedSong.id] || selectedSong.duration * 1000;
-    const position = audioPosition[selectedSong.id] || 0;
-    const isMuted = audioMuted[selectedSong.id] || false;
-
-    return (
-      <View className="absolute inset-0 bg-black/50 z-50 justify-center items-center">
-        <View className="bg-white rounded-2xl p-6 mx-4 w-[90%] max-w-md">
-          {/* Close Button */}
-          <TouchableOpacity
-            onPress={() => setShowFullPlayer(false)}
-            className="self-end mb-4"
-          >
-            <Ionicons name="close" size={24} color="#6B7280" />
-          </TouchableOpacity>
-
-          {/* Song Thumbnail */}
-          <View className="items-center mb-4">
-            <Image
-              source={selectedSong.thumbnailUrl}
-              className="w-32 h-32 rounded-xl"
-              resizeMode="cover"
-            />
-          </View>
-
-          {/* Song Details */}
-          <View className="items-center mb-6">
-            <Text className="text-xl font-rubik-bold text-center mb-2">
-              {selectedSong.title}
-            </Text>
-            <Text className="text-gray-600 font-rubik text-center mb-2">
-              by {selectedSong.artist}
-            </Text>
-            <Text className="text-sm text-gray-500 font-rubik text-center">
-              {selectedSong.views} views • {selectedSong.likes} likes
-            </Text>
-          </View>
-
-          {/* Audio Controls */}
-          <View className="flex-row items-center mb-6">
-            <TouchableOpacity
-              onPress={() =>
-                toggleAudioPlay(selectedSong.id, selectedSong.audioUrl)
-              }
-              className="w-12 h-12 bg-[#4ECDC4] rounded-full justify-center items-center mr-4"
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={24}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-
-            <View className="flex-1 mr-4">
-              {/* Progress Bar */}
-              <View className="h-1 bg-gray-200 rounded-full mb-2">
-                <View
-                  className="h-full bg-[#4ECDC4] rounded-full"
-                  style={{ width: `${progress * 100}%` }}
-                />
-              </View>
-
-              {/* Time Display */}
-              <View className="flex-row justify-between">
-                <Text className="text-xs font-rubik text-gray-500">
-                  {formatTime(position)}
-                </Text>
-                <Text className="text-xs font-rubik text-gray-500">
-                  {formatTime(duration)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Mute Button */}
-            <TouchableOpacity
-              onPress={() => toggleAudioMute(selectedSong.id)}
-              className="w-10 h-10 justify-center items-center"
-            >
-              <Ionicons
-                name={isMuted ? "volume-mute" : "volume-high"}
-                size={20}
-                color="#6B7280"
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Action Buttons */}
-          <View className="flex-row justify-between">
-            <TouchableOpacity
-              onPress={() => setShowFullPlayer(false)}
-              className="flex-1 bg-gray-200 py-3 rounded-lg mr-2"
-            >
-              <Text className="text-center font-rubik-bold text-gray-700">
-                Close
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                console.log("Adding song to library:", selectedSong.title);
-                setShowFullPlayer(false);
-              }}
-              className="flex-1 bg-[#4ECDC4] py-3 rounded-lg ml-2"
-            >
-              <Text className="text-center font-rubik-bold text-white">
-                Add to Library
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }, [
-    selectedSong,
-    playingSong,
-    audioProgress,
-    audioDuration,
-    audioPosition,
-    audioMuted,
-    toggleAudioPlay,
-    toggleAudioMute,
-    formatTime,
-  ]);
+  // Removed renderFullPlayer - now using CopyrightFreeSongModal component
 
   const keyExtractor = useCallback((item: any) => item.id, []);
 
@@ -550,8 +446,41 @@ export default function CopyrightFreeSongs({
         ))}
       </ScrollView>
 
-      {/* Full Player Modal */}
-      {showFullPlayer && renderFullPlayer()}
+      {/* YouTube-style Song Modal */}
+      <CopyrightFreeSongModal
+        visible={showSongModal}
+        song={selectedSong}
+        onClose={() => {
+          setShowSongModal(false);
+          setSelectedSong(null);
+        }}
+        onPlay={(song) => handlePlayIconPress(song)}
+        isPlaying={selectedSong ? currentTrack?.id === selectedSong.id && globalIsPlaying : false}
+        audioProgress={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().progress : 0}
+        audioDuration={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().duration : (selectedSong?.duration * 1000 || 0)}
+        audioPosition={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().position : 0}
+        isMuted={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().isMuted : false}
+        onTogglePlay={async () => {
+          if (selectedSong) {
+            if (currentTrack?.id === selectedSong.id) {
+              await togglePlayPause();
+            } else {
+              await handlePlayIconPress(selectedSong);
+            }
+          }
+        }}
+        onToggleMute={async () => {
+          if (selectedSong && currentTrack?.id === selectedSong.id) {
+            await useGlobalAudioPlayerStore.getState().toggleMute();
+          }
+        }}
+        onSeek={async (progress) => {
+          if (selectedSong && currentTrack?.id === selectedSong.id) {
+            await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
+          }
+        }}
+        formatTime={formatTime}
+      />
     </View>
   );
 }

@@ -82,20 +82,36 @@ export const getContentKey = (item: MediaItem): string => {
   }`;
 };
 
-// Time ago utility
-export const getTimeAgo = (createdAt: string): string => {
+// Time ago utility - Unified version
+export const getTimeAgo = (createdAt: string | undefined | null, format: "uppercase" | "lowercase" = "uppercase"): string => {
+  if (!createdAt) return format === "uppercase" ? "JUST NOW" : "Just now";
+  
   const now = new Date();
   const posted = new Date(createdAt);
   const diff = now.getTime() - posted.getTime();
+  
+  if (Number.isNaN(diff) || diff < 0) {
+    return format === "uppercase" ? "JUST NOW" : "Just now";
+  }
+  
   const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
 
-  if (minutes < 1) return "NOW";
-  if (minutes < 60) return `${minutes}MIN AGO`;
-  if (hours < 24) return `${hours}HRS AGO`;
-  return `${days}DAYS AGO`;
+  if (minutes < 1) return format === "uppercase" ? "JUST NOW" : "Just now";
+  if (minutes < 60) return format === "uppercase" ? `${minutes}MINS AGO` : `${minutes}m ago`;
+  if (hours < 24) return format === "uppercase" ? `${hours}HRS AGO` : `${hours}h ago`;
+  if (days < 7) return format === "uppercase" ? `${days}DAYS AGO` : `${days}d ago`;
+  if (weeks < 4) return format === "uppercase" ? `${weeks}WEEKS AGO` : `${weeks}w ago`;
+  if (months < 12) return format === "uppercase" ? `${months}MONTHS AGO` : `${months}mo ago`;
+  return format === "uppercase" ? `${years}YEARS AGO` : `${years}y ago`;
 };
+
+// Alias for backward compatibility
+export const formatTimeAgo = (iso?: string | null): string => getTimeAgo(iso, "uppercase");
 
 // User display name from content
 export const getUserDisplayNameFromContent = (item: MediaItem): string => {

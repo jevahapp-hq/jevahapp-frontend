@@ -14,6 +14,7 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
@@ -69,6 +70,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(true);
+  const [showReportModal, setShowReportModal] = useState(false);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
@@ -996,6 +998,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         mediaItem={video}
         onDelete={handleDeletePress}
         showDelete={isOwner}
+        onReport={() => setShowReportModal(true)}
       />
 
       {/* Delete Confirmation Modal */}
@@ -1005,6 +1008,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         mediaTitle={video.title || "this media"}
         onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}
+      />
+
+      {/* Report Modal */}
+      <ReportMediaModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        mediaId={video._id || ""}
+        mediaTitle={video.title}
       />
 
       {/* AI Description Box removed in src version; exists only in app layer */}

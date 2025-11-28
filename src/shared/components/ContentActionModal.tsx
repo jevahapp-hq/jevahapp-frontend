@@ -41,6 +41,8 @@ interface ContentActionModalProps {
   mediaItem?: any; // Full media item for ownership checking (optional)
   onDelete?: () => void;
   showDelete?: boolean; // If provided, use it; otherwise check ownership internally
+  // Report functionality props
+  onReport?: () => void;
 }
 
 export default function ContentActionModal({
@@ -57,6 +59,7 @@ export default function ContentActionModal({
   mediaItem,
   onDelete,
   showDelete,
+  onReport,
 }: ContentActionModalProps) {
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
@@ -386,6 +389,54 @@ export default function ContentActionModal({
                       }}
                     >
                       Delete
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+
+              {/* Report button - only show if user is NOT the owner */}
+              {onReport && !isOwner && (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onReport) {
+                      onReport();
+                    }
+                    handleClose();
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 12,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        backgroundColor: "#FEE2E2",
+                        borderRadius: 18,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 12,
+                      }}
+                    >
+                      <Ionicons name="flag-outline" size={18} color="#EF4444" />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontFamily: "Rubik-SemiBold",
+                        color: "#DC2626",
+                      }}
+                    >
+                      Report
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />

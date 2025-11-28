@@ -4,6 +4,7 @@ import { CommentIcon } from "./CommentIcon";
 import LikeBurst from "./LikeBurst";
 import LikeButton from "./LikeButton";
 import SaveButton from "./SaveButton";
+import { AnimatedButton } from "./AnimatedButton";
 
 type Props = {
   viewCount: number;
@@ -77,24 +78,13 @@ export default function CardFooterActions({
           />
         </View>
       ) : (
-        <TouchableOpacity
-          className="flex-row items-center mr-6"
-          onPress={onLike}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <MaterialIcons
-            name={liked ? ("favorite" as any) : ("favorite-border" as any)}
-            size={28}
-            color={liked ? likeColor : "#98A2B3"}
-          />
-          <LikeBurst
-            triggerKey={likeBurstKey}
-            color={likeColor}
-            size={14}
-            style={{ marginLeft: -6, marginTop: -8 }}
-          />
-          <Text className="text-[10px] text-gray-500 ml-1">{likeCount}</Text>
-        </TouchableOpacity>
+        <AnimatedLikeButton
+          liked={liked}
+          likeColor={likeColor}
+          likeCount={likeCount}
+          likeBurstKey={likeBurstKey}
+          onLike={onLike}
+        />
       )}
 
       <CommentIcon
@@ -139,12 +129,55 @@ export default function CardFooterActions({
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity
-        onPress={onShare}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Feather name="send" size={26} color="#98A2B3" />
-      </TouchableOpacity>
+      <AnimatedShareButton onShare={onShare} />
     </View>
+  );
+}
+
+// Optimized Like Button with instant scale feedback
+function AnimatedLikeButton({
+  liked,
+  likeColor,
+  likeCount,
+  likeBurstKey,
+  onLike,
+}: {
+  liked: boolean;
+  likeColor: string;
+  likeCount: number;
+  likeBurstKey: number;
+  onLike: () => void;
+}) {
+  return (
+    <AnimatedButton
+      className="flex-row items-center mr-6"
+      onPress={onLike}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <MaterialIcons
+        name={liked ? ("favorite" as any) : ("favorite-border" as any)}
+        size={28}
+        color={liked ? likeColor : "#98A2B3"}
+      />
+      <LikeBurst
+        triggerKey={likeBurstKey}
+        color={likeColor}
+        size={14}
+        style={{ marginLeft: -6, marginTop: -8 }}
+      />
+      <Text className="text-[10px] text-gray-500 ml-1">{likeCount}</Text>
+    </AnimatedButton>
+  );
+}
+
+// Optimized Share Button with instant scale feedback
+function AnimatedShareButton({ onShare }: { onShare: () => void }) {
+  return (
+    <AnimatedButton
+      onPress={onShare}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Feather name="send" size={26} color="#98A2B3" />
+    </AnimatedButton>
   );
 }
