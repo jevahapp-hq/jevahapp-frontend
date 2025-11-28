@@ -136,6 +136,52 @@ export default function UploadScreen() {
     return "application/octet-stream";
   };
 
+  // Detect actual file type from file extension and mime type
+  const detectFileType = (file: any): "video" | "audio" | "ebook" | "unknown" => {
+    if (!file) return "unknown";
+    
+    const fileExtension = file.name?.split(".").pop()?.toLowerCase() || "";
+    const mimeType = file.mimeType || "";
+    
+    // Video formats
+    const videoFormats = ["mp4", "mov", "avi", "mkv", "webm"];
+    const videoMimes = ["video/"];
+    
+    // Audio formats
+    const audioFormats = ["mp3", "wav", "aac", "m4a", "ogg", "flac", "wma"];
+    const audioMimes = ["audio/"];
+    
+    // Ebook formats
+    const ebookFormats = ["pdf", "epub", "mobi"];
+    const ebookMimes = ["application/pdf", "application/epub", "application/x-mobipocket-ebook"];
+    
+    // Check by mime type first (more reliable)
+    if (mimeType) {
+      if (videoMimes.some((mime) => mimeType.toLowerCase().startsWith(mime))) {
+        return "video";
+      }
+      if (audioMimes.some((mime) => mimeType.toLowerCase().startsWith(mime))) {
+        return "audio";
+      }
+      if (ebookMimes.some((mime) => mimeType.toLowerCase().includes(mime.toLowerCase()))) {
+        return "ebook";
+      }
+    }
+    
+    // Fallback to file extension
+    if (videoFormats.includes(fileExtension)) {
+      return "video";
+    }
+    if (audioFormats.includes(fileExtension)) {
+      return "audio";
+    }
+    if (ebookFormats.includes(fileExtension)) {
+      return "ebook";
+    }
+    
+    return "unknown";
+  };
+
   // Validate media eligibility before upload
   const validateMediaEligibility = (): {
     isValid: boolean;
@@ -164,78 +210,144 @@ export default function UploadScreen() {
       errors.push("Please select a content type");
     }
 
-    // Validate file type
+    // Validate file type - detect actual file type first, then check compatibility
     if (file) {
+      const actualFileType = detectFileType(file);
       const fileExtension = file.name?.split(".").pop()?.toLowerCase() || "";
       const mimeType = file.mimeType || "";
 
-      // Check file type based on selected content type
-      if (selectedType === "music" || selectedType === "sermon") {
-        const validAudioFormats = ["mp3", "wav", "aac", "m4a", "ogg", "flac"];
-        const validAudioMimes = [
-          "audio/mpeg",
-          "audio/wav",
-          "audio/aac",
-          "audio/mp4",
-          "audio/ogg",
-          "audio/flac",
-        ];
-        if (
-          !validAudioFormats.includes(fileExtension) &&
-          !validAudioMimes.some((mime) => mimeType.includes(mime))
-        ) {
+      // Define valid formats for each content type
+      const validAudioFormats = ["mp3", "wav", "aac", "m4a", "ogg", "flac"];
+      const validAudioMimes = [
+        "audio/mpeg",
+        "audio/wav",
+        "audio/aac",
+        "audio/mp4",
+        "audio/ogg",
+        "audio/flac",
+        "audio/x-m4a",
+      ];
+      
+      const validVideoFormats = ["mp4"];
+      const validVideoMimes = ["video/mp4"];
+      
+      const validBookFormats = ["pdf", "epub"];
+      const validBookMimes = [
+        "application/pdf",
+        "application/epub+zip",
+        "application/epub",
+      ];
+
+      // Validate based on selected content type and actual file type
+      if (selectedType === "music" || selectedType === "podcasts") {
+        // Music and Podcasts require audio files
+        if (actualFileType === "video") {
+          errors.push(
+            "Invalid file type. You selected Music/Podcast but uploaded a video file. Please select a video content type or upload an audio file."
+          );
+        } else if (actualFileType === "ebook") {
+          errors.push(
+            "Invalid file type. You selected Music/Podcast but uploaded an ebook file. Please select Books/Ebook content type or upload an audio file."
+          );
+        } else if (actualFileType === "unknown" || (!validAudioFormats.includes(fileExtension) && !validAudioMimes.some((mime) => mimeType.toLowerCase().includes(mime.toLowerCase())))) {
           errors.push(
             "Invalid audio format. Supported: MP3, WAV, AAC, M4A, OGG, FLAC"
           );
         }
       } else if (selectedType === "videos") {
-        const validVideoFormats = ["mp4"];
-        const validVideoMimes = ["video/mp4"];
-        if (
-          !validVideoFormats.includes(fileExtension) &&
-          !validVideoMimes.some((mime) => mimeType.includes(mime))
-        ) {
+        // Videos require video files
+        if (actualFileType === "audio") {
+          errors.push(
+            "Invalid file type. You selected Videos but uploaded an audio file. Please select Music/Podcast/Sermon content type or upload a video file."
+          );
+        } else if (actualFileType === "ebook") {
+          errors.push(
+            "Invalid file type. You selected Videos but uploaded an ebook file. Please select Books/Ebook content type or upload a video file."
+          );
+        } else if (actualFileType === "unknown" || (!validVideoFormats.includes(fileExtension) && !validVideoMimes.some((mime) => mimeType.toLowerCase().includes(mime.toLowerCase())))) {
           errors.push("Invalid video format. Supported: MP4");
         }
       } else if (selectedType === "books" || selectedType === "ebook") {
-        const validBookFormats = ["pdf", "epub"];
-        const validBookMimes = [
-          "application/pdf",
-          "application/epub+zip",
-        ];
-        if (
-          !validBookFormats.includes(fileExtension) &&
-          !validBookMimes.some((mime) => mimeType.includes(mime))
-        ) {
+        // Books require ebook files
+        if (actualFileType === "video") {
+          errors.push(
+            "Invalid file type. You selected Books/Ebook but uploaded a video file. Please select Videos content type or upload an ebook file."
+          );
+        } else if (actualFileType === "audio") {
+          errors.push(
+            "Invalid file type. You selected Books/Ebook but uploaded an audio file. Please select Music/Podcast/Sermon content type or upload an ebook file."
+          );
+        } else if (actualFileType === "unknown" || (!validBookFormats.includes(fileExtension) && !validBookMimes.some((mime) => mimeType.toLowerCase().includes(mime.toLowerCase())))) {
           errors.push("Invalid book format. Supported: PDF, EPUB");
+        }
+      } else if (selectedType === "sermon") {
+        // Sermons can be either audio or video
+        if (actualFileType === "ebook") {
+          errors.push(
+            "Invalid file type. Sermons must be either audio or video files, not ebooks."
+          );
+        } else if (actualFileType === "video") {
+          // Validate video format
+          if (!validVideoFormats.includes(fileExtension) && !validVideoMimes.some((mime) => mimeType.toLowerCase().includes(mime.toLowerCase()))) {
+            errors.push("Invalid video format. Supported: MP4");
+          }
+        } else if (actualFileType === "audio") {
+          // Validate audio format
+          if (!validAudioFormats.includes(fileExtension) && !validAudioMimes.some((mime) => mimeType.toLowerCase().includes(mime.toLowerCase()))) {
+            errors.push(
+              "Invalid audio format. Supported: MP3, WAV, AAC, M4A, OGG, FLAC"
+            );
+          }
+        } else if (actualFileType === "unknown") {
+          errors.push(
+            "Unable to detect file type. Please ensure you're uploading a valid audio or video file."
+          );
         }
       }
     }
 
-    // Validate file size
+    // Validate file size based on actual file type and selected content type
     if (file && file.size) {
       const maxVideoSize = 100 * 1024 * 1024; // 100MB
       const maxAudioSize = 50 * 1024 * 1024; // 50MB
       const maxBookSize = 50 * 1024 * 1024; // 50MB
 
-      if (selectedType === "videos" && file.size > maxVideoSize) {
-        errors.push("Video file size exceeds 100MB limit");
-      } else if (
-        (selectedType === "music" || selectedType === "sermon") &&
-        file.size > maxAudioSize
-      ) {
-        errors.push("Audio file size exceeds 50MB limit");
-      } else if (
-        (selectedType === "books" || selectedType === "ebook") &&
-        file.size > maxBookSize
-      ) {
-        errors.push("Book file size exceeds 50MB limit");
+      const actualFileType = detectFileType(file);
+
+      // For videos content type
+      if (selectedType === "videos") {
+        if (file.size > maxVideoSize) {
+          errors.push("Video file size exceeds 100MB limit");
+        }
+      }
+      // For music and podcasts content types (should be audio)
+      else if (selectedType === "music" || selectedType === "podcasts") {
+        if (actualFileType === "audio" && file.size > maxAudioSize) {
+          errors.push("Audio file size exceeds 50MB limit");
+        }
+      }
+      // For sermon content type (can be audio or video)
+      else if (selectedType === "sermon") {
+        if (actualFileType === "video" && file.size > maxVideoSize) {
+          errors.push("Video file size exceeds 100MB limit");
+        } else if (actualFileType === "audio" && file.size > maxAudioSize) {
+          errors.push("Audio file size exceeds 50MB limit");
+        }
+      }
+      // For books and ebook content types (should be ebooks)
+      else if (selectedType === "books" || selectedType === "ebook") {
+        if (file.size > maxBookSize) {
+          errors.push("Book file size exceeds 50MB limit");
+        }
       }
     }
 
     // Warnings
-    if (!thumbnail && (selectedType === "music" || selectedType === "videos")) {
-      warnings.push("Thumbnail recommended for better visibility");
+    if (file) {
+      const actualFileType = detectFileType(file);
+      if (!thumbnail && (selectedType === "music" || selectedType === "videos" || selectedType === "podcasts" || (selectedType === "sermon" && actualFileType === "video"))) {
+        warnings.push("Thumbnail recommended for better visibility");
+      }
     }
 
     if (description && description.length > 500) {
