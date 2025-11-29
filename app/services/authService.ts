@@ -153,18 +153,21 @@ class AuthService {
   }
 
   // Login with Jevah backend
-  async login(email: string, password: string) {
+  async login(email: string, password: string, rememberMe: boolean = false) {
     try {
       console.log("🔍 Logging in user:", email);
+      console.log("🧠 Remember Me flag:", rememberMe);
 
       const response = await fetch(`${this.baseURL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           email: email.trim(),
           password: password,
+          rememberMe,
         }),
       });
 

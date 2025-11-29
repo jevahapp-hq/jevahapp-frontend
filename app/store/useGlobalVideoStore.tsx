@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 
 // ⚠️ DEPRECATED: This store is being replaced by useMediaPlaybackStore.tsx
 // Please use the unified store for new components.
@@ -41,6 +42,7 @@ interface VideoPlayerState {
   // Video player registry - professional imperative control
   registerVideoPlayer: (key: string, player: VideoPlayerRef) => void;
   unregisterVideoPlayer: (key: string) => void;
+  pauseAllVideosImperatively: () => void;
 
   // Global play function - pauses all others and plays selected video
   playVideoGlobally: (videoKey: string) => void;
@@ -67,6 +69,12 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
     // Individual video actions
     playVideo: (videoKey: string) => {
+      // Stop all audio when video starts
+      const audioManager = GlobalAudioInstanceManager.getInstance();
+      audioManager.stopAllAudio().catch((err) => {
+        console.warn("⚠️ Failed to stop all audio when video started:", err);
+      });
+
       set((state) => ({
         currentlyPlayingVideo: videoKey,
         playingVideos: { ...state.playingVideos, [videoKey]: true },
@@ -158,11 +166,44 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       );
     },
 
+    // Imperatively pause all videos (for use by audio manager)
+    pauseAllVideosImperatively: () => {
+      console.log("⏸️ Imperatively pausing all videos for audio playback");
+      videoPlayerRegistry.forEach((player, key) => {
+        console.log(`⏸️ Imperatively pausing video: ${key}`);
+        player.pause().catch((err) => console.warn(`Failed to pause ${key}:`, err));
+        player.showOverlay();
+      });
+      
+      // Also update state
+      set((state) => {
+        const newPlayingVideos: Record<string, boolean> = {};
+        const newShowOverlay: Record<string, boolean> = {};
+
+        Object.keys(state.playingVideos).forEach((key) => {
+          newPlayingVideos[key] = false;
+          newShowOverlay[key] = true;
+        });
+
+        return {
+          currentlyPlayingVideo: null,
+          playingVideos: newPlayingVideos,
+          showOverlay: newShowOverlay,
+        };
+      });
+    },
+
     // ✅ Global play function - PROFESSIONAL IMPERATIVE CONTROL (like Instagram/TikTok)
     playVideoGlobally: (videoKey: string) => {
       console.log("🌍 playVideoGlobally called with:", videoKey);
 
-      // STEP 1: Imperatively pause ALL other videos DIRECTLY (no state waiting)
+      // STEP 1: Stop ALL audio when video starts playing
+      const audioManager = GlobalAudioInstanceManager.getInstance();
+      audioManager.stopAllAudio().catch((err) => {
+        console.warn("⚠️ Failed to stop all audio when video started:", err);
+      });
+
+      // STEP 2: Imperatively pause ALL other videos DIRECTLY (no state waiting)
       const pausedKeys: string[] = [];
       videoPlayerRegistry.forEach((player, key) => {
         if (key !== videoKey) {
@@ -175,7 +216,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         }
       });
 
-      // STEP 2: Update state to reflect the change
+      // STEP 3: Update state to reflect the change
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
@@ -189,7 +230,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         newShowOverlay[videoKey] = false;
 
         console.log(
-          `🎬 Playing video: ${videoKey}, paused ${pausedKeys.length} others`
+          `🎬 Playing video: ${videoKey}, paused ${pausedKeys.length} other videos, stopped all audio`
         );
         return {
           currentlyPlayingVideo: videoKey,
@@ -214,8 +255,15 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             showOverlay: { ...state.showOverlay, [videoKey]: true },
           };
         } else {
-          // If video is paused, play it
+          // If video is paused, play it - stop all audio first
           console.log("🔄 Toggling to play:", videoKey);
+          
+          // Stop all audio when video starts
+          const audioManager = GlobalAudioInstanceManager.getInstance();
+          audioManager.stopAllAudio().catch((err) => {
+            console.warn("⚠️ Failed to stop all audio when video started:", err);
+          });
+          
           // Use the same logic as playVideoGlobally
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
@@ -296,6 +344,12 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           };
         } else {
           // A new video is visible, pause all others and play this one
+          // Stop all audio when video auto-plays
+          const audioManager = GlobalAudioInstanceManager.getInstance();
+          audioManager.stopAllAudio().catch((err) => {
+            console.warn("⚠️ Failed to stop all audio when video auto-played:", err);
+          });
+
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
 
@@ -309,7 +363,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           newPlayingVideos[visibleVideoKey] = true;
           newShowOverlay[visibleVideoKey] = false;
 
-          console.log(`📱 Auto-playing visible video: ${visibleVideoKey}`);
+          console.log(`📱 Auto-playing visible video: ${visibleVideoKey}, stopped all audio`);
 
           return {
             ...state,

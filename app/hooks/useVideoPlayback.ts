@@ -1,5 +1,6 @@
 import { Video } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mediaApi } from "../../src/core/api/MediaApi";
 
 /**
  * Custom hook to manage video playback state
@@ -9,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export interface UseVideoPlaybackOptions {
   videoKey: string;
   autoPlay?: boolean;
+  mediaId?: string; // backend media id for playback tracking
   onPlaybackUpdate?: (status: {
     position: number;
     duration: number;
@@ -19,7 +21,7 @@ export interface UseVideoPlaybackOptions {
 
 export interface UseVideoPlaybackReturn {
   // Video ref
-  videoRef: React.RefObject<Video>;
+  videoRef: React.RefObject<Video | null>;
 
   // State
   duration: number;
@@ -47,7 +49,7 @@ export function useVideoPlayback(
   const { videoKey, autoPlay = false, onPlaybackUpdate } = options;
 
   // Refs
-  const videoRef = useRef<Video>(null);
+  const videoRef = useRef<Video | null>(null);
   const isMountedRef = useRef(true);
   const lastPositionRef = useRef(0);
 
@@ -58,17 +60,95 @@ export function useVideoPlayback(
   const [isBuffering, setIsBuffering] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Backend playback session state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Helper to clear progress timer
+  const clearProgressTimer = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }, []);
+
   // Play
   const play = useCallback(async () => {
     try {
       if (!videoRef.current) return;
+
+      // If we have a mediaId and duration, ensure a backend playback session exists
+      if (options.mediaId && duration > 0 && !sessionId) {
+        try {
+          const durationSeconds = duration / 1000;
+          const positionSeconds = position / 1000;
+          const response = await mediaApi.startPlaybackSession(
+            options.mediaId,
+            {
+              duration: Math.round(durationSeconds),
+              position: Math.floor(positionSeconds),
+            }
+          );
+
+          if (response.success) {
+            const session = (response.data as any)?.data?.session;
+            const resumeFrom = (response.data as any)?.data?.resumeFrom;
+            if (session?._id) {
+              setSessionId(session._id);
+            }
+
+            // Seek to resume position if provided
+            if (
+              resumeFrom != null &&
+              !Number.isNaN(resumeFrom) &&
+              resumeFrom > 0
+            ) {
+              const resumeMs = resumeFrom * 1000;
+              await videoRef.current.setPositionAsync(resumeMs);
+              setPosition(resumeMs);
+              lastPositionRef.current = resumeMs;
+            }
+
+            // Start periodic progress updates every 10 seconds
+            clearProgressTimer();
+            progressTimerRef.current = setInterval(async () => {
+              try {
+                if (!sessionId || !videoRef.current) return;
+                const status = await videoRef.current.getStatusAsync();
+                if (!status?.isLoaded || !status.isPlaying) return;
+
+                const currentMs = status.positionMillis ?? 0;
+                const totalMs = status.durationMillis ?? 0;
+                if (totalMs <= 0) return;
+
+                const positionSec = currentMs / 1000;
+                const durationSec = totalMs / 1000;
+                const progressPercentage =
+                  durationSec > 0 ? (positionSec / durationSec) * 100 : 0;
+
+                await mediaApi.updatePlaybackProgress({
+                  sessionId,
+                  position: Math.floor(positionSec),
+                  duration: Math.round(durationSec),
+                  progressPercentage,
+                });
+              } catch (err) {
+                console.warn("Error updating playback progress:", err);
+              }
+            }, 10000);
+          }
+        } catch (err) {
+          console.warn("Failed to start backend playback session:", err);
+        }
+      }
+
       await videoRef.current.playAsync();
       setIsPlaying(true);
       console.log(`▶️ Playing video: ${videoKey}`);
     } catch (error) {
       console.error("❌ Error playing video:", error);
     }
-  }, [videoKey]);
+  }, [videoKey, options.mediaId, duration, position, sessionId, clearProgressTimer]);
 
   // Pause
   const pause = useCallback(async () => {
@@ -77,10 +157,19 @@ export function useVideoPlayback(
       await videoRef.current.pauseAsync();
       setIsPlaying(false);
       console.log(`⏸️ Paused video: ${videoKey}`);
+
+      // Notify backend about pause if we have an active session
+      if (sessionId) {
+        try {
+          await mediaApi.pausePlayback(sessionId);
+        } catch (err) {
+          console.warn("Failed to pause backend playback session:", err);
+        }
+      }
     } catch (error) {
       console.error("❌ Error pausing video:", error);
     }
-  }, [videoKey]);
+  }, [videoKey, sessionId]);
 
   // Toggle play/pause
   const togglePlayPause = useCallback(async () => {
@@ -143,7 +232,7 @@ export function useVideoPlayback(
 
   // Handle playback status updates
   const onPlaybackStatusUpdate = useCallback(
-    (status: any) => {
+    async (status: any) => {
       if (!isMountedRef.current || !status?.isLoaded) return;
 
       try {
@@ -190,12 +279,29 @@ export function useVideoPlayback(
         if (status.didJustFinish) {
           setIsPlaying(false);
           console.log("🏁 Video finished playing");
+
+          // End backend playback session when video finishes
+          if (sessionId) {
+            try {
+              const finalPositionSec = (status.positionMillis ?? 0) / 1000;
+              await mediaApi.endPlaybackSession({
+                sessionId,
+                reason: "completed",
+                finalPosition: Math.floor(finalPositionSec),
+              });
+            } catch (err) {
+              console.warn("Failed to end backend playback session:", err);
+            } finally {
+              clearProgressTimer();
+              setSessionId(null);
+            }
+          }
         }
       } catch (error) {
         console.error("❌ Error in playback status update:", error);
       }
     },
-    [duration, onPlaybackUpdate]
+    [duration, onPlaybackUpdate, sessionId, clearProgressTimer]
   );
 
   // Handle video load
@@ -234,12 +340,27 @@ export function useVideoPlayback(
 
     return () => {
       isMountedRef.current = false;
+      clearProgressTimer();
+
+      // Best-effort: if we still have an active session, end it as stopped
+      if (sessionId) {
+        mediaApi
+          .endPlaybackSession({
+            sessionId,
+            reason: "stopped",
+            finalPosition: Math.floor(lastPositionRef.current / 1000),
+          })
+          .catch((err) =>
+            console.warn("Failed to end backend playback session on unmount:", err)
+          );
+      }
+
       // Unload video
       videoRef.current?.unloadAsync().catch((err) => {
         console.warn("Error unloading video:", err);
       });
     };
-  }, []);
+  }, [clearProgressTimer, sessionId]);
 
   return {
     // Ref

@@ -1,7 +1,8 @@
 import { router } from "expo-router";
 
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import { useCallback, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -17,6 +18,7 @@ export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Debug password visibility
   console.log("Password visibility state:", showPassword);
@@ -24,6 +26,51 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // On mount, restore last email and rememberMe choice, and optionally fast‑forward
+  // straight to Home if we still have a token and the user opted into Remember Me.
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateFromStorage = async () => {
+      try {
+        const [storedEmail, storedRemember, storedToken] = await Promise.all([
+          AsyncStorage.getItem("lastEmail"),
+          AsyncStorage.getItem("rememberMe"),
+          AsyncStorage.getItem("token"),
+        ]);
+
+        if (cancelled) return;
+
+        if (storedEmail) {
+          setEmailAddress(storedEmail);
+        }
+
+        const rememberFlag = storedRemember === "true";
+        if (rememberFlag) {
+          setRememberMe(true);
+
+          // If we still have a token and the user chose Remember Me,
+          // skip the form and take them back into the app.
+          if (storedToken) {
+            console.log(
+              "🔐 Remember Me active with stored token – redirecting to HomeScreen"
+            );
+            router.replace("/categories/HomeScreen");
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to restore login prefs from storage:", err);
+      }
+    };
+
+    hydrateFromStorage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -66,11 +113,31 @@ export default function LoginScreen() {
       // Use authService for email/password login
       const result = await loginDebugger.debugLogin(
         emailAddress.trim().toLowerCase(),
-        password.trim()
+        password.trim(),
+        rememberMe
       );
 
       if (result.success && "data" in result && result.data?.token) {
         console.log("✅ Login successful");
+
+        // Persist last login details for future sessions
+        try {
+          await AsyncStorage.setItem(
+            "lastEmail",
+            emailAddress.trim().toLowerCase()
+          );
+          await AsyncStorage.setItem(
+            "rememberMe",
+            rememberMe ? "true" : "false"
+          );
+          await AsyncStorage.setItem(
+            "lastLoginAt",
+            new Date().toISOString()
+          );
+        } catch (storageErr) {
+          console.warn("Failed to persist login preferences:", storageErr);
+        }
+
         router.replace("/categories/HomeScreen");
       } else {
         console.log("❌ Login failed:", result);
@@ -89,7 +156,7 @@ export default function LoginScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [emailAddress, password]);
+  }, [emailAddress, password, rememberMe]);
 
   const validatePassword = (password: string) => {
     return (
@@ -190,17 +257,37 @@ export default function LoginScreen() {
             )}
           </View>
 
-          <TouchableOpacity
-            onPress={() => router.push("/auth/forgetPassword")}
-            className="mt-2 flex flex-row w-[333px] ml-2"
-          >
-            <Text
-              className="text-[#FEA74E] text-[14px] font-rubik-semibold"
-              style={{ textDecorationLine: "none" }}
+          <View className="mt-2 flex flex-row w-[333px] items-center justify-between">
+            <TouchableOpacity
+              onPress={() => setRememberMe((prev) => !prev)}
+              className="flex flex-row items-center"
             >
-              Forgot password?
-            </Text>
-          </TouchableOpacity>
+              <View
+                className={`w-4 h-4 rounded-[4px] border ${
+                  rememberMe ? "bg-[#090E24] border-[#090E24]" : "border-[#9D9FA7]"
+                } flex items-center justify-center`}
+              >
+                {rememberMe && (
+                  <FontAwesome6 name="check" size={10} color="#FFFFFF" />
+                )}
+              </View>
+              <Text className="ml-2 text-[#344054] text-[14px] font-rubik">
+                Remember me
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push("/auth/forgetPassword")}
+              className="flex flex-row ml-2"
+            >
+              <Text
+                className="text-[#FEA74E] text-[14px] font-rubik-semibold"
+                style={{ textDecorationLine: "none" }}
+              >
+                Forgot password?
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View className="flex flex-col mt-32 justify-center items-center w-full">

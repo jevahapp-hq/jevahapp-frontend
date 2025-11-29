@@ -475,6 +475,155 @@ class MediaApi {
     };
   }
 
+  // ==================== PLAYBACK SESSION ENDPOINTS ====================
+
+  /**
+   * Start a playback session for a media item.
+   * Backend will automatically pause any existing active session for this user.
+   */
+  async startPlaybackSession(
+    mediaId: string,
+    payload: {
+      duration: number; // total duration in seconds
+      position?: number; // optional resume position in seconds
+      deviceInfo?: string;
+    }
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `/api/media/${mediaId}/playback/start`,
+      payload
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to start playback session",
+    };
+  }
+
+  /**
+   * Update playback progress for an active session.
+   * Should be called every 5–10 seconds while playing.
+   */
+  async updatePlaybackProgress(payload: {
+    sessionId: string;
+    position: number; // seconds
+    duration: number; // seconds
+    progressPercentage: number; // 0–100
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `/api/media/playback/progress`,
+      payload
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to update playback progress",
+    };
+  }
+
+  /** Pause the current playback session. */
+  async pausePlayback(
+    sessionId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `/api/media/playback/pause`,
+      { sessionId }
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to pause playback",
+    };
+  }
+
+  /** Resume a paused playback session. */
+  async resumePlayback(
+    sessionId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `/api/media/playback/resume`,
+      { sessionId }
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to resume playback",
+    };
+  }
+
+  /** End a playback session when the user stops or video finishes. */
+  async endPlaybackSession(payload: {
+    sessionId: string;
+    reason: "completed" | "stopped" | "error";
+    finalPosition?: number; // seconds
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    const response = await apiClient.post<any>(
+      `/api/media/playback/end`,
+      payload
+    );
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to end playback session",
+    };
+  }
+
+  /** Get the currently active playback session, if any. */
+  async getActivePlaybackSession(): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
+    const response = await apiClient.get<any>(`/api/media/playback/active`);
+
+    if (response.success) {
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || "Failed to get active playback session",
+    };
+  }
+
   // Test available endpoints
   async testAvailableEndpoints(): Promise<{
     available: string[];

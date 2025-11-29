@@ -4,15 +4,16 @@ export const loginDebugger = {
   /**
    * Test login with detailed debugging
    */
-  async debugLogin(email: string, password: string) {
+  async debugLogin(email: string, password: string, rememberMe: boolean = false) {
     console.log('🔍 === LOGIN DEBUG START ===');
     console.log('📧 Email:', email);
     console.log('🔑 Password length:', password.length);
     console.log('🔑 Password (first 3 chars):', password.substring(0, 3) + '***');
+    console.log('🧠 Remember Me:', rememberMe);
     
     try {
       console.log('🚀 Attempting login...');
-      const result = await authService.login(email, password);
+      const result = await authService.login(email, password, rememberMe);
       
       console.log('📥 Login result:', {
         success: result.success,

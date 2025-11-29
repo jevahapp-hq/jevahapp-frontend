@@ -217,6 +217,44 @@ export const useGlobalMediaStore = create<GlobalMediaState>()(
 
     // Global media control - ensures only one media plays at a time
     playMediaGlobally: (mediaKey: string, type: "video" | "audio") => {
+      // Use runtime require to avoid circular dependencies
+      if (type === "video") {
+        // Stop all audio when video starts
+        try {
+          const audioManagerModule = require("../utils/globalAudioInstanceManager");
+          const audioManager = audioManagerModule.default.getInstance();
+          audioManager.stopAllAudio().catch((err) => {
+            console.warn("⚠️ Failed to stop all audio when video started:", err);
+          });
+        } catch (error) {
+          console.warn("⚠️ Failed to access audio manager:", error);
+        }
+        
+        // Use the video store's global play function which handles everything
+        try {
+          const videoStoreModule = require("./useGlobalVideoStore");
+          const videoStore = videoStoreModule.useGlobalVideoStore.getState();
+          if (videoStore && videoStore.playVideoGlobally) {
+            videoStore.playVideoGlobally(mediaKey);
+            return; // Early return, video store handles state
+          }
+        } catch (error) {
+          console.warn("⚠️ Failed to access video store:", error);
+        }
+      } else {
+        // Pause all videos when audio starts
+        try {
+          const videoStoreModule = require("./useGlobalVideoStore");
+          const videoStore = videoStoreModule.useGlobalVideoStore.getState();
+          if (videoStore && videoStore.pauseAllVideosImperatively) {
+            videoStore.pauseAllVideosImperatively();
+          }
+        } catch (error) {
+          console.warn("⚠️ Failed to pause videos when audio started:", error);
+        }
+      }
+      
+      // Fallback to state-only update if stores are not available
       set((state) => {
         const isCurrentlyPlaying =
           type === "video"

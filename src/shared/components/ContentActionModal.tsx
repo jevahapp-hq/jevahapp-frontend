@@ -1,4 +1,4 @@
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import {
   Dimensions,
@@ -8,8 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useMediaOwnership } from "../hooks/useMediaOwnership";
-import { getUploadedBy } from "../utils/mediaHelpers";
 import {
   GestureHandlerRootView,
   HandlerStateChangeEvent,
@@ -22,6 +20,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import { useMediaOwnership } from "../hooks/useMediaOwnership";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -65,19 +64,20 @@ export default function ContentActionModal({
   const lastTranslateY = useSharedValue(0);
   const [internalVisible, setInternalVisible] = useState(isVisible);
   
-  // Use ownership hook if mediaItem is provided, otherwise use showDelete prop
-  // Always check ownership when modal opens if mediaItem is provided (as fallback/verification)
+  // Use ownership hook if mediaItem is provided AND showDelete is not explicitly provided
+  // If showDelete is explicitly provided (true/false), trust it and skip the hook check
+  const shouldCheckOwnership = showDelete === undefined && (!!mediaItem || !!uploadedBy);
   const { isOwner: isOwnerFromHook } = useMediaOwnership({
     mediaItem: mediaItem || (uploadedBy ? { uploadedBy } : undefined),
-    isModalVisible: internalVisible && onDelete !== undefined,
-    checkOnModalOpen: !!mediaItem, // Always check if mediaItem is provided
+    isModalVisible: internalVisible && onDelete !== undefined && shouldCheckOwnership,
+    checkOnModalOpen: shouldCheckOwnership, // Only check if showDelete is not provided
   });
   
   // Determine final isOwner value
   // Priority: 
-  // 1. If showDelete is explicitly true, show delete
+  // 1. If showDelete is explicitly true, show delete (trust the parent component's ownership check)
   // 2. If showDelete is explicitly false, don't show delete  
-  // 3. Otherwise, use hook result (which checks ownership)
+  // 3. Otherwise, use hook result (which checks ownership as fallback)
   const isOwner = showDelete === true 
     ? true 
     : showDelete === false 

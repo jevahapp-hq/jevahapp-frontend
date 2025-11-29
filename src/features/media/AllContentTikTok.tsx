@@ -7,6 +7,8 @@ import React, {
     useRef,
     useState,
 } from "react";
+import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
+import { useCurrentPlayingAudioStore } from "../../../app/store/useCurrentPlayingAudioStore";
 import {
     ActivityIndicator,
     Dimensions,
@@ -283,6 +285,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   useEffect(() => {
     soundMapRef.current = soundMap;
   }, [soundMap]);
+
+  // Sync with global audio manager
+  useEffect(() => {
+    const audioManager = GlobalAudioInstanceManager.getInstance();
+    
+    // Subscribe to global audio state changes
+    const unsubscribe = audioManager.subscribe((playingId) => {
+      if (playingId !== playingAudioId) {
+        setPlayingAudioId(playingId);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [playingAudioId]);
 
   // Autoplay disabled - users must manually click to play videos
   useEffect(() => {
@@ -577,101 +596,181 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     });
 
     setIsLoadingAudio(true);
+    const audioManager = GlobalAudioInstanceManager.getInstance();
+    const { setCurrentAudio } = useCurrentPlayingAudioStore.getState();
 
     try {
       playMedia(id, "audio");
 
-      if (playingAudioId && playingAudioId !== id && soundMap[playingAudioId]) {
-        try {
-          const currentSound = soundMap[playingAudioId];
-          if (currentSound) {
-            const status = await currentSound.getStatusAsync();
-            if (status.isLoaded) {
-              await currentSound.pauseAsync();
-              setPausedAudioMap((prev) => ({
-                ...prev,
-                [playingAudioId]: status.positionMillis ?? 0,
-              }));
-            }
-          }
-        } catch (error) {
-          console.warn("⚠️ Error pausing current audio:", error);
-        }
+      // Find the media item for this audio
+      const mediaItem = filteredMediaList.find((item) => item._id === id);
+
+      // Check if this audio is already playing
+      if (audioManager.isPlaying(id)) {
+        // If playing, pause it
+        await audioManager.pauseAudio(id);
+        setPlayingAudioId(null);
+        setCurrentAudio(null, null);
+        setIsLoadingAudio(false);
+        return;
       }
 
-      const existing = soundMap[id];
-      if (existing) {
-        try {
-          const status = await existing.getStatusAsync();
-          if (status.isLoaded) {
-            if (status.isPlaying) {
-              const pos = status.positionMillis ?? 0;
-              await existing.pauseAsync();
-              setPausedAudioMap((prev) => ({ ...prev, [id]: pos }));
-              setPlayingAudioId(null);
-            } else {
-              const resumePos = pausedAudioMap[id] ?? 0;
-              await existing.playFromPositionAsync(resumePos);
-              setPlayingAudioId(id);
-            }
-            setIsLoadingAudio(false);
-            return;
-          }
-        } catch (error) {
-          console.warn("⚠️ Error with existing sound:", error);
-        }
-      }
-
+      // Check if there's an existing sound instance
+      let sound = audioManager.getAudioInstance(id);
       const resumePos = pausedAudioMap[id] ?? 0;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        {
-          shouldPlay: true,
-          isMuted: audioMuteMap[id] ?? false,
-          positionMillis: resumePos,
+
+      // If sound exists, check if it's still valid
+      if (sound) {
+        try {
+          const status = await sound.getStatusAsync();
+          if (!status.isLoaded) {
+            // Sound exists but is not loaded, unload it first
+            try {
+              await sound.unloadAsync();
+            } catch {}
+            sound = null;
+          }
+        } catch (error) {
+          // Sound instance is invalid, clear it
+          console.warn("⚠️ Existing sound instance is invalid, creating new one");
+          sound = null;
         }
-      );
+      }
 
-      setSoundMap((prev) => ({ ...prev, [id]: sound }));
+      if (!sound) {
+        // Clean up any old instance in our local map
+        if (soundMap[id]) {
+          try {
+            const oldSound = soundMap[id];
+            const status = await oldSound.getStatusAsync();
+            if (status.isLoaded) {
+              await oldSound.stopAsync();
+              await oldSound.unloadAsync();
+            }
+          } catch (error) {
+            // Ignore errors
+          }
+          setSoundMap((prev) => {
+            const updated = { ...prev };
+            delete updated[id];
+            return updated;
+          });
+        }
+
+        // Create new sound instance
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri },
+          {
+            shouldPlay: false, // Don't auto-play, let manager handle it
+            isMuted: audioMuteMap[id] ?? false,
+            positionMillis: resumePos,
+          }
+        );
+        sound = newSound;
+        audioManager.registerAudio(id, sound);
+        setSoundMap((prev) => ({ ...prev, [id]: sound! }));
+        
+        // Wait for sound to be loaded
+        let loaded = false;
+        let attempts = 0;
+        while (!loaded && attempts < 10) {
+          const status = await sound.getStatusAsync();
+          if (status.isLoaded) {
+            loaded = true;
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+        }
+        
+        if (!loaded) {
+          throw new Error("Sound failed to load");
+        }
+      } else {
+        // Resume from paused position if needed
+        try {
+          const status = await sound.getStatusAsync();
+          if (status.isLoaded) {
+            if (resumePos > 0) {
+              await sound.setPositionAsync(resumePos);
+            }
+          }
+        } catch (error) {
+          console.warn("⚠️ Error setting position:", error);
+        }
+      }
+
+      // Use global manager to play (this will stop all other audio)
+      await audioManager.playAudio(id, sound, true);
       setPlayingAudioId(id);
+      
+      // Set current playing audio in store for mini player
+      if (mediaItem) {
+        console.log("🎵 Setting current audio in store:", {
+          id: id,
+          title: mediaItem.title,
+          audioId: id,
+        });
+        setCurrentAudio(mediaItem, id);
+      } else {
+        console.warn("⚠️ MediaItem not found for audio ID:", id);
+      }
 
+      // Get initial status for duration/progress
       const initial = await sound.getStatusAsync();
       if (initial.isLoaded && typeof initial.durationMillis === "number") {
         const safeDur = initial.durationMillis || 1;
+        const currentPos = initial.positionMillis || 0;
         setAudioDurationMap((prev) => ({ ...prev, [id]: safeDur }));
         setAudioProgressMap((prev) => ({
           ...prev,
-          [id]: (resumePos || 0) / safeDur,
+          [id]: currentPos / safeDur,
         }));
       }
 
+      // Set up playback status updates
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (!status.isLoaded || typeof status.durationMillis !== "number")
           return;
         const safeDur = status.durationMillis || 1;
+        const currentPos = status.positionMillis || 0;
         setAudioProgressMap((prev) => ({
           ...prev,
-          [id]: (status.positionMillis || 0) / safeDur,
+          [id]: currentPos / safeDur,
         }));
         setAudioDurationMap((prev) => ({ ...prev, [id]: safeDur }));
 
+        // Save paused position
+        if (status.isLoaded && !status.isPlaying && currentPos > 0) {
+          setPausedAudioMap((prev) => ({ ...prev, [id]: currentPos }));
+        }
+
+        // Handle playback completion
         if (status.didJustFinish) {
           try {
-            await sound.unloadAsync();
-          } catch {}
-          setSoundMap((prev) => {
-            const u = { ...prev };
-            delete u[id];
-            return u;
-          });
-          setPlayingAudioId((curr) => (curr === id ? null : curr));
-          setPausedAudioMap((prev) => ({ ...prev, [id]: 0 }));
-          setAudioProgressMap((prev) => ({ ...prev, [id]: 0 }));
+            await audioManager.unregisterAudio(id);
+            setSoundMap((prev) => {
+              const u = { ...prev };
+              delete u[id];
+              return u;
+            });
+            setPlayingAudioId((curr) => (curr === id ? null : curr));
+            setPausedAudioMap((prev) => ({ ...prev, [id]: 0 }));
+            setAudioProgressMap((prev) => ({ ...prev, [id]: 0 }));
+            // Clear current audio in store
+            setCurrentAudio(null, null);
+          } catch (error) {
+            console.warn("⚠️ Error cleaning up audio:", error);
+          }
         }
       });
     } catch (err) {
       console.error("❌ Audio playback error:", err);
       setPlayingAudioId(null);
+      setCurrentAudio(null, null);
+      try {
+        await audioManager.unregisterAudio(id);
+      } catch {}
       setSoundMap((prev) => {
         const updated = { ...prev };
         delete updated[id];
@@ -684,25 +783,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const pauseAllAudio = useCallback(async () => {
     try {
-      const ids = Object.keys(soundMap);
-      for (const id of ids) {
-        const snd = soundMap[id];
-        if (snd) {
-          try {
-            const status = await snd.getStatusAsync();
-            if (status.isLoaded) {
-              await snd.pauseAsync();
-            }
-          } catch (error) {
-            console.warn(`⚠️ Error pausing audio ${id}:`, error);
-          }
-        }
-      }
+      const audioManager = GlobalAudioInstanceManager.getInstance();
+      await audioManager.stopAllAudio();
       setPlayingAudioId(null);
     } catch (error) {
       console.warn("⚠️ Error in pauseAllAudio:", error);
     }
-  }, [soundMap]);
+  }, []);
 
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
@@ -1883,3 +1970,4 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     </ContentErrorBoundary>
   );
 };
+

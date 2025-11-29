@@ -59,6 +59,7 @@ export default function ReelVideoPlayer({
     onError,
   } = useVideoPlayback({
     videoKey,
+    mediaId: videoData?._id || videoData?.id,
     autoPlay: isActive,
   });
 

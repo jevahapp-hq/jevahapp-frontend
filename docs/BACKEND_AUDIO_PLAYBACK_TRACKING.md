@@ -282,3 +282,4 @@ Based on listening history:
 - **Graceful degradation**: If backend is unavailable, playback should continue
 - **Privacy-first**: Respect user privacy preferences
 
+
