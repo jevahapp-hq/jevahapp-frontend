@@ -1,14 +1,15 @@
 import { useAuth, useOAuth, useUser } from "@clerk/clerk-expo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    Image,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import "../global.css";
 import { mediaApi } from "../src/core/api/MediaApi";
@@ -55,6 +56,9 @@ export default function Welcome() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
+  const [skipIntro, setSkipIntro] = useState(false);
+  const [hasLegacyToken, setHasLegacyToken] = useState(false);
+  const [onboardingReady, setOnboardingReady] = useState(false);
 
   // Animation values for fade transitions
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -71,6 +75,56 @@ export default function Welcome() {
   const { startOAuthFlow: startAppleAuth } = useOAuth({
     strategy: "oauth_apple",
   });
+
+  // Onboarding / first-run logic:
+  // - Show intro / slides only on first install
+  // - On subsequent launches, if user is already authenticated, jump straight to Home
+  // - If they've seen onboarding before but are logged out, skip the animated intro but show the auth landing
+  useEffect(() => {
+    let cancelled = false;
+
+    const initOnboarding = async () => {
+      try {
+        const [seenFlag, legacyToken] = await Promise.all([
+          AsyncStorage.getItem("onboardingSeen"),
+          AsyncStorage.getItem("token"),
+        ]);
+
+        if (cancelled) return;
+
+        setHasLegacyToken(!!legacyToken);
+
+        if (seenFlag === "true") {
+          setSkipIntro(true);
+        } else {
+          // First time: mark onboarding as seen so we can skip next time
+          await AsyncStorage.setItem("onboardingSeen", "true");
+        }
+      } catch {
+        // On any storage error, just fall back to normal behavior
+      } finally {
+        if (!cancelled) {
+          setOnboardingReady(true);
+        }
+      }
+    };
+
+    initOnboarding();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // If onboarding was already seen and the user is authenticated (via Clerk or legacy token),
+  // skip the welcome screen entirely and go straight to the app home.
+  useEffect(() => {
+    if (!onboardingReady) return;
+
+    if ((isSignedIn || hasLegacyToken) && skipIntro) {
+      router.replace("/categories/HomeScreen");
+    }
+  }, [onboardingReady, skipIntro, isSignedIn, hasLegacyToken]);
 
   useEffect(() => {
     if (showIntro) return;
@@ -157,8 +211,8 @@ export default function Welcome() {
     [login]
   );
 
-  // Show loading while auth is initializing
-  if (!authLoaded || !userLoaded) {
+  // Show loading while auth and onboarding state are initializing
+  if (!authLoaded || !userLoaded || !onboardingReady) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#090E24" />
@@ -167,7 +221,7 @@ export default function Welcome() {
     );
   }
 
-  if (showIntro) {
+  if (showIntro && !skipIntro) {
     return (
       <AnimatedLogoIntro
         onFinished={handleIntroFinished}

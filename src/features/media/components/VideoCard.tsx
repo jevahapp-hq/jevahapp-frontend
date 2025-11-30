@@ -1,12 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
-import {
-    Image,
-    Text,
-    TouchableWithoutFeedback,
-    View
-} from "react-native";
+import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
@@ -14,9 +9,10 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
-import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
+import MediaDetailsModal from "../../../shared/components/MediaDetailsModal";
 import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
+import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useMediaDeletion } from "../../../shared/hooks";
@@ -26,8 +22,8 @@ import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackC
 import { VideoCardProps } from "../../../shared/types";
 import { getUploadedBy, isValidUri } from "../../../shared/utils";
 import {
-    getBestVideoUrl,
-    handleVideoError as handleVideoErrorUtil,
+  getBestVideoUrl,
+  handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
@@ -64,13 +60,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 }) => {
   const videoRef = useRef<Video>(null);
   const isMountedRef = useRef(true);
-  const [showOverlay, setShowOverlay] = useState(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
-  const [overlayVisible, setOverlayVisible] = useState(true);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
@@ -165,16 +160,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Video player registry is now handled by useVideoPlaybackControl hook
 
-  // Overlay management functions
+  // Overlay management: simple state based on play status
   const showOverlayTemporarily = useCallback(() => {
-    setOverlayVisible(true);
+    setShowOverlay(true);
     if (overlayTimeoutRef.current) {
       clearTimeout(overlayTimeoutRef.current);
     }
-
-    // Hide overlay after 3 seconds
+    // Optional: auto-hide after a few seconds while playing
     overlayTimeoutRef.current = setTimeout(() => {
-      setOverlayVisible(false);
+      setShowOverlay(false);
     }, 3000) as any;
   }, []);
 
@@ -182,14 +176,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     if (overlayTimeoutRef.current) {
       clearTimeout(overlayTimeoutRef.current);
     }
-    setOverlayVisible(false);
+    setShowOverlay(false);
   }, []);
 
   const showOverlayPermanently = useCallback(() => {
     if (overlayTimeoutRef.current) {
       clearTimeout(overlayTimeoutRef.current);
     }
-    setOverlayVisible(true);
+    setShowOverlay(true);
   }, []);
 
   // Handle external playing state changes (e.g., from scrolling)
@@ -207,17 +201,28 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       }
     );
 
-    // When video is paused externally (like from scrolling), show overlay
+    // When video is paused externally (like from scrolling), show overlay icon
     if (!isPlaying) {
+      // Show play icon overlay persistently when paused
       showOverlayPermanently();
+    } else {
+      // When this video starts playing, briefly show a dimmed pause overlay
+      // and then fade it away so the content is fully visible.
+      showOverlayTemporarily();
     }
-    // Don't auto-hide overlay when playing - let user control it manually
-  }, [isPlaying, video.title, key, videoLoaded, showOverlayPermanently]);
+  }, [
+    isPlaying,
+    video.title,
+    key,
+    videoLoaded,
+    showOverlayPermanently,
+    showOverlayTemporarily,
+  ]);
 
   // Initialize overlay state on mount - always show overlay initially
   useEffect(() => {
-    showOverlayPermanently(); // Always show controls on mount
-  }, []); // Only run on mount
+    showOverlayPermanently(); // Always show play icon on mount
+  }, [showOverlayPermanently]); // Only run on mount
 
   // Audio player for audio sermons
   const audioUrl =
@@ -646,6 +651,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   // View tracking state (thresholds: 3s or 25%, or completion) & avatar fallback initial
   const [hasTrackedView, setHasTrackedView] = useState(false);
   const [avatarErrored, setAvatarErrored] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const storeRef = useRef<any>(null);
   useEffect(() => {
     try {
@@ -818,7 +824,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           <MediaPlayButton
             isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
             onPress={handleTogglePlay}
-            showOverlay={overlayVisible}
+            showOverlay={showOverlay}
             size="medium"
             disabled={isPlayTogglePending}
           />
@@ -987,7 +993,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             onModalToggle(null);
           }
         }}
-        onViewDetails={() => {}}
+        onViewDetails={() => {
+          // Close the action modal and open the details sheet for this media
+          closeModal();
+          setShowDetailsModal(true);
+        }}
         onSaveToLibrary={() => onSave(modalKey, video)}
         onDownload={() => onDownload(video)}
         isSaved={!!contentStats[contentId]?.userInteractions?.saved}
@@ -1016,6 +1026,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         onClose={() => setShowReportModal(false)}
         mediaId={video._id || ""}
         mediaTitle={video.title}
+      />
+
+      {/* Media Details Slider */}
+      <MediaDetailsModal
+        visible={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        mediaItem={video}
       />
 
       {/* AI Description Box removed in src version; exists only in app layer */}

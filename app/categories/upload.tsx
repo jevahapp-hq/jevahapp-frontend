@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -11,7 +12,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from "react-native";
 
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -93,6 +93,9 @@ export default function UploadScreen() {
     errors: string[];
     warnings: string[];
   } | null>(null);
+  const [detectedFileType, setDetectedFileType] = useState<
+    "video" | "audio" | "ebook" | "unknown"
+  >("unknown");
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
     getOrientation()
   );
@@ -153,7 +156,12 @@ export default function UploadScreen() {
     
     // Ebook formats
     const ebookFormats = ["pdf", "epub", "mobi"];
-    const ebookMimes = ["application/pdf", "application/epub", "application/x-mobipocket-ebook"];
+    const ebookMimes = [
+      "application/pdf",
+      "application/epub",
+      "application/epub+zip",
+      "application/x-mobipocket-ebook",
+    ];
     
     // Check by mime type first (more reliable)
     if (mimeType) {
@@ -207,7 +215,26 @@ export default function UploadScreen() {
     }
 
     if (!selectedType) {
-      errors.push("Please select a content type");
+      if (file) {
+        const actualFileType = detectFileType(file);
+        if (actualFileType === "video") {
+          errors.push(
+            "Please select a content type. Detected a video file; choose Videos or Sermon."
+          );
+        } else if (actualFileType === "audio") {
+          errors.push(
+            "Please select a content type. Detected an audio file; choose Music, Podcasts, or Sermon."
+          );
+        } else if (actualFileType === "ebook") {
+          errors.push(
+            "Please select a content type. Detected an ebook/PDF; choose Books or Ebook."
+          );
+        } else {
+          errors.push("Please select a content type.");
+        }
+      } else {
+        errors.push("Please select a content type.");
+      }
     }
 
     // Validate file type - detect actual file type first, then check compatibility
@@ -409,6 +436,9 @@ export default function UploadScreen() {
     };
 
     setFile(selectedFile);
+    // Detect and store file type for UI and validation hints
+    const detectedType = detectFileType(selectedFile);
+    setDetectedFileType(detectedType);
 
     // Validate eligibility when file is selected
     if (title && selectedCategory && selectedType) {
@@ -973,7 +1003,8 @@ export default function UploadScreen() {
     setSelected: (val: string) => void
   ) => {
     const isSelected = value === selected;
-    const tagPadding = getResponsiveSpacing(8, 12, 16);
+    const tagPaddingHorizontal = getResponsiveSpacing(10, 14, 18);
+    const tagPaddingVertical = getResponsiveSpacing(6, 8, 10);
     const tagFontSize = getResponsiveFontSize(12, 14, 16);
     const touchTargetSize = getTouchTargetSize();
 
@@ -998,8 +1029,8 @@ export default function UploadScreen() {
           isSelected ? "bg-black border-black" : "bg-white border-gray-300"
         }`}
         style={{
-          paddingHorizontal: tagPadding,
-          paddingVertical: tagPadding * 0.75,
+          paddingHorizontal: tagPaddingHorizontal,
+          paddingVertical: tagPaddingVertical,
           minHeight: touchTargetSize,
         }}
         activeOpacity={0.8}
@@ -1307,26 +1338,37 @@ export default function UploadScreen() {
         {...getKeyboardAdjustment()}
         className="flex-1 bg-white"
       >
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{
-            paddingBottom: getResponsiveSpacing(20, 30, 40),
-            minHeight: getScreenDimensions().height - 100, // Ensure content fills screen
-          }}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={{ flex: 1 }}>
+          {/* Fixed top header (back / close) – does NOT scroll */}
           <View
-            style={{ paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32) }}
+            style={{
+              paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+              paddingTop: getResponsiveSpacing(16, 20, 24, 32),
+            }}
           >
-            <View className="mt-6">
-              <AuthHeader title="New Upload" />
-            </View>
+            <AuthHeader title="New Upload" />
+          </View>
 
-            {/* Media and Thumbnail Pickers */}
-            <View className="mt-4 mb-6">{renderMediaPickers()}</View>
+          {/* Scrollable form content */}
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{
+              paddingBottom: getResponsiveSpacing(20, 30, 40),
+              minHeight: getScreenDimensions().height - 100, // Ensure content fills screen
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              style={{
+                paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+                paddingTop: getResponsiveSpacing(8, 10, 12, 16),
+              }}
+            >
+              {/* Media and Thumbnail Pickers */}
+              <View className="mt-2 mb-6">{renderMediaPickers()}</View>
 
-            {/* Form Fields */}
-            <View className="flex-1">
+              {/* Form Fields */}
+              <View className="flex-1">
               <Text className="text-xs text-gray-600 mb-1 font-medium">
                 TITLE
               </Text>
@@ -1384,6 +1426,19 @@ export default function UploadScreen() {
               <Text className="text-xs text-gray-600 mb-2 font-medium">
                 CONTENT TYPE
               </Text>
+              {file && (
+                <Text
+                  className="text-[11px] text-gray-500 mb-1"
+                  style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+                >
+                  {detectedFileType === "video" && "Detected file: Video (e.g. MP4)"}
+                  {detectedFileType === "audio" && "Detected file: Audio (e.g. MP3, WAV)"}
+                  {detectedFileType === "ebook" &&
+                    "Detected file: Document / Ebook (e.g. PDF, EPUB)"}
+                  {detectedFileType === "unknown" &&
+                    "File type not recognized yet. Please choose the correct content type."}
+                </Text>
+              )}
               <View className="flex-row flex-wrap mb-4">
                 {contentTypes.map((item) =>
                   renderTag(
@@ -1680,8 +1735,10 @@ export default function UploadScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            {/* Close scroll content container View */}
           </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </>
   );

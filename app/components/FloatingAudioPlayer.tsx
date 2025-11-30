@@ -23,7 +23,7 @@ import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const MINI_PLAYER_HEIGHT = 64;
-const HEADER_HEIGHT = 60; // Approximate header height
+const BOTTOM_NAV_HEIGHT = 80; // Approximate bottom tab height (Upload / Live bar)
 
 export default function FloatingAudioPlayer() {
   const router = useRouter();
@@ -101,7 +101,7 @@ export default function FloatingAudioPlayer() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  // Pan responder for swipe up to dismiss (since it's at top)
+  // Pan responder for swipe down to dismiss (player sits above bottom nav)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -112,17 +112,17 @@ export default function FloatingAudioPlayer() {
         panY.current = 0;
       },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy < 0) {
-          // Only allow upward swipe (to dismiss)
+        if (gestureState.dy > 0) {
+          // Only allow downward swipe (to dismiss)
           panY.current = gestureState.dy;
           translateY.setValue(gestureState.dy);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy < -80) {
-          // Dismiss if swiped up more than 80px
+        if (gestureState.dy > 80) {
+          // Dismiss if swiped down more than 80px
           Animated.timing(translateY, {
-            toValue: -MINI_PLAYER_HEIGHT - 20,
+            toValue: MINI_PLAYER_HEIGHT + 20,
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
@@ -152,12 +152,12 @@ export default function FloatingAudioPlayer() {
 
   return (
     <>
-      {/* Floating Mini Player - Top Position with Glassmorphism */}
+      {/* Floating Mini Player - Bottom Position just above Upload / Live bar */}
       <Animated.View
         style={[
           styles.container,
           {
-            top: insets.top + HEADER_HEIGHT,
+            bottom: insets.bottom + BOTTOM_NAV_HEIGHT,
             transform: [{ translateY }],
           },
         ]}

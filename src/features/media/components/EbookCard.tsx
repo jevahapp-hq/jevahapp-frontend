@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
-import { useCommentModal } from "../../../../app/context/CommentModalContext";
-import { useMediaDeletion } from "../../../shared/hooks";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
   useContentCount,
   useUserInteraction,
@@ -11,8 +10,10 @@ import {
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import MediaDetailsModal from "../../../shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
+import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { EbookCardProps } from "../../../shared/types";
@@ -36,6 +37,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   
   // Delete media functionality - using reusable hook
   const {
@@ -300,7 +302,10 @@ export const EbookCard: React.FC<EbookCardProps> = ({
       <ContentActionModal
         isVisible={isModalVisible}
         onClose={closeModal}
-        onViewDetails={() => {}}
+        onViewDetails={() => {
+          closeModal();
+          setShowDetailsModal(true);
+        }}
         onSaveToLibrary={() => onSave(ebook)}
         onDownload={() => onDownload(ebook)}
         isSaved={!!(ebook as any)?.saved}
@@ -328,6 +333,13 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         onClose={() => setShowReportModal(false)}
         mediaId={ebook._id || ""}
         mediaTitle={ebook.title}
+      />
+
+      {/* Media Details Slider */}
+      <MediaDetailsModal
+        visible={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        mediaItem={ebook}
       />
     </View>
   );

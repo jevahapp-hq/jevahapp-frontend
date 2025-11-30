@@ -306,12 +306,34 @@ export default function CopyrightFreeSongs({
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   }, []);
 
-  const { setTrack, currentTrack, isPlaying: globalIsPlaying, togglePlayPause } = useGlobalAudioPlayerStore();
+  const {
+    setTrack,
+    currentTrack,
+    isPlaying: globalIsPlaying,
+    togglePlayPause,
+    isLoading: globalIsLoading,
+  } = useGlobalAudioPlayerStore();
 
   const handlePlayIconPress = useCallback(
     async (song: any) => {
       console.log("🎵 Play button pressed for:", song.title);
-      
+      // Avoid double-press while the global player is still loading a track
+      if (globalIsLoading) {
+        console.log("⏳ Global audio player is loading, ignoring tap");
+        return;
+      }
+
+      // Stop any legacy/advanced audio that might be playing elsewhere
+      try {
+        const audioManagerModule = require("../utils/globalAudioInstanceManager");
+        const audioManager = audioManagerModule.default.getInstance();
+        audioManager.stopAllAudio().catch(() => {
+          // ignore errors – we just don't want duplicate audio sources
+        });
+      } catch {
+        // manager not available, safe to continue
+      }
+
       // Use global audio player
       if (currentTrack?.id === song.id && globalIsPlaying) {
         // If same song is playing, just pause

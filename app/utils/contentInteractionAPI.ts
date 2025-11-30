@@ -668,44 +668,53 @@ class ContentInteractionService {
       const headers = await this.getAuthHeaders();
       const backendContentType = this.mapContentTypeToBackend(contentType);
 
-      const response = await fetch(
-        `${this.baseURL}/api/content/${backendContentType}/${contentId}/comment`,
-        {
-          method: "POST",
-          headers,
-          // Backend expects { content, parentCommentId }
-          body: JSON.stringify({ content: comment, parentCommentId }),
-        }
-      );
+      // New unified comments endpoint: POST /api/comments
+      const response = await fetch(`${this.baseURL}/api/comments`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          contentId,
+          contentType: backendContentType,
+          content: comment,
+          parentCommentId,
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, body: ${errorText}`
+        );
       }
 
       const raw = await response.json();
-      const data = raw && raw.data ? raw.data : raw;
-      // Transform server comment → CommentData
+      // Backend spec: { success, message, data: { ...comment } }
+      const data = raw?.data || raw;
+      const user = data?.user || {};
+
+      const firstName =
+        user.firstName || user.given_name || user.first_name || "";
+      const lastName =
+        user.lastName || user.family_name || user.last_name || "";
+      const fullName = `${String(firstName).trim()} ${String(
+        lastName
+      ).trim()}`.trim();
+
       const transformed: CommentData = {
-        id: String(data?._id || data?.id),
+        id: String(data?.id || data?._id),
         contentId: String(contentId),
-        userId: String(data?.userId || data?.authorId || ""),
-        username: String(data?.username || data?.user?.username || "User"),
-        userAvatar: data?.userAvatar || data?.user?.avatarUrl,
+        userId: String(user.id || user._id || data?.userId || ""),
+        username:
+          fullName ||
+          user.username ||
+          data?.username ||
+          user.email ||
+          "User",
+        userAvatar: user.avatar || user.avatarUrl || data?.avatar,
         comment: String(data?.content || ""),
         timestamp: String(data?.createdAt || new Date().toISOString()),
-        likes: Number(data?.reactionsCount || data?.likes || 0),
-        replies: Array.isArray(data?.replies)
-          ? data.replies.map((r: any) => ({
-              id: String(r?._id || r?.id),
-              contentId: String(contentId),
-              userId: String(r?.userId || r?.authorId || ""),
-              username: String(r?.username || r?.user?.username || "User"),
-              userAvatar: r?.userAvatar || r?.user?.avatarUrl,
-              comment: String(r?.content || ""),
-              timestamp: String(r?.createdAt || new Date().toISOString()),
-              likes: Number(r?.reactionsCount || r?.likes || 0),
-            }))
-          : [],
+        likes: Number(data?.likesCount ?? data?.likes ?? 0),
+        replies: [], // replies are loaded separately when needed
       };
       return transformed;
     } catch (error) {
@@ -786,13 +795,12 @@ class ContentInteractionService {
         return { liked: false, totalLikes: 0 };
       }
       const headers = await this.getAuthHeaders();
-      // Use reaction endpoint with correct body shape
+      // New spec: POST /api/comments/:commentId/like
       const response = await fetch(
-        `${this.baseURL}/api/interactions/comments/${commentId}/reaction`,
+        `${this.baseURL}/api/comments/${commentId}/like`,
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ reactionType: "like" }),
         }
       );
 
@@ -803,8 +811,10 @@ class ContentInteractionService {
       const raw = await response.json();
       const data = raw && raw.data ? raw.data : raw;
       return {
-        liked: Boolean(data?.liked ?? true),
-        totalLikes: Number(data?.totalLikes ?? data?.reactionsCount ?? 0),
+        liked: Boolean(data?.liked ?? false),
+        totalLikes: Number(
+          data?.likesCount ?? data?.totalLikes ?? data?.reactionsCount ?? 0
+        ),
       };
     } catch (error) {
       console.error("Error toggling comment like:", error);

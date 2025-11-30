@@ -7,10 +7,9 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import { useMediaDeletion } from "../../../shared/hooks";
-import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import {
   useContentCount,
   useUserInteraction,
@@ -19,9 +18,11 @@ import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
+import MediaDetailsModal from "../../../shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import { AudioCardSkeleton } from "../../../shared/components/Skeleton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
+import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
@@ -77,6 +78,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const [showReportModal, setShowReportModal] = useState(false);
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   
   // Delete media functionality - using reusable hook
   const {
@@ -124,11 +126,26 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     }
   );
 
-  const handlePlayPress = useCallback(() => {
+  const handlePlayPress = useCallback(async () => {
     if (!audioUrl || !isValidUri(audioUrl)) return;
+    // Prevent rapid double-taps while the player is toggling state
+    if (playerState.isLoading) return;
+
     setAttemptedPlay(true);
-    controls.togglePlay();
-  }, [audioUrl, controls]);
+    try {
+      await controls.togglePlay();
+      // Optionally notify parent (e.g. to drive a global mini-player)
+      if (onPlay) {
+        try {
+          onPlay(audioUrl, audio._id || `music-${index}`);
+        } catch (err) {
+          console.warn("MusicCard onPlay callback failed:", err);
+        }
+      }
+    } catch (err) {
+      console.warn("MusicCard play toggle failed:", err);
+    }
+  }, [audioUrl, controls, onPlay, audio._id, index, playerState.isLoading]);
 
   const handleOverlayToggle = useCallback(() => {
     setShowOverlay((prev) => !prev);
@@ -416,7 +433,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       <ContentActionModal
         isVisible={isModalVisible}
         onClose={closeModal}
-        onViewDetails={() => {}}
+        onViewDetails={() => {
+          closeModal();
+          setShowDetailsModal(true);
+        }}
         onSaveToLibrary={() => onSave(audio)}
         onDownload={() => onDownload(audio)}
         isSaved={!!audio.saves}
@@ -445,6 +465,13 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         onClose={() => setShowReportModal(false)}
         mediaId={audio._id || ""}
         mediaTitle={audio.title}
+      />
+
+      {/* Media Details Slider */}
+      <MediaDetailsModal
+        visible={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        mediaItem={audio}
       />
     </View>
   );

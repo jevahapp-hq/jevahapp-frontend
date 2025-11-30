@@ -203,6 +203,18 @@ export const useAdvancedAudioPlayer = (
       }
       if (!soundRef.current) return;
       setState((prev) => ({ ...prev, isLoading: true }));
+      // Ensure any legacy/global audio instances are stopped before starting this one
+      try {
+        // Runtime require to avoid circular deps if the manager is not used elsewhere
+        const audioManagerModule = require("../utils/globalAudioInstanceManager");
+        const audioManager = audioManagerModule.default.getInstance();
+        audioManager.stopAllAudio().catch(() => {
+          // ignore manager errors; local playback will still work
+        });
+      } catch {
+        // manager not available, ignore
+      }
+
       useGlobalMediaStore.getState().playMediaGlobally(audioKey, "audio");
       await soundRef.current.playAsync();
       setState((prev) => ({ ...prev, isPlaying: true, isLoading: false }));

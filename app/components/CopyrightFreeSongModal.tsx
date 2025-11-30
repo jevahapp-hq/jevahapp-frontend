@@ -285,145 +285,238 @@ export default function CopyrightFreeSongModal({
         animationType="none"
         onRequestClose={onClose}
       >
-        <View className="flex-1 bg-black/50 justify-end">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <Animated.View
             style={[
               {
-                backgroundColor: "white",
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
+                backgroundColor: UI_CONFIG.COLORS.BACKGROUND,
+                borderRadius: 32,
+                width: "92%",
                 maxHeight: SCREEN_HEIGHT * 0.9,
-                paddingTop: 16,
+                paddingTop: UI_CONFIG.SPACING.MD,
+                paddingBottom: UI_CONFIG.SPACING.XL,
               },
               modalAnimatedStyle,
             ]}
           >
-            {/* Header - Matches app theme */}
+            {/* Header - Now Playing style */}
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
-                paddingHorizontal: UI_CONFIG.SPACING.MD,
-                paddingVertical: UI_CONFIG.SPACING.MD,
-                borderBottomWidth: 1,
-                borderBottomColor: UI_CONFIG.COLORS.BORDER,
+                paddingHorizontal: UI_CONFIG.SPACING.LG,
+                paddingVertical: UI_CONFIG.SPACING.SM,
               }}
             >
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                    fontFamily: "Rubik-SemiBold",
-                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  }}
-                >
-                  Audio Library
-                </Text>
-                <Text
-                  style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                    fontFamily: "Rubik",
-                    color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                    marginTop: 4,
-                  }}
-                >
-                  Copyright-free music
-                </Text>
-              </View>
               <TouchableOpacity
                 onPress={onClose}
                 style={{
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
                   justifyContent: "center",
                   alignItems: "center",
+                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
                 }}
               >
                 <Ionicons
-                  name="close"
+                  name="chevron-down"
                   size={20}
-                  color={UI_CONFIG.COLORS.TEXT_SECONDARY}
+                  color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                />
+              </TouchableOpacity>
+
+              <Text
+                style={{
+                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+                  fontFamily: "Rubik-SemiBold",
+                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                }}
+              >
+                Now Playing
+              </Text>
+
+              <TouchableOpacity
+                onPress={handleAddToPlaylist}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                }}
+              >
+                <Ionicons
+                  name="ellipsis-horizontal"
+                  size={18}
+                  color={UI_CONFIG.COLORS.TEXT_PRIMARY}
                 />
               </TouchableOpacity>
             </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 24 }}
+              contentContainerStyle={{
+                paddingHorizontal: UI_CONFIG.SPACING.LG,
+                paddingTop: UI_CONFIG.SPACING.LG,
+              }}
             >
-              {/* Song Thumbnail - YouTube-style larger */}
-              <View className="items-center mt-6 mb-6">
+              {/* Artwork */}
+              <View
+                style={{
+                  alignItems: "center",
+                  marginBottom: UI_CONFIG.SPACING.XL,
+                }}
+              >
                 <Image
                   source={song.thumbnailUrl}
-                  className="w-56 h-56 rounded-2xl shadow-lg"
-                  resizeMode="cover"
                   style={{
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
+                    width: 260,
+                    height: 260,
+                    borderRadius: 32,
                   }}
+                  resizeMode="cover"
                 />
               </View>
 
               {/* Song Info */}
-              <View className="px-4 mb-6">
-                <Text className="text-2xl font-rubik-bold text-center mb-2">
+              <View
+                style={{
+                  alignItems: "center",
+                  marginBottom: UI_CONFIG.SPACING.LG,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XL,
+                    fontFamily: "Rubik-SemiBold",
+                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                    marginBottom: 4,
+                    textAlign: "center",
+                  }}
+                  numberOfLines={2}
+                >
                   {song.title}
                 </Text>
-                <Text className="text-lg text-gray-600 font-rubik text-center mb-1">
+                <Text
+                  style={{
+                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                    fontFamily: "Rubik",
+                    color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                    marginBottom: 4,
+                    textAlign: "center",
+                  }}
+                  numberOfLines={1}
+                >
                   {song.artist}
                 </Text>
                 {song.category && (
-                  <Text className="text-sm text-gray-500 font-rubik text-center mb-4">
+                  <Text
+                    style={{
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
+                      fontFamily: "Rubik",
+                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                    }}
+                    numberOfLines={1}
+                  >
                     {song.category}
                   </Text>
                 )}
-                {song.description && (
-                  <Text className="text-sm text-gray-700 font-rubik text-center leading-5">
-                    {song.description}
-                  </Text>
-                )}
-                <View className="flex-row items-center justify-center mt-4 gap-4">
-                  <View className="flex-row items-center">
-                    <Ionicons name="eye-outline" size={16} color="#9CA3AF" />
-                    <Text className="text-xs text-gray-500 ml-1 font-rubik">
-                      {song.views || 0} views
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center">
-                    <Ionicons name="heart-outline" size={16} color="#9CA3AF" />
-                    <Text className="text-xs text-gray-500 ml-1 font-rubik">
-                      {song.likes || 0} likes
-                    </Text>
-                  </View>
-                </View>
               </View>
 
-              {/* Audio Player - Matches app theme */}
-              <View
-                style={{
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  marginBottom: UI_CONFIG.SPACING.LG,
-                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
-                  borderRadius: UI_CONFIG.BORDER_RADIUS.XL,
-                  paddingVertical: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                <View className="flex-row items-center mb-4">
+              {/* Progress + controls */}
+              <View style={{ marginBottom: UI_CONFIG.SPACING.XL }}>
+                {/* Progress bar */}
+                <View
+                  ref={progressBarRef}
+                  style={{
+                    height: 4,
+                    borderRadius: 999,
+                    backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                    overflow: "hidden",
+                    marginBottom: 8,
+                  }}
+                  {...panResponder.panHandlers}
+                >
+                  <View
+                    style={{
+                      height: "100%",
+                      borderRadius: 999,
+                      width: `${
+                        (isSeeking ? seekProgress : audioProgress) * 100
+                      }%`,
+                      backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+                    }}
+                  />
+                </View>
+
+                {/* Time row */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: UI_CONFIG.SPACING.LG,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
+                      fontFamily: "Rubik",
+                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                    }}
+                  >
+                    {formatTime(
+                      isSeeking
+                        ? seekProgress * (audioDuration || song.duration * 1000)
+                        : audioPosition
+                    )}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
+                      fontFamily: "Rubik",
+                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                    }}
+                  >
+                    {formatTime(audioDuration || song.duration * 1000)}
+                  </Text>
+                </View>
+
+                {/* Transport controls */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: UI_CONFIG.SPACING.XL,
+                  }}
+                >
+                  <AnimatedButton onPress={() => onSeek && onSeek(0)}>
+                    <Ionicons
+                      name="play-skip-back"
+                      size={24}
+                      color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                    />
+                  </AnimatedButton>
+
                   <AnimatedButton
                     onPress={onTogglePlay || (() => onPlay?.(song))}
                     style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 32,
-                      backgroundColor: UI_CONFIG.COLORS.SECONDARY, // #FEA74E - matches theme
+                      width: 72,
+                      height: 72,
+                      borderRadius: 36,
+                      backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green
                       justifyContent: "center",
                       alignItems: "center",
-                      marginRight: 16,
                       ...UI_CONFIG.SHADOWS.MD,
                     }}
                   >
@@ -434,126 +527,66 @@ export default function CopyrightFreeSongModal({
                     />
                   </AnimatedButton>
 
-                  <View className="flex-1 mr-4">
-                    {/* Seekable Progress Bar */}
-                    <View
-                      ref={progressBarRef}
-                      className="h-3 bg-gray-200 rounded-full mb-2"
-                      {...panResponder.panHandlers}
-                    >
-                      <View
-                        className="h-full rounded-full relative"
-                        style={{
-                          width: `${(isSeeking ? seekProgress : audioProgress) * 100}%`,
-                          backgroundColor: UI_CONFIG.COLORS.SECONDARY, // #FEA74E
-                        }}
-                      >
-                        {/* Seek Thumb */}
-                        <View
-                          className="absolute right-0 top-1/2 rounded-full border-2 border-white"
-                          style={{
-                            transform: [{ translateX: 6 }, { translateY: -8 }],
-                            width: 16,
-                            height: 16,
-                            backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                          }}
-                        />
-                      </View>
-                    </View>
-
-                    {/* Time Display */}
-                    <View className="flex-row justify-between">
-                      <Text className="text-xs font-rubik text-gray-500">
-                        {formatTime(
-                          isSeeking
-                            ? seekProgress * (audioDuration || song.duration * 1000)
-                            : audioPosition
-                        )}
-                      </Text>
-                      <Text className="text-xs font-rubik text-gray-500">
-                        {formatTime(audioDuration || song.duration * 1000)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Mute Button */}
-                  <AnimatedButton onPress={onToggleMute}>
-                    <Ionicons
-                      name={isMuted ? "volume-mute" : "volume-high"}
-                      size={24}
-                      color={UI_CONFIG.COLORS.TEXT_SECONDARY}
-                    />
-                  </AnimatedButton>
-
-                  {/* Playlist Button - Samsung-style list icon */}
                   <AnimatedButton
-                    onPress={() => {
-                      setShowPlaylistView(true);
-                    }}
-                    style={{ marginLeft: 8 }}
+                    onPress={() => onSeek && onSeek(0.99)}
                   >
                     <Ionicons
-                      name="list"
+                      name="play-skip-forward"
                       size={24}
-                      color={UI_CONFIG.COLORS.SECONDARY}
+                      color={UI_CONFIG.COLORS.TEXT_PRIMARY}
                     />
                   </AnimatedButton>
                 </View>
               </View>
 
-              {/* Action Buttons - Matches app theme */}
+              {/* Bottom row: mute + playlist pill */}
               <View
                 style={{
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  gap: 12,
-                  marginBottom: UI_CONFIG.SPACING.MD,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                <AnimatedButton
-                  onPress={handleAddToPlaylist}
-                  style={{
-                    backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                    paddingVertical: UI_CONFIG.SPACING.MD,
-                    borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    ...UI_CONFIG.SHADOWS.MD,
-                  }}
-                >
-                  <Ionicons name="add-circle-outline" size={22} color="#FFFFFF" />
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontFamily: "Rubik-SemiBold",
-                      marginLeft: 8,
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-                    }}
-                  >
-                    Add to Playlist
-                  </Text>
+                <AnimatedButton onPress={onToggleMute}>
+                  <Ionicons
+                    name={isMuted ? "volume-mute" : "volume-high"}
+                    size={22}
+                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                  />
                 </AnimatedButton>
 
                 <AnimatedButton
-                  onPress={onClose}
+                  onPress={() => setShowPlaylistView(true)}
                   style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: UI_CONFIG.SPACING.LG,
+                    paddingVertical: UI_CONFIG.SPACING.SM,
+                    borderRadius: 999,
                     backgroundColor: UI_CONFIG.COLORS.SURFACE,
-                    paddingVertical: 14,
-                    borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                    borderWidth: 1,
-                    borderColor: UI_CONFIG.COLORS.BORDER,
                   }}
                 >
+                  <Ionicons
+                    name="list"
+                    size={18}
+                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                  />
                   <Text
                     style={{
+                      marginLeft: 6,
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                      fontFamily: "Rubik",
                       color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                      fontFamily: "Rubik-SemiBold",
-                      textAlign: "center",
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
                     }}
                   >
-                    Close
+                    Playlist
                   </Text>
+                  <Ionicons
+                    name="chevron-up"
+                    size={16}
+                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                    style={{ marginLeft: 4 }}
+                  />
                 </AnimatedButton>
               </View>
             </ScrollView>

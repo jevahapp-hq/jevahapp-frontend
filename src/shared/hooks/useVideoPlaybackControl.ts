@@ -28,6 +28,7 @@ export const useVideoPlaybackControl = ({
     isAutoPlayEnabled,
     registerVideoPlayer,
     unregisterVideoPlayer,
+    playVideoGlobally,
   } = useGlobalVideoStore();
 
   const isPlaying = playingVideos[videoKey] || false;
@@ -113,8 +114,9 @@ export const useVideoPlaybackControl = ({
   // Manual play control
   const play = useCallback(() => {
     console.log(`🎮 Manual play triggered for: ${videoKey}`);
-    playVideo(videoKey);
-  }, [videoKey, playVideo]);
+    // Use global play to ensure only one video plays at a time
+    playVideoGlobally(videoKey);
+  }, [videoKey, playVideoGlobally]);
 
   // Manual pause control
   const pause = useCallback(() => {

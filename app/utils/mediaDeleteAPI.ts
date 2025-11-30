@@ -1,8 +1,7 @@
 // Media Deletion API Service
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { apiAxios, getApiBaseUrl } from "./api";
-import TokenUtils from "./tokenUtils";
+import { getApiBaseUrl } from "./api";
 
 export interface DeleteMediaResponse {
   success: boolean;
@@ -211,23 +210,58 @@ export const isMediaOwner = async (
   mediaItem?: any
 ): Promise<boolean> => {
   try {
-    // Get current user ID
+    // Get current user ID using all known fields & sources
     const userStr = await AsyncStorage.getItem("user");
-    if (!userStr) {
-      console.log("❌ isMediaOwner: No user found in AsyncStorage");
-      return false;
+    let currentUserId = "";
+    let user: any = null;
+
+    if (userStr) {
+      try {
+        user = JSON.parse(userStr);
+      } catch (e) {
+        console.warn("⚠️ isMediaOwner: Failed to parse user from AsyncStorage", e);
+      }
     }
 
-    const user = JSON.parse(userStr);
-    // Try multiple possible user ID fields
-    const currentUserId = String(user._id || user.id || user.userId || "").trim();
-    
+    // Try multiple possible user ID fields on the stored user object
+    if (user) {
+      currentUserId = String(
+        user._id ||
+          user.id ||
+          user.userId ||
+          user.userID || // defensive for alternate casing
+          (user.profile && (user.profile._id || user.profile.id)) ||
+          ""
+      ).trim();
+    }
+
+    // Fallback: if still no ID but we have a token, assume this is "some" logged-in user
+    // and let the backend enforce the final authorization.
     if (!currentUserId) {
-      console.log("❌ isMediaOwner: No current user ID found", { user });
-      return false;
+      const token =
+        (await AsyncStorage.getItem("userToken")) ||
+        (await AsyncStorage.getItem("token")) ||
+        null;
+
+      if (!token) {
+        console.log("❌ isMediaOwner: No current user ID or auth token found", {
+          user,
+        });
+        return false;
+      }
+
+      console.log(
+        "⚠️ isMediaOwner: No explicit user ID found, but token exists – trusting frontend ownership check and deferring final check to backend."
+      );
+      // We don't set currentUserId here, but we can still safely do a best-effort owner check below.
     }
 
-    if (!uploadedBy && !mediaItem?.authorInfo?._id && !mediaItem?.author?._id) {
+    if (
+      !uploadedBy &&
+      !mediaItem?.authorInfo?._id &&
+      !mediaItem?.author?._id &&
+      !mediaItem?.uploadedBy
+    ) {
       console.log("❌ isMediaOwner: No uploadedBy or author info provided");
       return false;
     }
@@ -235,11 +269,19 @@ export const isMediaOwner = async (
     // Extract uploadedBy ID - handle multiple formats
     let uploadedById: string = "";
     
-    // First, try to get from mediaItem authorInfo/author (most reliable)
+    // First, try to get from mediaItem authorInfo/author/uploadedBy (most reliable)
     if (mediaItem?.authorInfo?._id) {
       uploadedById = String(mediaItem.authorInfo._id).trim();
     } else if (mediaItem?.author?._id) {
       uploadedById = String(mediaItem.author._id).trim();
+    } else if (
+      mediaItem?.uploadedBy &&
+      typeof mediaItem.uploadedBy === "object" &&
+      (mediaItem.uploadedBy._id || mediaItem.uploadedBy.id)
+    ) {
+      uploadedById = String(
+        mediaItem.uploadedBy._id || mediaItem.uploadedBy.id
+      ).trim();
     } else if (typeof uploadedBy === "string") {
       // Check if it's an ObjectId (24 hex characters) or a full name
       const trimmed = String(uploadedBy).trim();
