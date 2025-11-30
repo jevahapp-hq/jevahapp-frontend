@@ -16,7 +16,7 @@ import {
 
 import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ResizeMode, Video } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -1045,6 +1045,15 @@ export default function UploadScreen() {
     );
   };
 
+  // Video player for preview (only when file is selected)
+  const previewVideoPlayer = useVideoPlayer(
+    file && file.mimeType?.startsWith("video") ? file.uri : "",
+    (player) => {
+      player.loop = false;
+      player.muted = false;
+    }
+  );
+
   // Responsive layout for media pickers
   const renderMediaPickers = () => {
     const mediaSize = getMediaPickerSize();
@@ -1083,11 +1092,12 @@ export default function UploadScreen() {
                   Select Media
                 </Text>
               </View>
-            ) : file.mimeType.startsWith("video") ? (
-              <Video
-                source={{ uri: file.uri || undefined }}
-                useNativeControls
-                resizeMode={ResizeMode.COVER}
+            ) : file.mimeType.startsWith("video") && previewVideoPlayer ? (
+              <VideoView
+                player={previewVideoPlayer}
+                contentFit="cover"
+                nativeControls={true}
+                fullscreenOptions={{ enterFullscreenButton: false }}
                 style={{ width: "100%", height: "100%", borderRadius: 12 }}
               />
             ) : (
@@ -1166,11 +1176,12 @@ export default function UploadScreen() {
                 Select Media
               </Text>
             </View>
-          ) : file.mimeType.startsWith("video") ? (
-            <Video
-              source={{ uri: file.uri || undefined }}
-              useNativeControls
-              resizeMode={ResizeMode.COVER}
+          ) : file.mimeType.startsWith("video") && previewVideoPlayer ? (
+            <VideoView
+              player={previewVideoPlayer}
+              contentFit="cover"
+              nativeControls={true}
+              fullscreenOptions={{ enterFullscreenButton: false }}
               style={{ width: "100%", height: "100%", borderRadius: 12 }}
             />
           ) : (

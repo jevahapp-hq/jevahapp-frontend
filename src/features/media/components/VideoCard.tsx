@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
@@ -58,7 +58,54 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onLayout,
   isAutoPlayEnabled = false,
 }) => {
-  const videoRef = useRef<Video>(null);
+  const contentId = video._id || getContentKey(video);
+  const key = getContentKey(video);
+  const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
+  const progress = progresses[key] || 0;
+
+  // Media type detection - needs to be before useVideoPlayer
+  const getMediaType = useCallback(() => {
+    const contentType = video.contentType?.toLowerCase() || "";
+
+    // Handle sermons - can be audio or video based on file extension
+    if (contentType === "sermon") {
+      const fileUrl = video.fileUrl?.toLowerCase() || "";
+      if (
+        fileUrl.includes(".mp4") ||
+        fileUrl.includes(".mov") ||
+        fileUrl.includes(".avi") ||
+        fileUrl.includes(".webm") ||
+        fileUrl.includes(".mkv")
+      ) {
+        return "video";
+      }
+      return "audio";
+    }
+
+    // Live, videos, and other video content types are all videos
+    if (
+      contentType === "live" ||
+      contentType === "video" ||
+      contentType === "videos"
+    ) {
+      return "video";
+    }
+
+    // Default to video for any other content type with a video file
+    return "video";
+  }, [video.contentType, video.fileUrl]);
+
+  const mediaType = getMediaType();
+  const isAudioSermon = mediaType === "audio";
+
+  const videoUrl = !isAudioSermon && isValidUri(video.fileUrl) 
+    ? getBestVideoUrl(video.fileUrl)
+    : null;
+  const player = useVideoPlayer(videoUrl || "", (player) => {
+    player.loop = false;
+    player.muted = isMuted ?? false; // Ensure boolean, never undefined
+    player.volume = (videoVolume ?? 1.0); // Ensure number, never undefined
+  });
   const isMountedRef = useRef(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
@@ -107,56 +154,36 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const lastTapRef = useRef<number>(0);
   const tapCountRef = useRef<number>(0);
 
-  // Media type detection - supports video, sermon (video/audio), and live
-  const getMediaType = useCallback(() => {
-    const contentType = video.contentType?.toLowerCase() || "";
 
-    // Handle sermons - can be audio or video based on file extension
-    if (contentType === "sermon") {
-      const fileUrl = video.fileUrl?.toLowerCase() || "";
-      if (
-        fileUrl.includes(".mp4") ||
-        fileUrl.includes(".mov") ||
-        fileUrl.includes(".avi") ||
-        fileUrl.includes(".webm") ||
-        fileUrl.includes(".mkv")
-      ) {
-        return "video";
-      }
-      return "audio";
+  // Update player settings when mute/volume changes
+  useEffect(() => {
+    if (player) {
+      player.muted = isMuted;
+      player.volume = videoVolume;
     }
+  }, [player, isMuted, videoVolume]);
 
-    // Live, videos, and other video content types are all videos
-    if (
-      contentType === "live" ||
-      contentType === "video" ||
-      contentType === "videos"
-    ) {
-      return "video";
-    }
-
-    // Default to video for any other content type with a video file
-    return "video";
-  }, [video.contentType, video.fileUrl]);
-
-  const mediaType = getMediaType();
-  const isAudioSermon = mediaType === "audio";
-
-  const contentId = video._id || getContentKey(video);
-  const key = getContentKey(video);
-  const isMuted = mutedVideos[key] || false;
-  const progress = progresses[key] || 0;
-
-  // Use modular video playback control hook
+  // Sync playback state with global store
   const {
     isPlaying,
     toggle: togglePlayback,
     shouldPlayThisVideo,
   } = useVideoPlaybackControl({
     videoKey: key,
-    videoRef,
+    videoRef: { current: player } as any, // Adapter for expo-video player
     enableAutoPlay: false, // Manual play only - Instagram/TikTok style
   });
+
+  // Sync player playback with global state
+  useEffect(() => {
+    if (!player) return;
+    
+    if (shouldPlayThisVideo && !player.playing) {
+      player.play();
+    } else if (!shouldPlayThisVideo && player.playing) {
+      player.pause();
+    }
+  }, [player, shouldPlayThisVideo]);
 
   // Video player registry is now handled by useVideoPlaybackControl hook
 
@@ -197,7 +224,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           (k) => playingVideos[k]
         ),
         videoLoaded,
-        videoRefExists: !!videoRef.current,
+        videoRefExists: !!player,
       }
     );
 
@@ -267,9 +294,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           console.warn("Audio seekBySeconds failed", e);
         }
       } else {
-        // Handle video seeking
+        // Handle video seeking with expo-video
         const durationMs = lastKnownDurationRef.current || 0;
-        if (!videoRef.current || durationMs <= 0) return;
+        if (!player || durationMs <= 0) return;
         const currentMs = Math.max(
           0,
           Math.min(progress * durationMs, durationMs)
@@ -279,7 +306,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           Math.min(currentMs + deltaSec * 1000, durationMs)
         );
         try {
-          await videoRef.current.setPositionAsync(nextMs);
+          player.currentTime = nextMs / 1000; // expo-video uses seconds
         } catch (e) {
           console.warn("Video seekBySeconds failed", e);
         }
@@ -291,6 +318,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       audioState.position,
       audioState.duration,
       audioControls,
+      player,
     ]
   );
 
@@ -307,18 +335,18 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           console.warn("Audio seekToPercent failed", e);
         }
       } else {
-        // Handle video seeking
+        // Handle video seeking with expo-video
         const durationMs = lastKnownDurationRef.current || 0;
-        if (!videoRef.current || durationMs <= 0) return;
+        if (!player || durationMs <= 0) return;
         const clamped = Math.max(0, Math.min(percent, 1));
         try {
-          await videoRef.current.setPositionAsync(clamped * durationMs);
+          player.currentTime = (clamped * durationMs) / 1000; // expo-video uses seconds
         } catch (e) {
           console.warn("Video seekToPercent failed", e);
         }
       }
     },
-    [isAudioSermon, audioState.duration, audioControls]
+    [isAudioSermon, audioState.duration, audioControls, player]
   );
 
   // Handle hover start - no autoplay functionality
@@ -360,9 +388,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         } else {
           // Use modular hook for pause
           togglePlayback();
-          if (videoRef.current) {
+          if (player) {
             try {
-              await videoRef.current.pauseAsync();
+              player.pause();
             } catch (error) {
               console.error("❌ Pause failed:", error);
             }
@@ -387,9 +415,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           } else {
             // Use modular hook for pause
             togglePlayback();
-            if (videoRef.current) {
+            if (player) {
               try {
-                await videoRef.current.pauseAsync();
+                player.pause();
               } catch (error) {
                 console.error("❌ Pause failed:", error);
               }
@@ -534,40 +562,88 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     [video.title, video.fileUrl]
   );
 
-  // Handle video load with better error handling
-  const handleVideoLoad = useCallback(
-    (status: AVPlaybackStatus) => {
-      if (status.isLoaded) {
-        console.log(`📱 Video load status for ${video.title}:`, {
-          isLoaded: status.isLoaded,
-          duration: status.durationMillis,
-          key,
-          shouldPlay: isPlaying,
-        });
+  // Handle video load and progress tracking with expo-video
+  useEffect(() => {
+    if (!player || isAudioSermon) return;
 
-        console.log(
-          `✅ Video loaded successfully and ready for playback: ${video.title}`
-        );
+    // Track duration when ready
+    const statusSubscription = player.addListener('statusChange', (status) => {
+      if (status.status === 'readyToPlay') {
+        console.log(`✅ Video loaded successfully: ${video.title}`);
         setFailedVideoLoad(false);
         setVideoLoaded(true);
-
-        // If the video should be playing according to state, start it now
-        if (isPlaying && videoRef.current) {
-          console.log(
-            "🚀 Video loaded and should be playing - starting playback immediately:",
-            key
-          );
-          videoRef.current.playAsync().catch((error) => {
-            console.error("❌ Failed to start playback after load:", error);
-          });
+        if (player.duration) {
+          lastKnownDurationRef.current = player.duration * 1000; // Convert to ms
         }
-      } else {
+        
+        if (isPlaying) {
+          player.play();
+        }
+      } else if (status.status === 'error') {
         console.error(`❌ Video load error for ${video.title}:`, status);
         setFailedVideoLoad(true);
+        handleVideoError(status);
       }
-    },
-    [video.title, key, isPlaying]
-  );
+    });
+
+    // Track progress and view completion
+    const progressInterval = setInterval(() => {
+      if (!player || !isMountedRef.current) return;
+      
+      const currentTime = player.currentTime || 0;
+      const duration = player.duration || 0;
+      const positionMs = currentTime * 1000;
+      const durationMs = duration * 1000;
+      const progress = durationMs > 0 ? positionMs / durationMs : 0;
+      
+      lastKnownDurationRef.current = durationMs;
+
+      const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
+      const finished = player.currentTime >= player.duration && player.duration > 0;
+
+      // Auto-restart video when finished
+      if (finished && isMountedRef.current) {
+        try {
+          player.currentTime = 0;
+          if (player.playing) {
+            player.play();
+          }
+        } catch (error) {
+          console.warn("Failed to restart video:", error);
+        }
+      }
+
+      // Track view
+      if (!hasTrackedView && (qualifies || finished)) {
+        try {
+          contentInteractionAPI.recordView(
+            contentId,
+            "media",
+            {
+              durationMs: finished ? durationMs : positionMs,
+              progressPct: Math.round(progress * 100),
+              isComplete: finished,
+            }
+          ).then((result) => {
+            setHasTrackedView(true);
+            if (
+              result?.totalViews != null &&
+              storeRef.current?.mutateStats
+            ) {
+              storeRef.current.mutateStats(contentId, () => ({
+                views: Number(result.totalViews) || 0,
+              }));
+            }
+          }).catch(() => {});
+        } catch {}
+      }
+    }, 1000);
+
+    return () => {
+      statusSubscription.remove();
+      clearInterval(progressInterval);
+    };
+  }, [player, video.title, isPlaying, isAudioSermon, contentId, hasTrackedView]);
 
   // Note: Video player registration is now handled by useVideoPlaybackControl hook
   // This ensures proper registration/unregistration and prevents duplicate registrations
@@ -706,27 +782,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       >
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermon ? (
-            <Video
-              ref={videoRef}
-              source={{
-                uri: getBestVideoUrl(video.fileUrl),
-                headers: {
-                  "User-Agent": "JevahApp/1.0",
-                  Accept: "video/*",
-                },
-              }}
+          {!failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermon && player ? (
+            <VideoView
+              player={player}
               style={{
                 width: "100%",
                 height: "100%",
                 position: "absolute",
               }}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={false}
-              isMuted={isMuted}
-              volume={videoVolume}
-              onError={handleVideoError}
-              onLoad={handleVideoLoad}
+              contentFit="cover"
+              nativeControls={false}
+              fullscreenOptions={{ enterFullscreenButton: false }}
               onLoadStart={() => {
                 console.log(`🔄 Video loading started: ${video.title}`, {
                   key,
@@ -734,54 +800,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                   videoUrl: getBestVideoUrl(video.fileUrl),
                 });
                 setVideoLoaded(false);
-              }}
-              progressUpdateIntervalMillis={1000}
-              onPlaybackStatusUpdate={async (status) => {
-                if (!status?.isLoaded) return;
-                const positionMs = Number(status.positionMillis || 0);
-                const durationMs = Number(status.durationMillis || 0);
-                const progress = durationMs > 0 ? positionMs / durationMs : 0;
-                // Cache duration for pan responder
-                lastKnownDurationRef.current = durationMs;
-
-                const qualifies =
-                  status.isPlaying && (positionMs >= 3000 || progress >= 0.25);
-                const finished = Boolean(status.didJustFinish);
-
-                // Auto-restart video when finished
-                if (finished && isMountedRef.current) {
-                  try {
-                    // Reset to beginning and play immediately
-                    await videoRef.current?.setPositionAsync(0);
-                    // The video will continue playing automatically due to shouldPlay prop
-                  } catch (error) {
-                    console.warn("Failed to restart video:", error);
-                  }
-                }
-
-                if (!isMountedRef.current) return;
-                if (!hasTrackedView && (qualifies || finished)) {
-                  try {
-                    const result = await contentInteractionAPI.recordView(
-                      contentId,
-                      "media",
-                      {
-                        durationMs: finished ? durationMs : positionMs,
-                        progressPct: Math.round(progress * 100),
-                        isComplete: finished,
-                      }
-                    );
-                    setHasTrackedView(true);
-                    if (
-                      result?.totalViews != null &&
-                      storeRef.current?.mutateStats
-                    ) {
-                      storeRef.current.mutateStats(contentId, () => ({
-                        views: Number(result.totalViews) || 0,
-                      }));
-                    }
-                  } catch {}
-                }
               }}
             />
           ) : (

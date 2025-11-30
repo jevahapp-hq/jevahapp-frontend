@@ -1,4 +1,4 @@
-import { Video } from "expo-av";
+import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect } from "react";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 
@@ -8,6 +8,7 @@ import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
  * - Only one video plays at a time
  * - Manual play/pause control (NO auto-play)
  * - Proper state synchronization
+ * Supports both expo-av Video refs and expo-video VideoPlayer instances
  */
 export const useVideoPlaybackControl = ({
   videoKey,
@@ -15,7 +16,7 @@ export const useVideoPlaybackControl = ({
   enableAutoPlay = false,
 }: {
   videoKey: string;
-  videoRef: React.RefObject<Video>;
+  videoRef: React.RefObject<any> | { current: VideoPlayer | null };
   enableAutoPlay?: boolean;
 }) => {
   const {
@@ -37,13 +38,22 @@ export const useVideoPlaybackControl = ({
 
   // Register/unregister video player for imperative control
   useEffect(() => {
-    if (!videoRef.current) return;
+    const player = videoRef.current;
+    if (!player) return;
+
+    // Check if it's expo-video player (has .play/.pause methods directly)
+    const isExpoVideoPlayer = typeof player.play === 'function' && typeof player.pause === 'function' && !player.pauseAsync;
 
     const playerRef = {
       pause: async () => {
-        if (videoRef.current) {
+        if (player) {
           try {
-            await videoRef.current.pauseAsync();
+            if (isExpoVideoPlayer) {
+              player.pause();
+            } else {
+              // expo-av Video
+              await player.pauseAsync();
+            }
             setOverlayVisible(videoKey, true);
           } catch (err) {
             console.warn(`Failed to pause ${videoKey}:`, err);
@@ -71,7 +81,8 @@ export const useVideoPlaybackControl = ({
 
   // Sync video playback with global state (NO AUTO-PLAY unless explicitly enabled)
   useEffect(() => {
-    if (!videoRef.current) return;
+    const player = videoRef.current;
+    if (!player) return;
 
     // Only sync if auto-play is explicitly enabled or if video was manually played
     if (!enableAutoPlay && !isCurrentlyPlaying && !shouldPlayThisVideo) {
@@ -80,20 +91,40 @@ export const useVideoPlaybackControl = ({
 
     const syncPlayback = async () => {
       try {
+        // Check if it's expo-video player
+        const isExpoVideoPlayer = typeof player.play === 'function' && typeof player.pause === 'function' && !player.pauseAsync;
+
         if (shouldPlayThisVideo) {
           // Video should be playing
-          const status = await videoRef.current?.getStatusAsync();
-          if (status?.isLoaded && !status.isPlaying) {
-            console.log(`▶️ Syncing playback: Playing ${videoKey}`);
-            await videoRef.current?.playAsync();
+          if (isExpoVideoPlayer) {
+            if (!player.playing) {
+              console.log(`▶️ Syncing playback: Playing ${videoKey}`);
+              player.play();
+            }
+          } else {
+            // expo-av Video
+            const status = await player.getStatusAsync();
+            if (status?.isLoaded && !status.isPlaying) {
+              console.log(`▶️ Syncing playback: Playing ${videoKey}`);
+              await player.playAsync();
+            }
           }
         } else {
           // Video should be paused
-          const status = await videoRef.current?.getStatusAsync();
-          if (status?.isLoaded && status.isPlaying) {
-            console.log(`⏸️ Syncing playback: Pausing ${videoKey}`);
-            await videoRef.current?.pauseAsync();
-            setOverlayVisible(videoKey, true);
+          if (isExpoVideoPlayer) {
+            if (player.playing) {
+              console.log(`⏸️ Syncing playback: Pausing ${videoKey}`);
+              player.pause();
+              setOverlayVisible(videoKey, true);
+            }
+          } else {
+            // expo-av Video
+            const status = await player.getStatusAsync();
+            if (status?.isLoaded && status.isPlaying) {
+              console.log(`⏸️ Syncing playback: Pausing ${videoKey}`);
+              await player.pauseAsync();
+              setOverlayVisible(videoKey, true);
+            }
           }
         }
       } catch (error) {

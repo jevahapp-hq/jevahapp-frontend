@@ -1,4 +1,5 @@
 import { Audio } from "expo-av";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -296,13 +297,76 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
     }),
     {
       name: "@jevahapp_global_audio_player",
-      partialize: (state) => ({
+      storage: {
+        getItem: async (name: string): Promise<string | null> => {
+          try {
+            const value = await AsyncStorage.getItem(name);
+            return value;
+          } catch (error) {
+            console.warn("Error reading from storage:", error);
+            return null;
+          }
+        },
+        setItem: async (name: string, value: string): Promise<void> => {
+          try {
+            // Zustand persist already stringifies, but ensure it's a string
+            if (typeof value !== 'string') {
+              console.warn("Storage value is not a string, stringifying:", typeof value);
+              value = JSON.stringify(value);
+            }
+            await AsyncStorage.setItem(name, value);
+          } catch (error) {
+            console.warn("Error writing to storage:", error);
+            // Don't throw - just log the error
+          }
+        },
+        removeItem: async (name: string): Promise<void> => {
+          try {
+            await AsyncStorage.removeItem(name);
+          } catch (error) {
+            console.warn("Error removing from storage:", error);
+          }
+        },
+      },
+      partialize: (state) => {
         // Only persist minimal state - don't persist soundInstance
-        currentTrack: state.currentTrack,
-        isMuted: state.isMuted,
-        queue: state.queue,
-        currentIndex: state.currentIndex,
-      }),
+        // Convert audioUrl and thumbnailUrl to strings if they're require() objects
+        const persistedTrack = state.currentTrack ? {
+          id: state.currentTrack.id,
+          title: state.currentTrack.title,
+          artist: state.currentTrack.artist,
+          duration: state.currentTrack.duration,
+          category: state.currentTrack.category,
+          description: state.currentTrack.description,
+          // Convert require() objects to strings
+          audioUrl: typeof state.currentTrack.audioUrl === 'string' 
+            ? state.currentTrack.audioUrl 
+            : (state.currentTrack.audioUrl?.uri || ''),
+          thumbnailUrl: typeof state.currentTrack.thumbnailUrl === 'string'
+            ? state.currentTrack.thumbnailUrl
+            : (state.currentTrack.thumbnailUrl?.uri || ''),
+        } : null;
+
+        return {
+          currentTrack: persistedTrack,
+          isMuted: state.isMuted,
+          queue: state.queue.map(track => ({
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            duration: track.duration,
+            category: track.category,
+            description: track.description,
+            audioUrl: typeof track.audioUrl === 'string' 
+              ? track.audioUrl 
+              : (track.audioUrl?.uri || ''),
+            thumbnailUrl: typeof track.thumbnailUrl === 'string'
+              ? track.thumbnailUrl
+              : (track.thumbnailUrl?.uri || ''),
+          })),
+          currentIndex: state.currentIndex,
+        };
+      },
     }
   )
 );

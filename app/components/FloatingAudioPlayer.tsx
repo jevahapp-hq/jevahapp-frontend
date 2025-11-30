@@ -19,11 +19,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { UI_CONFIG } from "../../src/shared/constants";
+import { getBottomNavHeight } from "../utils/responsive";
 import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const MINI_PLAYER_HEIGHT = 64;
-const BOTTOM_NAV_HEIGHT = 80; // Approximate bottom tab height (Upload / Live bar)
 
 export default function FloatingAudioPlayer() {
   const router = useRouter();
@@ -39,20 +39,9 @@ export default function FloatingAudioPlayer() {
   const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
 
   // Check if user is authenticated and not on auth/onboarding screens
+  // Show player if there's a track, even if auth isn't fully loaded (for better UX)
   const shouldShowPlayer = useMemo(() => {
-    // Don't show if Clerk is not loaded yet
-    if (!clerkLoaded) return false;
-    
-    // Don't show if user is not signed in (Clerk check)
-    if (!isSignedIn) return false;
-    
-    // Don't show if user profile is not loaded yet
-    if (userLoading) return false;
-    
-    // Don't show if user profile doesn't exist
-    if (!user) return false;
-    
-    // Don't show on auth/onboarding screens
+    // Don't show on auth/onboarding screens - always hide there
     const authRouteSegments = ['auth', 'login', 'signup', 'sign-in', 'sign-up', 'onboarding', 'welcome'];
     const authRoutePaths = ['/auth', '/login', '/signup', '/sign-in', '/sign-up', '/onboarding', '/welcome'];
     
@@ -62,13 +51,26 @@ export default function FloatingAudioPlayer() {
       segments.some(seg => authRouteSegments.includes(seg.toLowerCase()));
     
     // Don't show on root/index screen (welcome/onboarding)
-    // The index route is the welcome/onboarding screen
     if (pathname === '/' || pathname === '/index' || segments.length === 0 || (segments.length === 1 && segments[0] === 'index')) {
       return false;
     }
     
-    return !isAuthRoute;
-  }, [isSignedIn, clerkLoaded, user, userLoading, pathname, segments]);
+    // If on auth route, never show
+    if (isAuthRoute) {
+      return false;
+    }
+    
+    // If there's a current track, ALWAYS show the player (even if auth is still loading)
+    // This allows the player to appear immediately when a song starts playing
+    if (currentTrack) {
+      console.log("🎵 FloatingAudioPlayer: Showing because currentTrack exists:", currentTrack.title);
+      return true;
+    }
+    
+    // If no track, only show if fully authenticated (but this shouldn't happen since we return null if no track)
+    // This is just for safety - the component will return null anyway if no track
+    return false;
+  }, [isSignedIn, clerkLoaded, user, userLoading, pathname, segments, currentTrack]);
 
   const {
     currentTrack,
@@ -87,11 +89,18 @@ export default function FloatingAudioPlayer() {
 
   // Debug: Log when track changes
   useEffect(() => {
-    if (currentTrack) {
-      console.log("🎵 FloatingAudioPlayer: Track loaded:", currentTrack.title);
-      console.log("🎵 FloatingAudioPlayer: Should show:", shouldShowPlayer);
-    }
-  }, [currentTrack, shouldShowPlayer]);
+    console.log("🎵 FloatingAudioPlayer Debug:", {
+      hasCurrentTrack: !!currentTrack,
+      currentTrackTitle: currentTrack?.title,
+      shouldShowPlayer,
+      isSignedIn,
+      clerkLoaded,
+      hasUser: !!user,
+      userLoading,
+      pathname,
+      segments,
+    });
+  }, [currentTrack, shouldShowPlayer, isSignedIn, clerkLoaded, user, userLoading, pathname, segments]);
 
   // Format time helper
   const formatTime = (milliseconds: number): string => {
@@ -142,13 +151,17 @@ export default function FloatingAudioPlayer() {
 
   // Don't render if user not authenticated or on auth screens
   if (!shouldShowPlayer) {
+    console.log("🎵 FloatingAudioPlayer: Not showing - shouldShowPlayer is false");
     return null;
   }
 
   // Don't render if no track is loaded
   if (!currentTrack) {
+    console.log("🎵 FloatingAudioPlayer: Not showing - no currentTrack");
     return null;
   }
+
+  console.log("🎵 FloatingAudioPlayer: Rendering with track:", currentTrack.title);
 
   return (
     <>
@@ -157,7 +170,7 @@ export default function FloatingAudioPlayer() {
         style={[
           styles.container,
           {
-            bottom: insets.bottom + BOTTOM_NAV_HEIGHT,
+            bottom: getBottomNavHeight() + 8, // 8px gap above bottom nav
             transform: [{ translateY }],
           },
         ]}
@@ -275,7 +288,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: MINI_PLAYER_HEIGHT,
-    zIndex: 998, // Below header (usually 1000) but above content
+    zIndex: 9999, // High z-index to appear above bottom nav and other content
     overflow: "hidden",
     ...Platform.select({
       ios: {
