@@ -222,20 +222,22 @@ export default function MiniAudioPlayer() {
       style={[
         styles.container,
         {
-          bottom: BOTTOM_NAV_HEIGHT + insets.bottom,
+          // Float slightly above bottom nav like the copyright-free mini
+          bottom: BOTTOM_NAV_HEIGHT + insets.bottom + 8,
         },
       ]}
     >
+      {/* Blur glass background */}
       <BlurView
-        intensity={80}
+        intensity={95}
         tint="light"
         style={StyleSheet.absoluteFill}
       />
-      
-      {/* Glassmorphism Background Overlay */}
+
+      {/* Glassmorphism overlay (cleaner, more minimal than copyright-free mini) */}
       <View style={styles.glassOverlay} />
-      
-      {/* Progress Bar */}
+
+      {/* Top progress accent */}
       {duration > 0 && (
         <View style={styles.progressBarContainer}>
           <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
@@ -247,7 +249,7 @@ export default function MiniAudioPlayer() {
         {/* Thumbnail */}
         <TouchableOpacity
           onPress={() => {
-            // Navigate to audio details or full player
+            // Navigate to audio details or full player (can later be wired to a dedicated modal)
             router.push(`/categories/HomeScreen`);
           }}
           style={styles.thumbnailContainer}
@@ -286,9 +288,9 @@ export default function MiniAudioPlayer() {
           </Text>
         </TouchableOpacity>
 
-        {/* Controls */}
+        {/* Controls – styled to echo the copyright-free mini */}
         <View style={styles.controls}>
-          {/* Play/Pause Button */}
+          {/* Play/Pause Button – Jevah green, circular */}
           <TouchableOpacity
             onPress={handleTogglePlayPause}
             style={styles.playButton}
@@ -301,7 +303,7 @@ export default function MiniAudioPlayer() {
             />
           </TouchableOpacity>
 
-          {/* Stop Button */}
+          {/* Stop Button – subtle glass button */}
           <TouchableOpacity
             onPress={handleStop}
             style={styles.controlButton}
@@ -322,28 +324,30 @@ export default function MiniAudioPlayer() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
     height: MINI_PLAYER_HEIGHT,
-    zIndex: 999, // Above bottom nav but below modals
+    zIndex: 20, // Under big modals/FAB, similar to FloatingAudioPlayer
     overflow: "hidden",
+    borderRadius: 24,
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowColor: UI_CONFIG.COLORS.PRIMARY,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 8,
+        elevation: 14,
       },
     }),
   },
   glassOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.85)",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0, 0, 0, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.6)",
+    borderRadius: 24,
   },
   progressBarContainer: {
     position: "absolute",
@@ -371,9 +375,9 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: 48,
     height: 48,
-    borderRadius: UI_CONFIG.BORDER_RADIUS?.MD || 8,
-    borderWidth: 1,
-    borderColor: "rgba(0, 0, 0, 0.1)",
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.8)",
   },
   placeholderThumbnail: {
     backgroundColor: "#f0f0f0",
@@ -421,22 +425,26 @@ const styles = StyleSheet.create({
     gap: UI_CONFIG.SPACING.XS || 8,
   },
   controlButton: {
-    padding: 6,
-    borderRadius: UI_CONFIG.BORDER_RADIUS?.MD || 8,
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.4)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.6)",
   },
   playButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: UI_CONFIG.COLORS?.SECONDARY || "#FEA74E",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green to match brand
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: UI_CONFIG.COLORS?.SECONDARY || "#FEA74E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: UI_CONFIG.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
 });
 

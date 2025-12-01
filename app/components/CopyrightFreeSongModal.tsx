@@ -442,28 +442,63 @@ export default function CopyrightFreeSongModal({
 
               {/* Progress + controls */}
               <View style={{ marginBottom: UI_CONFIG.SPACING.XL }}>
-                {/* Progress bar */}
+                {/* Progress bar with draggable thumb for easier scrubbing */}
                 <View
                   ref={progressBarRef}
                   style={{
-                    height: 4,
-                    borderRadius: 999,
-                    backgroundColor: UI_CONFIG.COLORS.SURFACE,
-                    overflow: "hidden",
+                    height: 20, // taller touch area for bigger fingers
+                    justifyContent: "center",
                     marginBottom: 8,
                   }}
                   {...panResponder.panHandlers}
                 >
+                  {/* Track */}
                   <View
                     style={{
-                      height: "100%",
+                      height: 4,
                       borderRadius: 999,
-                      width: `${
+                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <View
+                      style={{
+                        height: "100%",
+                        borderRadius: 999,
+                        width: `${
+                          (isSeeking ? seekProgress : audioProgress) * 100
+                        }%`,
+                        backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+                      }}
+                    />
+                  </View>
+                  {/* Thumb/handle */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      left: `${
                         (isSeeking ? seekProgress : audioProgress) * 100
                       }%`,
-                      backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+                      transform: [{ translateX: -10 }],
                     }}
-                  />
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: "#FFFFFF",
+                        borderWidth: 2,
+                        borderColor: UI_CONFIG.COLORS.SECONDARY,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 3.5,
+                        elevation: 4,
+                      }}
+                    />
+                  </View>
                 </View>
 
                 {/* Time row */}
@@ -498,7 +533,7 @@ export default function CopyrightFreeSongModal({
                   </Text>
                 </View>
 
-                {/* Transport controls */}
+                {/* Transport controls (with skip back/forward using seek) */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -507,7 +542,8 @@ export default function CopyrightFreeSongModal({
                     paddingHorizontal: UI_CONFIG.SPACING.XL,
                   }}
                 >
-                  <AnimatedButton onPress={() => onSeek && onSeek(0)}>
+                  {/* Skip back 15 seconds */}
+                  <AnimatedButton onPress={() => handleSkip(-15)}>
                     <Ionicons
                       name="play-skip-back"
                       size={24}
@@ -534,9 +570,8 @@ export default function CopyrightFreeSongModal({
                     />
                   </AnimatedButton>
 
-                  <AnimatedButton
-                    onPress={() => onSeek && onSeek(0.99)}
-                  >
+                  {/* Skip forward 15 seconds */}
+                  <AnimatedButton onPress={() => handleSkip(15)}>
                     <Ionicons
                       name="play-skip-forward"
                       size={24}

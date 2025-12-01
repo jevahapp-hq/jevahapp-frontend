@@ -3,6 +3,8 @@ import { Asset } from "expo-asset";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
+import { useCurrentPlayingAudioStore } from "./useCurrentPlayingAudioStore";
 
 export interface AudioTrack {
   id: string;
@@ -73,6 +75,21 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
       setTrack: async (track: AudioTrack) => {
         const { stop, soundInstance } = get();
+
+        // Ensure any legacy/audio-manager based playback is stopped
+        // so we never have two different audio systems playing at once.
+        try {
+          await GlobalAudioInstanceManager.getInstance().stopAllAudio();
+        } catch (error) {
+          console.warn("Error stopping legacy audio manager before global track:", error);
+        }
+
+        // Clear MiniAudioPlayer's current audio state, if any
+        try {
+          useCurrentPlayingAudioStore.getState().clearCurrentAudio();
+        } catch (error) {
+          // no-op
+        }
         
         // Stop current track if playing
         if (soundInstance) {

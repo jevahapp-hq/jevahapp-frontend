@@ -17,6 +17,7 @@ import {
   getResponsiveTextStyle,
 } from "../../utils/responsive";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
 
@@ -104,6 +105,15 @@ export default function BottomNav({
           } catch (e) {
             // no-op
           }
+          // For Bible tab, also stop the global audio player so
+          // the floating mini player disappears and audio stops.
+          try {
+            if (tab === "Bible") {
+              void useGlobalAudioPlayerStore.getState().stop();
+            }
+          } catch (e) {
+            // no-op
+          }
         });
       }
     },
@@ -140,19 +150,34 @@ export default function BottomNav({
             }}
           >
             {Platform.OS !== "web" ? (
-              <BlurView
-                intensity={80}
-                tint="light"
+            <BlurView
+              intensity={80}
+              tint="light"
+              style={{
+                flexDirection: "row",
+                width: "100%",
+                height: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: getResponsiveSpacing(12, 16, 20, 24),
+                // Glassmorphism orange background – soft, translucent
+                backgroundColor: "rgba(255, 140, 0, 0.16)",
+                overflow: "hidden",
+              }}
+            >
+              {/* Subtle shimmering highlight to draw attention */}
+              <View
+                pointerEvents="none"
                 style={{
-                  flexDirection: "row",
-                  width: "100%",
-                  height: "100%",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: getResponsiveSpacing(12, 16, 20, 24),
-                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  position: "absolute",
+                  left: -80,
+                  top: 0,
+                  bottom: 0,
+                  width: 80,
+                  backgroundColor: "rgba(255, 255, 255, 0.22)",
+                  transform: [{ rotate: "-20deg" }],
                 }}
-              >
+              />
                 <TouchableOpacity
                   style={{
                     backgroundColor: "#256E63",

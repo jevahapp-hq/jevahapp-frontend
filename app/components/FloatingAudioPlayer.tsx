@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { UI_CONFIG } from "../../src/shared/constants";
-import { getBottomNavHeight } from "../utils/responsive";
+import { getBottomNavHeight } from "../utils/responsiveOptimized";
 import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -36,6 +36,31 @@ export default function FloatingAudioPlayer() {
   const panY = useRef(0);
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
   const slideAnim = useRef(new Animated.Value(100)).current; // For slide-up animation
+
+  const handleCloseMini = React.useCallback(() => {
+    Animated.timing(translateY, {
+      toValue: MINI_PLAYER_HEIGHT + 20,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      stop();
+    });
+  }, [stop, translateY]);
+
+  const {
+    currentTrack,
+    isPlaying,
+    position,
+    duration,
+    progress,
+    togglePlayPause,
+    seekToProgress,
+    toggleMute,
+    isMuted,
+    stop,
+    next,
+    previous,
+  } = useGlobalAudioPlayerStore();
 
   // Check authentication using Clerk
   const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
@@ -61,6 +86,22 @@ export default function FloatingAudioPlayer() {
     if (isAuthRoute) {
       return false;
     }
+
+    // Hide entirely on any Bible-related routes (onboarding + reader),
+    // so mini player is not visible there at all.
+    const bibleRouteSegments = ['bible', 'biblescreen', 'bibleonboarding'];
+    const inBibleRoute = segments.some(seg =>
+      bibleRouteSegments.includes(seg.toLowerCase())
+    );
+    if (inBibleRoute) {
+      return false;
+    }
+
+    // Hide on upload screen so it doesn't block the upload form,
+    // but keep audio playing in the background.
+    if (pathname?.startsWith("/categories/upload")) {
+      return false;
+    }
     
     // If there's a current track, ALWAYS show the player (even if auth is still loading)
     // This allows the player to appear immediately when a song starts playing
@@ -73,21 +114,6 @@ export default function FloatingAudioPlayer() {
     // This is just for safety - the component will return null anyway if no track
     return false;
   }, [isSignedIn, clerkLoaded, user, userLoading, pathname, segments, currentTrack]);
-
-  const {
-    currentTrack,
-    isPlaying,
-    position,
-    duration,
-    progress,
-    togglePlayPause,
-    seekToProgress,
-    toggleMute,
-    isMuted,
-    stop,
-    next,
-    previous,
-  } = useGlobalAudioPlayerStore();
 
   // Debug: Log when track changes
   useEffect(() => {
@@ -106,6 +132,16 @@ export default function FloatingAudioPlayer() {
 
   // Fade-in and slide-up animation when track appears
   useEffect(() => {
+    // If we're on any Bible route, force-stop audio so nothing plays in background
+    const bibleRouteSegments = ['bible', 'biblescreen', 'bibleonboarding'];
+    const inBibleRoute = segments.some(seg =>
+      bibleRouteSegments.includes(seg.toLowerCase())
+    );
+    if (inBibleRoute && currentTrack) {
+      stop();
+      return;
+    }
+
     if (currentTrack && shouldShowPlayer) {
       // Animate in
       Animated.parallel([
@@ -206,7 +242,8 @@ export default function FloatingAudioPlayer() {
         style={[
           styles.container,
           {
-            bottom: getBottomNavHeight() + 100, // Position well above upload/live buttons
+            // Sit comfortably above the bottom nav / plus actions
+            bottom: getBottomNavHeight() + 56,
             opacity: fadeAnim,
             transform: [
               { 
@@ -238,7 +275,11 @@ export default function FloatingAudioPlayer() {
             style={styles.thumbnailContainer}
           >
             <Image
-              source={currentTrack.thumbnailUrl}
+              source={
+                typeof currentTrack.thumbnailUrl === "string"
+                  ? { uri: currentTrack.thumbnailUrl }
+                  : currentTrack.thumbnailUrl
+              }
               style={styles.thumbnail}
               resizeMode="cover"
             />
@@ -303,6 +344,19 @@ export default function FloatingAudioPlayer() {
                 color={UI_CONFIG.COLORS.TEXT_PRIMARY}
               />
             </TouchableOpacity>
+
+            {/* Close mini player */}
+            <TouchableOpacity
+              onPress={handleCloseMini}
+              style={styles.closeButton}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name="close"
+                size={18}
+                color={UI_CONFIG.COLORS.TEXT_SECONDARY}
+              />
+            </TouchableOpacity>
           </View>
         </View>
       </Animated.View>
@@ -333,7 +387,9 @@ const styles = StyleSheet.create({
     left: 20, // Centered with margins on left and right
     right: 20,
     height: MINI_PLAYER_HEIGHT,
-    zIndex: 9999, // High z-index to appear above bottom nav and other content
+    // Below FAB/actions (zIndex 30/100 in BottomNav) so those sit on top,
+    // but above main content behind the bottom area.
+    zIndex: 20,
     overflow: "hidden",
     borderRadius: 28, // Curvy edges - more rounded
     ...Platform.select({
@@ -438,6 +494,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: UI_CONFIG.SPACING.XS,
+  },
+  closeButton: {
+    padding: 6,
+    marginLeft: UI_CONFIG.SPACING.XS,
   },
   controlButton: {
     padding: 8,

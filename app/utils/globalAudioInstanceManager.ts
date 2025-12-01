@@ -153,6 +153,19 @@ class GlobalAudioInstanceManager {
       // Silently fail if video store is not available (avoid breaking audio playback)
       console.warn("⚠️ Failed to pause videos when audio started:", error);
     }
+
+    // STEP 1b: Stop any global audio-player based track so there's
+    // never more than one audio system playing at once.
+    try {
+      const globalAudioModule = require("../store/useGlobalAudioPlayerStore");
+      const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
+      if (globalAudioStore && globalAudioStore.clear) {
+        await globalAudioStore.clear();
+        console.log("🛑 Stopped global audio player before starting legacy audio");
+      }
+    } catch (error) {
+      console.warn("⚠️ Failed to stop global audio player when legacy audio started:", error);
+    }
     
     // STEP 2: If this audio is already playing, do nothing
     if (this.currentlyPlayingId === audioId) {
