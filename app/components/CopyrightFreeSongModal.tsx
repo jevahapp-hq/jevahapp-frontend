@@ -377,15 +377,22 @@ export default function CopyrightFreeSongModal({
                   marginBottom: UI_CONFIG.SPACING.XL,
                 }}
               >
-                <Image
-                  source={song.thumbnailUrl}
-                  style={{
-                    width: 260,
-                    height: 260,
-                    borderRadius: 32,
-                  }}
-                  resizeMode="cover"
-                />
+                {/** Support both backend URL strings and local require() thumbnails */}
+                {song?.thumbnailUrl && (
+                  <Image
+                    source={
+                      typeof song.thumbnailUrl === "string"
+                        ? { uri: song.thumbnailUrl }
+                        : song.thumbnailUrl
+                    }
+                    style={{
+                      width: 260,
+                      height: 260,
+                      borderRadius: 32,
+                    }}
+                    resizeMode="cover"
+                  />
+                )}
               </View>
 
               {/* Song Info */}

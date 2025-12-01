@@ -1,7 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import copyrightFreeMusicAPI, {
+  CopyrightFreeSongResponse,
+} from "../services/copyrightFreeMusicAPI";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
@@ -15,6 +25,8 @@ export default function CopyrightFreeSongs({
   showAsLibrary = false,
 }: CopyrightFreeSongsProps) {
   const [songs, setSongs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [playingSong, setPlayingSong] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>(
     {}
@@ -30,6 +42,9 @@ export default function CopyrightFreeSongs({
   const [selectedSong, setSelectedSong] = useState<any>(null);
   const audioRefs = useRef<Record<string, Audio.Sound>>({});
 
+  /**
+   * Load songs on mount
+   */
   useEffect(() => {
     loadSongs();
   }, []);
@@ -54,9 +69,48 @@ export default function CopyrightFreeSongs({
     };
   }, []);
 
-  const loadSongs = useCallback(() => {
-    // Create songs using the specified audio files and images
-    const customSongs = [
+  /**
+   * Transform backend song format to frontend format
+   */
+  const transformBackendSong = useCallback(
+    (backendSong: CopyrightFreeSongResponse): any => {
+      // Support id/_id, fileUrl/audioUrl, views/viewCount, likes/likeCount, artist/singer
+      const id = backendSong.id ?? backendSong._id ?? "";
+      const audioUrl = backendSong.audioUrl ?? backendSong.fileUrl ?? "";
+      const views = backendSong.views ?? backendSong.viewCount ?? 0;
+      const likes = backendSong.likes ?? backendSong.likeCount ?? 0;
+      const artist = backendSong.artist ?? backendSong.singer ?? "";
+
+      return {
+        id,
+        title: backendSong.title,
+        artist,
+        year: backendSong.year,
+        audioUrl, // String URL from backend
+        thumbnailUrl: backendSong.thumbnailUrl, // String URL from backend
+        category: backendSong.category,
+        duration: backendSong.duration,
+        contentType: backendSong.contentType,
+        description: backendSong.description,
+        speaker: backendSong.speaker ?? artist,
+        uploadedBy: backendSong.uploadedBy,
+        createdAt: backendSong.createdAt,
+        views,
+        likes,
+        isLiked: backendSong.isLiked ?? false,
+        isInLibrary: backendSong.isInLibrary ?? false,
+        isPublicDomain: backendSong.isPublicDomain ?? true,
+      };
+    },
+    []
+  );
+
+  /**
+   * Fallback hardcoded songs (used temporarily when backend endpoint is not ready)
+   * Uses the SAME card UI; just a local dataset until the API is implemented.
+   */
+  const getFallbackSongs = useCallback(() => {
+    return [
       {
         id: "song-in-the-name-of-jesus",
         title: "In The Name of Jesus",
@@ -87,8 +141,8 @@ export default function CopyrightFreeSongs({
         thumbnailUrl: require("../../assets/images/engelis.jpg"),
         category: "Gospel Music",
         duration: 220,
-        contentType: "copyright-free-music",
         description: "A beautiful call to worship song by Engelis.",
+        contentType: "copyright-free-music",
         speaker: "Engelis",
         uploadedBy: "Jevah App",
         createdAt: new Date().toISOString(),
@@ -107,7 +161,6 @@ export default function CopyrightFreeSongs({
         thumbnailUrl: require("../../assets/images/jesus-christ-14617710.webp"),
         category: "Gospel Pop",
         duration: 195,
-        contentType: "copyright-free-music",
         description: "An uplifting gospel pop song with beautiful vocals.",
         speaker: "Gospel Pop Vocals",
         uploadedBy: "Jevah App",
@@ -127,7 +180,6 @@ export default function CopyrightFreeSongs({
         thumbnailUrl: require("../../assets/images/Background #22.jpeg"),
         category: "Traditional Gospel",
         duration: 210,
-        contentType: "copyright-free-music",
         description: "A classic gospel train song with traditional styling.",
         speaker: "Traditional Gospel",
         uploadedBy: "Jevah App",
@@ -147,7 +199,6 @@ export default function CopyrightFreeSongs({
         thumbnailUrl: require("../../assets/images/tunemelodymedia   .jpg"),
         category: "Contemporary Gospel",
         duration: 185,
-        contentType: "copyright-free-music",
         description: "A soulful contemporary gospel song about restoration.",
         speaker: "Tune Melody Media",
         uploadedBy: "Jevah App",
@@ -159,8 +210,41 @@ export default function CopyrightFreeSongs({
         isPublicDomain: true,
       },
     ];
-    setSongs(customSongs);
   }, []);
+
+  /**
+   * Load songs from backend API with fallback to hardcoded songs
+   */
+  const loadSongs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Try to fetch from backend API
+      const response = await copyrightFreeMusicAPI.getAllSongs({
+        page: 1,
+        limit: 50, // Get more songs initially
+        sort: "popular",
+      });
+
+      if (response.success && response.data?.songs?.length) {
+        // Transform backend songs to frontend format
+        const transformedSongs = response.data.songs.map(transformBackendSong);
+        setSongs(transformedSongs);
+        console.log("✅ Loaded", transformedSongs.length, "songs from backend");
+      } else {
+        // No songs from backend - temporarily fall back to local songs
+        console.warn("⚠️ No songs from backend, using local copyright-free set");
+        setSongs(getFallbackSongs());
+      }
+    } catch (err) {
+      console.error("❌ Error loading songs from backend:", err);
+      setError("Failed to load songs from server. Showing offline collection.");
+      setSongs(getFallbackSongs());
+    } finally {
+      setLoading(false);
+    }
+  }, [transformBackendSong, getFallbackSongs]);
 
   const toggleAudioPlay = useCallback(
     async (songId: string, audioUrl: any) => {
@@ -366,6 +450,11 @@ export default function CopyrightFreeSongs({
   const renderSongCard = useCallback(
     (item: any) => {
       const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+      // Support both backend string URLs and local require() objects
+      const thumbnailSource =
+        typeof item.thumbnailUrl === "string"
+          ? { uri: item.thumbnailUrl }
+          : item.thumbnailUrl;
 
       return (
         <View className="mr-4 w-[154px] flex-col items-center">
@@ -376,7 +465,7 @@ export default function CopyrightFreeSongs({
           >
             {/* Thumbnail Image */}
             <Image
-              source={item.thumbnailUrl}
+              source={thumbnailSource}
               style={{ position: "absolute", width: "100%", height: "100%" }}
               resizeMode="cover"
             />
@@ -441,7 +530,7 @@ export default function CopyrightFreeSongs({
         </View>
       );
     },
-    [playingSong, handleCardPress, handlePlayIconPress]
+    [playingSong, handleCardPress, handlePlayIconPress, currentTrack, globalIsPlaying]
   );
 
   // Removed renderFullPlayer - now using CopyrightFreeSongModal component
@@ -455,18 +544,42 @@ export default function CopyrightFreeSongs({
         <Text className="text-xl font-rubik-bold text-gray-900">
           Songs for you
         </Text>
+        {error && (
+          <Text className="text-xs text-orange-500 mt-1 font-rubik">
+            {error}
+          </Text>
+        )}
       </View>
 
-      {/* Horizontal Scrollable Cards */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
-      >
-        {songs.map((song) => (
-          <View key={song.id}>{renderSongCard(song)}</View>
-        ))}
-      </ScrollView>
+      {/* Loading State */}
+      {loading ? (
+        <View className="flex-1 justify-center items-center py-20">
+          <ActivityIndicator size="large" color="#256E63" />
+          <Text className="text-sm text-gray-500 mt-4 font-rubik">
+            Loading songs...
+          </Text>
+        </View>
+      ) : (
+        /* Horizontal Scrollable Cards */
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+        >
+          {songs.length > 0 ? (
+            songs.map((song) => (
+              <View key={song.id}>{renderSongCard(song)}</View>
+            ))
+          ) : (
+            <View className="flex-1 justify-center items-center py-20 px-4">
+              <Ionicons name="musical-notes-outline" size={48} color="#9CA3AF" />
+              <Text className="text-sm text-gray-500 mt-4 font-rubik text-center">
+                No songs available
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
 
       {/* YouTube-style Song Modal */}
       <CopyrightFreeSongModal

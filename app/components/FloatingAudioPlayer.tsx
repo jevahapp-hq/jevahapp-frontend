@@ -23,7 +23,7 @@ import { getBottomNavHeight } from "../utils/responsive";
 import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const MINI_PLAYER_HEIGHT = 64;
+const MINI_PLAYER_HEIGHT = 72; // Slightly taller for better glassmorphism effect
 
 export default function FloatingAudioPlayer() {
   const router = useRouter();
@@ -34,6 +34,8 @@ export default function FloatingAudioPlayer() {
   const [showFullPlayer, setShowFullPlayer] = React.useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
   const panY = useRef(0);
+  const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
+  const slideAnim = useRef(new Animated.Value(100)).current; // For slide-up animation
 
   // Check authentication using Clerk
   const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
@@ -102,6 +104,40 @@ export default function FloatingAudioPlayer() {
     });
   }, [currentTrack, shouldShowPlayer, isSignedIn, clerkLoaded, user, userLoading, pathname, segments]);
 
+  // Fade-in and slide-up animation when track appears
+  useEffect(() => {
+    if (currentTrack && shouldShowPlayer) {
+      // Animate in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Animate out
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 100,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [currentTrack, shouldShowPlayer]);
+
   // Format time helper
   const formatTime = (milliseconds: number): string => {
     const totalSeconds = Math.floor(milliseconds / 1000);
@@ -165,25 +201,34 @@ export default function FloatingAudioPlayer() {
 
   return (
     <>
-      {/* Floating Mini Player - Bottom Position just above Upload / Live bar */}
+      {/* Floating Mini Player - Centered notification box with curvy edges */}
       <Animated.View
         style={[
           styles.container,
           {
-            bottom: getBottomNavHeight() + 8, // 8px gap above bottom nav
-            transform: [{ translateY }],
+            bottom: getBottomNavHeight() + 100, // Position well above upload/live buttons
+            opacity: fadeAnim,
+            transform: [
+              { 
+                translateY: Animated.add(translateY, slideAnim) // Combine swipe gesture with slide-in animation
+              },
+            ],
           },
         ]}
         {...panResponder.panHandlers}
       >
+        {/* Enhanced Glassmorphism Background */}
         <BlurView
-          intensity={80}
+          intensity={95}
           tint="light"
           style={StyleSheet.absoluteFill}
         />
         
-        {/* Glassmorphism Background Overlay */}
+        {/* Glassmorphism Overlay with app colors */}
         <View style={styles.glassOverlay} />
+        
+        {/* Subtle gradient accent using app colors */}
+        <View style={styles.gradientAccent} />
         
         {/* Content */}
         <View style={styles.content}>
@@ -233,7 +278,7 @@ export default function FloatingAudioPlayer() {
               />
             </TouchableOpacity>
 
-            {/* Play/Pause Button */}
+            {/* Play/Pause Button - Jevah Green */}
             <TouchableOpacity
               onPress={togglePlayPause}
               style={styles.playButton}
@@ -241,7 +286,7 @@ export default function FloatingAudioPlayer() {
             >
               <Ionicons
                 name={isPlaying ? "pause" : "play"}
-                size={18}
+                size={20}
                 color="#FFFFFF"
               />
             </TouchableOpacity>
@@ -285,28 +330,39 @@ export default function FloatingAudioPlayer() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: 20, // Centered with margins on left and right
+    right: 20,
     height: MINI_PLAYER_HEIGHT,
     zIndex: 9999, // High z-index to appear above bottom nav and other content
     overflow: "hidden",
+    borderRadius: 28, // Curvy edges - more rounded
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowColor: UI_CONFIG.COLORS.PRIMARY,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
       },
       android: {
-        elevation: 8,
+        elevation: 16,
       },
     }),
   },
   glassOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.3)",
+    backgroundColor: "rgba(255, 255, 255, 0.9)", // More opaque for better glass effect
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.6)",
+    borderRadius: 28, // Match container border radius
+  },
+  gradientAccent: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green accent line
+    opacity: 0.6,
   },
   content: {
     flexDirection: "row",
@@ -320,24 +376,34 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   thumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: UI_CONFIG.BORDER_RADIUS.MD,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.5)",
+    width: 52,
+    height: 52,
+    borderRadius: 14, // More curvy to match container
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.8)",
+    shadowColor: UI_CONFIG.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   playIndicator: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+    top: -3,
+    right: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: UI_CONFIG.COLORS.SECONDARY, // Orange accent
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.9)",
+    borderWidth: 2.5,
+    borderColor: "rgba(255, 255, 255, 0.95)",
+    shadowColor: UI_CONFIG.COLORS.SECONDARY,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
   },
   playIndicatorDot: {
     width: 6,
@@ -353,18 +419,20 @@ const styles = StyleSheet.create({
     fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
     fontFamily: "Rubik-SemiBold",
     color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-    textShadowColor: "rgba(255, 255, 255, 0.8)",
-    textShadowOffset: { width: 0, height: 0 },
+    textShadowColor: "rgba(37, 110, 99, 0.1)", // Subtle Jevah green shadow
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    letterSpacing: 0.2,
   },
   trackArtist: {
     fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
     fontFamily: "Rubik",
     color: UI_CONFIG.COLORS.TEXT_SECONDARY,
     marginTop: 2,
-    textShadowColor: "rgba(255, 255, 255, 0.6)",
-    textShadowOffset: { width: 0, height: 0 },
+    textShadowColor: "rgba(37, 110, 99, 0.08)",
+    textShadowOffset: { width: 0, height: 0.5 },
     textShadowRadius: 1,
+    letterSpacing: 0.1,
   },
   controls: {
     flexDirection: "row",
@@ -372,22 +440,26 @@ const styles = StyleSheet.create({
     gap: UI_CONFIG.SPACING.XS,
   },
   controlButton: {
-    padding: 6,
-    borderRadius: UI_CONFIG.BORDER_RADIUS.MD,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    padding: 8,
+    borderRadius: 12, // More curvy
+    backgroundColor: "rgba(255, 255, 255, 0.4)", // More visible glass effect
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.6)",
   },
   playButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+    width: 40,
+    height: 40,
+    borderRadius: 20, // Perfect circle
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: UI_CONFIG.COLORS.SECONDARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: UI_CONFIG.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)", // Subtle white border for depth
   },
 });
 

@@ -1,4 +1,5 @@
 import { Audio } from "expo-av";
+import { Asset } from "expo-asset";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -101,9 +102,27 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             playThroughEarpieceAndroid: false,
           });
 
-          // Create new audio instance
+          // Normalize audio source for expo-av (support require(), string URLs, and { uri } objects)
+          let source: any = track.audioUrl;
+          if (!source) {
+            throw new Error("Missing audio source for track");
+          }
+
+          // If we received a plain string from backend, wrap in { uri }
+          if (typeof source === "string") {
+            source = { uri: source };
+          } else if (typeof source === "number") {
+            // Convert require() number module to Asset
+            source = Asset.fromModule(source);
+          } else if (typeof source === "object" && !("uri" in source)) {
+            // If it's some other object (e.g. { localUri }), try to map to { uri }
+            if ((source as any).localUri) {
+              source = { uri: (source as any).localUri };
+            }
+          }
+
           const { sound } = await Audio.Sound.createAsync(
-            track.audioUrl,
+            source,
             {
               shouldPlay: false,
               isMuted: get().isMuted,
@@ -112,7 +131,8 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
               if (status.isLoaded) {
                 const newPosition = status.positionMillis || 0;
                 const newDuration = status.durationMillis || 0;
-                const newProgress = newDuration > 0 ? newPosition / newDuration : 0;
+                const newProgress =
+                  newDuration > 0 ? newPosition / newDuration : 0;
 
                 set({
                   position: newPosition,

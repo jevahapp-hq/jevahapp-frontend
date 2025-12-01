@@ -21,6 +21,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useMediaOwnership } from "../hooks/useMediaOwnership";
+import { UI_CONFIG } from "../constants";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -224,7 +225,7 @@ export default function ContentActionModal({
                 style={{
                   fontSize: 20,
                   fontWeight: "600",
-                  color: "#1D2939",
+                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                   fontFamily: "Rubik-SemiBold",
                 }}
               >
@@ -235,20 +236,20 @@ export default function ContentActionModal({
                 style={{
                   width: 32,
                   height: 32,
-                  backgroundColor: "#E5E7EB",
+                  backgroundColor: UI_CONFIG.COLORS.BORDER,
                   borderRadius: 16,
                   justifyContent: "center",
                   alignItems: "center",
                 }}
               >
-                <Ionicons name="close" size={20} color="#6B7280" />
+                <Ionicons name="close" size={20} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
               </TouchableOpacity>
             </View>
 
             <Text
               style={{
                 fontSize: 14,
-                color: "#667085",
+                color: UI_CONFIG.COLORS.TEXT_SECONDARY,
                 fontFamily: "Rubik",
                 marginBottom: 16,
                 textAlign: "center",
@@ -271,7 +272,7 @@ export default function ContentActionModal({
                   justifyContent: "space-between",
                   paddingVertical: 12,
                   paddingHorizontal: 16,
-                  backgroundColor: "#F9FAFB",
+                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
                   borderRadius: 12,
                 }}
                 activeOpacity={0.7}
@@ -281,26 +282,26 @@ export default function ContentActionModal({
                     style={{
                       width: 36,
                       height: 36,
-                      backgroundColor: "#DBEAFE",
+                      backgroundColor: "rgba(37, 110, 99, 0.1)", // Jevah green with 10% opacity
                       borderRadius: 18,
                       justifyContent: "center",
                       alignItems: "center",
                       marginRight: 12,
                     }}
                   >
-                    <Ionicons name="eye-outline" size={18} color="#3B82F6" />
+                    <Ionicons name="eye-outline" size={18} color={UI_CONFIG.COLORS.PRIMARY} />
                   </View>
                   <Text
                     style={{
                       fontSize: 14,
                       fontFamily: "Rubik-SemiBold",
-                      color: "#1D2939",
+                      color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                     }}
                   >
                     View Details
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                <Ionicons name="chevron-forward" size={18} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -311,7 +312,7 @@ export default function ContentActionModal({
                   justifyContent: "space-between",
                   paddingVertical: 12,
                   paddingHorizontal: 16,
-                  backgroundColor: "#F9FAFB",
+                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
                   borderRadius: 12,
                 }}
                 activeOpacity={0.7}
@@ -321,7 +322,9 @@ export default function ContentActionModal({
                     style={{
                       width: 36,
                       height: 36,
-                      backgroundColor: "#D1FAE5",
+                      backgroundColor: isSaved 
+                        ? "rgba(37, 110, 99, 0.15)" // Jevah green with 15% opacity when saved
+                        : "rgba(37, 110, 99, 0.1)", // Jevah green with 10% opacity when not saved
                       borderRadius: 18,
                       justifyContent: "center",
                       alignItems: "center",
@@ -331,20 +334,20 @@ export default function ContentActionModal({
                     <MaterialIcons
                       name={isSaved ? "bookmark" : "bookmark-border"}
                       size={18}
-                      color={isSaved ? "#10B981" : "#6B7280"}
+                      color={isSaved ? UI_CONFIG.COLORS.PRIMARY : UI_CONFIG.COLORS.TEXT_SECONDARY}
                     />
                   </View>
                   <Text
                     style={{
                       fontSize: 14,
                       fontFamily: "Rubik-SemiBold",
-                      color: "#1D2939",
+                      color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                     }}
                   >
                     {isSaved ? "Remove from Library" : "Save to Library"}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                <Ionicons name="chevron-forward" size={18} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
               </TouchableOpacity>
 
               {/* Delete button - only show if user is the owner */}
@@ -362,7 +365,7 @@ export default function ContentActionModal({
                     justifyContent: "space-between",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
-                    backgroundColor: "#FEF2F2",
+                    backgroundColor: UI_CONFIG.COLORS.SURFACE,
                     borderRadius: 12,
                   }}
                   activeOpacity={0.7}
@@ -372,26 +375,26 @@ export default function ContentActionModal({
                       style={{
                         width: 36,
                         height: 36,
-                        backgroundColor: "#FEE2E2",
+                        backgroundColor: "rgba(255, 107, 107, 0.1)", // Error color with 10% opacity
                         borderRadius: 18,
                         justifyContent: "center",
                         alignItems: "center",
                         marginRight: 12,
                       }}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      <Ionicons name="trash-outline" size={18} color={UI_CONFIG.COLORS.ERROR} />
                     </View>
                     <Text
                       style={{
                         fontSize: 14,
                         fontFamily: "Rubik-SemiBold",
-                        color: "#DC2626",
+                        color: UI_CONFIG.COLORS.ERROR,
                       }}
                     >
                       Delete
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                  <Ionicons name="chevron-forward" size={18} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
                 </TouchableOpacity>
               )}
 
@@ -410,7 +413,7 @@ export default function ContentActionModal({
                     justifyContent: "space-between",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
-                    backgroundColor: "#FEF2F2",
+                    backgroundColor: UI_CONFIG.COLORS.SURFACE,
                     borderRadius: 12,
                   }}
                   activeOpacity={0.7}
@@ -420,26 +423,26 @@ export default function ContentActionModal({
                       style={{
                         width: 36,
                         height: 36,
-                        backgroundColor: "#FEE2E2",
+                        backgroundColor: "rgba(255, 107, 107, 0.1)", // Error color with 10% opacity
                         borderRadius: 18,
                         justifyContent: "center",
                         alignItems: "center",
                         marginRight: 12,
                       }}
                     >
-                      <Ionicons name="flag-outline" size={18} color="#EF4444" />
+                      <Ionicons name="flag-outline" size={18} color={UI_CONFIG.COLORS.ERROR} />
                     </View>
                     <Text
                       style={{
                         fontSize: 14,
                         fontFamily: "Rubik-SemiBold",
-                        color: "#DC2626",
+                        color: UI_CONFIG.COLORS.ERROR,
                       }}
                     >
                       Report
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                  <Ionicons name="chevron-forward" size={18} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
                 </TouchableOpacity>
               )}
 
@@ -451,7 +454,7 @@ export default function ContentActionModal({
                   justifyContent: "space-between",
                   paddingVertical: 12,
                   paddingHorizontal: 16,
-                  backgroundColor: "#F9FAFB",
+                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
                   borderRadius: 12,
                 }}
                 activeOpacity={0.7}
@@ -461,7 +464,9 @@ export default function ContentActionModal({
                     style={{
                       width: 36,
                       height: 36,
-                      backgroundColor: "#FED7AA",
+                      backgroundColor: isDownloaded
+                        ? "rgba(37, 110, 99, 0.15)" // Jevah green with 15% opacity when downloaded
+                        : "rgba(254, 167, 78, 0.1)", // Secondary orange with 10% opacity when not downloaded
                       borderRadius: 18,
                       justifyContent: "center",
                       alignItems: "center",
@@ -473,20 +478,20 @@ export default function ContentActionModal({
                         isDownloaded ? "checkmark-circle" : "download-outline"
                       }
                       size={18}
-                      color={isDownloaded ? "#256E63" : "#F59E0B"}
+                      color={isDownloaded ? UI_CONFIG.COLORS.PRIMARY : UI_CONFIG.COLORS.SECONDARY}
                     />
                   </View>
                   <Text
                     style={{
                       fontSize: 14,
                       fontFamily: "Rubik-SemiBold",
-                      color: "#1D2939",
+                      color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                     }}
                   >
                     {isDownloaded ? "Remove Download" : "Download"}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                <Ionicons name="chevron-forward" size={18} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
               </TouchableOpacity>
 
             </ScrollView>
