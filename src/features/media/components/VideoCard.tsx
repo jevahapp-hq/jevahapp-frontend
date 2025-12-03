@@ -838,6 +838,28 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             size="medium"
           />
 
+          {/* Fullscreen / expand button (opens reels viewer) - positioned top-right */}
+          <TouchableWithoutFeedback
+            onPress={() => onVideoTap(key, video, index)}
+          >
+            <View
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                backgroundColor: "rgba(0,0,0,0.6)",
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                zIndex: 10,
+              }}
+            >
+              <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+            </View>
+          </TouchableWithoutFeedback>
+
           {/* Play/Pause Overlay */}
           <MediaPlayButton
             isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
@@ -878,31 +900,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </Text>
           </View>
 
-          {/* Video/Audio Progress Bar */}
-          {/* 
-            To use the new modular TikTok-style progress bar with debug mode:
-            import { TikTokProgressBar } from '@/shared/components/VideoProgressBar';
-            Replace VideoProgressBar with TikTokProgressBar and use config prop:
-            
-            <TikTokProgressBar
-              progress={isAudioSermon ? audioState.progress : progress}
-              currentMs={...}
-              durationMs={...}
-              isMuted={isAudioSermon ? audioState.isMuted : isMuted}
-              onToggleMute={handleToggleMute}
-              onSeekToPercent={seekToPercent}
-              debug={true}  // Enable debug logging
-              config={{
-                trackHeight: 4,
-                trackHeightDragging: 8,
-                knobSize: 20,
-                knobSizeDragging: 24,
-                seekSyncTicks: 4,
-                seekMsTolerance: 200,
-                minProgressEpsilon: 0.005,
-              }}
-            />
-          */}
+          {/* Video/Audio Progress Bar - Full width with proper margins */}
           <VideoProgressBar
             progress={isAudioSermon ? audioState.progress : progress}
             isMuted={isAudioSermon ? audioState.isMuted : isMuted}

@@ -150,16 +150,16 @@ export default function BottomNav({
             }}
           >
             {Platform.OS !== "web" ? (
-            <BlurView
-              intensity={80}
-              tint="light"
-              style={{
-                flexDirection: "row",
-                width: "100%",
-                height: "100%",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: getResponsiveSpacing(12, 16, 20, 24),
+              <BlurView
+                intensity={80}
+                tint="light"
+                style={{
+                  flexDirection: "row",
+                  width: "100%",
+                  height: "100%",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: getResponsiveSpacing(12, 16, 20, 24),
                 // Glassmorphism orange background – soft, translucent
                 backgroundColor: "rgba(255, 140, 0, 0.16)",
                 overflow: "hidden",

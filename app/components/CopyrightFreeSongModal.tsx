@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -19,6 +20,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { usePlaylistStore, type Playlist, type PlaylistSong } from "../store/usePlaylistStore";
+import { playlistAPI, type Playlist as BackendPlaylist } from "../utils/playlistAPI";
 import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
 import { UI_CONFIG } from "../../src/shared/constants";
 
@@ -79,18 +81,28 @@ export default function CopyrightFreeSongModal({
     addSongToPlaylist,
     removeSongFromPlaylist,
     getAllPlaylists,
+    loadPlaylistsFromBackend,
   } = usePlaylistStore();
+  
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
 
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const playlistViewTranslateY = useSharedValue(SCREEN_HEIGHT);
   const playlistDetailTranslateY = useSharedValue(SCREEN_HEIGHT);
 
-  // Load playlists on mount
+  // Load playlists from backend on mount and when playlist modal opens
   useEffect(() => {
     if (visible) {
-      usePlaylistStore.getState().loadPlaylists();
+      loadPlaylistsFromBackend();
     }
-  }, [visible]);
+  }, [visible, loadPlaylistsFromBackend]);
+
+  // Refresh playlists when playlist modal opens
+  useEffect(() => {
+    if (showPlaylistModal) {
+      loadPlaylistsFromBackend();
+    }
+  }, [showPlaylistModal, loadPlaylistsFromBackend]);
 
   // Smooth modal animations - no bouncing
   useEffect(() => {
@@ -192,72 +204,127 @@ export default function CopyrightFreeSongModal({
     setShowPlaylistModal(true);
   };
 
-  const handleCreatePlaylist = () => {
+  const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) {
       Alert.alert("Error", "Please enter a playlist name");
       return;
     }
 
-    const playlistId = createPlaylist(newPlaylistName.trim(), newPlaylistDescription.trim());
-    
-    // Automatically add the current song to the new playlist
-    if (song) {
-      const playlistSong: PlaylistSong = {
-        id: song.id,
-        title: song.title,
-        artist: song.artist,
-        audioUrl: song.audioUrl,
-        thumbnailUrl: song.thumbnailUrl,
-        duration: song.duration,
-        category: song.category,
-        description: song.description,
-        addedAt: new Date().toISOString(),
-      };
-      addSongToPlaylist(playlistId, playlistSong);
-    }
+    try {
+      setIsLoadingPlaylists(true);
+      
+      // Create playlist via backend API
+      const result = await playlistAPI.createPlaylist({
+        name: newPlaylistName.trim(),
+        description: newPlaylistDescription.trim() || undefined,
+        isPublic: false,
+      });
 
-    setNewPlaylistName("");
-    setNewPlaylistDescription("");
-    setShowCreatePlaylist(false);
-    setShowPlaylistModal(false);
-    Alert.alert("Success", "Playlist created and song added!");
+      if (!result.success || !result.data) {
+        Alert.alert("Error", result.error || "Failed to create playlist");
+        setIsLoadingPlaylists(false);
+        return;
+      }
+
+      const playlistId = result.data._id;
+      
+      // Clear form
+      setNewPlaylistName("");
+      setNewPlaylistDescription("");
+      
+      // Close create modal
+      setShowCreatePlaylist(false);
+      
+      // Refresh playlists from backend FIRST to ensure new playlist is loaded
+      await loadPlaylistsFromBackend();
+      
+      // Automatically add the current song to the new playlist if song exists
+      if (song) {
+        // Add song to the newly created playlist
+        const songId = song._id || song.id;
+        if (songId) {
+          const addResult = await playlistAPI.addTrackToPlaylist(playlistId, {
+            copyrightFreeSongId: songId,
+            position: undefined,
+          });
+
+          if (addResult.success) {
+            // Refresh playlists again to get updated song counts
+            await loadPlaylistsFromBackend();
+            // Close playlist modal and show success
+            setShowPlaylistModal(false);
+            Alert.alert("Success", "Playlist created and song added!");
+          } else {
+            // If adding song fails, still show playlist modal with new playlist
+            setShowPlaylistModal(true);
+            Alert.alert("Success", "Playlist created! But failed to add song.");
+          }
+        } else {
+          // No valid song ID, just reopen playlist modal
+          setShowPlaylistModal(true);
+          Alert.alert("Success", "Playlist created!");
+        }
+      } else {
+        // If no song, reopen the playlist selection modal to show the new playlist
+        setShowPlaylistModal(true);
+        Alert.alert("Success", "Playlist created!");
+      }
+      
+      setIsLoadingPlaylists(false);
+    } catch (error) {
+      console.error("Error creating playlist:", error);
+      Alert.alert("Error", "Failed to create playlist");
+      setIsLoadingPlaylists(false);
+    }
   };
 
-  const handleAddToExistingPlaylist = (playlistId: string) => {
+  const handleAddToExistingPlaylist = async (playlistId: string) => {
     if (!song) return;
 
-    const playlist = playlists.find((p) => p.id === playlistId);
-    if (!playlist) return;
+    try {
+      setIsLoadingPlaylists(true);
 
-    // Check if song already exists
-    const songExists = playlist.songs.some((s) => s.id === song.id);
-    if (songExists) {
-      Alert.alert("Info", "This song is already in the playlist");
-      return;
-    }
+      // Add track via backend API using copyrightFreeSongId
+      // Handle both id and _id formats
+      const songId = song._id || song.id;
+      if (!songId) {
+        Alert.alert("Error", "Invalid song ID");
+        setIsLoadingPlaylists(false);
+        return;
+      }
 
-    const playlistSong: PlaylistSong = {
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      audioUrl: song.audioUrl,
-      thumbnailUrl: song.thumbnailUrl,
-      duration: song.duration,
-      category: song.category,
-      description: song.description,
-      addedAt: new Date().toISOString(),
-    };
+      const result = await playlistAPI.addTrackToPlaylist(playlistId, {
+        copyrightFreeSongId: songId,
+        position: undefined, // Add to end
+      });
 
-    const success = addSongToPlaylist(playlistId, playlistSong);
-    if (success) {
+      if (!result.success) {
+        if (result.error?.includes("already in the playlist")) {
+          Alert.alert("Info", "This song is already in the playlist");
+        } else {
+          Alert.alert("Error", result.error || "Failed to add song to playlist");
+        }
+        setIsLoadingPlaylists(false);
+        return;
+      }
+
+      // Refresh playlists from backend
+      await loadPlaylistsFromBackend();
+      
+      setNewPlaylistName("");
+      setNewPlaylistDescription("");
+      setShowCreatePlaylist(false);
       setShowPlaylistModal(false);
       Alert.alert("Success", "Song added to playlist!");
-    } else {
+      setIsLoadingPlaylists(false);
+    } catch (error) {
+      console.error("Error adding song to playlist:", error);
       Alert.alert("Error", "Failed to add song to playlist");
+      setIsLoadingPlaylists(false);
     }
   };
 
-  const handleDeletePlaylist = (playlistId: string) => {
+  const handleDeletePlaylist = async (playlistId: string) => {
     Alert.alert(
       "Delete Playlist",
       "Are you sure you want to delete this playlist?",
@@ -266,14 +333,51 @@ export default function CopyrightFreeSongModal({
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            deletePlaylist(playlistId);
-            Alert.alert("Success", "Playlist deleted");
+          onPress: async () => {
+            try {
+              setIsLoadingPlaylists(true);
+              const result = await playlistAPI.deletePlaylist(playlistId);
+              
+              if (result.success) {
+                // Refresh playlists from backend
+                await loadPlaylistsFromBackend();
+                Alert.alert("Success", "Playlist deleted");
+              } else {
+                Alert.alert("Error", result.error || "Failed to delete playlist");
+              }
+              setIsLoadingPlaylists(false);
+            } catch (error) {
+              console.error("Error deleting playlist:", error);
+              Alert.alert("Error", "Failed to delete playlist");
+              setIsLoadingPlaylists(false);
+            }
           },
         },
       ]
     );
   };
+
+  // Skip forward/backward helper (in seconds)
+  const handleSkip = useCallback(
+    (seconds: number) => {
+      if (!onSeek) {
+        return;
+      }
+
+      const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
+      if (!durationMs || durationMs <= 0) {
+        return;
+      }
+
+      const newPositionMs = Math.max(
+        0,
+        Math.min(durationMs, (audioPosition || 0) + seconds * 1000)
+      );
+      const newProgress = newPositionMs / durationMs;
+      onSeek(newProgress);
+    },
+    [onSeek, audioDuration, audioPosition, song]
+  );
 
   if (!song) return null;
 
@@ -661,7 +765,9 @@ export default function CopyrightFreeSongModal({
             >
               {/* Create New Playlist Button - Matches app theme */}
               <AnimatedButton
-                onPress={() => {
+                onPress={async () => {
+                  // Refresh playlists before opening create modal
+                  await loadPlaylistsFromBackend();
                   setShowCreatePlaylist(true);
                   setShowPlaylistModal(false);
                 }}
@@ -690,7 +796,13 @@ export default function CopyrightFreeSongModal({
               </AnimatedButton>
 
               {/* Existing Playlists */}
-              {playlists.length === 0 ? (
+              {isLoadingPlaylists ? (
+                <View className="py-8 items-center">
+                  <Text className="text-center text-gray-500 font-rubik">
+                    Loading playlists...
+                  </Text>
+                </View>
+              ) : playlists.length === 0 ? (
                 <Text className="text-center text-gray-500 font-rubik py-8">
                   No playlists yet. Create one to get started!
                 </Text>
@@ -765,7 +877,7 @@ export default function CopyrightFreeSongModal({
         </View>
       </Modal>
 
-      {/* Create Playlist Modal */}
+      {/* Create Playlist Modal - Sleek Spotify-like Design */}
       <Modal
         visible={showCreatePlaylist}
         transparent
@@ -776,70 +888,228 @@ export default function CopyrightFreeSongModal({
           setNewPlaylistDescription("");
         }}
       >
-        <View className="flex-1 bg-black/50 justify-center items-center px-4">
-          <View className="bg-white rounded-2xl w-full max-w-md p-6">
-            <Text className="text-xl font-rubik-bold text-gray-900 mb-4">
-              Create New Playlist
-            </Text>
-
-            <Text className="text-sm font-rubik-medium text-gray-700 mb-2">
-              Playlist Name *
-            </Text>
-            <TextInput
-              value={newPlaylistName}
-              onChangeText={setNewPlaylistName}
-              placeholder="Enter playlist name"
-              className="border border-gray-300 rounded-lg px-4 py-3 mb-4 font-rubik"
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <Text className="text-sm font-rubik-medium text-gray-700 mb-2">
-              Description (Optional)
-            </Text>
-            <TextInput
-              value={newPlaylistDescription}
-              onChangeText={setNewPlaylistDescription}
-              placeholder="Enter playlist description"
-              className="border border-gray-300 rounded-lg px-4 py-3 mb-6 font-rubik"
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={3}
-            />
-
-            <View className="flex-row gap-3">
-              <AnimatedButton
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setShowCreatePlaylist(false);
+            setNewPlaylistName("");
+            setNewPlaylistDescription("");
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 24,
+            paddingVertical: 40,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 24,
+              width: "100%",
+              maxWidth: 420,
+              paddingTop: 28,
+              paddingBottom: 24,
+              paddingHorizontal: 24,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 16,
+            }}
+          >
+            {/* Header with Close Button */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 24,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 24,
+                  fontFamily: "Rubik-Bold",
+                  color: "#111827",
+                  letterSpacing: -0.5,
+                }}
+              >
+                Create playlist
+              </Text>
+              <TouchableOpacity
                 onPress={() => {
                   setShowCreatePlaylist(false);
                   setNewPlaylistName("");
                   setNewPlaylistDescription("");
                 }}
                 style={{
-                  flex: 1,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
                   backgroundColor: "#F3F4F6",
-                  paddingVertical: 12,
-                  borderRadius: 10,
+                  justifyContent: "center",
+                  alignItems: "center",
                 }}
               >
-                <Text className="text-gray-700 font-rubik-bold text-center">
-                  Cancel
-                </Text>
-              </AnimatedButton>
-              <AnimatedButton
-                onPress={handleCreatePlaylist}
+                <Ionicons name="close" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Playlist Name Input */}
+            <View style={{ marginBottom: 20 }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontFamily: "Rubik-SemiBold",
+                  color: "#374151",
+                  marginBottom: 8,
+                  letterSpacing: 0.2,
+                }}
+              >
+                Playlist name
+              </Text>
+              <TextInput
+                value={newPlaylistName}
+                onChangeText={setNewPlaylistName}
+                placeholder="My playlist"
+                placeholderTextColor="#9CA3AF"
+                style={{
+                  backgroundColor: "#F9FAFB",
+                  borderWidth: 1,
+                  borderColor: "#E5E7EB",
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  fontSize: 16,
+                  fontFamily: "Rubik",
+                  color: "#111827",
+                }}
+                autoFocus
+              />
+            </View>
+
+            {/* Description Input */}
+            <View style={{ marginBottom: 28 }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontFamily: "Rubik-SemiBold",
+                  color: "#374151",
+                  marginBottom: 8,
+                  letterSpacing: 0.2,
+                }}
+              >
+                Description <Text style={{ color: "#9CA3AF", fontWeight: "400" }}>(optional)</Text>
+              </Text>
+              <TextInput
+                value={newPlaylistDescription}
+                onChangeText={setNewPlaylistDescription}
+                placeholder="Add a description"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                style={{
+                  backgroundColor: "#F9FAFB",
+                  borderWidth: 1,
+                  borderColor: "#E5E7EB",
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  fontSize: 16,
+                  fontFamily: "Rubik",
+                  color: "#111827",
+                  minHeight: 80,
+                }}
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCreatePlaylist(false);
+                  setNewPlaylistName("");
+                  setNewPlaylistDescription("");
+                }}
+                disabled={isLoadingPlaylists}
                 style={{
                   flex: 1,
-                  backgroundColor: "#FEA74E",
-                  paddingVertical: 12,
-                  borderRadius: 10,
+                  backgroundColor: "#F3F4F6",
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: isLoadingPlaylists ? 0.5 : 1,
                 }}
               >
-                <Text className="text-white font-rubik-bold text-center">
-                  Create
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontFamily: "Rubik-SemiBold",
+                    color: "#374151",
+                  }}
+                >
+                  Cancel
                 </Text>
-              </AnimatedButton>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCreatePlaylist}
+                disabled={isLoadingPlaylists || !newPlaylistName.trim()}
+                style={{
+                  flex: 1,
+                  backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: isLoadingPlaylists || !newPlaylistName.trim() ? 0.6 : 1,
+                  shadowColor: UI_CONFIG.COLORS.SECONDARY,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                {isLoadingPlaylists ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontFamily: "Rubik-SemiBold",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      Creating...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontFamily: "Rubik-SemiBold",
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    Create
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Playlist View Modal - Shows all playlists */}
@@ -936,19 +1206,21 @@ export default function CopyrightFreeSongModal({
                       marginTop: UI_CONFIG.SPACING.MD,
                     }}
                   >
-                    No Playlists Yet
+                    {isLoadingPlaylists ? "Loading playlists..." : "No Playlists Yet"}
                   </Text>
-                  <Text
-                    style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                      marginTop: UI_CONFIG.SPACING.SM,
-                      textAlign: "center",
-                    }}
-                  >
-                    Create a playlist to organize your favorite songs
-                  </Text>
+                  {!isLoadingPlaylists && (
+                    <Text
+                      style={{
+                        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                        fontFamily: "Rubik",
+                        color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                        marginTop: UI_CONFIG.SPACING.SM,
+                        textAlign: "center",
+                      }}
+                    >
+                      Create a playlist to organize your favorite songs
+                    </Text>
+                  )}
                 </View>
               ) : (
                 <View style={{ gap: UI_CONFIG.SPACING.MD }}>

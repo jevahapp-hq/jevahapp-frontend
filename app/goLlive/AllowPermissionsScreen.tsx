@@ -201,9 +201,9 @@ const AllowPermissionsScreen = () => {
           </View>
         </View>
 
-        {/* Allow Button */}
+        {/* Allow Button – for now this leads to a \"coming soon\" screen so users know\n           Live is an upcoming feature, while keeping the real GoLive screen\n           reserved for a future release. */} 
         <Pressable
-          onPress={() => router.push("/goLlive/GoLive")}
+          onPress={() => router.push("/goLlive/LiveComingSoon")}
           style={{
             backgroundColor: 'black',
             borderRadius: getResponsiveBorderRadius('round'),
@@ -220,7 +220,7 @@ const AllowPermissionsScreen = () => {
               fontWeight: '600',
             }
           ]}>
-            Allow Permissions
+            Allow & Continue
           </Text>
         </Pressable>
       </View>

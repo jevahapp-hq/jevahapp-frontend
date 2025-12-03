@@ -256,13 +256,20 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       stop: async () => {
-        const { soundInstance, pause, clear } = get();
+        const { soundInstance, pause } = get();
         if (soundInstance) {
           try {
-            await pause();
-            await soundInstance.setPositionAsync(0);
+            // Only attempt to pause/reset if the sound is actually loaded.
+            const status = await soundInstance.getStatusAsync();
+            if (status.isLoaded) {
+              if (status.isPlaying) {
+                await pause();
+              }
+              await soundInstance.setPositionAsync(0);
+            }
           } catch (error) {
-            console.error("Error stopping audio:", error);
+            // Non‑fatal: if sound is already unloaded or not ready, just ignore.
+            console.warn("Warning while stopping audio (non-fatal):", error);
           }
         }
         set({ position: 0, progress: 0 });

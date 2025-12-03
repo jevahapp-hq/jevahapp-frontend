@@ -233,10 +233,10 @@ export default function MiniAudioPlayer() {
         tint="light"
         style={StyleSheet.absoluteFill}
       />
-
+      
       {/* Glassmorphism overlay (cleaner, more minimal than copyright-free mini) */}
       <View style={styles.glassOverlay} />
-
+      
       {/* Top progress accent */}
       {duration > 0 && (
         <View style={styles.progressBarContainer}>

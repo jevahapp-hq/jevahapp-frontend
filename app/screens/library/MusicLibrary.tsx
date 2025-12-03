@@ -1,13 +1,14 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-    FlatList,
-    Image,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Image,
+  ScrollView,
+  Share,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLibraryStore } from "../../store/useLibraryStore";
@@ -194,28 +195,63 @@ export default function MusicLibrary () {
     </View>
   );
 
+  // Simple client-side search within saved music
+  const filteredMusic = useMemo(() => {
+    if (!query.trim()) return savedMusic;
+    const q = query.toLowerCase();
+    return savedMusic.filter((item) => {
+      const title = String(item.title || "").toLowerCase();
+      const speaker = String(item.speaker || "").toLowerCase();
+      return title.includes(q) || speaker.includes(q);
+    });
+  }, [query, savedMusic]);
+
   return (
     <SafeAreaView className="flex-1  bg-[#98a2b318]">
-   
-
       {/* Scrollable Content with matching px-6 */}
       <ScrollView
         className="flex-1 px-3"
         contentContainerStyle={{ paddingBottom: 60 }}
       >
-        {/* Past Search Keywords */}
-       
+        {/* Search within Music Library */}
+        <View className="mt-4 mb-3 flex-row items-center bg-[#E5E5EA] rounded-xl px-3 py-2">
+          <Ionicons name="search" size={18} color="#8E8E93" />
+          <TextInput
+            className="ml-2 flex-1 font-rubik text-[#090E24]"
+            placeholder="Search saved music..."
+            placeholderTextColor="#98A2B3"
+            value={query}
+            onChangeText={setQuery}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery("")}>
+              <Text className="text-xs text-blue-500 font-rubik-semibold">
+                Clear
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Media Cards */}
-        {savedMusic.length > 0 ? (
+        {filteredMusic.length > 0 ? (
           <FlatList
-            data={savedMusic}
+            data={filteredMusic}
             renderItem={renderMediaCard}
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={{ justifyContent: "space-between" }}
             scrollEnabled={false}
           />
+        ) : savedMusic.length > 0 ? (
+          <View className="flex-1 justify-center items-center py-10">
+            <Ionicons name="musical-notes-outline" size={48} color="#98A2B3" />
+            <Text className="text-[#98A2B3] text-lg font-rubik-medium mt-4">
+              No matches found
+            </Text>
+            <Text className="text-[#D0D5DD] text-sm font-rubik text-center mt-2 px-6">
+              Try a different song title or artist
+            </Text>
+          </View>
         ) : (
           <View className="flex-1 justify-center items-center py-10">
             <Ionicons name="musical-notes-outline" size={48} color="#98A2B3" />

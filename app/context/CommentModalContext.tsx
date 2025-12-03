@@ -257,8 +257,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       if (!currentContentId || !text.trim()) return;
       
       // Check if user is authenticated before allowing comment submission
-      const token = await AsyncStorage.getItem("userToken") || 
-                   await AsyncStorage.getItem("token");
+      const token =
+        (await AsyncStorage.getItem("userToken")) ||
+        (await AsyncStorage.getItem("token"));
       
       if (!token) {
         console.warn("⚠️ User not authenticated. Cannot submit comment.");
@@ -266,14 +267,18 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         return;
       }
 
-      // Optimistic insert
+      const trimmed = text.trim();
+
+      // Optimistic insert (temporary id)
       const tempId = `temp-${Date.now()}`;
       const optimistic: Comment = {
         id: tempId,
-        userName: `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() || "You",
+        userName:
+          `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() ||
+          "You",
         avatar: "",
         timestamp: new Date().toISOString(),
-        comment: text.trim(),
+        comment: trimmed,
         likes: 0,
         isLiked: false,
         replies: [],
@@ -281,6 +286,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         userId: currentUserIdRef.current,
       };
       setComments((prev) => [optimistic, ...prev]);
+
       // Optimistically bump comment count in the centralized store
       try {
         const store = useInteractionStore.getState();
@@ -288,14 +294,35 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
           comments: Math.max(0, (s?.comments || 0) + 1),
         }));
       } catch {}
-      // API
-      await contentInteractionAPI.addComment(
+
+      // Call backend and get the real, canonical comment
+      const created = await contentInteractionAPI.addComment(
         currentContentId,
-        text.trim(),
+        trimmed,
         currentContentType
       );
-      // Refresh from server without overwriting optimistic comment immediately.
-      // Merge results to avoid the just-posted comment "disappearing" due to eventual consistency.
+
+      // Replace the temporary optimistic comment with the real one
+      const createdComment: Comment = {
+        id: created.id,
+        userName: created.username,
+        avatar: created.userAvatar || "",
+        timestamp: created.timestamp,
+        comment: created.comment,
+        likes: created.likes || 0,
+        isLiked: false,
+        replies: [],
+        // @ts-ignore optional
+        userId: created.userId,
+      };
+
+      setComments((prev) => {
+        // Drop all temp-* entries and insert the real comment at the top
+        const withoutTemps = prev.filter((c) => !c.id.startsWith("temp-"));
+        return [createdComment, ...withoutTemps];
+      });
+
+      // Refresh from server and merge by id; this will not duplicate the new comment
       await loadCommentsFromServer(
         currentContentId,
         currentContentType,
@@ -305,8 +332,10 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       );
     } catch (e) {
       console.error("Error submitting comment:", e);
-      // Remove optimistic comment if API call failed
-      setComments((prev) => prev.filter(comment => !comment.id.startsWith('temp-')));
+      // Remove any optimistic comments if API call failed
+      setComments((prev) =>
+        prev.filter((comment) => !comment.id.startsWith("temp-"))
+      );
     }
   };
 

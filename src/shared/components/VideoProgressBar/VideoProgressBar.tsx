@@ -253,10 +253,10 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   if (!showControls) return null;
 
   return (
-    <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-      {/* Progress Bar */}
-      <View className="flex-1 flex-row items-center">
-        <Text className="text-white text-xs font-rubik mr-2 min-w-[35px]">
+    <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-center px-4 pb-4 pt-2">
+      {/* Progress Bar - Full width container */}
+      <View className="flex-1 flex-row items-center max-w-full">
+        <Text className="text-white text-xs font-rubik mr-3 min-w-[40px] text-right">
           {formatTime(currentProgress * durationMs)}
         </Text>
 
@@ -345,20 +345,20 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
           />
         </View>
 
-        <Text className="text-white text-xs font-rubik ml-2 min-w-[35px]">
+        <Text className="text-white text-xs font-rubik ml-3 min-w-[40px]">
           {formatTime(durationMs)}
         </Text>
       </View>
 
-      {/* Mute Button - moved to the right */}
+      {/* Mute Button - positioned on the right with proper spacing */}
       <TouchableOpacity
         onPress={onToggleMute}
-        className="bg-black/50 p-2 rounded-full"
+        className="bg-black/60 p-2.5 rounded-full ml-3"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Ionicons
           name={isMuted ? "volume-mute" : "volume-high"}
-          size={16}
+          size={18}
           color="#FFFFFF"
         />
       </TouchableOpacity>

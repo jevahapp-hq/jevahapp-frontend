@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { playlistAPI, type Playlist as BackendPlaylist, type PlaylistTrack } from "../utils/playlistAPI";
 
 export interface PlaylistSong {
   id: string;
@@ -12,6 +13,10 @@ export interface PlaylistSong {
   category?: string;
   description?: string;
   addedAt: string;
+  // Track type info (for unified playlists)
+  trackType?: "media" | "copyrightFree";
+  mediaId?: string;
+  copyrightFreeSongId?: string;
 }
 
 export interface Playlist {
@@ -22,6 +27,7 @@ export interface Playlist {
   createdAt: string;
   updatedAt: string;
   thumbnailUrl?: any;
+  totalTracks?: number; // Total tracks count from backend
 }
 
 interface PlaylistState {
@@ -37,6 +43,7 @@ interface PlaylistState {
   getPlaylist: (playlistId: string) => Playlist | null;
   getAllPlaylists: () => Playlist[];
   loadPlaylists: () => Promise<void>;
+  loadPlaylistsFromBackend: () => Promise<void>;
   clearAll: () => void;
 }
 
@@ -175,6 +182,71 @@ export const usePlaylistStore = create<PlaylistState>()(
         }
       },
 
+      /**
+       * Load playlists from backend and transform to frontend format
+       */
+      loadPlaylistsFromBackend: async () => {
+        try {
+          const result = await playlistAPI.getUserPlaylists();
+          
+          if (result.success && result.data?.playlists) {
+            // Transform backend playlists to frontend format
+            const transformedPlaylists: Playlist[] = result.data.playlists.map((backendPlaylist: BackendPlaylist) => {
+              // Transform tracks to songs (preserving track type info)
+              const songs: PlaylistSong[] = backendPlaylist.tracks.map((track: PlaylistTrack) => ({
+                id: track.content._id,
+                title: track.content.title,
+                artist: track.content.artistName,
+                audioUrl: track.content.fileUrl,
+                thumbnailUrl: track.content.thumbnailUrl,
+                duration: track.content.duration,
+                category: track.content.contentType,
+                description: track.content.title, // Use title as description fallback
+                addedAt: track.addedAt,
+                // Store track type for reference (Media vs Copyright-Free)
+                trackType: track.trackType, // "media" | "copyrightFree"
+                mediaId: track.mediaId,
+                copyrightFreeSongId: track.copyrightFreeSongId,
+              }));
+
+              return {
+                id: backendPlaylist._id,
+                name: backendPlaylist.name,
+                description: backendPlaylist.description,
+                songs,
+                createdAt: backendPlaylist.createdAt,
+                updatedAt: backendPlaylist.updatedAt,
+                thumbnailUrl: songs[0]?.thumbnailUrl, // Use first song's thumbnail
+                totalTracks: backendPlaylist.totalTracks || songs.length,
+              };
+            });
+
+            set({ playlists: transformedPlaylists, isLoaded: true });
+            console.log(`✅ Loaded ${transformedPlaylists.length} playlists from backend`);
+          } else {
+            console.warn("⚠️ Failed to load playlists from backend:", result.error);
+            // Fallback to local storage
+            const stored = await AsyncStorage.getItem(STORAGE_KEY);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              set({ playlists: parsed.state?.playlists || [], isLoaded: true });
+            } else {
+              set({ isLoaded: true });
+            }
+          }
+        } catch (error) {
+          console.error("Error loading playlists from backend:", error);
+          // Fallback to local storage
+          const stored = await AsyncStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            set({ playlists: parsed.state?.playlists || [], isLoaded: true });
+          } else {
+            set({ isLoaded: true });
+          }
+        }
+      },
+
       clearAll: () => {
         set({ playlists: [] });
       },
@@ -185,5 +257,7 @@ export const usePlaylistStore = create<PlaylistState>()(
     }
   )
 );
+
+
 
 

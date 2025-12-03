@@ -1,16 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Modal,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import copyrightFreeMusicAPI, {
-  CopyrightFreeSongResponse,
+    CopyrightFreeSongResponse,
 } from "../services/copyrightFreeMusicAPI";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
@@ -40,14 +43,17 @@ export default function CopyrightFreeSongs({
   const [audioMuted, setAudioMuted] = useState<Record<string, boolean>>({});
   const [showSongModal, setShowSongModal] = useState(false);
   const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [optionsSong, setOptionsSong] = useState<any | null>(null);
   const audioRefs = useRef<Record<string, Audio.Sound>>({});
 
   /**
-   * Load songs on mount
+   * Load songs on mount.
+   * First try cached songs for instant display, then refresh from network.
    */
   useEffect(() => {
-    loadSongs();
-  }, []);
+    loadSongs(true);
+  }, [loadSongs]);
 
   // Cleanup audio when component unmounts
   useEffect(() => {
@@ -213,38 +219,90 @@ export default function CopyrightFreeSongs({
   }, []);
 
   /**
-   * Load songs from backend API with fallback to hardcoded songs
+   * Load songs from backend API with optional cache in AsyncStorage
+   * to make subsequent loads feel instant.
    */
-  const loadSongs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadSongs = useCallback(
+    async (useCacheFirst: boolean = true) => {
+      setError(null);
 
-    try {
-      // Try to fetch from backend API
-      const response = await copyrightFreeMusicAPI.getAllSongs({
-        page: 1,
-        limit: 50, // Get more songs initially
-        sort: "popular",
-      });
+      const CACHE_KEY = "copyrightFreeSongsCache_v1";
+      const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-      if (response.success && response.data?.songs?.length) {
-        // Transform backend songs to frontend format
-        const transformedSongs = response.data.songs.map(transformBackendSong);
-        setSongs(transformedSongs);
-        console.log("✅ Loaded", transformedSongs.length, "songs from backend");
-      } else {
-        // No songs from backend - temporarily fall back to local songs
-        console.warn("⚠️ No songs from backend, using local copyright-free set");
-        setSongs(getFallbackSongs());
+      let usedCache = false;
+
+      // 1. Try to show cached songs immediately (for fast perceived load)
+      if (useCacheFirst) {
+        try {
+          const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
+          if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw);
+            const { timestamp, songs: cachedSongs } = parsed || {};
+            if (
+              Array.isArray(cachedSongs) &&
+              typeof timestamp === "number" &&
+              Date.now() - timestamp < CACHE_TTL_MS
+            ) {
+              setSongs(cachedSongs);
+              setLoading(false);
+              usedCache = true;
+            }
+          }
+        } catch (cacheError) {
+          console.warn("⚠️ Failed to read copyright-free songs cache:", cacheError);
+        }
       }
-    } catch (err) {
-      console.error("❌ Error loading songs from backend:", err);
-      setError("Failed to load songs from server. Showing offline collection.");
-      setSongs(getFallbackSongs());
-    } finally {
-      setLoading(false);
-    }
-  }, [transformBackendSong, getFallbackSongs]);
+
+      // 2. Fetch fresh data from backend (in background if cache was used)
+      if (!usedCache) {
+        setLoading(true);
+      }
+
+      try {
+        const response = await copyrightFreeMusicAPI.getAllSongs({
+          page: 1,
+          limit: 20, // smaller page for faster response
+          sort: "popular",
+        });
+
+        if (response.success && response.data?.songs?.length) {
+          // Transform backend songs to frontend format
+          const transformedSongs = response.data.songs.map(transformBackendSong);
+          setSongs(transformedSongs);
+
+          // Store in cache for next time
+          try {
+            await AsyncStorage.setItem(
+              CACHE_KEY,
+              JSON.stringify({
+                timestamp: Date.now(),
+                songs: transformedSongs,
+              })
+            );
+          } catch (cacheWriteError) {
+            console.warn(
+              "⚠️ Failed to cache copyright-free songs:",
+              cacheWriteError
+            );
+          }
+        } else {
+          console.warn(
+            "⚠️ No songs from backend, using local copyright-free set"
+          );
+          const fallback = getFallbackSongs();
+          setSongs(fallback);
+        }
+      } catch (err) {
+        console.error("❌ Error loading songs from backend:", err);
+        setError("Failed to load songs from server. Showing offline collection.");
+        const fallback = getFallbackSongs();
+        setSongs(fallback);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [transformBackendSong, getFallbackSongs]
+  );
 
   const toggleAudioPlay = useCallback(
     async (songId: string, audioUrl: any) => {
@@ -418,6 +476,45 @@ export default function CopyrightFreeSongs({
         // manager not available, safe to continue
       }
 
+      // Build / update global queue so Next/Previous behave like a real music player.
+      // We use the currently loaded `songs` array as the playlist.
+      try {
+        const state = useGlobalAudioPlayerStore.getState();
+        const currentQueue = state.queue || [];
+        const songIndex = songs.findIndex((s) => s.id === song.id);
+
+        if (songIndex !== -1) {
+          const queueNeedsUpdate =
+            currentQueue.length !== songs.length ||
+            currentQueue.some((track, idx) => track.id !== songs[idx]?.id);
+
+          if (queueNeedsUpdate) {
+            const mappedQueue = songs.map((s) => ({
+              id: s.id,
+              title: s.title,
+              artist: s.artist,
+              audioUrl: s.audioUrl,
+              thumbnailUrl: s.thumbnailUrl,
+              duration: s.duration,
+              category: s.category,
+              description: s.description,
+            }));
+
+            useGlobalAudioPlayerStore.setState({
+              queue: mappedQueue,
+              currentIndex: songIndex,
+            });
+          } else {
+            // Queue already matches current songs; just move the index.
+            useGlobalAudioPlayerStore.setState({
+              currentIndex: songIndex,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("⚠️ Failed to set global audio queue from copyright songs:", e);
+      }
+
       // Use global audio player
       if (currentTrack?.id === song.id && globalIsPlaying) {
         // If same song is playing, just pause
@@ -439,7 +536,7 @@ export default function CopyrightFreeSongs({
         await play();
       }
     },
-    [currentTrack, globalIsPlaying, setTrack, togglePlayPause]
+    [currentTrack, globalIsPlaying, setTrack, togglePlayPause, globalIsLoading, songs]
   );
 
   const handleCardPress = useCallback((song: any) => {
@@ -511,7 +608,20 @@ export default function CopyrightFreeSongs({
               >
                 {item.artist}
               </Text>
-              <Ionicons name="ellipsis-vertical" size={14} color="#9CA3AF" />
+              <TouchableOpacity
+                onPress={() => {
+                  setOptionsSong(item);
+                  setShowOptionsModal(true);
+                }}
+                activeOpacity={0.7}
+                style={{
+                  paddingHorizontal: 6,
+                  paddingVertical: 4,
+                  borderRadius: 999,
+                }}
+              >
+                <Ionicons name="ellipsis-vertical" size={16} color="#9CA3AF" />
+              </TouchableOpacity>
             </View>
             <View className="flex-row items-center">
               <Ionicons
@@ -538,7 +648,15 @@ export default function CopyrightFreeSongs({
   const keyExtractor = useCallback((item: any) => item.id, []);
 
   return (
-    <View className="flex-1">
+    <View
+      // Non-flexing container so it never overlaps with content behind it.
+      // The white background + padding makes it feel like its own row/strip.
+      style={{
+        width: "100%",
+        paddingBottom: 12,
+        backgroundColor: "white",
+      }}
+    >
       {/* Header */}
       <View className="px-4 py-3">
         <Text className="text-xl font-rubik-bold text-gray-900">
@@ -581,7 +699,7 @@ export default function CopyrightFreeSongs({
         </ScrollView>
       )}
 
-      {/* YouTube-style Song Modal */}
+      {/* Full Song Player Modal */}
       <CopyrightFreeSongModal
         visible={showSongModal}
         song={selectedSong}
@@ -616,6 +734,185 @@ export default function CopyrightFreeSongs({
         }}
         formatTime={formatTime}
       />
+
+      {/* Options Modal opened from three dots under each mini card */}
+      <Modal
+        visible={showOptionsModal && !!optionsSong}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowOptionsModal(false);
+          setOptionsSong(null);
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setShowOptionsModal(false);
+            setOptionsSong(null);
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 28,
+            }}
+          >
+            {/* Handle bar */}
+            <View
+              style={{
+                alignSelf: "center",
+                width: 40,
+                height: 4,
+                borderRadius: 999,
+                backgroundColor: "#E5E7EB",
+                marginBottom: 16,
+              }}
+            />
+
+            {optionsSong && (
+              <>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: "#111827",
+                    marginBottom: 4,
+                  }}
+                  numberOfLines={1}
+                >
+                  {optionsSong.title}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#6B7280",
+                    marginBottom: 16,
+                  }}
+                  numberOfLines={1}
+                >
+                  {optionsSong.artist}
+                </Text>
+              </>
+            )}
+
+            {/* Option: Open in full player */}
+            <TouchableOpacity
+              onPress={() => {
+                if (optionsSong) {
+                  handleCardPress(optionsSong);
+                }
+                setShowOptionsModal(false);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 12,
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#F3F4F6",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="play-circle" size={18} color="#256E63" />
+              </View>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#111827",
+                  fontWeight: "500",
+                }}
+              >
+                Play in full player
+              </Text>
+            </TouchableOpacity>
+
+            {/* Option: Add to playlist (delegates to full player UI) */}
+            <TouchableOpacity
+              onPress={() => {
+                if (optionsSong) {
+                  handleCardPress(optionsSong);
+                  Alert.alert(
+                    "Add to playlist",
+                    "Use the Playlist button in the full player to add this song to your playlist."
+                  );
+                }
+                setShowOptionsModal(false);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 12,
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#EEF2FF",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="list" size={18} color="#4F46E5" />
+              </View>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#111827",
+                  fontWeight: "500",
+                }}
+              >
+                Add to playlist
+              </Text>
+            </TouchableOpacity>
+
+            {/* Option: Cancel */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowOptionsModal(false);
+                setOptionsSong(null);
+              }}
+              style={{
+                marginTop: 8,
+                paddingVertical: 12,
+                alignItems: "center",
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#6B7280",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }

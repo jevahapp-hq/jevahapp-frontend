@@ -13,6 +13,8 @@ export interface DownloadItem {
   size?: string;
   downloadedAt: string;
   status: 'DOWNLOADED' | 'DOWNLOADING' | 'FAILED';
+  localPath?: string; // Local file path in app storage
+  downloadProgress?: number; // 0-100
 }
 
 interface DownloadStore {
@@ -20,6 +22,7 @@ interface DownloadStore {
   isLoaded: boolean;
   
   addToDownloads: (item: Omit<DownloadItem, 'downloadedAt' | 'status'>) => Promise<void>;
+  updateDownloadItem: (itemId: string, updates: Partial<DownloadItem>) => Promise<void>;
   removeFromDownloads: (itemId: string) => Promise<void>;
   isItemDownloaded: (itemId: string) => boolean;
   loadDownloadedItems: () => Promise<void>;
@@ -62,6 +65,21 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     }
   },
 
+  updateDownloadItem: async (itemId: string, updates: Partial<DownloadItem>) => {
+    const { downloadedItems } = get();
+    const updatedItems = downloadedItems.map(item =>
+      item.id === itemId ? { ...item, ...updates } : item
+    );
+    
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
+      set({ downloadedItems: updatedItems });
+      console.log(`✅ Updated download item: ${itemId}`);
+    } catch (error) {
+      console.error("❌ Failed to update download item:", error);
+    }
+  },
+
   removeFromDownloads: async (itemId: string) => {
     const { downloadedItems } = get();
     const updatedItems = downloadedItems.filter(item => item.id !== itemId);
@@ -77,7 +95,9 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
 
   isItemDownloaded: (itemId: string) => {
     const { downloadedItems } = get();
-    return downloadedItems.some(item => item.id === itemId);
+    const item = downloadedItems.find(item => item.id === itemId);
+    // Consider downloaded only if status is DOWNLOADED and has localPath
+    return item?.status === 'DOWNLOADED' && !!item.localPath;
   },
 
   loadDownloadedItems: async () => {

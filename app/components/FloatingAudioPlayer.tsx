@@ -37,16 +37,6 @@ export default function FloatingAudioPlayer() {
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
   const slideAnim = useRef(new Animated.Value(100)).current; // For slide-up animation
 
-  const handleCloseMini = React.useCallback(() => {
-    Animated.timing(translateY, {
-      toValue: MINI_PLAYER_HEIGHT + 20,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      stop();
-    });
-  }, [stop, translateY]);
-
   const {
     currentTrack,
     isPlaying,
@@ -60,7 +50,14 @@ export default function FloatingAudioPlayer() {
     stop,
     next,
     previous,
+    clear,
   } = useGlobalAudioPlayerStore();
+
+  const handleCloseMini = React.useCallback(() => {
+    // For an explicit close tap, immediately clear the global
+    // audio player so the mini player disappears in one action.
+    clear();
+  }, [clear]);
 
   // Check authentication using Clerk
   const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
@@ -207,7 +204,8 @@ export default function FloatingAudioPlayer() {
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
-            stop();
+            // Clear global audio so mini player is fully dismissed
+            clear();
           });
         } else {
           // Snap back

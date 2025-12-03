@@ -153,7 +153,7 @@ class GlobalAudioInstanceManager {
       // Silently fail if video store is not available (avoid breaking audio playback)
       console.warn("⚠️ Failed to pause videos when audio started:", error);
     }
-
+    
     // STEP 1b: Stop any global audio-player based track so there's
     // never more than one audio system playing at once.
     try {

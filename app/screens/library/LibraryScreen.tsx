@@ -16,8 +16,9 @@ import { navigateMainTab } from "../../utils/navigation";
 import { Ionicons } from "@expo/vector-icons";
 import CopyrightFreeSongs from "../../components/CopyrightFreeSongs";
 import AllLibrary from "./AllLibrary";
+import PlaylistsLibrary from "./PlaylistsLibrary";
 
-const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
+const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "PLAYLISTS"];
 
 export default function LibraryScreen() {
   const [selectedCategoryA, setSelectedCategorA] = useState("ALL");
@@ -51,6 +52,8 @@ export default function LibraryScreen() {
         return <AllLibrary contentType="E-BOOKS" />;
       case "VIDEO":
         return <AllLibrary contentType="VIDEO" />;
+      case "PLAYLISTS":
+        return <PlaylistsLibrary />;
       default:
         return null;
     }

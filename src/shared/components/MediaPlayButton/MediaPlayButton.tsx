@@ -46,10 +46,8 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
       style={[
         styles.container,
         {
-          // Dim the underlying video slightly while the overlay is visible
-          backgroundColor: isPlaying
-            ? "rgba(0, 0, 0, 0.35)"
-            : "transparent",
+          // No dimming overlay - keep video bright and visible
+          backgroundColor: "transparent",
         },
         { pointerEvents: "box-none" as any },
         className ? { className } : {},

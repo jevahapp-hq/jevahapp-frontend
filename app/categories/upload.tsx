@@ -1747,7 +1747,7 @@ export default function UploadScreen() {
               </TouchableOpacity>
             </View>
             {/* Close scroll content container View */}
-          </View>
+            </View>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
