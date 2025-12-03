@@ -23,6 +23,10 @@ import { usePlaylistStore, type Playlist, type PlaylistSong } from "../store/use
 import { playlistAPI, type Playlist as BackendPlaylist } from "../utils/playlistAPI";
 import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
 import { UI_CONFIG } from "../../src/shared/constants";
+import copyrightFreeMusicAPI from "../services/copyrightFreeMusicAPI";
+import SocketManager from "../services/SocketManager";
+import TokenUtils from "../utils/tokenUtils";
+import { getApiBaseUrl } from "../utils/api";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -73,6 +77,15 @@ export default function CopyrightFreeSongModal({
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekProgress, setSeekProgress] = useState(0);
   const progressBarRef = useRef<View>(null);
+  
+  // Like and Views state
+  const [isLiked, setIsLiked] = useState(song?.isLiked || false);
+  const [likeCount, setLikeCount] = useState(song?.likeCount || song?.likes || 0);
+  const [viewCount, setViewCount] = useState(song?.viewCount || song?.views || 0);
+  const [isTogglingLike, setIsTogglingLike] = useState(false);
+
+  // Socket.IO manager for real-time updates (scoped to this modal)
+  const socketManagerRef = useRef<SocketManager | null>(null);
 
   const {
     playlists,
@@ -96,6 +109,120 @@ export default function CopyrightFreeSongModal({
       loadPlaylistsFromBackend();
     }
   }, [visible, loadPlaylistsFromBackend]);
+
+  // Update like and view counts when song changes
+  useEffect(() => {
+    if (song) {
+      setIsLiked(song.isLiked || false);
+      setLikeCount(song.likeCount || song.likes || 0);
+      setViewCount(song.viewCount || song.views || 0);
+    }
+  }, [song]);
+
+  // Real-time updates via Socket.IO for this song
+  useEffect(() => {
+    const songId = song?._id || song?.id;
+    if (!visible || !songId) {
+      return;
+    }
+
+    let isActive = true;
+    let socket: any = null;
+    let handleRealtimeUpdate: ((data: any) => void) | null = null;
+
+    const initSocket = async () => {
+      try {
+        const token = await TokenUtils.getAuthToken();
+        if (!token || !isActive) return;
+
+        const manager = new SocketManager({
+          serverUrl: getApiBaseUrl(),
+          authToken: token,
+        });
+
+        socketManagerRef.current = manager;
+
+        await manager.connect();
+        if (!isActive) {
+          manager.disconnect();
+          socketManagerRef.current = null;
+          return;
+        }
+
+        // Access underlying socket instance for custom event
+        socket = (manager as any).socket;
+        if (!socket) {
+          return;
+        }
+
+        // Join a content room so backend can target this song specifically
+        try {
+          manager.joinContentRoom(songId, "audio");
+        } catch (e) {
+          console.warn("⚠️ Failed to join real-time room for song:", e);
+        }
+
+        handleRealtimeUpdate = (data: any) => {
+          try {
+            if (!data || data.songId !== songId) return;
+
+            if (typeof data.likeCount === "number") {
+              setLikeCount((prev) =>
+                Number.isFinite(data.likeCount) ? data.likeCount : prev
+              );
+            }
+
+            if (typeof data.viewCount === "number") {
+              setViewCount((prev) =>
+                Number.isFinite(data.viewCount) ? data.viewCount : prev
+              );
+            }
+
+            if (typeof data.liked === "boolean") {
+              setIsLiked(data.liked);
+            }
+          } catch (e) {
+            console.warn("⚠️ Error applying real-time song update:", e);
+          }
+        };
+
+        socket.on(
+          "copyright-free-song-interaction-updated",
+          handleRealtimeUpdate
+        );
+      } catch (error) {
+        console.warn(
+          "⚠️ Failed to initialize real-time updates for copyright-free song:",
+          error
+        );
+      }
+    };
+
+    initSocket();
+
+    return () => {
+      isActive = false;
+
+      if (socket && handleRealtimeUpdate) {
+        socket.off(
+          "copyright-free-song-interaction-updated",
+          handleRealtimeUpdate
+        );
+      }
+
+      // Disconnect and leave room when modal closes or song changes
+      const manager = socketManagerRef.current;
+      if (manager) {
+        try {
+          if (songId) {
+            manager.leaveContentRoom(songId, "audio");
+          }
+        } catch {}
+        manager.disconnect();
+        socketManagerRef.current = null;
+      }
+    };
+  }, [visible, song?._id, song?.id]);
 
   // Refresh playlists when playlist modal opens
   useEffect(() => {
@@ -324,6 +451,50 @@ export default function CopyrightFreeSongModal({
     }
   };
 
+  const handleToggleLike = async () => {
+    if (!song || isTogglingLike) return;
+
+    const songId = song._id || song.id;
+    if (!songId) {
+      console.warn("⚠️ Cannot toggle like: Invalid song ID");
+      return;
+    }
+
+    try {
+      setIsTogglingLike(true);
+      
+      // Optimistic update
+      const previousLiked = isLiked;
+      const previousLikeCount = likeCount;
+      setIsLiked(!previousLiked);
+      setLikeCount(previousLiked ? previousLikeCount - 1 : previousLikeCount + 1);
+
+      // Call API
+      const result = await copyrightFreeMusicAPI.toggleLike(songId);
+
+      if (result.success && result.data) {
+        setIsLiked(result.data.liked);
+        setLikeCount(result.data.likeCount);
+        if (result.data.viewCount !== undefined) {
+          setViewCount(result.data.viewCount);
+        }
+      } else {
+        // Revert optimistic update on error
+        setIsLiked(previousLiked);
+        setLikeCount(previousLikeCount);
+        Alert.alert("Error", "Failed to update like");
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      // Revert optimistic update
+      setIsLiked(isLiked);
+      setLikeCount(likeCount);
+      Alert.alert("Error", "Failed to update like");
+    } finally {
+      setIsTogglingLike(false);
+    }
+  };
+
   const handleDeletePlaylist = async (playlistId: string) => {
     Alert.alert(
       "Delete Playlist",
@@ -536,12 +707,84 @@ export default function CopyrightFreeSongModal({
                       fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
                       fontFamily: "Rubik",
                       color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      marginBottom: UI_CONFIG.SPACING.MD,
                     }}
                     numberOfLines={1}
                   >
                     {song.category}
                   </Text>
                 )}
+
+                {/* Like and Views Icons */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: UI_CONFIG.SPACING.LG,
+                    marginTop: UI_CONFIG.SPACING.SM,
+                  }}
+                >
+                  {/* Like Icon */}
+                  <TouchableOpacity
+                    onPress={handleToggleLike}
+                    disabled={isTogglingLike}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingHorizontal: UI_CONFIG.SPACING.MD,
+                      paddingVertical: UI_CONFIG.SPACING.SM,
+                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
+                      backgroundColor: isLiked 
+                        ? UI_CONFIG.COLORS.ERROR + "15" 
+                        : UI_CONFIG.COLORS.SURFACE,
+                    }}
+                  >
+                    <Ionicons
+                      name={isLiked ? "heart" : "heart-outline"}
+                      size={20}
+                      color={isLiked ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY}
+                    />
+                    <Text
+                      style={{
+                        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                        fontFamily: "Rubik-SemiBold",
+                        color: isLiked ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      }}
+                    >
+                      {likeCount > 0 ? likeCount.toLocaleString() : "0"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Views Icon */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingHorizontal: UI_CONFIG.SPACING.MD,
+                      paddingVertical: UI_CONFIG.SPACING.SM,
+                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
+                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                    }}
+                  >
+                    <Ionicons
+                      name="eye-outline"
+                      size={20}
+                      color={UI_CONFIG.COLORS.TEXT_SECONDARY}
+                    />
+                    <Text
+                      style={{
+                        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                        fontFamily: "Rubik-SemiBold",
+                        color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      }}
+                    >
+                      {viewCount > 0 ? viewCount.toLocaleString() : "0"}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               {/* Progress + controls */}
@@ -1253,6 +1496,7 @@ export default function CopyrightFreeSongModal({
                           justifyContent: "center",
                           alignItems: "center",
                           marginRight: UI_CONFIG.SPACING.MD,
+                          overflow: "hidden",
                         }}
                       >
                         {playlist.thumbnailUrl ? (
@@ -1266,10 +1510,14 @@ export default function CopyrightFreeSongModal({
                             resizeMode="cover"
                           />
                         ) : (
-                          <Ionicons
-                            name="musical-notes"
-                            size={28}
-                            color={UI_CONFIG.COLORS.SECONDARY}
+                          <Image
+                            source={require("../../assets/images/Jevah.png")}
+                            style={{
+                              width: 60,
+                              height: 60,
+                              borderRadius: UI_CONFIG.BORDER_RADIUS.MD,
+                            }}
+                            resizeMode="cover"
                           />
                         )}
                       </View>
