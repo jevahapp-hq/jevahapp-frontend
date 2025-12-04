@@ -1,5 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   Modal,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useUserProfile } from "../../../app/hooks/useUserProfile";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -22,7 +24,28 @@ export default function MediaDetailsModal({
   onClose,
   mediaItem,
 }: MediaDetailsModalProps) {
-  if (!visible || !mediaItem) return null;
+  // ✅ Hook must be called before any early returns
+  const { user } = useUserProfile();
+  const [currentUserIdFromStorage, setCurrentUserIdFromStorage] = useState<string | null>(null);
+
+  // Fallback: Get user ID from AsyncStorage if hook hasn't loaded yet
+  useEffect(() => {
+    const getUserIdFromStorage = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        if (userStr) {
+          const userObj = JSON.parse(userStr);
+          const userId = userObj._id || userObj.id;
+          if (userId) {
+            setCurrentUserIdFromStorage(String(userId).trim());
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error getting user ID from storage:", error);
+      }
+    };
+    getUserIdFromStorage();
+  }, []);
 
   const {
     title,
@@ -30,6 +53,7 @@ export default function MediaDetailsModal({
     contentType,
     speaker,
     uploadedBy,
+    userId,
     createdAt,
     views,
     viewCount,
@@ -40,11 +64,63 @@ export default function MediaDetailsModal({
   const displayTitle = title || "Untitled";
   const displayContentType =
     (contentType || "media").toString().replace(/_/g, " ");
-  const displaySpeaker =
-    speaker ||
-    uploadedBy ||
-    (typeof uploadedBy === "object" ? uploadedBy?.name : "") ||
-    "Unknown";
+
+  // Determine the author display name
+  const displaySpeaker = useMemo(() => {
+    // Get current user ID first (prioritize hook, fallback to storage)
+    const currentUserId = (user?._id || user?.id || currentUserIdFromStorage) as string | null | undefined;
+
+    // Get the author ID from various possible fields (priority order)
+    let authorId: string | null = null;
+    
+    if (typeof uploadedBy === "object" && uploadedBy?._id) {
+      authorId = String(uploadedBy._id);
+    } else if (typeof uploadedBy === "string" && uploadedBy.trim()) {
+      authorId = uploadedBy.trim();
+    } else if (userId) {
+      authorId = String(userId).trim();
+    } else if (speaker && typeof speaker === "string") {
+      // Check if speaker is an ID (MongoDB ObjectId format or similar)
+      const looksLikeId = /^[0-9a-fA-F]{24}$/.test(speaker.trim());
+      if (looksLikeId) {
+        authorId = speaker.trim();
+      }
+    }
+
+    // Check if the video is by the current user (compare IDs)
+    if (currentUserId && authorId) {
+      const currentUserIdStr = String(currentUserId).trim();
+      const authorIdStr = String(authorId).trim();
+      if (currentUserIdStr === authorIdStr) {
+        return "you";
+      }
+    }
+
+    // If uploadedBy is an object with firstName/lastName, use that
+    if (typeof uploadedBy === "object" && uploadedBy) {
+      if (uploadedBy.firstName || uploadedBy.lastName) {
+        const fullName = `${uploadedBy.firstName || ""} ${uploadedBy.lastName || ""}`.trim();
+        if (fullName) {
+          return fullName;
+        }
+      }
+      if (uploadedBy.name) {
+        return uploadedBy.name;
+      }
+    }
+
+    // If speaker is a name (not an ID), use it
+    if (speaker && typeof speaker === "string") {
+      // Check if speaker looks like an ID (MongoDB ObjectId format or similar)
+      const looksLikeId = /^[0-9a-fA-F]{24}$/.test(speaker.trim()) || speaker.trim().length < 3;
+      if (!looksLikeId) {
+        return speaker;
+      }
+    }
+
+    // Fallback to "Unknown"
+    return "Unknown";
+  }, [uploadedBy, userId, speaker, user, mediaItem, currentUserIdFromStorage]);
 
   const displayViews = viewCount ?? views;
   const displayLikes = likeCount ?? likes;
@@ -60,6 +136,9 @@ export default function MediaDetailsModal({
   } catch {
     // ignore bad dates
   }
+
+  // Early return check after hooks
+  if (!visible || !mediaItem) return null;
 
   return (
     <Modal

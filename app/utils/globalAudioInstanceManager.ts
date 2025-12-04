@@ -60,8 +60,6 @@ class GlobalAudioInstanceManager {
    * Stop all audio instances
    */
   async stopAllAudio(): Promise<void> {
-    console.log("🛑 Stopping all audio instances...");
-    
     const stopPromises: Promise<void>[] = [];
     
     // Stop all instances and unload them
@@ -77,7 +75,6 @@ class GlobalAudioInstanceManager {
               }
               // Unload the sound to prevent multiple instances
               await sound.unloadAsync();
-              console.log(`⏸️ Stopped and unloaded audio: ${id}`);
             }
           } catch (error) {
             console.warn(`⚠️ Error stopping audio ${id}:`, error);

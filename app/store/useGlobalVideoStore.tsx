@@ -154,24 +154,16 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     // Video player registry management
     registerVideoPlayer: (key: string, player: VideoPlayerRef) => {
       videoPlayerRegistry.set(key, player);
-      console.log(
-        `📝 Registered video player: ${key}, total: ${videoPlayerRegistry.size}`
-      );
     },
 
     unregisterVideoPlayer: (key: string) => {
       videoPlayerRegistry.delete(key);
-      console.log(
-        `🗑️ Unregistered video player: ${key}, total: ${videoPlayerRegistry.size}`
-      );
     },
 
     // Imperatively pause all videos (for use by audio manager)
     pauseAllVideosImperatively: () => {
-      console.log("⏸️ Imperatively pausing all videos for audio playback");
-      videoPlayerRegistry.forEach((player, key) => {
-        console.log(`⏸️ Imperatively pausing video: ${key}`);
-        player.pause().catch((err) => console.warn(`Failed to pause ${key}:`, err));
+      videoPlayerRegistry.forEach((player) => {
+        player.pause().catch((err) => console.warn("Failed to pause video:", err));
         player.showOverlay();
       });
       
@@ -195,8 +187,6 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
     // ✅ Global play function - PROFESSIONAL IMPERATIVE CONTROL (like Instagram/TikTok)
     playVideoGlobally: (videoKey: string) => {
-      console.log("🌍 playVideoGlobally called with:", videoKey);
-
       // STEP 1: Stop ALL audio when video starts playing
       const audioManager = GlobalAudioInstanceManager.getInstance();
       audioManager.stopAllAudio().catch((err) => {
@@ -204,15 +194,12 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       });
 
       // STEP 2: Imperatively pause ALL other videos DIRECTLY (no state waiting)
-      const pausedKeys: string[] = [];
       videoPlayerRegistry.forEach((player, key) => {
         if (key !== videoKey) {
-          console.log(`⏸️ Imperatively pausing video: ${key}`);
           player
             .pause()
             .catch((err) => console.warn(`Failed to pause ${key}:`, err));
           player.showOverlay();
-          pausedKeys.push(key);
         }
       });
 
@@ -228,10 +215,6 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
         newPlayingVideos[videoKey] = true;
         newShowOverlay[videoKey] = false;
-
-        console.log(
-          `🎬 Playing video: ${videoKey}, paused ${pausedKeys.length} other videos, stopped all audio`
-        );
         return {
           currentlyPlayingVideo: videoKey,
           playingVideos: newPlayingVideos,
@@ -242,13 +225,11 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
     // ✅ Toggle function - for cases where toggle behavior is needed
     toggleVideo: (videoKey: string) => {
-      console.log("🔄 toggleVideo called with:", videoKey);
       set((state) => {
         const isCurrentlyPlaying = state.playingVideos[videoKey] ?? false;
 
         if (isCurrentlyPlaying) {
           // If video is already playing, pause it
-          console.log("🔄 Toggling to pause:", videoKey);
           return {
             currentlyPlayingVideo: null,
             playingVideos: { ...state.playingVideos, [videoKey]: false },
@@ -256,8 +237,6 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           };
         } else {
           // If video is paused, play it - stop all audio first
-          console.log("🔄 Toggling to play:", videoKey);
-          
           // Stop all audio when video starts
           const audioManager = GlobalAudioInstanceManager.getInstance();
           audioManager.stopAllAudio().catch((err) => {

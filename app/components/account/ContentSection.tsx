@@ -1,13 +1,19 @@
-import { Image, Text, View, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { ActivityIndicator, FlatList, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useAccountContent } from "../../hooks/useAccountContent";
-import type { Post, MediaItem, Video } from "../../types/account.types";
+import { useUserProfile } from "../../hooks/useUserProfile";
+import { useReelsStore } from "../../store/useReelsStore";
+import type { MediaItem, Post, Video } from "../../types/account.types";
 
 type ContentSectionProps = {
   selectedIndex: number;
 };
 
 export default function ContentSection({ selectedIndex }: ContentSectionProps) {
+  const router = useRouter();
+  const reelsStore = useReelsStore();
+  const { user, getAvatarUrl } = useUserProfile();
   const {
     posts,
     media,
@@ -89,12 +95,21 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         keyExtractor={(item) => item._id}
         numColumns={3}
         columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
+        nestedScrollEnabled={true}
         ListEmptyComponent={
-          <View className="items-center justify-center py-8">
-            <Text className="text-gray-500">No posts yet</Text>
+          <View className="flex-1 items-center justify-center py-16 px-8">
+            <View className="items-center mb-4">
+              <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center mb-4">
+                <Ionicons name="albums-outline" size={48} color="#9CA3AF" />
+              </View>
+              <Text className="text-xl font-semibold text-gray-700 mb-2">No posts yet</Text>
+              <Text className="text-sm text-gray-500 text-center">
+                Start sharing your thoughts and moments with the community
+              </Text>
+            </View>
           </View>
         }
       />
@@ -127,12 +142,21 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         keyExtractor={(item) => item._id}
         numColumns={3}
         columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
         onEndReached={loadMoreMedia}
         onEndReachedThreshold={0.5}
+        nestedScrollEnabled={true}
         ListEmptyComponent={
-          <View className="items-center justify-center py-8">
-            <Text className="text-gray-500">No media yet</Text>
+          <View className="flex-1 items-center justify-center py-16 px-8">
+            <View className="items-center mb-4">
+              <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center mb-4">
+                <Ionicons name="images-outline" size={48} color="#9CA3AF" />
+              </View>
+              <Text className="text-xl font-semibold text-gray-700 mb-2">No media yet</Text>
+              <Text className="text-sm text-gray-500 text-center">
+                Upload photos and images to share with others
+              </Text>
+            </View>
           </View>
         }
       />
@@ -141,25 +165,79 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Videos Tab (Index 2)
   if (selectedIndex === 2) {
-    const renderVideoItem = ({ item }: { item: Video }) => {
+    const handleVideoPress = (video: Video, index: number) => {
+      // Get user's actual avatar URL, fallback to placeholder if not available
+      const userAvatarUrl = user && getAvatarUrl(user) 
+        ? getAvatarUrl(user) 
+        : "https://via.placeholder.com/40x40/cccccc/ffffff?text=U";
+      
+      // Prepare video list for navigation
+      const videoListForNavigation = videos.map((v, idx) => ({
+        title: v.title || "Untitled Video",
+        speaker: v.userId || "Unknown",
+        timeAgo: new Date(v.createdAt).toLocaleDateString(),
+        views: v.viewsCount || 0,
+        sheared: 0,
+        saved: 0,
+        favorite: v.likesCount || 0,
+        fileUrl: v.url || "",
+        imageUrl: v.thumbnail || v.url || "",
+        speakerAvatar: userAvatarUrl,
+        _id: v._id,
+        contentType: "videos",
+        description: v.description || "",
+        createdAt: v.createdAt,
+        uploadedBy: v.userId,
+      }));
+
+      // Set video list in reels store BEFORE navigation for immediate access
+      reelsStore.setVideoList(videoListForNavigation);
+      reelsStore.setCurrentIndex(index);
+
+      // Navigate to reels screen
+      router.push({
+        pathname: "/reels/Reelsviewscroll",
+        params: {
+          title: video.title || "Untitled Video",
+          speaker: video.userId || "Unknown",
+          timeAgo: new Date(video.createdAt).toLocaleDateString(),
+          views: String(video.viewsCount || 0),
+          sheared: "0",
+          saved: "0",
+          favorite: String(video.likesCount || 0),
+          imageUrl: video.url || "",
+          speakerAvatar: userAvatarUrl,
+          category: "videos",
+          currentIndex: String(index),
+          source: "AccountScreen",
+          videoList: JSON.stringify(videoListForNavigation),
+        },
+      });
+    };
+
+    const renderVideoItem = ({ item, index }: { item: Video; index: number }) => {
       return (
         <TouchableOpacity
           className="w-[32%] mb-2 aspect-square relative"
-          onPress={() => {
-            // Navigate to video player
-          }}
+          onPress={() => handleVideoPress(item, index)}
+          activeOpacity={0.8}
         >
           <Image
             source={{ uri: item.thumbnail || item.url }}
             className="w-full h-full rounded-lg"
             resizeMode="cover"
           />
+          {/* Semi-transparent overlay for better play icon visibility */}
+          <View className="absolute inset-0 bg-black/20 rounded-lg" />
+          {/* Play icon with background circle - smaller for compact grid */}
           <View className="absolute inset-0 items-center justify-center">
-            <Ionicons name="play-circle" size={40} color="white" />
+            <View className="bg-black/60 rounded-full p-1">
+              <Ionicons name="play" size={16} color="white" />
+            </View>
           </View>
           {item.duration && (
-            <View className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 rounded">
-              <Text className="text-white text-xs">
+            <View className="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded">
+              <Text className="text-white text-[10px] font-medium">
                 {formatDuration(item.duration)}
               </Text>
             </View>
@@ -175,12 +253,21 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         keyExtractor={(item) => item._id}
         numColumns={3}
         columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
         onEndReached={loadMoreVideos}
         onEndReachedThreshold={0.5}
+        nestedScrollEnabled={true}
         ListEmptyComponent={
-          <View className="items-center justify-center py-8">
-            <Text className="text-gray-500">No videos yet</Text>
+          <View className="flex-1 items-center justify-center py-16 px-8">
+            <View className="items-center mb-4">
+              <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center mb-4">
+                <Ionicons name="videocam-outline" size={48} color="#9CA3AF" />
+              </View>
+              <Text className="text-xl font-semibold text-gray-700 mb-2">No videos yet</Text>
+              <Text className="text-sm text-gray-500 text-center">
+                Share your favorite videos with the community
+              </Text>
+            </View>
           </View>
         }
       />
@@ -189,11 +276,32 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Analytics Tab (Index 3)
   if (selectedIndex === 3) {
-    if (!analytics) {
+    if (loading) {
       return (
         <View className="flex-1 items-center justify-center py-8">
           <ActivityIndicator size="large" color="#FEA74E" />
         </View>
+      );
+    }
+
+    if (!analytics) {
+      return (
+        <ScrollView 
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 20 }}
+        >
+          <View className="items-center justify-center py-16 px-8">
+            <View className="items-center mb-4">
+              <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center mb-4">
+                <Ionicons name="stats-chart-outline" size={48} color="#9CA3AF" />
+              </View>
+              <Text className="text-xl font-semibold text-gray-700 mb-2">No analytics data</Text>
+              <Text className="text-sm text-gray-500 text-center">
+                Analytics will appear here once you start creating content
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
       );
     }
 
@@ -237,7 +345,11 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
     ];
 
     return (
-      <View className="px-4 py-4">
+      <ScrollView 
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
         {analyticsMetrics.map((metric, index) => (
           <View
             key={index}
@@ -254,7 +366,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
             <Text className="text-[#111827] font-semibold">{String(metric.value)}</Text>
           </View>
         ))}
-      </View>
+      </ScrollView>
     );
   }
 

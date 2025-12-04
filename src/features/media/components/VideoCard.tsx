@@ -464,15 +464,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const handleTogglePlay = useCallback(async () => {
     if (isPlayTogglePending) return; // Prevent double-taps
 
-    console.log(
-      "🎮 VideoCard togglePlay called with key:",
-      key,
-      "isAudioSermon:",
-      isAudioSermon,
-      "currentlyPlaying:",
-      isPlaying
-    );
-
     // Clear any pending tap detection when play icon is clicked
     tapCountRef.current = 0;
     if (tapTimeoutRef.current) {

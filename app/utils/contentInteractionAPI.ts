@@ -642,11 +642,6 @@ class ContentInteractionService {
         responseTime: Date.now(),
         success: true,
       };
-      console.log(
-        "📊 VIEW_INTERACTION:",
-        JSON.stringify(viewAnalyticsData, null, 2)
-      );
-
       return { totalViews: Number(viewCount) || 0, hasViewed };
     } catch (error) {
       console.error("Error recording view:", error);

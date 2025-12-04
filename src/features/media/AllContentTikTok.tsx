@@ -1433,12 +1433,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       const { y, height } = event.nativeEvent.layout;
       contentLayoutsRef.current[key] = { y, height, type, uri };
 
-      console.log(
-        `📱 Layout tracked: ${key} (${type}) at y=${Math.round(
-          y
-        )}, height=${Math.round(height)}`
-      );
-
       // No automatic video start on layout - manual play still works
       // Videos will only play when user clicks the play button
     },
@@ -1698,7 +1692,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   useFocusEffect(
     useCallback(() => {
       return () => {
-        console.log("📱 Pausing all media on focus loss");
         try {
           pauseAllMedia();
         } catch {}
