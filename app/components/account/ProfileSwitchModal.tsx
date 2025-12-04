@@ -41,23 +41,6 @@ export default function ProfileSwitchModal({
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
 
-              {/* Account Button */}
-              <TouchableOpacity
-                onPress={handleAccountPress}
-                className="flex-row items-center justify-center bg-white rounded-xl p-4 mb-6 shadow-sm border border-gray-100"
-              >
-                <Ionicons name="person-outline" size={24} color="#256E63" />
-                <Text className="text-base font-semibold text-gray-900 ml-3">
-                  Account & Profile Settings
-                </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color="#9CA3AF"
-                  style={{ marginLeft: "auto" }}
-                />
-              </TouchableOpacity>
-
               {/* Title */}
               <Text className="text-xl font-bold text-center text-gray-900 mb-6">
                 Switch Profile
@@ -121,6 +104,23 @@ export default function ProfileSwitchModal({
                   </View>
                 </Pressable>
               </View>
+
+              {/* Account Button - Moved to bottom before last element */}
+              <TouchableOpacity
+                onPress={handleAccountPress}
+                className="flex-row items-center justify-center bg-white rounded-xl p-4 mt-6 shadow-sm border border-gray-100"
+              >
+                <Ionicons name="person-outline" size={24} color="#256E63" />
+                <Text className="text-base font-semibold text-gray-900 ml-3">
+                  Account & Profile Settings
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color="#9CA3AF"
+                  style={{ marginLeft: "auto" }}
+                />
+              </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
         </View>

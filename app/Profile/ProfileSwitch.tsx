@@ -38,23 +38,6 @@ const ProfileSwitch = () => {
       {/* Header */}
       <AuthHeader title="Profile Switch" />
 
-      {/* Account Button */}
-      <TouchableOpacity
-        onPress={handleAccountPress}
-        className="flex-row items-center justify-center bg-white rounded-xl p-4 mb-6 shadow-sm border border-gray-100"
-      >
-        <Ionicons name="person-outline" size={24} color="#256E63" />
-        <Text className="text-base font-semibold text-gray-900 ml-3">
-          Account & Profile Settings
-        </Text>
-        <Ionicons
-          name="chevron-forward"
-          size={20}
-          color="#9CA3AF"
-          style={{ marginLeft: "auto" }}
-        />
-      </TouchableOpacity>
-
       {/* Title */}
       <Text className="text-xl font-bold text-center text-gray-900 mb-6">
         Choose your section
@@ -97,8 +80,25 @@ const ProfileSwitch = () => {
         ))}
       </View>
 
+      {/* Account Button - Moved to bottom before last element */}
+      <TouchableOpacity
+        onPress={handleAccountPress}
+        className="flex-row items-center justify-center bg-white rounded-xl p-4 mt-6 shadow-sm border border-gray-100"
+      >
+        <Ionicons name="person-outline" size={24} color="#256E63" />
+        <Text className="text-base font-semibold text-gray-900 ml-3">
+          Account & Profile Settings
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color="#9CA3AF"
+          style={{ marginLeft: "auto" }}
+        />
+      </TouchableOpacity>
+
       {/* Learn more */}
-      <Pressable className="mt-16 border border-black py-3 rounded-full items-center">
+      <Pressable className="mt-6 border border-black py-3 rounded-full items-center">
         <Text className="text-base font-semibold text-black">Learn more</Text>
       </Pressable>
     </ScrollView>
