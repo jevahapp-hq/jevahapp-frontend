@@ -2,11 +2,8 @@ import { ContentType, MediaItem } from "../types";
 
 // Export media helper utilities
 export {
-  getUploadedBy,
-  getMediaId,
-  getMediaTitle,
-  hasAuthorInfo,
-  getAuthorId,
+    getAuthorId, getMediaId,
+    getMediaTitle, getUploadedBy, hasAuthorInfo
 } from "./mediaHelpers";
 
 // URL validation utility with enhanced checks
@@ -277,6 +274,8 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem => {
     likeCount: item.likeCount,
     totalLikes: item.totalLikes,
     commentCount: item.commentCount,
+    // Preserve duration from backend (in seconds, will be converted to ms when needed)
+    duration: item.duration,
   };
 };
 

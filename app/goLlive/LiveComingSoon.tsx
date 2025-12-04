@@ -3,12 +3,14 @@ import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   getResponsiveBorderRadius,
   getResponsiveSize,
   getResponsiveSpacing,
   getResponsiveTextStyle,
 } from "../../utils/responsive";
+import { UI_CONFIG } from "../../src/shared/constants";
 
 /**
  * LiveComingSoon – simple, intelligent screen to let users know
@@ -35,10 +37,10 @@ const LiveComingSoon = () => {
     <View
       style={{
         flex: 1,
-        backgroundColor: "#050816",
+        backgroundColor: UI_CONFIG.COLORS.PRIMARY,
         paddingHorizontal: getResponsiveSpacing(20, 24, 28, 32),
         paddingTop: getResponsiveSpacing(40, 44, 48, 52),
-        paddingBottom: getResponsiveSpacing(24, 28, 32, 36),
+        paddingBottom: getResponsiveSpacing(16, 18, 20, 22),
       }}
     >
       {/* Header */}
@@ -60,7 +62,7 @@ const LiveComingSoon = () => {
           <Ionicons
             name="arrow-back"
             size={getResponsiveSize(18, 20, 22, 24)}
-            color="#E5E7EB"
+            color="#FFFFFF"
           />
         </TouchableOpacity>
 
@@ -68,7 +70,7 @@ const LiveComingSoon = () => {
           style={[
             getResponsiveTextStyle("subtitle"),
             {
-              color: "#E5E7EB",
+              color: "#FFFFFF",
               fontWeight: "600",
             },
           ]}
@@ -89,28 +91,27 @@ const LiveComingSoon = () => {
       >
         <View
           style={{
-            backgroundColor: "rgba(15,23,42,0.9)",
+            backgroundColor: UI_CONFIG.COLORS.SURFACE,
             borderRadius: getResponsiveBorderRadius("large"),
             paddingHorizontal: getResponsiveSpacing(20, 24, 28, 32),
             paddingVertical: getResponsiveSpacing(24, 28, 32, 36),
             width: "100%",
             maxWidth: 420,
             alignItems: "center",
+            borderWidth: 1,
+            borderColor: UI_CONFIG.COLORS.BORDER,
           }}
         >
           {/* Icon */}
           <View
             style={{
-              backgroundColor: "rgba(248,250,252,0.06)",
-              borderRadius: getResponsiveBorderRadius("round"),
-              padding: getResponsiveSpacing(16, 20, 24, 28),
               marginBottom: getResponsiveSpacing(16, 20, 24, 28),
             }}
           >
             <Ionicons
               name="radio-outline"
               size={getResponsiveSize(32, 36, 40, 44)}
-              color="#F97316"
+              color={UI_CONFIG.COLORS.PRIMARY}
             />
           </View>
 
@@ -119,7 +120,7 @@ const LiveComingSoon = () => {
             style={{
               fontSize: getResponsiveSize(20, 22, 24, 26),
               fontFamily: "Rubik-SemiBold",
-              color: "#F9FAFB",
+              color: UI_CONFIG.COLORS.TEXT_PRIMARY,
               textAlign: "center",
               marginBottom: getResponsiveSpacing(8, 10, 12, 14),
             }}
@@ -131,14 +132,14 @@ const LiveComingSoon = () => {
           <Text
             style={{
               fontSize: getResponsiveSize(13, 14, 15, 16),
-              color: "#9CA3AF",
+              color: UI_CONFIG.COLORS.TEXT_SECONDARY,
               textAlign: "center",
               lineHeight: 20,
               marginBottom: getResponsiveSpacing(16, 18, 20, 22),
             }}
           >
-            In the next Jevah app update, you’ll be able to start{" "}
-            <Text style={{ color: "#F97316", fontWeight: "600" }}>
+            In the next Jevah app update, you'll be able to start{" "}
+            <Text style={{ color: UI_CONFIG.COLORS.SECONDARY, fontWeight: "600" }}>
               live services, prayer meetings, and broadcasts
             </Text>{" "}
             directly from here.
@@ -153,7 +154,7 @@ const LiveComingSoon = () => {
           >
             <Text
               style={{
-                color: "#E5E7EB",
+                color: UI_CONFIG.COLORS.TEXT_PRIMARY,
                 marginBottom: 4,
                 fontSize: 13,
               }}
@@ -162,38 +163,57 @@ const LiveComingSoon = () => {
             </Text>
             <Text
               style={{
-                color: "#9CA3AF",
+                color: UI_CONFIG.COLORS.TEXT_SECONDARY,
                 fontSize: 12,
               }}
             >
-              • We’re finalizing streaming and moderation features to make sure
-              it’s smooth and safe for your community.
+              • We're finalizing streaming and moderation features to make sure
+              it's smooth and safe for your community.
             </Text>
           </View>
         </View>
-      </View>
 
-      {/* Footer button */}
+        {/* Button positioned right below the card */}
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            marginTop: getResponsiveSpacing(24, 28, 32, 36),
+          }}
+        >
+          {/* Footer button with clean gradient design */}
       <TouchableOpacity
         onPress={handleGoHome}
         activeOpacity={0.8}
         style={{
-          backgroundColor: "#F97316",
           borderRadius: getResponsiveBorderRadius("round"),
-          paddingVertical: getResponsiveSpacing(14, 16, 18, 20),
-          alignItems: "center",
+          overflow: "hidden",
+          width: "100%",
         }}
       >
-        <Text
+        <LinearGradient
+          colors={[UI_CONFIG.COLORS.PRIMARY, UI_CONFIG.COLORS.SECONDARY]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
           style={{
-            fontSize: getResponsiveSize(14, 15, 16, 17),
-            fontFamily: "Rubik-SemiBold",
-            color: "#111827",
+            paddingVertical: getResponsiveSpacing(14, 16, 18, 20),
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          Back to home
-        </Text>
+          <Text
+            style={{
+              fontSize: getResponsiveSize(14, 15, 16, 17),
+              fontFamily: "Rubik-SemiBold",
+              color: "#FFFFFF",
+            }}
+          >
+            Back to home
+          </Text>
+        </LinearGradient>
       </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };

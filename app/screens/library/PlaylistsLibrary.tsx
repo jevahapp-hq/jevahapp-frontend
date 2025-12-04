@@ -227,7 +227,11 @@ export default function PlaylistsLibrary() {
                 resizeMode="cover"
               />
             ) : (
-              <Ionicons name="musical-notes" size={40} color="#9CA3AF" />
+              <Image
+                source={require("../../../assets/images/Jevah.png")}
+                style={{ width: 80, height: 80 }}
+                resizeMode="cover"
+              />
             )}
           </View>
 

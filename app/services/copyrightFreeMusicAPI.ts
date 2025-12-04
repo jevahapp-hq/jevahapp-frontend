@@ -302,6 +302,51 @@ class CopyrightFreeMusicAPI {
       throw error;
     }
   }
+
+  /**
+   * Record a view for a song
+   * Tracks user engagement (duration, progress, completion)
+   */
+  async recordView(
+    songId: string,
+    payload?: {
+      durationMs?: number;
+      progressPct?: number;
+      isComplete?: boolean;
+    }
+  ): Promise<{
+    success: boolean;
+    data: {
+      viewCount: number;
+      hasViewed: boolean;
+    };
+  }> {
+    try {
+      const token = await TokenUtils.getAuthToken();
+      if (!token) {
+        throw new Error("Authentication required");
+      }
+
+      const response = await fetch(`${this.baseUrl}/${songId}/view`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error recording view for song ${songId}:`, error);
+      throw error;
+    }
+  }
 }
 
 export default new CopyrightFreeMusicAPI();

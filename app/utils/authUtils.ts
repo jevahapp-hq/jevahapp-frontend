@@ -282,6 +282,18 @@ export const authUtils = {
         throw new Error("Incomplete Clerk user data");
       }
     }
+
+    // Refresh interaction stats after login to restore like/bookmark state
+    try {
+      const { useInteractionStore } = await import(
+        "../store/useInteractionStore"
+      );
+      await useInteractionStore.getState().refreshAllStatsAfterLogin();
+      console.log("✅ Refreshed interaction stats after login");
+    } catch (error) {
+      console.warn("⚠️ Failed to refresh interaction stats after login:", error);
+      // Non-critical, continue with login
+    }
   },
 
   /**

@@ -22,8 +22,8 @@ import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackC
 import { VideoCardProps } from "../../../shared/types";
 import { getUploadedBy, isValidUri } from "../../../shared/utils";
 import {
-  getBestVideoUrl,
-  handleVideoError as handleVideoErrorUtil,
+    getBestVideoUrl,
+    handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
@@ -62,6 +62,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const key = getContentKey(video);
   const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
   const progress = progresses[key] || 0;
+  
+  // Get duration from backend metadata (in seconds) as fallback
+  const backendDurationSeconds = (video as any)?.duration;
+  const backendDurationMs = backendDurationSeconds && Number.isFinite(backendDurationSeconds) && backendDurationSeconds > 0
+    ? (backendDurationSeconds < 86400 ? backendDurationSeconds * 1000 : backendDurationSeconds) // Convert seconds to ms if < 24h, otherwise assume already ms
+    : 0;
 
   // Media type detection - needs to be before useVideoPlayer
   const getMediaType = useCallback(() => {
@@ -572,8 +578,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         console.log(`✅ Video loaded successfully: ${video.title}`);
         setFailedVideoLoad(false);
         setVideoLoaded(true);
-        if (player.duration) {
-          lastKnownDurationRef.current = player.duration * 1000; // Convert to ms
+        if (player.duration && Number.isFinite(player.duration) && player.duration > 0) {
+          const durationMs = Math.min(player.duration * 1000, 24 * 60 * 60 * 1000); // Max 24 hours
+          if (!isNaN(durationMs)) {
+            lastKnownDurationRef.current = durationMs;
+          }
         }
         
         if (isPlaying) {
@@ -592,11 +601,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       
       const currentTime = player.currentTime || 0;
       const duration = player.duration || 0;
-      const positionMs = currentTime * 1000;
-      const durationMs = duration * 1000;
-      const progress = durationMs > 0 ? positionMs / durationMs : 0;
       
-      lastKnownDurationRef.current = durationMs;
+      // Validate and clamp duration (prevent invalid values)
+      const durationMs = Math.max(0, Math.min(duration * 1000, 24 * 60 * 60 * 1000)); // Max 24 hours
+      const positionMs = Math.max(0, Math.min(currentTime * 1000, durationMs));
+      
+      // Only update duration ref if it's valid and finite
+      if (Number.isFinite(durationMs) && durationMs > 0 && !isNaN(durationMs)) {
+        lastKnownDurationRef.current = durationMs;
+      }
+      
+      const progress = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
 
       const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
       const finished = player.currentTime >= player.duration && player.duration > 0;
@@ -902,19 +917,37 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
           {/* Video/Audio Progress Bar - Full width with proper margins */}
           <VideoProgressBar
-            progress={isAudioSermon ? audioState.progress : progress}
+            progress={
+              isAudioSermon
+                ? audioState.progress
+                : Math.max(0, Math.min(1, progress || 0))
+            }
             isMuted={isAudioSermon ? audioState.isMuted : isMuted}
             onToggleMute={handleToggleMute}
             onSeekToPercent={seekToPercent}
+            // Lift the controls row up so it's visually closer to the title overlay
+            // while still anchored near the bottom of the video frame.
+            bottomOffset={24}
             currentMs={
               isAudioSermon
-                ? audioState.position
-                : lastKnownDurationRef.current > 0
-                ? progress * lastKnownDurationRef.current
-                : 0
+                ? (Number.isFinite(audioState.position) && audioState.position >= 0 
+                    ? audioState.position 
+                    : 0)
+                : (lastKnownDurationRef.current > 0 && Number.isFinite(lastKnownDurationRef.current)
+                    ? Math.max(0, Math.min(
+                        progress * lastKnownDurationRef.current,
+                        lastKnownDurationRef.current
+                      ))
+                    : 0)
             }
             durationMs={
-              isAudioSermon ? audioState.duration : lastKnownDurationRef.current
+              isAudioSermon 
+                ? (Number.isFinite(audioState.duration) && audioState.duration > 0
+                    ? audioState.duration
+                    : 0)
+                : (Number.isFinite(lastKnownDurationRef.current) && lastKnownDurationRef.current > 0
+                    ? lastKnownDurationRef.current
+                    : (backendDurationMs > 0 ? backendDurationMs : 0))
             }
             showControls={true}
             // Pro config to avoid jumpbacks and ensure usability
@@ -931,7 +964,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       </TouchableWithoutFeedback>
 
       {/* Footer with User Info and compact left-aligned stats/actions - matching MusicCard */}
-      <View className="flex-row items-center justify-between mt-2 px-3">
+      <View className="flex-row items-center justify-between mt-2 px-2">
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
             {/* Avatar with initial fallback */}

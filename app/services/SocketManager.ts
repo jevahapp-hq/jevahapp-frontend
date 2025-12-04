@@ -92,11 +92,15 @@ class SocketManager {
         auth: {
           token: this.authToken,
         },
-        transports: ["websocket", "polling"],
+        transports: ["websocket", "polling"], // Try WebSocket first, fallback to polling
         timeout: 20000,
         forceNew: true, // Force new connection
         autoConnect: false, // Don't auto-connect, we'll do it manually
-        reconnection: false, // Disable automatic reconnection
+        reconnection: true, // Enable automatic reconnection
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+        upgrade: true, // Allow upgrade from polling to websocket
       });
 
       this.setupEventHandlers();
@@ -122,12 +126,33 @@ class SocketManager {
     });
 
     this.socket.on("disconnect", (reason) => {
+      // Don't log transport errors as disconnects (they're expected during connection attempts)
+      if (reason === "transport error" || reason === "transport close") {
+        console.log("🔄 Transport disconnected, Socket.IO will retry...");
+        return; // Socket.IO will handle reconnection automatically
+      }
       console.log("❌ Socket disconnected:", reason);
       this.handleReconnect();
     });
 
     this.socket.on("connect_error", (error: any) => {
-      // Check if it's an authentication error first
+      // Check if it's a transport error (WebSocket failure - Socket.IO will auto-fallback to polling)
+      const isTransportError =
+        error?.message?.includes("websocket error") ||
+        error?.message?.includes("transport error") ||
+        error?.type === "TransportError" ||
+        (error as any)?.type === "TransportError";
+
+      if (isTransportError) {
+        // Transport errors are expected - Socket.IO will automatically fallback to polling
+        // Don't log as error, just as debug info
+        console.log(
+          "🔄 WebSocket transport failed, Socket.IO will fallback to polling..."
+        );
+        return; // Let Socket.IO handle the fallback automatically
+      }
+
+      // Check if it's an authentication error
       const isAuthError =
         error.message?.includes("Authentication failed") ||
         error.message?.includes("Unauthorized") ||
@@ -142,28 +167,14 @@ class SocketManager {
       if (isAuthError) {
         console.log("🔐 Authentication required - please log in to connect");
         console.log("💡 App will continue without real-time features");
-
-        // Show user-friendly notification (optional)
-        // You can integrate with your notification system here
-        console.log(
-          "📱 User notification: Please log in again to enable real-time features"
-        );
         this.reconnectAttempts = this.maxReconnectAttempts;
         this.socket?.disconnect();
         this.socket = null;
         return;
       }
 
-      // Log other connection errors (non-authentication)
-      console.error("❌ Socket connection error:", error?.message);
-      console.error("❌ Error details:", {
-        message: error?.message,
-        type: (error as any)?.type,
-        description: (error as any)?.description,
-        context: (error as any)?.context,
-        code: (error as any)?.code,
-        data: (error as any)?.data,
-      });
+      // Log other connection errors (non-authentication, non-transport)
+      console.warn("⚠️ Socket connection error:", error?.message || "Unknown error");
 
       // Don't reconnect on network errors that are likely permanent
       if (
@@ -182,6 +193,7 @@ class SocketManager {
         return;
       }
 
+      // For other errors, attempt reconnection
       this.handleReconnect();
     });
 

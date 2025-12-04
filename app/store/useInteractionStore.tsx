@@ -96,6 +96,7 @@ interface InteractionState {
   // Cache management
   clearCache: () => void;
   refreshContentStats: (contentId: string) => Promise<void>;
+  refreshAllStatsAfterLogin: () => Promise<void>;
 }
 
 export const useInteractionStore = create<InteractionState>()(
@@ -597,9 +598,21 @@ export const useInteractionStore = create<InteractionState>()(
           contentId,
           contentType
         );
-
         set((state) => {
           const existing = state.contentStats[contentId];
+
+          // Prefer whichever source reports a "true" interaction.
+          // This prevents fresh server metadata that hasn't caught up yet
+          // from clearing a like/save the user just performed in this session.
+          const existingLiked = existing?.userInteractions?.liked ?? false;
+          const statsLiked = stats.userInteractions?.liked ?? false;
+          const existingSaved = existing?.userInteractions?.saved ?? false;
+          const statsSaved = stats.userInteractions?.saved ?? false;
+          const existingShared = existing?.userInteractions?.shared ?? false;
+          const statsShared = stats.userInteractions?.shared ?? false;
+          const existingViewed = existing?.userInteractions?.viewed ?? false;
+          const statsViewed = stats.userInteractions?.viewed ?? false;
+
           const merged: ContentStats = {
             contentId,
             likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
@@ -608,22 +621,10 @@ export const useInteractionStore = create<InteractionState>()(
             views: Math.max(existing?.views ?? 0, stats.views ?? 0),
             comments: Math.max(existing?.comments ?? 0, stats.comments ?? 0),
             userInteractions: {
-              liked:
-                stats.userInteractions?.liked ??
-                existing?.userInteractions?.liked ??
-                false,
-              saved:
-                stats.userInteractions?.saved ??
-                existing?.userInteractions?.saved ??
-                false,
-              shared:
-                stats.userInteractions?.shared ??
-                existing?.userInteractions?.shared ??
-                false,
-              viewed:
-                stats.userInteractions?.viewed ??
-                existing?.userInteractions?.viewed ??
-                false,
+              liked: existingLiked || statsLiked,
+              saved: existingSaved || statsSaved,
+              shared: existingShared || statsShared,
+              viewed: existingViewed || statsViewed,
             },
           };
 
@@ -681,6 +682,18 @@ export const useInteractionStore = create<InteractionState>()(
             >;
             for (const [id, stats] of Object.entries(fromBatch)) {
               const existing = state.contentStats[id];
+
+              const existingLiked = existing?.userInteractions?.liked ?? false;
+              const statsLiked = stats.userInteractions?.liked ?? false;
+              const existingSaved = existing?.userInteractions?.saved ?? false;
+              const statsSaved = stats.userInteractions?.saved ?? false;
+              const existingShared =
+                existing?.userInteractions?.shared ?? false;
+              const statsShared = stats.userInteractions?.shared ?? false;
+              const existingViewed =
+                existing?.userInteractions?.viewed ?? false;
+              const statsViewed = stats.userInteractions?.viewed ?? false;
+
               merged[id] = {
                 contentId: id,
                 likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
@@ -692,22 +705,10 @@ export const useInteractionStore = create<InteractionState>()(
                   stats.comments ?? 0
                 ),
                 userInteractions: {
-                  liked:
-                    stats.userInteractions?.liked ??
-                    existing?.userInteractions?.liked ??
-                    false,
-                  saved:
-                    stats.userInteractions?.saved ??
-                    existing?.userInteractions?.saved ??
-                    false,
-                  shared:
-                    stats.userInteractions?.shared ??
-                    existing?.userInteractions?.shared ??
-                    false,
-                  viewed:
-                    stats.userInteractions?.viewed ??
-                    existing?.userInteractions?.viewed ??
-                    false,
+                  liked: existingLiked || statsLiked,
+                  saved: existingSaved || statsSaved,
+                  shared: existingShared || statsShared,
+                  viewed: existingViewed || statsViewed,
                 },
               } as ContentStats;
             }
@@ -787,6 +788,41 @@ export const useInteractionStore = create<InteractionState>()(
 
     refreshContentStats: async (contentId: string) => {
       await get().loadContentStats(contentId);
+    },
+
+    /**
+     * Refresh interaction stats for all currently cached content after login
+     * This ensures likes/bookmarks persist across logout/login sessions
+     * @param contentIds Optional array of content IDs to refresh. If not provided, refreshes all cached content.
+     */
+    refreshAllStatsAfterLogin: async (contentIds?: string[]) => {
+      const state = get();
+      const idsToRefresh = contentIds || Object.keys(state.contentStats);
+      
+      if (idsToRefresh.length === 0) {
+        console.log("🔄 No content to refresh after login");
+        return;
+      }
+
+      console.log(`🔄 Refreshing interaction stats for ${idsToRefresh.length} items after login...`);
+      
+      // Group by content type (we'll need to infer or use a default)
+      // For now, refresh all as "media" type (most common)
+      // Components can call loadBatchContentStats with proper types
+      try {
+        await state.loadBatchContentStats(idsToRefresh, "media");
+        console.log("✅ Successfully refreshed interaction stats after login");
+      } catch (error) {
+        console.warn("⚠️ Failed to refresh all stats after login, falling back to per-item:", error);
+        // Fallback to per-item refresh
+        for (const id of idsToRefresh) {
+          try {
+            await state.loadContentStats(id, "media");
+          } catch (itemError) {
+            console.warn(`⚠️ Failed to refresh stats for ${id}:`, itemError);
+          }
+        }
+      }
     },
 
     clearCache: () => {

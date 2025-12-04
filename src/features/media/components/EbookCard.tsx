@@ -104,15 +104,16 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const [imageErrored, setImageErrored] = useState(false);
   const shouldShowImage = !!initialThumb && !imageErrored;
 
-  const [liked, setLiked] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
-  const [likeCount, setLikeCount] = useState<number>(ebook.likes || 0);
   const viewCount = useContentCount(contentId, "views") || ebook.views || 0;
   const commentCount =
     useContentCount(contentId, "comments") || ebook.comments || 0;
   const saveCount =
     useContentCount(contentId, "saves") || (ebook as any)?.saves || 0;
+  const likesFromStore =
+    useContentCount(contentId, "likes") || (ebook as any)?.likes || 0;
   const savedFromStore = useUserInteraction(contentId, "saved");
+  const likedFromStore = useUserInteraction(contentId, "liked");
   useHydrateContentStats(contentId, "media");
 
   // Hydrate stats on mount to keep saved highlight after tab switches
@@ -132,8 +133,6 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const handleFavorite = () => {
     try {
       setLikeBurstKey((k) => k + 1);
-      setLiked((prev) => !prev);
-      setLikeCount((prev) => (liked ? Math.max(0, prev - 1) : prev + 1));
       onLike(ebook);
     } catch {}
   };
@@ -243,7 +242,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         </View>
       </TouchableWithoutFeedback>
 
-      <View className="flex-row items-center justify-between mt-1 px-3">
+      <View className="flex-row items-center justify-between mt-1 px-2">
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
             {/* Avatar with initial fallback */}
@@ -266,8 +265,8 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             </View>
             <CardFooterActions
               viewCount={viewCount}
-              liked={liked}
-              likeCount={likeCount}
+              liked={!!likedFromStore}
+              likeCount={likesFromStore}
               likeBurstKey={likeBurstKey}
               likeColor="#FF1744"
               onLike={handleFavorite}

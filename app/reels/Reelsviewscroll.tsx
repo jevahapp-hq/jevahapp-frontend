@@ -20,7 +20,9 @@ import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
 import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
+import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import { useCommentModal } from "../context/CommentModalContext";
+import { useDownloadHandler } from "../utils/downloadUtils";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
@@ -35,6 +37,9 @@ import {
     toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
+import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
+import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
+import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
 
 // ✅ Route Params Type
 type Params = {
@@ -265,6 +270,11 @@ export default function Reelsviewscroll() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("Home");
   const [menuVisible, setMenuVisible] = useState<boolean>(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  
+  // Download functionality
+  const { handleDownload, checkIfDownloaded } = useDownloadHandler();
 
   // 🔁 Helper: try to refresh stale media URL from backend
   const tryRefreshMediaUrl = async (item: any): Promise<string | null> => {
@@ -404,6 +414,18 @@ export default function Reelsviewscroll() {
   // Create a unique key for this reel content
   const reelKey = `reel-${currentVideo.title}-${currentVideo.speaker}`;
   const modalKey = reelKey;
+
+  // Media deletion functionality - must be after currentVideo is defined
+  const {
+    isOwner,
+    showDeleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleDeleteConfirm: handleDeleteConfirmInternal,
+  } = useMediaDeletion({
+    mediaItem: currentVideo,
+    isModalVisible: menuVisible,
+  });
 
   // Create video object for consistency with VideoComponent pattern
   const video = {
@@ -649,6 +671,38 @@ export default function Reelsviewscroll() {
       console.error("Error handling share:", error);
       setMenuVisible(false);
     }
+  };
+
+  // Handle download
+  const handleDownloadAction = async () => {
+    try {
+      const downloadableItem = {
+        id: currentVideo._id || modalKey,
+        title: currentVideo.title || title,
+        description: currentVideo.description || "",
+        author: currentVideo.speaker || speaker || "Unknown",
+        contentType: "video",
+        fileUrl: currentVideo.fileUrl || imageUrl,
+        thumbnailUrl: currentVideo.imageUrl || imageUrl,
+      };
+      
+      await handleDownload(downloadableItem);
+      setMenuVisible(false);
+    } catch (error) {
+      console.error("Error downloading video:", error);
+    }
+  };
+
+  // Handle view details
+  const handleViewDetails = () => {
+    setMenuVisible(false);
+    setShowDetailsModal(true);
+  };
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = async () => {
+    await handleDeleteConfirmInternal();
+    setMenuVisible(false);
   };
 
   // Toggle video play/pause when tapped
@@ -1596,7 +1650,7 @@ export default function Reelsviewscroll() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Action Menu - Improved positioning */}
+                {/* Action Menu - White background popup with ContentActionModal options */}
                 {menuVisible && (
                   <>
                     <TouchableWithoutFeedback
@@ -1622,7 +1676,12 @@ export default function Reelsviewscroll() {
                         zIndex: 20,
                       }}
                     >
+                      {/* View Details */}
                       <TouchableOpacity
+                        onPress={() => {
+                          handleViewDetails();
+                          setMenuVisible(false);
+                        }}
                         style={{
                           paddingVertical: 10,
                           borderBottomWidth: 1,
@@ -1648,8 +1707,12 @@ export default function Reelsviewscroll() {
                         />
                       </TouchableOpacity>
 
+                      {/* Save to Library / Remove from Library */}
                       <TouchableOpacity
-                        onPress={() => handleShare(videoKey)}
+                        onPress={() => {
+                          handleSave(modalKey);
+                          setMenuVisible(false);
+                        }}
                         style={{
                           paddingVertical: 10,
                           borderBottomWidth: 1,
@@ -1666,38 +1729,13 @@ export default function Reelsviewscroll() {
                             fontFamily: "Rubik",
                           }}
                         >
-                          Share
-                        </Text>
-                        <Feather name="send" size={22} color="#1D2939" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={{
-                          paddingVertical: 10,
-                          marginTop: 10,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                        onPress={() => {
-                          handleSave(videoKey);
-                          setMenuVisible(false);
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#1D2939",
-                            fontSize: 14,
-                            fontFamily: "Rubik",
-                          }}
-                        >
-                          {libraryStore.isItemSaved(videoKey)
+                          {libraryStore.isItemSaved(modalKey)
                             ? "Remove from Library"
                             : "Save to Library"}
                         </Text>
                         <MaterialIcons
                           name={
-                            libraryStore.isItemSaved(videoKey)
+                            libraryStore.isItemSaved(modalKey)
                               ? "bookmark"
                               : "bookmark-border"
                           }
@@ -1706,7 +1744,78 @@ export default function Reelsviewscroll() {
                         />
                       </TouchableOpacity>
 
+                      {/* Delete - Only show if owner */}
+                      {isOwner && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            openDeleteModal();
+                            setMenuVisible(false);
+                          }}
+                          style={{
+                            paddingVertical: 10,
+                            borderBottomWidth: 1,
+                            borderBottomColor: "#f3f4f6",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#FF6B6B",
+                              fontSize: 14,
+                              fontFamily: "Rubik",
+                            }}
+                          >
+                            Delete
+                          </Text>
+                          <Ionicons
+                            name="trash-outline"
+                            size={22}
+                            color="#FF6B6B"
+                          />
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Report - Only show if not owner */}
+                      {!isOwner && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setShowReportModal(true);
+                            setMenuVisible(false);
+                          }}
+                          style={{
+                            paddingVertical: 10,
+                            borderBottomWidth: 1,
+                            borderBottomColor: "#f3f4f6",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#FF6B6B",
+                              fontSize: 14,
+                              fontFamily: "Rubik",
+                            }}
+                          >
+                            Report
+                          </Text>
+                          <Ionicons
+                            name="flag-outline"
+                            size={22}
+                            color="#FF6B6B"
+                          />
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Download / Remove Download */}
                       <TouchableOpacity
+                        onPress={() => {
+                          handleDownloadAction();
+                          setMenuVisible(false);
+                        }}
                         style={{
                           paddingVertical: 10,
                           borderTopWidth: 1,
@@ -1724,12 +1833,22 @@ export default function Reelsviewscroll() {
                             fontFamily: "Rubik",
                           }}
                         >
-                          Download
+                          {checkIfDownloaded(currentVideo._id || modalKey)
+                            ? "Remove Download"
+                            : "Download"}
                         </Text>
                         <Ionicons
-                          name="download-outline"
+                          name={
+                            checkIfDownloaded(currentVideo._id || modalKey)
+                              ? "checkmark-circle"
+                              : "download-outline"
+                          }
                           size={24}
-                          color="#090E24"
+                          color={
+                            checkIfDownloaded(currentVideo._id || modalKey)
+                              ? "#256E63"
+                              : "#090E24"
+                          }
                         />
                       </TouchableOpacity>
                     </View>
@@ -2072,6 +2191,30 @@ export default function Reelsviewscroll() {
       </View>
 
       {/* Comment Modal removed; global instance in app/_layout handles it */}
+      
+      {/* Delete Confirmation Modal */}
+      <DeleteMediaConfirmation
+        visible={showDeleteModal}
+        mediaId={currentVideo._id || ""}
+        mediaTitle={currentVideo.title || "this video"}
+        onClose={closeDeleteModal}
+        onSuccess={handleDeleteConfirm}
+      />
+
+      {/* Report Modal */}
+      <ReportMediaModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        mediaId={currentVideo._id || ""}
+        mediaTitle={currentVideo.title || title}
+      />
+
+      {/* Media Details Modal */}
+      <MediaDetailsModal
+        visible={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        mediaItem={currentVideo}
+      />
     </ErrorBoundary>
   );
 }

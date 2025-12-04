@@ -390,26 +390,6 @@ const DownloadScreen: React.FC = () => {
           )}
       </View>
 
-      {/* Profile - moved directly under search */}
-      <View className="flex-row items-center px-4 mt-4 self-start ml-3">
-          <Image
-            source={
-              typeof user?.avatar === "string" && user.avatar.trim() && user.avatar.startsWith("http")
-                ? { uri: user.avatar.trim() }
-                : defaultAvatar
-            }
-            className="w-[40px] h-[38px] rounded-[10px]"
-          />
-          <View className="flex-col items-start ml-3">
-            <Text className="font-semibold text-base">
-              {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
-            </Text>
-            <Text className="text-gray-400">
-              {user?.section?.toUpperCase()}
-            </Text>
-       </View>
-      </View>
-
       {/* Smart download */}
         <View className="bg-[#E5E5EA] rounded-xl w-[362px] h-[104px] mx-4 mt-4 px-4 py-4 flex-row justify-between">
           <View className="flex-row items-start flex-1">

@@ -21,6 +21,7 @@ export interface MediaItem extends BaseEntity {
   favorite?: number;
   imageUrl?: string | { uri: string };
   thumbnailUrl?: string | { uri: string };
+  duration?: number; // Duration in seconds from backend
   // Additional fields from API
   likes?: number;
   shares?: number;

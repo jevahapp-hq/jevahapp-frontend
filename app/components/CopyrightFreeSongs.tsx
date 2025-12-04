@@ -456,6 +456,23 @@ export default function CopyrightFreeSongs({
     isLoading: globalIsLoading,
   } = useGlobalAudioPlayerStore();
 
+  // Update selectedSong when currentTrack changes (for auto-advance to next song)
+  // Update selectedSong when currentTrack changes (for auto-advance to next song)
+  useEffect(() => {
+    if (showSongModal && currentTrack && songs.length > 0) {
+      // Find the full song data from the songs array
+      const fullSongData = songs.find((s) => s.id === currentTrack.id);
+      if (fullSongData) {
+        // Only update if the song actually changed to avoid unnecessary re-renders
+        const currentSongId = selectedSong?.id;
+        if (currentSongId !== currentTrack.id) {
+          console.log("🔄 Auto-advance: Updating modal to show next song:", fullSongData.title);
+          setSelectedSong(fullSongData);
+        }
+      }
+    }
+  }, [currentTrack?.id, showSongModal, songs, selectedSong?.id]);
+
   const handlePlayIconPress = useCallback(
     async (song: any) => {
       console.log("🎵 Play button pressed for:", song.title);

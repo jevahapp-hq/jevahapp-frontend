@@ -15,7 +15,7 @@ export const ThreeDotsMenuButton: React.FC<ThreeDotsMenuButtonProps> = ({
   onPress,
   size = 18,
   color = "#9CA3AF",
-  hitSlop = 8,
+  hitSlop = 10,
   className = "",
   style,
 }) => {

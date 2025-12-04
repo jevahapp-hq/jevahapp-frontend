@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  PanResponder,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    PanResponder,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 interface VideoProgressBarProps {
@@ -16,6 +16,13 @@ interface VideoProgressBarProps {
   onToggleMute: () => void;
   onSeekToPercent: (percent: number) => void;
   showControls?: boolean;
+  /**
+   * Vertical offset from the bottom of the parent container (in pixels).
+   * - Useful when you want the bar/timer/mute row to sit a bit above the bottom edge
+   *   to be visually closer to other overlays (e.g. title text).
+   * - Defaults to 0 (flush with bottom).
+   */
+  bottomOffset?: number;
   // UI config (optional)
   showFloatingLabel?: boolean; // default true
   enlargeOnDrag?: boolean; // default true
@@ -43,6 +50,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   onToggleMute,
   onSeekToPercent,
   showControls = true,
+  bottomOffset = 0,
   showFloatingLabel = true,
   enlargeOnDrag = true,
   knobSize = 20,
@@ -72,9 +80,18 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   const lastUpdateTimeRef = useRef(0);
 
   const formatTime = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    // Validate and clamp input to prevent invalid displays
+    if (!Number.isFinite(ms) || ms < 0 || isNaN(ms)) {
+      return "0:00";
+    }
+    
+    // Clamp to reasonable maximum (24 hours)
+    const clampedMs = Math.min(ms, 24 * 60 * 60 * 1000);
+    
+    const totalSeconds = Math.floor(clampedMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+    
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
@@ -253,7 +270,10 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   if (!showControls) return null;
 
   return (
-    <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-center px-4 pb-4 pt-2">
+    <View
+      className="absolute left-0 right-0 flex-row items-center justify-center px-4 pb-4 pt-2"
+      style={{ bottom: bottomOffset }}
+    >
       {/* Progress Bar - Full width container */}
       <View className="flex-1 flex-row items-center max-w-full">
         <Text className="text-white text-xs font-rubik mr-3 min-w-[40px] text-right">

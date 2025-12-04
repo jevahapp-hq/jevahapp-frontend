@@ -45,14 +45,14 @@ export default function CardFooterActions({
   useEnhancedComponents = false,
 }: Props) {
   return (
-    <View className="flex-row items-center pl-2">
-      <View className="flex-row items-center mr-6">
+    <View className="flex-row items-center pl-1">
+      <View className="flex-row items-center mr-4">
         <MaterialIcons name="visibility" size={24} color="#98A2B3" />
         <Text className="text-[10px] text-gray-500 ml-1">{viewCount}</Text>
       </View>
 
       {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-6">
+        <View className="flex-row items-center mr-4">
           <LikeButton
             contentType={contentType}
             contentId={contentId}
@@ -95,11 +95,11 @@ export default function CardFooterActions({
         count={commentCount}
         layout="horizontal"
         onPress={onComment}
-        style={{ marginRight: 24 }}
+        style={{ marginRight: 16 }}
       />
 
       {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-6">
+        <View className="flex-row items-center mr-4">
           <SaveButton
             contentId={contentId}
             contentType={contentType}
@@ -117,7 +117,7 @@ export default function CardFooterActions({
       ) : (
         <TouchableOpacity
           onPress={onSave}
-          className="flex-row items-center mr-6"
+          className="flex-row items-center mr-4"
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
@@ -130,6 +130,7 @@ export default function CardFooterActions({
       )}
 
       <AnimatedShareButton onShare={onShare} />
+      <View style={{ width: 2 }} />
     </View>
   );
 }
@@ -150,7 +151,7 @@ function AnimatedLikeButton({
 }) {
   return (
     <AnimatedButton
-      className="flex-row items-center mr-6"
+      className="flex-row items-center mr-4"
       onPress={onLike}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
     >

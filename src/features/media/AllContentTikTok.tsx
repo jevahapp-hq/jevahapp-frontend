@@ -7,19 +7,17 @@ import React, {
     useRef,
     useState,
 } from "react";
-import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
-import { useCurrentPlayingAudioStore } from "../../../app/store/useCurrentPlayingAudioStore";
 import {
     ActivityIndicator,
     Dimensions,
-    Image,
     RefreshControl,
     ScrollView,
     Share,
     Text,
-    TouchableOpacity,
-    View,
+    View
 } from "react-native";
+import { useCurrentPlayingAudioStore } from "../../../app/store/useCurrentPlayingAudioStore";
+import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
@@ -53,6 +51,7 @@ import VideoCard from "./components/VideoCard";
 
 // Import original stores and hooks (these will be bridged)
 import { useCommentModal } from "../../../app/context/CommentModalContext";
+import { useUserProfile } from "../../../app/hooks/useUserProfile";
 import { useVideoNavigation } from "../../../app/hooks/useVideoNavigation";
 import SocketManager from "../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../app/store/useDownloadStore";
@@ -66,7 +65,9 @@ import {
 } from "../../../app/utils/downloadUtils";
 import {
     getPersistedStats,
-    getViewed,
+    getUserFavorites,
+    getUserId,
+    getViewed
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -141,7 +142,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     toggleSave,
     loadContentStats,
     loadingInteraction,
+    refreshAllStatsAfterLogin,
   } = useInteractionStore();
+
+  // User profile for authentication state detection
+  const { user } = useUserProfile();
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);
@@ -467,6 +472,28 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }
   }, []);
 
+  // Track previous user state to detect login
+  const previousUserIdRef = useRef<string | null>(null);
+
+  // Refresh stats when user becomes authenticated (after login)
+  useEffect(() => {
+    const currentUserId = user?._id || user?.id || null;
+    const previousUserId = previousUserIdRef.current;
+
+    // If user just logged in (went from null/undefined to having an ID)
+    if (!previousUserId && currentUserId && filteredMediaList.length > 0) {
+      console.log("🔄 User just logged in, refreshing interaction stats for visible content...");
+      // Refresh stats for currently visible content
+      // Refresh all stats after login (no arguments needed)
+      refreshAllStatsAfterLogin().catch((error) => {
+        console.warn("⚠️ Failed to refresh stats after login:", error);
+      });
+    }
+
+    // Update ref for next comparison
+    previousUserIdRef.current = currentUserId;
+  }, [user, filteredMediaList, refreshAllStatsAfterLogin]);
+
   useEffect(() => {
     const loadStatsForVisibleContent = async () => {
       const items = filteredMediaList || [];
@@ -511,7 +538,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     loadStatsForVisibleContent();
   }, [filteredMediaList, loadContentStats, mapContentTypeToBackend]);
 
-  // Load persisted data
+  // Load persisted data including likes (like reels does)
   useEffect(() => {
     const loadAllData = async () => {
       console.log("📱 AllContent: Loading persisted data...");
@@ -527,11 +554,37 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         ]);
 
         setPreviouslyViewed(viewed || []);
-        console.log(
-          `✅ AllContent: Loaded ${
-            mediaList.length
-          } media items and stats for ${Object.keys(stats || {}).length} items`
-        );
+        
+        // Load persisted likes and merge with backend state
+        if (mediaList.length > 0) {
+          try {
+            const userId = await getUserId();
+            const persistedFavorites = await getUserFavorites(userId);
+            
+            // Merge persisted likes into contentStats
+            const store = useInteractionStore.getState();
+            for (const item of mediaList) {
+              const contentId = item._id || getContentKey(item);
+              if (persistedFavorites[contentId]) {
+                // Update store with persisted like state
+                store.mutateStats(contentId, (s) => ({
+                  userInteractions: {
+                    ...s.userInteractions,
+                    liked: true, // Persisted state takes priority
+                  },
+                }));
+              }
+            }
+            
+            console.log(
+              `✅ AllContent: Loaded ${
+                mediaList.length
+              } media items, ${Object.keys(stats || {}).length} stats, and ${Object.keys(persistedFavorites).length} persisted likes`
+            );
+          } catch (persistError) {
+            console.warn("⚠️ Failed to load persisted likes:", persistError);
+          }
+        }
       } catch (error) {
         console.error("❌ Error loading AllContent data:", error);
       } finally {
@@ -546,11 +599,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }
   }, [mediaList.length]);
 
-  // Helper functions to get interaction state from backend
-  const getUserLikeState = (contentId: string) => {
+  // Helper functions to get interaction state - merge persisted and backend state
+  // Synchronous version for immediate UI updates (persisted state is loaded on mount)
+  const getUserLikeState = useCallback((contentId: string): boolean => {
+    // Check backend state (which should have persisted state merged on mount)
     const stats = contentStats[contentId];
     return stats?.userInteractions?.liked || false;
-  };
+  }, [contentStats]);
 
   const getLikeCount = (contentId: string) => {
     const stats = contentStats[contentId];
@@ -628,12 +683,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             try {
               await sound.unloadAsync();
             } catch {}
-            sound = null;
+            sound = undefined;
           }
         } catch (error) {
           // Sound instance is invalid, clear it
           console.warn("⚠️ Existing sound instance is invalid, creating new one");
-          sound = null;
+          sound = undefined;
         }
       }
 
@@ -1428,92 +1483,61 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     );
   }, [hymns, loadingHymns, router]);
 
-  // Reusable renderer for Recommended Live mini-cards with red LIVE badge
+  // Upcoming feature placeholder for Recommended Live
   const renderRecommendedLiveCards = useCallback(() => {
     return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+      <View
+        style={{
+          paddingHorizontal: UI_CONFIG.SPACING.MD,
+          paddingVertical: UI_CONFIG.SPACING.XL,
+          backgroundColor: UI_CONFIG.COLORS.SURFACE || "#F9FAFB",
+          borderRadius: 12,
+          marginHorizontal: UI_CONFIG.SPACING.MD,
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 1,
+          borderColor: UI_CONFIG.COLORS.BORDER || "#E5E7EB",
+          borderStyle: "dashed",
+        }}
       >
-        {loadingHymns ? (
-          <View style={{ paddingVertical: 16, alignItems: "center" }}>
-            <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY }}>
-              Loading content…
-            </Text>
-          </View>
-        ) : (
-          (hymns || []).map((h) => (
-            <View
-              key={`live-${h.id}`}
-              className="mr-4 w-[154px] flex-col items-center"
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  // Live content - no navigation for now
-                  console.log("Live content tapped:", h.title);
-                }}
-                className="w-full h-[232px] rounded-2xl overflow-hidden relative"
-                activeOpacity={0.9}
-              >
-                <Image
-                  source={require("../../../assets/images/image (7).png")}
-                  style={{
-                    position: "absolute",
-                    width: "100%",
-                    height: "100%",
-                  }}
-                  resizeMode="cover"
-                />
-
-                {/* Red LIVE badge */}
-                <View className="absolute top-2 left-2 bg-red-600 rounded-md px-2 py-1 flex-row items-center">
-                  <View className="w-2 h-2 bg-white rounded-full mr-1" />
-                  <Text className="text-white text-[10px] font-rubik font-semibold">
-                    LIVE
-                  </Text>
-                </View>
-
-                <View className="absolute bottom-2 left-2 right-2">
-                  <Text
-                    className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
-                    numberOfLines={2}
-                  >
-                    {h.title}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <View className="mt-2 flex flex-col w-full">
-                <View className="flex flex-row justify-between items-center">
-                  <Text
-                    className="text-[12px] text-[#1D2939] font-rubik font-medium"
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    Minister Joseph Eluwa
-                  </Text>
-                  <Ionicons
-                    name="ellipsis-vertical"
-                    size={14}
-                    color="#9CA3AF"
-                  />
-                </View>
-                <View className="flex-row items-center mt-1">
-                  <Ionicons name="eye" size={12} color="#98A2B3" />
-                  <Text
-                    className="text-[10px] text-gray-500 ml-1 font-rubik"
-                    numberOfLines={1}
-                  >
-                    500 • 3HRS AGO
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: UI_CONFIG.COLORS.PRIMARY || "#FEA74E",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: UI_CONFIG.SPACING.MD,
+          }}
+        >
+          <Ionicons name="radio" size={32} color="#FFFFFF" />
+        </View>
+        <Text
+          style={{
+            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+            fontWeight: "600",
+            color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+            marginBottom: UI_CONFIG.SPACING.SM,
+            textAlign: "center",
+          }}
+        >
+          Live Streaming Coming Soon
+        </Text>
+        <Text
+          style={{
+            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+            color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+            textAlign: "center",
+            lineHeight: 20,
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
+          }}
+        >
+          We're working on bringing you live streaming content. Stay tuned for updates!
+        </Text>
+      </View>
     );
-  }, [hymns, loadingHymns, router]);
+  }, []);
 
   // Handle media deletion
   const handleDeleteMedia = useCallback((item: MediaItem) => {
@@ -1839,7 +1863,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           )}
 
           {/* Hymns section (mini cards) - Only show in MUSIC tab */}
-          {(contentType === "MUSIC" || contentType === "music" || contentType === "ALL") && (
+          {(String(contentType) === "MUSIC" || String(contentType) === "music" || contentType === "ALL") && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{
@@ -1857,7 +1881,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           )}
 
           {/* Copyright-Free Songs Section - Only show in MUSIC tab */}
-          {(contentType === "MUSIC" || contentType === "music" || contentType === "ALL") && contentType !== "videos" && (
+          {(String(contentType) === "MUSIC" || String(contentType) === "music" || contentType === "ALL") && String(contentType) !== "videos" && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{

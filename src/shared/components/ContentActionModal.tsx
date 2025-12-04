@@ -1,27 +1,27 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Dimensions,
-  Modal,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Modal,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  GestureHandlerRootView,
-  HandlerStateChangeEvent,
-  PanGestureHandler,
-  PanGestureHandlerGestureEvent,
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
-import { useMediaOwnership } from "../hooks/useMediaOwnership";
 import { UI_CONFIG } from "../constants";
+import { useMediaOwnership } from "../hooks/useMediaOwnership";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -280,16 +280,16 @@ export default function ContentActionModal({
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <View
                     style={{
-                      width: 36,
-                      height: 36,
-                      backgroundColor: "rgba(37, 110, 99, 0.1)", // Jevah green with 10% opacity
-                      borderRadius: 18,
+                      width: 40,
+                      height: 40,
+                      backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Thicker Jevah green background
+                      borderRadius: 20,
                       justifyContent: "center",
                       alignItems: "center",
                       marginRight: 12,
                     }}
                   >
-                    <Ionicons name="eye-outline" size={18} color={UI_CONFIG.COLORS.PRIMARY} />
+                    <Ionicons name="eye-outline" size={20} color="#FEA74E" />
                   </View>
                   <Text
                     style={{
@@ -320,12 +320,10 @@ export default function ContentActionModal({
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <View
                     style={{
-                      width: 36,
-                      height: 36,
-                      backgroundColor: isSaved 
-                        ? "rgba(37, 110, 99, 0.15)" // Jevah green with 15% opacity when saved
-                        : "rgba(37, 110, 99, 0.1)", // Jevah green with 10% opacity when not saved
-                      borderRadius: 18,
+                      width: 40,
+                      height: 40,
+                      backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Thicker Jevah green background
+                      borderRadius: 20,
                       justifyContent: "center",
                       alignItems: "center",
                       marginRight: 12,
@@ -333,8 +331,8 @@ export default function ContentActionModal({
                   >
                     <MaterialIcons
                       name={isSaved ? "bookmark" : "bookmark-border"}
-                      size={18}
-                      color={isSaved ? UI_CONFIG.COLORS.PRIMARY : UI_CONFIG.COLORS.TEXT_SECONDARY}
+                      size={20}
+                      color={isSaved ? "#FF8A00" : "#FEA74E"} // Orange shades
                     />
                   </View>
                   <Text
@@ -462,12 +460,10 @@ export default function ContentActionModal({
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <View
                     style={{
-                      width: 36,
-                      height: 36,
-                      backgroundColor: isDownloaded
-                        ? "rgba(37, 110, 99, 0.15)" // Jevah green with 15% opacity when downloaded
-                        : "rgba(254, 167, 78, 0.1)", // Secondary orange with 10% opacity when not downloaded
-                      borderRadius: 18,
+                      width: 40,
+                      height: 40,
+                      backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Thicker Jevah green background
+                      borderRadius: 20,
                       justifyContent: "center",
                       alignItems: "center",
                       marginRight: 12,
@@ -477,8 +473,8 @@ export default function ContentActionModal({
                       name={
                         isDownloaded ? "checkmark-circle" : "download-outline"
                       }
-                      size={18}
-                      color={isDownloaded ? UI_CONFIG.COLORS.PRIMARY : UI_CONFIG.COLORS.SECONDARY}
+                      size={20}
+                      color={isDownloaded ? "#FF8A00" : "#FEA74E"} // Orange shades
                     />
                   </View>
                   <Text

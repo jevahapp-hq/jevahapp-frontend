@@ -110,6 +110,19 @@ export const useUserProfile = () => {
         } catch (error) {
           console.error("❌ Failed to trigger media refresh:", error);
         }
+
+        // Refresh interaction stats after profile fetch to restore like/bookmark state
+        // This ensures likes persist across logout/login sessions
+        try {
+          const { useInteractionStore } = await import(
+            "../store/useInteractionStore"
+          );
+          await useInteractionStore.getState().refreshAllStatsAfterLogin();
+          console.log("✅ Refreshed interaction stats after profile fetch");
+        } catch (error) {
+          console.warn("⚠️ Failed to refresh interaction stats after profile fetch:", error);
+          // Non-critical, continue
+        }
       } else {
         console.warn("⚠️ No user data received from API");
         setError("No user data received");

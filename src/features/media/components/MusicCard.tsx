@@ -372,7 +372,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       </TouchableWithoutFeedback>
 
       {/* Footer with User Info and compact left-aligned stats/actions */}
-      <View className="flex-row items-center justify-between mt-2 px-3">
+      <View className="flex-row items-center justify-between mt-2 px-2">
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
             {/* Avatar with initial fallback */}

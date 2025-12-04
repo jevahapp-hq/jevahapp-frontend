@@ -235,8 +235,7 @@ export const isMediaOwner = async (
       ).trim();
     }
 
-    // Fallback: if still no ID but we have a token, assume this is "some" logged-in user
-    // and let the backend enforce the final authorization.
+    // Fallback: if still no ID but we have a token, try to extract user ID from JWT token
     if (!currentUserId) {
       const token =
         (await AsyncStorage.getItem("userToken")) ||
@@ -246,14 +245,38 @@ export const isMediaOwner = async (
       if (!token) {
         console.log("❌ isMediaOwner: No current user ID or auth token found", {
           user,
+          userKeys: user ? Object.keys(user) : [],
         });
         return false;
       }
 
-      console.log(
-        "⚠️ isMediaOwner: No explicit user ID found, but token exists – trusting frontend ownership check and deferring final check to backend."
-      );
-      // We don't set currentUserId here, but we can still safely do a best-effort owner check below.
+      // Try to extract userId from JWT token
+      try {
+        const tokenParts = token.split(".");
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          if (payload.userId || payload.user_id || payload.id) {
+            currentUserId = String(payload.userId || payload.user_id || payload.id).trim();
+            console.log("✅ Extracted user ID from JWT token:", currentUserId);
+          }
+        }
+      } catch (tokenError) {
+        console.warn("⚠️ Failed to extract user ID from token:", tokenError);
+      }
+
+      // If still no ID, log warning but continue (backend will verify)
+      if (!currentUserId) {
+        console.log(
+          "⚠️ isMediaOwner: No explicit user ID found, but token exists – trusting frontend ownership check and deferring final check to backend.",
+          {
+            user,
+            userKeys: user ? Object.keys(user) : [],
+            hasToken: !!token,
+          }
+        );
+        // Return true to show delete option - backend will verify actual ownership
+        return true;
+      }
     }
 
     if (
@@ -267,14 +290,15 @@ export const isMediaOwner = async (
     }
 
     // Extract uploadedBy ID - handle multiple formats
+    // Priority order matches backend structure:
+    // 1. uploadedBy._id (populated object) - for Media content
+    // 2. uploadedBy (direct string/ObjectId) - if not populated
+    // 3. author._id - for Devotional content
+    // 4. authorInfo._id - fallback for other content types
     let uploadedById: string = "";
     
-    // First, try to get from mediaItem authorInfo/author/uploadedBy (most reliable)
-    if (mediaItem?.authorInfo?._id) {
-      uploadedById = String(mediaItem.authorInfo._id).trim();
-    } else if (mediaItem?.author?._id) {
-      uploadedById = String(mediaItem.author._id).trim();
-    } else if (
+    // Priority 1: uploadedBy object (populated) with _id - BACKEND RETURNS THIS FOR MEDIA
+    if (
       mediaItem?.uploadedBy &&
       typeof mediaItem.uploadedBy === "object" &&
       (mediaItem.uploadedBy._id || mediaItem.uploadedBy.id)
@@ -282,8 +306,13 @@ export const isMediaOwner = async (
       uploadedById = String(
         mediaItem.uploadedBy._id || mediaItem.uploadedBy.id
       ).trim();
-    } else if (typeof uploadedBy === "string") {
-      // Check if it's an ObjectId (24 hex characters) or a full name
+    }
+    // Priority 2: uploadedBy parameter as object with _id
+    else if (uploadedBy && typeof uploadedBy === "object" && (uploadedBy._id || uploadedBy.id)) {
+      uploadedById = String(uploadedBy._id || uploadedBy.id || uploadedBy.userId || "").trim();
+    }
+    // Priority 3: uploadedBy as direct ObjectId string
+    else if (typeof uploadedBy === "string") {
       const trimmed = String(uploadedBy).trim();
       // ObjectId format: 24 hex characters
       if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
@@ -295,8 +324,21 @@ export const isMediaOwner = async (
         // Return true to show delete button - backend will verify actual ownership
         return true;
       }
-    } else if (uploadedBy && typeof uploadedBy === "object") {
-      uploadedById = String(uploadedBy._id || uploadedBy.id || uploadedBy.userId || "").trim();
+    }
+    // Priority 4: mediaItem.uploadedBy as direct string (if not populated)
+    else if (mediaItem?.uploadedBy && typeof mediaItem.uploadedBy === "string") {
+      const trimmed = String(mediaItem.uploadedBy).trim();
+      if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
+        uploadedById = trimmed;
+      }
+    }
+    // Priority 5: author._id - for Devotional content
+    else if (mediaItem?.author?._id) {
+      uploadedById = String(mediaItem.author._id).trim();
+    }
+    // Priority 6: authorInfo._id - fallback for other content types
+    else if (mediaItem?.authorInfo?._id) {
+      uploadedById = String(mediaItem.authorInfo._id).trim();
     }
 
     if (!uploadedById) {
@@ -315,8 +357,16 @@ export const isMediaOwner = async (
       currentUserIdType: typeof currentUserId,
       uploadedByIdType: typeof uploadedById,
       uploadedByValue: uploadedBy,
+      uploadedByType: typeof uploadedBy,
+      hasUploadedByObject: !!(mediaItem?.uploadedBy && typeof mediaItem.uploadedBy === "object"),
+      uploadedByObjectId: mediaItem?.uploadedBy?._id,
       hasAuthorInfo: !!mediaItem?.authorInfo,
       hasAuthor: !!mediaItem?.author,
+      userObject: user ? {
+        keys: Object.keys(user),
+        hasId: !!(user._id || user.id || user.userId),
+        idValue: user._id || user.id || user.userId,
+      } : null,
     });
 
     return isOwner;

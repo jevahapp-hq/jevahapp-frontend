@@ -707,12 +707,62 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
           renderVideoCard(video, index, "videosA")
         )}
       </View>
-      {renderMiniCards(
-        "Recommended for Live you",
-        recommendedItems,
-        rsModalIndex,
-        setRsModalIndex
-      )}
+      {/* Upcoming Feature: Recommended Live */}
+      <View className="mt-5">
+        <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+          Recommended Live for you
+        </Text>
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 32,
+            backgroundColor: "#F9FAFB",
+            borderRadius: 12,
+            marginHorizontal: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "#E5E7EB",
+            borderStyle: "dashed",
+          }}
+        >
+          <View
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: "#FEA74E",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 16,
+            }}
+          >
+            <Ionicons name="radio" size={32} color="#FFFFFF" />
+          </View>
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "600",
+              color: "#1D2939",
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
+            Live Recommendations Coming Soon
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: "#6B7280",
+              textAlign: "center",
+              lineHeight: 20,
+              paddingHorizontal: 16,
+            }}
+          >
+            We're working on personalized live content recommendations. Stay tuned!
+          </Text>
+        </View>
+      </View>
       <View className="mt-9 gap-12">
         {videosB.map((video, index) =>
           renderVideoCard(video, index, "videosB")

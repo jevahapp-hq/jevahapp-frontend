@@ -1,7 +1,7 @@
+import { Alert } from "react-native";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { downloadAPI } from "./downloadAPI";
-import { fileDownloadManager, DownloadProgressCallback } from "./fileDownloadManager";
-import { Alert } from "react-native";
+import { DownloadProgressCallback, fileDownloadManager } from "./fileDownloadManager";
 
 export interface DownloadableItem {
   id: string;
@@ -55,6 +55,14 @@ export const useDownloadHandler = () => {
       if (!initiateResult.success || !initiateResult.downloadUrl) {
         const errorMsg = initiateResult.error || "Failed to get download URL";
         console.error("❌ Failed to initiate download:", errorMsg);
+        
+        // Handle specific backend error message gracefully
+        if (errorMsg.includes("Invalid interaction type download")) {
+          const friendlyMsg = "This content cannot be downloaded at this time";
+          Alert.alert("Download Unavailable", friendlyMsg);
+          return { success: false, message: friendlyMsg };
+        }
+        
         Alert.alert("Download Failed", errorMsg);
         return { success: false, message: errorMsg };
       }
