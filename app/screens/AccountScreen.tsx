@@ -24,8 +24,7 @@ export default function AccountScreen() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const router = useRouter();
   const { signOut } = useClerk();
-  const { user, getAvatarUrl, getFullName, getUserSection } = useUserProfile();
-  const { analytics } = useAccountContent();
+  const { user, getAvatarUrl, getFullName, getUserSection, refreshUserProfile } = useUserProfile();
 
   // Normalize null -> undefined for consumers expecting undefined
   const getAvatarUrlAsUndef = (u: any) => getAvatarUrl(u) ?? undefined;
@@ -91,6 +90,7 @@ export default function AccountScreen() {
             getFullName={getFullName}
             onEdit={() => setIsEditOpen(true)}
             onLogout={optimizedLogoutHandler}
+            onProfileUpdate={refreshUserProfile}
           />
 
           <ContentTabs
@@ -100,7 +100,6 @@ export default function AccountScreen() {
 
           <ContentSection
             selectedIndex={selectedContentTab}
-            analytics={analytics}
           />
         </ScrollView>
 

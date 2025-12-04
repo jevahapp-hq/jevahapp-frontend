@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, TouchableOpacity, View, Alert } from "react-native";
+import { apiClient } from "../../utils/dataFetching";
 
 type ProfileSummaryProps = {
   user: any;
@@ -8,6 +9,7 @@ type ProfileSummaryProps = {
   getFullName: (user: any) => string;
   onEdit: () => void;
   onLogout: () => void;
+  onProfileUpdate?: () => void; // Callback to refresh profile after update
 };
 
 export default function ProfileSummary({
@@ -16,9 +18,45 @@ export default function ProfileSummary({
   getFullName,
   onEdit,
   onLogout,
+  onProfileUpdate,
 }: ProfileSummaryProps) {
   const [avatarError, setAvatarError] = useState(false);
+  const [updatingBio, setUpdatingBio] = useState(false);
   const avatarUrl = user ? getAvatarUrl(user) ?? undefined : undefined;
+
+  const handleAddBio = () => {
+    Alert.prompt(
+      user?.bio ? "Edit Bio" : "Add Bio",
+      "Enter your bio (max 500 characters)",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Save",
+          onPress: async (bioText) => {
+            if (!bioText) return;
+            if (bioText.length > 500) {
+              Alert.alert("Error", "Bio must be less than 500 characters");
+              return;
+            }
+            try {
+              setUpdatingBio(true);
+              await apiClient.updateUserProfile({ bio: bioText });
+              // Call refresh callback if provided
+              if (onProfileUpdate) {
+                onProfileUpdate();
+              }
+            } catch (error: any) {
+              Alert.alert("Error", error.message || "Failed to update bio");
+            } finally {
+              setUpdatingBio(false);
+            }
+          },
+        },
+      ],
+      "plain-text",
+      user?.bio || ""
+    );
+  };
 
   return (
     <View className="px-4 py-8">
@@ -80,9 +118,30 @@ export default function ProfileSummary({
           {user ? getFullName(user) : "Loading..."}
         </Text>
 
-        <TouchableOpacity className="mb-2">
-          <Text className="text-[#FEA74E] font-medium">+ Add bio</Text>
-        </TouchableOpacity>
+        {user?.bio ? (
+          <View className="px-4 mb-2">
+            <Text className="text-[#3B3B3B] text-sm text-center">{user.bio}</Text>
+            <TouchableOpacity
+              onPress={handleAddBio}
+              disabled={updatingBio}
+              className="mt-2"
+            >
+              <Text className="text-[#FEA74E] font-medium text-center">
+                {updatingBio ? "Updating..." : "Edit bio"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            className="mb-2"
+            onPress={handleAddBio}
+            disabled={updatingBio}
+          >
+            <Text className="text-[#FEA74E] font-medium">
+              {updatingBio ? "Updating..." : "+ Add bio"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Logout Button - Close to profile */}

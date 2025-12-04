@@ -357,6 +357,192 @@ export class ApiClient {
     return response.json();
   }
 
+  // ============= ACCOUNT & PROFILE API METHODS =============
+
+  /**
+   * Get user's posts
+   * GET /api/users/:userId/posts
+   */
+  async getUserPosts(
+    userId: string,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ success: boolean; data?: { posts: any[]; pagination: any }; error?: string }> {
+    try {
+      const result = await this.request(`/users/${userId}/posts?page=${page}&limit=${limit}`, {
+        cache: true,
+      });
+      
+      // Handle different response formats
+      if (result.data) {
+        return { success: true, data: result.data };
+      }
+      
+      // If response is direct, wrap it
+      if (result.posts) {
+        return {
+          success: true,
+          data: {
+            posts: result.posts,
+            pagination: result.pagination || {
+              page,
+              limit,
+              total: result.posts?.length || 0,
+              totalPages: 1,
+              hasMore: false,
+            },
+          },
+        };
+      }
+      
+      return { success: true, data: { posts: [], pagination: { page, limit, total: 0, totalPages: 0, hasMore: false } } };
+    } catch (error: any) {
+      console.error("Error fetching user posts:", error);
+      return { success: false, error: error.message || "Failed to fetch posts" };
+    }
+  }
+
+  /**
+   * Get user's media (images)
+   * GET /api/users/:userId/media
+   */
+  async getUserMedia(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    type?: "image" | "video"
+  ): Promise<{ success: boolean; data?: { media: any[]; pagination: any }; error?: string }> {
+    try {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      
+      if (type) {
+        queryParams.append("type", type);
+      }
+      
+      const result = await this.request(`/users/${userId}/media?${queryParams.toString()}`, {
+        cache: true,
+      });
+      
+      if (result.data) {
+        return { success: true, data: result.data };
+      }
+      
+      if (result.media) {
+        return {
+          success: true,
+          data: {
+            media: result.media,
+            pagination: result.pagination || {
+              page,
+              limit,
+              total: result.media?.length || 0,
+              totalPages: 1,
+              hasMore: false,
+            },
+          },
+        };
+      }
+      
+      return { success: true, data: { media: [], pagination: { page, limit, total: 0, totalPages: 0, hasMore: false } } };
+    } catch (error: any) {
+      console.error("Error fetching user media:", error);
+      return { success: false, error: error.message || "Failed to fetch media" };
+    }
+  }
+
+  /**
+   * Get user's videos
+   * GET /api/users/:userId/videos
+   */
+  async getUserVideos(
+    userId: string,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ success: boolean; data?: { videos: any[]; pagination: any }; error?: string }> {
+    try {
+      const result = await this.request(`/users/${userId}/videos?page=${page}&limit=${limit}`, {
+        cache: true,
+      });
+      
+      if (result.data) {
+        return { success: true, data: result.data };
+      }
+      
+      if (result.videos) {
+        return {
+          success: true,
+          data: {
+            videos: result.videos,
+            pagination: result.pagination || {
+              page,
+              limit,
+              total: result.videos?.length || 0,
+              totalPages: 1,
+              hasMore: false,
+            },
+          },
+        };
+      }
+      
+      return { success: true, data: { videos: [], pagination: { page, limit, total: 0, totalPages: 0, hasMore: false } } };
+    } catch (error: any) {
+      console.error("Error fetching user videos:", error);
+      return { success: false, error: error.message || "Failed to fetch videos" };
+    }
+  }
+
+  /**
+   * Get user analytics
+   * GET /api/users/:userId/analytics
+   */
+  async getUserAnalytics(userId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await this.request(`/users/${userId}/analytics`, {
+        cache: true,
+        cacheDuration: 2 * 60 * 1000, // Cache for 2 minutes
+      });
+      
+      if (result.data) {
+        return { success: true, data: result.data };
+      }
+      
+      // If response is direct analytics object
+      if (result.posts || result.likes) {
+        return { success: true, data: result };
+      }
+      
+      return { success: true, data: null };
+    } catch (error: any) {
+      console.error("Error fetching user analytics:", error);
+      return { success: false, error: error.message || "Failed to fetch analytics" };
+    }
+  }
+
+  /**
+   * Logout user
+   * POST /api/auth/logout
+   */
+  async logout(): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const result = await this.request("/auth/logout", {
+        method: "POST",
+      });
+      
+      // Clear cache after logout
+      this.cache.clear();
+      
+      return { success: true, message: result.message || "Logged out successfully" };
+    } catch (error: any) {
+      console.error("Error logging out:", error);
+      // Still clear cache even if API call fails
+      this.cache.clear();
+      return { success: false, error: error.message || "Failed to logout" };
+    }
+  }
+
   // Media-related API methods
   async getMediaList(
     params: {

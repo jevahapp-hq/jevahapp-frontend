@@ -11,6 +11,7 @@ export type User = {
   email?: string;
   avatar?: string | null;
   avatarUpload?: string | null;
+  bio?: string | null;
   section?: string;
   role?: string;
   isProfileComplete?: boolean;
