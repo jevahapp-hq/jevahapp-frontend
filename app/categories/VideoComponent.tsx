@@ -1,35 +1,35 @@
 import {
-  AntDesign,
-  Feather,
-  Ionicons,
-  MaterialIcons,
+    AntDesign,
+    Feather,
+    Ionicons,
+    MaterialIcons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  Dimensions,
-  ImageSourcePropType,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Dimensions,
+    ImageSourcePropType,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import VideoCard from "../../src/features/media/components/VideoCard";
 import {
-  MiniCardSkeleton,
-  VideoCardSkeleton,
+    MiniCardSkeleton,
+    VideoCardSkeleton,
 } from "../../src/shared/components/Skeleton";
 import { MediaItem } from "../../src/shared/types";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
@@ -42,20 +42,20 @@ import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../utils/downloadUtils";
 import {
-  getFavoriteState,
-  getPersistedStats,
-  getViewed,
-  persistStats,
-  persistViewed,
-  toggleFavorite,
+    getFavoriteState,
+    getPersistedStats,
+    getViewed,
+    persistStats,
+    persistViewed,
+    toggleFavorite,
 } from "../utils/persistentStorage";
 import {
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../utils/userValidation";
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
@@ -790,6 +790,7 @@ export default function VideoComponent() {
           videoTop > viewportBottom;
 
         const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
+
         if (shouldPause && isVideoPlaying) {
           console.log(
             `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
@@ -929,6 +930,38 @@ export default function VideoComponent() {
     },
     [isAutoPlayEnabled, globalVideoStore, scrollDirection]
   );
+
+  const handleScrollEnd = useCallback(() => {
+    console.log("📱 VideoComponent: Scroll ended, finalizing auto-pause cleanup");
+    const scrollY = lastScrollYRef.current;
+    const screenHeight = Dimensions.get("window").height;
+    const viewportTop = scrollY;
+    const viewportBottom = scrollY + screenHeight;
+
+    // Final cleanup for all videos when scrolling stops
+    Object.entries(videoLayoutsRef.current).forEach(([key, layout]) => {
+      const videoTop = layout.y;
+      const videoBottom = layout.y + layout.height;
+
+      // Calculate final visibility ratio
+      const intersectionTop = Math.max(viewportTop, videoTop);
+      const intersectionBottom = Math.min(viewportBottom, videoBottom);
+      const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+      const visibilityRatio =
+        layout.height > 0 ? visibleHeight / layout.height : 0;
+
+      // Final check: pause videos that are less than 20% visible
+      const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
+      if (visibilityRatio < 0.2 && isVideoPlaying) {
+        console.log(
+          `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
+            visibilityRatio * 100
+          ).toFixed(1)}%`
+        );
+        globalVideoStore.pauseVideo(key);
+      }
+    });
+  }, [globalVideoStore]);
 
   const recomputeVisibilityFromLayouts = useCallback(() => {
     if (!isAutoPlayEnabled) return;
@@ -2058,9 +2091,11 @@ export default function VideoComponent() {
         onTouchStart={closeAllMenus}
         onScroll={handleScroll}
         onScrollEndDrag={() => {
+          handleScrollEnd();
           recomputeVisibilityFromLayouts();
         }}
         onMomentumScrollEnd={() => {
+          handleScrollEnd();
           recomputeVisibilityFromLayouts();
         }}
         scrollEventThrottle={16}

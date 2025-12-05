@@ -83,6 +83,17 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     },
 
     pauseVideo: (videoKey: string) => {
+      // Imperatively pause the video player directly (no state waiting)
+      const player = videoPlayerRegistry.get(videoKey);
+      if (player) {
+        console.log(`⏸️ Imperatively pausing video: ${videoKey}`);
+        player
+          .pause()
+          .catch((err) => console.warn(`Failed to pause ${videoKey}:`, err));
+        player.showOverlay();
+      }
+
+      // Update state to reflect the change
       set((state) => ({
         currentlyPlayingVideo:
           state.currentlyPlayingVideo === videoKey
@@ -94,6 +105,16 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     },
 
     pauseAllVideos: () => {
+      // Imperatively pause all video players directly (no state waiting)
+      videoPlayerRegistry.forEach((player, key) => {
+        console.log(`⏸️ Imperatively pausing video: ${key}`);
+        player
+          .pause()
+          .catch((err) => console.warn(`Failed to pause ${key}:`, err));
+        player.showOverlay();
+      });
+
+      // Update state to reflect the change
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
