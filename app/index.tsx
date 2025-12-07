@@ -3,13 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Image,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Image,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import "../global.css";
 import { mediaApi } from "../src/core/api/MediaApi";
@@ -118,11 +118,22 @@ export default function Welcome() {
 
   // If onboarding was already seen and the user is authenticated (via Clerk or legacy token),
   // skip the welcome screen entirely and go straight to the app home.
+  //
+  // If onboarding was already seen BUT the user is not authenticated anymore
+  // (e.g. JWT expired / tokens cleared), skip onboarding and send them
+  // directly to the login screen instead of showing the slides again.
   useEffect(() => {
     if (!onboardingReady) return;
 
     if ((isSignedIn || hasLegacyToken) && skipIntro) {
       router.replace("/categories/HomeScreen");
+      return;
+    }
+
+    // Onboarding has been seen, but there is no valid auth session.
+    // Take user straight to login instead of showing onboarding again.
+    if (skipIntro && !isSignedIn && !hasLegacyToken) {
+      router.replace("/auth/login");
     }
   }, [onboardingReady, skipIntro, isSignedIn, hasLegacyToken]);
 
