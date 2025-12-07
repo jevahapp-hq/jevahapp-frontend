@@ -142,13 +142,26 @@ export function useForums() {
         setDiscussionsError(null);
         const response = await communityAPI.createForum(forumData);
         if (response.success && response.data) {
+          const createdForum = response.data;
+          
+          // Optimistically add the forum to discussions if it's in the current category
           if (forumData.categoryId === selectedCategoryId) {
+            setDiscussions((prev) => {
+              // Check if forum already exists (avoid duplicates)
+              const exists = prev.some((f) => f._id === createdForum._id);
+              if (exists) return prev;
+              // Add at the beginning (newest first)
+              return [createdForum, ...prev];
+            });
+            
+            // Also refresh from server to ensure we have the latest data
             lastFetchedCategoryIdRef.current = forumData.categoryId;
             await loadDiscussions(forumData.categoryId);
           } else {
+            // If different category, just refresh categories
             void loadCategories();
           }
-          return response.data;
+          return createdForum;
         } else {
           const apiError = ApiErrorHandler.handle(response);
           setDiscussionsError(apiError);

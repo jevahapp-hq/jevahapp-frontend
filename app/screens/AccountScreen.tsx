@@ -2,7 +2,7 @@
 import { useClerk } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccountHeader from "../components/account/AccountHeader";
 import ContentSection from "../components/account/ContentSection";
@@ -10,7 +10,6 @@ import ContentTabs from "../components/account/ContentTabs";
 import ProfileSummary from "../components/account/ProfileSummary";
 import ProfileSwitchModal from "../components/account/ProfileSwitchModal";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
-import useAccountContent from "../hooks/useAccountContent";
 import { useUserProfile } from "../hooks/useUserProfile";
 import EditProfileSlideOver from "../Profile/EditProfileSlideOver";
 import { authUtils } from "../utils/authUtils";
@@ -78,30 +77,29 @@ export default function AccountScreen() {
           onPressProfile={handleProfilePress}
         />
 
-        <ScrollView
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 50 }}
-          className="bg-[#dcdfe418]"
-        >
-          <ProfileSummary
-            user={user}
-            getAvatarUrl={getAvatarUrlAsUndef}
-            getFullName={getFullName}
-            onEdit={() => setIsEditOpen(true)}
-            onLogout={optimizedLogoutHandler}
-            onProfileUpdate={refreshUserProfile}
-          />
+        <View style={{ flex: 1 }} className="bg-[#dcdfe418]">
+          <View style={{ paddingHorizontal: 16 }}>
+            <ProfileSummary
+              user={user}
+              getAvatarUrl={getAvatarUrlAsUndef}
+              getFullName={getFullName}
+              onEdit={() => setIsEditOpen(true)}
+              onLogout={optimizedLogoutHandler}
+              onProfileUpdate={refreshUserProfile}
+            />
 
-          <ContentTabs
-            selectedIndex={selectedContentTab}
-            onSelect={setSelectedContentTab}
-          />
+            <ContentTabs
+              selectedIndex={selectedContentTab}
+              onSelect={setSelectedContentTab}
+            />
+          </View>
 
-          <ContentSection
-            selectedIndex={selectedContentTab}
-          />
-        </ScrollView>
+          <View style={{ flex: 1 }}>
+            <ContentSection
+              selectedIndex={selectedContentTab}
+            />
+          </View>
+        </View>
 
         <ProfileSwitchModal
           visible={showProfileModal}

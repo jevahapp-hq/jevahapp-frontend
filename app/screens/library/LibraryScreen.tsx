@@ -80,8 +80,8 @@ export default function LibraryScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        className="px-2 py-2 mt-6"
-        contentContainerStyle={{ paddingHorizontal: 16 }}
+        className="mt-6"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
       >
         {categories.map((category) => (
           <TouchableOpacity

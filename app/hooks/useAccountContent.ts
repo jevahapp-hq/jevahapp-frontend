@@ -1,11 +1,12 @@
-import { useEffect, useState, useCallback } from "react";
-import { apiClient } from "../utils/dataFetching";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useEffect, useState } from "react";
 import type {
-  Post,
   MediaItem,
-  Video,
+  Post,
   UserAnalytics,
+  Video,
 } from "../types/account.types";
+import { apiClient } from "../utils/dataFetching";
 
 type UseAccountContentResult = {
   posts: Post[];
@@ -36,14 +37,56 @@ export function useAccountContent(): UseAccountContentResult {
   const [hasMoreMedia, setHasMoreMedia] = useState(true);
   const [hasMoreVideos, setHasMoreVideos] = useState(true);
 
+  // Helper function to get user ID - matches pattern used in other parts of codebase
+  const getUserId = useCallback(async (): Promise<string | null> => {
+    try {
+      // First, try to get from AsyncStorage (where it's stored with _id from login)
+      const userStr = await AsyncStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        const userId = user._id || user.id;
+        if (userId) {
+          return userId;
+        }
+      }
+
+      // Fallback: try API response
+      const userProfile = await apiClient.getUserProfile();
+      const userId = userProfile.user._id || userProfile.user.id;
+      if (userId) {
+        return userId;
+      }
+
+      // Last resort: try to extract from JWT token
+      const token = await AsyncStorage.getItem("userToken") || await AsyncStorage.getItem("token");
+      if (token) {
+        try {
+          const tokenParts = token.split(".");
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            if (payload.userId || payload.user_id || payload.id) {
+              return String(payload.userId || payload.user_id || payload.id).trim();
+            }
+          }
+        } catch (tokenError) {
+          console.warn("⚠️ Failed to extract user ID from token:", tokenError);
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error("❌ Error getting user ID:", error);
+      return null;
+    }
+  }, []);
+
   const loadContent = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Get user ID from profile
-      const userProfile = await apiClient.getUserProfile();
-      const userId = userProfile.user._id || userProfile.user.id;
+      // Get user ID using the helper function
+      const userId = await getUserId();
 
       if (!userId) {
         throw new Error("User ID not found");
@@ -100,14 +143,13 @@ export function useAccountContent(): UseAccountContentResult {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getUserId]);
 
   const loadMorePosts = useCallback(async () => {
     if (!hasMorePosts || loading) return;
 
     try {
-      const userProfile = await apiClient.getUserProfile();
-      const userId = userProfile.user._id || userProfile.user.id;
+      const userId = await getUserId();
       if (!userId) return;
 
       const nextPage = postsPage + 1;
@@ -121,14 +163,13 @@ export function useAccountContent(): UseAccountContentResult {
     } catch (err: any) {
       console.error("Error loading more posts:", err);
     }
-  }, [postsPage, hasMorePosts, loading]);
+  }, [postsPage, hasMorePosts, loading, getUserId]);
 
   const loadMoreMedia = useCallback(async () => {
     if (!hasMoreMedia || loading) return;
 
     try {
-      const userProfile = await apiClient.getUserProfile();
-      const userId = userProfile.user._id || userProfile.user.id;
+      const userId = await getUserId();
       if (!userId) return;
 
       const nextPage = mediaPage + 1;
@@ -147,14 +188,13 @@ export function useAccountContent(): UseAccountContentResult {
     } catch (err: any) {
       console.error("Error loading more media:", err);
     }
-  }, [mediaPage, hasMoreMedia, loading]);
+  }, [mediaPage, hasMoreMedia, loading, getUserId]);
 
   const loadMoreVideos = useCallback(async () => {
     if (!hasMoreVideos || loading) return;
 
     try {
-      const userProfile = await apiClient.getUserProfile();
-      const userId = userProfile.user._id || userProfile.user.id;
+      const userId = await getUserId();
       if (!userId) return;
 
       const nextPage = videosPage + 1;
@@ -168,7 +208,7 @@ export function useAccountContent(): UseAccountContentResult {
     } catch (err: any) {
       console.error("Error loading more videos:", err);
     }
-  }, [videosPage, hasMoreVideos, loading]);
+  }, [videosPage, hasMoreVideos, loading, getUserId]);
 
   useEffect(() => {
     loadContent();

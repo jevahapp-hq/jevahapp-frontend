@@ -335,38 +335,51 @@ export default function PrayerWallScreen() {
 
   const renderPrayerCard = (prayer: PrayerRequestType, index: number) => {
     const cardTheme = buildPrayerCardTheme(prayer.color);
+    
+    // Ensure shape has a default value if missing (fallback to rectangle)
+    const prayerShape = prayer.shape || "rectangle";
+    
+    // Debug: Log shape to verify it's being received from backend
+    if (__DEV__ && index === 0) {
+      console.log("🎴 Prayer card shape:", {
+        prayerId: prayer._id,
+        shape: prayer.shape,
+        prayerShape,
+        color: prayer.color
+      });
+    }
 
     // Wrap the card in a container that matches the shape used when creating the prayer
     // This matches the previewTouchable style from PostAPrayer
     return (
       <View key={prayer._id} style={styles.cardWrapper}>
         <TouchableOpacity
-          style={[getCardStyle(prayer.shape, cardTheme), styles.prayerCardTouchable]}
+          style={[getCardStyle(prayerShape, cardTheme), styles.prayerCardTouchable]}
           activeOpacity={0.8}
           onPress={() => handlePrayerCardPress(prayer)}
         >
-          {prayer.shape === "scalloped" ? (
+          {prayerShape === "scalloped" ? (
             renderScallopedCard(prayer, cardTheme)
           ) : (
             <>
-              {prayer.shape === "square" && (
+              {prayerShape === "square" && (
                 <View style={[styles.diagonalCut, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.triangle} />
                 </View>
               )}
-              {prayer.shape === "square2" && (
+              {prayerShape === "square2" && (
                 <View style={[styles.diagonalCut2, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.diagonalMask2} />
                   <View style={styles.triangle2} />
                 </View>
               )}
-              {prayer.shape === "square3" && (
+              {prayerShape === "square3" && (
                 <View style={[styles.diagonalCut3, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.diagonalMask3} />
                   <View style={styles.triangle3} />
                 </View>
               )}
-              {prayer.shape === "square4" && (
+              {prayerShape === "square4" && (
                 <View style={[styles.diagonalCut4, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.triangle4} />
                 </View>

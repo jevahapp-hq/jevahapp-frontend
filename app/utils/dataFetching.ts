@@ -186,6 +186,87 @@ async function enhancedFetch(
 // Main API client
 export class ApiClient {
   private cache = CacheManager.getInstance();
+  private isRefreshing: boolean = false;
+  private refreshPromise: Promise<string | null> | null = null;
+
+  // Refresh authentication token
+  private async refreshToken(): Promise<string | null> {
+    // If already refreshing, return the existing promise
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = (async () => {
+      try {
+        const currentToken = await TokenManager.getToken();
+        if (!currentToken) {
+          console.log("🔄 No token to refresh");
+          return null;
+        }
+
+        console.log("🔄 Attempting to refresh token...");
+
+        const refreshResponse = await enhancedFetch(
+          `${API_BASE_URL}/api/auth/refresh`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${currentToken}`,
+            },
+            body: JSON.stringify({ token: currentToken }),
+          }
+        );
+
+        if (!refreshResponse.ok) {
+          const errorText = await refreshResponse.text().catch(() => "");
+          console.log(
+            `🔄 Token refresh failed: ${refreshResponse.status}`,
+            errorText
+          );
+
+          // If refresh fails with 401, clear tokens
+          if (refreshResponse.status === 401) {
+            await TokenManager.clearToken();
+            console.log("🔄 Session expired, tokens cleared");
+          }
+
+          return null;
+        }
+
+        const refreshData = await refreshResponse.json();
+        const newToken =
+          refreshData?.data?.token || refreshData?.token || null;
+
+        if (!newToken) {
+          console.log("🔄 Token refresh succeeded but no token in response");
+          return null;
+        }
+
+        // Validate and store the new token
+        // Check if token has valid JWT format (3 parts separated by dots)
+        const parts = newToken.split(".");
+        if (parts.length !== 3) {
+          console.log("🔄 New token has invalid format");
+          return null;
+        }
+
+        await TokenManager.setToken(newToken);
+        console.log("✅ Token refreshed successfully");
+
+        return newToken;
+      } catch (error) {
+        console.log("🔄 Token refresh error:", error);
+        return null;
+      } finally {
+        this.isRefreshing = false;
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
 
   async request<T = any>(
     endpoint: string,
@@ -219,20 +300,82 @@ export class ApiClient {
         // Get authentication token
         const token = await TokenManager.getToken();
         console.log(`🔑 API: Token found: ${token ? "Yes" : "No"}`);
+        const requestHeaders = { ...headers };
         if (token) {
-          headers.Authorization = `Bearer ${token}`;
+          requestHeaders.Authorization = `Bearer ${token}`;
         }
 
         // Add platform header
-        headers["expo-platform"] = Platform.OS;
+        requestHeaders["expo-platform"] = Platform.OS;
 
         try {
           const response = await enhancedFetch(url, {
             method,
             body,
-            headers,
+            headers: requestHeaders,
             ...options,
           });
+
+          // Handle 401 errors with token refresh
+          if (response.status === 401 && token) {
+            console.log("🔄 Received 401, attempting token refresh...");
+            const newToken = await this.refreshToken();
+
+            if (newToken) {
+              // Retry the request with the new token
+              const retryHeaders = {
+                ...requestHeaders,
+                Authorization: `Bearer ${newToken}`,
+              };
+
+              console.log(
+                `🔄 Retrying request with new token: ${method} ${url}`
+              );
+
+              const retryResponse = await enhancedFetch(url, {
+                method,
+                body,
+                headers: retryHeaders,
+                ...options,
+              });
+
+              if (!retryResponse.ok) {
+                const errorText = await retryResponse.text().catch(() => "");
+                console.error(
+                  `❌ API: HTTP ${retryResponse.status}: ${retryResponse.statusText}`
+                );
+                let errorMessage = `HTTP ${retryResponse.status}: ${retryResponse.statusText}`;
+
+                try {
+                  const errorData = await retryResponse.json();
+                  if (errorData.message) {
+                    errorMessage = errorData.message;
+                  }
+                } catch (parseError) {
+                  // If we can't parse the error response, use the default message
+                }
+
+                throw new Error(errorMessage);
+              }
+
+              const retryData = await retryResponse.json();
+              console.log(`✅ API: Response data after refresh:`, retryData);
+
+              // Cache successful GET responses
+              if (cache && method === "GET") {
+                this.cache.set(cacheKey, retryData, cacheDuration);
+              }
+
+              return retryData;
+            } else {
+              // Token refresh failed, return the original error
+              const errorText = await response.text().catch(() => "");
+              console.log(
+                `❌ API: Token refresh failed, returning 401 error`
+              );
+              throw new Error("Authentication failed. Please log in again.");
+            }
+          }
 
           if (!response.ok) {
             console.error(
