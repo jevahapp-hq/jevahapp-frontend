@@ -4,11 +4,11 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
 import { navigateMainTab } from "../../utils/navigation";
@@ -76,64 +76,55 @@ export default function LibraryScreen() {
         />
       </View>
 
-      {/* Category tabs - always visible */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="px-2 py-2 mt-6"
-        contentContainerStyle={{ paddingHorizontal: 16 }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 50,
+        }}
+        showsVerticalScrollIndicator={false}
+        className="bg-[#98a2b318] mt-6"
       >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            onPress={() => setSelectedCategorA(category)}
-            activeOpacity={0.7}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              marginHorizontal: 4,
-              borderRadius: 10,
-              backgroundColor:
-                selectedCategoryA === category ? "black" : "white",
-              borderWidth: selectedCategoryA === category ? 0 : 1,
-              borderColor:
-                selectedCategoryA === category ? "transparent" : "#6B6E7C",
-              minWidth: 48,
-              minHeight: 44,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="px-2 py-2 mt-6 "
+        >
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              onPress={() => setSelectedCategorA(category)}
+              activeOpacity={0.7}
               style={{
-                color: selectedCategoryA === category ? "white" : "#1D2939",
-                fontFamily: "Rubik_600SemiBold",
-                fontSize: 14,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                marginHorizontal: 4,
+                borderRadius: 10,
+                backgroundColor:
+                  selectedCategoryA === category ? "black" : "white",
+                borderWidth: selectedCategoryA === category ? 0 : 1,
+                borderColor:
+                  selectedCategoryA === category ? "transparent" : "#6B6E7C",
+                minWidth: 48,
+                minHeight: 44,
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Content area - conditional rendering to avoid VirtualizedList nesting */}
-      {selectedCategoryA === "PLAYLISTS" ? (
-        // PlaylistsLibrary handles its own scrolling with FlatList
-        <View className="flex-1 mt-2">{renderContent()}</View>
-      ) : (
-        // Other categories can use ScrollView
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingBottom: 50,
-          }}
-          showsVerticalScrollIndicator={false}
-          className="bg-white mt-2"
-        >
-          <View className="flex-1 mb-24">{renderContent()}</View>
+              <Text
+                style={{
+                  color: selectedCategoryA === category ? "white" : "#1D2939",
+                  fontFamily: "Rubik_600SemiBold",
+                  fontSize: 14,
+                }}
+              >
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
-      )}
+
+        <View className="flex-1 mb-24">{renderContent()}</View>
+      </ScrollView>
       <BottomNavOverlay
         selectedTab={activeTab}
         onTabChange={(tab) => {
