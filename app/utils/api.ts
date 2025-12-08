@@ -121,8 +121,8 @@ apiAxios.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If we get a 401 and haven't already retried
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // If we get a 401 or 402 and haven't already retried (402 is used for auth failures)
+    if ((error.response?.status === 401 || error.response?.status === 402) && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
@@ -229,9 +229,9 @@ apiAxios.interceptors.response.use(
             error: errorText,
           });
           
-          // If refresh fails with 401, the session is truly invalid
-          if (refreshResponse.status === 401) {
-            console.error("❌ Token refresh also returned 401 - session is invalid");
+          // If refresh fails with 401 or 402, the session is truly invalid
+          if (refreshResponse.status === 401 || refreshResponse.status === 402) {
+            console.error(`❌ Token refresh also returned ${refreshResponse.status} - session is invalid`);
             await TokenUtils.clearAuthTokens();
             throw new Error("Session expired. Please log in again.");
           }

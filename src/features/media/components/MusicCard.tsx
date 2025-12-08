@@ -1,18 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Image,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import {
-  useContentCount,
-  useUserInteraction,
+    useContentCount,
+    useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
@@ -27,10 +27,10 @@ import { useContentActionModal } from "../../../shared/hooks/useContentActionMod
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  isValidUri,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    isValidUri,
 } from "../../../shared/utils";
 
 const ORANGE = "#FF8A00";
@@ -484,4 +484,4 @@ function formatTime(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-export default MusicCard;
+export default memo(MusicCard);

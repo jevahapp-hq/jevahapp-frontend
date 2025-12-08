@@ -1,5 +1,4 @@
 // API Error Handler Utility
-import { ApiResponse } from "./communityAPI";
 
 export interface ApiError {
   success: false;
@@ -38,6 +37,13 @@ export class ApiErrorHandler {
           success: false,
           error: "Unauthorized. Please login again.",
           code: "UNAUTHORIZED",
+        };
+
+      case 402:
+        return {
+          success: false,
+          error: "Authentication failed. Please login again.",
+          code: "AUTHENTICATION_FAILED",
         };
 
       case 403:
@@ -105,7 +111,7 @@ export class ApiErrorHandler {
   }
 
   static isAuthError(error: ApiError): boolean {
-    return error.code === "UNAUTHORIZED" || error.code === "FORBIDDEN";
+    return error.code === "UNAUTHORIZED" || error.code === "AUTHENTICATION_FAILED" || error.code === "FORBIDDEN";
   }
 
   static isValidationError(error: ApiError): boolean {

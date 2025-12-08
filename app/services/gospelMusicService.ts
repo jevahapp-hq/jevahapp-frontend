@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../utils/api";
+import { BaseService } from "../../src/core/services/BaseService";
 
 export interface GospelTrack {
   id: string;
@@ -34,12 +34,8 @@ export interface GospelSearchResponse {
   message?: string;
 }
 
-class GospelMusicService {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = `${API_BASE_URL}/gospel-music`;
-  }
+class GospelMusicService extends BaseService {
+  private basePath = "/gospel-music";
 
   /**
    * Search for gospel music tracks
@@ -49,29 +45,32 @@ class GospelMusicService {
     limit: number = 20
   ): Promise<GospelSearchResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const response = await this.post<GospelSearchResponse>(
+        `${this.basePath}/search`,
+        {
           query,
           limit,
           genre: "gospel",
           includePreviews: true,
-        }),
-      });
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.success && response.data) {
+        return response.data;
       }
 
-      const data = await response.json();
-      return data;
+      // Return fallback data with copyright-free options
+      return {
+        success: false,
+        data: {
+          tracks: this.getFallbackGospelTracks(),
+          playlists: this.getFallbackPlaylists(),
+          total: 0,
+        },
+        message: "Using offline gospel music collection",
+      };
     } catch (error) {
       console.error("Error searching gospel music:", error);
-
-      // Return fallback data with copyright-free options
       return {
         success: false,
         data: {
@@ -89,19 +88,25 @@ class GospelMusicService {
    */
   async getFeaturedPlaylists(): Promise<GospelSearchResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/featured`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await this.get<GospelSearchResponse>(
+        `${this.basePath}/featured`,
+        undefined,
+        { requireAuth: false }
+      );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.success && response.data) {
+        return response.data;
       }
 
-      const data = await response.json();
-      return data;
+      return {
+        success: false,
+        data: {
+          tracks: [],
+          playlists: this.getFallbackPlaylists(),
+          total: 0,
+        },
+        message: "Using offline playlists",
+      };
     } catch (error) {
       console.error("Error fetching featured playlists:", error);
       return {
@@ -121,22 +126,17 @@ class GospelMusicService {
    */
   async getTracksByArtist(artistName: string): Promise<GospelSearchResponse> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/artist/${encodeURIComponent(artistName)}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
+      const response = await this.get<GospelSearchResponse>(
+        `${this.basePath}/artist/${encodeURIComponent(artistName)}`,
+        undefined,
+        { requireAuth: false }
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.success && response.data) {
+        return response.data;
       }
 
-      const data = await response.json();
-      return data;
+      throw new Error(response.error || "Failed to fetch artist tracks");
     } catch (error) {
       console.error("Error fetching artist tracks:", error);
       throw error;

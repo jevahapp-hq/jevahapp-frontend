@@ -1,32 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Modal,
-  PanResponder,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    InteractionManager,
+    Modal,
+    PanResponder,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
-import { usePlaylistStore, type Playlist, type PlaylistSong } from "../store/usePlaylistStore";
-import { playlistAPI, type Playlist as BackendPlaylist } from "../utils/playlistAPI";
 import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
 import { UI_CONFIG } from "../../src/shared/constants";
 import copyrightFreeMusicAPI from "../services/copyrightFreeMusicAPI";
 import SocketManager from "../services/SocketManager";
-import TokenUtils from "../utils/tokenUtils";
+import { usePlaylistStore, type Playlist } from "../store/usePlaylistStore";
 import { getApiBaseUrl } from "../utils/api";
+import { playlistAPI } from "../utils/playlistAPI";
+import TokenUtils from "../utils/tokenUtils";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -83,6 +83,7 @@ export default function CopyrightFreeSongModal({
   const [likeCount, setLikeCount] = useState(song?.likeCount || song?.likes || 0);
   const [viewCount, setViewCount] = useState(song?.viewCount || song?.views || 0);
   const [isTogglingLike, setIsTogglingLike] = useState(false);
+  const [hasTrackedView, setHasTrackedView] = useState(false); // Track if view has been recorded
 
   // Socket.IO manager for real-time updates (scoped to this modal)
   const socketManagerRef = useRef<SocketManager | null>(null);
@@ -116,8 +117,66 @@ export default function CopyrightFreeSongModal({
       setIsLiked(song.isLiked || false);
       setLikeCount(song.likeCount || song.likes || 0);
       setViewCount(song.viewCount || song.views || 0);
+      // Reset view tracking when song changes
+      setHasTrackedView(false);
     }
   }, [song]);
+
+  // View tracking: Record view when engagement thresholds are met
+  // Thresholds: 3 seconds OR 25% progress OR completion
+  useEffect(() => {
+    const songId = song?._id || song?.id;
+    if (!visible || !songId || hasTrackedView || !isPlaying) {
+      return;
+    }
+
+    const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
+    const positionMs = audioPosition || 0;
+    const progressPct = audioProgress ? Math.round(audioProgress * 100) : 0;
+    const isComplete = durationMs > 0 && audioProgress >= 0.999;
+
+    // Check if engagement threshold is met
+    const meetsThreshold =
+      positionMs >= 3000 || // 3 seconds
+      progressPct >= 25 || // 25% progress
+      isComplete; // Song completed
+
+    if (meetsThreshold) {
+      // Record view with backend API
+      (async () => {
+        try {
+          const result = await copyrightFreeMusicAPI.recordView(songId, {
+            durationMs: isComplete ? durationMs : positionMs,
+            progressPct: progressPct,
+            isComplete: isComplete,
+          });
+
+          if (result.success && result.data) {
+            // Update view count from backend response
+            setViewCount(result.data.viewCount);
+            setHasTrackedView(true);
+            console.log(`✅ View recorded for song ${songId}:`, {
+              viewCount: result.data.viewCount,
+              hasViewed: result.data.hasViewed,
+            });
+          }
+        } catch (error) {
+          // Silently handle errors (view tracking is non-critical)
+          console.warn("⚠️ Failed to record view:", error);
+        }
+      })();
+    }
+  }, [
+    visible,
+    song?._id,
+    song?.id,
+    song?.duration,
+    isPlaying,
+    audioPosition,
+    audioProgress,
+    audioDuration,
+    hasTrackedView,
+  ]);
 
   // Real-time updates via Socket.IO for this song
   useEffect(() => {
@@ -166,14 +225,15 @@ export default function CopyrightFreeSongModal({
           try {
             if (!data || data.songId !== songId) return;
 
+            // Backend WebSocket event format: { songId, likeCount, viewCount, liked }
             if (typeof data.likeCount === "number") {
-              setLikeCount((prev) =>
+              setLikeCount((prev: number) =>
                 Number.isFinite(data.likeCount) ? data.likeCount : prev
               );
             }
 
             if (typeof data.viewCount === "number") {
-              setViewCount((prev) =>
+              setViewCount((prev: number) =>
                 Number.isFinite(data.viewCount) ? data.viewCount : prev
               );
             }
@@ -224,11 +284,17 @@ export default function CopyrightFreeSongModal({
     };
   }, [visible, song?._id, song?.id]);
 
-  // Refresh playlists when playlist modal opens
+  // Refresh playlists when playlist modal opens (only when opening, not closing)
+  const prevShowPlaylistModalRef = useRef(false);
   useEffect(() => {
-    if (showPlaylistModal) {
-      loadPlaylistsFromBackend();
+    // Only load when modal transitions from closed to open
+    if (showPlaylistModal && !prevShowPlaylistModalRef.current) {
+      // Defer the load to avoid blocking the modal opening animation
+      InteractionManager.runAfterInteractions(() => {
+        loadPlaylistsFromBackend();
+      });
     }
+    prevShowPlaylistModalRef.current = showPlaylistModal;
   }, [showPlaylistModal, loadPlaylistsFromBackend]);
 
   // Smooth modal animations - no bouncing
@@ -326,10 +392,16 @@ export default function CopyrightFreeSongModal({
     transform: [{ translateY: translateY.value }],
   }));
 
-  const handleAddToPlaylist = () => {
+  const handleAddToPlaylist = useCallback(() => {
     if (!song) return;
     setShowPlaylistModal(true);
-  };
+  }, [song]);
+
+  // Optimized close handler for playlist modal
+  const handleClosePlaylistModal = useCallback(() => {
+    // Immediately update state for instant UI feedback
+    setShowPlaylistModal(false);
+  }, []);
 
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) {
@@ -988,19 +1060,31 @@ export default function CopyrightFreeSongModal({
         visible={showPlaylistModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowPlaylistModal(false)}
+        onRequestClose={handleClosePlaylistModal}
       >
-        <View className="flex-1 bg-black/50 justify-center items-center px-4">
-          <View className="bg-white rounded-2xl w-full max-w-md max-h-[80%]">
-            {/* Header */}
-            <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
-              <Text className="text-lg font-rubik-bold text-gray-900">
-                Add to Playlist
-              </Text>
-              <TouchableOpacity onPress={() => setShowPlaylistModal(false)}>
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={handleClosePlaylistModal}
+          style={{ flex: 1 }}
+        >
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl w-full max-w-md max-h-[80%]"
+            >
+              {/* Header */}
+              <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
+                <Text className="text-lg font-rubik-bold text-gray-900">
+                  Add to Playlist
+                </Text>
+                <TouchableOpacity 
+                  onPress={handleClosePlaylistModal}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -1116,8 +1200,9 @@ export default function CopyrightFreeSongModal({
                 </View>
               )}
             </ScrollView>
+            </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Create Playlist Modal - Sleek Spotify-like Design */}

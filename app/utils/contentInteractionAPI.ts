@@ -722,7 +722,8 @@ class ContentInteractionService {
     contentId: string,
     contentType: string = "media",
     page: number = 1,
-    limit: number = 20
+    limit: number = 20,
+    sortBy: "newest" | "oldest" | "top" = "newest"
   ): Promise<{
     comments: CommentData[];
     totalComments: number;
@@ -735,8 +736,17 @@ class ContentInteractionService {
       const headers = await this.getAuthHeaders();
       const backendContentType = this.mapContentTypeToBackend(contentType);
 
+      // Build query params
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      if (sortBy) {
+        params.append("sortBy", sortBy);
+      }
+
       const response = await fetch(
-        `${this.baseURL}/api/content/${backendContentType}/${contentId}/comments?page=${page}&limit=${limit}`,
+        `${this.baseURL}/api/content/${backendContentType}/${contentId}/comments?${params.toString()}`,
         { headers }
       );
 

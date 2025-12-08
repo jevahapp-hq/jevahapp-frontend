@@ -176,16 +176,10 @@ export interface InteractionButtonsProps {
   layout?: "horizontal" | "vertical";
 }
 
-// Comment interface
-export interface Comment {
-  id: string;
-  userName: string;
-  avatar: string;
-  timestamp: string;
-  comment: string;
-  likes: number;
-  isLiked: boolean;
-}
+// Comment interfaces - re-exported from comment.types for convenience
+export type {
+    Comment, CommentData, CommentIconProps
+} from "./comment.types";
 
 // API response interfaces
 export interface ApiResponse<T = any> {

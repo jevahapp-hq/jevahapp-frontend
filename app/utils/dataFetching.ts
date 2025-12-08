@@ -316,9 +316,9 @@ export class ApiClient {
             ...options,
           });
 
-          // Handle 401 errors with token refresh
-          if (response.status === 401 && token) {
-            console.log("🔄 Received 401, attempting token refresh...");
+          // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
+          if ((response.status === 401 || response.status === 402) && token) {
+            console.log(`🔄 Received ${response.status}, attempting token refresh...`);
             const newToken = await this.refreshToken();
 
             if (newToken) {
@@ -447,6 +447,7 @@ export class ApiClient {
       // Provide more specific error messages
       if (
         error.message?.includes("401") ||
+        error.message?.includes("402") ||
         error.message?.includes("Unauthorized")
       ) {
         throw new Error("Authentication failed. Please login again.");
@@ -851,7 +852,7 @@ export class DataSyncManager {
 // Error handling utilities
 export class ErrorHandler {
   static handleApiError(error: any): string {
-    if (error.message?.includes("401")) {
+    if (error.message?.includes("401") || error.message?.includes("402")) {
       return "Authentication required. Please sign in again.";
     }
     if (error.message?.includes("403")) {
@@ -878,7 +879,7 @@ export class ErrorHandler {
   }
 
   static isAuthError(error: any): boolean {
-    return error.message?.includes("401") || error.message?.includes("403");
+    return error.message?.includes("401") || error.message?.includes("402") || error.message?.includes("403");
   }
 }
 

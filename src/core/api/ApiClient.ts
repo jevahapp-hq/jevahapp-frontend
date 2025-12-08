@@ -44,9 +44,9 @@ class ApiClient {
 
       const response = await fetch(url, config);
 
-      // Handle 401 errors with token refresh
-      if (response.status === 401 && authToken) {
-        console.log("🔄 Received 401, attempting token refresh...");
+      // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
+      if ((response.status === 401 || response.status === 402) && authToken) {
+        console.log(`🔄 Received ${response.status}, attempting token refresh...`);
         const newToken = await this.refreshToken();
 
         if (newToken) {
@@ -196,8 +196,8 @@ class ApiClient {
             errorText
           );
 
-          // If refresh fails with 401, clear tokens
-          if (refreshResponse.status === 401) {
+          // If refresh fails with 401 or 402, clear tokens
+          if (refreshResponse.status === 401 || refreshResponse.status === 402) {
             const TokenUtils = await import("../../../app/utils/tokenUtils");
             await TokenUtils.default.clearAuthTokens();
             console.log("🔄 Session expired, tokens cleared");
@@ -308,12 +308,43 @@ class ApiClient {
     try {
       console.log(`📤 Upload Request: POST ${url}`);
 
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: "POST",
         headers,
         body: formData,
         timeout: this.timeout,
       });
+
+      // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
+      if ((response.status === 401 || response.status === 402) && authToken) {
+        console.log(`🔄 Upload received ${response.status}, attempting token refresh...`);
+        const newToken = await this.refreshToken();
+
+        if (newToken) {
+          // Retry the upload with the new token
+          headers["Authorization"] = `Bearer ${newToken}`;
+          console.log(`🔄 Retrying upload with new token: POST ${url}`);
+          
+          response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: formData,
+            timeout: this.timeout,
+          });
+        } else {
+          // Token refresh failed
+          const errorText = await response.text();
+          console.error(
+            `❌ Upload Error (token refresh failed): ${response.status} ${response.statusText}`,
+            errorText
+          );
+
+          return {
+            success: false,
+            error: `HTTP ${response.status}: Authentication failed. Please log in again.`,
+          };
+        }
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
