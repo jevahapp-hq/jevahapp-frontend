@@ -3,20 +3,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  Modal,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    Modal,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
+import { UI_CONFIG } from "../../../src/shared/constants";
 import { usePlaylistStore, type Playlist, type PlaylistSong } from "../../store/usePlaylistStore";
 import { playlistAPI } from "../../utils/playlistAPI";
-import { UI_CONFIG } from "../../../src/shared/constants";
 
 export default function PlaylistsLibrary() {
   const router = useRouter();
@@ -192,57 +191,68 @@ export default function PlaylistsLibrary() {
     return (
       <TouchableOpacity
         onPress={() => handleViewPlaylist(playlist)}
+        activeOpacity={0.95}
         style={{
           backgroundColor: "#FFFFFF",
-          borderRadius: 16,
-          marginBottom: 16,
-          padding: 16,
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
+          borderRadius: 20,
+          marginBottom: 12,
+          padding: 20,
           shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          elevation: 2,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          elevation: 4,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {/* Thumbnail */}
+          {/* Thumbnail - Larger and more prominent */}
           <View
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: 12,
+              width: 96,
+              height: 96,
+              borderRadius: 16,
               backgroundColor: "#F3F4F6",
-              marginRight: 12,
+              marginRight: 16,
               overflow: "hidden",
               justifyContent: "center",
               alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 2,
             }}
           >
             {playlist.thumbnailUrl ? (
               <Image
                 source={thumbnailSource}
-                style={{ width: 80, height: 80 }}
+                style={{ width: 96, height: 96 }}
                 resizeMode="cover"
               />
             ) : (
-              <Image
-                source={require("../../../assets/images/Jevah.png")}
-                style={{ width: 80, height: 80 }}
-                resizeMode="cover"
-              />
+              <View
+                style={{
+                  width: 96,
+                  height: 96,
+                  backgroundColor: "#E5E7EB",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Ionicons name="musical-notes" size={40} color="#9CA3AF" />
+              </View>
             )}
           </View>
 
           {/* Playlist Info */}
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, justifyContent: "center" }}>
             <Text
               style={{
                 fontSize: 18,
                 fontFamily: "Rubik-SemiBold",
                 color: "#111827",
-                marginBottom: 4,
+                marginBottom: 6,
+                letterSpacing: -0.3,
               }}
               numberOfLines={1}
             >
@@ -254,49 +264,82 @@ export default function PlaylistsLibrary() {
                   fontSize: 14,
                   fontFamily: "Rubik",
                   color: "#6B7280",
-                  marginBottom: 8,
+                  marginBottom: 10,
+                  lineHeight: 20,
                 }}
                 numberOfLines={2}
               >
                 {playlist.description}
               </Text>
             )}
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="musical-note" size={16} color="#9CA3AF" />
-              <Text
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: playlist.description ? 0 : 10 }}>
+              <View
                 style={{
-                  fontSize: 14,
-                  fontFamily: "Rubik",
-                  color: "#9CA3AF",
-                  marginLeft: 4,
+                  backgroundColor: "#F3F4F6",
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  flexDirection: "row",
+                  alignItems: "center",
                 }}
               >
-                {playlist.songs.length} song{playlist.songs.length !== 1 ? "s" : ""}
-              </Text>
+                <Ionicons name="musical-note" size={14} color="#6B7280" />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "Rubik-Medium",
+                    color: "#6B7280",
+                    marginLeft: 4,
+                  }}
+                >
+                  {playlist.songs.length} {playlist.songs.length === 1 ? "song" : "songs"}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Actions */}
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          {/* Actions - More subtle and modern */}
+          <View style={{ flexDirection: "row", gap: 6, marginLeft: 8 }}>
             <TouchableOpacity
-              onPress={() => handleViewPlaylist(playlist)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleViewPlaylist(playlist);
+              }}
+              activeOpacity={0.7}
               style={{
-                padding: 8,
-                borderRadius: 8,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
                 backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+                justifyContent: "center",
+                alignItems: "center",
+                shadowColor: UI_CONFIG.COLORS.SECONDARY,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 3,
               }}
             >
-              <Ionicons name="play" size={20} color="#FFFFFF" />
+              <Ionicons name="play" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => handleDeletePlaylist(playlist.id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDeletePlaylist(playlist.id);
+              }}
+              activeOpacity={0.7}
               style={{
-                padding: 8,
-                borderRadius: 8,
-                backgroundColor: UI_CONFIG.COLORS.ERROR,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: "#FEF2F2",
+                justifyContent: "center",
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#FEE2E2",
               }}
             >
-              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+              <Ionicons name="trash-outline" size={20} color="#EF4444" />
             </TouchableOpacity>
           </View>
         </View>
@@ -457,7 +500,7 @@ export default function PlaylistsLibrary() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
       {/* Header */}
       <View
         style={{
@@ -465,23 +508,27 @@ export default function PlaylistsLibrary() {
           alignItems: "center",
           justifyContent: "space-between",
           paddingHorizontal: 20,
-          paddingTop: 16,
-          paddingBottom: 16,
+          paddingTop: 20,
+          paddingBottom: 20,
+          backgroundColor: "#FFFFFF",
+          borderBottomWidth: 1,
+          borderBottomColor: "#F3F4F6",
         }}
       >
         <View>
           <Text
             style={{
-              fontSize: 24,
-              fontFamily: "Rubik-SemiBold",
+              fontSize: 28,
+              fontFamily: "Rubik-Bold",
               color: "#111827",
+              letterSpacing: -0.5,
             }}
           >
             My Playlists
           </Text>
           <Text
             style={{
-              fontSize: 14,
+              fontSize: 15,
               fontFamily: "Rubik",
               color: "#6B7280",
               marginTop: 4,
@@ -492,16 +539,22 @@ export default function PlaylistsLibrary() {
         </View>
         <TouchableOpacity
           onPress={() => setShowCreateModal(true)}
+          activeOpacity={0.8}
           style={{
             flexDirection: "row",
             alignItems: "center",
             backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 12,
+            paddingHorizontal: 18,
+            paddingVertical: 12,
+            borderRadius: 14,
+            shadowColor: UI_CONFIG.COLORS.SECONDARY,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 3,
           }}
         >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Ionicons name="add" size={22} color="#FFFFFF" />
           <Text
             style={{
               fontSize: 16,
@@ -574,9 +627,13 @@ export default function PlaylistsLibrary() {
           data={playlists}
           renderItem={renderPlaylistCard}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 20 }}
+          contentContainerStyle={{ 
+            padding: 20,
+            paddingBottom: 40,
+          }}
           refreshing={isLoading}
           onRefresh={loadPlaylists}
+          showsVerticalScrollIndicator={false}
         />
       )}
 

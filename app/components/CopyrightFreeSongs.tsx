@@ -3,15 +3,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { devLog } from "../../src/shared/utils/logger";
 import copyrightFreeMusicAPI, {
     CopyrightFreeSongResponse,
 } from "../services/copyrightFreeMusicAPI";
@@ -45,15 +46,9 @@ export default function CopyrightFreeSongs({
   const [selectedSong, setSelectedSong] = useState<any>(null);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [optionsSong, setOptionsSong] = useState<any | null>(null);
+  const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
+  const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
   const audioRefs = useRef<Record<string, Audio.Sound>>({});
-
-  /**
-   * Load songs on mount.
-   * First try cached songs for instant display, then refresh from network.
-   */
-  useEffect(() => {
-    loadSongs(true);
-  }, [loadSongs]);
 
   // Cleanup audio when component unmounts
   useEffect(() => {
@@ -68,7 +63,7 @@ export default function CopyrightFreeSongs({
             }
           }
         } catch (error) {
-          console.warn(`⚠️ Error cleaning up audio ${songId}:`, error);
+          if (__DEV__) console.warn(`⚠️ Error cleaning up audio ${songId}:`, error);
         }
       });
       audioRefs.current = {};
@@ -280,15 +275,19 @@ export default function CopyrightFreeSongs({
               })
             );
           } catch (cacheWriteError) {
-            console.warn(
-              "⚠️ Failed to cache copyright-free songs:",
-              cacheWriteError
-            );
+            if (__DEV__) {
+              console.warn(
+                "⚠️ Failed to cache copyright-free songs:",
+                cacheWriteError
+              );
+            }
           }
         } else {
-          console.warn(
-            "⚠️ No songs from backend, using local copyright-free set"
-          );
+          if (__DEV__) {
+            console.warn(
+              "⚠️ No songs from backend, using local copyright-free set"
+            );
+          }
           const fallback = getFallbackSongs();
           setSongs(fallback);
         }
@@ -303,6 +302,14 @@ export default function CopyrightFreeSongs({
     },
     [transformBackendSong, getFallbackSongs]
   );
+
+  /**
+   * Load songs on mount.
+   * First try cached songs for instant display, then refresh from network.
+   */
+  useEffect(() => {
+    loadSongs(true);
+  }, [loadSongs]);
 
   const toggleAudioPlay = useCallback(
     async (songId: string, audioUrl: any) => {
@@ -320,7 +327,7 @@ export default function CopyrightFreeSongs({
                 await audioRefs.current[songId].pauseAsync();
               }
             } catch (error) {
-              console.warn("⚠️ Error pausing audio:", error);
+              if (__DEV__) console.warn("⚠️ Error pausing audio:", error);
             }
           }
           setPlayingSong(null);
@@ -335,14 +342,14 @@ export default function CopyrightFreeSongs({
                 await audioRefs.current[playingSong].pauseAsync();
               }
             } catch (error) {
-              console.warn("⚠️ Error stopping previous audio:", error);
+              if (__DEV__) console.warn("⚠️ Error stopping previous audio:", error);
               delete audioRefs.current[playingSong];
             }
           }
 
           // Start new audio
           if (!audioRefs.current[songId]) {
-            console.log("🎵 Creating new audio instance for:", songId);
+            if (__DEV__) devLog.log("🎵 Creating new audio instance for:", songId);
             const { sound } = await Audio.Sound.createAsync(
               audioUrl,
               {
@@ -374,7 +381,7 @@ export default function CopyrightFreeSongs({
               }
             );
             audioRefs.current[songId] = sound;
-            console.log("🎵 Audio instance created successfully for:", songId);
+            if (__DEV__) devLog.log("🎵 Audio instance created successfully for:", songId);
           } else {
             try {
               const status = await audioRefs.current[songId].getStatusAsync();
@@ -388,7 +395,7 @@ export default function CopyrightFreeSongs({
                 audioRefs.current[songId] = sound;
               }
             } catch (error) {
-              console.warn("⚠️ Error playing existing audio:", error);
+              if (__DEV__) console.warn("⚠️ Error playing existing audio:", error);
               delete audioRefs.current[songId];
               const { sound } = await Audio.Sound.createAsync(audioUrl, {
                 shouldPlay: true,
@@ -435,7 +442,7 @@ export default function CopyrightFreeSongs({
           setAudioProgress((prev) => ({ ...prev, [songId]: progress }));
         }
       } catch (error) {
-        console.error("Error seeking audio:", error);
+        if (__DEV__) console.error("Error seeking audio:", error);
       }
     },
     [audioDuration]
@@ -466,7 +473,7 @@ export default function CopyrightFreeSongs({
         // Only update if the song actually changed to avoid unnecessary re-renders
         const currentSongId = selectedSong?.id;
         if (currentSongId !== currentTrack.id) {
-          console.log("🔄 Auto-advance: Updating modal to show next song:", fullSongData.title);
+          if (__DEV__) devLog.log("🔄 Auto-advance: Updating modal to show next song:", fullSongData.title);
           setSelectedSong(fullSongData);
         }
       }
@@ -475,10 +482,10 @@ export default function CopyrightFreeSongs({
 
   const handlePlayIconPress = useCallback(
     async (song: any) => {
-      console.log("🎵 Play button pressed for:", song.title);
+      if (__DEV__) devLog.log("🎵 Play button pressed for:", song.title);
       // Avoid double-press while the global player is still loading a track
       if (globalIsLoading) {
-        console.log("⏳ Global audio player is loading, ignoring tap");
+        if (__DEV__) devLog.log("⏳ Global audio player is loading, ignoring tap");
         return;
       }
 
@@ -529,7 +536,7 @@ export default function CopyrightFreeSongs({
           }
         }
       } catch (e) {
-        console.warn("⚠️ Failed to set global audio queue from copyright songs:", e);
+        if (__DEV__) console.warn("⚠️ Failed to set global audio queue from copyright songs:", e);
       }
 
       // Use global audio player
@@ -560,6 +567,44 @@ export default function CopyrightFreeSongs({
     setSelectedSong(song);
     setShowSongModal(true);
   }, []);
+
+  // Fetch latest song data when options modal opens
+  useEffect(() => {
+    const fetchOptionsSongData = async () => {
+      if (!showOptionsModal || !optionsSong) {
+        return;
+      }
+
+      const songId = optionsSong.id || optionsSong._id;
+      if (!songId) {
+        return;
+      }
+
+      setLoadingOptionsSong(true);
+      try {
+        const response = await copyrightFreeMusicAPI.getSongById(songId);
+        if (response.success && response.data) {
+          const transformedSong = transformBackendSong(response.data);
+          setOptionsSongData(transformedSong);
+          
+          // Also update the song in the songs array to keep it in sync
+          setSongs((prevSongs) =>
+            prevSongs.map((s) =>
+              s.id === songId ? transformedSong : s
+            )
+          );
+        }
+      } catch (error) {
+        if (__DEV__) console.warn("⚠️ Failed to fetch song data for options modal:", error);
+        // Fallback to using the existing song data
+        setOptionsSongData(optionsSong);
+      } finally {
+        setLoadingOptionsSong(false);
+      }
+    };
+
+    fetchOptionsSongData();
+  }, [showOptionsModal, optionsSong, transformBackendSong]);
 
   const renderSongCard = useCallback(
     (item: any) => {
@@ -628,6 +673,7 @@ export default function CopyrightFreeSongs({
               <TouchableOpacity
                 onPress={() => {
                   setOptionsSong(item);
+                  setOptionsSongData(null); // Reset to force fresh fetch
                   setShowOptionsModal(true);
                 }}
                 activeOpacity={0.7}
@@ -642,7 +688,7 @@ export default function CopyrightFreeSongs({
             </View>
             <View className="flex-row items-center">
               <Ionicons
-                name="musical-notes-outline"
+                name="eye-outline"
                 size={13}
                 color="#98A2B3"
               />
@@ -650,7 +696,7 @@ export default function CopyrightFreeSongs({
                 className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik"
                 numberOfLines={1}
               >
-                {item.views} views
+                {item.views || item.viewCount || 0} views
               </Text>
             </View>
           </View>
@@ -767,6 +813,7 @@ export default function CopyrightFreeSongs({
           onPress={() => {
             setShowOptionsModal(false);
             setOptionsSong(null);
+            setOptionsSongData(null);
           }}
           style={{
             flex: 1,
@@ -813,12 +860,42 @@ export default function CopyrightFreeSongs({
                   style={{
                     fontSize: 13,
                     color: "#6B7280",
-                    marginBottom: 16,
+                    marginBottom: 12,
                   }}
                   numberOfLines={1}
                 >
                   {optionsSong.artist}
                 </Text>
+
+                {/* Views Display with Icon */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 16,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    backgroundColor: "#F9FAFB",
+                    borderRadius: 8,
+                  }}
+                >
+                  <Ionicons name="eye" size={16} color="#256E63" />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: "#374151",
+                      fontWeight: "500",
+                      marginLeft: 8,
+                      fontFamily: "Rubik",
+                    }}
+                  >
+                    {loadingOptionsSong ? (
+                      <ActivityIndicator size="small" color="#256E63" />
+                    ) : (
+                      `${optionsSongData?.views || optionsSongData?.viewCount || optionsSong?.views || optionsSong?.viewCount || 0} views`
+                    )}
+                  </Text>
+                </View>
               </>
             )}
 
@@ -909,6 +986,7 @@ export default function CopyrightFreeSongs({
               onPress={() => {
                 setShowOptionsModal(false);
                 setOptionsSong(null);
+                setOptionsSongData(null);
               }}
               style={{
                 marginTop: 8,

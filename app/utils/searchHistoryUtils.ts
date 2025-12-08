@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import unifiedSearchAPI from '../services/unifiedSearchAPI';
 
 const SEARCH_HISTORY_KEY = 'search_history';
 const TRENDING_SEARCHES_KEY = 'trending_searches';
@@ -84,7 +85,7 @@ export const clearSearchHistory = async (): Promise<void> => {
 };
 
 /**
- * Get trending searches (mock implementation - replace with actual API call)
+ * Get trending searches from unified search API
  */
 export const getTrendingSearches = async (): Promise<TrendingSearch[]> => {
   try {
@@ -98,7 +99,25 @@ export const getTrendingSearches = async (): Promise<TrendingSearch[]> => {
       }
     }
     
-    // Mock trending searches - replace with actual API call
+    // Fetch trending searches from API
+    try {
+      const response = await unifiedSearchAPI.getTrending(10, 'week');
+      if (response.success && response.data?.trending) {
+        const trending = response.data.trending;
+        
+        // Cache the trending searches
+        await AsyncStorage.setItem(TRENDING_SEARCHES_KEY, JSON.stringify({
+          data: trending,
+          timestamp: Date.now()
+        }));
+        
+        return trending;
+      }
+    } catch (apiError) {
+      console.warn('Failed to fetch trending searches from API, using fallback:', apiError);
+    }
+    
+    // Fallback to mock trending searches if API fails
     const mockTrending: TrendingSearch[] = [
       { query: 'worship music', count: 1250, category: 'music' },
       { query: 'bible study', count: 980, category: 'education' },
@@ -111,12 +130,6 @@ export const getTrendingSearches = async (): Promise<TrendingSearch[]> => {
       { query: 'bible verse', count: 420, category: 'reading' },
       { query: 'praise and worship', count: 380, category: 'music' }
     ];
-    
-    // Cache the trending searches
-    await AsyncStorage.setItem(TRENDING_SEARCHES_KEY, JSON.stringify({
-      data: mockTrending,
-      timestamp: Date.now()
-    }));
     
     return mockTrending;
   } catch (error) {

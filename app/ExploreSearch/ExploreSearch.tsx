@@ -3,6 +3,7 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     FlatList,
     Image,
@@ -15,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import SuccessCard from "../components/SuccessCard";
+import unifiedSearchAPI, { UnifiedSearchItem } from "../services/unifiedSearchAPI";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { MediaItem, useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
@@ -32,6 +34,12 @@ export default function ExploreSearch() {
   const [trendingSearches, setTrendingSearches] = useState<Array<{query: string, count: number, category?: string}>>([]);
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  
+  // Search results state
+  const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   
   // Success card state
   const [showSuccessCard, setShowSuccessCard] = useState(false);
@@ -93,7 +101,87 @@ export default function ExploreSearch() {
     };
   }, []);
 
-  // Display all content or filtered content based on search
+  // Transform unified search item to MediaItem format
+  const transformSearchItem = (item: UnifiedSearchItem): MediaItem => {
+    return {
+      _id: item._id || item.id,
+      title: item.title,
+      description: item.description || "",
+      speaker: item.speaker || item.artist || "",
+      uploadedBy: item.uploadedBy || "",
+      category: item.category ? [item.category] : [],
+      topics: [],
+      thumbnailUrl: item.thumbnailUrl || "",
+      fileUrl: item.fileUrl || item.audioUrl || "",
+      contentType: item.contentType || (item.type === "copyright-free" ? "copyright-free-music" : "audio"),
+      duration: item.duration || 0,
+      viewCount: item.viewCount || item.views || 0,
+      listenCount: item.listenCount || 0,
+      readCount: item.readCount || 0,
+      likeCount: item.likeCount || item.likes || 0,
+      createdAt: item.createdAt,
+      updatedAt: item.createdAt,
+      year: item.year,
+      isLiked: item.isLiked || false,
+      isInLibrary: item.isInLibrary || false,
+      isPublicDomain: item.isPublicDomain || false,
+    };
+  };
+
+  // Debounced search effect
+  useEffect(() => {
+    // Clear previous timer
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    // Don't search if query is empty
+    if (!query.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      setSearchError(null);
+      setHasSearched(false);
+      return;
+    }
+
+    // Set loading state
+    setIsSearching(true);
+    setSearchError(null);
+    setHasSearched(true);
+
+    // Debounce: Wait 500ms after user stops typing
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        const response = await unifiedSearchAPI.search(query.trim(), {
+          contentType: "all",
+          limit: 50,
+          sort: "relevance",
+        });
+
+        if (response.success && response.data) {
+          const transformedResults = response.data.results.map(transformSearchItem);
+          setSearchResults(transformedResults);
+        } else {
+          setSearchResults([]);
+        }
+      } catch (error) {
+        console.error("Search error:", error);
+        setSearchError("Failed to search. Please try again.");
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // 500ms debounce delay
+
+    // Cleanup
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [query]);
+
+  // Display all content or search results
   const displayResults = useMemo(() => {
     if (!query.trim()) {
       // Show all content when no search query
@@ -102,49 +190,9 @@ export default function ExploreSearch() {
       );
     }
     
-    // Filter content when there's a search query
-    const searchTerm = query.toLowerCase().trim();
-    const filteredMedia = mediaList.filter((item) => {
-      // Search in title
-      if (item.title.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      // Search in description
-      if (item.description && item.description.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      // Search in speaker/uploadedBy
-      if (item.speaker && item.speaker.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      if (item.uploadedBy && item.uploadedBy.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      // Search in category
-      if (item.category && Array.isArray(item.category)) {
-        if (item.category.some(cat => cat.toLowerCase().includes(searchTerm))) {
-          return true;
-        }
-      }
-      
-      // Search in topics
-      if (item.topics && Array.isArray(item.topics)) {
-        if (item.topics.some(topic => topic.toLowerCase().includes(searchTerm))) {
-          return true;
-        }
-      }
-      
-      return false;
-    });
-    
-    return filteredMedia.sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [query, mediaList]);
+    // Show search results when query exists
+    return searchResults;
+  }, [query, mediaList, searchResults]);
 
 
   const removePastSearch = async (item: string) => {
@@ -568,14 +616,21 @@ export default function ExploreSearch() {
 
   const renderEmptyState = () => (
     <View className="flex-1 justify-center items-center py-20">
-      {hasSearched ? (
+      {isSearching ? (
+        <View className="items-center">
+          <ActivityIndicator size="large" color="#256E63" />
+          <Text className="text-[#9CA3AF] text-lg font-rubik-semibold mt-4">
+            Searching...
+          </Text>
+        </View>
+      ) : hasSearched ? (
         <View className="items-center">
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
           <Text className="text-[#9CA3AF] text-lg font-rubik-semibold mt-4">
-            No results found
+            {searchError || "No results found"}
           </Text>
           <Text className="text-[#9CA3AF] text-sm font-rubik text-center mt-2 px-8">
-            Try searching with different keywords
+            {searchError ? "Please try again" : "Try searching with different keywords"}
           </Text>
         </View>
       ) : mediaList.length === 0 ? (
@@ -636,6 +691,19 @@ export default function ExploreSearch() {
               onSubmitEditing={() => handleSearch(query)}
               returnKeyType="search"
             />
+            {query.trim().length > 0 && (
+              <TouchableOpacity
+                onPress={() => handleSearch(query)}
+                disabled={isSearching}
+                className="mr-2 p-1"
+              >
+                <Ionicons 
+                  name="search" 
+                  size={20} 
+                  color={isSearching ? "#9CA3AF" : "#256E63"} 
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           <TouchableOpacity 
@@ -713,12 +781,19 @@ export default function ExploreSearch() {
         </View>
 
         {/* Media Cards */}
-        <TouchableOpacity 
-          activeOpacity={1} 
+        <TouchableOpacity
+          activeOpacity={1}
           onPress={closeModal}
           className="flex-1"
         >
-          {displayResults.length > 0 ? (
+          {isSearching ? (
+            <View className="py-20 items-center">
+              <ActivityIndicator size="large" color="#256E63" />
+              <Text className="text-[#9CA3AF] text-sm font-rubik mt-4">
+                Searching...
+              </Text>
+            </View>
+          ) : displayResults.length > 0 ? (
             <FlatList
               data={displayResults}
               renderItem={renderMediaCard}

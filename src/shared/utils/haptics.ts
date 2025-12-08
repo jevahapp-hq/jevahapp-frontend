@@ -43,3 +43,4 @@ export const triggerSuccessHaptic = (): void => {
 export const triggerErrorHaptic = (): void => {
   triggerHapticFeedback("heavy");
 };
+

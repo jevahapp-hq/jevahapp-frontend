@@ -644,7 +644,35 @@ class ContentInteractionService {
       };
       return { totalViews: Number(viewCount) || 0, hasViewed };
     } catch (error) {
-      console.error("Error recording view:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Handle network errors gracefully - don't spam logs
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError) {
+        // Only log network errors in development, and throttle them
+        if (__DEV__) {
+          const errorKey = `network_error_view_${contentId}_${Date.now()}`;
+          if (!(global as any).__loggedNetworkErrors) {
+            (global as any).__loggedNetworkErrors = new Set();
+          }
+          if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
+            (global as any).__loggedNetworkErrors.add(errorKey);
+            setTimeout(() => {
+              (global as any).__loggedNetworkErrors?.delete(errorKey);
+            }, 10000); // 10 second throttle
+            console.warn("⚠️ Network error recording view (offline or server unreachable)");
+          }
+        }
+      } else if (__DEV__) {
+        // Log non-network errors normally in dev
+        console.error("Error recording view:", error);
+      }
+      
+      // Return gracefully - view tracking failure shouldn't break the app
       return { totalViews: 0 };
     }
   }

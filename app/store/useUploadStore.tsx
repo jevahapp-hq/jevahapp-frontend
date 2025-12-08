@@ -443,40 +443,72 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     set({ defaultContentLoading: true, defaultContentError: null });
 
     try {
-      console.log("🚀 Store: Fetching default content with params:", params);
+      if (__DEV__) {
+        console.log("🚀 Store: Fetching default content with params:", params);
+      }
       const response = await allMediaAPI.getDefaultContent(params);
 
       if (response.success) {
-        console.log(
-          "✅ Store: Successfully fetched default content:",
-          response.data
-        );
+        if (__DEV__) {
+          console.log(
+            "✅ Store: Successfully fetched default content:",
+            response.data
+          );
+        }
         set({
           defaultContent: response.data.content,
           defaultContentPagination: response.data.pagination,
           defaultContentLoading: false,
         });
       } else {
-        console.error(
-          "❌ Store: Failed to fetch default content:",
-          response.error
-        );
+        // Handle network errors gracefully - don't set error state for network failures
+        const isNetworkError = response.error?.includes("Network unavailable");
+        
+        if (isNetworkError) {
+          // Network error - keep existing content, just stop loading
+          set({
+            defaultContentLoading: false,
+            // Don't set error state for network failures - user can still use cached content
+          });
+        } else {
+          if (__DEV__) {
+            console.error(
+              "❌ Store: Failed to fetch default content:",
+              response.error
+            );
+          }
+          set({
+            defaultContentError:
+              response.error || "Failed to fetch default content",
+            defaultContentLoading: false,
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError) {
+        // Network error - keep existing content, just stop loading
         set({
-          defaultContentError:
-            response.error || "Failed to fetch default content",
+          defaultContentLoading: false,
+          // Don't set error state for network failures
+        });
+      } else {
+        if (__DEV__) {
+          console.error(
+            "❌ Store: Exception while fetching default content:",
+            error
+          );
+        }
+        set({
+          defaultContentError: errorMessage,
           defaultContentLoading: false,
         });
       }
-    } catch (error) {
-      console.error(
-        "❌ Store: Exception while fetching default content:",
-        error
-      );
-      set({
-        defaultContentError:
-          error instanceof Error ? error.message : "Unknown error",
-        defaultContentLoading: false,
-      });
     }
   },
 

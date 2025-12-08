@@ -50,3 +50,4 @@ export interface CommentData {
   };
   isLiked?: boolean;
 }
+
