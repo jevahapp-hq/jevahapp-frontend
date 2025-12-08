@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  isFresh,
-  useContentCacheStore,
+    isFresh,
+    useContentCacheStore,
 } from "../../../app/store/useContentCacheStore";
 import { mediaApi } from "../../core/api/MediaApi";
 import {
-  ContentFilter,
-  MediaItem,
-  UseMediaOptions,
-  UseMediaReturn,
+    ContentFilter,
+    MediaItem,
+    UseMediaOptions,
+    UseMediaReturn,
 } from "../types";
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
 
@@ -50,7 +50,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     setAllContentError(null);
 
     try {
-      console.log("🚀 useMedia: Fetching all content (useAuth:", useAuth, ")");
+      if (__DEV__) console.log("🚀 useMedia: Fetching all content (useAuth:", useAuth, ")");
 
       let response;
       if (useAuth) {
@@ -75,22 +75,45 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         setAllContentTotal(response.total || 0);
         setAllContentLoading(false);
       } else {
-        console.error(
-          "❌ useMedia: Failed to fetch all content:",
-          response.error
-        );
-        setAllContentError(response.error || "Failed to fetch all content");
-        setAllContentLoading(false);
+        // Handle network errors gracefully
+        const isNetworkError = response.error?.includes("Network unavailable");
+        
+        if (isNetworkError) {
+          // Network error - keep existing content, just stop loading
+          setAllContentLoading(false);
+          // Don't set error state for network failures
+        } else {
+          if (__DEV__) {
+            console.error(
+              "❌ useMedia: Failed to fetch all content:",
+              response.error
+            );
+          }
+          setAllContentError(response.error || "Failed to fetch all content");
+          setAllContentLoading(false);
+        }
       }
     } catch (error) {
-      console.error(
-        "❌ useMedia: Exception while fetching all content:",
-        error
-      );
-      setAllContentError(
-        error instanceof Error ? error.message : "Unknown error"
-      );
-      setAllContentLoading(false);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError) {
+        // Network error - keep existing content, just stop loading
+        setAllContentLoading(false);
+        // Don't set error state for network failures
+      } else {
+        if (__DEV__) {
+          console.error(
+            "❌ useMedia: Exception while fetching all content:",
+            error
+          );
+        }
+        setAllContentError(errorMessage);
+        setAllContentLoading(false);
+      }
     }
   }, []);
 
@@ -101,7 +124,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       setDefaultContentError(null);
 
       try {
-        console.log("🚀 useMedia: Fetching default content:", params);
+        if (__DEV__) {
+          console.log("🚀 useMedia: Fetching default content:", params);
+        }
 
         const filter: ContentFilter = {
           page: params?.page || page,
@@ -144,24 +169,47 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
           setDefaultContentLoading(false);
         } else {
-          console.error(
-            "❌ useMedia: Failed to fetch default content:",
-            response.error
-          );
-          setDefaultContentError(
-            response.error || "Failed to fetch default content"
-          );
-          setDefaultContentLoading(false);
+          // Handle network errors gracefully
+          const isNetworkError = response.error?.includes("Network unavailable");
+          
+          if (isNetworkError) {
+            // Network error - keep existing content, just stop loading
+            setDefaultContentLoading(false);
+            // Don't set error state for network failures
+          } else {
+            if (__DEV__) {
+              console.error(
+                "❌ useMedia: Failed to fetch default content:",
+                response.error
+              );
+            }
+            setDefaultContentError(
+              response.error || "Failed to fetch default content"
+            );
+            setDefaultContentLoading(false);
+          }
         }
       } catch (error) {
-        console.error(
-          "❌ useMedia: Exception while fetching default content:",
-          error
-        );
-        setDefaultContentError(
-          error instanceof Error ? error.message : "Unknown error"
-        );
-        setDefaultContentLoading(false);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const isNetworkError = 
+          errorMessage.includes("Network request failed") ||
+          errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("NetworkError");
+        
+        if (isNetworkError) {
+          // Network error - keep existing content, just stop loading
+          setDefaultContentLoading(false);
+          // Don't set error state for network failures
+        } else {
+          if (__DEV__) {
+            console.error(
+              "❌ useMedia: Exception while fetching default content:",
+              error
+            );
+          }
+          setDefaultContentError(errorMessage);
+          setDefaultContentLoading(false);
+        }
       }
     },
     [page, limit, contentType]
@@ -173,7 +221,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       // Try authenticated first, fallback to public
       await fetchAllContent(true);
     } catch (error) {
-      console.log("🔄 Auth failed, trying public endpoint...");
+      if (__DEV__) console.log("🔄 Auth failed, trying public endpoint...");
       await fetchAllContent(false);
     }
   }, [fetchAllContent]);
@@ -218,7 +266,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   // Initialize content on mount if immediate is true
   useEffect(() => {
     if (immediate) {
-      console.log("🚀 useMedia: Initializing with immediate load");
+      if (__DEV__) console.log("🚀 useMedia: Initializing with immediate load");
 
       // Test available endpoints first
       mediaApi.testAvailableEndpoints();

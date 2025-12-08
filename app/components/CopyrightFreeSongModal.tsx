@@ -1,32 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Modal,
-  PanResponder,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    InteractionManager,
+    Modal,
+    PanResponder,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
-import { usePlaylistStore, type Playlist, type PlaylistSong } from "../store/usePlaylistStore";
-import { playlistAPI, type Playlist as BackendPlaylist } from "../utils/playlistAPI";
 import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
 import { UI_CONFIG } from "../../src/shared/constants";
 import copyrightFreeMusicAPI from "../services/copyrightFreeMusicAPI";
 import SocketManager from "../services/SocketManager";
-import TokenUtils from "../utils/tokenUtils";
+import { usePlaylistStore, type Playlist } from "../store/usePlaylistStore";
 import { getApiBaseUrl } from "../utils/api";
+import { playlistAPI } from "../utils/playlistAPI";
+import TokenUtils from "../utils/tokenUtils";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -78,11 +78,18 @@ export default function CopyrightFreeSongModal({
   const [seekProgress, setSeekProgress] = useState(0);
   const progressBarRef = useRef<View>(null);
   
+  // Options modal state
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
+  const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
+  
   // Like and Views state
   const [isLiked, setIsLiked] = useState(song?.isLiked || false);
   const [likeCount, setLikeCount] = useState(song?.likeCount || song?.likes || 0);
   const [viewCount, setViewCount] = useState(song?.viewCount || song?.views || 0);
   const [isTogglingLike, setIsTogglingLike] = useState(false);
+  const [hasTrackedView, setHasTrackedView] = useState(false); // Track if view has been recorded
+  const isRecordingViewRef = useRef(false); // Prevent concurrent view recording requests
 
   // Socket.IO manager for real-time updates (scoped to this modal)
   const socketManagerRef = useRef<SocketManager | null>(null);
@@ -103,12 +110,9 @@ export default function CopyrightFreeSongModal({
   const playlistViewTranslateY = useSharedValue(SCREEN_HEIGHT);
   const playlistDetailTranslateY = useSharedValue(SCREEN_HEIGHT);
 
-  // Load playlists from backend on mount and when playlist modal opens
-  useEffect(() => {
-    if (visible) {
-      loadPlaylistsFromBackend();
-    }
-  }, [visible, loadPlaylistsFromBackend]);
+  // NOTE: We no longer load playlists every time the song modal becomes visible.
+  // Playlists are fetched lazily when the playlist UI is actually opened,
+  // which makes opening the song modal faster and avoids unnecessary network calls.
 
   // Update like and view counts when song changes
   useEffect(() => {
@@ -116,8 +120,129 @@ export default function CopyrightFreeSongModal({
       setIsLiked(song.isLiked || false);
       setLikeCount(song.likeCount || song.likes || 0);
       setViewCount(song.viewCount || song.views || 0);
+      // Reset view tracking when song changes
+      setHasTrackedView(false);
+      isRecordingViewRef.current = false;
     }
   }, [song]);
+
+  // View tracking: Record view when engagement thresholds are met
+  // Thresholds: 3 seconds OR 25% progress OR completion
+  useEffect(() => {
+    const songId = song?._id || song?.id;
+    if (!visible || !songId || hasTrackedView || !isPlaying || isRecordingViewRef.current) {
+      return;
+    }
+
+    const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
+    const positionMs = audioPosition || 0;
+    const progressPct = audioProgress ? Math.round(audioProgress * 100) : 0;
+    const isComplete = durationMs > 0 && audioProgress >= 0.999;
+
+    // Check if engagement threshold is met
+    const meetsThreshold =
+      positionMs >= 3000 || // 3 seconds
+      progressPct >= 25 || // 25% progress
+      isComplete; // Song completed
+
+    if (meetsThreshold) {
+      // Record view with backend API
+      (async () => {
+        // Prevent concurrent calls
+        if (isRecordingViewRef.current) {
+          return;
+        }
+        isRecordingViewRef.current = true;
+
+        try {
+          if (__DEV__) {
+            console.log(`📊 Recording view for song ${songId}:`, {
+              positionMs,
+              progressPct,
+              isComplete,
+              durationMs,
+              threshold: "met",
+            });
+          }
+
+          const result = await copyrightFreeMusicAPI.recordView(songId, {
+            durationMs: isComplete ? durationMs : positionMs,
+            progressPct: progressPct,
+            isComplete: isComplete,
+          });
+
+          if (__DEV__) {
+            console.log(`📡 API Response for view recording:`, result);
+          }
+
+          if (result.success && result.data) {
+            // Update view count from backend response
+            setViewCount(result.data.viewCount);
+            setHasTrackedView(true);
+            if (__DEV__) {
+              console.log(`✅ View RECORDED and PERSISTED for song ${songId}:`, {
+                viewCount: result.data.viewCount,
+                hasViewed: result.data.hasViewed,
+                songTitle: song?.title,
+              });
+            }
+          } else {
+            if (__DEV__) {
+              console.warn(`⚠️ View recording returned unsuccessful:`, result);
+            }
+            // Set hasTrackedView to true to prevent infinite retries
+            setHasTrackedView(true);
+          }
+        } catch (error) {
+          // Log error details for debugging (only in dev, and throttle network errors)
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const isNetworkError = 
+            errorMessage.includes("Network request failed") ||
+            errorMessage.includes("Failed to fetch") ||
+            errorMessage.includes("NetworkError");
+          
+          if (isNetworkError) {
+            // Network errors are handled silently in production
+            if (__DEV__) {
+              const errorKey = `network_error_view_${songId}_${Date.now()}`;
+              if (!(global as any).__loggedNetworkErrors) {
+                (global as any).__loggedNetworkErrors = new Set();
+              }
+              if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
+                (global as any).__loggedNetworkErrors.add(errorKey);
+                setTimeout(() => {
+                  (global as any).__loggedNetworkErrors?.delete(errorKey);
+                }, 10000);
+                console.warn(`⚠️ Network error recording view for song ${songId} (offline or server unreachable)`);
+              }
+            }
+          } else if (__DEV__) {
+            console.error(`❌ Failed to record view for song ${songId}:`, error);
+            console.error(`Error details:`, {
+              message: errorMessage,
+              songId,
+              songTitle: song?.title,
+            });
+          }
+          // Set hasTrackedView to true even on error to prevent infinite retry loops
+          // This prevents spamming the backend with failed requests
+          setHasTrackedView(true);
+        } finally {
+          isRecordingViewRef.current = false;
+        }
+      })();
+    }
+  }, [
+    visible,
+    song?._id,
+    song?.id,
+    song?.duration,
+    isPlaying,
+    audioPosition,
+    audioProgress,
+    audioDuration,
+    hasTrackedView,
+  ]);
 
   // Real-time updates via Socket.IO for this song
   useEffect(() => {
@@ -159,21 +284,22 @@ export default function CopyrightFreeSongModal({
         try {
           manager.joinContentRoom(songId, "audio");
         } catch (e) {
-          console.warn("⚠️ Failed to join real-time room for song:", e);
+          if (__DEV__) console.warn("⚠️ Failed to join real-time room for song:", e);
         }
 
         handleRealtimeUpdate = (data: any) => {
           try {
             if (!data || data.songId !== songId) return;
 
+            // Backend WebSocket event format: { songId, likeCount, viewCount, liked }
             if (typeof data.likeCount === "number") {
-              setLikeCount((prev) =>
+              setLikeCount((prev: number) =>
                 Number.isFinite(data.likeCount) ? data.likeCount : prev
               );
             }
 
             if (typeof data.viewCount === "number") {
-              setViewCount((prev) =>
+              setViewCount((prev: number) =>
                 Number.isFinite(data.viewCount) ? data.viewCount : prev
               );
             }
@@ -182,7 +308,7 @@ export default function CopyrightFreeSongModal({
               setIsLiked(data.liked);
             }
           } catch (e) {
-            console.warn("⚠️ Error applying real-time song update:", e);
+            if (__DEV__) console.warn("⚠️ Error applying real-time song update:", e);
           }
         };
 
@@ -191,10 +317,12 @@ export default function CopyrightFreeSongModal({
           handleRealtimeUpdate
         );
       } catch (error) {
-        console.warn(
-          "⚠️ Failed to initialize real-time updates for copyright-free song:",
-          error
-        );
+        if (__DEV__) {
+          console.warn(
+            "⚠️ Failed to initialize real-time updates for copyright-free song:",
+            error
+          );
+        }
       }
     };
 
@@ -224,11 +352,17 @@ export default function CopyrightFreeSongModal({
     };
   }, [visible, song?._id, song?.id]);
 
-  // Refresh playlists when playlist modal opens
+  // Refresh playlists when playlist modal opens (only when opening, not closing)
+  const prevShowPlaylistModalRef = useRef(false);
   useEffect(() => {
-    if (showPlaylistModal) {
-      loadPlaylistsFromBackend();
+    // Only load when modal transitions from closed to open
+    if (showPlaylistModal && !prevShowPlaylistModalRef.current) {
+      // Defer the load to avoid blocking the modal opening animation
+      InteractionManager.runAfterInteractions(() => {
+        loadPlaylistsFromBackend();
+      });
     }
+    prevShowPlaylistModalRef.current = showPlaylistModal;
   }, [showPlaylistModal, loadPlaylistsFromBackend]);
 
   // Smooth modal animations - no bouncing
@@ -326,10 +460,113 @@ export default function CopyrightFreeSongModal({
     transform: [{ translateY: translateY.value }],
   }));
 
-  const handleAddToPlaylist = () => {
+  const handleAddToPlaylist = useCallback(() => {
     if (!song) return;
     setShowPlaylistModal(true);
-  };
+  }, [song]);
+
+  const handleOptionsPress = useCallback(() => {
+    if (!song) return;
+    setOptionsSongData(null); // Reset to force fresh fetch
+    setShowOptionsModal(true);
+  }, [song]);
+
+  // Transform backend song format to frontend format
+  const transformBackendSong = useCallback((backendSong: any): any => {
+    const id = backendSong.id ?? backendSong._id ?? "";
+    const audioUrl = backendSong.audioUrl ?? backendSong.fileUrl ?? "";
+    const views = backendSong.views ?? backendSong.viewCount ?? 0;
+    const likes = backendSong.likes ?? backendSong.likeCount ?? 0;
+    const artist = backendSong.artist ?? backendSong.singer ?? "";
+
+    return {
+      id,
+      title: backendSong.title,
+      artist,
+      year: backendSong.year,
+      audioUrl,
+      thumbnailUrl: backendSong.thumbnailUrl,
+      category: backendSong.category,
+      duration: backendSong.duration,
+      contentType: backendSong.contentType,
+      description: backendSong.description,
+      speaker: backendSong.speaker ?? artist,
+      uploadedBy: backendSong.uploadedBy,
+      createdAt: backendSong.createdAt,
+      views,
+      viewCount: views,
+      likes,
+      likeCount: likes,
+      isLiked: backendSong.isLiked ?? false,
+      isInLibrary: backendSong.isInLibrary ?? false,
+      isPublicDomain: backendSong.isPublicDomain ?? true,
+    };
+  }, []);
+
+  // Fetch latest song data when options modal opens
+  useEffect(() => {
+    const fetchOptionsSongData = async () => {
+      if (!showOptionsModal || !song) {
+        return;
+      }
+
+      const songId = song.id || song._id;
+      if (!songId) {
+        return;
+      }
+
+      setLoadingOptionsSong(true);
+      try {
+        if (__DEV__) {
+          console.log(`🔍 Fetching latest song data for options modal:`, { songId, songTitle: song?.title });
+        }
+        const response = await copyrightFreeMusicAPI.getSongById(songId);
+        if (__DEV__) {
+          console.log(`📥 Song data API response:`, {
+            success: response.success,
+            viewCount: response.data?.viewCount || response.data?.views,
+            likeCount: response.data?.likeCount || response.data?.likes,
+          });
+        }
+        
+        if (response.success && response.data) {
+          const transformedSong = transformBackendSong(response.data);
+          setOptionsSongData(transformedSong);
+          
+          // Update the view count in the main state
+          const newViewCount = transformedSong.views || transformedSong.viewCount || 0;
+          setViewCount(newViewCount);
+          if (__DEV__) {
+            console.log(`✅ Updated view count from backend:`, {
+              oldCount: viewCount,
+              newCount: newViewCount,
+              songTitle: song?.title,
+            });
+          }
+        } else {
+          if (__DEV__) {
+            console.warn(`⚠️ Song data fetch unsuccessful:`, response);
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.error("❌ Failed to fetch song data for options modal:", error);
+        }
+        // Fallback to using the existing song data
+        setOptionsSongData(song);
+      } finally {
+        setLoadingOptionsSong(false);
+      }
+    };
+
+    fetchOptionsSongData();
+  }, [showOptionsModal, song, transformBackendSong, viewCount]);
+
+  // Optimized close handler for playlist modal
+  const handleClosePlaylistModal = useCallback(() => {
+    // Immediately update state for instant UI feedback
+    setShowPlaylistModal(false);
+  }, []);
 
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) {
@@ -620,7 +857,7 @@ export default function CopyrightFreeSongModal({
               </Text>
 
               <TouchableOpacity
-                onPress={handleAddToPlaylist}
+                onPress={handleOptionsPress}
                 style={{
                   width: 32,
                   height: 32,
@@ -988,19 +1225,31 @@ export default function CopyrightFreeSongModal({
         visible={showPlaylistModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowPlaylistModal(false)}
+        onRequestClose={handleClosePlaylistModal}
       >
-        <View className="flex-1 bg-black/50 justify-center items-center px-4">
-          <View className="bg-white rounded-2xl w-full max-w-md max-h-[80%]">
-            {/* Header */}
-            <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
-              <Text className="text-lg font-rubik-bold text-gray-900">
-                Add to Playlist
-              </Text>
-              <TouchableOpacity onPress={() => setShowPlaylistModal(false)}>
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={handleClosePlaylistModal}
+          style={{ flex: 1 }}
+        >
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl w-full max-w-md max-h-[80%]"
+            >
+              {/* Header */}
+              <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
+                <Text className="text-lg font-rubik-bold text-gray-900">
+                  Add to Playlist
+                </Text>
+                <TouchableOpacity 
+                  onPress={handleClosePlaylistModal}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -1116,8 +1365,9 @@ export default function CopyrightFreeSongModal({
                 </View>
               )}
             </ScrollView>
+            </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Create Playlist Modal - Sleek Spotify-like Design */}
@@ -1844,6 +2094,188 @@ export default function CopyrightFreeSongModal({
             </ScrollView>
           </Animated.View>
         </View>
+      </Modal>
+
+      {/* Options Modal opened from three dots */}
+      <Modal
+        visible={showOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowOptionsModal(false);
+          setOptionsSongData(null);
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setShowOptionsModal(false);
+            setOptionsSongData(null);
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 28,
+            }}
+          >
+            {/* Handle bar */}
+            <View
+              style={{
+                alignSelf: "center",
+                width: 40,
+                height: 4,
+                borderRadius: 999,
+                backgroundColor: "#E5E7EB",
+                marginBottom: 16,
+              }}
+            />
+
+            {song && (
+              <>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: "#111827",
+                    marginBottom: 4,
+                    fontFamily: "Rubik-SemiBold",
+                  }}
+                  numberOfLines={1}
+                >
+                  {song.title}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#6B7280",
+                    marginBottom: 12,
+                    fontFamily: "Rubik",
+                  }}
+                  numberOfLines={1}
+                >
+                  {song.artist}
+                </Text>
+
+                {/* Views Display with Icon */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 16,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#F9FAFB",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Ionicons name="eye" size={20} color="#256E63" />
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#6B7280",
+                        fontFamily: "Rubik",
+                        marginBottom: 2,
+                      }}
+                    >
+                      Total Views
+                    </Text>
+                    {loadingOptionsSong ? (
+                      <ActivityIndicator size="small" color="#256E63" />
+                    ) : (
+                      <Text
+                        style={{
+                          fontSize: 18,
+                          color: "#111827",
+                          fontWeight: "600",
+                          fontFamily: "Rubik-SemiBold",
+                        }}
+                      >
+                        {(optionsSongData?.views || optionsSongData?.viewCount || viewCount || 0).toLocaleString()}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* Option: Add to playlist */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowOptionsModal(false);
+                setOptionsSongData(null);
+                setShowPlaylistModal(true);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 12,
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#EEF2FF",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="list" size={18} color="#4F46E5" />
+              </View>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#111827",
+                  fontWeight: "500",
+                  fontFamily: "Rubik-Medium",
+                }}
+              >
+                Add to playlist
+              </Text>
+            </TouchableOpacity>
+
+            {/* Option: Cancel */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowOptionsModal(false);
+                setOptionsSongData(null);
+              }}
+              style={{
+                marginTop: 8,
+                paddingVertical: 12,
+                alignItems: "center",
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#6B7280",
+                  fontWeight: "500",
+                  fontFamily: "Rubik-Medium",
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </>
   );

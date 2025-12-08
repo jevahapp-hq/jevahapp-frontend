@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -36,6 +36,8 @@ import {
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
 import { useMediaStore } from "../store/useUploadStore";
+import SocketManager from "../services/SocketManager";
+import TokenUtils from "../utils/tokenUtils";
 
 import {
   logUserDataStatus,
@@ -99,6 +101,10 @@ export default function UploadScreen() {
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
     getOrientation()
   );
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const socketManagerRef = useRef<SocketManager | null>(null);
+  const currentUploadIdRef = useRef<string | null>(null);
+  const isUsingRealTimeProgressRef = useRef<boolean>(false);
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -114,6 +120,20 @@ export default function UploadScreen() {
     };
 
     checkAuth();
+  }, []);
+
+  // Cleanup Socket.IO connection on unmount
+  useEffect(() => {
+    return () => {
+      if (socketManagerRef.current) {
+        socketManagerRef.current.disconnect();
+        socketManagerRef.current = null;
+      }
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    };
   }, []);
 
   // Handle orientation changes
@@ -761,12 +781,136 @@ export default function UploadScreen() {
       console.log("📤 Starting upload request...");
       const uploadStartTime = Date.now();
 
+      // Generate uploadId for tracking
+      const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      currentUploadIdRef.current = uploadId;
+      isUsingRealTimeProgressRef.current = false;
+
+      // Initialize Socket.IO for real-time progress updates
+      try {
+        const token = await TokenUtils.getAuthToken();
+        if (token && TokenUtils.isValidJWTFormat(token)) {
+          const socketManager = new SocketManager({
+            serverUrl: API_BASE_URL,
+            authToken: token,
+          });
+
+          await socketManager.connect();
+
+          // Access underlying socket to listen for upload-progress events
+          const socket = (socketManager as any).socket;
+          if (socket) {
+            socketManagerRef.current = socketManager;
+
+            // Set up upload progress listener BEFORE checking connection status
+            // This way we catch events even if connection happens later
+            const handleUploadProgress = (progressData: {
+              uploadId: string;
+              progress: number;
+              stage: string;
+              message: string;
+              timestamp: string;
+            }) => {
+              // Only process progress for current upload
+              if (progressData.uploadId === uploadId) {
+                console.log("📊 Real-time progress update:", progressData);
+                
+                // Switch to real-time progress if we were using simulated
+                if (!isUsingRealTimeProgressRef.current) {
+                  console.log("🔄 Switching from simulated to real-time progress");
+                  isUsingRealTimeProgressRef.current = true;
+                  
+                  // Clear simulated progress interval
+                  if (progressIntervalRef.current) {
+                    clearInterval(progressIntervalRef.current);
+                    progressIntervalRef.current = null;
+                  }
+                }
+
+                // Map backend stages to frontend status
+                let status: "verifying" | "uploading" | "success" | "error" = "verifying";
+                if (progressData.stage === "complete") {
+                  status = "success";
+                } else if (progressData.stage === "error" || progressData.stage === "rejected") {
+                  status = "error";
+                  // Clean up on error/rejection
+                  if (socketManagerRef.current) {
+                    const socket = (socketManagerRef.current as any).socket;
+                    if (socket) {
+                      socket.off("upload-progress");
+                    }
+                    socketManagerRef.current.disconnect();
+                    socketManagerRef.current = null;
+                  }
+                  currentUploadIdRef.current = null;
+                  isUsingRealTimeProgressRef.current = false;
+                  setLoading(false);
+                } else if (progressData.stage === "finalizing") {
+                  status = "uploading";
+                }
+
+                setUploadState({
+                  status,
+                  progress: Math.min(progressData.progress, 100),
+                  message: progressData.message || progressData.stage,
+                });
+              }
+            };
+
+            socket.on("upload-progress", handleUploadProgress);
+
+            // Check if already connected, or wait for connection
+            if (socket.connected) {
+              console.log("✅ Socket.IO already connected for real-time progress");
+              isUsingRealTimeProgressRef.current = true;
+            } else {
+              // Wait for connection event (with timeout)
+              const connectionTimeout = setTimeout(() => {
+                if (!socket.connected) {
+                  console.warn("⚠️ Socket.IO connection timeout, using simulated progress");
+                }
+              }, 3000); // 3 second timeout
+
+              socket.once("connect", () => {
+                clearTimeout(connectionTimeout);
+                console.log("✅ Socket.IO connected for real-time progress");
+                isUsingRealTimeProgressRef.current = true;
+                
+                // Clear simulated progress if it was started
+                if (progressIntervalRef.current) {
+                  clearInterval(progressIntervalRef.current);
+                  progressIntervalRef.current = null;
+                }
+              });
+            }
+          } else {
+            console.warn("⚠️ Socket.IO socket not available, using simulated progress");
+          }
+        }
+      } catch (socketError) {
+        console.warn("⚠️ Failed to initialize Socket.IO, using simulated progress:", socketError);
+      }
+
       // Update state to show verification in progress
       setUploadState({
         status: "verifying",
-        progress: 30,
+        progress: 10, // Start at 10%
         message: "Analyzing content... This may take 10-30 seconds.",
       });
+
+      // Start dynamic progress simulation as fallback (only if real-time isn't working)
+      let currentProgress = 10;
+      progressIntervalRef.current = setInterval(() => {
+        // Only update if we're not using real-time progress
+        if (!isUsingRealTimeProgressRef.current) {
+          // Gradually increase progress, but cap at 85% until upload completes
+          currentProgress = Math.min(currentProgress + Math.random() * 3 + 1, 85);
+          setUploadState((prev) => ({
+            ...prev,
+            progress: Math.round(currentProgress),
+          }));
+        }
+      }, 500); // Update every 500ms
 
       const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
         method: "POST",
@@ -774,14 +918,32 @@ export default function UploadScreen() {
           Authorization: `Bearer ${authStatus.token}`,
           Accept: "application/json",
           "expo-platform": Platform.OS,
+          // Optional: Include uploadId in header for backend tracking
+          "X-Upload-ID": uploadId,
         },
         body: formData,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
+      
+      // Clear progress interval when request completes (if still running)
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      
       const uploadDuration = Date.now() - uploadStartTime;
       console.log(`✅ Upload request completed in ${uploadDuration}ms`);
+      
+      // Update progress to 90% when response is received (only if not using real-time)
+      if (!isUsingRealTimeProgressRef.current) {
+        setUploadState((prev) => ({
+          ...prev,
+          progress: 90,
+          message: "Finalizing upload...",
+        }));
+      }
 
       const contentType = res.headers.get("content-type") || "";
       let result: any = null;
@@ -800,6 +962,12 @@ export default function UploadScreen() {
 
       // Handle different response statuses
       if (!res.ok) {
+        // Clear progress interval on error
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        
         setLoading(false);
         setUploadState({
           status: "error",
@@ -813,6 +981,18 @@ export default function UploadScreen() {
           result,
           rawTextPreview: rawText ? rawText.slice(0, 300) : null,
         });
+
+        // Clean up Socket.IO connection on error
+        if (socketManagerRef.current) {
+          const socket = (socketManagerRef.current as any).socket;
+          if (socket) {
+            socket.off("upload-progress");
+          }
+          socketManagerRef.current.disconnect();
+          socketManagerRef.current = null;
+        }
+        currentUploadIdRef.current = null;
+        isUsingRealTimeProgressRef.current = false;
 
         // Handle 403 Forbidden - Content Rejected or Requires Review
         if (res.status === 403 && result) {
@@ -863,6 +1043,18 @@ export default function UploadScreen() {
         Alert.alert("Upload failed", message || "Please try again.");
         return;
       }
+
+      // Clean up Socket.IO connection
+      if (socketManagerRef.current) {
+        const socket = (socketManagerRef.current as any).socket;
+        if (socket) {
+          socket.off("upload-progress");
+        }
+        socketManagerRef.current.disconnect();
+        socketManagerRef.current = null;
+      }
+      currentUploadIdRef.current = null;
+      isUsingRealTimeProgressRef.current = false;
 
       // Update state to show upload success
       setUploadState({
@@ -960,6 +1152,24 @@ export default function UploadScreen() {
         ]
       );
     } catch (error: any) {
+      // Clean up on error
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      
+      // Clean up Socket.IO connection
+      if (socketManagerRef.current) {
+        const socket = (socketManagerRef.current as any).socket;
+        if (socket) {
+          socket.off("upload-progress");
+        }
+        socketManagerRef.current.disconnect();
+        socketManagerRef.current = null;
+      }
+      currentUploadIdRef.current = null;
+      isUsingRealTimeProgressRef.current = false;
+      
       setLoading(false);
       setUploadState({
         status: "error",
@@ -1714,8 +1924,7 @@ export default function UploadScreen() {
                     lineHeight: 16,
                   }}
                 >
-                  By uploading, you confirm you own or have the right to
-                  distribute this content.
+                  Your content will be verified by AI. By uploading, you confirm you own or have the right to distribute this content.
                 </Text>
               </View>
               <TouchableOpacity

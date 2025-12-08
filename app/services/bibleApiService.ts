@@ -1,9 +1,7 @@
 // Bible API Service - Frontend Integration
 // Connects to your backend Bible endpoints
 
-import { getApiBaseUrl } from "../utils/api";
-
-const API_BASE_URL = getApiBaseUrl();
+import { BaseService } from "../../src/core/services/BaseService";
 
 export interface BibleBook {
   _id: string;
@@ -71,49 +69,35 @@ export interface AdvancedSearchResult {
   isAIEnhanced?: boolean;
 }
 
-export interface ApiResponse<T> {
+interface BibleApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
   count?: number;
 }
 
-class BibleApiService {
-  private async makeRequest<T>(endpoint: string): Promise<ApiResponse<T>> {
-    try {
-      const url = `${API_BASE_URL}${endpoint}`;
-      console.log(`📖 Bible API Request: ${url}`);
-
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = {
-            message:
-              errorText || `HTTP ${response.status}: ${response.statusText}`,
-          };
-        }
-        console.error(`❌ Bible API Error [${response.status}]:`, errorData);
-        throw new Error(
-          errorData.message || `Request failed with status ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-      console.log(`✅ Bible API Success: ${url}`);
-      return data;
-    } catch (error) {
-      console.error("Bible API Error:", error);
-      // Re-throw with more context
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(`Bible API request failed: ${error}`);
+class BibleApiService extends BaseService {
+  private async makeRequest<T>(endpoint: string): Promise<BibleApiResponse<T>> {
+    console.log(`📖 Bible API Request: ${endpoint}`);
+    
+    const response = await this.get<T>(endpoint, undefined, { requireAuth: false });
+    
+    if (!response.success) {
+      console.error(`❌ Bible API Error:`, response.error);
+      throw new Error(response.error || "Bible API request failed");
     }
+
+    // Transform ApiResponse to BibleApiResponse format for backward compatibility
+    const data = this.extractData<T>(response);
+    if (!data) {
+      throw new Error("No data returned from Bible API");
+    }
+
+    console.log(`✅ Bible API Success: ${endpoint}`);
+    return {
+      success: true,
+      data,
+    };
   }
 
   // Books endpoints

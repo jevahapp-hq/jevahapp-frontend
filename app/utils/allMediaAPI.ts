@@ -76,7 +76,7 @@ class AllMediaAPI {
         "expo-platform": Platform.OS,
       };
     } catch (error) {
-      console.error("Error getting auth headers:", error);
+      if (__DEV__) console.error("Error getting auth headers:", error);
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
@@ -126,7 +126,7 @@ class AllMediaAPI {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error("Error fetching all media:", error);
+      if (__DEV__) console.error("Error fetching all media:", error);
       throw error;
     }
   }
@@ -205,30 +205,33 @@ class AllMediaAPI {
       }`;
 
       const fullUrl = `${this.baseURL}${endpoint}`;
-      console.log("🌐 Fetching default content from:", fullUrl);
-      console.log("📋 Request params:", params);
-      console.log("🔐 Headers:", headers);
+      if (__DEV__) {
+        console.log("🌐 Fetching default content from:", fullUrl);
+        console.log("📋 Request params:", params);
+      }
 
       const response = await fetch(fullUrl, {
         method: "GET",
         headers,
       });
 
-      console.log("📡 Response status:", response.status);
-      console.log(
-        "📡 Response headers:",
-        Object.fromEntries(response.headers.entries())
-      );
+      if (__DEV__) {
+        console.log("📡 Response status:", response.status);
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("❌ API Error Response:", errorText);
+        if (__DEV__) {
+          console.error("❌ API Error Response:", errorText);
+        }
 
         // If the default endpoint doesn't exist (404 or 400), try the regular media endpoint
         if (response.status === 404 || response.status === 400) {
-          console.log(
-            "🔄 Default endpoint not found or invalid, trying regular media endpoint..."
-          );
+          if (__DEV__) {
+            console.log(
+              "🔄 Default endpoint not found or invalid, trying regular media endpoint..."
+            );
+          }
           return this.fallbackToRegularMedia(params);
         }
 
@@ -238,7 +241,9 @@ class AllMediaAPI {
       }
 
       const data = await response.json();
-      console.log("✅ API Response data:", data);
+      if (__DEV__) {
+        console.log("✅ API Response data:", data);
+      }
 
       if (!data.success) {
         throw new Error(data.message || "Failed to fetch default content");
@@ -249,10 +254,49 @@ class AllMediaAPI {
         data: data.data,
       };
     } catch (error) {
-      console.error("❌ Error fetching default content:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      // Handle network errors gracefully - don't spam logs
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError) {
+        // Only log network errors in development, and throttle them
+        if (__DEV__) {
+          const errorKey = `network_error_${endpoint}_${Date.now()}`;
+          if (!(global as any).__loggedNetworkErrors) {
+            (global as any).__loggedNetworkErrors = new Set();
+          }
+          if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
+            (global as any).__loggedNetworkErrors.add(errorKey);
+            setTimeout(() => {
+              (global as any).__loggedNetworkErrors?.delete(errorKey);
+            }, 10000); // 10 second throttle
+            console.warn("⚠️ Network error fetching default content (offline or server unreachable)");
+          }
+        }
+        
+        // Return empty result gracefully - frontend will show cached data if available
+        return {
+          success: false,
+          error: "Network unavailable",
+          data: {
+            content: [],
+            pagination: { page: 1, limit: 10, total: 0, pages: 0 },
+          },
+        };
+      }
+      
+      // Log other errors normally
+      if (__DEV__) {
+        console.error("❌ Error fetching default content:", error);
+      }
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
         data: {
           content: [],
           pagination: { page: 1, limit: 10, total: 0, pages: 0 },
@@ -280,7 +324,9 @@ class AllMediaAPI {
     error?: string;
   }> {
     try {
-      console.log("🔄 Using fallback: trying latest media endpoint");
+      if (__DEV__) {
+        console.log("🔄 Using fallback: trying latest media endpoint");
+      }
 
       // Try getLatestMedia first (most likely to have content)
       const response = await this.getLatestMedia(params.limit || 10);
@@ -321,7 +367,7 @@ class AllMediaAPI {
         },
       };
     } catch (error) {
-      console.error("❌ Fallback also failed:", error);
+      if (__DEV__) console.error("❌ Fallback also failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Both endpoints failed",
@@ -400,8 +446,10 @@ class AllMediaAPI {
 
   // Test method to check available endpoints
   async testAvailableEndpoints(): Promise<void> {
-    console.log("🧪 Testing available endpoints...");
-    console.log("🌐 Base URL:", this.baseURL);
+    if (__DEV__) {
+      console.log("🧪 Testing available endpoints...");
+      console.log("🌐 Base URL:", this.baseURL);
+    }
 
     try {
       const endpoints = [
@@ -416,18 +464,18 @@ class AllMediaAPI {
         const response = await fetch(
           `${this.baseURL}${endpoint}?page=1&limit=1`
         );
-        console.log(`📡 ${endpoint} status:`, response.status);
+        if (__DEV__) console.log(`📡 ${endpoint} status:`, response.status);
 
         if (response.ok) {
           const data = await response.json();
           console.log(`✅ ${endpoint} response:`, data);
         } else {
           const error = await response.text();
-          console.log(`❌ ${endpoint} error:`, error);
+          if (__DEV__) console.log(`❌ ${endpoint} error:`, error);
         }
       }
     } catch (error) {
-      console.error("❌ Endpoint test failed:", error);
+      if (__DEV__) console.error("❌ Endpoint test failed:", error);
     }
   }
 
@@ -839,7 +887,8 @@ class AllMediaAPI {
   // Get User's Saved Content
   async getSavedContent(
     page: number = 1,
-    limit: number = 20
+    limit: number = 20,
+    contentType?: string
   ): Promise<{
     success: boolean;
     data?: any;
@@ -848,6 +897,7 @@ class AllMediaAPI {
     console.log("🔍 AllMediaAPI: Getting saved content with params:", {
       page,
       limit,
+      contentType,
     });
 
     try {
@@ -856,6 +906,7 @@ class AllMediaAPI {
       const queryParams = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
+        ...(contentType && { contentType }),
       });
 
       console.log("📡 AllMediaAPI: Using endpoint: /api/bookmark/user");

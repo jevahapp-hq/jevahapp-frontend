@@ -119,7 +119,34 @@ class CopyrightFreeMusicAPI {
       const data: CopyrightFreeSongsResponse = await response.json();
       return data;
     } catch (error) {
-      console.error("Error fetching copyright-free songs:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Handle network errors gracefully
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError && !__DEV__) {
+        // In production, don't log network errors (they're expected when offline)
+        // Return empty result so frontend can use cached data
+        return {
+          success: false,
+          data: {
+            songs: [],
+            pagination: {
+              page: 1,
+              limit: 20,
+              total: 0,
+              totalPages: 0,
+            },
+          },
+        };
+      }
+      
+      if (__DEV__) {
+        console.error("Error fetching copyright-free songs:", error);
+      }
       throw error;
     }
   }
@@ -157,27 +184,55 @@ class CopyrightFreeMusicAPI {
         data: result.data as CopyrightFreeSongResponse,
       };
     } catch (error) {
-      console.error(`Error fetching song ${songId}:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Handle network errors gracefully
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError && !__DEV__) {
+        // In production, return error result gracefully
+        return {
+          success: false,
+          data: {} as CopyrightFreeSongResponse,
+        };
+      }
+      
+      if (__DEV__) {
+        console.error(`Error fetching song ${songId}:`, error);
+      }
       throw error;
     }
   }
 
   /**
    * Search copyright-free songs
+   * Uses unified search endpoint with contentType filter
    */
   async searchSongs(query: string, options: {
     category?: string;
     limit?: number;
+    page?: number;
+    sort?: "relevance" | "popular" | "newest" | "oldest" | "title";
   } = {}): Promise<CopyrightFreeSongsResponse> {
     try {
-      const { category, limit = 20 } = options;
+      const { category, limit = 20, page = 1, sort = "relevance" } = options;
 
+      // Use unified search endpoint with copyright-free filter
+      const baseUrl = `${getApiBaseUrl()}/api/search`;
       const params = new URLSearchParams({
-        q: query,
+        q: query.trim(),
+        contentType: "copyright-free",
+        page: page.toString(),
         limit: limit.toString(),
+        sort,
       });
 
-      if (category) params.append("category", category);
+      if (category) {
+        params.append("category", category);
+      }
 
       const token = await TokenUtils.getAuthToken();
       const headers: HeadersInit = {
@@ -188,7 +243,7 @@ class CopyrightFreeMusicAPI {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${this.baseUrl}/search?${params.toString()}`, {
+      const response = await fetch(`${baseUrl}?${params.toString()}`, {
         method: "GET",
         headers,
       });
@@ -197,8 +252,58 @@ class CopyrightFreeMusicAPI {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data: CopyrightFreeSongsResponse = await response.json();
-      return data;
+      const unifiedData = await response.json();
+
+      // Transform unified search response to CopyrightFreeSongsResponse format
+      if (unifiedData.success && unifiedData.data) {
+        const songs = unifiedData.data.results.map((item: any) => ({
+          id: item.id || item._id,
+          _id: item._id || item.id,
+          title: item.title,
+          artist: item.artist || item.singer,
+          singer: item.singer || item.artist,
+          year: item.year || new Date(item.createdAt).getFullYear(),
+          audioUrl: item.audioUrl || item.fileUrl,
+          fileUrl: item.fileUrl || item.audioUrl,
+          thumbnailUrl: item.thumbnailUrl || "",
+          category: item.category || "",
+          duration: item.duration || 0,
+          contentType: "copyright-free-music" as const,
+          description: item.description || "",
+          speaker: item.speaker,
+          uploadedBy: item.uploadedBy || "system",
+          createdAt: item.createdAt,
+          viewCount: item.viewCount || item.views || 0,
+          views: item.views || item.viewCount || 0,
+          likeCount: item.likeCount || item.likes || 0,
+          likes: item.likes || item.likeCount || 0,
+          isLiked: item.isLiked || false,
+          isInLibrary: item.isInLibrary || false,
+          isPublicDomain: item.isPublicDomain !== undefined ? item.isPublicDomain : true,
+        }));
+
+        return {
+          success: true,
+          data: {
+            songs,
+            pagination: unifiedData.data.pagination,
+          },
+        };
+      }
+
+      // Fallback to empty response
+      return {
+        success: false,
+        data: {
+          songs: [],
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            totalPages: 0,
+          },
+        },
+      };
     } catch (error) {
       console.error("Error searching copyright-free songs:", error);
       throw error;
@@ -327,7 +432,16 @@ class CopyrightFreeMusicAPI {
         throw new Error("Authentication required");
       }
 
-      const response = await fetch(`${this.baseUrl}/${songId}/view`, {
+      const url = `${this.baseUrl}/${songId}/view`;
+      if (__DEV__) {
+        console.log(`🌐 Calling POST ${url}`, {
+          songId,
+          payload,
+          hasToken: !!token,
+        });
+      }
+
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -336,15 +450,79 @@ class CopyrightFreeMusicAPI {
         body: JSON.stringify(payload || {}),
       });
 
+      if (__DEV__) {
+        console.log(`📥 Response status: ${response.status} ${response.statusText}`);
+      }
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        if (__DEV__) {
+          console.error(`❌ API Error Response:`, {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+          });
+        }
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
 
       const data = await response.json();
+      if (__DEV__) {
+        console.log(`✅ View API Success:`, {
+          success: data.success,
+          viewCount: data.data?.viewCount,
+          hasViewed: data.data?.hasViewed,
+        });
+      }
       return data;
     } catch (error) {
-      console.error(`Error recording view for song ${songId}:`, error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Handle network errors gracefully - don't spam logs
+      const isNetworkError = 
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+      
+      if (isNetworkError) {
+        // Only log network errors in development, and throttle them
+        if (__DEV__) {
+          const errorKey = `network_error_view_${songId}_${Date.now()}`;
+          if (!(global as any).__loggedNetworkErrors) {
+            (global as any).__loggedNetworkErrors = new Set();
+          }
+          if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
+            (global as any).__loggedNetworkErrors.add(errorKey);
+            setTimeout(() => {
+              (global as any).__loggedNetworkErrors?.delete(errorKey);
+            }, 10000); // 10 second throttle
+            console.warn(`⚠️ Network error recording view for song ${songId} (offline or server unreachable)`);
+          }
+        }
+        
+        // Return error result gracefully - view tracking failure shouldn't break the app
+        return {
+          success: false,
+          data: {
+            viewCount: 0,
+            hasViewed: false,
+          },
+        };
+      }
+      
+      // Log other errors normally in dev
+      if (__DEV__) {
+        console.error(`❌ Error recording view for song ${songId}:`, error);
+      }
+      
+      // Return error result gracefully
+      return {
+        success: false,
+        data: {
+          viewCount: 0,
+          hasViewed: false,
+        },
+      };
     }
   }
 }

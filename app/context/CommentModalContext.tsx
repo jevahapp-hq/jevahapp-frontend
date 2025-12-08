@@ -6,6 +6,7 @@ import React, {
     useRef,
     useState,
 } from "react";
+import { InteractionManager } from "react-native";
 import SocketManager from "../services/SocketManager";
 import { useInteractionStore } from "../store/useInteractionStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
@@ -96,9 +97,37 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       incomingCount: newComments?.length || 0,
     });
     
+    // Try to load cached comments immediately for instant display
+    let cachedComments: Comment[] = [];
+    if (contentId) {
+      try {
+        // Check interaction store for cached comments
+        const store = useInteractionStore.getState();
+        const storeComments = store.comments[contentId];
+        if (storeComments && Array.isArray(storeComments) && storeComments.length > 0) {
+          // Transform store comments to Comment format
+          cachedComments = storeComments.slice(0, 10).map((c: any) => ({
+            id: c.id || c._id,
+            userName: c.userName || c.username || "User",
+            avatar: c.avatar || c.userAvatar || "",
+            timestamp: c.timestamp || c.createdAt || new Date().toISOString(),
+            comment: c.comment || c.text || "",
+            likes: c.likes || 0,
+            isLiked: c.isLiked || false,
+            replies: c.replies || [],
+            userId: c.userId,
+          }));
+          console.log("⚡ Using cached comments from store:", cachedComments.length);
+        }
+      } catch (e) {
+        console.warn("Failed to load cached comments:", e);
+      }
+    }
+    
     // Set modal visible IMMEDIATELY - no delays
     setIsVisible(true);
-    setComments(newComments || []);
+    // Use cached comments if available, otherwise use provided comments
+    setComments(cachedComments.length > 0 ? cachedComments : (newComments || []));
     if (contentId) {
       setCurrentContentId(contentId);
     }
@@ -113,23 +142,32 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
     // Load latest comments from backend and join realtime room ASYNC (non-blocking)
-    // Use requestAnimationFrame for immediate execution without setTimeout delay
+    // Defer all async work using InteractionManager to ensure modal opens instantly
     if (contentId) {
-      // Fetch user data first (fast, non-blocking)
-      AsyncStorage.getItem("user").then((userStr) => {
-        if (userStr) {
-          try {
-            const u = JSON.parse(userStr);
-            currentUserIdRef.current = String(u?._id || u?.id || "");
-            currentUserFirstNameRef.current = String(u?.firstName || "");
-            currentUserLastNameRef.current = String(u?.lastName || "");
-          } catch {}
-        }
-      }).catch(() => {});
-      
-      // Load comments and join room immediately (non-blocking)
-      loadCommentsFromServer(contentId, contentType, 1, sortBy).catch(() => {});
-      joinRealtimeRoom(contentId, contentType).catch(() => {});
+      // Defer all async work until after modal animation completes
+      // This ensures the modal appears instantly without waiting for API calls
+      InteractionManager.runAfterInteractions(() => {
+        // Fetch user data and load comments in parallel for faster loading
+        Promise.all([
+          // Fetch user data (fast, non-blocking)
+          AsyncStorage.getItem("user").then((userStr) => {
+            if (userStr) {
+              try {
+                const u = JSON.parse(userStr);
+                currentUserIdRef.current = String(u?._id || u?.id || "");
+                currentUserFirstNameRef.current = String(u?.firstName || "");
+                currentUserLastNameRef.current = String(u?.lastName || "");
+              } catch {}
+            }
+          }).catch(() => {}),
+          
+          // Load comments from cache first, then refresh from server
+          loadCommentsFromServer(contentId, contentType, 1, sortBy, cachedComments.length === 0).catch(() => {}),
+        ]);
+        
+        // Join realtime room (can happen in parallel)
+        joinRealtimeRoom(contentId, contentType).catch(() => {});
+      });
     }
   };
 
@@ -322,6 +360,12 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         return [createdComment, ...withoutTemps];
       });
 
+      // Invalidate cache since we added a new comment
+      try {
+        const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
+        await AsyncStorage.removeItem(cacheKey);
+      } catch {}
+      
       // Refresh from server and merge by id; this will not duplicate the new comment
       await loadCommentsFromServer(
         currentContentId,
@@ -349,6 +393,56 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
     try {
+      // Check cache first for instant display (only on first page)
+      if (pageNum === 1) {
+        try {
+          const cacheKey = `comments-cache-${contentId}-${sort}`;
+          const cached = await AsyncStorage.getItem(cacheKey);
+          if (cached) {
+            const parsedCache = JSON.parse(cached);
+            const cacheAge = Date.now() - (parsedCache.timestamp || 0);
+            const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache
+            
+            if (cacheAge < CACHE_TTL && parsedCache.comments && parsedCache.comments.length > 0) {
+              console.log("⚡ Loading comments from cache (age:", Math.round(cacheAge / 1000), "s)");
+              const cachedComments: Comment[] = parsedCache.comments.map((c: any) => ({
+                id: c.id,
+                userName: c.userName || "User",
+                avatar: c.avatar || "",
+                timestamp: c.timestamp,
+                comment: c.comment,
+                likes: c.likes || 0,
+                isLiked: c.isLiked || false,
+                replies: c.replies || [],
+                userId: c.userId,
+              }));
+              
+              if (replace) {
+                setComments(cachedComments);
+              } else {
+                setComments((prev) => {
+                  const existingById = new Map(prev.map((p) => [p.id, p] as const));
+                  const merged: Comment[] = [...prev];
+                  for (const c of cachedComments) {
+                    if (!existingById.has(c.id)) {
+                      merged.push(c);
+                    }
+                  }
+                  return merged;
+                });
+              }
+              setHasMore(parsedCache.hasMore || false);
+              setPage(parsedCache.page || 1);
+              
+              // Still fetch fresh data in background, but don't wait
+              // This ensures cache is updated for next time
+            }
+          }
+        } catch (cacheError) {
+          console.warn("Cache read error:", cacheError);
+        }
+      }
+      
       // Check if user is authenticated before making API call
       const token = await AsyncStorage.getItem("userToken") || 
                    await AsyncStorage.getItem("token");
@@ -362,29 +456,62 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         return;
       }
 
+      // Use smaller limit for first page (10) for faster loading, larger for pagination (20)
+      const limit = pageNum === 1 ? 10 : 20;
+      
       const res = await contentInteractionAPI.getComments(
         contentId,
         contentType,
         pageNum,
-        20
+        limit,
+        sort
       );
-      let mapped: Comment[] = (res.comments || []).map((c: any) => {
+      
+      console.log("📥 Comments loaded from server:", {
+        contentId,
+        contentType,
+        commentCount: res.comments?.length || 0,
+        totalComments: res.totalComments,
+        hasMore: res.hasMore,
+        firstComment: res.comments?.[0],
+      });
+      
+      // Helper function to recursively map comments and their replies
+      const mapComment = (c: any): Comment => {
         const first = c.firstName || c.userFirstName || c.user?.firstName || "";
         const last = c.lastName || c.userLastName || c.user?.lastName || "";
         const fullName = `${String(first).trim()} ${String(last).trim()}`.trim();
         const name = fullName || c.username || "User";
-        return {
+        
+        const mappedComment: Comment = {
           id: c.id,
           userName: name,
           avatar: c.userAvatar || c.avatar || c.user?.avatar || "",
           timestamp: c.timestamp,
           comment: c.comment,
           likes: c.likes || 0,
-          isLiked: false,
-          replies: [],
+          isLiked: c.isLiked || false,
+          replies: Array.isArray(c.replies) && c.replies.length > 0
+            ? c.replies.map((r: any) => mapComment(r))
+            : [],
           // @ts-ignore optional
           userId: c.userId,
         };
+        
+        return mappedComment;
+      };
+      
+      let mapped: Comment[] = (res.comments || []).map(mapComment);
+      
+      // Count total comments including replies for debugging
+      const totalWithReplies = mapped.reduce((sum, c) => {
+        return sum + 1 + (c.replies?.length || 0);
+      }, 0);
+      
+      console.log("📊 Mapped comments:", {
+        topLevel: mapped.length,
+        totalWithReplies,
+        expectedTotal: res.totalComments,
       });
       setComments((prev) => {
         if (replace) return mapped;
@@ -404,12 +531,35 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       });
       setHasMore(Boolean(res.hasMore));
       setPage(pageNum);
+      
+      // Cache the results for faster subsequent loads (only cache first page)
+      if (pageNum === 1) {
+        try {
+          const cacheKey = `comments-cache-${contentId}-${sort}`;
+          await AsyncStorage.setItem(cacheKey, JSON.stringify({
+            comments: mapped,
+            hasMore: res.hasMore,
+            page: pageNum,
+            timestamp: Date.now(),
+          }));
+          console.log("💾 Cached comments for faster next load");
+        } catch (cacheError) {
+          console.warn("Cache write error:", cacheError);
+        }
+      }
     } catch (e) {
-      console.warn("Failed loading comments from server:", e);
+      console.error("❌ Failed loading comments from server:", {
+        contentId,
+        contentType,
+        error: e,
+        pageNum,
+      });
       // Don't throw error, just log it and continue with empty state
       if (replace) {
         setComments([]);
       }
+      // If we have a comment count but no comments loaded, this might indicate an API issue
+      // The UI will show empty, but the count badge will still show the number
     } finally {
       isLoadingRef.current = false;
     }
@@ -441,6 +591,12 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         manager.setEventHandlers({
           onContentComment: (data: any) => {
             if (data?.contentId === currentContentId) {
+              // Invalidate cache when new comment arrives via socket
+              try {
+                const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
+                AsyncStorage.removeItem(cacheKey).catch(() => {});
+              } catch {}
+              
               // Refresh comments on any new comment event
               loadCommentsFromServer(
                 currentContentId,

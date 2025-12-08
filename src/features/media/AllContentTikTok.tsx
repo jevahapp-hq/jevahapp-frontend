@@ -24,6 +24,7 @@ import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
     categorizeContent,
+    devLog,
     filterContentByType,
     getContentKey,
     getMostRecentItem,
@@ -248,10 +249,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Filter content based on contentType
   const filteredMediaList = useMemo(() => {
     const filtered = filterContentByType(mediaList, contentType);
-    console.log(`📚 AllContentTikTok: Filtering for contentType="${contentType}"`);
-    console.log(`📚 AllContentTikTok: Total media items: ${mediaList.length}`);
-    console.log(`📚 AllContentTikTok: Filtered items: ${filtered.length}`);
-    console.log(`📚 AllContentTikTok: Ebook items in filtered list:`, 
+    devLog.log(`📚 AllContentTikTok: Filtering for contentType="${contentType}"`);
+    devLog.log(`📚 AllContentTikTok: Total media items: ${mediaList.length}`);
+    devLog.log(`📚 AllContentTikTok: Filtered items: ${filtered.length}`);
+    devLog.log(`📚 AllContentTikTok: Ebook items in filtered list:`, 
       filtered.filter(item => {
         const ct = (item.contentType || "").toLowerCase();
         return ct === "ebook" || ct === "e-books" || ct === "books" || ct === "pdf" || (item.fileUrl && /\.pdf$/i.test(item.fileUrl));
@@ -263,9 +264,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Categorize content
   const categorizedContent = useMemo(() => {
     const categorized = categorizeContent(filteredMediaList);
-    console.log(`📚 AllContentTikTok: Categorized content - ebooks: ${categorized.ebooks.length}, videos: ${categorized.videos.length}, music: ${categorized.music.length}, sermons: ${categorized.sermons.length}`);
+    devLog.log(`📚 AllContentTikTok: Categorized content - ebooks: ${categorized.ebooks.length}, videos: ${categorized.videos.length}, music: ${categorized.music.length}, sermons: ${categorized.sermons.length}`);
     if (categorized.ebooks.length > 0) {
-      console.log(`📚 AllContentTikTok: Ebook items:`, categorized.ebooks.map(e => ({ title: e.title, contentType: e.contentType })));
+      devLog.log(`📚 AllContentTikTok: Ebook items:`, categorized.ebooks.map(e => ({ title: e.title, contentType: e.contentType })));
     }
     return categorized;
   }, [filteredMediaList]);
@@ -281,6 +282,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
     return getMostRecentItem(allItems);
   }, [categorizedContent]);
+
+  // Memoize filtered content lists for rendering
+  const filteredContentLists = useMemo(() => {
+    const remaining = (filteredMediaList || []).filter(
+      (item) => !mostRecentItem || item._id !== mostRecentItem._id
+    );
+    return {
+      firstFour: remaining.slice(0, 4),
+      nextFour: remaining.slice(4, 8),
+      rest: remaining.slice(8),
+    };
+  }, [filteredMediaList, mostRecentItem]);
 
   // Update refs when state changes
   useEffect(() => {
@@ -887,7 +900,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         return "Unknown";
       };
       if (video && index !== undefined) {
-        console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
+        devLog.log(`📱 Video tapped to navigate to reels: ${video.title}`);
         navigateToReels({
           video: video as any,
           index,
@@ -908,6 +921,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       contentStats,
       getContentKey,
       getTimeAgo,
+      contentType,
     ]
   );
 
@@ -934,7 +948,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const handleComment = useCallback(
     (key: string, item: MediaItem) => {
-      console.log("🔄 Comment button clicked for content:", item.title);
+      devLog.log("🔄 Comment button clicked for content:", item.title);
       const contentId = item._id || key;
       // Open modal with empty array - backend will load comments immediately
       showCommentModal([], contentId);
@@ -1280,7 +1294,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             videoTop > viewportBottom;
 
           if (shouldPause && isVideoPlaying(key)) {
-            console.log(
+            devLog.log(
               `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
                 visibilityRatio * 100
               ).toFixed(1)}%`
@@ -1324,7 +1338,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           const isGloballyPlaying = playingVideos[key] || false;
 
           if (shouldPause && (isLocallyPlaying || isGloballyPlaying)) {
-            console.log(
+            devLog.log(
               `🎵 Auto-pause: Pausing music ${key} - visibility: ${(
                 visibilityRatio * 100
               ).toFixed(1)}%`
@@ -1351,7 +1365,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   );
 
   const handleScrollEnd = useCallback(() => {
-    console.log("📱 Scroll ended, finalizing auto-pause cleanup");
+    devLog.log("📱 Scroll ended, finalizing auto-pause cleanup");
     const scrollY = lastScrollYRef.current;
     const screenHeight = Dimensions.get("window").height;
     const viewportTop = scrollY;
@@ -1372,7 +1386,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
         // Final check: pause videos that are less than 20% visible
         if (visibilityRatio < 0.2 && isVideoPlaying(key)) {
-          console.log(
+          devLog.log(
             `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
               visibilityRatio * 100
             ).toFixed(1)}%`
@@ -1406,7 +1420,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
         // Final check: pause music that is less than 30% visible
         if (visibilityRatio < 0.3 && (isLocallyPlaying || isGloballyPlaying)) {
-          console.log(
+          devLog.log(
             `🎵 Final cleanup: Pausing music ${key} - visibility: ${(
               visibilityRatio * 100
             ).toFixed(1)}%`
@@ -1823,6 +1837,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1835,7 +1851,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           onScroll={handleScroll}
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={8}
         >
           {/* Most Recent Section */}
           {mostRecentItem && (
@@ -1908,12 +1923,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
             {/* First four big cards (excluding Most Recent if duplicated) */}
             {(() => {
-              const remaining = (filteredMediaList || []).filter(
-                (item) => !mostRecentItem || item._id !== mostRecentItem._id
-              );
-              const firstFour = remaining.slice(0, 4);
-              const nextFour = remaining.slice(4, 8);
-              const rest = remaining.slice(8);
+              const { firstFour, nextFour, rest } = filteredContentLists;
               return (
                 <>
                   {firstFour.map((item, index) =>

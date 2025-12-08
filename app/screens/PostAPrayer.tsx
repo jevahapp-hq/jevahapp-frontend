@@ -56,10 +56,14 @@ export default function PostAPrayer() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [prayerId, setPrayerId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [verseText, setVerseText] = useState("");
-  const [verseReference, setVerseReference] = useState("");
+  const [verseText, setVerseText] = useState(
+    "And this is the confidence that we have toward Him, that if we ask anything according to His will, He hears us."
+  );
+  const [verseReference, setVerseReference] = useState("1 John 5:14");
   const textInputRef = useRef<TextInput | null>(null);
   const scallopedTextInputRef = useRef<TextInput | null>(null);
+  const verseTextInputRef = useRef<TextInput | null>(null);
+  const verseReferenceInputRef = useRef<TextInput | null>(null);
 
   // Check if we're in edit mode and initialize with existing prayer data
   useEffect(() => {
@@ -69,6 +73,13 @@ export default function PostAPrayer() {
       setPrayerText((params.prayer as string) || "");
       setSelectedColor((params.color as string) || availableColors[0]);
       setSelectedShape((params.shape as ShapeType) || "square");
+      // Initialize verse data if provided
+      if (params.verseText) {
+        setVerseText(params.verseText as string);
+      }
+      if (params.verseReference) {
+        setVerseReference(params.verseReference as string);
+      }
       // If there's existing text, show typing state
       if (params.prayer) {
         setIsTyping(true);
@@ -640,43 +651,66 @@ export default function PostAPrayer() {
         {/* Preview Section */}
         <View style={styles.previewSection}>
           <Text style={styles.previewTitle}>Post a Prayer</Text>
-          <Text style={styles.bibleVerse}>
-            "And this is the confidence that we have toward Him, that if we ask
-            anything according to His will, He hears us."
-          </Text>
-          <Text style={styles.bibleReference}>- 1 John 5:14</Text>
-          <View style={styles.previewContainer}>{renderPreview()}</View>
+          
+          {/* Editable Scripture Verse */}
+          <TouchableOpacity
+            style={styles.verseContainer}
+            onPress={() => {
+              if (verseTextInputRef.current) {
+                verseTextInputRef.current.focus();
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <TextInput
+              ref={verseTextInputRef}
+              style={styles.bibleVerseInput}
+              placeholder="Enter verse text..."
+              placeholderTextColor="#999999"
+              value={verseText}
+              onChangeText={setVerseText}
+              multiline
+              maxLength={500}
+              textAlign="center"
+            />
+            {!verseText.trim() && (
+              <View style={styles.versePlaceholderOverlay} pointerEvents="none">
+                <Text style={styles.bibleVersePlaceholder}>
+                  "And this is the confidence that we have toward Him, that if we ask
+                  anything according to His will, He hears us."
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-          {/* Post Button - Only show when user has typed */}
-          {prayerText.trim().length > 0 && (
-            <View style={styles.postButtonContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.postButton,
-                  isSubmitting
-                    ? styles.disabledButton
-                    : styles.activeButton,
-                ]}
-                onPress={handlePost}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text
-                    style={[
-                      styles.postButtonText,
-                      isSubmitting
-                        ? styles.disabledButtonText
-                        : styles.activeButtonText,
-                    ]}
-                  >
-                    {isEditMode ? "Update Prayer" : "Post Prayer"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* Editable Scripture Reference */}
+          <TouchableOpacity
+            style={styles.referenceContainer}
+            onPress={() => {
+              if (verseReferenceInputRef.current) {
+                verseReferenceInputRef.current.focus();
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <TextInput
+              ref={verseReferenceInputRef}
+              style={styles.bibleReferenceInput}
+              placeholder="Enter reference..."
+              placeholderTextColor="#999999"
+              value={verseReference}
+              onChangeText={setVerseReference}
+              maxLength={50}
+              textAlign="center"
+            />
+            {!verseReference.trim() && (
+              <View style={styles.referencePlaceholderOverlay} pointerEvents="none">
+                <Text style={styles.bibleReferencePlaceholder}>- 1 John 5:14</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.previewContainer}>{renderPreview()}</View>
         </View>
 
         {/* Color Selection */}
@@ -724,6 +758,38 @@ export default function PostAPrayer() {
           </ScrollView>
         </View>
       </ScrollView>
+
+      {/* Fixed Post Button - Always visible */}
+      {(prayerText.trim().length > 0 || verseText.trim().length > 0 || verseReference.trim().length > 0) && (
+        <View style={styles.fixedPostButtonContainer}>
+          <TouchableOpacity
+            style={[
+              styles.fixedPostButton,
+              isSubmitting
+                ? styles.disabledButton
+                : styles.activeButton,
+            ]}
+            onPress={handlePost}
+            disabled={isSubmitting}
+            activeOpacity={0.8}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text
+                style={[
+                  styles.fixedPostButtonText,
+                  isSubmitting
+                    ? styles.disabledButtonText
+                    : styles.activeButtonText,
+                ]}
+              >
+                {isEditMode ? "Update Prayer" : "Post Prayer"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -763,24 +829,70 @@ const styles = StyleSheet.create({
     fontFamily: "Rubik-SemiBold",
     textAlign: "center",
   },
-  bibleVerse: {
+  verseContainer: {
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    minHeight: 60,
+    justifyContent: "center",
+  },
+  bibleVerseInput: {
     fontSize: 16,
     fontStyle: "italic",
     color: "#666666",
     textAlign: "center",
     lineHeight: 24,
     fontFamily: "Playball-Regular",
-    marginBottom: 8,
-    paddingHorizontal: 20,
+    paddingVertical: 8,
     transform: [{ skewX: "-12deg" }],
   },
-  bibleReference: {
+  versePlaceholderOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 20,
+    right: 20,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bibleVersePlaceholder: {
+    fontSize: 16,
+    fontStyle: "italic",
+    color: "#999999",
+    textAlign: "center",
+    lineHeight: 24,
+    fontFamily: "Playball-Regular",
+    transform: [{ skewX: "-12deg" }],
+  },
+  referenceContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    minHeight: 30,
+    justifyContent: "center",
+  },
+  bibleReferenceInput: {
     fontSize: 14,
     fontStyle: "italic",
     color: "#666666",
     textAlign: "center",
     fontFamily: "Playball-Regular",
-    marginBottom: 20,
+    paddingVertical: 4,
+    transform: [{ skewX: "-12deg" }],
+  },
+  referencePlaceholderOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 20,
+    right: 20,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bibleReferencePlaceholder: {
+    fontSize: 14,
+    fontStyle: "italic",
+    color: "#999999",
+    textAlign: "center",
+    fontFamily: "Playball-Regular",
     transform: [{ skewX: "-12deg" }],
   },
   colorSection: {
@@ -806,7 +918,7 @@ const styles = StyleSheet.create({
   },
   templateSection: {
     marginTop: 16,
-    marginBottom: 40,
+    marginBottom: 100, // Extra space for fixed button
   },
   templateScrollView: {
     maxHeight: 100,
@@ -991,6 +1103,41 @@ const styles = StyleSheet.create({
     color: "#D1D5DB",
   },
   activeButtonText: {
+    color: "white",
+  },
+  fixedPostButtonContainer: {
+    position: "absolute" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FCFCFD",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  fixedPostButton: {
+    backgroundColor: "#DF930E",
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    shadowColor: "#DF930E",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  fixedPostButtonText: {
+    fontSize: 18,
+    fontWeight: "600",
+    fontFamily: "Rubik-SemiBold",
     color: "white",
   },
   previewTouchable: {

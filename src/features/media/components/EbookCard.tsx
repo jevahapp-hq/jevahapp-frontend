@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
-  useContentCount,
-  useUserInteraction,
+    useContentCount,
+    useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -18,9 +18,9 @@ import { useContentActionModal } from "../../../shared/hooks/useContentActionMod
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
 } from "../../../shared/utils";
 
 export const EbookCard: React.FC<EbookCardProps> = ({
@@ -344,4 +344,4 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   );
 };
 
-export default EbookCard;
+export default memo(EbookCard);

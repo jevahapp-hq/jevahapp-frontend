@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Image, Text, TouchableOpacity, View, Alert } from "react-native";
+import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
 import { apiClient } from "../../utils/dataFetching";
 
 type ProfileSummaryProps = {

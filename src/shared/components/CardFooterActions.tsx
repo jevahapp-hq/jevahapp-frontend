@@ -1,10 +1,12 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Text, TouchableOpacity, View } from "react-native";
+import { UI_CONFIG } from "../constants";
+import { darkenColor, lightenColor } from "../utils";
+import { AnimatedButton } from "./AnimatedButton";
 import { CommentIcon } from "./CommentIcon";
 import LikeBurst from "./LikeBurst";
 import LikeButton from "./LikeButton";
 import SaveButton from "./SaveButton";
-import { AnimatedButton } from "./AnimatedButton";
 
 type Props = {
   viewCount: number;
@@ -44,11 +46,18 @@ export default function CardFooterActions({
   contentId,
   useEnhancedComponents = false,
 }: Props) {
+  // Generate shades of the theme color
+  const themeColor = UI_CONFIG.COLORS.PRIMARY; // #256E63
+  const lightShade = lightenColor(themeColor, 65); // Very light for inactive icons
+  const mediumShade = lightenColor(themeColor, 40); // Medium for default state
+  const activeShade = themeColor; // Base theme color for active states
+  const darkShade = darkenColor(themeColor, 15); // Darker for emphasis
+
   return (
     <View className="flex-row items-center pl-1">
       <View className="flex-row items-center mr-4">
-        <MaterialIcons name="visibility" size={24} color="#98A2B3" />
-        <Text className="text-[10px] text-gray-500 ml-1">{viewCount}</Text>
+        <MaterialIcons name="visibility" size={24} color={mediumShade} />
+        <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{viewCount}</Text>
       </View>
 
       {useEnhancedComponents && contentId ? (
@@ -59,8 +68,8 @@ export default function CardFooterActions({
             initialLiked={liked}
             initialLikeCount={likeCount}
             size={28}
-            color="#98A2B3"
-            likedColor={likeColor}
+            color={mediumShade}
+            likedColor={activeShade}
             showCount={true}
             onLikeChange={(newLiked, newCount) => {
               // Trigger like burst animation
@@ -72,7 +81,7 @@ export default function CardFooterActions({
           />
           <LikeBurst
             triggerKey={likeBurstKey}
-            color={likeColor}
+            color={activeShade}
             size={14}
             style={{ marginLeft: -6, marginTop: -8 }}
           />
@@ -80,17 +89,19 @@ export default function CardFooterActions({
       ) : (
         <AnimatedLikeButton
           liked={liked}
-          likeColor={likeColor}
+          likeColor={activeShade}
           likeCount={likeCount}
           likeBurstKey={likeBurstKey}
           onLike={onLike}
+          defaultColor={mediumShade}
+          themeColor={themeColor}
         />
       )}
 
       <CommentIcon
         comments={[]}
         size={26}
-        color={commentColor}
+        color={mediumShade}
         showCount={true}
         count={commentCount}
         layout="horizontal"
@@ -106,8 +117,8 @@ export default function CardFooterActions({
             initialSaved={saved}
             initialSaveCount={saveCount}
             size={26}
-            color="#98A2B3"
-            savedColor="#FEA74E"
+            color={mediumShade}
+            savedColor={darkShade}
             showCount={true}
             onSaveChange={(newSaved, newCount) => {
               onSave();
@@ -123,9 +134,9 @@ export default function CardFooterActions({
           <Ionicons
             name={saved ? ("bookmark" as any) : ("bookmark-outline" as any)}
             size={26}
-            color={saved ? "#FEA74E" : "#98A2B3"}
+            color={saved ? darkShade : mediumShade}
           />
-          <Text className="text-[10px] text-gray-500 ml-1">{saveCount}</Text>
+          <Text className="text-[10px] ml-1" style={{ color: saved ? darkShade : mediumShade }}>{saveCount}</Text>
         </TouchableOpacity>
       )}
 
@@ -142,13 +153,21 @@ function AnimatedLikeButton({
   likeCount,
   likeBurstKey,
   onLike,
+  defaultColor,
+  themeColor: passedThemeColor,
 }: {
   liked: boolean;
   likeColor: string;
   likeCount: number;
   likeBurstKey: number;
   onLike: () => void;
+  defaultColor?: string;
+  themeColor?: string;
 }) {
+  const themeColor = passedThemeColor || UI_CONFIG.COLORS.PRIMARY;
+  const mediumShade = defaultColor || lightenColor(themeColor, 40);
+  const activeColor = likeColor === "#D22A2A" ? themeColor : (likeColor || themeColor);
+  
   return (
     <AnimatedButton
       className="flex-row items-center mr-4"
@@ -158,27 +177,30 @@ function AnimatedLikeButton({
       <MaterialIcons
         name={liked ? ("favorite" as any) : ("favorite-border" as any)}
         size={28}
-        color={liked ? likeColor : "#98A2B3"}
+        color={liked ? activeColor : mediumShade}
       />
       <LikeBurst
         triggerKey={likeBurstKey}
-        color={likeColor}
+        color={activeColor}
         size={14}
         style={{ marginLeft: -6, marginTop: -8 }}
       />
-      <Text className="text-[10px] text-gray-500 ml-1">{likeCount}</Text>
+      <Text className="text-[10px] ml-1" style={{ color: liked ? activeColor : mediumShade }}>{likeCount}</Text>
     </AnimatedButton>
   );
 }
 
 // Optimized Share Button with instant scale feedback
 function AnimatedShareButton({ onShare }: { onShare: () => void }) {
+  const themeColor = UI_CONFIG.COLORS.PRIMARY;
+  const mediumShade = lightenColor(themeColor, 40);
+  
   return (
     <AnimatedButton
       onPress={onShare}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
     >
-      <Feather name="send" size={26} color="#98A2B3" />
+      <Feather name="send" size={26} color={mediumShade} />
     </AnimatedButton>
   );
 }

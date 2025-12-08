@@ -102,6 +102,7 @@ export default function ForumScreen() {
       return;
     }
 
+    // If we have a pending forum ID (from creating a new forum), try to select it
     if (pendingForumId) {
       const matchingDiscussion = discussions.find(
         (discussion) => discussion._id === pendingForumId
@@ -111,9 +112,12 @@ export default function ForumScreen() {
         setPendingForumId(null);
         return;
       }
+      // If not found yet, wait a bit more (discussions might still be loading)
+      // The optimistic update should have added it, but server refresh might be pending
       return;
     }
 
+    // If no pending forum, select the first one if none is selected
     if (
       !selectedForumId ||
       !discussions.some((discussion) => discussion._id === selectedForumId)
@@ -344,14 +348,25 @@ export default function ForumScreen() {
         setForumDescription("");
         setShowCreateForumModal(false);
         setSelectedCategoryForCreation(null);
-        setPendingForumId(result._id);
 
         const targetCategoryId = result.categoryId || selectedCategoryForCreation;
+        
+        // Ensure we're viewing the correct category
         if (!selectedCategoryId || selectedCategoryId !== targetCategoryId) {
+          // Switch to the target category first
           selectCategory(targetCategoryId);
+          // Set pending ID - useEffect will select it once discussions load
+          setPendingForumId(result._id);
+        } else {
+          // Same category - forum should already be in discussions list (optimistic update)
+          // Set pending ID so useEffect can find and select it
+          setPendingForumId(result._id);
+          // Also try to select immediately if it's already in the list
+          if (discussions.some((d) => d._id === result._id)) {
+            setSelectedForumId(result._id);
+            setPendingForumId(null);
+          }
         }
-
-        setSelectedForumId(result._id);
 
         Alert.alert("Success", "Forum created successfully!");
       } else {
@@ -656,21 +671,47 @@ export default function ForumScreen() {
             <Text style={styles.loadingText}>Select a forum to view posts</Text>
           </View>
         ) : posts.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={80} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>No posts yet</Text>
-            <Text style={styles.emptyText}>
-              Be the first to start a conversation in{" "}
-              {activeDiscussion?.title || "this forum"}!
-            </Text>
-            <TouchableOpacity
-              style={styles.createForumButtonInEmpty}
-              onPress={openCreateForumModal}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add-circle" size={20} color="#fff" />
-              <Text style={styles.createForumButtonText}>Create Forum</Text>
-            </TouchableOpacity>
+          <View style={styles.emptyStateWithPostInput}>
+            {/* Empty State Message */}
+            <View style={styles.emptyStateMessage}>
+              <Ionicons name="chatbubbles-outline" size={80} color="#9CA3AF" />
+              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptyText}>
+                Be the first to start a conversation in{" "}
+                {activeDiscussion?.title || "this forum"}!
+              </Text>
+            </View>
+
+            {/* Post Creation Input - Always visible when forum is selected */}
+            {selectedForumId && (
+              <View style={styles.startConversationContainer}>
+                <View style={styles.plusButton}>
+                  <Ionicons name="chatbubbles-outline" size={20} color="#666" />
+                </View>
+
+                <TextInput
+                  style={styles.conversationInput}
+                  placeholder={`Start a conversation in ${
+                    activeDiscussion?.title || "this forum"
+                  }...`}
+                  placeholderTextColor="#9CA3AF"
+                  value={newPostText}
+                  onChangeText={setNewPostText}
+                  multiline
+                  maxLength={5000}
+                />
+
+                {newPostText.trim().length > 0 && (
+                  <TouchableOpacity
+                    style={styles.sendButton}
+                    onPress={handleStartConversation}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="send" size={20} color="#256E63" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         ) : (
           <FlatList
@@ -1259,6 +1300,17 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyStateWithPostInput: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  emptyStateMessage: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
     paddingHorizontal: 40,
   },
   emptyTitle: {

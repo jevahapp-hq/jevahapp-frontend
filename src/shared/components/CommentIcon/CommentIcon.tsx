@@ -1,64 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-    Dimensions,
-    Platform,
-    Text,
-    ViewStyle,
-} from "react-native";
+import { Text, TouchableOpacity, ViewStyle } from "react-native";
 import { UI_CONFIG } from "../../constants";
+import { CommentIconProps } from "../../types/comment.types";
+import { triggerHapticFeedback } from "../../utils";
+import {
+    getResponsiveFontSize,
+    getResponsiveSize,
+    getResponsiveSpacing,
+    getTouchTargetSize,
+} from "../../utils/responsive";
 import { AnimatedButton } from "../AnimatedButton";
 
-interface Comment {
-  id: string;
-  userName: string;
-  avatar: string;
-  timestamp: string;
-  comment: string;
-  likes: number;
-  isLiked: boolean;
-}
-
-interface CommentIconProps {
-  comments: Comment[];
-  size?: number;
-  color?: string;
-  showCount?: boolean;
-  count?: number;
-  layout?: "horizontal" | "vertical";
-  onPress?: () => void;
-  style?: any;
-}
-
-const { width: screenWidth } = Dimensions.get("window");
-const isSmallScreen = screenWidth < 360;
-const isMediumScreen = screenWidth < 768;
-
-const getResponsiveSize = (small: number, medium: number, large: number) => {
-  if (isSmallScreen) return small;
-  if (isMediumScreen) return medium;
-  return large;
-};
-
-const getResponsiveSpacing = (
-  small: number,
-  medium: number,
-  large: number
-) => getResponsiveSize(small, medium, large);
-
-const getResponsiveFontSize = (
-  small: number,
-  medium: number,
-  large: number
-) => getResponsiveSize(small, medium, large);
-
-const getTouchTargetSize = () => (Platform.OS === "ios" ? 44 : 48);
-
-const triggerHapticFeedback = () => {
-  if (Platform.OS === "ios") {
-    // Integrate expo-haptics here if desired
-  }
-};
+// Re-export types for convenience
+export type { CommentIconProps } from "../../types/comment.types";
 
 export const CommentIcon: React.FC<CommentIconProps> = ({
   comments,
@@ -67,14 +22,19 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
   showCount = false,
   count,
   layout = "horizontal",
+  contentId,
   onPress,
   style,
+  useAnimatedButton = true,
 }) => {
   const handlePress = () => {
     triggerHapticFeedback();
     if (onPress) {
       onPress();
     }
+    // Note: If contentId is provided but no onPress, the parent component
+    // should handle opening the comment modal. The app/components/CommentIcon.tsx
+    // wrapper handles this case for backward compatibility.
   };
 
   const isVertical = layout === "vertical";
@@ -115,21 +75,27 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
       isVertical && color.toLowerCase() === "#ffffff" ? 2 : 0,
   };
 
+  const ButtonComponent = useAnimatedButton ? AnimatedButton : TouchableOpacity;
+  const buttonProps = useAnimatedButton
+    ? {}
+    : { activeOpacity: 0.7 };
+
   return (
-    <AnimatedButton
+    <ButtonComponent
       onPress={handlePress}
       hitSlop={{ top: 24, bottom: 24, left: 24, right: 24 }}
       style={[containerStyle, style]}
       accessibilityRole="button"
       accessibilityLabel="Open comments"
+      {...buttonProps}
     >
       <Ionicons name="chatbubble-outline" size={iconSize} color={color} />
       {showCount && (
-        <Text style={textStyle}>
+        <Text style={textStyle} pointerEvents="none">
           {count !== undefined ? count : comments.length}
         </Text>
       )}
-    </AnimatedButton>
+    </ButtonComponent>
   );
 };
 

@@ -25,8 +25,8 @@ import { useAuth } from "./hooks/useAuth";
 import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
-import { PerformanceOptimizer } from "./utils/performance";
 import { warmupBackend } from "./utils/apiWarmup";
+import { PerformanceOptimizer } from "./utils/performance";
 
 // ✅ Initialize Sentry
 Sentry.init({
@@ -87,19 +87,40 @@ export default function RootLayout() {
     Rubik_700Bold,
   });
 
-  // Suppress Clerk telemetry errors and video URL errors
+  // Suppress Clerk telemetry errors, video URL errors, and network failures
   useEffect(() => {
     const originalError = console.error;
     console.error = (...args) => {
+      const errorMessage = args[0]?.toString() || "";
+      
+      // Suppress non-critical errors that don't affect functionality
       if (
         args[0]?.includes?.("clerk/telemetry") ||
         args[0]?.includes?.("Clerk hooks not available") ||
         args[0]?.includes?.("Video error for") ||
         args[0]?.includes?.("AVPlayerItem instance has failed") ||
         args[0]?.includes?.("error code -11819") ||
-        args[0]?.includes?.("AVFoundationErrorDomain")
+        args[0]?.includes?.("AVFoundationErrorDomain") ||
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("TypeError: Network request failed")
       ) {
-        return; // Suppress these specific errors
+        // Only log network errors in development
+        if (__DEV__ && (errorMessage.includes("Network request failed") || errorMessage.includes("TypeError: Network request failed"))) {
+          // Log once per error type to avoid spam
+          const errorKey = `network_error_${Date.now()}`;
+          if (!(global as any).__loggedNetworkErrors) {
+            (global as any).__loggedNetworkErrors = new Set();
+          }
+          if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
+            (global as any).__loggedNetworkErrors.add(errorKey);
+            // Clear the set after 5 seconds to allow new logs
+            setTimeout(() => {
+              (global as any).__loggedNetworkErrors?.delete(errorKey);
+            }, 5000);
+            originalError.apply(console, args);
+          }
+        }
+        return; // Suppress these specific errors in production
       }
       originalError.apply(console, args);
     };

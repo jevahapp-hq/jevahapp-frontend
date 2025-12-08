@@ -2,24 +2,24 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  FlatList,
-  Image,
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    FlatList,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { usePrayers, useSearchPrayers } from "../hooks/usePrayers";
-import { formatTimestamp } from "../utils/communityHelpers";
 import { PrayerRequest as PrayerRequestType } from "../utils/communityAPI";
+import { formatTimestamp } from "../utils/communityHelpers";
 
-const DEFAULT_PRAYER_CARD_COLOR = "#256E63";
+// Match the default color from PostAPrayer design templates
+const DEFAULT_PRAYER_CARD_COLOR = "#A16CE5"; // Purple (first color in PostAPrayer's availableColors)
 const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
 
 type PrayerCardTheme = {
@@ -244,10 +244,10 @@ export default function PrayerWallScreen() {
           borderRadius: 20,
           width: 216,
           height: 216,
+          alignSelf: "center" as const,
           backgroundColor: "transparent",
           padding: 0,
           justifyContent: "flex-start" as const,
-          borderWidth: 0,
         };
       default: // rectangle
         return {
@@ -335,38 +335,51 @@ export default function PrayerWallScreen() {
 
   const renderPrayerCard = (prayer: PrayerRequestType, index: number) => {
     const cardTheme = buildPrayerCardTheme(prayer.color);
+    
+    // Ensure shape has a default value if missing (fallback to square to match PostAPrayer design templates)
+    const prayerShape = prayer.shape || "square";
+    
+    // Debug: Log shape to verify it's being received from backend
+    if (__DEV__ && index === 0) {
+      console.log("🎴 Prayer card shape:", {
+        prayerId: prayer._id,
+        shape: prayer.shape,
+        prayerShape,
+        color: prayer.color
+      });
+    }
 
     // Wrap the card in a container that matches the shape used when creating the prayer
     // This matches the previewTouchable style from PostAPrayer
     return (
       <View key={prayer._id} style={styles.cardWrapper}>
         <TouchableOpacity
-          style={[getCardStyle(prayer.shape, cardTheme), styles.prayerCardTouchable]}
+          style={[getCardStyle(prayerShape, cardTheme), styles.prayerCardTouchable]}
           activeOpacity={0.8}
           onPress={() => handlePrayerCardPress(prayer)}
         >
-          {prayer.shape === "scalloped" ? (
+          {prayerShape === "scalloped" ? (
             renderScallopedCard(prayer, cardTheme)
           ) : (
             <>
-              {prayer.shape === "square" && (
+              {prayerShape === "square" && (
                 <View style={[styles.diagonalCut, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.triangle} />
                 </View>
               )}
-              {prayer.shape === "square2" && (
+              {prayerShape === "square2" && (
                 <View style={[styles.diagonalCut2, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.diagonalMask2} />
                   <View style={styles.triangle2} />
                 </View>
               )}
-              {prayer.shape === "square3" && (
+              {prayerShape === "square3" && (
                 <View style={[styles.diagonalCut3, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.diagonalMask3} />
                   <View style={styles.triangle3} />
                 </View>
               )}
-              {prayer.shape === "square4" && (
+              {prayerShape === "square4" && (
                 <View style={[styles.diagonalCut4, { backgroundColor: darkenColor(cardTheme.color) }]}>
                   <View style={styles.triangle4} />
                 </View>

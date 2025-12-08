@@ -3,25 +3,25 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Image,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated,
+    FlatList,
+    Image,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import SuccessCard from "../../components/SuccessCard";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
+import SuccessCard from "../../components/SuccessCard";
+import { useDeleteMedia } from "../../hooks/useDeleteMedia";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
 import allMediaAPI from "../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../utils/downloadUtils";
-import { useDeleteMedia } from "../../hooks/useDeleteMedia";
 
 const sampleMedia = [
   {
@@ -192,14 +192,30 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     [savedItemIds, libraryStore]
   );
 
+  // Helper function to map LibraryScreen category to API contentType format
+  const mapContentTypeToAPI = useCallback((category?: string): string | undefined => {
+    if (!category || category === "ALL") return undefined;
+    
+    const mapping: Record<string, string> = {
+      "SERMON": "sermon",
+      "MUSIC": "music",
+      "E-BOOKS": "ebook",
+      "VIDEO": "video",
+      "LIVE": "live",
+    };
+    
+    return mapping[category] || category.toLowerCase().replace("-", "");
+  }, []);
+
   useEffect(() => {
     const loadSavedItems = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        // Fetch saved content from API
-        const response = await allMediaAPI.getSavedContent(1, 50); // Get first 50 items
+        // Fetch saved content from API with contentType filter for better performance
+        const apiContentType = mapContentTypeToAPI(contentType);
+        const response = await allMediaAPI.getSavedContent(1, 50, apiContentType); // Get first 50 items
 
         if (response.success && response.data) {
           // Handle different API response structures
@@ -315,7 +331,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     };
 
     loadSavedItems();
-  }, [contentType]);
+  }, [contentType, mapContentTypeToAPI]);
 
   // Helper function to detect if content is an e-book based on file URL and MIME type
   const isEbookContent = useCallback((item: any): boolean => {
@@ -424,8 +440,9 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Fetch saved content from API
-      const response = await allMediaAPI.getSavedContent(1, 50);
+      // Fetch saved content from API with contentType filter
+      const apiContentType = mapContentTypeToAPI(contentType);
+      const response = await allMediaAPI.getSavedContent(1, 50, apiContentType);
 
       if (response.success && response.data) {
         // Handle different API response structures
@@ -491,7 +508,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     } finally {
       setRefreshing(false);
     }
-  }, [contentType]);
+  }, [contentType, mapContentTypeToAPI]);
 
   const loadFromLocalStorage = async () => {
     try {
@@ -1270,12 +1287,13 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       }
 
       return (
-        <View className="w-[48%] mb-6 h-[232px] rounded-xl bg-[#E5E5EA]" style={{ overflow: 'visible' }}>
+        <View className="w-[48%] mb-6 h-[232px] rounded-xl bg-[#E5E5EA]" style={{ overflow: 'hidden', borderRadius: 12 }}>
           {isVideo ? (
             <TouchableOpacity
               onPress={() => togglePlay(itemId)}
               className="w-full h-full"
               activeOpacity={0.9}
+              style={{ borderRadius: 12, overflow: 'hidden' }}
             >
               <Video
                 ref={(ref) => {
@@ -1284,7 +1302,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                   }
                 }}
                 source={{ uri: safeVideoUri }}
-                style={{ width: "100%", height: "100%", position: "absolute" }}
+                style={{ width: "100%", height: "100%", position: "absolute", borderRadius: 12 }}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay={isPlaying}
                 isLooping={false}
@@ -1404,10 +1422,12 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
               }}
               className="w-full h-full"
               activeOpacity={0.9}
+              style={{ borderRadius: 12, overflow: 'hidden' }}
             >
               <Image
                 source={getThumbnailSource(item)}
                 className="h-full w-full rounded-xl"
+                style={{ borderRadius: 12 }}
                 resizeMode="cover"
                 onError={(error) => {
                   console.log(
@@ -1441,10 +1461,11 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             </TouchableOpacity>
           ) : (
             // All other content (should only be ebooks/books) with proper thumbnail display
-            <TouchableOpacity className="w-full h-full" activeOpacity={0.9}>
+            <TouchableOpacity className="w-full h-full" activeOpacity={0.9} style={{ borderRadius: 12, overflow: 'hidden' }}>
               <Image
                 source={getThumbnailSource(item)}
                 className="h-full w-full rounded-xl"
+                style={{ borderRadius: 12 }}
                 resizeMode="cover"
                 onError={(error) => {
                   console.log(

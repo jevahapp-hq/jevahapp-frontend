@@ -116,6 +116,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  // Local playback state for video (non-audio) so the progress bar
+  // always reflects the real player position, even if the parent
+  // store's `progresses[key]` is stale.
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoPositionMs, setVideoPositionMs] = useState(0);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
@@ -301,12 +306,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         }
       } else {
         // Handle video seeking with expo-video
-        const durationMs = lastKnownDurationRef.current || 0;
+        const durationMs =
+          lastKnownDurationRef.current || backendDurationMs || 0;
         if (!player || durationMs <= 0) return;
-        const currentMs = Math.max(
-          0,
-          Math.min(progress * durationMs, durationMs)
-        );
+        // Use the last known position rather than external `progress`
+        // so that skipping is stable even if the parent store isn't
+        // updating progresses for this video.
+        const currentMs = Math.max(0, Math.min(videoPositionMs, durationMs));
         const nextMs = Math.max(
           0,
           Math.min(currentMs + deltaSec * 1000, durationMs)
@@ -325,6 +331,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       audioState.duration,
       audioControls,
       player,
+      videoPositionMs,
+      backendDurationMs,
     ]
   );
 
@@ -603,6 +611,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       }
       
       const progress = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
+      // Keep local video progress/position in sync with the player so
+      // the UI progress bar always moves smoothly with playback.
+      setVideoPositionMs(positionMs);
+      setVideoProgress(progress);
 
       const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
       const finished = player.currentTime >= player.duration && player.duration > 0;
@@ -911,7 +923,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             progress={
               isAudioSermon
                 ? audioState.progress
-                : Math.max(0, Math.min(1, progress || 0))
+                : Math.max(0, Math.min(1, videoProgress || 0))
             }
             isMuted={isAudioSermon ? audioState.isMuted : isMuted}
             onToggleMute={handleToggleMute}
@@ -924,12 +936,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 ? (Number.isFinite(audioState.position) && audioState.position >= 0 
                     ? audioState.position 
                     : 0)
-                : (lastKnownDurationRef.current > 0 && Number.isFinite(lastKnownDurationRef.current)
-                    ? Math.max(0, Math.min(
-                        progress * lastKnownDurationRef.current,
-                        lastKnownDurationRef.current
-                      ))
-                    : 0)
+                : videoPositionMs
             }
             durationMs={
               isAudioSermon 
