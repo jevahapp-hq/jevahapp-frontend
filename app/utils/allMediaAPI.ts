@@ -265,7 +265,7 @@ class AllMediaAPI {
       if (isNetworkError) {
         // Only log network errors in development, and throttle them
         if (__DEV__) {
-          const errorKey = `network_error_${endpoint}_${Date.now()}`;
+          const errorKey = `network_error_default_content_${Date.now()}`;
           if (!(global as any).__loggedNetworkErrors) {
             (global as any).__loggedNetworkErrors = new Set();
           }

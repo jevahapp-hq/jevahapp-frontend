@@ -2,13 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio, Video } from "expo-av";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  Animated,
-  PanResponder,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    PanResponder,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
+import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 
 interface UnifiedMediaControlsProps {
   content: {
@@ -33,6 +35,9 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
   onFinished,
 }) => {
   const globalMediaStore = useGlobalMediaStore();
+  const audioManager = React.useRef(
+    GlobalAudioInstanceManager.getInstance()
+  ).current;
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -135,6 +140,18 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
     setError(null);
 
     try {
+      // Stop any global audio-player based track first (like CopyrightFreeSongs does)
+      // so there's never more than one audio system playing at once.
+      try {
+        const globalAudioStore = useGlobalAudioPlayerStore.getState();
+        if (globalAudioStore && globalAudioStore.clear) {
+          await globalAudioStore.clear();
+          console.log("🛑 Stopped global audio player before starting UnifiedMediaControls audio");
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to stop global audio player:", error);
+      }
+
       const mediaType = getMediaType();
 
       if (mediaType === "video") {
@@ -143,12 +160,13 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
         const { sound } = await Audio.Sound.createAsync(
           { uri: content.fileUrl },
           {
-            shouldPlay: true,
+            shouldPlay: false,
             isMuted: isMuted,
           }
         );
 
         soundRef.current = sound;
+        audioManager.registerAudio(mediaKey, sound);
 
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.isLoaded) {
@@ -177,12 +195,13 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
         const { sound } = await Audio.Sound.createAsync(
           { uri: content.fileUrl },
           {
-            shouldPlay: true,
+            shouldPlay: false,
             isMuted: isMuted,
           }
         );
 
         soundRef.current = sound;
+        audioManager.registerAudio(mediaKey, sound);
 
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.isLoaded) {
@@ -202,6 +221,7 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
         });
       }
 
+      await audioManager.playAudio(mediaKey, soundRef.current!, true);
       setIsPlaying(true);
       globalMediaStore.playMediaGlobally(mediaKey, "audio");
     } catch (error) {
@@ -220,6 +240,7 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
     globalMediaStore,
     onError,
     onFinished,
+    audioManager,
   ]);
 
   // Toggle play/pause
@@ -229,16 +250,27 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
     if (soundRef.current) {
       try {
         const status = await soundRef.current.getStatusAsync();
-        if (status.isLoaded) {
-          if (status.isPlaying) {
-            await soundRef.current.pauseAsync();
-            setIsPlaying(false);
-            globalMediaStore.pauseAudio(mediaKey);
-          } else {
-            await soundRef.current.playAsync();
-            setIsPlaying(true);
-            globalMediaStore.playMediaGlobally(mediaKey, "audio");
+        if (!status.isLoaded) return;
+
+        if (status.isPlaying) {
+          await audioManager.pauseAudio(mediaKey);
+          setIsPlaying(false);
+          globalMediaStore.pauseAudio(mediaKey);
+        } else {
+          // Stop any global audio-player based track first (like CopyrightFreeSongs does)
+          try {
+            const globalAudioStore = useGlobalAudioPlayerStore.getState();
+            if (globalAudioStore && globalAudioStore.clear) {
+              await globalAudioStore.clear();
+              console.log("🛑 Stopped global audio player before resuming UnifiedMediaControls audio");
+            }
+          } catch (error) {
+            console.warn("⚠️ Failed to stop global audio player:", error);
           }
+
+          await audioManager.playAudio(mediaKey, soundRef.current, true);
+          setIsPlaying(true);
+          globalMediaStore.playMediaGlobally(mediaKey, "audio");
         }
       } catch (error) {
         console.error("Toggle play error:", error);
@@ -246,7 +278,13 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
     } else {
       await loadAndPlayMedia();
     }
-  }, [isLoading, loadAndPlayMedia, mediaKey, globalMediaStore]);
+  }, [
+    audioManager,
+    isLoading,
+    loadAndPlayMedia,
+    mediaKey,
+    globalMediaStore,
+  ]);
 
   // Toggle mute
   const toggleMute = useCallback(async () => {
@@ -260,6 +298,14 @@ export const UnifiedMediaControls: React.FC<UnifiedMediaControlsProps> = ({
       }
     }
   }, [isMuted]);
+
+  React.useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        audioManager.unregisterAudio(mediaKey).catch(() => {});
+      }
+    };
+  }, [audioManager, mediaKey]);
 
   // Get play button style based on state
   const getPlayButtonStyle = () => {

@@ -1,6 +1,5 @@
-import React from "react";
+import { RenderAvatarRowProps } from "@/.expo/types/avatarTypes";
 import { Text, View } from "react-native";
-
 
 const cuteAvatars = {
   girls: [
@@ -46,7 +45,7 @@ const cuteAvatars = {
   ],
 };
 
-const CuteAvatar = ({ renderAvatarRow }: renderAvatarRowProps) => {
+const CuteAvatar = ({ renderAvatarRow }: RenderAvatarRowProps) => {
   return (
     <View>
       <Text className="text-[12px] font-rubik-medium text-[#475467] mb-2">GIRLS</Text>

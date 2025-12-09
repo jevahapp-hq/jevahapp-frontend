@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { Platform } from 'react-native';
 
 /**
@@ -19,9 +19,8 @@ export const audioConfig = {
         playsInSilentModeIOS: Platform.OS === 'ios',
         shouldDuckAndroid: Platform.OS === 'android',
         playThroughEarpieceAndroid: false,
-        // Use numeric values instead of constants to avoid compatibility issues
-        interruptionModeIOS: 1, // DO_NOT_MIX = 1
-        interruptionModeAndroid: 1, // DO_NOT_MIX = 1
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });
       
       console.log('✅ Audio session configured successfully for video playback');
@@ -45,9 +44,8 @@ export const audioConfig = {
         playsInSilentModeIOS: Platform.OS === 'ios',
         shouldDuckAndroid: Platform.OS === 'android',
         playThroughEarpieceAndroid: false,
-        // Use numeric values instead of constants to avoid compatibility issues
-        interruptionModeIOS: 1, // DO_NOT_MIX = 1
-        interruptionModeAndroid: 1, // DO_NOT_MIX = 1
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });
       
       console.log('✅ Audio session configured successfully for music playback');
@@ -71,9 +69,8 @@ export const audioConfig = {
         playsInSilentModeIOS: Platform.OS === 'ios',
         shouldDuckAndroid: Platform.OS === 'android',
         playThroughEarpieceAndroid: false,
-        // Use numeric values instead of constants to avoid compatibility issues
-        interruptionModeIOS: 1, // DO_NOT_MIX = 1
-        interruptionModeAndroid: 1, // DO_NOT_MIX = 1
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });
       
       console.log('✅ Audio session configured successfully for general use');
@@ -97,9 +94,8 @@ export const audioConfig = {
         playsInSilentModeIOS: false,
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
-        // Use numeric values instead of constants to avoid compatibility issues
-        interruptionModeIOS: 0, // MIX_WITH_OTHERS = 0
-        interruptionModeAndroid: 0, // MIX_WITH_OTHERS = 0
+        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+        interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
       });
       
       console.log('✅ Audio session reset successfully');
@@ -115,7 +111,9 @@ export const audioConfig = {
    */
   async getAudioSessionStatus() {
     try {
-      const status = await Audio.getStatusAsync();
+      // Note: getStatusAsync doesn't exist in expo-av, removing this call
+      // const status = await Audio.getStatusAsync();
+      return null;
       console.log('📊 Audio session status:', status);
       return status;
     } catch (error) {

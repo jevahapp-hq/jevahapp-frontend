@@ -951,8 +951,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             // Pro config to avoid jumpbacks and ensure usability
             showFloatingLabel={true}
             enlargeOnDrag={true}
-            knobSize={20}
-            knobSizeDragging={24}
+            knobSize={8}
+            knobSizeDragging={10}
             trackHeights={{ normal: 4, dragging: 8 }}
             seekSyncTicks={4}
             seekMsTolerance={200}

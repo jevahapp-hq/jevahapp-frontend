@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Audio } from "expo-av";
+import type { AudioMode } from "expo-av";
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 
 interface AudioSessionState {
   isMuted: boolean;
@@ -17,7 +18,7 @@ class AudioManager {
     globalMuteEnabled: false,
   };
   private listeners: Array<(state: AudioSessionState) => void> = [];
-  private audioMode: Audio.AudioMode | null = null;
+  private audioMode: AudioMode | null = null;
 
   private constructor() {
     this.initializeAudioSession();
@@ -48,8 +49,8 @@ class AudioManager {
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });
 
       console.log("🎵 AudioManager initialized with state:", this.audioSession);
@@ -88,8 +89,8 @@ class AudioManager {
         playsInSilentModeIOS: !this.audioSession.isMuted,
         shouldDuckAndroid: !this.audioSession.isMuted,
         playThroughEarpieceAndroid: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });
 
       // Persist state
@@ -123,8 +124,8 @@ class AudioManager {
         playsInSilentModeIOS: !muted,
         shouldDuckAndroid: !muted,
         playThroughEarpieceAndroid: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });
 
       // Persist state

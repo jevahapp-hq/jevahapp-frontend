@@ -2,12 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio, AVPlaybackStatus } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  PanResponder,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    PanResponder,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
+import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
 
 interface AudioPlayerState {
   isPlaying: boolean;
@@ -41,6 +43,9 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
   onPlay,
   onPause,
 }) => {
+  const audioManager = React.useRef(
+    GlobalAudioInstanceManager.getInstance()
+  ).current;
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,6 +109,7 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
       );
 
       setSound(newSound);
+      audioManager.registerAudio(audioKey, newSound);
 
       // Set up status update listener
       newSound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
@@ -163,6 +169,8 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
     onError,
     onFinished,
     progressAnimation,
+    audioManager,
+    audioKey,
   ]);
 
   // Toggle play/pause
@@ -171,10 +179,22 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
 
     try {
       if (isPlaying) {
-        await sound.pauseAsync();
+        await audioManager.pauseAudio(audioKey);
         onPause?.();
       } else {
-        await sound.playAsync();
+        // Stop any global audio-player based track first (like CopyrightFreeSongs does)
+        // so there's never more than one audio system playing at once.
+        try {
+          const globalAudioStore = useGlobalAudioPlayerStore.getState();
+          if (globalAudioStore && globalAudioStore.clear) {
+            await globalAudioStore.clear();
+            console.log("🛑 Stopped global audio player before starting CompactAudioControls audio");
+          }
+        } catch (error) {
+          console.warn("⚠️ Failed to stop global audio player:", error);
+        }
+
+        await audioManager.playAudio(audioKey, sound, true);
         onPlay?.();
       }
     } catch (err) {
@@ -182,7 +202,16 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
       setError(errorMessage);
       onError?.(errorMessage);
     }
-  }, [sound, isPlaying, isLoading, onPlay, onPause, onError]);
+  }, [
+    audioManager,
+    audioKey,
+    sound,
+    isPlaying,
+    isLoading,
+    onPlay,
+    onPause,
+    onError,
+  ]);
 
   // Toggle mute
   const toggleMute = useCallback(async () => {
@@ -204,10 +233,10 @@ export const CompactAudioControls: React.FC<CompactAudioControlsProps> = ({
 
     return () => {
       if (sound) {
-        sound.unloadAsync();
+        audioManager.unregisterAudio(audioKey).catch(() => {});
       }
     };
-  }, [audioUrl]);
+  }, [audioUrl, audioManager, audioKey, sound]);
 
   // Format time
   const formatTime = (milliseconds: number): string => {

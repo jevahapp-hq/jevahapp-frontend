@@ -1,7 +1,5 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Text, TouchableOpacity, View } from "react-native";
-import { UI_CONFIG } from "../constants";
-import { darkenColor, lightenColor } from "../utils";
 import { AnimatedButton } from "./AnimatedButton";
 import { CommentIcon } from "./CommentIcon";
 import LikeBurst from "./LikeBurst";
@@ -46,12 +44,15 @@ export default function CardFooterActions({
   contentId,
   useEnhancedComponents = false,
 }: Props) {
-  // Generate shades of the theme color
-  const themeColor = UI_CONFIG.COLORS.PRIMARY; // #256E63
-  const lightShade = lightenColor(themeColor, 65); // Very light for inactive icons
-  const mediumShade = lightenColor(themeColor, 40); // Medium for default state
-  const activeShade = themeColor; // Base theme color for active states
-  const darkShade = darkenColor(themeColor, 15); // Darker for emphasis
+  // Use gray color scheme from audio-bible branch instead of green theme color
+  // Base gray color for inactive icons: #98A2B3 (matching audio-bible branch)
+  const baseGrayColor = "#98A2B3";
+  const mediumShade = baseGrayColor; // Gray for default/inactive state
+  // Active state colors from audio-bible branch
+  const likedActiveColor = "#D22A2A"; // Red for liked
+  const savedActiveColor = "#FEA74E"; // Orange for saved
+  const activeShade = likedActiveColor; // For like button active state
+  const darkShade = savedActiveColor; // For save button active state
 
   return (
     <View className="flex-row items-center pl-1">
@@ -69,7 +70,7 @@ export default function CardFooterActions({
             initialLikeCount={likeCount}
             size={28}
             color={mediumShade}
-            likedColor={activeShade}
+            likedColor={likedActiveColor}
             showCount={true}
             onLikeChange={(newLiked, newCount) => {
               // Trigger like burst animation
@@ -81,7 +82,7 @@ export default function CardFooterActions({
           />
           <LikeBurst
             triggerKey={likeBurstKey}
-            color={activeShade}
+            color={likedActiveColor}
             size={14}
             style={{ marginLeft: -6, marginTop: -8 }}
           />
@@ -89,12 +90,12 @@ export default function CardFooterActions({
       ) : (
         <AnimatedLikeButton
           liked={liked}
-          likeColor={activeShade}
+          likeColor={likedActiveColor}
           likeCount={likeCount}
           likeBurstKey={likeBurstKey}
           onLike={onLike}
           defaultColor={mediumShade}
-          themeColor={themeColor}
+          themeColor={baseGrayColor}
         />
       )}
 
@@ -118,7 +119,7 @@ export default function CardFooterActions({
             initialSaveCount={saveCount}
             size={26}
             color={mediumShade}
-            savedColor={darkShade}
+            savedColor={savedActiveColor}
             showCount={true}
             onSaveChange={(newSaved, newCount) => {
               onSave();
@@ -134,9 +135,9 @@ export default function CardFooterActions({
           <Ionicons
             name={saved ? ("bookmark" as any) : ("bookmark-outline" as any)}
             size={26}
-            color={saved ? darkShade : mediumShade}
+            color={saved ? savedActiveColor : mediumShade}
           />
-          <Text className="text-[10px] ml-1" style={{ color: saved ? darkShade : mediumShade }}>{saveCount}</Text>
+          <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{saveCount}</Text>
         </TouchableOpacity>
       )}
 
@@ -164,9 +165,11 @@ function AnimatedLikeButton({
   defaultColor?: string;
   themeColor?: string;
 }) {
-  const themeColor = passedThemeColor || UI_CONFIG.COLORS.PRIMARY;
-  const mediumShade = defaultColor || lightenColor(themeColor, 40);
-  const activeColor = likeColor === "#D22A2A" ? themeColor : (likeColor || themeColor);
+  // Use gray as base instead of green theme color (matching audio-bible branch)
+  const baseGrayColor = "#98A2B3";
+  const mediumShade = defaultColor || baseGrayColor;
+  // Use the passed likeColor (should be #D22A2A) or fallback to red
+  const activeColor = likeColor || "#D22A2A";
   
   return (
     <AnimatedButton
@@ -185,15 +188,15 @@ function AnimatedLikeButton({
         size={14}
         style={{ marginLeft: -6, marginTop: -8 }}
       />
-      <Text className="text-[10px] ml-1" style={{ color: liked ? activeColor : mediumShade }}>{likeCount}</Text>
+      <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{likeCount}</Text>
     </AnimatedButton>
   );
 }
 
 // Optimized Share Button with instant scale feedback
 function AnimatedShareButton({ onShare }: { onShare: () => void }) {
-  const themeColor = UI_CONFIG.COLORS.PRIMARY;
-  const mediumShade = lightenColor(themeColor, 40);
+  // Use gray color instead of green theme color (matching audio-bible branch)
+  const mediumShade = "#98A2B3";
   
   return (
     <AnimatedButton

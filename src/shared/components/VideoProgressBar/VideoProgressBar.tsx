@@ -53,8 +53,8 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   bottomOffset = 0,
   showFloatingLabel = true,
   enlargeOnDrag = true,
-  knobSize = 20,
-  knobSizeDragging = 24,
+  knobSize = 8,
+  knobSizeDragging = 10,
   trackHeights = { normal: 4, dragging: 8 },
   seekSyncTicks = 2,
   seekMsTolerance = 300,
@@ -75,9 +75,12 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   const [isSeeking, setIsSeeking] = useState(false);
   const targetProgressRef = useRef<number | null>(null);
   const [barWidth, setBarWidth] = useState(0);
+  const barWidthRef = useRef(0); // Ref for pan responder access
   const stableTicksRef = useRef(0);
   const dragStartPercentRef = useRef(0);
   const lastUpdateTimeRef = useRef(0);
+  const isDraggingRef = useRef(false); // Ref for pan responder access
+  const lastSeekTimeRef = useRef(0); // Throttle seek calls during drag
 
   const formatTime = (ms: number) => {
     // Validate and clamp input to prevent invalid displays
@@ -113,65 +116,99 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
 
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: (evt, gestureState) => {
-      // Only respond to touches on the progress bar area
+      // Always respond to touches on the progress bar area
       return true;
     },
     onMoveShouldSetPanResponder: (evt, gestureState) => {
-      // Respond to moves when dragging
-      return isDragging;
+      // Respond to moves immediately for smoother dragging
+      return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
     },
     onPanResponderGrant: (evt, gestureState) => {
+      isDraggingRef.current = true;
       setIsDragging(true);
-      progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
-        const percent = Math.max(
-          0,
-          Math.min(1, evt.nativeEvent.locationX / width)
-        );
+      // Use barWidth ref directly for immediate access
+      const currentBarWidth = barWidthRef.current;
+      if (currentBarWidth > 0) {
+        // Clamp locationX to ensure it's within bounds
+        const touchX = Math.max(0, Math.min(currentBarWidth, evt.nativeEvent.locationX));
+        const percent = touchX / currentBarWidth;
         setDragProgress(percent);
         animatedValue.setValue(percent);
         dragStartPercentRef.current = percent;
-        // Reset seeking state when starting new drag
-        setIsSeeking(false);
-        targetProgressRef.current = null;
-        stableTicksRef.current = 0;
-      });
+      } else {
+        progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+          if (width > 0) {
+            // Clamp locationX to ensure it's within bounds
+            const touchX = Math.max(0, Math.min(width, evt.nativeEvent.locationX));
+            const percent = touchX / width;
+            setDragProgress(percent);
+            animatedValue.setValue(percent);
+            dragStartPercentRef.current = percent;
+            barWidthRef.current = width;
+            setBarWidth(width);
+          }
+        });
+      }
+      // Reset seeking state when starting new drag
+      setIsSeeking(false);
+      targetProgressRef.current = null;
+      stableTicksRef.current = 0;
       if (enableHaptics && Haptics?.impactAsync) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       }
     },
     onPanResponderMove: (evt, gestureState) => {
-      if (isDragging) {
-        progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
-          const basePercent = dragStartPercentRef.current;
-          const dx = gestureState.dx || 0;
-          const dy = gestureState.dy || 0;
-          const slowdownEnabled = verticalScrub?.enabled !== false;
-          const sensitivityBase = verticalScrub?.sensitivityBase ?? 60; // pixels
-          const maxSlowdown = verticalScrub?.maxSlowdown ?? 5; // 1..5x
-          const slowFactor = slowdownEnabled
-            ? Math.min(maxSlowdown, 1 + Math.abs(dy) / sensitivityBase)
-            : 1;
-          const deltaPercent = width > 0 ? dx / width / slowFactor : 0;
-          const nextPercent = Math.max(
-            0,
-            Math.min(1, basePercent + deltaPercent)
-          );
-          setDragProgress(nextPercent);
-          animatedValue.setValue(nextPercent);
+      if (!isDraggingRef.current) return;
+      
+      const currentBarWidth = barWidthRef.current;
+      if (currentBarWidth <= 0) {
+        // Try to get width from measure if not available
+        progressBarRef.current?.measure((x, y, width) => {
+          if (width > 0) {
+            barWidthRef.current = width;
+            setBarWidth(width);
+            // Clamp locationX to valid range
+            const touchX = Math.max(0, Math.min(width, evt.nativeEvent.locationX));
+            const percent = touchX / width;
+            setDragProgress(percent);
+            animatedValue.setValue(percent);
+            onSeekToPercent(percent);
+          }
         });
+        return;
+      }
+      
+      // Always use absolute touch position - circle follows finger exactly
+      // Clamp locationX to ensure it's within the progress bar bounds
+      const touchX = Math.max(0, Math.min(currentBarWidth, evt.nativeEvent.locationX));
+      const percent = touchX / currentBarWidth;
+      
+      // Always update to exact finger position - no delays, no filtering
+      setDragProgress(percent);
+      animatedValue.setValue(percent);
+      
+      // Seek video in real-time while dragging - video continues playing
+      // Throttle seek calls to avoid too many rapid updates (every 50ms)
+      const now = Date.now();
+      if (now - lastSeekTimeRef.current > 50) {
+        onSeekToPercent(percent);
+        lastSeekTimeRef.current = now;
       }
     },
     onPanResponderRelease: () => {
+      isDraggingRef.current = false;
       setIsDragging(false);
       // Keep indicator at released location until external progress catches up
       setIsSeeking(true);
       targetProgressRef.current = dragProgress;
+      // Seek to final position - video continues playing
       onSeekToPercent(dragProgress);
       if (enableHaptics && Haptics?.impactAsync) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       }
     },
     onPanResponderTerminate: () => {
+      isDraggingRef.current = false;
       setIsDragging(false);
     },
   });
@@ -239,11 +276,16 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
 
   // Ensure the indicator position always matches the effective progress
   useEffect(() => {
+    // Don't update animated value during dragging - let drag handler control it
+    if (isDraggingRef.current) {
+      return; // Dragging is handled directly in pan responder
+    }
+    
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
 
     // Use smooth animation for non-dragging updates to make progress bar responsive
-    if (!isDragging && !isSeeking) {
+    if (!isSeeking) {
       // Throttle updates to prevent too frequent animations during playback
       if (timeSinceLastUpdate > 50) {
         // Update at most every 50ms
@@ -255,11 +297,11 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
         lastUpdateTimeRef.current = now;
       }
     } else {
-      // Immediate updates during drag/seek
+      // Immediate updates during seek (but not drag)
       animatedValue.setValue(currentProgress);
       lastUpdateTimeRef.current = now;
     }
-  }, [currentProgress, animatedValue, isDragging, isSeeking]);
+  }, [currentProgress, animatedValue, isSeeking]);
 
   // Precompute circle geometry for clean centering over the track
   const circleRadius =
@@ -283,10 +325,11 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
         <View
           ref={progressBarRef}
           className="flex-1 relative"
-          style={{ height: progressBarHeight + 16 }} // Extra height for touch area
+          style={{ height: Math.max(progressBarHeight + 32, 40) }} // Larger touch area for easier dragging
           onLayout={(e) => {
             const w = e.nativeEvent.layout.width;
-            if (w && Math.abs(w - barWidth) > 0.5) {
+            if (w && Math.abs(w - barWidthRef.current) > 0.5) {
+              barWidthRef.current = w;
               setBarWidth(w);
             }
           }}

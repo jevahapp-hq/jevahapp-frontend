@@ -392,7 +392,7 @@ const AvatarSelection = () => {
             <Images
               renderAvatarRow={renderAvatarRow}
               uploadedImage={uploadedImage}
-              setUploadedImage={(uri) => {
+              setUploadedImage={(uri: string) => {
                 setUploadedImage(uri);
                 setSelectedAvatar(uri);
               }}

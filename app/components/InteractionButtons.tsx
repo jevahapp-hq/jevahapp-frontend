@@ -5,7 +5,16 @@
  * Uses UnifiedInteractionButtons internally for consistency.
  */
 
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useEffect } from "react";
+import { Text, View } from "react-native";
 import { UnifiedInteractionButtons } from "../../src/shared/components/InteractionButtons/UnifiedInteractionButtons";
+import {
+    useContentCount,
+    useContentStats,
+    useInteractionStore,
+    useUserInteraction,
+} from "../store/useInteractionStore";
 
 interface InteractionButtonsProps {
   contentId: string;
@@ -65,10 +74,13 @@ export function HorizontalInteractionStats({
   const { loadContentStats } = useInteractionStore();
 
   const contentStats = useContentStats(contentId);
+  const isLiked = useUserInteraction(contentId, "liked");
+  const isSaved = useUserInteraction(contentId, "saved");
   const likesCount = useContentCount(contentId, "likes");
   const savesCount = useContentCount(contentId, "saves");
   const sharesCount = useContentCount(contentId, "shares");
   const viewsCount = useContentCount(contentId, "views");
+  const commentsCount = useContentCount(contentId, "comments");
 
   useEffect(() => {
     if (!contentStats) {
@@ -76,45 +88,61 @@ export function HorizontalInteractionStats({
     }
   }, [contentId, contentStats, loadContentStats]);
 
+  // Color scheme matching audio-bible branch
+  // Base gray color for inactive icons: #98A2B3
+  const baseIconColor = iconColor || "#98A2B3";
+  // Active state colors from audio-bible branch
+  const likedColor = "#D22A2A"; // Red for liked
+  const savedColor = "#FEA74E"; // Orange for saved
+  const commentColor = baseIconColor; // Gray for comments
+
   return (
     <View className="flex flex-row mt-2">
       {/* Views */}
       <View className="flex-row items-center">
-        <MaterialIcons name="visibility" size={iconSize} color={iconColor} />
+        <MaterialIcons name="visibility" size={iconSize} color={baseIconColor} />
         <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
           {viewsCount}
-        </Text>
-      </View>
-
-      {/* Shares */}
-      <View className="flex-row items-center ml-4">
-        <Ionicons name="share-outline" size={iconSize} color={iconColor} />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {sharesCount}
-        </Text>
-      </View>
-
-      {/* Saves */}
-      <View className="flex-row items-center ml-4">
-        <MaterialIcons
-          name="bookmark-border"
-          size={iconSize}
-          color={iconColor}
-        />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {savesCount}
         </Text>
       </View>
 
       {/* Likes */}
       <View className="flex-row items-center ml-4">
         <MaterialIcons
-          name="favorite-border"
+          name={isLiked ? "favorite" : "favorite-border"}
           size={iconSize}
-          color={iconColor}
+          color={isLiked ? likedColor : baseIconColor}
         />
         <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
           {likesCount}
+        </Text>
+      </View>
+
+      {/* Comments */}
+      <View className="flex-row items-center ml-4">
+        <Ionicons name="chatbubble-outline" size={iconSize} color={commentColor} />
+        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+          {commentsCount}
+        </Text>
+      </View>
+
+      {/* Saves */}
+      <View className="flex-row items-center ml-4">
+        <MaterialIcons
+          name={isSaved ? "bookmark" : "bookmark-border"}
+          size={iconSize}
+          color={isSaved ? savedColor : baseIconColor}
+        />
+        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+          {savesCount}
+        </Text>
+      </View>
+
+      {/* Shares */}
+      <View className="flex-row items-center ml-4">
+        <Ionicons name="share-outline" size={iconSize} color={baseIconColor} />
+        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+          {sharesCount}
         </Text>
       </View>
     </View>

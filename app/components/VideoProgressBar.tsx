@@ -2,11 +2,11 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { Video } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  PanResponder,
-  Platform,
-  Text,
-  TouchableOpacity,
-  View,
+    PanResponder,
+    Platform,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 interface VideoProgressBarProps {
@@ -384,20 +384,20 @@ export default function VideoProgressBar({
             <View
               style={{
                 position: "absolute",
-                top: -getResponsiveSize(6, 8, 10),
-                width: getResponsiveSize(16, 20, 24),
-                height: getResponsiveSize(16, 20, 24),
+                top: -getResponsiveSize(3, 4, 5),
+                width: getResponsiveSize(8, 10, 12),
+                height: getResponsiveSize(8, 10, 12),
                 backgroundColor: thumbColor,
-                borderRadius: getResponsiveSize(8, 10, 12),
-                borderWidth: 3,
+                borderRadius: getResponsiveSize(4, 5, 6),
+                borderWidth: 2,
                 borderColor: progressColor,
                 left: `${Math.max(0, Math.min(progressPercentage, 100))}%`,
-                transform: [{ translateX: -getResponsiveSize(8, 10, 12) }],
+                transform: [{ translateX: -getResponsiveSize(4, 5, 6) }],
                 shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: isDragging ? 0.5 : 0.3,
-                shadowRadius: isDragging ? 6 : 4,
-                elevation: isDragging ? 8 : 5,
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: isDragging ? 0.4 : 0.25,
+                shadowRadius: isDragging ? 3 : 2,
+                elevation: isDragging ? 4 : 3,
               }}
             />
           </View>

@@ -5,21 +5,21 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { PanResponder } from 'react-native';
-import type { ProgressBarConfig, ProgressBarState, GestureHandlers } from './types';
+import type { GestureHandlers, ProgressBarConfig, ProgressBarState } from './types';
 import {
-  calculateProgress,
-  calculateSeekEpsilon,
-  isProgressCloseEnough,
-  calculateProgressFromTouch,
-  debugLog,
-  clamp,
+    calculateProgress,
+    calculateProgressFromTouch,
+    calculateSeekEpsilon,
+    clamp,
+    debugLog,
+    isProgressCloseEnough,
 } from './utils';
 
 export const DEFAULT_CONFIG: ProgressBarConfig = {
   trackHeight: 4,
   trackHeightDragging: 8,
-  knobSize: 20,
-  knobSizeDragging: 24,
+  knobSize: 8,
+  knobSizeDragging: 10,
   trackColor: 'rgba(255, 255, 255, 0.3)',
   progressColor: '#FEA74E',
   knobColor: '#FEA74E',

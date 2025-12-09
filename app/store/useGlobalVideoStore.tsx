@@ -75,6 +75,19 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         console.warn("⚠️ Failed to stop all audio when video started:", err);
       });
 
+      // Stop global audio player store (like CopyrightFreeSongs does)
+      try {
+        const globalAudioModule = require("./useGlobalAudioPlayerStore");
+        const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
+        if (globalAudioStore && globalAudioStore.clear) {
+          globalAudioStore.clear().catch((err) => {
+            console.warn("⚠️ Failed to stop global audio player when video started:", err);
+          });
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to access global audio player store:", error);
+      }
+
       set((state) => ({
         currentlyPlayingVideo: videoKey,
         playingVideos: { ...state.playingVideos, [videoKey]: true },
@@ -214,6 +227,20 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         console.warn("⚠️ Failed to stop all audio when video started:", err);
       });
 
+      // STEP 1b: Stop global audio player store (like CopyrightFreeSongs does)
+      try {
+        const globalAudioModule = require("./useGlobalAudioPlayerStore");
+        const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
+        if (globalAudioStore && globalAudioStore.clear) {
+          globalAudioStore.clear().catch((err) => {
+            console.warn("⚠️ Failed to stop global audio player when video started:", err);
+          });
+          console.log("🛑 Stopped global audio player for video playback");
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to access global audio player store:", error);
+      }
+
       // STEP 2: Imperatively pause ALL other videos DIRECTLY (no state waiting)
       videoPlayerRegistry.forEach((player, key) => {
         if (key !== videoKey) {
@@ -263,6 +290,19 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           audioManager.stopAllAudio().catch((err) => {
             console.warn("⚠️ Failed to stop all audio when video started:", err);
           });
+
+          // Stop global audio player store (like CopyrightFreeSongs does)
+          try {
+            const globalAudioModule = require("./useGlobalAudioPlayerStore");
+            const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
+            if (globalAudioStore && globalAudioStore.clear) {
+              globalAudioStore.clear().catch((err) => {
+                console.warn("⚠️ Failed to stop global audio player when video started:", err);
+              });
+            }
+          } catch (error) {
+            console.warn("⚠️ Failed to access global audio player store:", error);
+          }
           
           // Use the same logic as playVideoGlobally
           const newPlayingVideos: Record<string, boolean> = {};
@@ -349,6 +389,19 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           audioManager.stopAllAudio().catch((err) => {
             console.warn("⚠️ Failed to stop all audio when video auto-played:", err);
           });
+
+          // Stop global audio player store (like CopyrightFreeSongs does)
+          try {
+            const globalAudioModule = require("./useGlobalAudioPlayerStore");
+            const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
+            if (globalAudioStore && globalAudioStore.clear) {
+              globalAudioStore.clear().catch((err) => {
+                console.warn("⚠️ Failed to stop global audio player when video auto-played:", err);
+              });
+            }
+          } catch (error) {
+            console.warn("⚠️ Failed to access global audio player store:", error);
+          }
 
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
