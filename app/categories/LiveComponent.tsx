@@ -293,7 +293,7 @@ const renderMiniCards = (
                   <Text className="text-sm text-[#1D2939] font-rubik ml-2">
                     Share
                   </Text>
-                  <AntDesign name="sharealt" size={16} color="#3A3E50" />
+                  <AntDesign name="share-alt" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 flex-row items-center justify-between">
                   <Text className="text-[#1D2939] font-rubik mr-2">
@@ -460,7 +460,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                   </Text>
                 </View>
                 <View className="flex-row items-center ml-4">
-                  <AntDesign name="sharealt" size={16} color="#98A2B3" />
+                  <AntDesign name="share-alt" size={16} color="#98A2B3" />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                     {video.sheared}
                   </Text>
@@ -636,7 +636,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                     <Text className="text-sm text-[#1D2939] font-rubik ml-2">
                       Share
                     </Text>
-                    <AntDesign name="sharealt" size={16} color="#3A3E50" />
+                    <AntDesign name="share-alt" size={16} color="#3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 flex-row items-center justify-between">
                     <Text className="text-[#1D2939] font-rubik mr-2">Save</Text>

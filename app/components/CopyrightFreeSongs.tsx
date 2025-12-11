@@ -544,7 +544,8 @@ export default function CopyrightFreeSongs({
         // If same song is playing, just pause
         await togglePlayPause();
       } else {
-        // Set new track in global player
+        // Set new track in global player and play immediately
+        // This avoids the pause/delay issue by starting playback as soon as the track is loaded
         await setTrack({
           id: song.id,
           title: song.title,
@@ -554,10 +555,13 @@ export default function CopyrightFreeSongs({
           duration: song.duration,
           category: song.category,
           description: song.description,
-        });
-        // Play the track after it's loaded
-        const { play } = useGlobalAudioPlayerStore.getState();
-        await play();
+        }, true); // Pass true to play immediately
+        
+        // If setTrack didn't start playing (e.g., track was already loaded), call play()
+        const state = useGlobalAudioPlayerStore.getState();
+        if (!state.isPlaying && state.soundInstance) {
+          await state.play();
+        }
       }
     },
     [currentTrack, globalIsPlaying, setTrack, togglePlayPause, globalIsLoading, songs]

@@ -6,7 +6,7 @@ import {
 } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { GestureResponderEvent, Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
@@ -15,7 +15,6 @@ import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
-import { getPersistedStats, toggleFavorite } from "../utils/persistentStorage";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
 interface EbookItem {
@@ -31,9 +30,10 @@ interface EbookItem {
   favorite?: number;
   saved?: number;
   sheared?: number;
+  comment?: number;
   imageUrl?: any;
   fileUrl?: string;
-  onPress?: () => void;
+  onPress?: (() => void) | ((event: GestureResponderEvent) => void);
 }
 
 export default function EbookComponent() {
@@ -52,8 +52,8 @@ export default function EbookComponent() {
   
   // Interaction functionality
   const { showCommentModal } = useCommentModal();
-  const { userFavorites, globalFavoriteCounts, comments } = useInteractionStore();
-  const { addToLibrary, removeFromLibrary, isInLibrary } = useLibraryStore();
+  const { comments, getContentStat, getContentCount } = useInteractionStore();
+  const { addToLibrary, removeFromLibrary, isItemSaved } = useLibraryStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -66,7 +66,8 @@ export default function EbookComponent() {
   const getContentKey = (item: EbookItem) => item._id || item.fileUrl || item.title;
   
   const handleFavorite = async (key: string, item: EbookItem) => {
-    await toggleFavorite(key, item);
+    const contentId = item._id || key;
+    await useInteractionStore.getState().toggleLike(contentId, "ebook");
   };
 
   const handleComment = (key: string, item: EbookItem) => {
@@ -86,13 +87,13 @@ export default function EbookComponent() {
 
   const handleSave = async (key: string, item: EbookItem) => {
     const contentKey = getContentKey(item);
-    if (isInLibrary(contentKey)) {
+    if (isItemSaved(contentKey)) {
       removeFromLibrary(contentKey);
     } else {
       addToLibrary({
         id: contentKey,
         title: item.title,
-        type: 'ebook',
+        contentType: 'e-books',
         fileUrl: item.fileUrl || '',
         imageUrl: item.imageUrl,
         speaker: item.speaker || item.uploadedBy || 'Unknown',
@@ -197,7 +198,7 @@ export default function EbookComponent() {
                   <Text className="text-sm text-[#1D2939] font-rubik ml-2">
                     Share
                   </Text>
-                  <AntDesign name="sharealt" size={16} color="#3A3E50" />
+                  <AntDesign name="share-alt" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 flex-row items-center justify-between">
                   <Text className="text-[#1D2939] font-rubik ml-2">
@@ -219,12 +220,12 @@ export default function EbookComponent() {
                   }}
                 >
                   <Text className="text-[#1D2939] font-rubik ml-2">
-                    {checkIfDownloaded(ebook._id || ebook.fileUrl) ? "Downloaded" : "Download"}
+                    {checkIfDownloaded(ebook._id || ebook.fileUrl || "") ? "Downloaded" : "Download"}
                   </Text>
                   <Ionicons 
-                    name={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    name={checkIfDownloaded(ebook._id || ebook.fileUrl || "") ? "checkmark-circle" : "download-outline"} 
                     size={24} 
-                    color={checkIfDownloaded(ebook._id || ebook.fileUrl) ? "#256E63" : "#090E24"} 
+                    color={checkIfDownloaded(ebook._id || ebook.fileUrl || "") ? "#256E63" : "#090E24"} 
                   />
                 </TouchableOpacity>
                 </View>
@@ -262,7 +263,7 @@ export default function EbookComponent() {
                     </Text>
                   </View>
                   <View className="flex-row items-center ml-4">
-                    <AntDesign name="sharealt" size={16} color="#98A2B3" />
+                    <AntDesign name="share-alt" size={16} color="#98A2B3" />
                     <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
                       {ebook.sheared || 0}
                     </Text>
@@ -352,7 +353,7 @@ export default function EbookComponent() {
                   <Text className="text-sm text-[#1D2939] font-rubik ml-2">
                     Share
                   </Text>
-                  <AntDesign name="sharealt" size={16} color="##3A3E50" />
+                  <AntDesign name="share-alt" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
                   <Text className="text-[#1D2939] font-rubik mr-2">
@@ -375,12 +376,12 @@ export default function EbookComponent() {
                   }}
                 >
                   <Text className="text-[#1D2939] font-rubik ml-2">
-                    {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
+                    {checkIfDownloaded(item._id || item.fileUrl || "") ? "Downloaded" : "Download"}
                   </Text>
                   <Ionicons 
-                    name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    name={checkIfDownloaded(item._id || item.fileUrl || "") ? "checkmark-circle" : "download-outline"} 
                     size={16} 
-                    color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#3A3E50"} 
+                    color={checkIfDownloaded(item._id || item.fileUrl || "") ? "#256E63" : "#3A3E50"} 
                   />
                 </TouchableOpacity>
               </View>
@@ -409,9 +410,9 @@ export default function EbookComponent() {
               </View>
               {(() => {
                 const key = getContentKey(item);
-                const stats = getPersistedStats(key) || {};
                 const contentId = item._id || key;
                 const currentComments = comments[contentId] || [];
+                const commentCount = getContentCount(contentId, "comments") || item.comment || 0;
                 const formattedComments = currentComments.map((comment: any) => ({
                   id: comment.id,
                   userName: comment.username || 'Anonymous',
@@ -431,12 +432,12 @@ export default function EbookComponent() {
               </View>
                 <TouchableOpacity onPress={() => handleFavorite(key, item)} className="flex-row items-center mr-6">
                   <MaterialIcons
-                    name={userFavorites[key] ? "favorite" : "favorite-border"}
+                    name={getContentStat(contentId, "liked") ? "favorite" : "favorite-border"}
                     size={28}
-                    color={userFavorites[key] ? "#D22A2A" : "#98A2B3"}
+                    color={getContentStat(contentId, "liked") ? "#D22A2A" : "#98A2B3"}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {globalFavoriteCounts[key] || 0}
+                    {getContentCount(contentId, "likes") || item.favorite || 0}
                   </Text>
                 </TouchableOpacity>
                 <View 
@@ -452,19 +453,19 @@ export default function EbookComponent() {
                     size={28}
                     color="#98A2B3"
                     showCount={true}
-                    count={stats.comment === 1 ? (item.comment ?? 0) + 1 : item.comment ?? 0}
+                    count={commentCount}
                     layout="horizontal"
                     contentId={contentId}
                   />
                 </View>
                 <TouchableOpacity onPress={() => handleSave(key, item)} className="flex-row items-center mr-6">
                   <MaterialIcons
-                    name={isInLibrary(getContentKey(item)) ? "bookmark" : "bookmark-border"}
+                    name={isItemSaved(getContentKey(item)) ? "bookmark" : "bookmark-border"}
                     size={28}
-                    color={isInLibrary(getContentKey(item)) ? "#FEA74E" : "#98A2B3"}
+                    color={isItemSaved(getContentKey(item)) ? "#FEA74E" : "#98A2B3"}
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {(stats as any)?.totalSaves || item.saved || 0}
+                    {getContentCount(contentId, "saves") || item.saved || 0}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
@@ -472,9 +473,9 @@ export default function EbookComponent() {
                   onPress={() => handleDownloadPress(item)}
                 >
                   <Ionicons 
-                    name={checkIfDownloaded(item._id || item.fileUrl) ? "checkmark-circle" : "download-outline"} 
+                    name={checkIfDownloaded(item._id || item.fileUrl || "") ? "checkmark-circle" : "download-outline"} 
                     size={28} 
-                    color={checkIfDownloaded(item._id || item.fileUrl) ? "#256E63" : "#98A2B3"} 
+                    color={checkIfDownloaded(item._id || item.fileUrl || "") ? "#256E63" : "#98A2B3"} 
                   />
                 </TouchableOpacity>
                   </View>

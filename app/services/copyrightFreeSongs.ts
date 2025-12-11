@@ -1,4 +1,4 @@
-import { libraryStore } from "../store/useLibraryStore";
+import { useLibraryStore } from "../store/useLibraryStore";
 
 export interface CopyrightFreeSong {
   id: string;
@@ -204,7 +204,7 @@ class CopyrightFreeSongsService {
         imageUrl: song.thumbnailUrl,
       };
 
-      await libraryStore.addToLibrary(libraryItem);
+      await useLibraryStore.getState().addToLibrary(libraryItem);
 
       // Update song status
       song.isInLibrary = true;
@@ -229,7 +229,7 @@ class CopyrightFreeSongsService {
       }
 
       // Remove from library store
-      await libraryStore.removeFromLibrary(songId);
+      await useLibraryStore.getState().removeFromLibrary(songId);
 
       // Update song status
       song.isInLibrary = false;

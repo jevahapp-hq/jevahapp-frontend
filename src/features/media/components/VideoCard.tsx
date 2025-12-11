@@ -800,7 +800,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       >
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermon && player ? (
+          {!failedVideoLoad && videoUrl && !isAudioSermon && player ? (
             <VideoView
               player={player}
               style={{

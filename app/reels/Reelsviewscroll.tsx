@@ -16,19 +16,22 @@ import {
     View,
 } from "react-native";
 
+import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
+import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
+import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
+import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
-import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import { useCommentModal } from "../context/CommentModalContext";
-import { useDownloadHandler } from "../utils/downloadUtils";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
 import { useReelsStore } from "../store/useReelsStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
+import { useDownloadHandler } from "../utils/downloadUtils";
 import { navigateMainTab } from "../utils/navigation";
 import {
     getFavoriteState,
@@ -37,9 +40,6 @@ import {
     toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
-import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
-import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
-import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
 
 // ✅ Route Params Type
 type Params = {
@@ -84,6 +84,7 @@ export default function Reelsviewscroll() {
   // Refs
   const videoRefs = useRef<Record<string, Video>>({});
   const lastIndexRef = useRef<number>(0);
+  const scrollStartIndexRef = useRef<number>(currentVideoIndex);
 
   // State hooks
   const [hasError, setHasError] = useState<boolean>(false);
@@ -1749,6 +1750,9 @@ export default function Reelsviewscroll() {
     if (scrollViewRef.current && parsedVideoList.length > 0) {
       const initialOffset = currentIndex_state * screenHeight;
       
+      // Initialize scroll start index
+      scrollStartIndexRef.current = currentIndex_state;
+      
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({
           y: initialOffset,
@@ -1769,16 +1773,66 @@ export default function Reelsviewscroll() {
     }
   }, [parsedVideoList.length, currentIndex_state]);
 
-  // Handle scroll end to ensure proper video playback
-  const handleScrollEnd = () => {
+  // Handle scroll end to ensure proper video playback and limit to one video per scroll
+  const handleScrollEnd = (event?: any) => {
+    if (!scrollViewRef.current) return;
+    
+    // Get the final scroll position
+    let finalScrollY = currentIndex_state * screenHeight;
+    if (event?.nativeEvent?.contentOffset?.y !== undefined) {
+      finalScrollY = event.nativeEvent.contentOffset.y;
+    }
+    
+    // Calculate the index from scroll position
+    const finalIndex = Math.round(finalScrollY / screenHeight);
+    const startIndex = scrollStartIndexRef.current;
+    
+    // Constrain to only move one video at a time from the starting position
+    let targetIndex = finalIndex;
+    const maxAllowedIndex = Math.min(startIndex + 1, allVideos.length - 1);
+    const minAllowedIndex = Math.max(startIndex - 1, 0);
+    
+    // Clamp to only allow adjacent videos (one video away)
+    if (targetIndex > maxAllowedIndex) {
+      targetIndex = maxAllowedIndex;
+    } else if (targetIndex < minAllowedIndex) {
+      targetIndex = minAllowedIndex;
+    }
+    
+    // Ensure index is within bounds
+    targetIndex = Math.max(0, Math.min(targetIndex, allVideos.length - 1));
+    
+    // Only snap if we need to constrain the scroll (moved more than one video)
+    if (targetIndex !== finalIndex) {
+      const targetY = targetIndex * screenHeight;
+      scrollViewRef.current.scrollTo({
+        y: targetY,
+        animated: true,
+      });
+    }
+    
+    // Update state if different
+    if (targetIndex !== currentIndex_state) {
+      setCurrentIndex_state(targetIndex);
+      lastIndexRef.current = targetIndex;
+    }
+    
+    // Update the scroll start index to the current position for next scroll
+    scrollStartIndexRef.current = targetIndex;
+    
     // Only auto-play if user hasn't manually paused
     if (!userHasManuallyPaused) {
-      const activeVideo = allVideos[currentIndex_state];
+      const activeVideo = allVideos[targetIndex];
       const activeKey = activeVideo
         ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
-        : `reel-index-${currentIndex_state}`;
+        : `reel-index-${targetIndex}`;
       globalVideoStore.playVideoGlobally(activeKey);
     }
+  };
+  
+  // Handle scroll begin drag to track starting position
+  const handleScrollBeginDrag = () => {
+    scrollStartIndexRef.current = currentIndex_state;
   };
 
   return (
@@ -1794,12 +1848,13 @@ export default function Reelsviewscroll() {
         pagingEnabled={true}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
-        onScrollEndDrag={handleScrollEnd}
-        onMomentumScrollEnd={handleScrollEnd}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onScrollEndDrag={(event) => handleScrollEnd(event)}
+        onMomentumScrollEnd={(event) => handleScrollEnd(event)}
         scrollEventThrottle={16}
         snapToInterval={screenHeight}
         snapToAlignment="start"
-        decelerationRate={isIOS ? "normal" : "fast"}
+        decelerationRate="normal"
         bounces={isIOS}
         scrollEnabled={true}
         nestedScrollEnabled={false}

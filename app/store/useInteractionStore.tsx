@@ -35,7 +35,7 @@ interface InteractionState {
   savedContentLoading: boolean;
 
   // Actions
-  toggleLike: (contentId: string, contentType: string) => Promise<void>;
+  toggleLike: (contentId: string, contentType: string) => Promise<{ liked: boolean; totalLikes: number }>;
   toggleSave: (
     contentId: string,
     contentType: string,

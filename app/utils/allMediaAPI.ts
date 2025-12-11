@@ -408,7 +408,6 @@ class AllMediaAPI {
       // Try a simple health check endpoint first
       const healthResponse = await fetch(`${this.baseURL}/health`, {
         method: "GET",
-        timeout: 5000, // 5 second timeout for health check
       });
       
       const responseTime = Date.now() - startTime;
@@ -423,7 +422,6 @@ class AllMediaAPI {
       // If health endpoint doesn't exist, try the main API
       const apiResponse = await fetch(`${this.baseURL}/api`, {
         method: "GET",
-        timeout: 5000,
       });
       
       const responseTime2 = Date.now() - startTime;
@@ -504,8 +502,7 @@ class AllMediaAPI {
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-          },
-          timeout: 15000, // 15 second timeout
+          }
         }
       );
 

@@ -1,6 +1,6 @@
-import { Audio } from "expo-av";
-import { Asset } from "expo-asset";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Asset } from "expo-asset";
+import { Audio } from "expo-av";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
@@ -37,7 +37,7 @@ interface GlobalAudioPlayerState {
   currentIndex: number;
   
   // Actions
-  setTrack: (track: AudioTrack) => Promise<void>;
+  setTrack: (track: AudioTrack, shouldPlayImmediately?: boolean) => Promise<void>;
   play: () => Promise<void>;
   pause: () => Promise<void>;
   togglePlayPause: () => Promise<void>;
@@ -73,8 +73,26 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       queue: [],
       currentIndex: -1,
 
-      setTrack: async (track: AudioTrack) => {
-        const { stop, soundInstance } = get();
+      setTrack: async (track: AudioTrack, shouldPlayImmediately: boolean = false) => {
+        const { stop, soundInstance, currentTrack } = get();
+
+        // If the same track is already loaded, just return (caller can call play() separately)
+        if (currentTrack?.id === track.id && soundInstance) {
+          try {
+            const status = await soundInstance.getStatusAsync();
+            if (status.isLoaded) {
+              // Track is already loaded, just update state if needed
+              if (shouldPlayImmediately && !status.isPlaying) {
+                await soundInstance.playAsync();
+                set({ isPlaying: true });
+              }
+              return;
+            }
+          } catch (error) {
+            // If status check fails, continue with loading
+            console.warn("Error checking existing track status:", error);
+          }
+        }
 
         // Ensure any legacy/audio-manager based playback is stopped
         // so we never have two different audio systems playing at once.
@@ -141,7 +159,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           const { sound } = await Audio.Sound.createAsync(
             source,
             {
-              shouldPlay: false,
+              shouldPlay: shouldPlayImmediately, // Start playing immediately if requested
               isMuted: get().isMuted,
             },
             (status) => {
@@ -170,6 +188,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             soundInstance: sound,
             isLoading: false,
             duration: track.duration * 1000, // Convert to milliseconds
+            isPlaying: shouldPlayImmediately, // Set playing state if we started immediately
           });
         } catch (error) {
           console.error("Error loading audio track:", error);
@@ -185,10 +204,18 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         const { soundInstance } = get();
         if (soundInstance) {
           try {
+            // Check if already playing to avoid unnecessary operations
+            const status = await soundInstance.getStatusAsync();
+            if (status.isLoaded && status.isPlaying) {
+              return; // Already playing, no need to do anything
+            }
+            
+            // Play immediately
             await soundInstance.playAsync();
             set({ isPlaying: true });
           } catch (error) {
             console.error("Error playing audio:", error);
+            set({ isPlaying: false });
           }
         }
       },

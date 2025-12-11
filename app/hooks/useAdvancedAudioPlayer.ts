@@ -198,10 +198,24 @@ export const useAdvancedAudioPlayer = (
 
   const play = useCallback(async () => {
     try {
+      // If audio is not loaded yet, wait for it to load (should be preloaded, but handle edge case)
       if (!soundRef.current) {
         await loadAudio();
+        // Wait a bit for the sound to be ready
+        let attempts = 0;
+        while (!soundRef.current && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        }
       }
       if (!soundRef.current) return;
+      
+      // Check if already loaded and playing
+      const status = await soundRef.current.getStatusAsync();
+      if (status.isLoaded && status.isPlaying) {
+        return; // Already playing
+      }
+      
       setState((prev) => ({ ...prev, isLoading: true }));
       // Ensure any legacy/global audio instances are stopped before starting this one
       try {
@@ -329,8 +343,10 @@ export const useAdvancedAudioPlayer = (
       cleanup();
     };
   }, [cleanup]);
+
+  // Preload audio immediately when URL is available (not wait for play click)
   useEffect(() => {
-    if (audioUrl) {
+    if (audioUrl && !soundRef.current) {
       loadAudio();
     }
   }, [audioUrl, loadAudio]);
