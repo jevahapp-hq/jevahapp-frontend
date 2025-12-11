@@ -6,6 +6,7 @@
 export * from "./colorUtils";
 export * from "./contentHelpers";
 export * from "./haptics";
+export * from "./imageOptimizer";
 export * from "./logger";
 export * from "./mediaHelpers";
 export * from "./responsive";

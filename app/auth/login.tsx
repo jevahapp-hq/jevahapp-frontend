@@ -4,12 +4,13 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  Image,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import { loginDebugger } from "../utils/loginDebugger";
@@ -167,7 +168,10 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 bg-white">
       <View className="px-4 mt-6">
-        <AuthHeader title="Sign In" />
+        <AuthHeader
+          title="Sign In"
+          showBack={false} // Prevent navigating back into the app after logout
+        />
       </View>
       <View className="flex flex-col justify-center items-center mx-auto px-4 mt-0 w-[333px] bg-white">
         <View className="flex flex-col justify-center items-start h-[160px] w-[333px] mt-3">
@@ -294,11 +298,21 @@ export default function LoginScreen() {
           <TouchableOpacity
             onPress={handleLoginValidation}
             disabled={isLoading}
-            className="bg-[#090E24] p-2 rounded-full mt-0 w-[333px] h-[45px]"
+            className="bg-[#090E24] p-2 rounded-full mt-0 w-[333px] h-[45px] flex-row items-center justify-center"
+            style={{ opacity: isLoading ? 0.7 : 1 }}
           >
-            <Text className="text-white text-center text-base">
-              {isLoading ? "Signing in…" : "Sign In"}
-            </Text>
+            {isLoading ? (
+              <>
+                <Text className="text-white text-center text-base">
+                  Signing in…
+                </Text>
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </>
+            ) : (
+              <Text className="text-white text-center text-base">
+                Sign In
+              </Text>
+            )}
           </TouchableOpacity>
 
           <Text className="text-1xl font-semibold mt-6">

@@ -445,21 +445,24 @@ export class ApiClient {
       console.error("❌ API: getUserProfile error:", error);
 
       // Provide more specific error messages
+      const msg: string = error?.message || "";
       if (
-        error.message?.includes("401") ||
-        error.message?.includes("402") ||
-        error.message?.includes("Unauthorized")
+        msg.includes("401") ||
+        msg.includes("402") ||
+        msg.includes("Unauthorized")
       ) {
         throw new Error("Authentication failed. Please login again.");
-      } else if (error.message?.includes("404")) {
+      } else if (msg.includes("404")) {
         throw new Error("User profile not found.");
       } else if (
-        error.message?.includes("Network") ||
-        error.message?.includes("fetch")
+        msg.includes("Network") ||
+        msg.includes("fetch") ||
+        msg.includes("timeout") ||
+        error?.name === "AbortError"
       ) {
         throw new Error("Network error. Please check your connection.");
       } else {
-        throw new Error(error.message || "Failed to fetch user profile");
+        throw new Error(msg || "Failed to fetch user profile");
       }
     }
   }

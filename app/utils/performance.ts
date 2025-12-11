@@ -239,30 +239,18 @@ export class PerformanceOptimizer {
       }
     }
 
-    // Create new request with timeout
-    const requestPromise = new Promise<T>(async (resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`Request timeout for ${key}`));
-      }, timeout);
+    // Execute the underlying fetch function and cache the result.
+    // NOTE: We intentionally do NOT add an extra timeout layer here because
+    // many callers already implement their own timeout / abort handling.
+    // Adding another layer caused duplicate \"Request timeout\" errors.
+    const data = await fetchFn();
 
-      try {
-        const data = await fetchFn();
-        clearTimeout(timeoutId);
-
-        // Cache the result
-        optimizer.preloadedData.set(key, {
-          data,
-          timestamp: Date.now(),
-        });
-
-        resolve(data);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        reject(error);
-      }
+    optimizer.preloadedData.set(key, {
+      data,
+      timestamp: Date.now(),
     });
 
-    return requestPromise;
+    return data;
   }
 
   /**
