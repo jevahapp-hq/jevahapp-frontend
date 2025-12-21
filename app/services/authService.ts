@@ -13,32 +13,85 @@ class AuthService {
   async forgotPassword(email: string) {
     try {
       console.log("🔍 Sending forgot password request for:", email);
-      console.log("🔍 API URL:", `${this.baseURL}/forgot-password`);
+      const endpoint = `${this.baseURL}/forgot-password`;
+      console.log("🔍 API URL:", endpoint);
 
-      const response = await fetch(`${this.baseURL}/forgot-password`, {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "expo-platform": Platform.OS,
         },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("❌ Failed to parse response:", parseError);
+        return {
+          success: false,
+          error: "Invalid server response",
+          status: response.status,
+          data: { message: "Server returned invalid response" },
+        };
+      }
+
       console.log("📧 Forgot password response:", data);
       console.log("📧 Response status:", response.status);
       console.log("📧 Response ok:", response.ok);
 
+      // Check both response.ok and data.success for proper error handling
+      const isSuccess = response.ok && (data.success !== false);
+      
+      // Handle "User not found" as a special case - for security, we should still show success
+      // This prevents email enumeration attacks
+      const isUserNotFound = 
+        data.message?.toLowerCase().includes("user not found") ||
+        data.error?.toLowerCase().includes("user not found") ||
+        data.message?.toLowerCase().includes("email not found") ||
+        data.error?.toLowerCase().includes("email not found");
+
+      if (isUserNotFound) {
+        // Log as info, not error - this is expected behavior for security
+        console.log("ℹ️ User not found for password reset (security: showing success message)");
+        // Return success to prevent email enumeration
+        return {
+          success: true,
+          data: { 
+            ...data, 
+            message: "If an account exists with this email, a reset code has been sent."
+          },
+          status: response.status,
+        };
+      }
+      
+      if (!isSuccess) {
+        const errorMessage = data.message || data.error || "Failed to send reset code";
+        // Only log as error if it's not a user not found case
+        console.warn("⚠️ Forgot password failed:", errorMessage);
+        return {
+          success: false,
+          error: errorMessage,
+          status: response.status,
+          data,
+        };
+      }
+
       return {
-        success: response.ok,
+        success: true,
         data,
         status: response.status,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error in forgotPassword:", error);
+      const errorMessage = error.message || "Network error occurred";
       return {
         success: false,
-        error: "Network error occurred",
+        error: errorMessage,
         status: 0,
+        data: { message: errorMessage },
       };
     }
   }

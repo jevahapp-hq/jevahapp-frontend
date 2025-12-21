@@ -87,7 +87,7 @@ export default function RootLayout() {
     Rubik_700Bold,
   });
 
-  // Suppress Clerk telemetry errors, video URL errors, and network failures
+  // Suppress Clerk telemetry errors, video URL errors, network failures, and expected auth errors
   useEffect(() => {
     const originalError = console.error;
     console.error = (...args) => {
@@ -102,7 +102,11 @@ export default function RootLayout() {
         args[0]?.includes?.("error code -11819") ||
         args[0]?.includes?.("AVFoundationErrorDomain") ||
         errorMessage.includes("Network request failed") ||
-        errorMessage.includes("TypeError: Network request failed")
+        errorMessage.includes("TypeError: Network request failed") ||
+        // Suppress "User not found" errors from password reset (expected behavior for security)
+        errorMessage.includes("User not found") ||
+        errorMessage.includes("Email not found") ||
+        errorMessage.includes("Forgot password failed: User not found")
       ) {
         // Only log network errors in development
         if (__DEV__ && (errorMessage.includes("Network request failed") || errorMessage.includes("TypeError: Network request failed"))) {

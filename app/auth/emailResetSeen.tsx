@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import {
     GestureHandlerRootView,
     HandlerStateChangeEvent,
@@ -95,6 +95,11 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
   const handleOkayGotIt = async () => {
     console.log("Okay, Got It button pressed, sending reset code for email:", emailAddress);
     
+    if (!emailAddress || !emailAddress.trim()) {
+      Alert.alert("Error", "Email address is required");
+      return;
+    }
+    
     setIsSendingCode(true);
     
     try {
@@ -102,32 +107,43 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
       const result = await authService.forgotPassword(emailAddress);
       
       if (result.success) {
-        console.log("Reset code sent successfully");
+        console.log("✅ Reset code sent successfully");
+        // Close the modal and navigate
+        if (Platform.OS === 'android') {
+          translateY.value = withTiming(SCREEN_HEIGHT, {
+            duration: 400,
+            easing: Easing.in(Easing.cubic),
+          });
+        } else {
+          translateY.value = withSpring(SCREEN_HEIGHT);
+        }
+        runOnJS(onClose)();
+        
+        // Navigate to verify-reset with email parameter
+        router.push({
+          pathname: "/auth/verify-reset",
+          params: { emailAddress }
+        });
       } else {
-        console.log("Failed to send reset code:", result.data?.message);
+        console.log("❌ Failed to send reset code:", result.error || result.data?.message);
+        const errorMessage = result.error || result.data?.message || "Failed to send reset code. Please try again.";
+        Alert.alert(
+          "Failed to Send Code",
+          errorMessage,
+          [{ text: "OK" }]
+        );
       }
-    } catch (error) {
-      console.error("Error sending reset code:", error);
+    } catch (error: any) {
+      console.error("❌ Error sending reset code:", error);
+      const errorMessage = error?.message || "Network error. Please check your connection and try again.";
+      Alert.alert(
+        "Error",
+        errorMessage,
+        [{ text: "OK" }]
+      );
     } finally {
       setIsSendingCode(false);
     }
-    
-    // Close the modal first
-    if (Platform.OS === 'android') {
-      translateY.value = withTiming(SCREEN_HEIGHT, {
-        duration: 400,
-        easing: Easing.in(Easing.cubic),
-      });
-    } else {
-      translateY.value = withSpring(SCREEN_HEIGHT);
-    }
-    runOnJS(onClose)();
-    
-    // Navigate to verify-reset with email parameter
-    router.push({
-      pathname: "/auth/verify-reset",
-      params: { emailAddress }
-    });
   };
 
   console.log("Modal visibility check:", isVisible);

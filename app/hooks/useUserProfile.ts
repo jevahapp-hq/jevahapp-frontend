@@ -132,18 +132,20 @@ export const useUserProfile = () => {
       console.error("❌ Failed to fetch user profile:", error);
 
       // Handle specific error types
+      // Don't clear tokens on 401 - let token refresh handle it
+      // Only clear tokens if refresh also fails (handled by API client)
       if (
         error.message?.includes("Unauthorized") ||
         error.message?.includes("401")
       ) {
-        await clearTokens();
+        // Don't clear tokens here - API client will try to refresh first
         setError("Session expired. Please login again.");
       } else if (error.message?.includes("Network error")) {
         setError("Network error. Please check your connection and try again.");
       } else if (error.message?.includes("User profile not found")) {
         setError("User profile not found. Please contact support.");
       } else if (error.message?.includes("Authentication failed")) {
-        await clearTokens();
+        // Don't clear tokens here - API client will try to refresh first
         setError("Authentication failed. Please login again.");
       } else {
         setError(error.message || "Failed to fetch user profile");

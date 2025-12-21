@@ -763,43 +763,65 @@ export default function VideoComponent() {
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset } = event.nativeEvent;
-      lastScrollYRef.current = contentOffset.y;
-
-      // Auto-pause videos that are scrolled out of view (TikTok/Instagram behavior)
-      const scrollY = contentOffset.y;
-      const screenHeight = Dimensions.get("window").height;
-      const viewportTop = scrollY;
-      const viewportBottom = scrollY + screenHeight;
-
-      Object.entries(videoLayoutsRef.current).forEach(([key, layout]) => {
-        const videoTop = layout.y;
-        const videoBottom = layout.y + layout.height;
-
-        // Calculate visibility ratio
-        const intersectionTop = Math.max(viewportTop, videoTop);
-        const intersectionBottom = Math.min(viewportBottom, videoBottom);
-        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-        const visibilityRatio =
-          layout.height > 0 ? visibleHeight / layout.height : 0;
-
-        // Auto-pause if video is less than 20% visible or completely out of view
-        const shouldPause =
-          visibilityRatio < 0.2 ||
-          videoBottom < viewportTop ||
-          videoTop > viewportBottom;
-
-        const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
-
-        if (shouldPause && isVideoPlaying) {
-          console.log(
-            `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
-              visibilityRatio * 100
-            ).toFixed(1)}%`
-          );
-          globalVideoStore.pauseVideo(key);
+      try {
+        // Safety check for event structure
+        if (!event?.nativeEvent?.contentOffset) {
+          return;
         }
-      });
+
+        const { contentOffset } = event.nativeEvent;
+        const scrollY = contentOffset.y;
+        
+        // Validate scrollY is a number
+        if (typeof scrollY !== 'number' || isNaN(scrollY)) {
+          return;
+        }
+
+        lastScrollYRef.current = scrollY;
+
+        // Auto-pause videos that are scrolled out of view (TikTok/Instagram behavior)
+        const screenHeight = Dimensions.get("window").height;
+        const viewportTop = scrollY;
+        const viewportBottom = scrollY + screenHeight;
+
+        try {
+          Object.entries(videoLayoutsRef.current).forEach(([key, layout]) => {
+            if (!layout || typeof layout !== 'object') return;
+            
+            const videoTop = layout.y;
+            const videoBottom = layout.y + layout.height;
+
+            // Calculate visibility ratio
+            const intersectionTop = Math.max(viewportTop, videoTop);
+            const intersectionBottom = Math.min(viewportBottom, videoBottom);
+            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+            const visibilityRatio =
+              layout.height > 0 ? visibleHeight / layout.height : 0;
+
+            // Auto-pause if video is less than 20% visible or completely out of view
+            const shouldPause =
+              visibilityRatio < 0.2 ||
+              videoBottom < viewportTop ||
+              videoTop > viewportBottom;
+
+            const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
+
+            if (shouldPause && isVideoPlaying) {
+              console.log(
+                `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
+                  visibilityRatio * 100
+                ).toFixed(1)}%`
+              );
+              try {
+                globalVideoStore.pauseVideo(key);
+              } catch (error) {
+                console.warn(`⚠️ Error pausing video ${key}:`, error);
+              }
+            }
+          });
+        } catch (error) {
+          console.warn("⚠️ Error processing video layouts during scroll:", error);
+        }
 
       // Footer-based autoplay behavior during scrolling
       if (isAutoPlayEnabled) {
@@ -924,43 +946,66 @@ export default function VideoComponent() {
           console.log(
             `🎬 VideoComponent: Footer-based video change to ${targetVideo} - Direction: ${scrollDirection}`
           );
-          globalVideoStore.playVideoGlobally(targetVideo);
+          try {
+            globalVideoStore.playVideoGlobally(targetVideo);
+          } catch (error) {
+            console.warn("⚠️ Error playing video globally:", error);
+          }
         }
+      }
+      } catch (error) {
+        console.error("❌ Error in handleScroll:", error);
+        // Don't throw - allow scrolling to continue
       }
     },
     [isAutoPlayEnabled, globalVideoStore, scrollDirection]
   );
 
   const handleScrollEnd = useCallback(() => {
-    console.log("📱 VideoComponent: Scroll ended, finalizing auto-pause cleanup");
-    const scrollY = lastScrollYRef.current;
-    const screenHeight = Dimensions.get("window").height;
-    const viewportTop = scrollY;
-    const viewportBottom = scrollY + screenHeight;
+    try {
+      console.log("📱 VideoComponent: Scroll ended, finalizing auto-pause cleanup");
+      const scrollY = lastScrollYRef.current;
+      const screenHeight = Dimensions.get("window").height;
+      const viewportTop = scrollY;
+      const viewportBottom = scrollY + screenHeight;
 
-    // Final cleanup for all videos when scrolling stops
-    Object.entries(videoLayoutsRef.current).forEach(([key, layout]) => {
-      const videoTop = layout.y;
-      const videoBottom = layout.y + layout.height;
+      // Final cleanup for all videos when scrolling stops
+      try {
+        Object.entries(videoLayoutsRef.current).forEach(([key, layout]) => {
+          if (!layout || typeof layout !== 'object') return;
+          
+          const videoTop = layout.y;
+          const videoBottom = layout.y + layout.height;
 
-      // Calculate final visibility ratio
-      const intersectionTop = Math.max(viewportTop, videoTop);
-      const intersectionBottom = Math.min(viewportBottom, videoBottom);
-      const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-      const visibilityRatio =
-        layout.height > 0 ? visibleHeight / layout.height : 0;
+          // Calculate final visibility ratio
+          const intersectionTop = Math.max(viewportTop, videoTop);
+          const intersectionBottom = Math.min(viewportBottom, videoBottom);
+          const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+          const visibilityRatio =
+            layout.height > 0 ? visibleHeight / layout.height : 0;
 
-      // Final check: pause videos that are less than 20% visible
-      const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
-      if (visibilityRatio < 0.2 && isVideoPlaying) {
-        console.log(
-          `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
-            visibilityRatio * 100
-          ).toFixed(1)}%`
-        );
-        globalVideoStore.pauseVideo(key);
+          // Final check: pause videos that are less than 20% visible
+          const isVideoPlaying = globalVideoStore.playingVideos[key] || false;
+          if (visibilityRatio < 0.2 && isVideoPlaying) {
+            console.log(
+              `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
+                visibilityRatio * 100
+              ).toFixed(1)}%`
+            );
+            try {
+              globalVideoStore.pauseVideo(key);
+            } catch (error) {
+              console.warn(`⚠️ Error pausing video ${key} in handleScrollEnd:`, error);
+            }
+          }
+        });
+      } catch (error) {
+        console.warn("⚠️ Error processing video layouts in handleScrollEnd:", error);
       }
-    });
+    } catch (error) {
+      console.error("❌ Error in handleScrollEnd:", error);
+      // Don't throw - allow app to continue functioning
+    }
   }, [globalVideoStore]);
 
   const recomputeVisibilityFromLayouts = useCallback(() => {

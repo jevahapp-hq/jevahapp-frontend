@@ -701,6 +701,23 @@ export default function Reelsviewscroll() {
     }
   };
 
+  // Format time helper function (MM:SS format)
+  const formatTime = (ms: number): string => {
+    // Validate and clamp input to prevent invalid displays
+    if (!Number.isFinite(ms) || ms < 0 || isNaN(ms)) {
+      return "0:00";
+    }
+    
+    // Clamp to reasonable maximum (24 hours)
+    const clampedMs = Math.min(ms, 24 * 60 * 60 * 1000);
+    
+    const totalSeconds = Math.floor(clampedMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+    
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
+
   // Progress bar dimensions and calculations
   const progressBarWidth = screenWidth - getResponsiveSpacing(24, 32, 40); // Responsive margins
   const progressPercentage =
@@ -1285,7 +1302,7 @@ export default function Reelsviewscroll() {
                 <View
                   style={{
                     position: "absolute",
-                    bottom: getResponsiveSpacing(100, 120, 140),
+                    bottom: getResponsiveSpacing(100, 120, 140), // Position above progress bar for proper centering
                     left: getResponsiveSpacing(12, 16, 20),
                     right: getResponsiveSpacing(12, 16, 20),
                     flexDirection: "row",
@@ -1305,13 +1322,13 @@ export default function Reelsviewscroll() {
                     {/* Avatar */}
                     <TouchableOpacity
                       style={{
-                        width: getResponsiveSize(36, 40, 44),
-                        height: getResponsiveSize(36, 40, 44),
-                        borderRadius: getResponsiveSize(18, 20, 22),
+                        width: getResponsiveSize(28, 32, 36), // Reduced size
+                        height: getResponsiveSize(28, 32, 36), // Reduced size
+                        borderRadius: getResponsiveSize(14, 16, 18), // Reduced radius
                         backgroundColor: "#f3f4f6",
                         alignItems: "center",
                         justifyContent: "center",
-                        marginRight: getResponsiveSpacing(10, 12, 14),
+                        marginRight: getResponsiveSpacing(8, 10, 12), // Reduced margin
                         borderWidth: 2,
                         borderColor: "rgba(255, 255, 255, 0.3)",
                       }}
@@ -1324,9 +1341,9 @@ export default function Reelsviewscroll() {
                       <Image
                         source={getUserAvatarFromContent(videoData)}
                         style={{
-                          width: getResponsiveSize(24, 28, 32),
-                          height: getResponsiveSize(24, 28, 32),
-                          borderRadius: getResponsiveSize(12, 14, 16),
+                          width: getResponsiveSize(20, 24, 28), // Reduced size
+                          height: getResponsiveSize(20, 24, 28), // Reduced size
+                          borderRadius: getResponsiveSize(10, 12, 14), // Reduced radius
                         }}
                         resizeMode="cover"
                       />
@@ -1390,9 +1407,9 @@ export default function Reelsviewscroll() {
                       setMenuVisible((v) => !v);
                     }}
                     style={{
-                      width: getResponsiveSize(36, 40, 44),
-                      height: getResponsiveSize(36, 40, 44),
-                      borderRadius: getResponsiveSize(18, 20, 22),
+                      width: getResponsiveSize(28, 32, 36), // Reduced size
+                      height: getResponsiveSize(28, 32, 36), // Reduced size
+                      borderRadius: getResponsiveSize(14, 16, 18), // Reduced radius
                       backgroundColor: "rgba(255, 255, 255, 0.9)",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1408,7 +1425,7 @@ export default function Reelsviewscroll() {
                   >
                     <Ionicons
                       name="ellipsis-vertical"
-                      size={getResponsiveSize(16, 18, 20)}
+                      size={getResponsiveSize(14, 16, 18)} // Reduced icon size
                       color="#3A3E50"
                     />
                   </TouchableOpacity>
@@ -1619,84 +1636,165 @@ export default function Reelsviewscroll() {
                   </>
                 )}
 
-                {/* Draggable Progress Bar - Enhanced user experience */}
+                {/* Draggable Progress Bar with Timer - Enhanced user experience */}
                 <View
                   style={{
                     position: "absolute",
-                    bottom: getResponsiveSpacing(60, 80, 100),
-                    left: getResponsiveSpacing(12, 16, 20),
-                    right: getResponsiveSpacing(12, 16, 20),
+                    bottom: getResponsiveSpacing(40, 60, 80), // Bring down closer to bottom
+                    left: getResponsiveSpacing(16, 20, 24), // Move to the right by increasing left margin
+                    right: getResponsiveSpacing(4, 8, 12), // Reduce right margin to maintain width
                     zIndex: 15,
                   }}
                 >
-                  <View
-                    {...createPanResponder(videoKey, null).panHandlers}
-                    style={{
-                      paddingVertical: getResponsiveSpacing(12, 16, 20),
-                      marginTop: -getResponsiveSpacing(12, 16, 20),
-                      marginBottom: -getResponsiveSpacing(12, 16, 20),
-                    }}
-                    accessibilityLabel="Video progress bar - slide to seek"
-                    accessibilityRole="adjustable"
-                    accessibilityValue={{
-                      min: 0,
-                      max: 100,
-                      now: Math.round(progressPercentage),
-                    }}
-                    accessibilityHint="Double tap and hold to drag, or tap to seek to position"
-                  >
-                    <View
-                      style={{
-                        height: getResponsiveSize(4, 5, 6),
-                        backgroundColor: "rgba(255, 255, 255, 0.3)",
-                        borderRadius: getResponsiveSize(2, 2.5, 3),
-                        position: "relative",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 2,
-                        elevation: 2,
-                      }}
-                    >
-                      <View
-                        style={{
-                          height: "100%",
-                          backgroundColor: "#FEA74E",
-                          borderRadius: getResponsiveSize(2, 2.5, 3),
-                          width: `${progressPercentage}%`,
-                          shadowColor: "#FEA74E",
-                          shadowOffset: { width: 0, height: 0 },
-                          shadowOpacity: 0.5,
-                          shadowRadius: 4,
-                          elevation: 3,
-                        }}
-                      />
 
-                      <View
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 4, // Minimal padding for maximum progress bar width
+                      paddingBottom: 12,
+                      paddingTop: 6,
+                      bottom: 0, // Match VideoProgressBar positioning
+                    }}
+                  >
+                    {/* Progress Bar - Full width container */}
+                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", maxWidth: "100%" }}>
+                      {/* Current time on left */}
+                      <Text
                         style={{
-                          position: "absolute",
-                          top: -getResponsiveSize(6, 8, 10),
-                          width: getResponsiveSize(16, 20, 24),
-                          height: getResponsiveSize(16, 20, 24),
-                          backgroundColor: "#FFFFFF",
-                          borderRadius: getResponsiveSize(8, 10, 12),
-                          borderWidth: 3,
-                          borderColor: "#FEA74E",
-                          left: `${Math.max(
-                            0,
-                            Math.min(progressPercentage, 100)
-                          )}%`,
-                          transform: [
-                            { translateX: -getResponsiveSize(8, 10, 12) },
-                          ],
-                          shadowColor: "#000",
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.3,
-                          shadowRadius: 4,
-                          elevation: 5,
+                          color: "#FFFFFF",
+                          fontSize: 10, // Even smaller font
+                          fontFamily: "Rubik-Medium",
+                          marginRight: 6, // Reduced margin
+                          minWidth: 30, // Reduced min width
+                          textAlign: "right",
+                          textShadowColor: "rgba(0, 0, 0, 0.75)",
+                          textShadowOffset: { width: 0, height: 1 },
+                          textShadowRadius: 2,
                         }}
-                      />
+                      >
+                        {videoDuration > 0 ? formatTime(videoPosition) : "0:00"}
+                      </Text>
+
+                      {/* Progress Bar */}
+                      <View
+                        {...createPanResponder(videoKey, null).panHandlers}
+                        style={{
+                          flex: 1,
+                          position: "relative",
+                          height: 40, // Larger touch area for easier dragging
+                        }}
+                        accessibilityLabel="Video progress bar - slide to seek"
+                        accessibilityRole="adjustable"
+                        accessibilityValue={{
+                          min: 0,
+                          max: 100,
+                          now: Math.round(progressPercentage),
+                        }}
+                        accessibilityHint="Double tap and hold to drag, or tap to seek to position"
+                      >
+                        {/* Background Track */}
+                        <View
+                          style={{
+                            height: 4,
+                            backgroundColor: "rgba(255, 255, 255, 0.3)",
+                            borderRadius: 2,
+                            position: "absolute",
+                            top: 8, // Center vertically in touch area
+                            left: 0,
+                            right: 0,
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 2,
+                            elevation: 2,
+                          }}
+                        />
+
+                        {/* Progress Fill - Orange */}
+                        <View
+                          style={{
+                            height: 4,
+                            backgroundColor: "#FEA74E",
+                            borderRadius: 2,
+                            width: `${progressPercentage}%`,
+                            position: "absolute",
+                            top: 8,
+                            left: 0,
+                            shadowColor: "#FEA74E",
+                            shadowOffset: { width: 0, height: 0 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 4,
+                            elevation: 3,
+                          }}
+                        />
+
+                        {/* Draggable White Indicator */}
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: 8 - 8, // Center on track (track top = 8, circle radius = 8)
+                            width: 16,
+                            height: 16,
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: 8,
+                            borderWidth: 3,
+                            borderColor: "#FEA74E",
+                            left: `${Math.max(0, Math.min(progressPercentage, 100))}%`,
+                            transform: [{ translateX: -8 }], // Center the circle
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 4,
+                            elevation: 5,
+                            zIndex: 10,
+                          }}
+                        />
+                      </View>
+
+                      {/* Total duration on right */}
+                      <Text
+                        style={{
+                          color: "#FFFFFF",
+                          fontSize: 10, // Even smaller font
+                          fontFamily: "Rubik-Medium",
+                          marginLeft: 6, // Reduced margin
+                          minWidth: 30, // Reduced min width
+                          textAlign: "left",
+                          textShadowColor: "rgba(0, 0, 0, 0.75)",
+                          textShadowOffset: { width: 0, height: 1 },
+                          textShadowRadius: 2,
+                        }}
+                      >
+                        {videoDuration > 0 ? formatTime(videoDuration) : "0:00"}
+                      </Text>
                     </View>
+
+                    {/* Mute Button - positioned on the right */}
+                    <TouchableOpacity
+                      onPress={() => toggleMute(videoKey)}
+                      style={{
+                        backgroundColor: "rgba(0, 0, 0, 0.6)",
+                        padding: 6, // Smaller padding
+                        borderRadius: 16, // Smaller radius
+                        marginLeft: 4, // Reduced margin
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`${mutedVideos[videoKey] ? "Unmute" : "Mute"} video`}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name={mutedVideos[videoKey] ? "volume-mute" : "volume-high"}
+                        size={16} // Smaller icon
+                        color="#FFFFFF"
+                      />
+                    </TouchableOpacity>
                   </View>
                 </View>
               </>
@@ -1714,34 +1812,67 @@ export default function Reelsviewscroll() {
 
   // Handle scroll-based navigation (update active index immediately while scrolling)
   const handleScroll = (event: any) => {
-    const { contentOffset } = event.nativeEvent;
-    const scrollY = contentOffset.y;
-    const index = Math.round(scrollY / screenHeight);
-
-    // Ensure index is within bounds
-    const clampedIndex = Math.max(0, Math.min(index, allVideos.length - 1));
-
-    if (
-      clampedIndex !== lastIndexRef.current &&
-      clampedIndex >= 0 &&
-      clampedIndex < allVideos.length
-    ) {
-      lastIndexRef.current = clampedIndex;
-      setCurrentIndex_state(clampedIndex);
-
-      // Compute the reel key for the new active index
-      const activeVideo = allVideos[clampedIndex];
-      const activeKey = activeVideo
-        ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
-        : `reel-index-${clampedIndex}`;
-
-      // 🚀 Update last accessed time for active video
-      mediaStore.updateLastAccessed(activeKey);
-
-      // Pause all other videos and play the active one using the global play (only if user hasn't manually paused)
-      if (!userHasManuallyPaused) {
-        globalVideoStore.playVideoGlobally(activeKey);
+    try {
+      // Safety check for event structure
+      if (!event?.nativeEvent?.contentOffset) {
+        return;
       }
+
+      const { contentOffset } = event.nativeEvent;
+      const scrollY = contentOffset.y;
+      
+      // Validate scrollY is a number
+      if (typeof scrollY !== 'number' || isNaN(scrollY)) {
+        return;
+      }
+
+      // Validate allVideos array
+      if (!Array.isArray(allVideos) || allVideos.length === 0) {
+        return;
+      }
+
+      const index = Math.round(scrollY / screenHeight);
+
+      // Ensure index is within bounds
+      const clampedIndex = Math.max(0, Math.min(index, allVideos.length - 1));
+
+      if (
+        clampedIndex !== lastIndexRef.current &&
+        clampedIndex >= 0 &&
+        clampedIndex < allVideos.length
+      ) {
+        lastIndexRef.current = clampedIndex;
+        setCurrentIndex_state(clampedIndex);
+
+        // Compute the reel key for the new active index
+        try {
+          const activeVideo = allVideos[clampedIndex];
+          const activeKey = activeVideo
+            ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
+            : `reel-index-${clampedIndex}`;
+
+          // 🚀 Update last accessed time for active video
+          try {
+            mediaStore.updateLastAccessed(activeKey);
+          } catch (error) {
+            console.warn("⚠️ Error updating last accessed:", error);
+          }
+
+          // Pause all other videos and play the active one using the global play (only if user hasn't manually paused)
+          if (!userHasManuallyPaused) {
+            try {
+              globalVideoStore.playVideoGlobally(activeKey);
+            } catch (error) {
+              console.warn("⚠️ Error playing video globally:", error);
+            }
+          }
+        } catch (error) {
+          console.warn("⚠️ Error processing active video in handleScroll:", error);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error in handleScroll:", error);
+      // Don't throw - allow scrolling to continue
     }
   };
 
@@ -1775,58 +1906,80 @@ export default function Reelsviewscroll() {
 
   // Handle scroll end to ensure proper video playback and limit to one video per scroll
   const handleScrollEnd = (event?: any) => {
-    if (!scrollViewRef.current) return;
-    
-    // Get the final scroll position
-    let finalScrollY = currentIndex_state * screenHeight;
-    if (event?.nativeEvent?.contentOffset?.y !== undefined) {
-      finalScrollY = event.nativeEvent.contentOffset.y;
-    }
-    
-    // Calculate the index from scroll position
-    const finalIndex = Math.round(finalScrollY / screenHeight);
-    const startIndex = scrollStartIndexRef.current;
-    
-    // Constrain to only move one video at a time from the starting position
-    let targetIndex = finalIndex;
-    const maxAllowedIndex = Math.min(startIndex + 1, allVideos.length - 1);
-    const minAllowedIndex = Math.max(startIndex - 1, 0);
-    
-    // Clamp to only allow adjacent videos (one video away)
-    if (targetIndex > maxAllowedIndex) {
-      targetIndex = maxAllowedIndex;
-    } else if (targetIndex < minAllowedIndex) {
-      targetIndex = minAllowedIndex;
-    }
-    
-    // Ensure index is within bounds
-    targetIndex = Math.max(0, Math.min(targetIndex, allVideos.length - 1));
-    
-    // Only snap if we need to constrain the scroll (moved more than one video)
-    if (targetIndex !== finalIndex) {
-      const targetY = targetIndex * screenHeight;
-      scrollViewRef.current.scrollTo({
-        y: targetY,
-        animated: true,
-      });
-    }
-    
-    // Update state if different
-    if (targetIndex !== currentIndex_state) {
-      setCurrentIndex_state(targetIndex);
-      lastIndexRef.current = targetIndex;
-    }
-    
-    // Update the scroll start index to the current position for next scroll
-    scrollStartIndexRef.current = targetIndex;
-    
-    // Only auto-play if user hasn't manually paused
-    if (!userHasManuallyPaused) {
-      const activeVideo = allVideos[targetIndex];
-      const activeKey = activeVideo
-        ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
-        : `reel-index-${targetIndex}`;
-      globalVideoStore.playVideoGlobally(activeKey);
+    try {
+      if (!scrollViewRef.current) return;
+      
+      // Get the final scroll position
+      let finalScrollY = currentIndex_state * screenHeight;
+      if (event?.nativeEvent?.contentOffset?.y !== undefined) {
+        const scrollY = event.nativeEvent.contentOffset.y;
+        if (typeof scrollY === 'number' && !isNaN(scrollY)) {
+          finalScrollY = scrollY;
+        }
+      }
+      
+      // Calculate the index from scroll position
+      const finalIndex = Math.round(finalScrollY / screenHeight);
+      const startIndex = scrollStartIndexRef.current;
+      
+      // Validate array bounds
+      if (!Array.isArray(allVideos) || allVideos.length === 0) {
+        console.warn("⚠️ No videos available for scroll end handling");
+        return;
+      }
+      
+      // Constrain to only move one video at a time from the starting position
+      let targetIndex = finalIndex;
+      const maxAllowedIndex = Math.min(startIndex + 1, allVideos.length - 1);
+      const minAllowedIndex = Math.max(startIndex - 1, 0);
+      
+      // Clamp to only allow adjacent videos (one video away)
+      if (targetIndex > maxAllowedIndex) {
+        targetIndex = maxAllowedIndex;
+      } else if (targetIndex < minAllowedIndex) {
+        targetIndex = minAllowedIndex;
+      }
+      
+      // Ensure index is within bounds
+      targetIndex = Math.max(0, Math.min(targetIndex, allVideos.length - 1));
+      
+      // Only snap if we need to constrain the scroll (moved more than one video)
+      if (targetIndex !== finalIndex && scrollViewRef.current) {
+        try {
+          const targetY = targetIndex * screenHeight;
+          scrollViewRef.current.scrollTo({
+            y: targetY,
+            animated: true,
+          });
+        } catch (scrollError) {
+          console.warn("⚠️ Error scrolling to target position:", scrollError);
+        }
+      }
+      
+      // Update state if different
+      if (targetIndex !== currentIndex_state) {
+        setCurrentIndex_state(targetIndex);
+        lastIndexRef.current = targetIndex;
+      }
+      
+      // Update the scroll start index to the current position for next scroll
+      scrollStartIndexRef.current = targetIndex;
+      
+      // Only auto-play if user hasn't manually paused
+      if (!userHasManuallyPaused && allVideos[targetIndex]) {
+        try {
+          const activeVideo = allVideos[targetIndex];
+          const activeKey = activeVideo
+            ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
+            : `reel-index-${targetIndex}`;
+          globalVideoStore.playVideoGlobally(activeKey);
+        } catch (playError) {
+          console.warn("⚠️ Error playing video on scroll end:", playError);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error in handleScrollEnd:", error);
+      // Don't throw - allow app to continue functioning
     }
   };
   

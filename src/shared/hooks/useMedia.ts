@@ -75,8 +75,97 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         setAllContentTotal(response.total || 0);
         setAllContentLoading(false);
       } else {
-        // Handle network errors gracefully
-        const isNetworkError = response.error?.includes("Network unavailable");
+        // Handle 401/402 authentication errors
+        const isAuthError = 
+          response.error?.includes("401") ||
+          response.error?.includes("402") ||
+          response.error?.includes("Unauthorized") ||
+          response.error?.includes("UNAUTHORIZED") ||
+          response.error?.includes("Authentication failed");
+        
+        if (isAuthError) {
+          // For auth errors, try public endpoint as fallback
+          if (__DEV__) {
+            console.log("🔄 Auth failed, trying public endpoint...");
+          }
+          try {
+            const publicResponse = await mediaApi.getAllContentPublic();
+            if (publicResponse.success) {
+              const transformedMedia = (publicResponse.media || []).map(
+                transformApiResponseToMediaItem
+              );
+              setAllContent(transformedMedia);
+              setAllContentTotal(publicResponse.total || 0);
+              setAllContentLoading(false);
+              return; // Success with public endpoint
+            }
+          } catch (fallbackError) {
+            if (__DEV__) {
+              console.warn("⚠️ Public endpoint also failed:", fallbackError);
+            }
+          }
+          // If both fail, set a user-friendly error message
+          setAllContentError("Session expired. Please login again.");
+          setAllContentLoading(false);
+        } else {
+          // Handle network errors gracefully
+          const isNetworkError = response.error?.includes("Network unavailable");
+          
+          if (isNetworkError) {
+            // Network error - keep existing content, just stop loading
+            setAllContentLoading(false);
+            // Don't set error state for network failures
+          } else {
+            if (__DEV__) {
+              console.error(
+                "❌ useMedia: Failed to fetch all content:",
+                response.error
+              );
+            }
+            // Clean up error message - don't show raw status codes
+            const cleanError = response.error?.replace(/^\d+\s*/, "") || "Failed to fetch content";
+            setAllContentError(cleanError);
+            setAllContentLoading(false);
+          }
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      // Handle 401/402 authentication errors
+      const isAuthError = 
+        errorMessage.includes("401") ||
+        errorMessage.includes("402") ||
+        errorMessage.includes("Unauthorized") ||
+        errorMessage.includes("UNAUTHORIZED") ||
+        errorMessage.includes("Authentication failed");
+      
+      if (isAuthError) {
+        // Try public endpoint as fallback
+        try {
+          const publicResponse = await mediaApi.getAllContentPublic();
+          if (publicResponse.success) {
+            const transformedMedia = (publicResponse.media || []).map(
+              transformApiResponseToMediaItem
+            );
+            setAllContent(transformedMedia);
+            setAllContentTotal(publicResponse.total || 0);
+            setAllContentLoading(false);
+            return; // Success with public endpoint
+          }
+        } catch (fallbackError) {
+          if (__DEV__) {
+            console.warn("⚠️ Public endpoint also failed:", fallbackError);
+          }
+        }
+        // If both fail, set a user-friendly error message
+        setAllContentError("Session expired. Please login again.");
+        setAllContentLoading(false);
+      } else {
+        const isNetworkError = 
+          errorMessage.includes("Network request failed") ||
+          errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("NetworkError");
         
         if (isNetworkError) {
           // Network error - keep existing content, just stop loading
@@ -85,34 +174,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         } else {
           if (__DEV__) {
             console.error(
-              "❌ useMedia: Failed to fetch all content:",
-              response.error
+              "❌ useMedia: Exception while fetching all content:",
+              error
             );
           }
-          setAllContentError(response.error || "Failed to fetch all content");
+          // Clean up error message - don't show raw status codes
+          const cleanError = errorMessage.replace(/^\d+\s*/, "") || "Failed to fetch content";
+          setAllContentError(cleanError);
           setAllContentLoading(false);
         }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      const isNetworkError = 
-        errorMessage.includes("Network request failed") ||
-        errorMessage.includes("Failed to fetch") ||
-        errorMessage.includes("NetworkError");
-      
-      if (isNetworkError) {
-        // Network error - keep existing content, just stop loading
-        setAllContentLoading(false);
-        // Don't set error state for network failures
-      } else {
-        if (__DEV__) {
-          console.error(
-            "❌ useMedia: Exception while fetching all content:",
-            error
-          );
-        }
-        setAllContentError(errorMessage);
-        setAllContentLoading(false);
       }
     }
   }, []);
@@ -169,8 +239,60 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
           setDefaultContentLoading(false);
         } else {
-          // Handle network errors gracefully
-          const isNetworkError = response.error?.includes("Network unavailable");
+          // Handle 401/402 authentication errors
+          const isAuthError = 
+            response.error?.includes("401") ||
+            response.error?.includes("402") ||
+            response.error?.includes("Unauthorized") ||
+            response.error?.includes("UNAUTHORIZED") ||
+            response.error?.includes("Authentication failed");
+          
+          if (isAuthError) {
+            // Set a user-friendly error message for auth errors
+            setDefaultContentError("Session expired. Please login again.");
+            setDefaultContentLoading(false);
+          } else {
+            // Handle network errors gracefully
+            const isNetworkError = response.error?.includes("Network unavailable");
+            
+            if (isNetworkError) {
+              // Network error - keep existing content, just stop loading
+              setDefaultContentLoading(false);
+              // Don't set error state for network failures
+            } else {
+              if (__DEV__) {
+                console.error(
+                  "❌ useMedia: Failed to fetch default content:",
+                  response.error
+                );
+              }
+              // Clean up error message - don't show raw status codes
+              const cleanError = response.error?.replace(/^\d+\s*/, "") || "Failed to fetch content";
+              setDefaultContentError(cleanError);
+              setDefaultContentLoading(false);
+            }
+          }
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        
+        // Handle 401/402 authentication errors
+        const isAuthError = 
+          errorMessage.includes("401") ||
+          errorMessage.includes("402") ||
+          errorMessage.includes("Unauthorized") ||
+          errorMessage.includes("UNAUTHORIZED") ||
+          errorMessage.includes("Authentication failed");
+        
+        if (isAuthError) {
+          // Set a user-friendly error message for auth errors
+          setDefaultContentError("Session expired. Please login again.");
+          setDefaultContentLoading(false);
+        } else {
+          const isNetworkError = 
+            errorMessage.includes("Network request failed") ||
+            errorMessage.includes("Failed to fetch") ||
+            errorMessage.includes("NetworkError");
           
           if (isNetworkError) {
             // Network error - keep existing content, just stop loading
@@ -179,36 +301,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           } else {
             if (__DEV__) {
               console.error(
-                "❌ useMedia: Failed to fetch default content:",
-                response.error
+                "❌ useMedia: Exception while fetching default content:",
+                error
               );
             }
-            setDefaultContentError(
-              response.error || "Failed to fetch default content"
-            );
+            // Clean up error message - don't show raw status codes
+            const cleanError = errorMessage.replace(/^\d+\s*/, "") || "Failed to fetch content";
+            setDefaultContentError(cleanError);
             setDefaultContentLoading(false);
           }
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        const isNetworkError = 
-          errorMessage.includes("Network request failed") ||
-          errorMessage.includes("Failed to fetch") ||
-          errorMessage.includes("NetworkError");
-        
-        if (isNetworkError) {
-          // Network error - keep existing content, just stop loading
-          setDefaultContentLoading(false);
-          // Don't set error state for network failures
-        } else {
-          if (__DEV__) {
-            console.error(
-              "❌ useMedia: Exception while fetching default content:",
-              error
-            );
-          }
-          setDefaultContentError(errorMessage);
-          setDefaultContentLoading(false);
         }
       }
     },

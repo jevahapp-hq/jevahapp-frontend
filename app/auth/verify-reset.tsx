@@ -2,19 +2,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Animated as RNAnimated,
-  Text,
-  TextInput,
-  TextStyle,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated as RNAnimated,
+    Text,
+    TextInput,
+    TextStyle,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/FontAwesome";
 import AuthHeader from "../components/AuthHeader";
@@ -198,7 +198,15 @@ export default function VerifyReset() {
 
   const handleResend = async () => {
     console.log("🔄 Resend button pressed for email:", emailAddress);
+    
+    if (!emailAddress || !emailAddress.trim()) {
+      Alert.alert("Error", "Email address is required");
+      return;
+    }
+
     setIsResending(true);
+    setShowFailure(false); // Clear any previous failure state
+    
     try {
       console.log("🔄 Calling authService.forgotPassword for resend...");
       const result = await authService.forgotPassword(emailAddress);
@@ -206,21 +214,32 @@ export default function VerifyReset() {
 
       if (result.success) {
         console.log("✅ Resend successful");
+        // Show success message (even if user not found, for security)
+        const message = result.data?.message || "A new password reset code has been sent to your email. Please check your inbox and spam folder.";
         Alert.alert(
           "Code Resent",
-          "A new password reset code has been sent to your email."
+          message,
+          [{ text: "OK" }]
         );
       } else {
-        console.log("❌ Resend failed:", result.data?.message);
-        triggerBounceDrop("failure");
+        console.log("❌ Resend failed:", result.error || result.data?.message);
+        const errorMessage = result.error || result.data?.message || "Failed to resend code. Please try again later.";
+        
+        // Don't show failure card for resend - just show alert
         Alert.alert(
           "Resend Failed",
-          result.data?.message || "Try again later."
+          errorMessage,
+          [{ text: "OK" }]
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Error resending reset code:", err);
-      triggerBounceDrop("failure");
+      const errorMessage = err?.message || "Network error. Please check your connection and try again.";
+      Alert.alert(
+        "Resend Failed",
+        errorMessage,
+        [{ text: "OK" }]
+      );
     } finally {
       setIsResending(false);
     }

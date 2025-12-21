@@ -86,10 +86,16 @@ export class BaseApiClient {
           const errorText = await refreshResponse.text().catch(() => "");
           console.error(`Token refresh failed: ${refreshResponse.status}`, errorText);
 
-          // If refresh fails with 401/402, clear tokens
+          // Only clear tokens if refresh endpoint itself returns 401/402
+          // This means the refresh token is also invalid
           if (refreshResponse.status === 401 || refreshResponse.status === 402) {
+            console.log("⚠️ Refresh token also invalid, clearing tokens");
             await TokenUtils.clearAuthTokens();
             console.log("Session expired, tokens cleared");
+          } else {
+            // Other errors (network, server errors) - don't clear tokens
+            // User might still be able to use the app with cached content
+            console.log("⚠️ Token refresh failed but not due to auth, keeping tokens");
           }
 
           return null;
@@ -200,6 +206,10 @@ export class BaseApiClient {
           };
 
           response = await fetch(`${this.baseURL}${endpoint}`, retryConfig);
+        } else {
+          // Token refresh failed, but don't clear tokens here
+          // Only clear if refresh endpoint itself returns 401/402
+          console.log("⚠️ Token refresh failed, but keeping existing token for retry");
         }
       }
 
@@ -210,9 +220,30 @@ export class BaseApiClient {
           errorText
         );
 
+        // Handle 401/402 errors with user-friendly messages
+        if (response.status === 401 || response.status === 402) {
+          return {
+            success: false,
+            error: "Session expired. Please login again.",
+          };
+        }
+
+        // Try to parse error message from response
+        let errorMessage = response.statusText || "An error occurred";
+        try {
+          if (errorText) {
+            const errorData = JSON.parse(errorText);
+            if (errorData.error || errorData.message) {
+              errorMessage = errorData.error || errorData.message;
+            }
+          }
+        } catch {
+          // If parsing fails, use status text
+        }
+
         return {
           success: false,
-          error: `HTTP ${response.status}: ${response.statusText}`,
+          error: errorMessage,
         };
       }
 

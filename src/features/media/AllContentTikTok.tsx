@@ -220,6 +220,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [hoveredVideos, setHoveredVideos] = useState<Set<string>>(new Set());
   const lastScrollY = useRef<number>(0);
   const lastSwitchTimeRef = useRef<number>(0);
+  const scrollAnimationFrameRef = useRef<number | null>(null);
+  const isContentReadyRef = useRef<boolean>(false);
 
   // Helper functions to get state for specific keys
   const getVideoState = (key: string) => ({
@@ -602,6 +604,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         console.error("❌ Error loading AllContent data:", error);
       } finally {
         setIsLoadingContent(false);
+        // Mark content as ready after loading completes
+        isContentReadyRef.current = true;
       }
     };
 
@@ -609,6 +613,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       loadAllData();
     } else {
       setIsLoadingContent(false);
+      // Mark as ready even if no content (prevents blocking)
+      isContentReadyRef.current = true;
     }
   }, [mediaList.length]);
 
@@ -1242,113 +1248,194 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Enhanced scroll behavior with auto-pause functionality
   const handleScroll = useCallback(
     (event: any) => {
-      const { contentOffset } = event.nativeEvent;
-      const scrollY = contentOffset.y;
-      lastScrollYRef.current = scrollY;
+      try {
+        // Safety check for event structure - allow scroll even if content isn't ready
+        if (!event?.nativeEvent?.contentOffset) {
+          return;
+        }
 
-      // Set scrolling state
-      setIsScrolling(true);
+        const { contentOffset } = event.nativeEvent;
+        const scrollY = contentOffset.y;
+        
+        // Validate scrollY is a number
+        if (typeof scrollY !== 'number' || isNaN(scrollY) || scrollY < 0) {
+          return;
+        }
 
-      // Clear existing timeout
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
+        lastScrollYRef.current = scrollY;
 
-      // Set timeout to detect when scrolling stops (shorter delay for responsiveness)
-      scrollTimeoutRef.current = setTimeout(() => {
-        setIsScrolling(false);
-        // Manual video play is still allowed during and after scrolling
-      }, 100) as any; // Reduced to 100ms for better responsiveness
+        // Set scrolling state (lightweight operation)
+        setIsScrolling(true);
 
-      // Real-time video control during scrolling
-      handleVideoVisibilityChange(scrollY);
+        // Clear existing timeout
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+          scrollTimeoutRef.current = null;
+        }
 
-      // Enhanced auto-pause logic for all media types
-      const screenHeight = Dimensions.get("window").height;
-      const viewportTop = scrollY;
-      const viewportBottom = scrollY + screenHeight;
+        // Set timeout to detect when scrolling stops
+        scrollTimeoutRef.current = setTimeout(() => {
+          setIsScrolling(false);
+        }, 150) as any;
 
-      const viewportCenter = (viewportTop + viewportBottom) / 2;
+        // Early return if content isn't ready or no layouts - skip heavy processing but allow scroll
+        if (!isContentReadyRef.current || loading || filteredMediaList.length === 0) {
+          return;
+        }
 
-      // Auto-pause videos that are scrolled out of view
-      Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
-        if (layout.type === "video") {
-          const videoTop = layout.y;
-          const videoBottom = layout.y + layout.height;
-          const videoCenter = (videoTop + videoBottom) / 2;
+        // Early return if no content layouts yet (prevents hangs during initial render)
+        const layoutsCount = Object.keys(contentLayoutsRef.current).length;
+        if (layoutsCount === 0) {
+          return;
+        }
 
-          // Calculate visibility ratio
-          const intersectionTop = Math.max(viewportTop, videoTop);
-          const intersectionBottom = Math.min(viewportBottom, videoBottom);
-          const visibleHeight = Math.max(
-            0,
-            intersectionBottom - intersectionTop
-          );
-          const visibilityRatio =
-            layout.height > 0 ? visibleHeight / layout.height : 0;
+        // Cancel any pending animation frame to prevent accumulation
+        if (scrollAnimationFrameRef.current !== null) {
+          cancelAnimationFrame(scrollAnimationFrameRef.current);
+          scrollAnimationFrameRef.current = null;
+        }
 
-          // Auto-pause if video is less than 20% visible or completely out of view
-          const shouldPause =
-            visibilityRatio < 0.2 ||
-            videoBottom < viewportTop ||
-            videoTop > viewportBottom;
-
-          if (shouldPause && isVideoPlaying(key)) {
-            devLog.log(
-              `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
-                visibilityRatio * 100
-              ).toFixed(1)}%`
-            );
-            // Pause only this specific video, not all videos
-            pauseMedia(key);
-
-            // Remove from hovered videos if it was hover-based
-            if (hoveredVideos.has(key)) {
-              setHoveredVideos((prev) => {
-                const newSet = new Set(prev);
-                newSet.delete(key);
-                return newSet;
-              });
+        // Defer heavy operations to prevent blocking scroll
+        // Use requestAnimationFrame with cancellation to prevent accumulation
+        scrollAnimationFrameRef.current = requestAnimationFrame(() => {
+          try {
+            // Double-check content is still ready - if not, skip processing but allow scroll
+            if (!isContentReadyRef.current || loading || layoutsCount === 0) {
+              scrollAnimationFrameRef.current = null;
+              return;
             }
+
+            // Limit processing to prevent hangs - only process if there are playing items
+            const hasPlayingVideos = Object.values(playingVideos).some(v => v === true);
+            const hasPlayingAudio = playingAudioId !== null;
+
+            if (!hasPlayingVideos && !hasPlayingAudio) {
+              scrollAnimationFrameRef.current = null;
+              return;
+            }
+
+            try {
+              // Real-time video control during scrolling (lightweight check first)
+              if (hasPlayingVideos || currentlyVisibleVideo) {
+                handleVideoVisibilityChange(scrollY);
+              }
+            } catch (error) {
+              console.warn("⚠️ Error in handleVideoVisibilityChange:", error);
+            }
+
+            // Enhanced auto-pause logic for all media types
+            const screenHeight = Dimensions.get("window").height;
+            const viewportTop = scrollY;
+            const viewportBottom = scrollY + screenHeight;
+
+            // Auto-pause videos that are scrolled out of view
+            try {
+              Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+                if (!layout || typeof layout !== 'object') return;
+                
+                if (layout.type === "video") {
+                  const videoTop = layout.y;
+                  const videoBottom = layout.y + layout.height;
+
+                  // Calculate visibility ratio
+                  const intersectionTop = Math.max(viewportTop, videoTop);
+                  const intersectionBottom = Math.min(viewportBottom, videoBottom);
+                  const visibleHeight = Math.max(
+                    0,
+                    intersectionBottom - intersectionTop
+                  );
+                  const visibilityRatio =
+                    layout.height > 0 ? visibleHeight / layout.height : 0;
+
+                  // Auto-pause if video is less than 20% visible or completely out of view
+                  const shouldPause =
+                    visibilityRatio < 0.2 ||
+                    videoBottom < viewportTop ||
+                    videoTop > viewportBottom;
+
+                  if (shouldPause && isVideoPlaying(key)) {
+                    devLog.log(
+                      `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
+                        visibilityRatio * 100
+                      ).toFixed(1)}%`
+                    );
+                    // Pause only this specific video, not all videos
+                    try {
+                      pauseMedia(key);
+                    } catch (error) {
+                      console.warn(`⚠️ Error pausing video ${key}:`, error);
+                    }
+
+                    // Remove from hovered videos if it was hover-based
+                    if (hoveredVideos.has(key)) {
+                      setHoveredVideos((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.delete(key);
+                        return newSet;
+                      });
+                    }
+                  }
+                }
+              });
+            } catch (error) {
+              console.warn("⚠️ Error processing video layouts during scroll:", error);
+            }
+
+            // Auto-pause audio/music that are scrolled out of view
+            try {
+              Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+                if (!layout || typeof layout !== 'object') return;
+                
+                if (layout.type === "music") {
+                  const musicTop = layout.y;
+                  const musicBottom = layout.y + layout.height;
+
+                  // Calculate visibility ratio
+                  const intersectionTop = Math.max(viewportTop, musicTop);
+                  const intersectionBottom = Math.min(viewportBottom, musicBottom);
+                  const visibleHeight = Math.max(
+                    0,
+                    intersectionBottom - intersectionTop
+                  );
+                  const visibilityRatio =
+                    layout.height > 0 ? visibleHeight / layout.height : 0;
+
+                  // Auto-pause if music is less than 30% visible
+                  const shouldPause = visibilityRatio < 0.3;
+
+                  // Check both local audio state and global media store
+                  const isLocallyPlaying = playingAudioId === key;
+                  const isGloballyPlaying = playingVideos[key] || false;
+
+                  if (shouldPause && (isLocallyPlaying || isGloballyPlaying)) {
+                    devLog.log(
+                      `🎵 Auto-pause: Pausing music ${key} - visibility: ${(
+                        visibilityRatio * 100
+                      ).toFixed(1)}%`
+                    );
+                    // Pause both local and global audio
+                    try {
+                      pauseAllAudio();
+                      pauseMedia(key);
+                    } catch (error) {
+                      console.warn(`⚠️ Error pausing audio ${key}:`, error);
+                    }
+                  }
+                }
+              });
+            } catch (error) {
+              console.warn("⚠️ Error processing music layouts during scroll:", error);
+            }
+          } catch (error) {
+            console.warn("⚠️ Error in scroll animation frame:", error);
+          } finally {
+            scrollAnimationFrameRef.current = null;
           }
-        }
-      });
-
-      // Auto-pause audio/music that are scrolled out of view
-      Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
-        if (layout.type === "music") {
-          const musicTop = layout.y;
-          const musicBottom = layout.y + layout.height;
-
-          // Calculate visibility ratio
-          const intersectionTop = Math.max(viewportTop, musicTop);
-          const intersectionBottom = Math.min(viewportBottom, musicBottom);
-          const visibleHeight = Math.max(
-            0,
-            intersectionBottom - intersectionTop
-          );
-          const visibilityRatio =
-            layout.height > 0 ? visibleHeight / layout.height : 0;
-
-          // Auto-pause if music is less than 30% visible
-          const shouldPause = visibilityRatio < 0.3;
-
-          // Check both local audio state and global media store
-          const isLocallyPlaying = playingAudioId === key;
-          const isGloballyPlaying = playingVideos[key] || false;
-
-          if (shouldPause && (isLocallyPlaying || isGloballyPlaying)) {
-            devLog.log(
-              `🎵 Auto-pause: Pausing music ${key} - visibility: ${(
-                visibilityRatio * 100
-              ).toFixed(1)}%`
-            );
-            // Pause both local and global audio
-            pauseAllAudio();
-            pauseMedia(key);
-          }
-        }
-      });
+        });
+      } catch (error) {
+        console.error("❌ Error in handleScroll:", error);
+        // Don't throw - allow scrolling to continue
+      }
     },
     [
       handleVideoVisibilityChange,
@@ -1361,77 +1448,196 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       hoveredVideos,
       pauseAllMedia,
       pauseAllAudio,
+      loading,
+      filteredMediaList.length,
     ]
   );
 
-  const handleScrollEnd = useCallback(() => {
-    devLog.log("📱 Scroll ended, finalizing auto-pause cleanup");
-    const scrollY = lastScrollYRef.current;
-    const screenHeight = Dimensions.get("window").height;
-    const viewportTop = scrollY;
-    const viewportBottom = scrollY + screenHeight;
-
-    // Final cleanup for all media types when scrolling stops
-    Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
-      if (layout.type === "video") {
-        const videoTop = layout.y;
-        const videoBottom = layout.y + layout.height;
-
-        // Calculate final visibility ratio
-        const intersectionTop = Math.max(viewportTop, videoTop);
-        const intersectionBottom = Math.min(viewportBottom, videoBottom);
-        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-        const visibilityRatio =
-          layout.height > 0 ? visibleHeight / layout.height : 0;
-
-        // Final check: pause videos that are less than 20% visible
-        if (visibilityRatio < 0.2 && isVideoPlaying(key)) {
-          devLog.log(
-            `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
-              visibilityRatio * 100
-            ).toFixed(1)}%`
-          );
-          // Pause only this specific video, not all videos
-          pauseMedia(key);
-
-          // Remove from hovered videos
-          if (hoveredVideos.has(key)) {
-            setHoveredVideos((prev) => {
-              const newSet = new Set(prev);
-              newSet.delete(key);
-              return newSet;
-            });
-          }
-        }
-      } else if (layout.type === "music") {
-        const musicTop = layout.y;
-        const musicBottom = layout.y + layout.height;
-
-        // Calculate final visibility ratio
-        const intersectionTop = Math.max(viewportTop, musicTop);
-        const intersectionBottom = Math.min(viewportBottom, musicBottom);
-        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-        const visibilityRatio =
-          layout.height > 0 ? visibleHeight / layout.height : 0;
-
-        // Check both local audio state and global media store
-        const isLocallyPlaying = playingAudioId === key;
-        const isGloballyPlaying = playingVideos[key] || false;
-
-        // Final check: pause music that is less than 30% visible
-        if (visibilityRatio < 0.3 && (isLocallyPlaying || isGloballyPlaying)) {
-          devLog.log(
-            `🎵 Final cleanup: Pausing music ${key} - visibility: ${(
-              visibilityRatio * 100
-            ).toFixed(1)}%`
-          );
-          // Pause both local and global audio
-          pauseAllAudio();
-          pauseMedia(key);
-        }
+  // Cleanup scroll timeout and animation frame on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
       }
-    });
+      if (scrollAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(scrollAnimationFrameRef.current);
+        scrollAnimationFrameRef.current = null;
+      }
+      // Reset content ready flag
+      isContentReadyRef.current = false;
+    };
+  }, []);
 
+  // Mark content as ready when filtered media list is available and not loading
+  useEffect(() => {
+    if (!loading && filteredMediaList.length > 0 && !isLoadingContent) {
+      // Small delay to ensure layouts are calculated
+      const timer = setTimeout(() => {
+        isContentReadyRef.current = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    } else if (loading || isLoadingContent) {
+      isContentReadyRef.current = false;
+    }
+  }, [loading, filteredMediaList.length, isLoadingContent]);
+
+  // Reset scroll state when contentType changes (category switch)
+  useEffect(() => {
+    // Reset content ready flag to allow immediate scrolling after category change
+    isContentReadyRef.current = !loading && filteredMediaList.length > 0 && !isLoadingContent;
+    
+    // Reset scroll position to top when category changes
+    if (scrollViewRef.current) {
+      // Small delay to ensure component is ready
+      const timer = setTimeout(() => {
+        try {
+          scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        } catch (error) {
+          // Ignore scroll errors during navigation
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Clear any pending scroll operations
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
+    if (scrollAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(scrollAnimationFrameRef.current);
+      scrollAnimationFrameRef.current = null;
+    }
+  }, [contentType, loading, filteredMediaList.length, isLoadingContent]);
+
+  // Reset scroll state when component gains focus (navigation back from reels, etc.)
+  useFocusEffect(
+    useCallback(() => {
+      // Reset content ready flag to allow immediate scrolling after navigation
+      isContentReadyRef.current = !loading && filteredMediaList.length > 0 && !isLoadingContent;
+      
+      // Reset scroll position to top when navigating back
+      if (scrollViewRef.current) {
+        // Small delay to ensure component is mounted
+        setTimeout(() => {
+          try {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+          } catch (error) {
+            // Ignore scroll errors during navigation
+          }
+        }, 50);
+      }
+
+      // Clear any pending scroll operations
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+      if (scrollAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(scrollAnimationFrameRef.current);
+        scrollAnimationFrameRef.current = null;
+      }
+
+      return () => {
+        // Cleanup on blur
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+          scrollTimeoutRef.current = null;
+        }
+        if (scrollAnimationFrameRef.current !== null) {
+          cancelAnimationFrame(scrollAnimationFrameRef.current);
+          scrollAnimationFrameRef.current = null;
+        }
+      };
+    }, [loading, filteredMediaList.length, isLoadingContent])
+  );
+
+  const handleScrollEnd = useCallback(() => {
+    try {
+      devLog.log("📱 Scroll ended, finalizing auto-pause cleanup");
+      const scrollY = lastScrollYRef.current;
+      const screenHeight = Dimensions.get("window").height;
+      const viewportTop = scrollY;
+      const viewportBottom = scrollY + screenHeight;
+
+      // Final cleanup for all media types when scrolling stops
+      try {
+        Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+          if (!layout || typeof layout !== 'object') return;
+          
+          if (layout.type === "video") {
+            const videoTop = layout.y;
+            const videoBottom = layout.y + layout.height;
+
+            // Calculate final visibility ratio
+            const intersectionTop = Math.max(viewportTop, videoTop);
+            const intersectionBottom = Math.min(viewportBottom, videoBottom);
+            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+            const visibilityRatio =
+              layout.height > 0 ? visibleHeight / layout.height : 0;
+
+            // Final check: pause videos that are less than 20% visible
+            if (visibilityRatio < 0.2 && isVideoPlaying(key)) {
+              devLog.log(
+                `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
+                  visibilityRatio * 100
+                ).toFixed(1)}%`
+              );
+              // Pause only this specific video, not all videos
+              try {
+                pauseMedia(key);
+              } catch (error) {
+                console.warn(`⚠️ Error pausing video ${key} in handleScrollEnd:`, error);
+              }
+
+              // Remove from hovered videos
+              if (hoveredVideos.has(key)) {
+                setHoveredVideos((prev) => {
+                  const newSet = new Set(prev);
+                  newSet.delete(key);
+                  return newSet;
+                });
+              }
+            }
+          } else if (layout.type === "music") {
+            const musicTop = layout.y;
+            const musicBottom = layout.y + layout.height;
+
+            // Calculate final visibility ratio
+            const intersectionTop = Math.max(viewportTop, musicTop);
+            const intersectionBottom = Math.min(viewportBottom, musicBottom);
+            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+            const visibilityRatio =
+              layout.height > 0 ? visibleHeight / layout.height : 0;
+
+            // Check both local audio state and global media store
+            const isLocallyPlaying = playingAudioId === key;
+            const isGloballyPlaying = playingVideos[key] || false;
+
+            // Final check: pause music that is less than 30% visible
+            if (visibilityRatio < 0.3 && (isLocallyPlaying || isGloballyPlaying)) {
+              devLog.log(
+                `🎵 Final cleanup: Pausing music ${key} - visibility: ${(
+                  visibilityRatio * 100
+                ).toFixed(1)}%`
+              );
+              // Pause both local and global audio
+              try {
+                pauseAllAudio();
+                pauseMedia(key);
+              } catch (error) {
+                console.warn(`⚠️ Error pausing music ${key} in handleScrollEnd:`, error);
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.warn("⚠️ Error in handleScrollEnd cleanup:", error);
+      }
+    } catch (error) {
+      console.error("❌ Error in handleScrollEnd:", error);
+    }
     // Manual video play remains available after scrolling ends
   }, [
     playingAudioId,
@@ -1718,7 +1924,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Loading state
   if (loading && !hasContent) {
     return (
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={{ flex: 1 }} 
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+      >
         <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
           <View
             style={{
@@ -1798,6 +2009,34 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     );
   }
 
+  // For LIVE content type, only show the Recommended Live component
+  if (contentType === "live" || contentType === "LIVE") {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
+        {showSuccessCard && (
+          <SuccessCard
+            message={successMessage}
+            onClose={() => setShowSuccessCard(false)}
+            duration={3000}
+          />
+        )}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingVertical: 40,
+            paddingHorizontal: 0,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderRecommendedLiveCards()}
+        </ScrollView>
+      </View>
+    );
+  }
+
   // Empty state
   if (filteredMediaList.length === 0) {
     return (
@@ -1826,7 +2065,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   return (
     <ContentErrorBoundary>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }} collapsable={false}>
         {showSuccessCard && (
           <SuccessCard
             message={successMessage}
@@ -1839,6 +2078,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           style={{ flex: 1 }}
           scrollEventThrottle={16}
           removeClippedSubviews={true}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

@@ -2,7 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { SafeAreaView, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, Text, View } from "react-native";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { navigateMainTab } from "../utils/navigation";
 
@@ -84,57 +84,116 @@ export default function CommunityScreen() {
         </View>
       </View>
 
-      {/* Cards Grid */}
+      {/* Coming Soon Screen */}
       <View
         style={{
           flex: 1,
           paddingHorizontal: PADDING_X,
           paddingTop: 20,
           paddingBottom: 100,
+          justifyContent: "center",
+          alignItems: "center",
         }}
       >
         <View
           style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
+            backgroundColor: "white",
+            borderRadius: 16,
+            paddingHorizontal: 24,
+            paddingVertical: 32,
+            width: "100%",
+            maxWidth: 320,
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
           }}
         >
-          {communityCards.map((card) => (
-            <TouchableOpacity
-              key={card.id}
-              onPress={() => handleCardPress(card)}
+          {/* Community Icon */}
+          <View
+            style={{
+              marginBottom: 24,
+            }}
+          >
+            <Ionicons
+              name="people-circle-outline"
+              size={64}
+              color="#279CCA"
+            />
+          </View>
+
+          {/* Title */}
+          <Text
+            style={{
+              fontSize: 24,
+              fontFamily: "Rubik-Bold",
+              color: "#000",
+              textAlign: "center",
+              marginBottom: 12,
+            }}
+          >
+            Community Features Coming Soon
+          </Text>
+
+          {/* Subtitle */}
+          <Text
+            style={{
+              fontSize: 16,
+              color: "#666",
+              textAlign: "center",
+              lineHeight: 22,
+              marginBottom: 24,
+            }}
+          >
+            We're working hard to bring you amazing community features including prayer walls, forums, polls, and groups. Stay tuned for the next update!
+          </Text>
+
+          {/* Feature Preview */}
+          <View
+            style={{
+              width: "100%",
+              marginTop: 8,
+            }}
+          >
+            <Text
               style={{
-                width: "48%",
-                height: 194,
-                backgroundColor: card.color,
-                borderRadius: 16,
-                alignItems: "center",
-                justifyContent: "center",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 3,
-                marginBottom: ITEM_GAP,
+                color: "#000",
+                marginBottom: 8,
+                fontSize: 14,
+                fontWeight: "600",
               }}
-              activeOpacity={0.8}
             >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 20,
-                  fontWeight: "900",
-                  textAlign: "center",
-                  fontFamily: "Rubik-Bold",
-                  paddingHorizontal: 10,
-                  letterSpacing: 0.5,
-                }}
-              >
-                {card.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
+              Coming in the next update:
+            </Text>
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              • Connect with fellow believers
+            </Text>
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              • Share prayers and get support
+            </Text>
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 14,
+              }}
+            >
+              • Join groups and discussions
+            </Text>
+          </View>
         </View>
       </View>
 
