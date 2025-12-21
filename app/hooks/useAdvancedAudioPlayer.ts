@@ -49,6 +49,27 @@ export const useAdvancedAudioPlayer = (
   const soundRef = useRef<Audio.Sound | null>(null);
   const statusUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Keep the latest callback props in refs so we don't have to
+  // recreate our internal callbacks/effects on every render.
+  const onPlaybackStatusUpdateRef = useRef<
+    ((status: AudioPlayerState) => void) | undefined
+  >(onPlaybackStatusUpdate);
+  const onErrorRef = useRef<((error: string) => void) | undefined>(onError);
+  const onFinishedRef = useRef<(() => void) | undefined>(onFinished);
+
+  // Sync refs when callbacks change
+  useEffect(() => {
+    onPlaybackStatusUpdateRef.current = onPlaybackStatusUpdate;
+  }, [onPlaybackStatusUpdate]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onFinishedRef.current = onFinished;
+  }, [onFinished]);
+
   const [state, setState] = useState<AudioPlayerState>({
     isPlaying: false,
     isLoading: false,
@@ -89,7 +110,8 @@ export const useAdvancedAudioPlayer = (
           error: null,
         };
         setState(newState);
-        onPlaybackStatusUpdate?.(newState);
+        // Use ref to avoid recreating callback dependencies on every render
+        onPlaybackStatusUpdateRef.current?.(newState);
         if (status.didJustFinish) {
           setState((prev) => ({
             ...prev,
@@ -97,15 +119,15 @@ export const useAdvancedAudioPlayer = (
             progress: 0,
             position: 0,
           }));
-          onFinished?.();
+          onFinishedRef.current?.();
         }
       }
     } catch (error) {
       const errorMessage = `Status update error: ${error}`;
       setState((prev) => ({ ...prev, error: errorMessage, isLoading: false }));
-      onError?.(errorMessage);
+      onErrorRef.current?.(errorMessage);
     }
-  }, [onPlaybackStatusUpdate, onError, onFinished]);
+  }, []);
 
   const startStatusUpdates = useCallback(() => {
     if (statusUpdateIntervalRef.current) return;
@@ -159,7 +181,7 @@ export const useAdvancedAudioPlayer = (
             error: null,
           };
           setState(newState);
-          onPlaybackStatusUpdate?.(newState);
+          onPlaybackStatusUpdateRef.current?.(newState);
           if (status.didJustFinish) {
             setState((prev) => ({
               ...prev,
@@ -167,7 +189,7 @@ export const useAdvancedAudioPlayer = (
               progress: 0,
               position: 0,
             }));
-            onFinished?.();
+            onFinishedRef.current?.();
           }
         }
       });
@@ -182,16 +204,13 @@ export const useAdvancedAudioPlayer = (
       const errorMessage = `Failed to load audio: ${error}`;
       console.warn(errorMessage, { audioUrl });
       setState((prev) => ({ ...prev, error: errorMessage, isLoading: false }));
-      onError?.(errorMessage);
+      onErrorRef.current?.(errorMessage);
     }
   }, [
     audioUrl,
     autoPlay,
     volume,
     loop,
-    onPlaybackStatusUpdate,
-    onError,
-    onFinished,
     startStatusUpdates,
     ensureAudioMode,
   ]);

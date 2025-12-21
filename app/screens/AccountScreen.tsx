@@ -2,7 +2,7 @@
 import { useClerk } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { Alert, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccountHeader from "../components/account/AccountHeader";
 import ContentSection from "../components/account/ContentSection";
@@ -45,8 +45,9 @@ export default function AccountScreen() {
             // Sign out from Clerk
             await signOut();
 
-            // Navigate to welcome screen
-            router.replace("/");
+            // Navigate directly to the email/password Sign In screen
+            // and reset away from the authenticated stack
+            router.replace("/auth/login");
           } catch (error) {
             console.error("Logout error:", error);
             Alert.alert("Error", "Failed to logout. Please try again.");
