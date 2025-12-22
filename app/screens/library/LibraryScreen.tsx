@@ -14,6 +14,7 @@ import { useFastPerformance } from "../../utils/fastPerformance";
 import { navigateMainTab } from "../../utils/navigation";
 import AllLibrary from "./AllLibrary";
 import PlaylistsLibrary from "./PlaylistsLibrary";
+import Music from "../../categories/music";
 
 const categories = ["ALL", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "PLAYLISTS"];
 
@@ -89,19 +90,7 @@ export default function LibraryScreen() {
       case "SERMON":
         return <AllLibrary contentType="SERMON" />;
       case "MUSIC":
-        return (
-          <View className="flex-1">
-            {/* Copyright-Free Songs Section */}
-            <View className="mb-4">
-              <CopyrightFreeSongs />
-            </View>
-
-            {/* Regular Music Library */}
-            <View className="flex-1">
-              <AllLibrary contentType="MUSIC" />
-            </View>
-          </View>
-        );
+        return <Music />;
       case "E-BOOKS":
         return <AllLibrary contentType="E-BOOKS" />;
       case "VIDEO":

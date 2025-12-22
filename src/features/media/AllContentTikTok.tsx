@@ -10,10 +10,15 @@ import React, {
 import {
     ActivityIndicator,
     Dimensions,
+    FlatList,
+    Image,
+    Modal,
     RefreshControl,
     ScrollView,
     Share,
     Text,
+    TextInput,
+    TouchableOpacity,
     View
 } from "react-native";
 import { useCurrentPlayingAudioStore } from "../../../app/store/useCurrentPlayingAudioStore";
@@ -42,6 +47,7 @@ import { useMedia } from "../../shared/hooks/useMedia";
 import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
 import CopyrightFreeSongs from "../../../app/components/CopyrightFreeSongs";
+import CopyrightFreeSongModal from "../../../app/components/CopyrightFreeSongModal";
 import SuccessCard from "../../../app/components/SuccessCard";
 import HymnMiniCard, {
     HymnItem,
@@ -60,6 +66,11 @@ import { useGlobalMediaStore } from "../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
+import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
+import copyrightFreeMusicAPI, {
+    CopyrightFreeSongResponse,
+} from "../../../app/services/copyrightFreeMusicAPI";
+import { LinearGradient } from "expo-linear-gradient";
 import {
     convertToDownloadableItem,
     useDownloadHandler,
@@ -166,6 +177,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [hymns, setHymns] = useState<HymnItem[]>([]);
   const [loadingHymns, setLoadingHymns] = useState(false);
+  
+  // Music section state (only for MUSIC tab)
+  const [copyrightFreeSongs, setCopyrightFreeSongs] = useState<any[]>([]);
+  const [loadingSongs, setLoadingSongs] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchInput, setShowSearchInput] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [displayMode, setDisplayMode] = useState<"list" | "grid" | "small" | "large">("list");
+  const [showSongModal, setShowSongModal] = useState(false);
+  const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
   // Audio playback state
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -286,16 +309,25 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, [categorizedContent]);
 
   // Memoize filtered content lists for rendering
+  // In MUSIC tab, exclude audio items (they're shown in the dedicated music section)
   const filteredContentLists = useMemo(() => {
-    const remaining = (filteredMediaList || []).filter(
+    let remaining = (filteredMediaList || []).filter(
       (item) => !mostRecentItem || item._id !== mostRecentItem._id
     );
+    
+    // In MUSIC tab, exclude audio/music items from "All Content" section
+    if ((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") {
+      remaining = remaining.filter(
+        (item) => item.contentType !== "audio" && item.contentType !== "music"
+      );
+    }
+    
     return {
       firstFour: remaining.slice(0, 4),
       nextFour: remaining.slice(4, 8),
       rest: remaining.slice(8),
     };
-  }, [filteredMediaList, mostRecentItem]);
+  }, [filteredMediaList, mostRecentItem, contentType]);
 
   // Update refs when state changes
   useEffect(() => {
@@ -425,45 +457,216 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
   }, []);
 
-  // Fetch local hymns JSON; fallback to Hymnary sample (MVP)
-  useEffect(() => {
-    const fetchHymns = async () => {
-      try {
-        setLoadingHymns(true);
-        try {
-          const mod = await import("../../../assets/hymns.json");
-          const local = (mod as any).default as HymnItem[];
-          if (Array.isArray(local) && local.length) {
-            setHymns(local);
-            return;
-          }
-        } catch {}
+  // Global audio player state
+  const {
+    currentTrack,
+    isPlaying: globalIsPlaying,
+    setTrack,
+    togglePlayPause,
+  } = useGlobalAudioPlayerStore();
 
-        // Fallback to external sample
-        try {
-          const res = await fetch(
-            "https://hymnary.org/api/scripture?reference=Psalm+136"
-          );
-          const json = await res.json();
-          const items = Object.values(json || {})
-            .slice(0, 10)
-            .map((h: any) => ({
-              id: h.title || Math.random().toString(36).slice(2),
-              title: h.title,
-              author: h.author || h.paraphraser || h.translator || "Unknown",
-              meter: h.meter,
-              refs: String(h["scripture references"] || "").trim(),
-            }));
-          setHymns(items as HymnItem[]);
-        } catch {}
-      } catch (e) {
-        console.warn("Hymnary fetch failed:", e);
+  const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+  // Transform backend song format to frontend format
+  const transformBackendSong = useCallback(
+    (backendSong: CopyrightFreeSongResponse): any => {
+      const id = backendSong.id ?? backendSong._id ?? "";
+      const audioUrl = backendSong.audioUrl ?? backendSong.fileUrl ?? "";
+      const views = backendSong.views ?? backendSong.viewCount ?? 0;
+      const likes = backendSong.likes ?? backendSong.likeCount ?? 0;
+      const artist = backendSong.artist ?? backendSong.singer ?? "";
+
+      return {
+        id,
+        title: backendSong.title,
+        artist,
+        year: backendSong.year,
+        audioUrl,
+        thumbnailUrl: backendSong.thumbnailUrl,
+        category: backendSong.category,
+        duration: backendSong.duration,
+        contentType: backendSong.contentType,
+        description: backendSong.description,
+        speaker: backendSong.speaker ?? artist,
+        uploadedBy: backendSong.uploadedBy,
+        createdAt: backendSong.createdAt,
+        views,
+        likes,
+        isLiked: backendSong.isLiked ?? false,
+        isInLibrary: backendSong.isInLibrary ?? false,
+        isPublicDomain: backendSong.isPublicDomain ?? true,
+        isCopyrightFree: true, // Flag to identify copyright-free songs
+      };
+    },
+    []
+  );
+
+  // Transform user-uploaded audio (MediaItem) to song format
+  const transformUserAudioToSong = useCallback(
+    (audioItem: MediaItem): any => {
+      const id = audioItem._id || "";
+      const audioUrl = audioItem.fileUrl || "";
+      const views = audioItem.views || audioItem.viewCount || 0;
+      const likes = audioItem.likes || audioItem.likeCount || audioItem.favorite || 0;
+      const artist = audioItem.speaker || getUserDisplayNameFromContent(audioItem) || "Unknown Artist";
+      const thumbnailUrl = audioItem.thumbnailUrl || audioItem.imageUrl || "";
+
+      return {
+        id,
+        title: audioItem.title || "Untitled",
+        artist,
+        year: audioItem.createdAt ? new Date(audioItem.createdAt).getFullYear() : new Date().getFullYear(),
+        audioUrl,
+        thumbnailUrl: typeof thumbnailUrl === "string" ? thumbnailUrl : (thumbnailUrl as any)?.uri || "",
+        category: "User Upload",
+        duration: audioItem.duration || 0,
+        contentType: audioItem.contentType || "audio",
+        description: audioItem.description || audioItem.title || "",
+        speaker: artist,
+        uploadedBy: audioItem.uploadedBy,
+        createdAt: audioItem.createdAt,
+        views,
+        likes,
+        isLiked: false, // Will be updated from contentStats
+        isInLibrary: false,
+        isPublicDomain: false,
+        isCopyrightFree: false, // Flag to identify user-uploaded audio
+        originalItem: audioItem, // Keep reference to original item for actions
+      };
+    },
+    []
+  );
+
+  // Load copyright-free songs
+  const loadSongs = useCallback(
+    async (search?: string, category?: string | null) => {
+      setLoadingSongs(true);
+      try {
+        const response = search
+          ? await copyrightFreeMusicAPI.searchSongs(search, {
+              category: category || undefined,
+              limit: 50,
+            })
+          : await copyrightFreeMusicAPI.getAllSongs({
+              category: category || undefined,
+              limit: 50,
+              sort: "popular",
+            });
+
+        if (response.success && response.data?.songs?.length) {
+          const transformedSongs = response.data.songs.map(transformBackendSong);
+          setCopyrightFreeSongs(transformedSongs);
+        } else {
+          setCopyrightFreeSongs([]);
+        }
+      } catch (err) {
+        console.error("Error loading songs:", err);
+        setCopyrightFreeSongs([]);
       } finally {
-        setLoadingHymns(false);
+        setLoadingSongs(false);
       }
-    };
-    fetchHymns();
+    },
+    [transformBackendSong]
+  );
+
+  // Load categories
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await copyrightFreeMusicAPI.getCategories();
+      if (response.success && response.data?.categories) {
+        setCategories(
+          response.data.categories.map((cat: any) => cat.name || cat)
+        );
+      }
+    } catch (err) {
+      console.warn("Error loading categories:", err);
+    }
   }, []);
+
+  // Combined songs list (copyright-free + user-uploaded audio) - Only for MUSIC tab
+  const allSongs = useMemo(() => {
+    if ((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") {
+      // Get user-uploaded audio from filteredMediaList
+      const userAudio = filteredMediaList.filter(
+        (item) => 
+          (item.contentType === "audio" || item.contentType === "music") &&
+          item.contentType !== "copyright-free-music"
+      );
+      
+      // Transform user-uploaded audio to song format
+      const transformedUserAudio = userAudio.map(transformUserAudioToSong);
+      
+      // Combine with copyright-free songs
+      const combined = [...copyrightFreeSongs, ...transformedUserAudio];
+      
+      // Apply search filter
+      let filtered = combined;
+      if (searchQuery && searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        filtered = combined.filter(
+          (song) =>
+            song.title?.toLowerCase().includes(query) ||
+            song.artist?.toLowerCase().includes(query)
+        );
+      }
+      
+      // Apply category filter (only for copyright-free songs, user uploads are always shown)
+      if (selectedCategory && selectedCategory !== "All") {
+        filtered = filtered.filter(
+          (song) => song.category === selectedCategory || !song.isCopyrightFree
+        );
+      }
+      
+      return filtered;
+    }
+    return copyrightFreeSongs;
+  }, [contentType, filteredMediaList, copyrightFreeSongs, transformUserAudioToSong, searchQuery, selectedCategory]);
+
+  // Load songs only when MUSIC tab is active (not ALL tab)
+  useEffect(() => {
+    if ((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") {
+      loadSongs(searchQuery || undefined, selectedCategory);
+      loadCategories();
+    }
+  }, [contentType, searchQuery, selectedCategory, loadSongs, loadCategories]);
+
+  // Reusable renderer for Hymn mini-cards (for ALL tab only)
+  const renderHymnMiniCards = useCallback(() => {
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+      >
+        {loadingHymns
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <View
+                key={`hym-skel-${i}`}
+                className="mr-4 w-[154px] flex-col items-center"
+              >
+                <Skeleton variant="thumbnail" />
+                <View className="mt-2 flex flex-col w-full">
+                  <Skeleton variant="text" width={"70%"} />
+                  <View style={{ height: 6 }} />
+                  <Skeleton variant="text" width={"50%"} />
+                </View>
+              </View>
+            ))
+          : (hymns || []).map((h) => (
+              <HymnMiniCard
+                key={h.id}
+                item={h}
+                onPress={(item) =>
+                  router.push({
+                    pathname: "/reader/HymnDetail",
+                    params: { id: item.id },
+                  })
+                }
+              />
+            ))}
+      </ScrollView>
+    );
+  }, [hymns, loadingHymns, router]);
 
   // Load content stats for all visible items so user-liked/bookmarked states persist
   const mapContentTypeToBackend = useCallback((type?: string) => {
@@ -1659,43 +1862,597 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [isAutoPlayEnabled, currentlyVisibleVideo, playMedia]
   );
 
-  // Reusable renderer for Hymn mini-cards (matches mini-card UI in design)
-  const renderHymnMiniCards = useCallback(() => {
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+  // Discover weekly style cards data (using Jevah colors)
+  const discoverCards = [
+    {
+      id: "1",
+      title: "Discover Weekly",
+      description: "The original slow instrumental best playlists.",
+      color: UI_CONFIG.COLORS.PRIMARY, // "#256E63"
+    },
+    {
+      id: "2",
+      title: "Featured Playlist",
+      description: "Top trending gospel songs this week.",
+      color: UI_CONFIG.COLORS.SECONDARY, // "#FEA74E"
+    },
+  ];
+
+  // Fetch local hymns JSON; fallback to Hymnary sample (MVP) - Only for ALL tab
+  useEffect(() => {
+    const fetchHymns = async () => {
+      try {
+        setLoadingHymns(true);
+        try {
+          const mod = await import("../../../assets/hymns.json");
+          const local = (mod as any).default as HymnItem[];
+          if (Array.isArray(local) && local.length) {
+            setHymns(local);
+            return;
+          }
+        } catch {}
+
+        // Fallback to external sample
+        try {
+          const res = await fetch(
+            "https://hymnary.org/api/scripture?reference=Psalm+136"
+          );
+          const json = await res.json();
+          const items = Object.values(json || {})
+            .slice(0, 10)
+            .map((h: any) => ({
+              id: h.title || Math.random().toString(36).slice(2),
+              title: h.title,
+              author: h.author || h.paraphraser || h.translator || "Unknown",
+              meter: h.meter,
+              refs: String(h["scripture references"] || "").trim(),
+            }));
+          setHymns(items as HymnItem[]);
+        } catch {}
+      } catch (e) {
+        console.warn("Hymnary fetch failed:", e);
+      } finally {
+        setLoadingHymns(false);
+      }
+    };
+    
+    // Only fetch hymns if in ALL tab
+    if (contentType === "ALL") {
+      fetchHymns();
+    }
+  }, [contentType]);
+
+  // Handle play/pause for a song (works for both copyright-free and user-uploaded audio)
+  const handlePlayPress = useCallback(
+    async (song: any) => {
+      if (currentTrack?.id === song.id && globalIsPlaying) {
+        await togglePlayPause();
+      } else {
+        // For user-uploaded audio, use the playAudio function
+        if (song.isCopyrightFree === false && song.originalItem) {
+          await playAudio(song.audioUrl, song.id);
+          return;
+        }
+
+        // For copyright-free songs, use global audio player
+        const songIndex = allSongs.findIndex((s) => s.id === song.id);
+        
+        if (songIndex !== -1) {
+          const mappedQueue = allSongs.map((s) => ({
+            id: s.id,
+            title: s.title,
+            artist: s.artist,
+            audioUrl: s.audioUrl,
+            thumbnailUrl: s.thumbnailUrl,
+            duration: s.duration,
+            category: s.category,
+            description: s.description,
+          }));
+
+          useGlobalAudioPlayerStore.setState({
+            queue: mappedQueue,
+            currentIndex: songIndex,
+          });
+        }
+
+        await setTrack(
+          {
+            id: song.id,
+            title: song.title,
+            artist: song.artist,
+            audioUrl: song.audioUrl,
+            thumbnailUrl: song.thumbnailUrl,
+            duration: song.duration,
+            category: song.category,
+            description: song.description,
+          },
+          true
+        );
+      }
+    },
+    [currentTrack, globalIsPlaying, setTrack, togglePlayPause, allSongs, playAudio]
+  );
+
+  // Format duration
+  const formatDuration = useCallback((seconds: number) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, []);
+
+  // Format time in milliseconds
+  const formatTime = useCallback((milliseconds: number) => {
+    if (!milliseconds || isNaN(milliseconds)) return "0:00";
+    const seconds = Math.floor(milliseconds / 1000);
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, []);
+
+  // Render Discover Weekly card
+  const renderDiscoverCard = useCallback(
+    (item: typeof discoverCards[0]) => (
+      <TouchableOpacity
+        key={item.id}
+        activeOpacity={0.9}
+        style={{
+          width: SCREEN_WIDTH - 64,
+          height: 180,
+          marginRight: 16,
+          borderRadius: 16,
+          overflow: "hidden",
+        }}
       >
-        {loadingHymns
-          ? Array.from({ length: 8 }).map((_, i) => (
-              <View
-                key={`hym-skel-${i}`}
-                className="mr-4 w-[154px] flex-col items-center"
-              >
-                <Skeleton variant="thumbnail" />
-                <View className="mt-2 flex flex-col w-full">
-                  <Skeleton variant="text" width={"70%"} />
-                  <View style={{ height: 6 }} />
-                  <Skeleton variant="text" width={"50%"} />
-                </View>
-              </View>
-            ))
-          : (hymns || []).map((h) => (
-              <HymnMiniCard
-                key={h.id}
-                item={h}
-                onPress={(item) =>
-                  router.push({
-                    pathname: "/reader/HymnDetail",
-                    params: { id: item.id },
-                  })
-                }
+        <LinearGradient
+          colors={[item.color, `${item.color}DD`]}
+          style={{ flex: 1, padding: 20, justifyContent: "space-between" }}
+        >
+          <View>
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: "700",
+                color: "#FFFFFF",
+                fontFamily: "Rubik_700Bold",
+                marginBottom: 8,
+              }}
+            >
+              {item.title}
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#FFFFFFDD",
+                fontFamily: "Rubik_400Regular",
+              }}
+            >
+              {item.description}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <TouchableOpacity
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: "#FFFFFF",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Ionicons name="play" size={24} color={item.color} />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <Ionicons name="download-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    ),
+    [SCREEN_WIDTH]
+  );
+
+  // Format duration
+  const formatSongDuration = useCallback((seconds: number) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, []);
+
+  // Render song in list view
+  const renderSongListItem = useCallback(
+    (item: any) => {
+      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+      const thumbnailSource =
+        typeof item.thumbnailUrl === "string"
+          ? { uri: item.thumbnailUrl }
+          : item.thumbnailUrl;
+
+      return (
+        <TouchableOpacity
+          key={item.id}
+          onPress={() => {
+            setSelectedSong(item);
+            setShowSongModal(true);
+          }}
+          activeOpacity={0.7}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
+            paddingVertical: 12,
+            backgroundColor: "#FFFFFF",
+          }}
+        >
+          <View
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              overflow: "hidden",
+              backgroundColor: "#E5E7EB",
+              marginRight: 12,
+            }}
+          >
+            {thumbnailSource ? (
+              <Image
+                source={thumbnailSource}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
               />
-            ))}
-      </ScrollView>
-    );
-  }, [hymns, loadingHymns, router]);
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#9CA3AF",
+                }}
+              >
+                <Ionicons name="musical-notes" size={24} color="#FFFFFF" />
+              </View>
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: "#1D2939",
+                fontFamily: "Rubik_600SemiBold",
+                marginBottom: 4,
+              }}
+              numberOfLines={1}
+            >
+              {item.title}
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#98A2B3",
+                fontFamily: "Rubik_400Regular",
+              }}
+              numberOfLines={1}
+            >
+              By {item.artist} • {formatSongDuration(item.duration)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handlePlayPress(item);
+            }}
+            activeOpacity={0.7}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: isPlaying ? "#256E63" : "#F3F4F6",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={20}
+              color={isPlaying ? "#FFFFFF" : "#256E63"}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      );
+    },
+    [currentTrack, globalIsPlaying, handlePlayPress, formatSongDuration]
+  );
+
+  // Render song in grid view
+  const renderSongGridItem = useCallback(
+    (item: any) => {
+      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+      const thumbnailSource =
+        typeof item.thumbnailUrl === "string"
+          ? { uri: item.thumbnailUrl }
+          : item.thumbnailUrl;
+      const cardWidth = (SCREEN_WIDTH - 48) / 2;
+
+      return (
+        <TouchableOpacity
+          key={item.id}
+          onPress={() => {
+            setSelectedSong(item);
+            setShowSongModal(true);
+          }}
+          activeOpacity={0.9}
+          style={{
+            width: cardWidth,
+            marginBottom: 16,
+            marginHorizontal: 4,
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              height: cardWidth,
+              borderRadius: 12,
+              overflow: "hidden",
+              backgroundColor: "#E5E7EB",
+              marginBottom: 8,
+            }}
+          >
+            {thumbnailSource ? (
+              <Image
+                source={thumbnailSource}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#9CA3AF",
+                }}
+              >
+                <Ionicons name="musical-notes" size={48} color="#FFFFFF" />
+              </View>
+            )}
+            <View
+              style={{
+                position: "absolute",
+                bottom: 8,
+                right: 8,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "#FFFFFF",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Ionicons
+                name={isPlaying ? "pause" : "play"}
+                size={20}
+                color="#256E63"
+              />
+            </View>
+          </View>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "600",
+              color: "#1D2939",
+              fontFamily: "Rubik_600SemiBold",
+              marginBottom: 4,
+            }}
+            numberOfLines={1}
+          >
+            {item.title}
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#98A2B3",
+              fontFamily: "Rubik_400Regular",
+            }}
+            numberOfLines={1}
+          >
+            {item.artist}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [currentTrack, globalIsPlaying, SCREEN_WIDTH]
+  );
+
+  // Render song in small icons view
+  const renderSongSmallItem = useCallback(
+    (item: any) => {
+      const thumbnailSource =
+        typeof item.thumbnailUrl === "string"
+          ? { uri: item.thumbnailUrl }
+          : item.thumbnailUrl;
+      const itemWidth = (SCREEN_WIDTH - 48) / 3;
+
+      return (
+        <TouchableOpacity
+          key={item.id}
+          onPress={() => {
+            setSelectedSong(item);
+            setShowSongModal(true);
+          }}
+          activeOpacity={0.9}
+          style={{ width: itemWidth, marginBottom: 12, marginHorizontal: 4 }}
+        >
+          <View
+            style={{
+              width: "100%",
+              height: itemWidth,
+              borderRadius: 8,
+              overflow: "hidden",
+              backgroundColor: "#E5E7EB",
+              marginBottom: 6,
+            }}
+          >
+            {thumbnailSource ? (
+              <Image
+                source={thumbnailSource}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#9CA3AF",
+                }}
+              >
+                <Ionicons name="musical-notes" size={32} color="#FFFFFF" />
+              </View>
+            )}
+          </View>
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              color: "#1D2939",
+              fontFamily: "Rubik_600SemiBold",
+            }}
+            numberOfLines={2}
+          >
+            {item.title}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [SCREEN_WIDTH]
+  );
+
+  // Render song in large icons view
+  const renderSongLargeItem = useCallback(
+    (item: any) => {
+      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+      const thumbnailSource =
+        typeof item.thumbnailUrl === "string"
+          ? { uri: item.thumbnailUrl }
+          : item.thumbnailUrl;
+      const cardWidth = SCREEN_WIDTH - 32;
+
+      return (
+        <TouchableOpacity
+          key={item.id}
+          onPress={() => {
+            setSelectedSong(item);
+            setShowSongModal(true);
+          }}
+          activeOpacity={0.9}
+          style={{ width: cardWidth, marginBottom: 20, marginHorizontal: 16 }}
+        >
+          <View
+            style={{
+              width: "100%",
+              height: cardWidth,
+              borderRadius: 16,
+              overflow: "hidden",
+              backgroundColor: "#E5E7EB",
+              marginBottom: 12,
+            }}
+          >
+            {thumbnailSource ? (
+              <Image
+                source={thumbnailSource}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#9CA3AF",
+                }}
+              >
+                <Ionicons name="musical-notes" size={64} color="#FFFFFF" />
+              </View>
+            )}
+            <View
+              style={{
+                position: "absolute",
+                bottom: 16,
+                right: 16,
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: "#FFFFFF",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Ionicons
+                name={isPlaying ? "pause" : "play"}
+                size={28}
+                color="#256E63"
+              />
+            </View>
+          </View>
+          <View style={{ paddingHorizontal: 4 }}>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: "#1D2939",
+                fontFamily: "Rubik_600SemiBold",
+                marginBottom: 4,
+              }}
+              numberOfLines={1}
+            >
+              {item.title}
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#98A2B3",
+                fontFamily: "Rubik_400Regular",
+              }}
+              numberOfLines={1}
+            >
+              By {item.artist} • {formatSongDuration(item.duration)}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [currentTrack, globalIsPlaying, SCREEN_WIDTH, formatSongDuration]
+  );
+
+  // Render song based on display mode
+  const renderSongItem = useCallback(
+    (item: any) => {
+      switch (displayMode) {
+        case "list":
+          return renderSongListItem(item);
+        case "grid":
+          return renderSongGridItem(item);
+        case "small":
+          return renderSongSmallItem(item);
+        case "large":
+          return renderSongLargeItem(item);
+        default:
+          return renderSongListItem(item);
+      }
+    },
+    [displayMode, renderSongListItem, renderSongGridItem, renderSongSmallItem, renderSongLargeItem]
+  );
 
   // Upcoming feature placeholder for Recommended Live
   const renderRecommendedLiveCards = useCallback(() => {
@@ -2111,8 +2868,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Hymns section (mini cards) - Only show in MUSIC tab */}
-          {(String(contentType) === "MUSIC" || String(contentType) === "music" || contentType === "ALL") && (
+          {/* Hymns section (mini cards) - Only show in ALL tab */}
+          {contentType === "ALL" && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{
@@ -2129,8 +2886,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Copyright-Free Songs Section - Only show in MUSIC tab */}
-          {(String(contentType) === "MUSIC" || String(contentType) === "music" || contentType === "ALL") && String(contentType) !== "videos" && (
+          {/* Copyright-Free Songs Section - Only show in ALL tab (old style) */}
+          {contentType === "ALL" && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{
@@ -2147,7 +2904,211 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
+          {/* Music Section - Only show in MUSIC tab (new style with list view) */}
+          {(String(contentType) === "MUSIC" || String(contentType) === "music") && String(contentType) !== "videos" && contentType !== "ALL" && (
+            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+              {/* Header with Search and Display Mode Toggle */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: UI_CONFIG.SPACING.MD,
+                  paddingVertical: 12,
+                  gap: 12,
+                }}
+              >
+                {showSearchInput ? (
+                  <View
+                    style={{
+                      flex: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "#F3F4F6",
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    <Ionicons name="search" size={20} color="#98A2B3" />
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        marginLeft: 8,
+                        fontSize: 16,
+                        fontFamily: "Rubik_400Regular",
+                        color: "#1D2939",
+                      }}
+                      placeholder="Search songs..."
+                      placeholderTextColor="#98A2B3"
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      autoFocus
+                    />
+                    {searchQuery.length > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setSearchQuery("")}
+                        style={{ marginRight: 8 }}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#98A2B3" />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowSearchInput(false);
+                        setSearchQuery("");
+                      }}
+                      style={{ marginLeft: 4 }}
+                    >
+                      <Ionicons name="close" size={20} color="#98A2B3" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => setShowSearchInput(true)}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: "#F3F4F6",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Ionicons name="search" size={20} color="#256E63" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setShowFilterModal(true)}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: "#F3F4F6",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Ionicons name="filter" size={20} color="#256E63" />
+                    </TouchableOpacity>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        backgroundColor: "#F3F4F6",
+                        borderRadius: 12,
+                        padding: 4,
+                        gap: 4,
+                      }}
+                    >
+                      {(["list", "grid", "small", "large"] as const).map((mode) => (
+                        <TouchableOpacity
+                          key={mode}
+                          onPress={() => setDisplayMode(mode)}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            backgroundColor:
+                              displayMode === mode ? "#256E63" : "transparent",
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Ionicons
+                            name={
+                              mode === "list"
+                                ? "list"
+                                : mode === "grid"
+                                ? "grid"
+                                : mode === "small"
+                                ? "apps"
+                                : "square"
+                            }
+                            size={18}
+                            color={displayMode === mode ? "#FFFFFF" : "#98A2B3"}
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </View>
+
+              {/* Discover Weekly Cards */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: UI_CONFIG.SPACING.MD,
+                  paddingVertical: 8,
+                }}
+              >
+                {discoverCards.map(renderDiscoverCard)}
+              </ScrollView>
+
+              {/* Songs List */}
+              {loadingSongs ? (
+                <View
+                  style={{
+                    paddingVertical: 40,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <ActivityIndicator size="large" color="#256E63" />
+                  <Text
+                    style={{
+                      marginTop: 12,
+                      fontSize: 14,
+                      color: "#98A2B3",
+                      fontFamily: "Rubik_400Regular",
+                    }}
+                  >
+                    Loading songs...
+                  </Text>
+                </View>
+              ) : allSongs.length === 0 ? (
+                <View
+                  style={{
+                    paddingVertical: 40,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    paddingHorizontal: 32,
+                  }}
+                >
+                  <Ionicons name="musical-notes-outline" size={48} color="#98A2B3" />
+                  <Text
+                    style={{
+                      marginTop: 12,
+                      fontSize: 16,
+                      color: "#98A2B3",
+                      fontFamily: "Rubik_400Regular",
+                      textAlign: "center",
+                    }}
+                  >
+                    No songs found
+                  </Text>
+                </View>
+              ) : displayMode === "list" || displayMode === "large" ? (
+                <View>
+                  {allSongs.map((song) => renderSongItem(song))}
+                </View>
+              ) : (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    paddingHorizontal: UI_CONFIG.SPACING.MD,
+                  }}
+                >
+                  {allSongs.map((song) => renderSongItem(song))}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* All Content Section (split into first four, then Recommended Live, then rest) */}
+          {/* In MUSIC tab, hide this section since audio content is shown in the music section above */}
+          {((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") ? null : (
           <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
             <Text
               style={{
@@ -2213,6 +3174,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               );
             })()}
           </View>
+          )}
 
           {/* Loading indicator for refresh */}
           {loading && hasContent && (
@@ -2235,6 +3197,173 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           )}
         </ScrollView>
       </View>
+
+      {/* Filter Modal for Music Section */}
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setShowFilterModal(false)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingTop: 16,
+              paddingBottom: 32,
+              maxHeight: "70%",
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: "#E5E7EB",
+                alignSelf: "center",
+                marginBottom: 16,
+              }}
+            />
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "700",
+                color: "#1D2939",
+                fontFamily: "Rubik_700Bold",
+                paddingHorizontal: 20,
+                marginBottom: 16,
+              }}
+            >
+              Filter by Category
+            </Text>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+            >
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedCategory(null);
+                  setShowFilterModal(false);
+                }}
+                style={{
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#E5E7EB",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: selectedCategory === null ? "#256E63" : "#1D2939",
+                    fontFamily:
+                      selectedCategory === null
+                        ? "Rubik_600SemiBold"
+                        : "Rubik_400Regular",
+                  }}
+                >
+                  All Categories
+                </Text>
+              </TouchableOpacity>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  onPress={() => {
+                    setSelectedCategory(category);
+                    setShowFilterModal(false);
+                  }}
+                  style={{
+                    paddingVertical: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#E5E7EB",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      color:
+                        selectedCategory === category ? "#256E63" : "#1D2939",
+                      fontFamily:
+                        selectedCategory === category
+                          ? "Rubik_600SemiBold"
+                          : "Rubik_400Regular",
+                    }}
+                  >
+                    {category}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Song Modal */}
+      {selectedSong && (
+        <CopyrightFreeSongModal
+          visible={showSongModal}
+          song={selectedSong}
+          onClose={() => {
+            setShowSongModal(false);
+            setSelectedSong(null);
+          }}
+          onPlay={handlePlayPress}
+          isPlaying={
+            selectedSong
+              ? currentTrack?.id === selectedSong.id && globalIsPlaying
+              : false
+          }
+          audioProgress={
+            selectedSong && currentTrack?.id === selectedSong.id
+              ? useGlobalAudioPlayerStore.getState().progress
+              : 0
+          }
+          audioDuration={
+            selectedSong && currentTrack?.id === selectedSong.id
+              ? useGlobalAudioPlayerStore.getState().duration
+              : (selectedSong?.duration * 1000 || 0)
+          }
+          audioPosition={
+            selectedSong && currentTrack?.id === selectedSong.id
+              ? useGlobalAudioPlayerStore.getState().position
+              : 0
+          }
+          isMuted={
+            selectedSong && currentTrack?.id === selectedSong.id
+              ? useGlobalAudioPlayerStore.getState().isMuted
+              : false
+          }
+          onTogglePlay={async () => {
+            if (selectedSong) {
+              if (currentTrack?.id === selectedSong.id) {
+                await togglePlayPause();
+              } else {
+                await handlePlayPress(selectedSong);
+              }
+            }
+          }}
+          onToggleMute={async () => {
+            if (selectedSong && currentTrack?.id === selectedSong.id) {
+              await useGlobalAudioPlayerStore.getState().toggleMute();
+            }
+          }}
+          onSeek={async (progress) => {
+            if (selectedSong && currentTrack?.id === selectedSong.id) {
+              await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
+            }
+          }}
+          formatTime={formatTime}
+        />
+      )}
     </ContentErrorBoundary>
   );
 };
