@@ -72,6 +72,8 @@ export default function EbookTtsPlayer({
         setAudioUrl(existingUrl);
         return;
       }
+      // If not generated yet (common response: success=false + canGenerate=true),
+      // auto-generate immediately when enabled.
       if (autoGenerate && existing?.data?.canGenerate !== false) {
         setIsGenerating(true);
         const created = await generateEbookTts(ebookId, {

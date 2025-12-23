@@ -55,6 +55,19 @@ export async function getEbookTts(
     ? await res.json().catch(() => ({}))
     : await res.text().catch(() => "");
 
+  // Backend may use 404 to indicate "not generated yet" for this ebook.
+  // Treat it as a non-fatal state so the caller can trigger generation.
+  if (res.status === 404) {
+    if (typeof body === "object" && body) {
+      return body as EbookTtsAudioResponse;
+    }
+    return {
+      success: false,
+      message: typeof body === "string" && body ? body : "TTS audio not generated for this ebook",
+      data: { canGenerate: true },
+    };
+  }
+
   if (!res.ok) {
     const msg = typeof body === "string" ? body : JSON.stringify(body);
     throw new Error(`HTTP ${res.status}: ${msg}`);
