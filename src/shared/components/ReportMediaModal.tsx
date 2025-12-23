@@ -65,10 +65,18 @@ export default function ReportMediaModal({
       );
     } catch (error: any) {
       let errorMessage = "Failed to submit report. Please try again.";
+      let alertTitle = "Error";
       
       if (error.message) {
-        if (error.message.includes("already reported")) {
+        if (error.message.toLowerCase().includes("already reported")) {
+          // Graceful handling for duplicate reports - show as info, not error
+          alertTitle = "Already Reported";
           errorMessage = "You have already reported this content. Our team will review it.";
+          
+          // Reset form and close modal for duplicate reports
+          setSelectedReason("");
+          setDescription("");
+          onClose();
         } else if (error.message.includes("Authentication") || error.message.includes("login")) {
           errorMessage = "Please log in to report content.";
         } else {
@@ -76,7 +84,7 @@ export default function ReportMediaModal({
         }
       }
       
-      Alert.alert("Error", errorMessage);
+      Alert.alert(alertTitle, errorMessage);
     } finally {
       setIsSubmitting(false);
     }

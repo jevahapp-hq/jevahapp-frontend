@@ -2850,8 +2850,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
         >
-          {/* Most Recent Section */}
-          {mostRecentItem && (
+          {/* Most Recent Section - Hide in MUSIC tab */}
+          {mostRecentItem && 
+           !((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{
@@ -2912,9 +2913,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
+                  justifyContent: "space-between",
                   paddingHorizontal: UI_CONFIG.SPACING.MD,
                   paddingVertical: 12,
-                  gap: 12,
                 }}
               >
                 {showSearchInput ? (
@@ -2964,32 +2965,43 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                   </View>
                 ) : (
                   <>
-                    <TouchableOpacity
-                      onPress={() => setShowSearchInput(true)}
+                    {/* Left container: Search and Filter icons */}
+                    <View
                       style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: "#F3F4F6",
-                        justifyContent: "center",
+                        flexDirection: "row",
                         alignItems: "center",
+                        gap: 12,
                       }}
                     >
-                      <Ionicons name="search" size={20} color="#256E63" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setShowFilterModal(true)}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: "#F3F4F6",
-                        justifyContent: "center",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Ionicons name="filter" size={20} color="#256E63" />
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setShowSearchInput(true)}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: "#F3F4F6",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Ionicons name="search" size={20} color="#256E63" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setShowFilterModal(true)}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: "#F3F4F6",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Ionicons name="filter" size={20} color="#256E63" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Right container: Display Mode icons */}
                     <View
                       style={{
                         flexDirection: "row",

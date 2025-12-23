@@ -1,9 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { FlatList, Text, View } from "react-native";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import AuthHeader from "../components/AuthHeader";
-import { useTextToSpeech } from "../hooks/useTextToSpeech";
 
 type HymnRecord = {
   id: string;
@@ -19,27 +18,6 @@ export default function HymnDetail() {
   const { id: rawId } = useLocalSearchParams<{ id?: string }>();
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const [hymn, setHymn] = useState<HymnRecord | null>(null);
-  const {
-    isSpeaking,
-    isPaused,
-    rate,
-    pitch,
-    speak,
-    pause,
-    resume,
-    stop,
-    setRate,
-    setPitch,
-  } = useTextToSpeech({ language: "en-US", rate: 1.0, pitch: 1.0 });
-
-  const readAllVerses = useCallback(async () => {
-    if (!hymn) return;
-    // Combine all verses into a single text to be read sequentially
-    const combinedText = (hymn.verses || [])
-      .map((verse, i) => `Verse ${i + 1}. ${verse}`)
-      .join(" ");
-    await speak(combinedText);
-  }, [hymn, speak]);
 
   useEffect(() => {
     async function load() {
@@ -89,54 +67,9 @@ export default function HymnDetail() {
         >
           {(hymn.meter || hymn.refs || "Hymn").toString()}
         </Text>
-        <View
-          style={{ flexDirection: "row", marginTop: 12, alignItems: "center" }}
-        >
-          <TouchableOpacity
-            onPress={() => readAllVerses()}
-            style={{
-              backgroundColor: "#256E63",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 8,
-              marginRight: 8,
-            }}
-          >
-            <Text style={{ color: "#fff", fontFamily: "Rubik-Medium" }}>
-              {isSpeaking ? "Reading…" : "Read All"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => (isPaused ? resume() : pause())}
-            style={{
-              backgroundColor: "#FEA74E",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 8,
-              marginRight: 8,
-            }}
-          >
-            <Text style={{ color: "#090E24", fontFamily: "Rubik-Medium" }}>
-              {isPaused ? "Resume" : "Pause"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => stop()}
-            style={{
-              backgroundColor: "#E5E7EB",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 8,
-            }}
-          >
-            <Text style={{ color: "#111", fontFamily: "Rubik-Medium" }}>
-              Stop
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
     );
-  }, [hymn, isSpeaking, isPaused, readAllVerses, resume, pause, stop]);
+  }, [hymn]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
