@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { ExtractionResult, pdfExtractor } from "../services/PdfTextExtractor";
+import EbookTtsPlayer from "../components/EbookTtsPlayer";
 
 // Decode URL-encoded text (like the %20 for spaces, %E2%80%99 for special chars)
 const decodeText = (text: string) => {
@@ -32,14 +33,17 @@ export default function PdfViewer() {
   const router = useRouter();
   const {
     url: rawUrl,
+    ebookId: rawEbookId,
     title: rawTitle,
     desc: rawDesc,
   } = useLocalSearchParams<{
     url?: string;
+    ebookId?: string;
     title?: string;
     desc?: string;
   }>();
   const url = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
+  const ebookId = Array.isArray(rawEbookId) ? rawEbookId[0] : rawEbookId;
   const title = Array.isArray(rawTitle) ? rawTitle[0] : rawTitle;
   const desc = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
 
@@ -767,6 +771,15 @@ export default function PdfViewer() {
           )}
         </View>
       )}
+
+      {/* Ebook backend narration (TTS audio) */}
+      {ebookId ? (
+        <EbookTtsPlayer
+          ebookId={ebookId}
+          title={title ? `Listen • ${title}` : "Listen"}
+          autoGenerate={true}
+        />
+      ) : null}
 
       {/* Removed hidden extraction WebView to avoid any overlay */}
     </View>

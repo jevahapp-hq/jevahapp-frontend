@@ -173,6 +173,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                 pathname: "/reader/PdfViewer",
                 params: {
                   url: pdfUrl,
+                  ebookId: (ebook as any)?._id || (ebook as any)?.id || "",
                   title: ebook.title,
                   desc: (ebook as any)?.description || "",
                 },

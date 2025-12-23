@@ -168,13 +168,27 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
                 const newDuration = status.durationMillis || 0;
                 const newProgress =
                   newDuration > 0 ? newPosition / newDuration : 0;
+                // Throttle state updates from the playback callback to avoid render/update loops
+                // and reduce unnecessary re-renders.
+                const prev = get();
+                const now = Date.now();
+                const lastTs = (prev as any).__lastStatusUpdateTs || 0;
+                const shouldUpdateNow =
+                  now - lastTs > 250 || // ~4 updates/sec
+                  prev.isPlaying !== status.isPlaying ||
+                  Math.abs(prev.position - newPosition) > 750 ||
+                  prev.duration !== newDuration;
 
-                set({
-                  position: newPosition,
-                  duration: newDuration,
-                  progress: newProgress,
-                  isPlaying: status.isPlaying,
-                });
+                if (shouldUpdateNow) {
+                  set({
+                    position: newPosition,
+                    duration: newDuration,
+                    progress: newProgress,
+                    isPlaying: status.isPlaying,
+                    // internal non-persisted marker
+                    __lastStatusUpdateTs: now,
+                  } as any);
+                }
 
                 // Handle playback completion
                 if (status.didJustFinish) {
