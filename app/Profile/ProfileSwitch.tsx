@@ -11,10 +11,12 @@ import {
   View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
+import ComingSoonModal from "../components/common/ComingSoonModal";
 
 const ProfileSwitch = () => {
   const router = useRouter();
   const [selected, setSelected] = useState<"ADULTS" | "KIDS">("ADULTS");
+  const [kidsComingSoonVisible, setKidsComingSoonVisible] = useState(false);
 
   const profiles = [
     {
@@ -53,6 +55,8 @@ const ProfileSwitch = () => {
               // Navigate to home when adult profile is selected
               if (profile.key === "ADULTS") {
                 router.replace("/categories/HomeScreen");
+              } else {
+                setKidsComingSoonVisible(true);
               }
             }}
             className={`items-center rounded-xl p-4 w-[48%] ${
@@ -101,6 +105,13 @@ const ProfileSwitch = () => {
       <Pressable className="mt-6 border border-black py-3 rounded-full items-center">
         <Text className="text-base font-semibold text-black">Learn more</Text>
       </Pressable>
+
+      <ComingSoonModal
+        visible={kidsComingSoonVisible}
+        title="Kids section is coming soon"
+        description="We’re building a safe, kid-friendly experience. Check back in the next update."
+        onClose={() => setKidsComingSoonVisible(false)}
+      />
     </ScrollView>
   );
 };

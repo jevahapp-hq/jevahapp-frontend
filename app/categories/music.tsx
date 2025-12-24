@@ -41,6 +41,9 @@ export default function Music() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("list");
   const [showSongModal, setShowSongModal] = useState(false);
   const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [songModalInitialAction, setSongModalInitialAction] = useState<
+    "options" | "playlist" | null
+  >(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   
@@ -128,7 +131,15 @@ export default function Music() {
             });
 
         if (response.success && response.data?.songs?.length) {
-          const transformedSongs = response.data.songs.map(transformBackendSong);
+          const transformedSongs = response.data.songs
+            .map(transformBackendSong)
+            // Defensive: ensure this screen shows ONLY copyright-free catalog
+            .filter(
+              (s) =>
+                !s?.contentType ||
+                String(s?.contentType || "").toLowerCase() ===
+                  "copyright-free-music"
+            );
           setSongs(transformedSongs);
         } else {
           setSongs([]);
@@ -315,7 +326,6 @@ export default function Music() {
    */
   const renderListItem = useCallback(
     ({ item }: { item: any }) => {
-      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
       const thumbnailSource =
         typeof item.thumbnailUrl === "string"
           ? { uri: item.thumbnailUrl }
@@ -324,7 +334,11 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
+            // Tap should open Now Playing view like the reference screenshot
+            // and start playback with the current queue.
+            handlePlayPress(item);
             setSelectedSong(item);
+            setSongModalInitialAction(null);
             setShowSongModal(true);
           }}
           activeOpacity={0.7}
@@ -393,32 +407,30 @@ export default function Music() {
             </Text>
           </View>
 
-          {/* Play button */}
+          {/* 3-dot menu */}
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
-              handlePlayPress(item);
+              setSelectedSong(item);
+              setSongModalInitialAction("options");
+              setShowSongModal(true);
             }}
             activeOpacity={0.7}
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: isPlaying ? "#256E63" : "#F3F4F6",
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: "#F3F4F6",
               justifyContent: "center",
               alignItems: "center",
             }}
           >
-            <Ionicons
-              name={isPlaying ? "pause" : "play"}
-              size={20}
-              color={isPlaying ? "#FFFFFF" : "#256E63"}
-            />
+            <Ionicons name="ellipsis-vertical" size={18} color="#256E63" />
           </TouchableOpacity>
         </TouchableOpacity>
       );
     },
-    [currentTrack, globalIsPlaying, handlePlayPress, formatDuration]
+    [handlePlayPress, formatDuration]
   );
 
   /**
@@ -426,7 +438,6 @@ export default function Music() {
    */
   const renderGridItem = useCallback(
     ({ item }: { item: any }) => {
-      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
       const thumbnailSource =
         typeof item.thumbnailUrl === "string"
           ? { uri: item.thumbnailUrl }
@@ -436,7 +447,9 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
+            handlePlayPress(item);
             setSelectedSong(item);
+            setSongModalInitialAction(null);
             setShowSongModal(true);
           }}
           activeOpacity={0.9}
@@ -474,25 +487,6 @@ export default function Music() {
                 <Ionicons name="musical-notes" size={48} color="#FFFFFF" />
               </View>
             )}
-            <View
-              style={{
-                position: "absolute",
-                bottom: 8,
-                right: 8,
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={20}
-                color="#256E63"
-              />
-            </View>
           </View>
           <Text
             style={{
@@ -519,7 +513,7 @@ export default function Music() {
         </TouchableOpacity>
       );
     },
-    [currentTrack, globalIsPlaying, SCREEN_WIDTH]
+    [SCREEN_WIDTH, handlePlayPress]
   );
 
   /**
@@ -536,7 +530,9 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
+            handlePlayPress(item);
             setSelectedSong(item);
+            setSongModalInitialAction(null);
             setShowSongModal(true);
           }}
           activeOpacity={0.9}
@@ -585,7 +581,7 @@ export default function Music() {
         </TouchableOpacity>
       );
     },
-    [SCREEN_WIDTH]
+    [SCREEN_WIDTH, handlePlayPress]
   );
 
   /**
@@ -593,7 +589,6 @@ export default function Music() {
    */
   const renderLargeItem = useCallback(
     ({ item }: { item: any }) => {
-      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
       const thumbnailSource =
         typeof item.thumbnailUrl === "string"
           ? { uri: item.thumbnailUrl }
@@ -603,7 +598,9 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
+            handlePlayPress(item);
             setSelectedSong(item);
+            setSongModalInitialAction(null);
             setShowSongModal(true);
           }}
           activeOpacity={0.9}
@@ -637,25 +634,6 @@ export default function Music() {
                 <Ionicons name="musical-notes" size={64} color="#FFFFFF" />
               </View>
             )}
-            <View
-              style={{
-                position: "absolute",
-                bottom: 16,
-                right: 16,
-                width: 56,
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={28}
-                color="#256E63"
-              />
-            </View>
           </View>
           <View style={{ paddingHorizontal: 4 }}>
             <Text
@@ -684,7 +662,7 @@ export default function Music() {
         </TouchableOpacity>
       );
     },
-    [currentTrack, globalIsPlaying, SCREEN_WIDTH, formatDuration]
+    [SCREEN_WIDTH, formatDuration, handlePlayPress]
   );
 
   /**
@@ -761,17 +739,8 @@ export default function Music() {
           </View>
         ) : (
           <>
-            <Text
-              style={{
-                flex: 1,
-                fontSize: 24,
-                fontWeight: "700",
-                color: "#1D2939",
-                fontFamily: "Rubik_700Bold",
-              }}
-            >
-              Music
-            </Text>
+            {/* Removed "Music" title text to match requested header */}
+            <View style={{ flex: 1 }} />
             <TouchableOpacity
               onPress={() => setShowSearchInput(true)}
               style={{
@@ -1055,10 +1024,16 @@ export default function Music() {
       {selectedSong && (
         <CopyrightFreeSongModal
           visible={showSongModal}
-          song={selectedSong}
+          song={
+            songModalInitialAction === "options"
+              ? selectedSong
+              : (currentTrack ?? selectedSong)
+          }
+          variant={songModalInitialAction === "options" ? "options" : "player"}
           onClose={() => {
             setShowSongModal(false);
             setSelectedSong(null);
+            setSongModalInitialAction(null);
           }}
           onPlay={handlePlayPress}
           isPlaying={
@@ -1106,6 +1081,7 @@ export default function Music() {
             }
           }}
           formatTime={formatTime}
+          initialAction={songModalInitialAction}
         />
       )}
     </View>

@@ -48,6 +48,7 @@ interface GlobalAudioPlayerState {
   stop: () => Promise<void>;
   next: () => Promise<void>;
   previous: () => Promise<void>;
+  playAtIndex: (index: number) => Promise<void>;
   clear: () => Promise<void>;
   
   // Internal state setters
@@ -330,6 +331,20 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         }
       },
 
+      playAtIndex: async (index: number) => {
+        const { queue, setTrack } = get();
+        if (!Array.isArray(queue) || queue.length === 0) return;
+        if (!Number.isFinite(index)) return;
+
+        const clampedIndex = Math.max(0, Math.min(index, queue.length - 1));
+        const track = queue[clampedIndex];
+        if (!track) return;
+
+        set({ currentIndex: clampedIndex });
+        await setTrack(track);
+        await get().play();
+      },
+
       clear: async () => {
         const { soundInstance, stop } = get();
         await stop();
@@ -380,12 +395,10 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         },
         setItem: async (name: string, value: string): Promise<void> => {
           try {
-            // Zustand persist already stringifies, but ensure it's a string
-            if (typeof value !== 'string') {
-              console.warn("Storage value is not a string, stringifying:", typeof value);
-              value = JSON.stringify(value);
-            }
-            await AsyncStorage.setItem(name, value);
+            // Zustand persist typically passes a string, but be defensive without spamming warnings
+            const toStore =
+              typeof value === "string" ? value : JSON.stringify(value);
+            await AsyncStorage.setItem(name, toStore);
           } catch (error) {
             console.warn("Error writing to storage:", error);
             // Don't throw - just log the error

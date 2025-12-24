@@ -135,6 +135,19 @@ export default function PdfViewer() {
         setLoading(false);
         return;
       }
+
+      // If this is already a local file (e.g. coming from offline downloads),
+      // skip remote downloading/caching and render directly.
+      const isLocalFile =
+        typeof url === "string" &&
+        (url.startsWith("file://") || url.startsWith(FileSystem.documentDirectory || ""));
+      if (isLocalFile) {
+        setFallbackUri(null);
+        setLocalUri(String(url));
+        setLoading(false);
+        return;
+      }
+
       // Always prepare a docs viewer URL for Android (WebView doesn't render PDFs natively)
       const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
         String(url)
@@ -210,7 +223,17 @@ export default function PdfViewer() {
         >
           <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => {
+                const isLocalFile =
+                  typeof url === "string" &&
+                  (url.startsWith("file://") ||
+                    url.startsWith(FileSystem.documentDirectory || ""));
+                if (isLocalFile) {
+                  router.replace("/downloads/DownloadsScreen");
+                } else {
+                  router.back();
+                }
+              }}
               style={{
                 width: 40,
                 height: 40,

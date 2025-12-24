@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Animated,
@@ -24,6 +24,8 @@ const BOTTOM_NAV_HEIGHT = 80; // Height of bottom nav
 
 export default function MiniAudioPlayer() {
   const router = useRouter();
+  const pathname = usePathname();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -137,8 +139,13 @@ export default function MiniAudioPlayer() {
     return unsubscribe;
   }, [audioId, effectiveAudioId, audioManager]);
 
-  // Don't render if no audio is loaded
-  if (!shouldShow) {
+  // Hide mini player on reader routes (e.g. HymnDetail) so it doesn't overlay reading.
+  const inReaderRoute =
+    pathname?.startsWith("/reader") ||
+    segments.some((seg) => String(seg).toLowerCase() === "reader");
+
+  // Don't render if no audio is loaded or we should hide in this route
+  if (!shouldShow || inReaderRoute) {
     return null;
   }
 

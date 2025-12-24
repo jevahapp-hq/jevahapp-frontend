@@ -3,7 +3,10 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Image, StatusBar, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  initialWindowMetrics,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 interface MobileHeaderProps {
   // Header type
@@ -79,6 +82,10 @@ export default function MobileHeader({
   const [avatarError, setAvatarError] = useState(false);
 
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  // On some remounts (e.g. switching tabs), insets.top can briefly be 0 for a frame.
+  // Use initialWindowMetrics as a stable fallback to prevent the header jumping into the status bar area.
+  const topInset = insets.top || initialWindowMetrics?.insets.top || 0;
 
   console.log("🔍 MobileHeader: Received user data:", user);
 
@@ -179,7 +186,12 @@ export default function MobileHeader({
       </TouchableOpacity>
 
       {/* Right Side - Action Buttons */}
-      <View className="flex-row items-center space-x-3">
+      <View
+        className="flex-row items-center"
+        // Use RN gap instead of NativeWind space-x to avoid transient layout jitter on re-mount.
+        // Also ensure this block never stretches/shrinks based on left content.
+        style={{ gap: 12, flexShrink: 0 }}
+      >
         {safeRightActions.map((action, index) => (
           <TouchableOpacity
             key={index}
@@ -192,10 +204,11 @@ export default function MobileHeader({
               size={20}
               color={textColor}
             />
-            {action.badge && (
+            {Boolean(action.badge) && (
               <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
             )}
-            {action.badgeCount && action.badgeCount > 0 && (
+            {(Number.isFinite(action.badgeCount) ? (action.badgeCount as number) : 0) >
+              0 && (
               <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full items-center justify-center">
                 <Text className="text-white text-[10px] font-rubik font-bold">
                   {action.badgeCount > 99 ? "99+" : String(action.badgeCount)}
@@ -299,7 +312,7 @@ export default function MobileHeader({
         {rightComponent ? (
           renderNode(rightComponent)
         ) : (
-          <View className="flex-row items-center space-x-3">
+          <View className="flex-row items-center" style={{ gap: 12 }}>
             {safeRightActions.map((action, index) => (
               <TouchableOpacity
                 key={index}
@@ -312,10 +325,12 @@ export default function MobileHeader({
                   size={20}
                   color={textColor}
                 />
-                {action.badge && (
+                {Boolean(action.badge) && (
                   <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
                 )}
-                {action.badgeCount && action.badgeCount > 0 && (
+                {(Number.isFinite(action.badgeCount)
+                  ? (action.badgeCount as number)
+                  : 0) > 0 && (
                   <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full items-center justify-center">
                     <Text className="text-white text-[10px] font-rubik font-bold">
                       {action.badgeCount > 99
@@ -346,11 +361,7 @@ export default function MobileHeader({
   };
 
   return (
-    <SafeAreaView
-      className="w-full"
-      edges={["top"]}
-      style={{ backgroundColor }}
-    >
+    <View className="w-full" style={{ backgroundColor, paddingTop: topInset }}>
       {/* Status Bar Configuration */}
       <StatusBar
         barStyle={statusBarStyle}
@@ -365,6 +376,6 @@ export default function MobileHeader({
       >
         {renderHeaderContent()}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

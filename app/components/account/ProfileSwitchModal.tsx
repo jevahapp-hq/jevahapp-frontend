@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Lock, Pencil } from "lucide-react-native";
+import { useState } from "react";
 import {
   Image,
   Modal,
@@ -10,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import ComingSoonModal from "../common/ComingSoonModal";
 
 type ProfileSwitchModalProps = {
   visible: boolean;
@@ -20,6 +22,8 @@ export default function ProfileSwitchModal({
   visible,
   onClose,
 }: ProfileSwitchModalProps) {
+  const [kidsComingSoonVisible, setKidsComingSoonVisible] = useState(false);
+
   const handleAccountPress = () => {
     onClose();
     router.push("/screens/AccountScreen");
@@ -78,7 +82,7 @@ export default function ProfileSwitchModal({
 
                 {/* Kids Profile */}
                 <Pressable
-                  onPress={onClose}
+                  onPress={() => setKidsComingSoonVisible(true)}
                   className="items-center rounded-xl p-4 w-[48%]"
                 >
                   <View className="relative mb-3">
@@ -125,6 +129,13 @@ export default function ProfileSwitchModal({
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
+
+      <ComingSoonModal
+        visible={kidsComingSoonVisible}
+        title="Kids section is coming soon"
+        description="We’re building a safe, kid-friendly experience. Check back in the next update."
+        onClose={() => setKidsComingSoonVisible(false)}
+      />
     </Modal>
   );
 }

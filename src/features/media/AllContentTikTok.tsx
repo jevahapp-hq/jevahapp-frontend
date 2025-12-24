@@ -46,8 +46,6 @@ import { useMedia } from "../../shared/hooks/useMedia";
 // Component imports
 import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
-import CopyrightFreeSongs from "../../../app/components/CopyrightFreeSongs";
-import CopyrightFreeSongModal from "../../../app/components/CopyrightFreeSongModal";
 import SuccessCard from "../../../app/components/SuccessCard";
 import HymnMiniCard, {
     HymnItem,
@@ -66,10 +64,6 @@ import { useGlobalMediaStore } from "../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
-import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
-import copyrightFreeMusicAPI, {
-    CopyrightFreeSongResponse,
-} from "../../../app/services/copyrightFreeMusicAPI";
 import { LinearGradient } from "expo-linear-gradient";
 import {
     convertToDownloadableItem,
@@ -91,6 +85,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   contentType = "ALL",
 }) => {
   const router = useRouter();
+  const isHymnsTab =
+    String(contentType).toLowerCase() === "hymns" ||
+    String(contentType).toLowerCase() === "hyms";
 
   // Media data from the new hook
   const {
@@ -177,18 +174,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [hymns, setHymns] = useState<HymnItem[]>([]);
   const [loadingHymns, setLoadingHymns] = useState(false);
+  const [hymnSearchQuery, setHymnSearchQuery] = useState("");
   
-  // Music section state (only for MUSIC tab)
-  const [copyrightFreeSongs, setCopyrightFreeSongs] = useState<any[]>([]);
-  const [loadingSongs, setLoadingSongs] = useState(false);
+  // Music section state (only for MUSIC tab) - user uploaded songs only
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchInput, setShowSearchInput] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<"list" | "grid" | "small" | "large">("list");
-  const [showSongModal, setShowSongModal] = useState(false);
-  const [selectedSong, setSelectedSong] = useState<any>(null);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [categories, setCategories] = useState<string[]>([]);
 
   // Audio playback state
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -268,7 +259,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
     const transformed = sourceData.map(transformApiResponseToMediaItem);
     // Filter out deleted items
-    return transformed.filter(item => !deletedMediaIds.has(item._id || ""));
+    return transformed.filter((item) => {
+      if (deletedMediaIds.has(item._id || "")) return false;
+      // Remove copyright-free catalog items from AllContentTikTok entirely
+      const ct = String(item.contentType || "").toLowerCase();
+      if (ct === "copyright-free-music") return false;
+      return true;
+    });
   }, [allContent, defaultContent, deletedMediaIds]);
 
   // Filter content based on contentType
@@ -457,178 +454,42 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
   }, []);
 
-  // Global audio player state
-  const {
-    currentTrack,
-    isPlaying: globalIsPlaying,
-    setTrack,
-    togglePlayPause,
-  } = useGlobalAudioPlayerStore();
-
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-  // Transform backend song format to frontend format
-  const transformBackendSong = useCallback(
-    (backendSong: CopyrightFreeSongResponse): any => {
-      const id = backendSong.id ?? backendSong._id ?? "";
-      const audioUrl = backendSong.audioUrl ?? backendSong.fileUrl ?? "";
-      const views = backendSong.views ?? backendSong.viewCount ?? 0;
-      const likes = backendSong.likes ?? backendSong.likeCount ?? 0;
-      const artist = backendSong.artist ?? backendSong.singer ?? "";
-
-      return {
-        id,
-        title: backendSong.title,
-        artist,
-        year: backendSong.year,
-        audioUrl,
-        thumbnailUrl: backendSong.thumbnailUrl,
-        category: backendSong.category,
-        duration: backendSong.duration,
-        contentType: backendSong.contentType,
-        description: backendSong.description,
-        speaker: backendSong.speaker ?? artist,
-        uploadedBy: backendSong.uploadedBy,
-        createdAt: backendSong.createdAt,
-        views,
-        likes,
-        isLiked: backendSong.isLiked ?? false,
-        isInLibrary: backendSong.isInLibrary ?? false,
-        isPublicDomain: backendSong.isPublicDomain ?? true,
-        isCopyrightFree: true, // Flag to identify copyright-free songs
-      };
-    },
-    []
-  );
-
-  // Transform user-uploaded audio (MediaItem) to song format
-  const transformUserAudioToSong = useCallback(
-    (audioItem: MediaItem): any => {
-      const id = audioItem._id || "";
-      const audioUrl = audioItem.fileUrl || "";
-      const views = audioItem.views || audioItem.viewCount || 0;
-      const likes = audioItem.likes || audioItem.likeCount || audioItem.favorite || 0;
-      const artist = audioItem.speaker || getUserDisplayNameFromContent(audioItem) || "Unknown Artist";
-      const thumbnailUrl = audioItem.thumbnailUrl || audioItem.imageUrl || "";
-
-      return {
-        id,
-        title: audioItem.title || "Untitled",
-        artist,
-        year: audioItem.createdAt ? new Date(audioItem.createdAt).getFullYear() : new Date().getFullYear(),
-        audioUrl,
-        thumbnailUrl: typeof thumbnailUrl === "string" ? thumbnailUrl : (thumbnailUrl as any)?.uri || "",
-        category: "User Upload",
-        duration: audioItem.duration || 0,
-        contentType: audioItem.contentType || "audio",
-        description: audioItem.description || audioItem.title || "",
-        speaker: artist,
-        uploadedBy: audioItem.uploadedBy,
-        createdAt: audioItem.createdAt,
-        views,
-        likes,
-        isLiked: false, // Will be updated from contentStats
-        isInLibrary: false,
-        isPublicDomain: false,
-        isCopyrightFree: false, // Flag to identify user-uploaded audio
-        originalItem: audioItem, // Keep reference to original item for actions
-      };
-    },
-    []
-  );
-
-  // Load copyright-free songs
-  const loadSongs = useCallback(
-    async (search?: string, category?: string | null) => {
-      setLoadingSongs(true);
-      try {
-        const response = search
-          ? await copyrightFreeMusicAPI.searchSongs(search, {
-              category: category || undefined,
-              limit: 50,
-            })
-          : await copyrightFreeMusicAPI.getAllSongs({
-              category: category || undefined,
-              limit: 50,
-              sort: "popular",
-            });
-
-        if (response.success && response.data?.songs?.length) {
-          const transformedSongs = response.data.songs.map(transformBackendSong);
-          setCopyrightFreeSongs(transformedSongs);
-        } else {
-          setCopyrightFreeSongs([]);
-        }
-      } catch (err) {
-        console.error("Error loading songs:", err);
-        setCopyrightFreeSongs([]);
-      } finally {
-        setLoadingSongs(false);
-      }
-    },
-    [transformBackendSong]
-  );
-
-  // Load categories
-  const loadCategories = useCallback(async () => {
-    try {
-      const response = await copyrightFreeMusicAPI.getCategories();
-      if (response.success && response.data?.categories) {
-        setCategories(
-          response.data.categories.map((cat: any) => cat.name || cat)
-        );
-      }
-    } catch (err) {
-      console.warn("Error loading categories:", err);
+  // User uploaded songs (current user only) - Only for MUSIC tab
+  const userUploadedSongs = useMemo(() => {
+    if (!(String(contentType) === "MUSIC" || String(contentType) === "music") || contentType === "ALL") {
+      return [] as MediaItem[];
     }
-  }, []);
 
-  // Combined songs list (copyright-free + user-uploaded audio) - Only for MUSIC tab
-  const allSongs = useMemo(() => {
-    if ((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") {
-      // Get user-uploaded audio from filteredMediaList
-      const userAudio = filteredMediaList.filter(
-        (item) => 
-          (item.contentType === "audio" || item.contentType === "music") &&
-          item.contentType !== "copyright-free-music"
-      );
-      
-      // Transform user-uploaded audio to song format
-      const transformedUserAudio = userAudio.map(transformUserAudioToSong);
-      
-      // Combine with copyright-free songs
-      const combined = [...copyrightFreeSongs, ...transformedUserAudio];
-      
-      // Apply search filter
-      let filtered = combined;
-      if (searchQuery && searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        filtered = combined.filter(
-          (song) =>
-            song.title?.toLowerCase().includes(query) ||
-            song.artist?.toLowerCase().includes(query)
-        );
-      }
-      
-      // Apply category filter (only for copyright-free songs, user uploads are always shown)
-      if (selectedCategory && selectedCategory !== "All") {
-        filtered = filtered.filter(
-          (song) => song.category === selectedCategory || !song.isCopyrightFree
-        );
-      }
-      
-      return filtered;
-    }
-    return copyrightFreeSongs;
-  }, [contentType, filteredMediaList, copyrightFreeSongs, transformUserAudioToSong, searchQuery, selectedCategory]);
+    const currentUserId = user?._id || (user as any)?.id || null;
+    if (!currentUserId) return [] as MediaItem[];
 
-  // Load songs only when MUSIC tab is active (not ALL tab)
-  useEffect(() => {
-    if ((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") {
-      loadSongs(searchQuery || undefined, selectedCategory);
-      loadCategories();
-    }
-  }, [contentType, searchQuery, selectedCategory, loadSongs, loadCategories]);
+    const query = (searchQuery || "").toLowerCase().trim();
+
+    const audioItems = (filteredMediaList || []).filter((item) => {
+      const ct = String(item.contentType || "").toLowerCase();
+      const isAudio = ct === "audio" || ct === "music";
+      const isCopyrightFree = ct === "copyright-free-music";
+      if (!isAudio || isCopyrightFree) return false;
+
+      const uploadedBy: any = (item as any).uploadedBy;
+      const uploaderId =
+        typeof uploadedBy === "string"
+          ? uploadedBy
+          : uploadedBy?._id || uploadedBy?.id;
+      if (!uploaderId) return false;
+      if (String(uploaderId) !== String(currentUserId)) return false;
+
+      if (!query) return true;
+      const title = String(item.title || "").toLowerCase();
+      const speaker = String((item as any).speaker || "").toLowerCase();
+      const displayName = String(getUserDisplayNameFromContent(item) || "").toLowerCase();
+      return title.includes(query) || speaker.includes(query) || displayName.includes(query);
+    });
+
+    return audioItems;
+  }, [contentType, filteredMediaList, user, searchQuery, getUserDisplayNameFromContent]);
 
   // Reusable renderer for Hymn mini-cards (for ALL tab only)
   const renderHymnMiniCards = useCallback(() => {
@@ -667,6 +528,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       </ScrollView>
     );
   }, [hymns, loadingHymns, router]);
+
+  const filteredHymns = useMemo(() => {
+    const q = hymnSearchQuery.trim().toLowerCase();
+    if (!q) return hymns || [];
+    return (hymns || []).filter((h) => {
+      const title = String(h.title || "").toLowerCase();
+      const author = String(h.author || "").toLowerCase();
+      const refs = String(h.refs || "").toLowerCase();
+      const meter = String(h.meter || "").toLowerCase();
+      return (
+        title.includes(q) ||
+        author.includes(q) ||
+        refs.includes(q) ||
+        meter.includes(q)
+      );
+    });
+  }, [hymns, hymnSearchQuery]);
 
   // Load content stats for all visible items so user-liked/bookmarked states persist
   const mapContentTypeToBackend = useCallback((type?: string) => {
@@ -1878,7 +1756,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     },
   ];
 
-  // Fetch local hymns JSON; fallback to Hymnary sample (MVP) - Only for ALL tab
+  // Fetch local hymns JSON; fallback to Hymnary sample (MVP) - Only for HYMS/HYMNS tab
   useEffect(() => {
     const fetchHymns = async () => {
       try {
@@ -1916,61 +1794,24 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
     };
     
-    // Only fetch hymns if in ALL tab
-    if (contentType === "ALL") {
+    // Only fetch hymns if in HYMS/HYMNS tab
+    if (isHymnsTab) {
+      // Reset search when switching into hymns tab
+      setHymnSearchQuery("");
       fetchHymns();
     }
-  }, [contentType]);
+  }, [contentType, isHymnsTab]);
 
-  // Handle play/pause for a song (works for both copyright-free and user-uploaded audio)
+  // Handle play/pause for a user-uploaded song (current user only)
   const handlePlayPress = useCallback(
-    async (song: any) => {
-      if (currentTrack?.id === song.id && globalIsPlaying) {
-        await togglePlayPause();
-      } else {
-        // For user-uploaded audio, use the playAudio function
-        if (song.isCopyrightFree === false && song.originalItem) {
-          await playAudio(song.audioUrl, song.id);
-          return;
-        }
-
-        // For copyright-free songs, use global audio player
-        const songIndex = allSongs.findIndex((s) => s.id === song.id);
-        
-        if (songIndex !== -1) {
-          const mappedQueue = allSongs.map((s) => ({
-            id: s.id,
-            title: s.title,
-            artist: s.artist,
-            audioUrl: s.audioUrl,
-            thumbnailUrl: s.thumbnailUrl,
-            duration: s.duration,
-            category: s.category,
-            description: s.description,
-          }));
-
-          useGlobalAudioPlayerStore.setState({
-            queue: mappedQueue,
-            currentIndex: songIndex,
-          });
-        }
-
-        await setTrack(
-          {
-            id: song.id,
-            title: song.title,
-            artist: song.artist,
-            audioUrl: song.audioUrl,
-            thumbnailUrl: song.thumbnailUrl,
-            duration: song.duration,
-            category: song.category,
-            description: song.description,
-          },
-          true
-        );
-      }
+    async (item: MediaItem) => {
+      const id = item._id || "";
+      const audioUrl = item.fileUrl || "";
+      if (!id || !audioUrl) return;
+      // `playAudio` already toggles pause if this id is currently playing.
+      await playAudio(audioUrl, id);
     },
-    [currentTrack, globalIsPlaying, setTrack, togglePlayPause, allSongs, playAudio]
+    [playAudio]
   );
 
   // Format duration
@@ -2069,20 +1910,29 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // Render song in list view
   const renderSongListItem = useCallback(
-    (item: any) => {
-      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+    (item: MediaItem) => {
+      const id = item._id || (item as any).id || "";
+      const key = id || getContentKey(item);
+      const title = item.title || "Untitled";
+      const artist =
+        (item as any).speaker ||
+        getUserDisplayNameFromContent(item) ||
+        "Unknown Artist";
+      const duration = (item as any).duration || 0;
+      const thumbnailUrl: any =
+        (item as any).thumbnailUrl || (item as any).imageUrl || "";
+      const isPlaying = !!id && playingAudioId === id;
       const thumbnailSource =
-        typeof item.thumbnailUrl === "string"
-          ? { uri: item.thumbnailUrl }
-          : item.thumbnailUrl;
+        typeof thumbnailUrl === "string" && thumbnailUrl
+          ? { uri: thumbnailUrl }
+          : typeof thumbnailUrl === "object" && thumbnailUrl
+          ? thumbnailUrl
+          : undefined;
 
       return (
         <TouchableOpacity
-          key={item.id}
-          onPress={() => {
-            setSelectedSong(item);
-            setShowSongModal(true);
-          }}
+          key={key}
+          onPress={() => handlePlayPress(item)}
           activeOpacity={0.7}
           style={{
             flexDirection: "row",
@@ -2132,7 +1982,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               }}
               numberOfLines={1}
             >
-              {item.title}
+              {title}
             </Text>
             <Text
               style={{
@@ -2142,7 +1992,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               }}
               numberOfLines={1}
             >
-              By {item.artist} • {formatSongDuration(item.duration)}
+              By {artist} • {formatSongDuration(duration)}
             </Text>
           </View>
           <TouchableOpacity
@@ -2169,26 +2019,34 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         </TouchableOpacity>
       );
     },
-    [currentTrack, globalIsPlaying, handlePlayPress, formatSongDuration]
+    [playingAudioId, handlePlayPress, formatSongDuration]
   );
 
   // Render song in grid view
   const renderSongGridItem = useCallback(
-    (item: any) => {
-      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+    (item: MediaItem) => {
+      const id = item._id || (item as any).id || "";
+      const key = id || getContentKey(item);
+      const title = item.title || "Untitled";
+      const artist =
+        (item as any).speaker ||
+        getUserDisplayNameFromContent(item) ||
+        "Unknown Artist";
+      const thumbnailUrl: any =
+        (item as any).thumbnailUrl || (item as any).imageUrl || "";
+      const isPlaying = !!id && playingAudioId === id;
       const thumbnailSource =
-        typeof item.thumbnailUrl === "string"
-          ? { uri: item.thumbnailUrl }
-          : item.thumbnailUrl;
+        typeof thumbnailUrl === "string" && thumbnailUrl
+          ? { uri: thumbnailUrl }
+          : typeof thumbnailUrl === "object" && thumbnailUrl
+          ? thumbnailUrl
+          : undefined;
       const cardWidth = (SCREEN_WIDTH - 48) / 2;
 
       return (
         <TouchableOpacity
-          key={item.id}
-          onPress={() => {
-            setSelectedSong(item);
-            setShowSongModal(true);
-          }}
+          key={key}
+          onPress={() => handlePlayPress(item)}
           activeOpacity={0.9}
           style={{
             width: cardWidth,
@@ -2254,7 +2112,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             }}
             numberOfLines={1}
           >
-            {item.title}
+            {title}
           </Text>
           <Text
             style={{
@@ -2264,30 +2122,34 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             }}
             numberOfLines={1}
           >
-            {item.artist}
+            {artist}
           </Text>
         </TouchableOpacity>
       );
     },
-    [currentTrack, globalIsPlaying, SCREEN_WIDTH]
+    [playingAudioId, handlePlayPress, SCREEN_WIDTH]
   );
 
   // Render song in small icons view
   const renderSongSmallItem = useCallback(
-    (item: any) => {
+    (item: MediaItem) => {
+      const id = item._id || (item as any).id || "";
+      const key = id || getContentKey(item);
+      const title = item.title || "Untitled";
+      const thumbnailUrl: any =
+        (item as any).thumbnailUrl || (item as any).imageUrl || "";
       const thumbnailSource =
-        typeof item.thumbnailUrl === "string"
-          ? { uri: item.thumbnailUrl }
-          : item.thumbnailUrl;
+        typeof thumbnailUrl === "string" && thumbnailUrl
+          ? { uri: thumbnailUrl }
+          : typeof thumbnailUrl === "object" && thumbnailUrl
+          ? thumbnailUrl
+          : undefined;
       const itemWidth = (SCREEN_WIDTH - 48) / 3;
 
       return (
         <TouchableOpacity
-          key={item.id}
-          onPress={() => {
-            setSelectedSong(item);
-            setShowSongModal(true);
-          }}
+          key={key}
+          onPress={() => handlePlayPress(item)}
           activeOpacity={0.9}
           style={{ width: itemWidth, marginBottom: 12, marginHorizontal: 4 }}
         >
@@ -2329,31 +2191,40 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             }}
             numberOfLines={2}
           >
-            {item.title}
+            {title}
           </Text>
         </TouchableOpacity>
       );
     },
-    [SCREEN_WIDTH]
+    [handlePlayPress, SCREEN_WIDTH]
   );
 
   // Render song in large icons view
   const renderSongLargeItem = useCallback(
-    (item: any) => {
-      const isPlaying = currentTrack?.id === item.id && globalIsPlaying;
+    (item: MediaItem) => {
+      const id = item._id || (item as any).id || "";
+      const key = id || getContentKey(item);
+      const title = item.title || "Untitled";
+      const artist =
+        (item as any).speaker ||
+        getUserDisplayNameFromContent(item) ||
+        "Unknown Artist";
+      const duration = (item as any).duration || 0;
+      const thumbnailUrl: any =
+        (item as any).thumbnailUrl || (item as any).imageUrl || "";
+      const isPlaying = !!id && playingAudioId === id;
       const thumbnailSource =
-        typeof item.thumbnailUrl === "string"
-          ? { uri: item.thumbnailUrl }
-          : item.thumbnailUrl;
+        typeof thumbnailUrl === "string" && thumbnailUrl
+          ? { uri: thumbnailUrl }
+          : typeof thumbnailUrl === "object" && thumbnailUrl
+          ? thumbnailUrl
+          : undefined;
       const cardWidth = SCREEN_WIDTH - 32;
 
       return (
         <TouchableOpacity
-          key={item.id}
-          onPress={() => {
-            setSelectedSong(item);
-            setShowSongModal(true);
-          }}
+          key={key}
+          onPress={() => handlePlayPress(item)}
           activeOpacity={0.9}
           style={{ width: cardWidth, marginBottom: 20, marginHorizontal: 16 }}
         >
@@ -2416,7 +2287,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               }}
               numberOfLines={1}
             >
-              {item.title}
+              {title}
             </Text>
             <Text
               style={{
@@ -2426,13 +2297,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               }}
               numberOfLines={1}
             >
-              By {item.artist} • {formatSongDuration(item.duration)}
+              By {artist} • {formatSongDuration(duration)}
             </Text>
           </View>
         </TouchableOpacity>
       );
     },
-    [currentTrack, globalIsPlaying, SCREEN_WIDTH, formatSongDuration]
+    [playingAudioId, handlePlayPress, SCREEN_WIDTH, formatSongDuration]
   );
 
   // Render song based on display mode
@@ -2794,6 +2665,143 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     );
   }
 
+  // HYMS/HYMNS category: show hymns only (and do not depend on media list)
+  if (isHymnsTab) {
+    return (
+      <ContentErrorBoundary>
+        <View style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
+          {showSuccessCard && (
+            <SuccessCard
+              message={successMessage}
+              onClose={() => setShowSuccessCard(false)}
+              duration={3000}
+            />
+          )}
+          <FlatList
+            data={filteredHymns}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingTop: UI_CONFIG.SPACING.LG,
+              paddingBottom: 24,
+              paddingHorizontal: UI_CONFIG.SPACING.MD,
+            }}
+            columnWrapperStyle={{
+              gap: 12,
+              marginBottom: 12,
+            }}
+            ListHeaderComponent={
+              <View style={{ marginBottom: 12 }}>
+                <Text
+                  style={{
+                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                    fontWeight: "600",
+                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                    marginBottom: UI_CONFIG.SPACING.MD,
+                  }}
+                >
+                  Hymns
+                </Text>
+
+                {/* Search */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "#F3F4F6",
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    gap: 8,
+                    borderWidth: 1,
+                    borderColor: "#EAECF0",
+                  }}
+                >
+                  <Ionicons name="search" size={18} color="#98A2B3" />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      fontSize: 16,
+                      fontFamily: "Rubik_400Regular",
+                      color: "#1D2939",
+                    }}
+                    placeholder="Search hymns..."
+                    placeholderTextColor="#98A2B3"
+                    value={hymnSearchQuery}
+                    onChangeText={setHymnSearchQuery}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                  />
+                  {!!hymnSearchQuery && (
+                    <TouchableOpacity
+                      onPress={() => setHymnSearchQuery("")}
+                      style={{ padding: 4 }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={18} color="#98A2B3" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Result count */}
+                {hymnSearchQuery.trim().length > 0 && (
+                  <Text
+                    style={{
+                      marginTop: 8,
+                      color: "#475467",
+                      fontSize: 12,
+                      fontFamily: "Rubik_400Regular",
+                    }}
+                  >
+                    {filteredHymns.length} result
+                    {filteredHymns.length === 1 ? "" : "s"}
+                  </Text>
+                )}
+              </View>
+            }
+            ListEmptyComponent={
+              loadingHymns ? (
+                <View style={{ paddingVertical: 24 }}>
+                  <ActivityIndicator color={UI_CONFIG.COLORS.PRIMARY} />
+                </View>
+              ) : (
+                <View style={{ paddingVertical: 24 }}>
+                  <Text
+                    style={{
+                      textAlign: "center",
+                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+                      fontFamily: "Rubik_400Regular",
+                    }}
+                  >
+                    No hymns found.
+                  </Text>
+                </View>
+              )
+            }
+            renderItem={({ item }) => (
+              <View style={{ flex: 1 }}>
+                <HymnMiniCard
+                  variant="grid"
+                  item={item}
+                  onPress={(h) =>
+                    router.push({
+                      pathname: "/reader/HymnDetail",
+                      params: { id: h.id },
+                    })
+                  }
+                />
+              </View>
+            )}
+          />
+        </View>
+      </ContentErrorBoundary>
+    );
+  }
+
   // Empty state
   if (filteredMediaList.length === 0) {
     return (
@@ -2868,41 +2876,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Hymns section (mini cards) - Only show in ALL tab */}
-          {contentType === "ALL" && (
-            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                  fontWeight: "600",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  marginBottom: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                Hymns
-              </Text>
-              {renderHymnMiniCards()}
-            </View>
-          )}
-
-          {/* Copyright-Free Songs Section - Only show in ALL tab (old style) */}
-          {contentType === "ALL" && (
-            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                  fontWeight: "600",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  marginBottom: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                Copyright-Free Songs
-              </Text>
-              <CopyrightFreeSongs />
-            </View>
-          )}
+          {/* Hymns moved to its own category (HYMS/HYMNS). Intentionally not shown in ALL. */}
 
           {/* Music Section - Only show in MUSIC tab (new style with list view) */}
           {(String(contentType) === "MUSIC" || String(contentType) === "music") && String(contentType) !== "videos" && contentType !== "ALL" && (
@@ -2977,19 +2951,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                     >
                       <Ionicons name="search" size={20} color="#256E63" />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setShowFilterModal(true)}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: "#F3F4F6",
-                        justifyContent: "center",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Ionicons name="filter" size={20} color="#256E63" />
-                    </TouchableOpacity>
                     <View
                       style={{
                         flexDirection: "row",
@@ -3045,28 +3006,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                 {discoverCards.map(renderDiscoverCard)}
               </ScrollView>
 
-              {/* Songs List */}
-              {loadingSongs ? (
-                <View
-                  style={{
-                    paddingVertical: 40,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <ActivityIndicator size="large" color="#256E63" />
-                  <Text
-                    style={{
-                      marginTop: 12,
-                      fontSize: 14,
-                      color: "#98A2B3",
-                      fontFamily: "Rubik_400Regular",
-                    }}
-                  >
-                    Loading songs...
-                  </Text>
-                </View>
-              ) : allSongs.length === 0 ? (
+              {/* Songs List (your uploads only) */}
+              {userUploadedSongs.length === 0 ? (
                 <View
                   style={{
                     paddingVertical: 40,
@@ -3085,12 +3026,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                       textAlign: "center",
                     }}
                   >
-                    No songs found
+                    {(user?._id || (user as any)?.id)
+                      ? "No uploaded songs found"
+                      : "Sign in to see your uploaded songs"}
                   </Text>
                 </View>
               ) : displayMode === "list" || displayMode === "large" ? (
                 <View>
-                  {allSongs.map((song) => renderSongItem(song))}
+                  {userUploadedSongs.map((song) => renderSongItem(song))}
                 </View>
               ) : (
                 <View
@@ -3100,7 +3043,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                     paddingHorizontal: UI_CONFIG.SPACING.MD,
                   }}
                 >
-                  {allSongs.map((song) => renderSongItem(song))}
+                  {userUploadedSongs.map((song) => renderSongItem(song))}
                 </View>
               )}
             </View>
@@ -3197,173 +3140,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           )}
         </ScrollView>
       </View>
-
-      {/* Filter Modal for Music Section */}
-      <Modal
-        visible={showFilterModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowFilterModal(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setShowFilterModal(false)}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingTop: 16,
-              paddingBottom: 32,
-              maxHeight: "70%",
-            }}
-          >
-            <View
-              style={{
-                width: 40,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: "#E5E7EB",
-                alignSelf: "center",
-                marginBottom: 16,
-              }}
-            />
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "700",
-                color: "#1D2939",
-                fontFamily: "Rubik_700Bold",
-                paddingHorizontal: 20,
-                marginBottom: 16,
-              }}
-            >
-              Filter by Category
-            </Text>
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedCategory(null);
-                  setShowFilterModal(false);
-                }}
-                style={{
-                  paddingVertical: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: "#E5E7EB",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: selectedCategory === null ? "#256E63" : "#1D2939",
-                    fontFamily:
-                      selectedCategory === null
-                        ? "Rubik_600SemiBold"
-                        : "Rubik_400Regular",
-                  }}
-                >
-                  All Categories
-                </Text>
-              </TouchableOpacity>
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category}
-                  onPress={() => {
-                    setSelectedCategory(category);
-                    setShowFilterModal(false);
-                  }}
-                  style={{
-                    paddingVertical: 12,
-                    borderBottomWidth: 1,
-                    borderBottomColor: "#E5E7EB",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      color:
-                        selectedCategory === category ? "#256E63" : "#1D2939",
-                      fontFamily:
-                        selectedCategory === category
-                          ? "Rubik_600SemiBold"
-                          : "Rubik_400Regular",
-                    }}
-                  >
-                    {category}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Song Modal */}
-      {selectedSong && (
-        <CopyrightFreeSongModal
-          visible={showSongModal}
-          song={selectedSong}
-          onClose={() => {
-            setShowSongModal(false);
-            setSelectedSong(null);
-          }}
-          onPlay={handlePlayPress}
-          isPlaying={
-            selectedSong
-              ? currentTrack?.id === selectedSong.id && globalIsPlaying
-              : false
-          }
-          audioProgress={
-            selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().progress
-              : 0
-          }
-          audioDuration={
-            selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().duration
-              : (selectedSong?.duration * 1000 || 0)
-          }
-          audioPosition={
-            selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().position
-              : 0
-          }
-          isMuted={
-            selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().isMuted
-              : false
-          }
-          onTogglePlay={async () => {
-            if (selectedSong) {
-              if (currentTrack?.id === selectedSong.id) {
-                await togglePlayPause();
-              } else {
-                await handlePlayPress(selectedSong);
-              }
-            }
-          }}
-          onToggleMute={async () => {
-            if (selectedSong && currentTrack?.id === selectedSong.id) {
-              await useGlobalAudioPlayerStore.getState().toggleMute();
-            }
-          }}
-          onSeek={async (progress) => {
-            if (selectedSong && currentTrack?.id === selectedSong.id) {
-              await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
-            }
-          }}
-          formatTime={formatTime}
-        />
-      )}
     </ContentErrorBoundary>
   );
 };

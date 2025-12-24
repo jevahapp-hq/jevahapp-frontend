@@ -60,7 +60,8 @@ export type ContentType =
   | "books"
   | "live"
   | "teachings"
-  | "e-books";
+  | "e-books"
+  | "hymns";
 
 // Content filtering options
 export interface ContentFilter {

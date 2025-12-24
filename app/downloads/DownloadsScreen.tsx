@@ -26,10 +26,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useRouter } from "expo-router";
 import AuthHeader from "../components/AuthHeader";
+import { useVideoNavigation } from "../hooks/useVideoNavigation";
 import { DownloadItem, useDownloadStore } from "../store/useDownloadStore";
 import { API_BASE_URL } from "../utils/api";
 import { authUtils } from "../utils/authUtils";
+import type { MediaItem } from "../types/media";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -46,146 +49,31 @@ type User = {
 
 interface DownloadCardProps {
   item: DownloadItem;
+  onOpen: (item: DownloadItem) => void;
 }
 
-const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [position, setPosition] = useState(0);
-  const videoRef = useRef<Video>(null);
-  const audioRef = useRef<Audio.Sound>(null);
-  const progressInterval = useRef<NodeJS.Timeout | null>(null);
-
+const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen }) => {
   const isVideo = item.contentType === 'video' || item.contentType === 'videos';
   const isAudio = item.contentType === 'audio' || item.contentType === 'music';
   const isEbook = item.contentType === 'ebook';
 
-  useEffect(() => {
-    return () => {
-      if (progressInterval.current) {
-        clearInterval(progressInterval.current);
-      }
-      if (audioRef.current) {
-        audioRef.current.unloadAsync();
-      }
-    };
-  }, []);
-
-  const togglePlay = async () => {
-    try {
-      if (isVideo) {
-        if (isPlaying) {
-          await videoRef.current?.pauseAsync();
-        } else {
-          await videoRef.current?.playAsync();
-        }
-        setIsPlaying(!isPlaying);
-      } else if (isAudio) {
-        if (isPlaying) {
-          await audioRef.current?.pauseAsync();
-        } else {
-          if (!audioRef.current) {
-            const { sound } = await Audio.Sound.createAsync(
-              { uri: item.fileUrl },
-              { shouldPlay: true }
-            );
-            audioRef.current = sound;
-            sound.setOnPlaybackStatusUpdate((status) => {
-              if (status.isLoaded) {
-                setProgress(status.positionMillis / status.durationMillis);
-                setPosition(status.positionMillis);
-                setDuration(status.durationMillis);
-                if (status.didJustFinish) {
-                  setIsPlaying(false);
-                  setProgress(0);
-                  setPosition(0);
-                }
-              }
-            });
-          } else {
-            await audioRef.current.playAsync();
-          }
-        }
-        setIsPlaying(!isPlaying);
-      }
-    } catch (error) {
-      console.error('Error toggling playback:', error);
-    }
-  };
-
-  const toggleMute = async () => {
-    try {
-      if (isVideo) {
-        await videoRef.current?.setIsMutedAsync(!isMuted);
-      } else if (isAudio) {
-        await audioRef.current?.setVolumeAsync(isMuted ? 1 : 0);
-      }
-      setIsMuted(!isMuted);
-    } catch (error) {
-      console.error('Error toggling mute:', error);
-    }
-  };
-
-  const seekTo = async (seekPosition: number) => {
-    try {
-      if (isVideo) {
-        await videoRef.current?.setPositionAsync(seekPosition);
-      } else if (isAudio) {
-        await audioRef.current?.setPositionAsync(seekPosition);
-      }
-    } catch (error) {
-      console.error('Error seeking:', error);
-    }
-  };
-
-  const formatTime = (milliseconds: number) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const handleVideoStatusUpdate = (status: any) => {
-    if (status.isLoaded) {
-      setProgress(status.positionMillis / status.durationMillis);
-      setPosition(status.positionMillis);
-      setDuration(status.durationMillis);
-      setIsPlaying(status.isPlaying);
-      if (status.didJustFinish) {
-        setIsPlaying(false);
-        setProgress(0);
-        setPosition(0);
-      }
-    }
-  };
-
   return (
-    <View className="mb-5 flex-row w-[362px] gap-6 justify-between">
+    <TouchableOpacity
+      activeOpacity={0.75}
+      onPress={() => onOpen(item)}
+      className="mb-5 flex-row w-[362px] gap-6 justify-between"
+    >
       {/* Thumbnail/Video/Audio Display */}
       <View className="w-[60px] h-[72px] rounded-xl overflow-hidden">
-        {isVideo ? (
-          <Video
-            ref={videoRef}
-            source={{ uri: item.fileUrl || '' }}
-            style={{ width: "100%", height: "100%" }}
-            resizeMode={ResizeMode.COVER}
-            useNativeControls={false}
-            isMuted={isMuted}
-            onPlaybackStatusUpdate={handleVideoStatusUpdate}
-          />
-        ) : (
-          <Image
-            source={
-              item.thumbnailUrl 
-                ? { uri: item.thumbnailUrl }
-                : require("../../assets/images/1.png")
-            }
-            className="w-full h-full"
-            resizeMode="cover"
-          />
-        )}
+        <Image
+          source={
+            item.thumbnailUrl
+              ? { uri: item.thumbnailUrl }
+              : require("../../assets/images/1.png")
+          }
+          className="w-full h-full"
+          resizeMode="cover"
+        />
       </View>
 
       <View className="flex-col w-[268px]">
@@ -199,53 +87,15 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
           {item.description}
         </Text>
 
-        {/* Playback Controls - Only for video and audio content */}
+        {/* Tap to open in the proper viewer (Reels / Music / Reader) */}
         {!isEbook && (
           <View className="flex-row items-center mt-3">
-            <TouchableOpacity className="mr-3" onPress={togglePlay}>
-              {isPlaying ? (
-                                <Pause size={18} color="black" />
-              ) : (
-                                <Play size={18} color="black" />
-              )}
-            </TouchableOpacity>
-
-            {/* Progress Bar */}
-            <View className="flex-1 mr-3">
-              <TouchableOpacity
-                onPress={(event) => {
-                  const { locationX } = event.nativeEvent;
-                  const progressBarWidth = 200; // Approximate width
-                  const seekRatio = locationX / progressBarWidth;
-                  const seekPosition = seekRatio * duration;
-                  seekTo(seekPosition);
-                }}
-              >
-                <View className="w-[200px] h-1 bg-gray-300 rounded-full">
-                  <View 
-                    className="h-1 bg-black rounded-full" 
-                    style={{ width: `${progress * 100}%` }}
-                  />
-                </View>
-              </TouchableOpacity>
-              {duration > 0 && (
-                <View className="flex-row justify-between mt-1">
-                  <Text className="text-xs text-gray-500 font-rubik">
-                    {formatTime(position)}
-                  </Text>
-                  <Text className="text-xs text-gray-500 font-rubik">
-                    {formatTime(duration)}
-                  </Text>
-                </View>
-              )}
+            <View className="mr-2">
+              <Play size={18} color="black" />
             </View>
-            
-            <TouchableOpacity onPress={toggleMute}>
-                              <Volume2 
-                size={18} 
-                color={isMuted ? "gray" : "black"} 
-              />
-            </TouchableOpacity>
+            <Text className="text-[#667085] text-sm font-rubik">
+              {isVideo ? "Open in Reels" : isAudio ? "Open player" : "Open"}
+            </Text>
           </View>
         )}
 
@@ -281,7 +131,7 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item }) => {
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -290,6 +140,8 @@ const DownloadScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isAutomaticDownloadsModalVisible, setIsAutomaticDownloadsModalVisible] = useState(false);
+  const router = useRouter();
+  const { navigateToReels } = useVideoNavigation();
   
   // Use the download store
   const { 
@@ -357,11 +209,57 @@ const DownloadScreen: React.FC = () => {
 
   const filteredDownloads = filterDownloads(downloadedItems);
 
-  // Group downloads by type
-  const videoDownloads = downloadedItems.filter(item => item.contentType === 'video');
-  const audioDownloads = downloadedItems.filter(item => item.contentType === 'audio');
-  const ebookDownloads = downloadedItems.filter(item => item.contentType === 'ebook');
-  const liveDownloads = downloadedItems.filter(item => item.contentType === 'live');
+  const toVideoMediaItem = (d: DownloadItem): MediaItem => ({
+    _id: d.id,
+    contentType: "videos",
+    fileUrl: d.localPath || d.fileUrl || "",
+    title: d.title,
+    speaker: d.author,
+    uploadedBy: d.author,
+    description: d.description,
+    createdAt: d.downloadedAt,
+    imageUrl: d.thumbnailUrl,
+  });
+
+  const openDownloadedItem = (d: DownloadItem) => {
+    const normalized = (d.contentType || "").toLowerCase();
+    if (normalized === "video" || normalized === "videos") {
+      const allVideos = downloadedItems
+        .filter((x) => ["video", "videos"].includes((x.contentType || "").toLowerCase()))
+        .map(toVideoMediaItem);
+      const currentIndex = Math.max(
+        0,
+        allVideos.findIndex((v) => v._id === d.id)
+      );
+
+      navigateToReels({
+        video: toVideoMediaItem(d),
+        index: currentIndex,
+        allVideos,
+        contentStats: {},
+        globalFavoriteCounts: {},
+        getContentKey: (item) => String(item._id || item.title),
+        getTimeAgo: (createdAt) => {
+          try {
+            return new Date(createdAt).toLocaleDateString();
+          } catch {
+            return "Recently";
+          }
+        },
+        getDisplayName: (speaker, uploadedBy) =>
+          speaker || uploadedBy || d.author || "Unknown",
+        source: "Downloads",
+        category: "videos",
+      });
+      return;
+    }
+
+    // Audio / Ebook / others: open viewer that uses the same UI components as their category
+    router.push({
+      pathname: "/downloads/DownloadContentViewer",
+      params: { id: d.id },
+    });
+  };
 
   return (
     <SafeAreaView className="flex-1 w-full bg-white">
@@ -446,7 +344,11 @@ const DownloadScreen: React.FC = () => {
             </View>
           ) : (
             filteredDownloads.map((item, index) => (
-              <DownloadCard key={item.id || index} item={item} />
+              <DownloadCard
+                key={item.id || String(index)}
+                item={item}
+                onOpen={openDownloadedItem}
+              />
             ))
           )}
 

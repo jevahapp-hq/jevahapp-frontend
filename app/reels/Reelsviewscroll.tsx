@@ -3,17 +3,17 @@ import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
-    Image,
-    PanResponder,
-    Platform,
-    ScrollView,
-    Share,
-    StatusBar,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Dimensions,
+  Image,
+  PanResponder,
+  Platform,
+  ScrollView,
+  Share,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 
 import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
@@ -21,6 +21,7 @@ import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
 import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
+import { getBottomNavHeight } from "../../utils/responsive";
 import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
@@ -34,10 +35,10 @@ import { audioConfig } from "../utils/audioConfig";
 import { useDownloadHandler } from "../utils/downloadUtils";
 import { navigateMainTab } from "../utils/navigation";
 import {
-    getFavoriteState,
-    getPersistedStats,
-    persistStats,
-    toggleFavorite,
+  getFavoriteState,
+  getPersistedStats,
+  persistStats,
+  toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
 
@@ -84,7 +85,10 @@ export default function Reelsviewscroll() {
   // Refs
   const videoRefs = useRef<Record<string, Video>>({});
   const lastIndexRef = useRef<number>(0);
-  const scrollStartIndexRef = useRef<number>(currentVideoIndex);
+  // Initialize from route param (currentVideoIndex is computed later in this file)
+  const scrollStartIndexRef = useRef<number>(
+    Number.parseInt(String(currentIndex ?? "0"), 10) || 0
+  );
 
   // State hooks
   const [hasError, setHasError] = useState<boolean>(false);
@@ -95,6 +99,7 @@ export default function Reelsviewscroll() {
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [videoPosition, setVideoPosition] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [reelsProgressBarWidth, setReelsProgressBarWidth] = useState<number>(0);
   const [showPauseOverlay, setShowPauseOverlay] = useState<boolean>(false);
   const [userHasManuallyPaused, setUserHasManuallyPaused] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("Home");
@@ -295,6 +300,12 @@ export default function Reelsviewscroll() {
   // Handle back navigation based on source component
   const handleBackNavigation = () => {
     triggerHapticFeedback();
+
+    // Downloads: always return to the Downloads screen (tab-like behavior)
+    if (source === "Downloads") {
+      router.replace("/downloads/DownloadsScreen");
+      return;
+    }
 
     // Special handling for AllContentTikTok: Always use explicit navigation
     // to preserve category context (even if router.canGoBack() is true)
@@ -615,7 +626,7 @@ export default function Reelsviewscroll() {
         title: currentVideo.title || title,
         description: currentVideo.description || "",
         author: currentVideo.speaker || speaker || "Unknown",
-        contentType: "video",
+        contentType: "video" as const,
         fileUrl: currentVideo.fileUrl || imageUrl,
         thumbnailUrl: currentVideo.imageUrl || imageUrl,
       };
@@ -719,7 +730,6 @@ export default function Reelsviewscroll() {
   };
 
   // Progress bar dimensions and calculations
-  const progressBarWidth = screenWidth - getResponsiveSpacing(24, 32, 40); // Responsive margins
   const progressPercentage =
     videoDuration > 0 ? (videoPosition / videoDuration) * 100 : 0;
 
@@ -735,18 +745,20 @@ export default function Reelsviewscroll() {
 
         // Calculate position based on touch location within the progress bar
         const touchX = evt.nativeEvent.locationX;
+        const width = Math.max(1, reelsProgressBarWidth || screenWidth);
         const newProgress = Math.max(
           0,
-          Math.min(100, (touchX / progressBarWidth) * 100)
+          Math.min(100, (touchX / width) * 100)
         );
         seekToPosition(videoKey, newProgress);
       },
       onPanResponderMove: (evt, gestureState) => {
         // Use absolute position instead of relative movement
         const touchX = evt.nativeEvent.locationX;
+        const width = Math.max(1, reelsProgressBarWidth || screenWidth);
         const newProgress = Math.max(
           0,
-          Math.min(100, (touchX / progressBarWidth) * 100)
+          Math.min(100, (touchX / width) * 100)
         );
         seekToPosition(videoKey, newProgress);
       },
@@ -1640,161 +1652,191 @@ export default function Reelsviewscroll() {
                 <View
                   style={{
                     position: "absolute",
-                    bottom: getResponsiveSpacing(40, 60, 80), // Bring down closer to bottom
-                    left: getResponsiveSpacing(16, 20, 24), // Move to the right by increasing left margin
-                    right: getResponsiveSpacing(4, 8, 12), // Reduce right margin to maintain width
-                    zIndex: 15,
+                    // Keep the progress bar above the BottomNav + floating FAB (especially on iOS)
+                    bottom: getBottomNavHeight() + getResponsiveSpacing(-18, -16, -14),
+                    left: 0,
+                    right: 0,
+                    // Ensure the timer/seek UI isn't covered by the avatar/speaker overlay
+                    zIndex: 30,
                   }}
                 >
-
                   <View
                     style={{
-                      flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "center",
-                      paddingHorizontal: 4, // Minimal padding for maximum progress bar width
                       paddingBottom: 12,
                       paddingTop: 6,
                       bottom: 0, // Match VideoProgressBar positioning
+                      width: "100%",
                     }}
                   >
-                    {/* Progress Bar - Full width container */}
-                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", maxWidth: "100%" }}>
-                      {/* Current time on left */}
-                      <Text
-                        style={{
-                          color: "#FFFFFF",
-                          fontSize: 10, // Even smaller font
-                          fontFamily: "Rubik-Medium",
-                          marginRight: 6, // Reduced margin
-                          minWidth: 30, // Reduced min width
-                          textAlign: "right",
-                          textShadowColor: "rgba(0, 0, 0, 0.75)",
-                          textShadowOffset: { width: 0, height: 1 },
-                          textShadowRadius: 2,
-                        }}
-                      >
-                        {videoDuration > 0 ? formatTime(videoPosition) : "0:00"}
-                      </Text>
-
-                      {/* Progress Bar */}
+                    {/* Full-width Reels progress bar (subtle unless dragging) */}
+                    <View
+                      {...createPanResponder(videoKey, null).panHandlers}
+                      style={{
+                        width: "100%",
+                        position: "relative",
+                        height: isDragging ? 48 : 40, // thicker/clearer while dragging
+                      }}
+                      onLayout={(e) => {
+                        const w = e.nativeEvent.layout.width;
+                        if (w && Math.abs(w - reelsProgressBarWidth) > 0.5) {
+                          setReelsProgressBarWidth(w);
+                        }
+                      }}
+                      accessibilityLabel="Video progress bar - slide to seek"
+                      accessibilityRole="adjustable"
+                      accessibilityValue={{
+                        min: 0,
+                        max: 100,
+                        now: Math.round(progressPercentage),
+                      }}
+                      accessibilityHint="Double tap and hold to drag, or tap to seek to position"
+                    >
+                      {/* Time labels - always visible (even when not dragging/playing) */}
                       <View
-                        {...createPanResponder(videoKey, null).panHandlers}
+                        pointerEvents="none"
                         style={{
-                          flex: 1,
-                          position: "relative",
-                          height: 40, // Larger touch area for easier dragging
+                          position: "absolute",
+                          left: 12,
+                          right: 12,
+                          top: 8, // keep off the very top edge
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          paddingRight: 44, // leave room for mute button
+                          zIndex: 35,
+                          opacity: isDragging ? 1 : 0.9,
                         }}
-                        accessibilityLabel="Video progress bar - slide to seek"
-                        accessibilityRole="adjustable"
-                        accessibilityValue={{
-                          min: 0,
-                          max: 100,
-                          now: Math.round(progressPercentage),
-                        }}
-                        accessibilityHint="Double tap and hold to drag, or tap to seek to position"
                       >
-                        {/* Background Track */}
                         <View
                           style={{
-                            height: 4,
-                            backgroundColor: "rgba(255, 255, 255, 0.3)",
-                            borderRadius: 2,
-                            position: "absolute",
-                            top: 8, // Center vertically in touch area
-                            left: 0,
-                            right: 0,
-                            shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.2,
-                            shadowRadius: 2,
-                            elevation: 2,
-                          }}
-                        />
-
-                        {/* Progress Fill - Orange */}
-                        <View
-                          style={{
-                            height: 4,
-                            backgroundColor: "#FEA74E",
-                            borderRadius: 2,
-                            width: `${progressPercentage}%`,
-                            position: "absolute",
-                            top: 8,
-                            left: 0,
-                            shadowColor: "#FEA74E",
-                            shadowOffset: { width: 0, height: 0 },
-                            shadowOpacity: 0.5,
-                            shadowRadius: 4,
-                            elevation: 3,
-                          }}
-                        />
-
-                        {/* Draggable White Indicator */}
-                        <View
-                          style={{
-                            position: "absolute",
-                            top: 8 - 8, // Center on track (track top = 8, circle radius = 8)
-                            width: 16,
-                            height: 16,
-                            backgroundColor: "#FFFFFF",
+                            backgroundColor: isDragging
+                              ? "rgba(0, 0, 0, 0.35)"
+                              : "rgba(0, 0, 0, 0.22)",
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
                             borderRadius: 8,
-                            borderWidth: 3,
-                            borderColor: "#FEA74E",
-                            left: `${Math.max(0, Math.min(progressPercentage, 100))}%`,
-                            transform: [{ translateX: -8 }], // Center the circle
-                            shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 5,
-                            zIndex: 10,
                           }}
-                        />
+                        >
+                          <Text
+                            style={{
+                              color: "rgba(255, 255, 255, 0.98)",
+                              fontSize: 10,
+                              fontFamily: "Rubik-Medium",
+                              textShadowColor: "rgba(0, 0, 0, 0.65)",
+                              textShadowOffset: { width: 0, height: 1 },
+                              textShadowRadius: 2,
+                            }}
+                          >
+                            {videoDuration > 0 ? formatTime(videoPosition) : "0:00"}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: isDragging
+                              ? "rgba(0, 0, 0, 0.35)"
+                              : "rgba(0, 0, 0, 0.22)",
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "rgba(255, 255, 255, 0.98)",
+                              fontSize: 10,
+                              fontFamily: "Rubik-Medium",
+                              textShadowColor: "rgba(0, 0, 0, 0.65)",
+                              textShadowOffset: { width: 0, height: 1 },
+                              textShadowRadius: 2,
+                            }}
+                          >
+                            {videoDuration > 0 ? formatTime(videoDuration) : "0:00"}
+                          </Text>
+                        </View>
                       </View>
 
-                      {/* Total duration on right */}
-                      <Text
+                      {/* Background Track */}
+                      <View
                         style={{
-                          color: "#FFFFFF",
-                          fontSize: 10, // Even smaller font
-                          fontFamily: "Rubik-Medium",
-                          marginLeft: 6, // Reduced margin
-                          minWidth: 30, // Reduced min width
-                          textAlign: "left",
-                          textShadowColor: "rgba(0, 0, 0, 0.75)",
-                          textShadowOffset: { width: 0, height: 1 },
-                          textShadowRadius: 2,
+                          height: isDragging ? 6 : 2,
+                          backgroundColor: isDragging
+                            ? "rgba(255, 255, 255, 0.45)"
+                            : "rgba(255, 255, 255, 0.15)",
+                          borderRadius: 999,
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top:
+                            ((isDragging ? 48 : 40) - (isDragging ? 6 : 2)) / 2,
                         }}
-                      >
-                        {videoDuration > 0 ? formatTime(videoDuration) : "0:00"}
-                      </Text>
-                    </View>
-
-                    {/* Mute Button - positioned on the right */}
-                    <TouchableOpacity
-                      onPress={() => toggleMute(videoKey)}
-                      style={{
-                        backgroundColor: "rgba(0, 0, 0, 0.6)",
-                        padding: 6, // Smaller padding
-                        borderRadius: 16, // Smaller radius
-                        marginLeft: 4, // Reduced margin
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 4,
-                        elevation: 3,
-                      }}
-                      activeOpacity={0.7}
-                      accessibilityLabel={`${mutedVideos[videoKey] ? "Unmute" : "Mute"} video`}
-                      accessibilityRole="button"
-                    >
-                      <Ionicons
-                        name={mutedVideos[videoKey] ? "volume-mute" : "volume-high"}
-                        size={16} // Smaller icon
-                        color="#FFFFFF"
                       />
-                    </TouchableOpacity>
+
+                      {/* Progress Fill - Orange */}
+                      <View
+                        style={{
+                          height: isDragging ? 6 : 2,
+                          backgroundColor: isDragging
+                            ? "rgba(254, 167, 78, 0.95)"
+                            : "rgba(254, 167, 78, 0.25)",
+                          borderRadius: 999,
+                          width: `${progressPercentage}%`,
+                          position: "absolute",
+                          left: 0,
+                          top:
+                            ((isDragging ? 48 : 40) - (isDragging ? 6 : 2)) / 2,
+                        }}
+                      />
+
+                      {/* Draggable knob (only obvious while dragging) */}
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: ((isDragging ? 48 : 40) - 16) / 2,
+                          width: 16,
+                          height: 16,
+                          backgroundColor: "#FFFFFF",
+                          borderRadius: 8,
+                          borderWidth: 3,
+                          borderColor: "#FEA74E",
+                          left: `${Math.max(0, Math.min(progressPercentage, 100))}%`,
+                          transform: [{ translateX: -8 }],
+                          opacity: isDragging ? 1 : 0,
+                          zIndex: 10,
+                        }}
+                      />
+
+                      {/* Mute Button - positioned on the right */}
+                      <TouchableOpacity
+                        onPress={() => toggleMute(videoKey)}
+                        style={{
+                          position: "absolute",
+                          right: 12,
+                          // Lift slightly so it doesn't touch the progress bar / track
+                          top: isDragging ? -2 : 4,
+                          backgroundColor: isDragging
+                            ? "rgba(0, 0, 0, 0.65)"
+                            : "rgba(0, 0, 0, 0.35)",
+                          padding: 6,
+                          borderRadius: 16,
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityLabel={`${
+                          mutedVideos[videoKey] ? "Unmute" : "Mute"
+                        } video`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name={
+                            mutedVideos[videoKey]
+                              ? "volume-mute"
+                              : "volume-high"
+                          }
+                          size={16}
+                          color="rgba(255, 255, 255, 0.95)"
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               </>

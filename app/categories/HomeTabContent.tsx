@@ -9,21 +9,43 @@ import {
   getResponsiveTextStyle,
 } from "../../utils/responsive";
 import Header from "../components/Header";
+import { useCurrentPlayingAudioStore } from "../store/useCurrentPlayingAudioStore";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
+import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 import AllContentTikTok from "./AllContentTikTok";
+import Music from "./music";
 
-const categories = ["ALL", "LIVE", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
+// NOTE: "HYMS" (hymns) requested as its own category, positioned between LIVE and SERMON.
+const categories = ["ALL", "LIVE", "HYMS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
 // Map uppercase category names to ContentType format expected by AllContentTikTok
-const mapCategoryToContentType = (category: string): "ALL" | "video" | "videos" | "audio" | "music" | "sermon" | "image" | "ebook" | "books" | "live" | "teachings" | "e-books" => {
+const mapCategoryToContentType = (
+  category: string
+):
+  | "ALL"
+  | "video"
+  | "videos"
+  | "audio"
+  | "music"
+  | "sermon"
+  | "image"
+  | "ebook"
+  | "books"
+  | "live"
+  | "teachings"
+  | "e-books"
+  | "hymns" => {
   const categoryUpper = category.toUpperCase();
   switch (categoryUpper) {
     case "VIDEO":
       return "videos";
     case "MUSIC":
       return "music";
+    case "HYMS":
+      return "hymns";
     case "SERMON":
       return "sermon";
     case "E-BOOKS":
@@ -48,6 +70,9 @@ const mapContentTypeToCategory = (contentType: string): string => {
   }
   if (contentTypeLower === "sermon" || contentTypeLower === "teachings") {
     return "SERMON";
+  }
+  if (contentTypeLower === "hymns" || contentTypeLower === "hyms") {
+    return "HYMS";
   }
   if (contentTypeLower === "e-books" || contentTypeLower === "ebook" || contentTypeLower === "books") {
     return "E-BOOKS";
@@ -175,6 +200,27 @@ export default function HomeTabContent() {
           } catch (e) {
             // no-op
           }
+          // HYMS: ensure global audio mini-players are cleared so they don't show on hymns browsing.
+          if (category === "HYMS") {
+            try {
+              // Stop any legacy audio instances
+              GlobalAudioInstanceManager.getInstance().stopAllAudio?.();
+            } catch (e) {
+              // no-op
+            }
+            try {
+              // Clear the legacy mini player store
+              useCurrentPlayingAudioStore.getState().clearCurrentAudio?.();
+            } catch (e) {
+              // no-op
+            }
+            try {
+              // Clear the global floating player store
+              useGlobalAudioPlayerStore.getState().clear?.();
+            } catch (e) {
+              // no-op
+            }
+          }
           try {
             useGlobalVideoStore.getState().pauseAllVideos();
           } catch (e) {
@@ -187,7 +233,14 @@ export default function HomeTabContent() {
   );
 
   const renderContent = () => {
-    return <AllContentTikTok contentType={mapCategoryToContentType(selectedCategory)} />;
+    // Music category should show copyright-free catalog (not user uploads)
+    if (selectedCategory === "MUSIC") {
+      return <Music />;
+    }
+
+    return (
+      <AllContentTikTok contentType={mapCategoryToContentType(selectedCategory)} />
+    );
 
    
   };

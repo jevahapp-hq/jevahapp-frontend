@@ -12,14 +12,30 @@ export type HymnItem = {
 type Props = {
   item: HymnItem;
   onPress?: (item: HymnItem) => void;
+  variant?: "carousel" | "grid";
 };
 
-export default function HymnMiniCard({ item, onPress }: Props) {
+export default function HymnMiniCard({
+  item,
+  onPress,
+  variant = "carousel",
+}: Props) {
   return (
-    <View key={item.id} className="mr-4 w-[154px] flex-col items-center">
+    <View
+      key={item.id}
+      className={
+        variant === "grid"
+          ? "w-full flex-col items-center"
+          : "mr-4 w-[154px] flex-col items-center"
+      }
+    >
       <TouchableOpacity
         onPress={() => onPress?.(item)}
-        className="w-full h-[232px] rounded-2xl overflow-hidden relative"
+        className={
+          variant === "grid"
+            ? "w-full h-[220px] rounded-2xl overflow-hidden relative"
+            : "w-full h-[232px] rounded-2xl overflow-hidden relative"
+        }
         activeOpacity={0.9}
       >
         <Image

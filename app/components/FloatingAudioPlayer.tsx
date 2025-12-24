@@ -86,7 +86,7 @@ export default function FloatingAudioPlayer() {
 
     // Hide entirely on any Bible-related routes (onboarding + reader),
     // so mini player is not visible there at all.
-    const bibleRouteSegments = ['bible', 'biblescreen', 'bibleonboarding'];
+    const bibleRouteSegments = ['bible', 'biblescreen', 'bibleonboarding', 'reader'];
     const inBibleRoute = segments.some(seg =>
       bibleRouteSegments.includes(seg.toLowerCase())
     );
@@ -130,7 +130,7 @@ export default function FloatingAudioPlayer() {
   // Fade-in and slide-up animation when track appears
   useEffect(() => {
     // If we're on any Bible route, force-stop audio so nothing plays in background
-    const bibleRouteSegments = ['bible', 'biblescreen', 'bibleonboarding'];
+    const bibleRouteSegments = ['bible', 'biblescreen', 'bibleonboarding', 'reader'];
     const inBibleRoute = segments.some(seg =>
       bibleRouteSegments.includes(seg.toLowerCase())
     );
