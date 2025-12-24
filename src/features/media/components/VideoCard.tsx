@@ -125,6 +125,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const toggleProcessingRef = useRef(false); // Ref for debouncing play toggle
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   
@@ -468,9 +469,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // Only pause when scrolled past or another video is hovered
   }, [video.title]);
 
-  // Handle play/pause toggle - now using modular hook
+  // Handle play/pause toggle - now using modular hook with improved responsiveness
   const handleTogglePlay = useCallback(async () => {
-    if (isPlayTogglePending) return; // Prevent double-taps
+    // Use ref-based debounce for immediate response while preventing double-taps
+    if (toggleProcessingRef.current) return; // Prevent double-taps but allow UI feedback
 
     // Clear any pending tap detection when play icon is clicked
     tapCountRef.current = 0;
@@ -479,36 +481,42 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       tapTimeoutRef.current = null;
     }
 
+    toggleProcessingRef.current = true;
     setIsPlayTogglePending(true);
 
-    if (isAudioSermon) {
-      // Handle audio sermon play/pause
-      if (audioState.isPlaying) {
-        audioControls.pause();
-        showOverlayPermanently();
+    // Immediate execution for responsive feel
+    try {
+      if (isAudioSermon) {
+        // Handle audio sermon play/pause
+        if (audioState.isPlaying) {
+          audioControls.pause();
+          showOverlayPermanently();
+        } else {
+          hideOverlay();
+          audioControls.play();
+        }
       } else {
-        hideOverlay();
-        audioControls.play();
-      }
-    } else {
-      // Use modular hook for video playback control
-      togglePlayback();
+        // Use modular hook for video playback control
+        togglePlayback();
 
-      // Update overlay state
-      if (isPlaying) {
-        showOverlayPermanently();
-      } else {
-        hideOverlay();
+        // Update overlay state immediately
+        if (isPlaying) {
+          showOverlayPermanently();
+        } else {
+          hideOverlay();
+        }
       }
+    } catch (error) {
+      console.error("Error in handleTogglePlay:", error);
+    } finally {
+      // Reset pending state quickly for better responsiveness
+      setTimeout(() => {
+        toggleProcessingRef.current = false;
+        setIsPlayTogglePending(false);
+      }, 100); // Reduced from 150ms for faster response
     }
-
-    // Reset pending state
-    setTimeout(() => {
-      setIsPlayTogglePending(false);
-    }, 150);
   }, [
     key,
-    isPlayTogglePending,
     isAudioSermon,
     audioState.isPlaying,
     audioControls,
