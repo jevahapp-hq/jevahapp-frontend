@@ -457,11 +457,21 @@ export default function CopyrightFreeSongs({
 
   const {
     setTrack,
+    play,
     currentTrack,
     isPlaying: globalIsPlaying,
+    position,
+    duration,
+    progress,
+    isMuted,
     togglePlayPause,
+    toggleMute,
+    seekToProgress,
     isLoading: globalIsLoading,
   } = useGlobalAudioPlayerStore();
+
+  // Get the setState function for queue management
+  const setAudioState = useGlobalAudioPlayerStore.setState;
 
   // Update selectedSong when currentTrack changes (for auto-advance to next song)
   // Update selectedSong when currentTrack changes (for auto-advance to next song)
@@ -503,8 +513,7 @@ export default function CopyrightFreeSongs({
       // Build / update global queue so Next/Previous behave like a real music player.
       // We use the currently loaded `songs` array as the playlist.
       try {
-        const state = useGlobalAudioPlayerStore.getState();
-        const currentQueue = state.queue || [];
+        const currentQueue = useGlobalAudioPlayerStore.getState().queue || [];
         const songIndex = songs.findIndex((s) => s.id === song.id);
 
         if (songIndex !== -1) {
@@ -558,9 +567,8 @@ export default function CopyrightFreeSongs({
         }, true); // Pass true to play immediately
         
         // If setTrack didn't start playing (e.g., track was already loaded), call play()
-        const state = useGlobalAudioPlayerStore.getState();
-        if (!state.isPlaying && state.soundInstance) {
-          await state.play();
+        if (!globalIsPlaying) {
+          await play();
         }
       }
     },
@@ -776,10 +784,10 @@ export default function CopyrightFreeSongs({
         }}
         onPlay={(song) => handlePlayIconPress(song)}
         isPlaying={selectedSong ? currentTrack?.id === selectedSong.id && globalIsPlaying : false}
-        audioProgress={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().progress : 0}
-        audioDuration={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().duration : (selectedSong?.duration * 1000 || 0)}
-        audioPosition={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().position : 0}
-        isMuted={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().isMuted : false}
+        audioProgress={selectedSong && currentTrack?.id === selectedSong.id ? progress : 0}
+        audioDuration={selectedSong && currentTrack?.id === selectedSong.id ? duration : (selectedSong?.duration * 1000 || 0)}
+        audioPosition={selectedSong && currentTrack?.id === selectedSong.id ? position : 0}
+        isMuted={selectedSong && currentTrack?.id === selectedSong.id ? isMuted : false}
         onTogglePlay={async () => {
           if (selectedSong) {
             if (currentTrack?.id === selectedSong.id) {
@@ -791,12 +799,12 @@ export default function CopyrightFreeSongs({
         }}
         onToggleMute={async () => {
           if (selectedSong && currentTrack?.id === selectedSong.id) {
-            await useGlobalAudioPlayerStore.getState().toggleMute();
+            await toggleMute();
           }
         }}
         onSeek={async (progress) => {
           if (selectedSong && currentTrack?.id === selectedSong.id) {
-            await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
+            await seekToProgress(progress);
           }
         }}
         formatTime={formatTime}

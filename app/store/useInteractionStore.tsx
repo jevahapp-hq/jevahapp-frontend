@@ -26,6 +26,12 @@ interface InteractionState {
   loadingStats: Record<string, boolean>;
   loadingInteraction: Record<string, boolean>;
 
+  // Last local mutation timestamps (used to prevent immediate flicker when the server
+  // metadata endpoint is briefly stale right after a user action).
+  // Keyed by contentId (simple) for now; if we later support multi-type keys, this should become likeKey.
+  lastLikeMutationAt: Record<string, number>;
+  lastSaveMutationAt: Record<string, number>;
+
   // Comments cache
   comments: Record<string, CommentData[]>;
   loadingComments: Record<string, boolean>;
@@ -105,6 +111,8 @@ export const useInteractionStore = create<InteractionState>()(
     contentStats: {},
     loadingStats: {},
     loadingInteraction: {},
+    lastLikeMutationAt: {},
+    lastSaveMutationAt: {},
     comments: {},
     loadingComments: {},
     savedContent: [],
@@ -116,6 +124,13 @@ export const useInteractionStore = create<InteractionState>()(
       contentType: string
     ): Promise<{ liked: boolean; totalLikes: number }> => {
       const key = `${contentId}_like`;
+      // Mark mutation time so metadata fetched right after the toggle doesn't fight UI.
+      set((state) => ({
+        lastLikeMutationAt: {
+          ...state.lastLikeMutationAt,
+          [contentId]: Date.now(),
+        },
+      }));
       // Optimistic UI
       set((state) => {
         const s =
@@ -213,6 +228,12 @@ export const useInteractionStore = create<InteractionState>()(
       options: ToggleSaveOptions = {}
     ): Promise<{ saved: boolean; totalSaves: number }> => {
       const key = `${contentId}_save`;
+      set((state) => ({
+        lastSaveMutationAt: {
+          ...state.lastSaveMutationAt,
+          [contentId]: Date.now(),
+        },
+      }));
       const previousStats = get().contentStats[contentId];
       const previousSaved =
         previousStats?.userInteractions?.saved ?? options.initialSaved ?? false;
@@ -600,31 +621,46 @@ export const useInteractionStore = create<InteractionState>()(
         );
         set((state) => {
           const existing = state.contentStats[contentId];
+          const now = Date.now();
+          const likeBusy = Boolean(state.loadingInteraction[`${contentId}_like`]);
+          const saveBusy = Boolean(state.loadingInteraction[`${contentId}_save`]);
+          const likeRecentlyMutated =
+            now - (state.lastLikeMutationAt[contentId] ?? 0) < 3000;
+          const saveRecentlyMutated =
+            now - (state.lastSaveMutationAt[contentId] ?? 0) < 3000;
 
-          // Prefer whichever source reports a "true" interaction.
-          // This prevents fresh server metadata that hasn't caught up yet
-          // from clearing a like/save the user just performed in this session.
           const existingLiked = existing?.userInteractions?.liked ?? false;
-          const statsLiked = stats.userInteractions?.liked ?? false;
           const existingSaved = existing?.userInteractions?.saved ?? false;
-          const statsSaved = stats.userInteractions?.saved ?? false;
           const existingShared = existing?.userInteractions?.shared ?? false;
-          const statsShared = stats.userInteractions?.shared ?? false;
           const existingViewed = existing?.userInteractions?.viewed ?? false;
+
+          const statsLiked = stats.userInteractions?.liked ?? false;
+          const statsSaved = stats.userInteractions?.saved ?? false;
+          const statsShared = stats.userInteractions?.shared ?? false;
           const statsViewed = stats.userInteractions?.viewed ?? false;
 
           const merged: ContentStats = {
             contentId,
-            likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-            saves: Math.max(existing?.saves ?? 0, stats.saves ?? 0),
-            shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
-            views: Math.max(existing?.views ?? 0, stats.views ?? 0),
-            comments: Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+            // Prefer server truth, except in the short window right after a local mutation
+            // (or while request is in-flight), where server caches may lag briefly.
+            likes:
+              likeBusy || likeRecentlyMutated
+                ? Math.max(existing?.likes ?? 0, stats.likes ?? 0)
+                : stats.likes ?? existing?.likes ?? 0,
+            saves:
+              saveBusy || saveRecentlyMutated
+                ? Math.max(existing?.saves ?? 0, stats.saves ?? 0)
+                : stats.saves ?? existing?.saves ?? 0,
+            shares: stats.shares ?? existing?.shares ?? 0,
+            views: stats.views ?? existing?.views ?? 0,
+            comments: stats.comments ?? existing?.comments ?? 0,
             userInteractions: {
-              liked: existingLiked || statsLiked,
-              saved: existingSaved || statsSaved,
-              shared: existingShared || statsShared,
-              viewed: existingViewed || statsViewed,
+              liked:
+                likeBusy || likeRecentlyMutated ? existingLiked || statsLiked : statsLiked,
+              saved:
+                saveBusy || saveRecentlyMutated ? existingSaved || statsSaved : statsSaved,
+              shared: statsShared ?? existingShared,
+              viewed: statsViewed ?? existingViewed,
             },
           };
 
@@ -682,33 +718,48 @@ export const useInteractionStore = create<InteractionState>()(
             >;
             for (const [id, stats] of Object.entries(fromBatch)) {
               const existing = state.contentStats[id];
+              const now = Date.now();
+              const likeBusy = Boolean(state.loadingInteraction[`${id}_like`]);
+              const saveBusy = Boolean(state.loadingInteraction[`${id}_save`]);
+              const likeRecentlyMutated =
+                now - (state.lastLikeMutationAt[id] ?? 0) < 3000;
+              const saveRecentlyMutated =
+                now - (state.lastSaveMutationAt[id] ?? 0) < 3000;
 
               const existingLiked = existing?.userInteractions?.liked ?? false;
-              const statsLiked = stats.userInteractions?.liked ?? false;
               const existingSaved = existing?.userInteractions?.saved ?? false;
+              const existingShared = existing?.userInteractions?.shared ?? false;
+              const existingViewed = existing?.userInteractions?.viewed ?? false;
+
+              const statsLiked = stats.userInteractions?.liked ?? false;
               const statsSaved = stats.userInteractions?.saved ?? false;
-              const existingShared =
-                existing?.userInteractions?.shared ?? false;
               const statsShared = stats.userInteractions?.shared ?? false;
-              const existingViewed =
-                existing?.userInteractions?.viewed ?? false;
               const statsViewed = stats.userInteractions?.viewed ?? false;
 
               merged[id] = {
                 contentId: id,
-                likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-                saves: Math.max(existing?.saves ?? 0, stats.saves ?? 0),
-                shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
-                views: Math.max(existing?.views ?? 0, stats.views ?? 0),
-                comments: Math.max(
-                  existing?.comments ?? 0,
-                  stats.comments ?? 0
-                ),
+                likes:
+                  likeBusy || likeRecentlyMutated
+                    ? Math.max(existing?.likes ?? 0, stats.likes ?? 0)
+                    : stats.likes ?? existing?.likes ?? 0,
+                saves:
+                  saveBusy || saveRecentlyMutated
+                    ? Math.max(existing?.saves ?? 0, stats.saves ?? 0)
+                    : stats.saves ?? existing?.saves ?? 0,
+                shares: stats.shares ?? existing?.shares ?? 0,
+                views: stats.views ?? existing?.views ?? 0,
+                comments: stats.comments ?? existing?.comments ?? 0,
                 userInteractions: {
-                  liked: existingLiked || statsLiked,
-                  saved: existingSaved || statsSaved,
-                  shared: existingShared || statsShared,
-                  viewed: existingViewed || statsViewed,
+                  liked:
+                    likeBusy || likeRecentlyMutated
+                      ? existingLiked || statsLiked
+                      : statsLiked,
+                  saved:
+                    saveBusy || saveRecentlyMutated
+                      ? existingSaved || statsSaved
+                      : statsSaved,
+                  shared: statsShared ?? existingShared,
+                  viewed: statsViewed ?? existingViewed,
                 },
               } as ContentStats;
             }

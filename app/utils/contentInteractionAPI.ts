@@ -176,12 +176,12 @@ class ContentInteractionService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        // Graceful fallback on 404 Content not found
+        // For real content IDs, do NOT fall back to local likes.
+        // Server must be the source of truth to avoid cross-user / cross-session divergence.
         if (response.status === 404) {
-          console.warn(
-            `⚠️ TOGGLE LIKE: Content not found (404) for ${backendContentType}/${contentId}. Falling back to local like.`
+          throw new Error(
+            `Content not found: ${backendContentType}/${contentId} (404)`
           );
-          return this.fallbackToggleLike(contentId);
         }
         console.error(
           "❌ TOGGLE LIKE: Request failed",
@@ -241,8 +241,9 @@ class ContentInteractionService {
         JSON.stringify(errorAnalyticsData, null, 2)
       );
 
-      // Fallback to local storage if API fails
-      return this.fallbackToggleLike(contentId);
+      // For valid server-backed content IDs, let callers handle failure (they revert optimistic UI).
+      // Only use local fallback for non-server IDs (handled above).
+      throw error;
     }
   }
 

@@ -26,6 +26,12 @@ import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
+import {
+  useContentCount,
+  useContentStats,
+  useInteractionStore,
+  useUserInteraction,
+} from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
 import { useReelsStore } from "../store/useReelsStore";
@@ -34,10 +40,8 @@ import { audioConfig } from "../utils/audioConfig";
 import { useDownloadHandler } from "../utils/downloadUtils";
 import { navigateMainTab } from "../utils/navigation";
 import {
-    getFavoriteState,
     getPersistedStats,
     persistStats,
-    toggleFavorite,
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent } from "../utils/userValidation";
 
@@ -84,13 +88,12 @@ export default function Reelsviewscroll() {
   // Refs
   const videoRefs = useRef<Record<string, Video>>({});
   const lastIndexRef = useRef<number>(0);
-  const scrollStartIndexRef = useRef<number>(currentVideoIndex);
+  // Note: currentVideoIndex is computed later; avoid referencing it here (would crash at runtime).
+  const scrollStartIndexRef = useRef<number>(0);
 
   // State hooks
   const [hasError, setHasError] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [userFavorites, setUserFavorites] = useState<Record<string, boolean>>({});
-  const [globalFavoriteCounts, setGlobalFavoriteCounts] = useState<Record<string, number>>({});
   const [videoStats, setVideoStats] = useState<Record<string, any>>({});
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [videoPosition, setVideoPosition] = useState<number>(0);
@@ -109,6 +112,10 @@ export default function Reelsviewscroll() {
   const { showCommentModal } = useCommentModal();
   const libraryStore = useLibraryStore();
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+
+  // Unified interaction store (likes/saves/etc.)
+  const toggleLike = useInteractionStore((s) => s.toggleLike);
+  const loadContentStats = useInteractionStore((s) => s.loadContentStats);
 
   // Get video states from global store
   const playingVideos = globalVideoStore.playingVideos;
@@ -187,9 +194,35 @@ export default function Reelsviewscroll() {
     }
   })();
 
-  // Create a unique key for this reel content
+  // Create a unique key for this reel content (for video playback tracking, stats, etc.)
   const reelKey = `reel-${currentVideo.title}-${currentVideo.speaker}`;
   const modalKey = reelKey;
+  
+  // Extract real contentId for API calls (comments, interactions, etc.)
+  // Prefer _id or id from the video object, fallback to synthetic key only if needed
+  const contentId = currentVideo._id || currentVideo.id || null;
+  const contentIdForHooks = (contentId || "") as string;
+  const canUseBackendLikes = Boolean(contentIdForHooks);
+  const activeContentType = (currentVideo.contentType || "video") as string;
+
+  // Read like state for the currently active reel (one reel at a time -> hooks are safe here).
+  const activeStats = useContentStats(contentIdForHooks);
+  const activeIsLiked = useUserInteraction(contentIdForHooks, "liked");
+  const activeLikesCount = useContentCount(contentIdForHooks, "likes");
+
+  // Hydrate stats when we have a real content id.
+  useEffect(() => {
+    if (!canUseBackendLikes) return;
+    if (!activeStats) {
+      loadContentStats(contentIdForHooks, activeContentType);
+    }
+  }, [
+    canUseBackendLikes,
+    activeStats,
+    loadContentStats,
+    contentIdForHooks,
+    activeContentType,
+  ]);
 
   // Media deletion functionality - MUST be called before useEffect hooks
   const {
@@ -408,17 +441,6 @@ export default function Reelsviewscroll() {
         // Load persisted data for this specific reel
         const stats = await getPersistedStats();
         setVideoStats(stats);
-
-        // Load user favorite state
-        const { isUserFavorite, globalCount } = await getFavoriteState(
-          modalKey
-        );
-        setUserFavorites((prev) => ({ ...prev, [modalKey]: isUserFavorite }));
-        setGlobalFavoriteCounts((prev) => ({
-          ...prev,
-          [modalKey]: globalCount,
-        }));
-
       } catch (error) {
         console.error("❌ ReelsView: Failed to load persisted data:", error);
         // Don't crash the app, just log the error
@@ -495,25 +517,26 @@ export default function Reelsviewscroll() {
     );
   }
 
-  const handleFavorite = async (key: string) => {
+  const handleLike = async () => {
     try {
-      // Toggle user's favorite state using the utility function
-      const result = await toggleFavorite(key);
-
-      // Update local state
-      setUserFavorites((prev) => ({ ...prev, [key]: result.isUserFavorite }));
-      setGlobalFavoriteCounts((prev) => ({
-        ...prev,
-        [key]: result.globalCount,
-      }));
+      if (!canUseBackendLikes) {
+        console.warn("⚠️ ReelsView: Missing real contentId; cannot like reliably.");
+        return;
+      }
+      await toggleLike(contentIdForHooks, activeContentType);
     } catch (error) {
-      console.error("❌ Error handling favorite:", error);
+      console.error("❌ Error toggling like in reels:", error);
     }
   };
 
   const handleComment = async (key: string) => {
+    // Use real contentId for comments API (required for backend to work)
+    // Fallback to synthetic key only if no real ID exists (shouldn't happen in production)
+    const commentContentId = contentId || key;
+    
     // Open modal with empty array - backend will load comments immediately
-    showCommentModal([], key);
+    // Pass contentType explicitly to ensure correct backend routing
+    showCommentModal([], commentContentId, "media", currentVideo.speaker);
 
     // Update comment count (optional - you might want to do this after actually posting a comment)
     const currentStats = videoStats[key] || {};
@@ -1138,7 +1161,7 @@ export default function Reelsviewscroll() {
                   <TouchableOpacity
                     onPress={() => {
                       triggerHapticFeedback();
-                      handleFavorite(videoKey);
+                      handleLike();
                     }}
                     style={{
                       alignItems: "center",
@@ -1149,16 +1172,16 @@ export default function Reelsviewscroll() {
                     }}
                     activeOpacity={0.7}
                     accessibilityLabel={`${
-                      userFavorites[videoKey] ? "Unlike" : "Like"
+                      activeIsLiked ? "Unlike" : "Like"
                     } this video`}
                     accessibilityRole="button"
                   >
                     <MaterialIcons
                       name={
-                        userFavorites[videoKey] ? "favorite" : "favorite-border"
+                        activeIsLiked ? "favorite" : "favorite-border"
                       }
                       size={getResponsiveSize(28, 32, 36)}
-                      color={userFavorites[videoKey] ? "#D22A2A" : "#FFFFFF"}
+                      color={activeIsLiked ? "#D22A2A" : "#FFFFFF"}
                     />
                     <Text
                       style={{
@@ -1171,7 +1194,13 @@ export default function Reelsviewscroll() {
                         textShadowRadius: 2,
                       }}
                     >
-                      {globalFavoriteCounts[videoKey] || video.favorite || 0}
+                      {canUseBackendLikes
+                        ? activeLikesCount
+                        : (videoData?.likeCount ??
+                            videoData?.likes ??
+                            videoData?.favorite ??
+                            video.favorite ??
+                            0)}
                     </Text>
                   </TouchableOpacity>
 

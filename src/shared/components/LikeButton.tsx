@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import contentInteractionAPI from "../../../app/utils/contentInteractionAPI";
 
@@ -32,18 +32,36 @@ const LikeButton: React.FC<LikeButtonProps> = ({
   const [likeCount, setLikeCount] = useState(initialLikeCount);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const didInteractRef = useRef(false);
+  const lastContentIdRef = useRef<string>(contentId);
 
-  // Update state when props change
+  // Treat props as "initial" values.
+  // We only re-sync from props when the contentId changes (new card)
+  // OR when the user hasn't interacted yet. This prevents the common flicker:
+  // user taps like (optimistic red) → parent re-renders with stale initialLiked=false
+  // → this effect overwrites local state and flips back.
   useEffect(() => {
-    setLiked(initialLiked);
-    setLikeCount(initialLikeCount);
-  }, [initialLiked, initialLikeCount]);
+    const contentChanged = lastContentIdRef.current !== contentId;
+    if (contentChanged) {
+      lastContentIdRef.current = contentId;
+      didInteractRef.current = false;
+      setLiked(initialLiked);
+      setLikeCount(initialLikeCount);
+      return;
+    }
+
+    if (!didInteractRef.current) {
+      setLiked(initialLiked);
+      setLikeCount(initialLikeCount);
+    }
+  }, [contentId, initialLiked, initialLikeCount]);
 
   const toggleLike = useCallback(async () => {
     if (loading || disabled) return;
 
     setLoading(true);
     setError(null);
+    didInteractRef.current = true;
 
     // Optimistic update
     const previousLiked = liked;

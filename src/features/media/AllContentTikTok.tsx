@@ -461,8 +461,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const {
     currentTrack,
     isPlaying: globalIsPlaying,
+    position,
+    duration,
+    progress,
+    isMuted,
     setTrack,
     togglePlayPause,
+    toggleMute,
+    seekToProgress,
   } = useGlobalAudioPlayerStore();
 
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -1867,13 +1873,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     {
       id: "1",
       title: "Discover Weekly",
-      description: "The original slow instrumental best playlists.",
+      description: "New copyright-free gospel music curated just for you.",
       color: UI_CONFIG.COLORS.PRIMARY, // "#256E63"
     },
     {
       id: "2",
       title: "Featured Playlist",
-      description: "Top trending gospel songs this week.",
+      description: "Most popular copyright-free songs everyone's listening to.",
       color: UI_CONFIG.COLORS.SECONDARY, // "#FEA74E"
     },
   ];
@@ -2887,20 +2893,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Copyright-Free Songs Section - Only show in ALL tab (old style) */}
+          {/* Songs Section - Only show in ALL tab (without heading text) */}
           {contentType === "ALL" && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                  fontWeight: "600",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  marginBottom: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                Copyright-Free Songs
-              </Text>
               <CopyrightFreeSongs />
             </View>
           )}
@@ -3336,22 +3331,22 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           }
           audioProgress={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().progress
+              ? progress
               : 0
           }
           audioDuration={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().duration
+              ? duration
               : (selectedSong?.duration * 1000 || 0)
           }
           audioPosition={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().position
+              ? position
               : 0
           }
           isMuted={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().isMuted
+              ? isMuted
               : false
           }
           onTogglePlay={async () => {
@@ -3365,12 +3360,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           }}
           onToggleMute={async () => {
             if (selectedSong && currentTrack?.id === selectedSong.id) {
-              await useGlobalAudioPlayerStore.getState().toggleMute();
+              await toggleMute();
             }
           }}
           onSeek={async (progress) => {
             if (selectedSong && currentTrack?.id === selectedSong.id) {
-              await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
+              await seekToProgress(progress);
             }
           }}
           formatTime={formatTime}

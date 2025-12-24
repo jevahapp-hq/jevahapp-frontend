@@ -50,8 +50,14 @@ export default function Music() {
   const {
     currentTrack,
     isPlaying: globalIsPlaying,
+    position,
+    duration,
+    progress,
+    isMuted,
     setTrack,
     togglePlayPause,
+    toggleMute,
+    seekToProgress,
   } = useGlobalAudioPlayerStore();
 
   // Discover weekly style cards (placeholder for ads/featured content) - using Jevah colors
@@ -59,14 +65,14 @@ export default function Music() {
     {
       id: "1",
       title: "Discover Weekly",
-      description: "The original slow instrumental best playlists.",
+      description: "New copyright-free gospel music curated just for you.",
       thumbnailUrl: "",
       color: "#256E63", // Jevah Primary (Green)
     },
     {
       id: "2",
       title: "Featured Playlist",
-      description: "Top trending gospel songs this week.",
+      description: "Most popular copyright-free songs everyone's listening to.",
       thumbnailUrl: "",
       color: "#FEA74E", // Jevah Secondary (Orange)
     },
@@ -1068,22 +1074,22 @@ export default function Music() {
           }
           audioProgress={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().progress
+              ? progress
               : 0
           }
           audioDuration={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().duration
+              ? duration
               : (selectedSong?.duration * 1000 || 0)
           }
           audioPosition={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().position
+              ? position
               : 0
           }
           isMuted={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().isMuted
+              ? isMuted
               : false
           }
           onTogglePlay={async () => {
@@ -1097,12 +1103,12 @@ export default function Music() {
           }}
           onToggleMute={async () => {
             if (selectedSong && currentTrack?.id === selectedSong.id) {
-              await useGlobalAudioPlayerStore.getState().toggleMute();
+              await toggleMute();
             }
           }}
           onSeek={async (progress) => {
             if (selectedSong && currentTrack?.id === selectedSong.id) {
-              await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
+              await seekToProgress(progress);
             }
           }}
           formatTime={formatTime}
