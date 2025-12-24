@@ -65,9 +65,64 @@ export interface CopyrightFreeSongCategoriesResponse {
 
 class CopyrightFreeMusicAPI {
   private baseUrl: string;
+  // Request deduplication: track in-flight requests
+  private pendingRequests: Map<string, Promise<any>> = new Map();
+  // Cache: store successful responses temporarily
+  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+  // Error logging throttling
+  private errorLogTimes: Map<string, number> = new Map();
+  private readonly ERROR_LOG_THROTTLE = 10000; // 10 seconds between error logs
 
   constructor() {
     this.baseUrl = `${getApiBaseUrl()}/api/audio/copyright-free`;
+  }
+
+  /**
+   * Check if we should log an error (throttle repeated errors)
+   */
+  private shouldLogError(key: string): boolean {
+    const now = Date.now();
+    const lastLogTime = this.errorLogTimes.get(key) || 0;
+    
+    if (now - lastLogTime > this.ERROR_LOG_THROTTLE) {
+      this.errorLogTimes.set(key, now);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get cached data if still valid
+   */
+  private getCached<T>(key: string): T | null {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.data as T;
+    }
+    if (cached) {
+      this.cache.delete(key); // Expired cache
+    }
+    return null;
+  }
+
+  /**
+   * Set cache data
+   */
+  private setCache<T>(key: string, data: T): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  private clearExpiredCache(): void {
+    const now = Date.now();
+    for (const [key, value] of this.cache.entries()) {
+      if (now - value.timestamp >= this.CACHE_TTL) {
+        this.cache.delete(key);
+      }
+    }
   }
 
   /**
@@ -210,6 +265,7 @@ class CopyrightFreeMusicAPI {
   /**
    * Search copyright-free songs
    * Uses unified search endpoint with contentType filter
+   * Includes request deduplication and improved error handling
    */
   async searchSongs(query: string, options: {
     category?: string;
@@ -217,6 +273,47 @@ class CopyrightFreeMusicAPI {
     page?: number;
     sort?: "relevance" | "popular" | "newest" | "oldest" | "title";
   } = {}): Promise<CopyrightFreeSongsResponse> {
+    const { category, limit = 20, page = 1, sort = "relevance" } = options;
+    
+    // Create unique request key for deduplication
+    const requestKey = `searchSongs_${query}_${category || ""}_${page}_${limit}_${sort}`;
+
+    // Check if there's already a pending request with same parameters
+    const pendingRequest = this.pendingRequests.get(requestKey);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    // Create new request
+    const requestPromise = this._searchSongsWithRetry(query, options, requestKey);
+    this.pendingRequests.set(requestKey, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      // Clean up pending request after completion
+      this.pendingRequests.delete(requestKey);
+    }
+  }
+
+  /**
+   * Internal method to search songs with retry logic
+   */
+  private async _searchSongsWithRetry(
+    query: string,
+    options: {
+      category?: string;
+      limit?: number;
+      page?: number;
+      sort?: "relevance" | "popular" | "newest" | "oldest" | "title";
+    },
+    requestKey: string,
+    retryCount = 0
+  ): Promise<CopyrightFreeSongsResponse> {
+    const maxRetries = 2;
+    const retryableStatuses = [500, 502, 503, 504, 520]; // Server errors that might be transient
+
     try {
       const { category, limit = 20, page = 1, sort = "relevance" } = options;
 
@@ -249,7 +346,39 @@ class CopyrightFreeMusicAPI {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const status = response.status;
+        const isRetryable = retryableStatuses.includes(status) && retryCount < maxRetries;
+
+        if (isRetryable) {
+          // Exponential backoff: wait 1s, 2s, 4s...
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+          if (this.shouldLogError(`search_retry_${status}`)) {
+            console.warn(
+              `Search API returned ${status}, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return this._searchSongsWithRetry(query, options, requestKey, retryCount + 1);
+        }
+
+        // Non-retryable error or max retries reached
+        if (this.shouldLogError(`search_error_${status}`)) {
+          console.error(`Error searching copyright-free songs: HTTP ${status}`);
+        }
+
+        // Return graceful error response
+        return {
+          success: false,
+          data: {
+            songs: [],
+            pagination: {
+              page: 1,
+              limit: 20,
+              total: 0,
+              totalPages: 0,
+            },
+          },
+        };
       }
 
       const unifiedData = await response.json();
@@ -305,15 +434,95 @@ class CopyrightFreeMusicAPI {
         },
       };
     } catch (error) {
-      console.error("Error searching copyright-free songs:", error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isNetworkError =
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+
+      // Retry network errors if we haven't exceeded max retries
+      if (isNetworkError && retryCount < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+        if (this.shouldLogError(`search_network_retry`)) {
+          console.warn(
+            `Network error searching songs, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this._searchSongsWithRetry(query, options, requestKey, retryCount + 1);
+      }
+
+      // Log error (throttled)
+      if (this.shouldLogError(`search_error`)) {
+        if (isNetworkError) {
+          console.warn("Network error searching copyright-free songs (offline or server unreachable)");
+        } else {
+          console.error("Error searching copyright-free songs:", error);
+        }
+      }
+
+      // Return graceful error response instead of throwing
+      return {
+        success: false,
+        data: {
+          songs: [],
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            totalPages: 0,
+          },
+        },
+      };
     }
   }
 
   /**
    * Get all categories
+   * Uses request deduplication, caching, and improved error handling
    */
   async getCategories(): Promise<CopyrightFreeSongCategoriesResponse> {
+    const cacheKey = "categories";
+    const requestKey = "getCategories";
+
+    // Check cache first
+    const cached = this.getCached<CopyrightFreeSongCategoriesResponse>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Check if there's already a pending request
+    const pendingRequest = this.pendingRequests.get(requestKey);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    // Create new request
+    const requestPromise = this._fetchCategoriesWithRetry(cacheKey, requestKey);
+    this.pendingRequests.set(requestKey, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      // Clean up pending request after completion
+      this.pendingRequests.delete(requestKey);
+      // Clean expired cache periodically
+      this.clearExpiredCache();
+    }
+  }
+
+  /**
+   * Internal method to fetch categories with retry logic
+   */
+  private async _fetchCategoriesWithRetry(
+    cacheKey: string,
+    requestKey: string,
+    retryCount = 0
+  ): Promise<CopyrightFreeSongCategoriesResponse> {
+    const maxRetries = 2;
+    const retryableStatuses = [500, 502, 503, 504, 520]; // Server errors that might be transient
+
     try {
       const response = await fetch(`${this.baseUrl}/categories`, {
         method: "GET",
@@ -323,14 +532,78 @@ class CopyrightFreeMusicAPI {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const status = response.status;
+        const isRetryable = retryableStatuses.includes(status) && retryCount < maxRetries;
+
+        if (isRetryable) {
+          // Exponential backoff: wait 1s, 2s, 4s...
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+          if (this.shouldLogError(`categories_retry_${status}`)) {
+            console.warn(
+              `Categories API returned ${status}, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return this._fetchCategoriesWithRetry(cacheKey, requestKey, retryCount + 1);
+        }
+
+        // Non-retryable error or max retries reached
+        if (this.shouldLogError(`categories_error_${status}`)) {
+          console.error(`Error fetching categories: HTTP ${status}`);
+        }
+
+        // Return graceful error response instead of throwing
+        return {
+          success: false,
+          data: {
+            categories: [],
+          },
+        };
       }
 
       const data: CopyrightFreeSongCategoriesResponse = await response.json();
+
+      // Cache successful response
+      if (data.success) {
+        this.setCache(cacheKey, data);
+      }
+
       return data;
     } catch (error) {
-      console.error("Error fetching categories:", error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isNetworkError =
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+
+      // Retry network errors if we haven't exceeded max retries
+      if (isNetworkError && retryCount < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+        if (this.shouldLogError(`categories_network_retry`)) {
+          console.warn(
+            `Network error fetching categories, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this._fetchCategoriesWithRetry(cacheKey, requestKey, retryCount + 1);
+      }
+
+      // Log error (throttled)
+      if (this.shouldLogError(`categories_error`)) {
+        if (isNetworkError) {
+          console.warn("Network error fetching categories (offline or server unreachable)");
+        } else {
+          console.error("Error fetching categories:", error);
+        }
+      }
+
+      // Return graceful error response instead of throwing
+      return {
+        success: false,
+        data: {
+          categories: [],
+        },
+      };
     }
   }
 

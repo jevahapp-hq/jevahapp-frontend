@@ -1867,13 +1867,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     {
       id: "1",
       title: "Discover Weekly",
-      description: "The original slow instrumental best playlists.",
+      description: "New copyright-free gospel music curated just for you.",
       color: UI_CONFIG.COLORS.PRIMARY, // "#256E63"
     },
     {
       id: "2",
       title: "Featured Playlist",
-      description: "Top trending gospel songs this week.",
+      description: "Most popular copyright-free songs everyone's listening to.",
       color: UI_CONFIG.COLORS.SECONDARY, // "#FEA74E"
     },
   ];
@@ -2887,20 +2887,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Copyright-Free Songs Section - Only show in ALL tab (old style) */}
+          {/* Songs Section - Only show in ALL tab (without heading text) */}
           {contentType === "ALL" && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                  fontWeight: "600",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  marginBottom: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                Copyright-Free Songs
-              </Text>
               <CopyrightFreeSongs />
             </View>
           )}
