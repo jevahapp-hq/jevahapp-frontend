@@ -108,7 +108,7 @@ class SocketManager {
       // Connect manually after setting up handlers
       this.socket.connect();
 
-      console.log("✅ SocketManager: Connection initiated");
+      if (__DEV__) console.log("✅ SocketManager: Connection initiated");
     } catch (error) {
       console.error("❌ SocketManager: Failed to initiate connection:", error);
       // Don't throw error, just log it and continue without socket
@@ -121,17 +121,17 @@ class SocketManager {
 
     // Connection events
     this.socket.on("connect", () => {
-      console.log("✅ Socket connected");
+      if (__DEV__) console.log("✅ Socket connected");
       this.reconnectAttempts = 0;
     });
 
     this.socket.on("disconnect", (reason) => {
       // Don't log transport errors as disconnects (they're expected during connection attempts)
       if (reason === "transport error" || reason === "transport close") {
-        console.log("🔄 Transport disconnected, Socket.IO will retry...");
+        if (__DEV__) console.log("🔄 Transport disconnected, Socket.IO will retry...");
         return; // Socket.IO will handle reconnection automatically
       }
-      console.log("❌ Socket disconnected:", reason);
+      if (__DEV__) console.log("❌ Socket disconnected:", reason);
       this.handleReconnect();
     });
 
@@ -146,9 +146,11 @@ class SocketManager {
       if (isTransportError) {
         // Transport errors are expected - Socket.IO will automatically fallback to polling
         // Don't log as error, just as debug info
-        console.log(
-          "🔄 WebSocket transport failed, Socket.IO will fallback to polling..."
-        );
+        if (__DEV__) {
+          console.log(
+            "🔄 WebSocket transport failed, Socket.IO will fallback to polling..."
+          );
+        }
         return; // Let Socket.IO handle the fallback automatically
       }
 
@@ -165,8 +167,10 @@ class SocketManager {
         error?.code === "FORBIDDEN";
 
       if (isAuthError) {
-        console.log("🔐 Authentication required - please log in to connect");
-        console.log("💡 App will continue without real-time features");
+        if (__DEV__) {
+          console.log("🔐 Authentication required - please log in to connect");
+          console.log("💡 App will continue without real-time features");
+        }
         this.reconnectAttempts = this.maxReconnectAttempts;
         this.socket?.disconnect();
         this.socket = null;
@@ -174,7 +178,9 @@ class SocketManager {
       }
 
       // Log other connection errors (non-authentication, non-transport)
-      console.warn("⚠️ Socket connection error:", error?.message || "Unknown error");
+      if (__DEV__) {
+        console.warn("⚠️ Socket connection error:", error?.message || "Unknown error");
+      }
 
       // Don't reconnect on network errors that are likely permanent
       if (
@@ -183,10 +189,12 @@ class SocketManager {
         error?.message?.includes("ECONNREFUSED") ||
         (error as any)?.code === "NETWORK_ERROR"
       ) {
-        console.log(
-          "🌐 Network error detected, stopping reconnection attempts"
-        );
-        console.log("⚠️ App will continue without real-time features");
+        if (__DEV__) {
+          console.log(
+            "🌐 Network error detected, stopping reconnection attempts"
+          );
+          console.log("⚠️ App will continue without real-time features");
+        }
         this.reconnectAttempts = this.maxReconnectAttempts;
         this.socket?.disconnect();
         this.socket = null;
@@ -199,22 +207,22 @@ class SocketManager {
 
     // Real-time content events
     this.socket.on("content-reaction", (data) => {
-      console.log("Real-time like received:", data);
+      if (__DEV__) console.log("Real-time like received:", data);
       this.handleContentReaction(data);
     });
 
     this.socket.on("content-comment", (data) => {
-      console.log("Real-time comment received:", data);
+      if (__DEV__) console.log("Real-time comment received:", data);
       this.handleContentComment(data);
     });
 
     this.socket.on("count-update", (data) => {
-      console.log("Real-time count update:", data);
+      if (__DEV__) console.log("Real-time count update:", data);
       this.handleCountUpdate(data);
     });
 
     this.socket.on("viewer-count-update", (data) => {
-      console.log("Real-time viewer count:", data);
+      if (__DEV__) console.log("Real-time viewer count:", data);
       this.handleViewerCountUpdate(data);
     });
 

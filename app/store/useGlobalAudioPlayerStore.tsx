@@ -463,8 +463,9 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         setItem: async (name: string, value: string): Promise<void> => {
           try {
             // Zustand persist already stringifies, but ensure it's a string
-            if (typeof value !== 'string') {
-              console.warn("Storage value is not a string, stringifying:", typeof value);
+            // Do NOT warn here (this runs frequently and causes log spam).
+            // Just coerce defensively if a non-string slips through.
+            if (typeof value !== "string") {
               value = JSON.stringify(value);
             }
             await AsyncStorage.setItem(name, value);
