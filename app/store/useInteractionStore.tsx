@@ -17,6 +17,11 @@ type ToggleSaveOptions = {
   initialSaved?: boolean;
 };
 
+// Canonical interaction key (professional): `${contentType}:${contentId}`
+// We will write both canonical and legacy keys for backward compatibility.
+const makeContentKey = (contentId: string, contentType?: string) =>
+  `${String(contentType || "media")}:${String(contentId)}`;
+
 // Types for the interaction store
 interface InteractionState {
   // Content stats cache
@@ -31,6 +36,9 @@ interface InteractionState {
   // Keyed by contentId (simple) for now; if we later support multi-type keys, this should become likeKey.
   lastLikeMutationAt: Record<string, number>;
   lastSaveMutationAt: Record<string, number>;
+
+  // Legacy contentId -> latest known canonical key
+  keyById: Record<string, string>;
 
   // Comments cache
   comments: Record<string, CommentData[]>;
@@ -113,6 +121,7 @@ export const useInteractionStore = create<InteractionState>()(
     loadingInteraction: {},
     lastLikeMutationAt: {},
     lastSaveMutationAt: {},
+    keyById: {},
     comments: {},
     loadingComments: {},
     savedContent: [],
@@ -123,17 +132,22 @@ export const useInteractionStore = create<InteractionState>()(
       contentId: string,
       contentType: string
     ): Promise<{ liked: boolean; totalLikes: number }> => {
-      const key = `${contentId}_like`;
+      const contentKey = makeContentKey(contentId, contentType);
+      const key = `${contentKey}_like`;
+      const legacyKey = `${contentId}_like`;
       // Mark mutation time so metadata fetched right after the toggle doesn't fight UI.
       set((state) => ({
         lastLikeMutationAt: {
           ...state.lastLikeMutationAt,
           [contentId]: Date.now(),
+          [contentKey]: Date.now(),
         },
+        keyById: { ...state.keyById, [contentId]: contentKey },
       }));
       // Optimistic UI
       set((state) => {
         const s =
+          state.contentStats[contentKey] ||
           state.contentStats[contentId] ||
           ({
             contentId,
@@ -151,16 +165,23 @@ export const useInteractionStore = create<InteractionState>()(
           } as ContentStats);
         const liked = !s.userInteractions.liked;
         const likes = Math.max(0, (s.likes || 0) + (liked ? 1 : -1));
+        const next: ContentStats = {
+          ...s,
+          contentId,
+          likes,
+          userInteractions: { ...s.userInteractions, liked },
+        };
         return {
           contentStats: {
             ...state.contentStats,
-            [contentId]: {
-              ...s,
-              likes,
-              userInteractions: { ...s.userInteractions, liked },
-            },
+            [contentKey]: next,
+            [contentId]: next, // legacy write
           },
-          loadingInteraction: { ...state.loadingInteraction, [key]: true },
+          loadingInteraction: {
+            ...state.loadingInteraction,
+            [key]: true,
+            [legacyKey]: true,
+          },
         };
       });
 
@@ -171,24 +192,32 @@ export const useInteractionStore = create<InteractionState>()(
         );
         // Reconcile with server
         set((state) => {
-          const s = state.contentStats[contentId];
+          const s = state.contentStats[contentKey] || state.contentStats[contentId];
           if (!s) return state;
+          const next: ContentStats = {
+            ...s,
+            contentId,
+            likes: result.totalLikes,
+            userInteractions: {
+              ...s.userInteractions,
+              liked: result.liked,
+            },
+          };
           return {
             contentStats: {
               ...state.contentStats,
-              [contentId]: {
-                ...s,
-                likes: result.totalLikes,
-                userInteractions: {
-                  ...s.userInteractions,
-                  liked: result.liked,
-                },
-              },
+              [contentKey]: next,
+              [contentId]: next,
             },
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+            loadingInteraction: {
+              ...state.loadingInteraction,
+              [key]: false,
+              [legacyKey]: false,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
-        const latest = get().contentStats[contentId];
+        const latest = get().contentStats[contentKey] || get().contentStats[contentId];
         return {
           liked: latest?.userInteractions?.liked ?? result.liked,
           totalLikes: latest?.likes ?? result.totalLikes,
@@ -197,26 +226,34 @@ export const useInteractionStore = create<InteractionState>()(
         console.error("Error toggling like:", error);
         // Revert on failure
         set((state) => {
-          const s = state.contentStats[contentId];
+          const s = state.contentStats[contentKey] || state.contentStats[contentId];
           if (!s) return state;
           const liked = !s.userInteractions.liked;
           const likes = Math.max(0, (s.likes || 0) + (liked ? 1 : -1));
+          const next: ContentStats = {
+            ...s,
+            contentId,
+            likes,
+            userInteractions: { ...s.userInteractions, liked },
+          };
           return {
             contentStats: {
               ...state.contentStats,
-              [contentId]: {
-                ...s,
-                likes,
-                userInteractions: { ...s.userInteractions, liked },
-              },
+              [contentKey]: next,
+              [contentId]: next,
             },
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+            loadingInteraction: {
+              ...state.loadingInteraction,
+              [key]: false,
+              [legacyKey]: false,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
+        const latest = get().contentStats[contentKey] || get().contentStats[contentId];
         return {
-          liked:
-            get().contentStats[contentId]?.userInteractions?.liked ?? false,
-          totalLikes: get().contentStats[contentId]?.likes ?? 0,
+          liked: latest?.userInteractions?.liked ?? false,
+          totalLikes: latest?.likes ?? 0,
         };
       }
     },
@@ -227,26 +264,36 @@ export const useInteractionStore = create<InteractionState>()(
       contentType: string,
       options: ToggleSaveOptions = {}
     ): Promise<{ saved: boolean; totalSaves: number }> => {
-      const key = `${contentId}_save`;
+      const contentKey = makeContentKey(contentId, contentType);
+      const key = `${contentKey}_save`;
+      const legacyKey = `${contentId}_save`;
       set((state) => ({
         lastSaveMutationAt: {
           ...state.lastSaveMutationAt,
           [contentId]: Date.now(),
+          [contentKey]: Date.now(),
         },
+        keyById: { ...state.keyById, [contentId]: contentKey },
       }));
-      const previousStats = get().contentStats[contentId];
+      const previousStats =
+        get().contentStats[contentKey] || get().contentStats[contentId];
       const previousSaved =
         previousStats?.userInteractions?.saved ?? options.initialSaved ?? false;
       const previousSaves =
         previousStats?.saves ?? options.initialSaves ?? 0;
 
       set((state) => ({
-        loadingInteraction: { ...state.loadingInteraction, [key]: true },
+        loadingInteraction: {
+          ...state.loadingInteraction,
+          [key]: true,
+          [legacyKey]: true,
+        },
       }));
 
       try {
         set((state) => {
-          const existing = state.contentStats[contentId];
+          const existing =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const currentlySaved =
             existing?.userInteractions?.saved ??
             options.initialSaved ??
@@ -300,6 +347,14 @@ export const useInteractionStore = create<InteractionState>()(
           return {
             contentStats: {
               ...state.contentStats,
+              [contentKey]: {
+                ...baseStats,
+                saves: nextSaves,
+                userInteractions: {
+                  ...baseStats.userInteractions,
+                  saved: nextSaved,
+                },
+              },
               [contentId]: {
                 ...baseStats,
                 saves: nextSaves,
@@ -312,7 +367,9 @@ export const useInteractionStore = create<InteractionState>()(
             loadingInteraction: {
               ...state.loadingInteraction,
               [key]: true,
+              [legacyKey]: true,
             },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
 
@@ -322,7 +379,8 @@ export const useInteractionStore = create<InteractionState>()(
         );
 
         set((state) => {
-          const currentStats = state.contentStats[contentId];
+          const currentStats =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
@@ -361,8 +419,17 @@ export const useInteractionStore = create<InteractionState>()(
           };
 
           return {
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: updatedStats,
+              [contentId]: updatedStats,
+            },
+            loadingInteraction: {
+              ...state.loadingInteraction,
+              [key]: false,
+              [legacyKey]: false,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
 
@@ -370,7 +437,8 @@ export const useInteractionStore = create<InteractionState>()(
           get().loadUserSavedContent();
         }
 
-        const latest = get().contentStats[contentId];
+        const latest =
+          get().contentStats[contentKey] || get().contentStats[contentId];
         return {
           saved: latest?.userInteractions?.saved ?? result.saved,
           totalSaves: latest?.saves ?? result.totalSaves,
@@ -380,13 +448,20 @@ export const useInteractionStore = create<InteractionState>()(
         set((state) => {
           const nextContentStats = { ...state.contentStats };
           if (previousStats) {
+            nextContentStats[contentKey] = previousStats;
             nextContentStats[contentId] = previousStats;
           } else {
+            delete nextContentStats[contentKey];
             delete nextContentStats[contentId];
           }
           return {
             contentStats: nextContentStats,
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+            loadingInteraction: {
+              ...state.loadingInteraction,
+              [key]: false,
+              [legacyKey]: false,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
         return {
@@ -410,7 +485,9 @@ export const useInteractionStore = create<InteractionState>()(
         );
 
         set((state) => {
-          const currentStats = state.contentStats[contentId];
+          const contentKey = makeContentKey(contentId, contentType);
+          const currentStats =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
@@ -429,7 +506,12 @@ export const useInteractionStore = create<InteractionState>()(
           };
 
           return {
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: updatedStats,
+              [contentId]: updatedStats,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
       } catch (error) {
@@ -453,7 +535,9 @@ export const useInteractionStore = create<InteractionState>()(
         );
 
         set((state) => {
-          const currentStats = state.contentStats[contentId];
+          const contentKey = makeContentKey(contentId, contentType);
+          const currentStats =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
@@ -472,7 +556,12 @@ export const useInteractionStore = create<InteractionState>()(
           };
 
           return {
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: updatedStats,
+              [contentId]: updatedStats,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
       } catch (error) {
@@ -496,11 +585,13 @@ export const useInteractionStore = create<InteractionState>()(
         );
 
         set((state) => {
+          const contentKey = makeContentKey(contentId, contentType);
           const currentComments = state.comments[contentId] || [];
           const updatedComments = [newComment, ...currentComments];
 
           // Update comment count in stats
-          const currentStats = state.contentStats[contentId];
+          const currentStats =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
@@ -519,7 +610,12 @@ export const useInteractionStore = create<InteractionState>()(
 
           return {
             comments: { ...state.comments, [contentId]: updatedComments },
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: updatedStats,
+              [contentId]: updatedStats,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
       } catch (error) {
@@ -548,12 +644,14 @@ export const useInteractionStore = create<InteractionState>()(
         );
 
         set((state) => {
+          const contentKey = makeContentKey(contentId, contentType);
           const existingComments =
             page === 1 ? [] : state.comments[contentId] || [];
           const allComments = [...existingComments, ...result.comments];
 
           // Update comment count in stats
-          const currentStats = state.contentStats[contentId];
+          const currentStats =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
@@ -572,8 +670,13 @@ export const useInteractionStore = create<InteractionState>()(
 
           return {
             comments: { ...state.comments, [contentId]: allComments },
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: updatedStats,
+              [contentId]: updatedStats,
+            },
             loadingComments: { ...state.loadingComments, [key]: false },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
       } catch (error) {
@@ -610,8 +713,10 @@ export const useInteractionStore = create<InteractionState>()(
       contentId: string,
       contentType: string = "media"
     ) => {
+      const contentKey = makeContentKey(contentId, contentType);
       set((state) => ({
-        loadingStats: { ...state.loadingStats, [contentId]: true },
+        loadingStats: { ...state.loadingStats, [contentKey]: true, [contentId]: true },
+        keyById: { ...state.keyById, [contentId]: contentKey },
       }));
 
       try {
@@ -620,14 +725,27 @@ export const useInteractionStore = create<InteractionState>()(
           contentType
         );
         set((state) => {
-          const existing = state.contentStats[contentId];
+          const existing =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const now = Date.now();
-          const likeBusy = Boolean(state.loadingInteraction[`${contentId}_like`]);
-          const saveBusy = Boolean(state.loadingInteraction[`${contentId}_save`]);
+          const likeBusy =
+            Boolean(state.loadingInteraction[`${contentKey}_like`]) ||
+            Boolean(state.loadingInteraction[`${contentId}_like`]);
+          const saveBusy =
+            Boolean(state.loadingInteraction[`${contentKey}_save`]) ||
+            Boolean(state.loadingInteraction[`${contentId}_save`]);
           const likeRecentlyMutated =
-            now - (state.lastLikeMutationAt[contentId] ?? 0) < 3000;
+            now -
+              (state.lastLikeMutationAt[contentKey] ??
+                state.lastLikeMutationAt[contentId] ??
+                0) <
+            3000;
           const saveRecentlyMutated =
-            now - (state.lastSaveMutationAt[contentId] ?? 0) < 3000;
+            now -
+              (state.lastSaveMutationAt[contentKey] ??
+                state.lastSaveMutationAt[contentId] ??
+                0) <
+            3000;
 
           const existingLiked = existing?.userInteractions?.liked ?? false;
           const existingSaved = existing?.userInteractions?.saved ?? false;
@@ -665,8 +783,17 @@ export const useInteractionStore = create<InteractionState>()(
           };
 
           return {
-            contentStats: { ...state.contentStats, [contentId]: merged },
-            loadingStats: { ...state.loadingStats, [contentId]: false },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: merged,
+              [contentId]: merged,
+            },
+            loadingStats: {
+              ...state.loadingStats,
+              [contentKey]: false,
+              [contentId]: false,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
       } catch (error) {
@@ -676,7 +803,9 @@ export const useInteractionStore = create<InteractionState>()(
         );
         set((state) => {
           // Keep existing stats if present; otherwise initialize to zeros
-          const existing = state.contentStats[contentId];
+          const contentKey = makeContentKey(contentId, contentType);
+          const existing =
+            state.contentStats[contentKey] || state.contentStats[contentId];
           const fallback: ContentStats =
             existing ||
             ({
@@ -694,8 +823,17 @@ export const useInteractionStore = create<InteractionState>()(
               },
             } as ContentStats);
           return {
-            contentStats: { ...state.contentStats, [contentId]: fallback },
-            loadingStats: { ...state.loadingStats, [contentId]: false },
+            contentStats: {
+              ...state.contentStats,
+              [contentKey]: fallback,
+              [contentId]: fallback,
+            },
+            loadingStats: {
+              ...state.loadingStats,
+              [contentKey]: false,
+              [contentId]: false,
+            },
+            keyById: { ...state.keyById, [contentId]: contentKey },
           };
         });
       }
@@ -717,14 +855,27 @@ export const useInteractionStore = create<InteractionState>()(
               ContentStats
             >;
             for (const [id, stats] of Object.entries(fromBatch)) {
+              const contentKey = makeContentKey(id, contentType);
               const existing = state.contentStats[id];
               const now = Date.now();
-              const likeBusy = Boolean(state.loadingInteraction[`${id}_like`]);
-              const saveBusy = Boolean(state.loadingInteraction[`${id}_save`]);
+              const likeBusy =
+                Boolean(state.loadingInteraction[`${contentKey}_like`]) ||
+                Boolean(state.loadingInteraction[`${id}_like`]);
+              const saveBusy =
+                Boolean(state.loadingInteraction[`${contentKey}_save`]) ||
+                Boolean(state.loadingInteraction[`${id}_save`]);
               const likeRecentlyMutated =
-                now - (state.lastLikeMutationAt[id] ?? 0) < 3000;
+                now -
+                  (state.lastLikeMutationAt[contentKey] ??
+                    state.lastLikeMutationAt[id] ??
+                    0) <
+                3000;
               const saveRecentlyMutated =
-                now - (state.lastSaveMutationAt[id] ?? 0) < 3000;
+                now -
+                  (state.lastSaveMutationAt[contentKey] ??
+                    state.lastSaveMutationAt[id] ??
+                    0) <
+                3000;
 
               const existingLiked = existing?.userInteractions?.liked ?? false;
               const existingSaved = existing?.userInteractions?.saved ?? false;
@@ -762,8 +913,21 @@ export const useInteractionStore = create<InteractionState>()(
                   viewed: statsViewed ?? existingViewed,
                 },
               } as ContentStats;
+              // Backward compatible dual-key write
+              merged[contentKey] = merged[id];
             }
-            return { contentStats: merged };
+            return {
+              contentStats: merged,
+              keyById: {
+                ...state.keyById,
+                ...Object.fromEntries(
+                  Object.keys(fromBatch).map((id) => [
+                    id,
+                    makeContentKey(id, contentType),
+                  ])
+                ),
+              },
+            };
           });
           return;
         }
@@ -785,14 +949,18 @@ export const useInteractionStore = create<InteractionState>()(
 
     mutateStats: (contentId, fn) => {
       set((state) => {
-        const s = state.contentStats[contentId];
+        const resolvedKey = state.keyById[contentId] || contentId;
+        const s = state.contentStats[resolvedKey] || state.contentStats[contentId];
         if (!s) return state;
         const patch = fn(s) as any;
+        const next = { ...s, ...patch };
         return {
           contentStats: {
             ...state.contentStats,
-            [contentId]: { ...s, ...patch },
+            [resolvedKey]: next,
+            [contentId]: next, // legacy mirror
           },
+          keyById: { ...state.keyById, [contentId]: resolvedKey },
         };
       });
     },
@@ -825,7 +993,10 @@ export const useInteractionStore = create<InteractionState>()(
       contentId: string,
       statType: keyof ContentStats["userInteractions"]
     ) => {
-      const stats = get().contentStats[contentId];
+      const state = get();
+      const resolvedKey = state.keyById[contentId] || contentId;
+      const stats =
+        state.contentStats[resolvedKey] || state.contentStats[contentId];
       return stats?.userInteractions?.[statType] || false;
     },
 
@@ -833,7 +1004,10 @@ export const useInteractionStore = create<InteractionState>()(
       contentId: string,
       countType: "likes" | "saves" | "shares" | "views" | "comments"
     ) => {
-      const stats = get().contentStats[contentId];
+      const state = get();
+      const resolvedKey = state.keyById[contentId] || contentId;
+      const stats =
+        state.contentStats[resolvedKey] || state.contentStats[contentId];
       return stats?.[countType] || 0;
     },
 
@@ -881,6 +1055,9 @@ export const useInteractionStore = create<InteractionState>()(
         contentStats: {},
         loadingStats: {},
         loadingInteraction: {},
+        lastLikeMutationAt: {},
+        lastSaveMutationAt: {},
+        keyById: {},
         comments: {},
         loadingComments: {},
         savedContent: [],
@@ -892,11 +1069,17 @@ export const useInteractionStore = create<InteractionState>()(
 
 // Selector hooks for better performance
 export const useContentStats = (contentId: string) => {
-  return useInteractionStore((state) => state.contentStats[contentId]);
+  return useInteractionStore((state) => {
+    const key = state.keyById[contentId] || contentId;
+    return state.contentStats[key] || state.contentStats[contentId];
+  });
 };
 
 export const useContentLoading = (contentId: string) => {
-  return useInteractionStore((state) => state.loadingStats[contentId] || false);
+  return useInteractionStore((state) => {
+    const key = state.keyById[contentId] || contentId;
+    return Boolean(state.loadingStats[key] || state.loadingStats[contentId]);
+  });
 };
 
 export const useUserInteraction = (
