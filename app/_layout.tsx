@@ -10,7 +10,7 @@ import Constants from "expo-constants";
 import { Slot, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
-import { Alert, BackHandler, Platform, Text, View } from "react-native";
+import { Alert, BackHandler, LogBox, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import CommentModalV2 from "./components/CommentModalV2";
@@ -131,6 +131,46 @@ export default function RootLayout() {
 
     return () => {
       console.error = originalError;
+    };
+  }, []);
+
+  // Optional: Disable noisy console logs globally (dev + prod) via env flag.
+  // Set in local `.env` (do NOT commit):
+  // EXPO_PUBLIC_DISABLE_LOGS=true
+  useEffect(() => {
+    const disableLogs = process.env.EXPO_PUBLIC_DISABLE_LOGS === "true";
+    if (!disableLogs) return;
+
+    const originalLog = console.log;
+    const originalInfo = console.info;
+    const originalDebug = console.debug;
+    const originalWarn = console.warn;
+
+    // Silence noisy logs. Keep console.error (already filtered above) for real failures.
+    console.log = () => {};
+    console.info = () => {};
+    console.debug = () => {};
+    console.warn = () => {};
+
+    // Hide React Native LogBox warnings too when logs are disabled.
+    try {
+      LogBox.ignoreAllLogs(true);
+    } catch {}
+
+    // Let devs know how to re-enable (only if logs are currently enabled)
+    originalLog?.call?.(
+      console,
+      "🔇 Logs disabled (EXPO_PUBLIC_DISABLE_LOGS=true). Set it to false/remove it to re-enable logs."
+    );
+
+    return () => {
+      console.log = originalLog;
+      console.info = originalInfo;
+      console.debug = originalDebug;
+      console.warn = originalWarn;
+      try {
+        LogBox.ignoreAllLogs(false);
+      } catch {}
     };
   }, []);
   const [isInitialized, setIsInitialized] = useState(false);
