@@ -17,7 +17,7 @@ const ENVIRONMENT_CONFIG: EnvironmentConfig = {
     name: "Local Development",
   },
   production: {
-    url: "https://jevahapp-backend-rped.onrender.com",
+    url: "https://jevahapp-backend.onrender.com",
     name: "Production",
   },
 };

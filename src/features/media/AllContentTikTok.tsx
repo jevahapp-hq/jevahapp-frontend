@@ -403,7 +403,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         }
 
         const manager = new SocketManager({
-          serverUrl: "https://jevahapp-backend-rped.onrender.com",
+          serverUrl: "https://jevahapp-backend.onrender.com",
           authToken,
         });
 
