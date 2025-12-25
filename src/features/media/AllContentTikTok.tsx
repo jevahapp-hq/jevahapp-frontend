@@ -52,6 +52,7 @@ import HymnMiniCard, {
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
+import { VirtualizedContentList } from "./components/VirtualizedContentList";
 
 // Import original stores and hooks (these will be bridged)
 import { LinearGradient } from "expo-linear-gradient";
@@ -3093,12 +3094,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                   {/* Gap before remaining content */}
                   <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
 
-                  {/* Render the rest of All Content */}
-                  {rest.map((item, index) =>
-                    renderContentByType(
-                      item,
-                      index + firstFour.length + nextFour.length
-                    )
+                  {/* Render the rest of All Content - OPTIMIZED with FlatList virtualization */}
+                  {rest.length > 0 && (
+                    <VirtualizedContentList
+                      data={rest}
+                      renderItem={(item, index) =>
+                        renderContentByType(
+                          item,
+                          index + firstFour.length + nextFour.length
+                        )
+                      }
+                      startIndex={firstFour.length + nextFour.length}
+                    />
                   )}
                 </>
               );
