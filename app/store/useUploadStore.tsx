@@ -327,24 +327,29 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       // Only update if we're actually improving the data or if it's a different user
       // Check if current media already has the SAME user's data
       const firstItem = currentMediaList[0];
-      if (
-        firstItem &&
-        firstItem.uploadedBy &&
-        firstItem.uploadedBy !== "Anonymous User"
-      ) {
-        // Check if the current user data matches what's already in media
-        const currentUserFullName = normalizedUser.fullName;
-        if (firstItem.uploadedBy === currentUserFullName) {
-          console.log(
-            "✅ Media items already have current user's data, no refresh needed"
-          );
-          return;
-        } else {
-          console.log(
-            `🔄 Different user logged in: "${currentUserFullName}" vs existing "${firstItem.uploadedBy}"`
-          );
-          console.log("📱 Refreshing media with new user's data...");
-          // Continue with refresh for new user
+      if (firstItem && firstItem.uploadedBy) {
+        // Handle both string and object cases for uploadedBy
+        const firstItemUploadedBy = typeof firstItem.uploadedBy === 'object' 
+          ? firstItem.uploadedBy.firstName && firstItem.uploadedBy.lastName
+            ? `${firstItem.uploadedBy.firstName} ${firstItem.uploadedBy.lastName}`.trim()
+            : firstItem.uploadedBy.firstName || firstItem.uploadedBy.email?.split('@')[0] || ''
+          : firstItem.uploadedBy;
+        
+        if (firstItemUploadedBy && firstItemUploadedBy !== "Anonymous User") {
+          // Check if the current user data matches what's already in media
+          const currentUserFullName = normalizedUser.fullName;
+          if (firstItemUploadedBy === currentUserFullName) {
+            console.log(
+              "✅ Media items already have current user's data, no refresh needed"
+            );
+            return;
+          } else {
+            console.log(
+              `🔄 Different user logged in: "${currentUserFullName}" vs existing "${firstItemUploadedBy}"`
+            );
+            console.log("📱 Refreshing media with new user's data...");
+            // Continue with refresh for new user
+          }
         }
       }
 
@@ -355,8 +360,15 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         // 2. The item was uploaded by the current user (based on some identifier)
         // DON'T update items that belong to other users
 
+        // Check if uploadedBy is "Anonymous User" (handle both string and object cases)
+        const itemUploadedBy = typeof item.uploadedBy === 'object'
+          ? (item.uploadedBy.firstName && item.uploadedBy.lastName
+              ? `${item.uploadedBy.firstName} ${item.uploadedBy.lastName}`.trim()
+              : item.uploadedBy.firstName || '')
+          : item.uploadedBy;
+
         if (
-          item.uploadedBy === "Anonymous User" ||
+          itemUploadedBy === "Anonymous User" ||
           item.speaker === "Anonymous User"
         ) {
           console.log(`🔧 Fixing anonymous item: ${item.title}`);

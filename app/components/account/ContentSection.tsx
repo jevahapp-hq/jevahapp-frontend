@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React, { useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useAccountContent } from "../../hooks/useAccountContent";
 import { useUserProfile } from "../../hooks/useUserProfile";
@@ -10,7 +11,7 @@ type ContentSectionProps = {
   selectedIndex: number;
 };
 
-export default function ContentSection({ selectedIndex }: ContentSectionProps) {
+function ContentSection({ selectedIndex }: ContentSectionProps) {
   const router = useRouter();
   const reelsStore = useReelsStore();
   const { user, getAvatarUrl } = useUserProfile();
@@ -26,8 +27,8 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
     loadMoreVideos,
   } = useAccountContent();
 
-  // Format number for display (e.g., 16800 -> "16.8k")
-  const formatNumber = (num: number): string => {
+  // Format number for display (e.g., 16800 -> "16.8k") - memoized
+  const formatNumber = useCallback((num: number): string => {
     if (num >= 1000000) {
       return `${(num / 1000000).toFixed(1)}M`;
     }
@@ -35,14 +36,14 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
       return `${(num / 1000).toFixed(1)}k`;
     }
     return num.toString();
-  };
+  }, []);
 
-  // Format duration (seconds to MM:SS)
-  const formatDuration = (seconds: number): string => {
+  // Format duration (seconds to MM:SS) - memoized
+  const formatDuration = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, []);
 
   if (loading && selectedIndex !== 3) {
     return (
@@ -62,7 +63,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Posts Tab (Index 0)
   if (selectedIndex === 0) {
-    const renderPostItem = ({ item }: { item: Post }) => {
+    const renderPostItem = useCallback(({ item }: { item: Post }) => {
       const thumbnailUrl = item.media?.[0]?.thumbnail || item.media?.[0]?.url;
 
       return (
@@ -86,7 +87,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
           )}
         </TouchableOpacity>
       );
-    };
+    }, []);
 
     return (
       <FlatList
@@ -99,6 +100,11 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
         nestedScrollEnabled={true}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-16 px-8">
             <View className="items-center mb-4">
@@ -118,7 +124,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Media Tab (Index 1)
   if (selectedIndex === 1) {
-    const renderMediaItem = ({ item }: { item: MediaItem }) => {
+    const renderMediaItem = useCallback(({ item }: { item: MediaItem }) => {
       return (
         <TouchableOpacity
           className="w-[32%] mb-2 aspect-square"
@@ -133,7 +139,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
           />
         </TouchableOpacity>
       );
-    };
+    }, []);
 
     return (
       <FlatList
@@ -146,6 +152,11 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         onEndReached={loadMoreMedia}
         onEndReachedThreshold={0.5}
         nestedScrollEnabled={true}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-16 px-8">
             <View className="items-center mb-4">
@@ -165,7 +176,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Videos Tab (Index 2)
   if (selectedIndex === 2) {
-    const handleVideoPress = (video: Video, index: number) => {
+    const handleVideoPress = useCallback((video: Video, index: number) => {
       // Get user's actual avatar URL, fallback to placeholder if not available
       const userAvatarUrl = user && getAvatarUrl(user) 
         ? getAvatarUrl(user) 
@@ -213,9 +224,9 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
           videoList: JSON.stringify(videoListForNavigation),
         },
       });
-    };
+    }, [router, reelsStore, user, getAvatarUrl, videos]);
 
-    const renderVideoItem = ({ item, index }: { item: Video; index: number }) => {
+    const renderVideoItem = useCallback(({ item, index }: { item: Video; index: number }) => {
       return (
         <TouchableOpacity
           className="w-[32%] mb-2 aspect-square relative"
@@ -244,7 +255,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
           )}
         </TouchableOpacity>
       );
-    };
+    }, [handleVideoPress, formatDuration]);
 
     return (
       <FlatList
@@ -257,6 +268,11 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         onEndReached={loadMoreVideos}
         onEndReachedThreshold={0.5}
         nestedScrollEnabled={true}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-16 px-8">
             <View className="items-center mb-4">
@@ -305,7 +321,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
       );
     }
 
-    const analyticsMetrics = [
+    const analyticsMetrics = useMemo(() => [
       {
         icon: "albums-outline",
         label: "Posts",
@@ -342,7 +358,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
         value: formatNumber(analytics.shares.total),
         sub: "Number of times people shared your contents",
       },
-    ];
+    ], [analytics, formatNumber]);
 
     return (
       <ScrollView 
@@ -372,3 +388,7 @@ export default function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   return null;
 }
+
+// Memoize ContentSection to prevent unnecessary re-renders
+// Using React.memo without comparison function for React Native compatibility
+export default React.memo(ContentSection);

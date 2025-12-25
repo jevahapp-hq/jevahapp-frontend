@@ -21,9 +21,8 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem => {
     fileUrl: item.fileUrl || item.file || item.url || "",
     title: item.title || "Untitled",
     speaker: item.speaker || item.author?.firstName || item.uploadedBy?.firstName,
-    uploadedBy: typeof item.uploadedBy === "object" 
-      ? item.uploadedBy._id || item.uploadedBy 
-      : item.uploadedBy,
+    // Preserve the full uploadedBy object if it exists, otherwise keep as string
+    uploadedBy: item.uploadedBy || undefined,
     description: item.description || item.title || "",
     speakerAvatar: item.speakerAvatar || item.author?.avatar || item.uploadedBy?.avatar,
     views: item.views || item.viewCount || item.totalViews || 0,

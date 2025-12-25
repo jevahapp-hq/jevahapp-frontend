@@ -115,16 +115,24 @@ export function getUserAvatarFromContent(
   fallbackAvatar: any = require("../../assets/images/Avatar-1.png")
 ): any {
   // Priority 1: Check if content has uploadedBy object with user profile data
-  if (content.uploadedBy && typeof content.uploadedBy === 'object' && content.uploadedBy.avatar) {
-    const avatarUrl = content.uploadedBy.avatar;
-    if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
-      if (avatarUrl.startsWith('http')) {
+  if (content.uploadedBy && typeof content.uploadedBy === 'object') {
+    // Check multiple possible avatar field names
+    const avatarUrl = content.uploadedBy.avatar || 
+                     content.uploadedBy.avatarUrl || 
+                     content.uploadedBy.imageUrl || 
+                     content.uploadedBy.profileImage ||
+                     content.uploadedBy.profilePicture;
+    
+    if (avatarUrl) {
+      if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
+        if (avatarUrl.startsWith('http')) {
+          return { uri: avatarUrl.trim() };
+        }
+        // Handle relative paths or other formats
         return { uri: avatarUrl.trim() };
       }
-      // Handle relative paths or other formats
-      return { uri: avatarUrl.trim() };
+      return avatarUrl;
     }
-    return avatarUrl;
   }
 
   // Priority 2: Check author object avatar (for Devotional content)

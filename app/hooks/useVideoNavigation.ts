@@ -33,9 +33,9 @@ export const useVideoNavigation = () => {
     source,
     category,
   }: VideoNavigationOptions) => {
-    console.log(`📱 Navigating to reels: ${video.title}`);
-    console.log(`📱 Index: ${index}, Total videos: ${allVideos.length}`);
-    console.log(`📱 Video ID: ${video._id}, File URL: ${video.fileUrl}`);
+    // console.log(`📱 Navigating to reels: ${video.title}`);
+    // console.log(`📱 Index: ${index}, Total videos: ${allVideos.length}`);
+    // console.log(`📱 Video ID: ${video._id}, File URL: ${video.fileUrl}`);
 
     // Pause all videos before navigation
     globalVideoStore.pauseAllVideos();
@@ -62,11 +62,11 @@ export const useVideoNavigation = () => {
       uploadedBy: v.uploadedBy,
     }));
 
-    console.log(
-      "🔍 Setting video list in store:",
-      videoListForNavigation.length,
-      "videos"
-    );
+    // console.log(
+    //   "🔍 Setting video list in store:",
+    //   videoListForNavigation.length,
+    //   "videos"
+    // );
 
     // Store the video list in global store
     reelsStore.setVideoList(videoListForNavigation);
@@ -100,14 +100,14 @@ export const useVideoNavigation = () => {
       source: source || "useVideoNavigation",
     };
 
-    console.log("🚀 About to navigate with params:", navigationParams);
+    // console.log("🚀 About to navigate with params:", navigationParams);
 
     router.push({
       pathname: "/reels/Reelsviewscroll",
       params: navigationParams,
     });
 
-    console.log("✅ Navigation call completed");
+    // console.log("✅ Navigation call completed");
   };
 
   return {

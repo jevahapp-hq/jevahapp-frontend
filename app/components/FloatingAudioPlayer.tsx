@@ -103,7 +103,7 @@ export default function FloatingAudioPlayer() {
     // If there's a current track, ALWAYS show the player (even if auth is still loading)
     // This allows the player to appear immediately when a song starts playing
     if (currentTrack) {
-      console.log("🎵 FloatingAudioPlayer: Showing because currentTrack exists:", currentTrack.title);
+      // console.log("🎵 FloatingAudioPlayer: Showing because currentTrack exists:", currentTrack.title);
       return true;
     }
     
@@ -114,17 +114,17 @@ export default function FloatingAudioPlayer() {
 
   // Debug: Log when track changes
   useEffect(() => {
-    console.log("🎵 FloatingAudioPlayer Debug:", {
-      hasCurrentTrack: !!currentTrack,
-      currentTrackTitle: currentTrack?.title,
-      shouldShowPlayer,
-      isSignedIn,
-      clerkLoaded,
-      hasUser: !!user,
-      userLoading,
-      pathname,
-      segments,
-    });
+    // console.log("🎵 FloatingAudioPlayer Debug:", {
+    //   hasCurrentTrack: !!currentTrack,
+    //   currentTrackTitle: currentTrack?.title,
+    //   shouldShowPlayer,
+    //   isSignedIn,
+    //   clerkLoaded,
+    //   hasUser: !!user,
+    //   userLoading,
+    //   pathname,
+    //   segments,
+    // });
   }, [currentTrack, shouldShowPlayer, isSignedIn, clerkLoaded, user, userLoading, pathname, segments]);
 
   // Fade-in and slide-up animation when track appears
@@ -221,17 +221,17 @@ export default function FloatingAudioPlayer() {
 
   // Don't render if user not authenticated or on auth screens
   if (!shouldShowPlayer) {
-    console.log("🎵 FloatingAudioPlayer: Not showing - shouldShowPlayer is false");
+    // console.log("🎵 FloatingAudioPlayer: Not showing - shouldShowPlayer is false");
     return null;
   }
 
   // Don't render if no track is loaded
   if (!currentTrack) {
-    console.log("🎵 FloatingAudioPlayer: Not showing - no currentTrack");
+    // console.log("🎵 FloatingAudioPlayer: Not showing - no currentTrack");
     return null;
   }
 
-  console.log("🎵 FloatingAudioPlayer: Rendering with track:", currentTrack.title);
+  // console.log("🎵 FloatingAudioPlayer: Rendering with track:", currentTrack.title);
 
   return (
     <>

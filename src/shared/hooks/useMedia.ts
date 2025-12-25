@@ -20,27 +20,62 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     limit = 10,
   } = options;
 
-  // State for all content (TikTok-style)
-  const [allContent, setAllContent] = useState<MediaItem[]>([]);
+  // INSTANT CACHE LOADING - Load cache synchronously before first render
+  const cacheStore = useContentCacheStore.getState();
+  const cachedAll = cacheStore.get("ALL:first");
+  const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
+  const cachedDefault = cacheStore.get(defaultKey);
+
+  // Initialize state with cached data immediately (no delay)
+  const [allContent, setAllContent] = useState<MediaItem[]>(() => {
+    if (cachedAll && isFresh("ALL:first")) {
+      return cachedAll.items as any;
+    }
+    return [];
+  });
   const [allContentLoading, setAllContentLoading] = useState(false);
   const [allContentError, setAllContentError] = useState<string | null>(null);
-  const [allContentTotal, setAllContentTotal] = useState(0);
+  const [allContentTotal, setAllContentTotal] = useState(() => {
+    if (cachedAll && isFresh("ALL:first")) {
+      return cachedAll.total || 0;
+    }
+    return 0;
+  });
 
-  // State for default content (paginated)
-  const [defaultContent, setDefaultContent] = useState<MediaItem[]>([]);
+  // State for default content (paginated) - Initialize with cache
+  const [defaultContent, setDefaultContent] = useState<MediaItem[]>(() => {
+    if (cachedDefault && isFresh(defaultKey)) {
+      return cachedDefault.items as any;
+    }
+    return [];
+  });
   const [defaultContentLoading, setDefaultContentLoading] = useState(false);
   const [defaultContentError, setDefaultContentError] = useState<string | null>(
     null
   );
-  const [defaultContentPagination, setDefaultContentPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 0,
+  const [defaultContentPagination, setDefaultContentPagination] = useState(() => {
+    if (cachedDefault && isFresh(defaultKey)) {
+      return {
+        page: cachedDefault.page,
+        limit: cachedDefault.limit,
+        total: cachedDefault.total || 0,
+        pages: Math.ceil(
+          (cachedDefault.total || 0) / (cachedDefault.limit || 10)
+        ),
+      };
+    }
+    return {
+      page: 1,
+      limit: 10,
+      total: 0,
+      pages: 0,
+    };
   });
 
-  // Combined loading and error states
-  const loading = allContentLoading || defaultContentLoading;
+  // Combined loading and error states - Don't show loading if we have cached content
+  const loading = (allContentLoading || defaultContentLoading) && 
+                  allContent.length === 0 && 
+                  defaultContent.length === 0;
   const error = allContentError || defaultContentError;
   const hasContent = allContent.length > 0 || defaultContent.length > 0;
 
@@ -365,39 +400,20 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   );
 
   // Initialize content on mount if immediate is true
+  // Cache is already loaded synchronously above, so we just refresh in background
   useEffect(() => {
     if (immediate) {
-      if (__DEV__) console.log("🚀 useMedia: Initializing with immediate load");
-
-      // Test available endpoints first
+      // Test available endpoints first (non-blocking)
       mediaApi.testAvailableEndpoints();
 
-      // Hydrate from cache instantly if fresh; then background revalidate
-      const cachedAll = useContentCacheStore.getState().get("ALL:first");
-      if (cachedAll && isFresh("ALL:first")) {
-        setAllContent(cachedAll.items as any);
-        setAllContentTotal(cachedAll.total || 0);
-      }
-      const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
-      const cachedDefault = useContentCacheStore.getState().get(defaultKey);
-      if (cachedDefault && isFresh(defaultKey)) {
-        setDefaultContent(cachedDefault.items as any);
-        setDefaultContentPagination((p) => ({
-          ...p,
-          page: cachedDefault.page,
-          limit: cachedDefault.limit,
-          total: cachedDefault.total || 0,
-          pages: Math.ceil(
-            (cachedDefault.total || 0) / (cachedDefault.limit || 10)
-          ),
-        }));
-      }
-
-      // Background revalidate
-      refreshAllContent();
-      fetchDefaultContent({ page, limit, contentType });
+      // Background revalidate - fetch fresh data without blocking UI
+      // Content is already shown from cache if available
+      Promise.all([
+        refreshAllContent().catch(() => {}), // Don't block on errors
+        fetchDefaultContent({ page, limit, contentType }).catch(() => {}),
+      ]);
     }
-  }, [immediate, refreshAllContent]);
+  }, [immediate, refreshAllContent, page, limit, contentType]);
 
   // Memoized return value
   const returnValue = useMemo(

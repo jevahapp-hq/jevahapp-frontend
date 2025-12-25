@@ -32,13 +32,13 @@ export default function MiniVideoCard({
   const [progress, setProgress] = useState(0);
   const globalVideoStore = useGlobalVideoStore();
 
-  console.log(`🎬 MiniVideoCard:`, {
-    title: video.title,
-    contentType: video.contentType,
-    createdAt: video.createdAt || video.uploadedAt,
-    date: new Date(video.createdAt || video.uploadedAt || 0).toISOString(),
-    index,
-  });
+  // console.log(`🎬 MiniVideoCard:`, {
+  //   title: video.title,
+  //   contentType: video.contentType,
+  //   createdAt: video.createdAt || video.uploadedAt,
+  //   date: new Date(video.createdAt || video.uploadedAt || 0).toISOString(),
+  //   index,
+  // });
 
   const videoKey = `mini-video-${video._id || video.fileUrl || index}`;
   const isGloballyPlaying = globalVideoStore.playingVideos[videoKey] ?? false;
@@ -50,14 +50,14 @@ export default function MiniVideoCard({
       shouldPlay: isGloballyPlaying,
       isMuted: true, // Mini cards are always muted
       onLoad: () => {
-        console.log(`✅ Mini video loaded: ${video.title}`);
+        // console.log(`✅ Mini video loaded: ${video.title}`);
       },
       onError: (error) => {
-        console.warn("Mini video failed to load:", video.title, error);
+        // console.warn("Mini video failed to load:", video.title, error);
       },
       onBuffering: (buffering) => {
         if (buffering) {
-          console.log(`⏳ Mini video buffering: ${video.title}`);
+          // console.log(`⏳ Mini video buffering: ${video.title}`);
         }
       },
     });

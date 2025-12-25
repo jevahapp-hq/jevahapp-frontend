@@ -139,7 +139,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   // Reset UI state when user changes (detect via token changes)
   useEffect(() => {
     const resetUIState = () => {
-      console.log("🔄 Resetting UI state for new user session");
+      // console.log("🔄 Resetting UI state for new user session");
       setLikedItems({});
       setLikeCounts({});
       setSavedItemIds(new Set());

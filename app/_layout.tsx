@@ -62,21 +62,21 @@ const publishableKey =
 
 // ✅ Clerk token cache
 const tokenCache = {
-  async getToken(key: string) {
-    try {
-      return await SecureStore.getItemAsync(key);
-    } catch (err) {
-      console.error("Error getting token:", err);
-      return null;
-    }
-  },
-  async saveToken(key: string, value: string) {
-    try {
-      return await SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      console.error("Error saving token:", err);
-    }
-  },
+    async getToken(key: string) {
+      try {
+        return await SecureStore.getItemAsync(key);
+      } catch (err) {
+        // console.error("Error getting token:", err);
+        return null;
+      }
+    },
+    async saveToken(key: string, value: string) {
+      try {
+        return await SecureStore.setItemAsync(key, value);
+      } catch (err) {
+        // console.error("Error saving token:", err);
+      }
+    },
 };
 
 export default function RootLayout() {
@@ -98,11 +98,22 @@ export default function RootLayout() {
         args[0]?.includes?.("clerk/telemetry") ||
         args[0]?.includes?.("Clerk hooks not available") ||
         args[0]?.includes?.("Video error for") ||
+        args[0]?.includes?.("Video load error") ||
         args[0]?.includes?.("AVPlayerItem instance has failed") ||
         args[0]?.includes?.("error code -11819") ||
+        args[0]?.includes?.("error code -1001") ||
+        args[0]?.includes?.("NSURLErrorDomain") ||
+        args[0]?.includes?.("NSURLErrorTimedOut") ||
         args[0]?.includes?.("AVFoundationErrorDomain") ||
+        args[0]?.includes?.("Audio sermon error") ||
+        args[0]?.includes?.("Failed to load audio") ||
+        args[0]?.includes?.("Failed to load the player item") ||
+        args[0]?.includes?.("request timed out") ||
         errorMessage.includes("Network request failed") ||
         errorMessage.includes("TypeError: Network request failed") ||
+        errorMessage.includes("The request timed out") ||
+        errorMessage.includes("NSURLErrorTimedOut") ||
+        errorMessage.includes("error code -1001") ||
         // Suppress "User not found" errors from password reset (expected behavior for security)
         errorMessage.includes("User not found") ||
         errorMessage.includes("Email not found") ||
@@ -145,69 +156,69 @@ export default function RootLayout() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        console.log("🚀 App initializing...");
-        console.log("✅ API_URL =", API_BASE_URL);
-        console.log("✅ CLERK_KEY =", publishableKey ? "Present" : "Missing");
-        console.log("🔧 Environment:", __DEV__ ? "Development" : "Production");
+        // console.log("🚀 App initializing...");
+        // console.log("✅ API_URL =", API_BASE_URL);
+        // console.log("✅ CLERK_KEY =", publishableKey ? "Present" : "Missing");
+        // console.log("🔧 Environment:", __DEV__ ? "Development" : "Production");
 
         // Try to load persisted media
         try {
           await loadPersistedMedia();
-          console.log("✅ Media loaded successfully");
+          // console.log("✅ Media loaded successfully");
         } catch (mediaErr) {
-          console.warn(
-            "⚠️ Media loading failed (continuing anyway):",
-            mediaErr
-          );
+          // console.warn(
+          //   "⚠️ Media loading failed (continuing anyway):",
+          //   mediaErr
+          // );
         }
 
         // Try to load downloaded items
         try {
           await loadDownloadedItems();
-          console.log("✅ Downloads loaded successfully");
+          // console.log("✅ Downloads loaded successfully");
         } catch (downloadErr) {
-          console.warn(
-            "⚠️ Downloads loading failed (continuing anyway):",
-            downloadErr
-          );
+          // console.warn(
+          //   "⚠️ Downloads loading failed (continuing anyway):",
+          //   downloadErr
+          // );
         }
 
         // Try to load saved library items
         try {
           await loadSavedItems();
-          console.log("✅ Library items loaded successfully");
+          // console.log("✅ Library items loaded successfully");
         } catch (libraryErr) {
-          console.warn(
-            "⚠️ Library items loading failed (continuing anyway):",
-            libraryErr
-          );
+          // console.warn(
+          //   "⚠️ Library items loading failed (continuing anyway):",
+          //   libraryErr
+          // );
         }
 
         // Preload critical data for better performance
         try {
           await PerformanceOptimizer.getInstance().preloadCriticalData();
-          console.log("✅ Critical data preloaded successfully");
+          // console.log("✅ Critical data preloaded successfully");
         } catch (preloadErr) {
-          console.warn(
-            "⚠️ Critical data preloading failed (continuing anyway):",
-            preloadErr
-          );
+          // console.warn(
+          //   "⚠️ Critical data preloading failed (continuing anyway):",
+          //   preloadErr
+          // );
         }
 
         // Warm up backend to prevent Render cold starts
         try {
-          console.log("🔥 Warming up backend...");
+          // console.log("🔥 Warming up backend...");
           warmupBackend().catch((warmupErr) => {
-            console.warn("⚠️ Backend warmup failed:", warmupErr);
+            // console.warn("⚠️ Backend warmup failed:", warmupErr);
           });
         } catch (warmupErr) {
-          console.warn("⚠️ Backend warmup error (continuing anyway):", warmupErr);
+          // console.warn("⚠️ Backend warmup error (continuing anyway):", warmupErr);
         }
 
-        console.log("✅ App initialization complete");
+        // console.log("✅ App initialization complete");
         setIsInitialized(true);
       } catch (err) {
-        console.error("❌ App initialization failed:", err);
+        // console.error("❌ App initialization failed:", err);
         setError("Initialization failed");
         setIsInitialized(true);
       }

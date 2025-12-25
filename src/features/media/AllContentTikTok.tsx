@@ -1,25 +1,24 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    Image,
-    Modal,
-    RefreshControl,
-    ScrollView,
-    Share,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Image,
+  RefreshControl,
+  ScrollView,
+  Share,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { useCurrentPlayingAudioStore } from "../../../app/store/useCurrentPlayingAudioStore";
 import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
@@ -28,15 +27,15 @@ import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceMa
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-    categorizeContent,
-    devLog,
-    filterContentByType,
-    getContentKey,
-    getMostRecentItem,
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
-    transformApiResponseToMediaItem,
+  categorizeContent,
+  devLog,
+  filterContentByType,
+  getContentKey,
+  getMostRecentItem,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+  transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
 // Feature-specific imports
@@ -48,13 +47,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../app/components/SuccessCard";
 import HymnMiniCard, {
-    HymnItem,
+  HymnItem,
 } from "../../../app/home/components/HymnMiniCard";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
 
 // Import original stores and hooks (these will be bridged)
+import { LinearGradient } from "expo-linear-gradient";
 import { useCommentModal } from "../../../app/context/CommentModalContext";
 import { useUserProfile } from "../../../app/hooks/useUserProfile";
 import { useVideoNavigation } from "../../../app/hooks/useVideoNavigation";
@@ -64,16 +64,15 @@ import { useGlobalMediaStore } from "../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
-import { LinearGradient } from "expo-linear-gradient";
 import {
-    convertToDownloadableItem,
-    useDownloadHandler,
+  convertToDownloadableItem,
+  useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-    getPersistedStats,
-    getUserFavorites,
-    getUserId,
-    getViewed
+  getPersistedStats,
+  getUserFavorites,
+  getUserId,
+  getViewed
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -373,29 +372,29 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   useEffect(() => {
     const initializeSocket = async () => {
       try {
-        console.log("🔌 AllContentTikTok: Initializing Socket.IO...");
+        // console.log("🔌 AllContentTikTok: Initializing Socket.IO...");
 
         const authToken = await TokenUtils.getAuthToken();
         const tokenInfo = await TokenUtils.getTokenInfo();
 
-        console.log("🔑 Token retrieval:", {
-          ...tokenInfo,
-          tokenPreview: authToken
-            ? TokenUtils.getTokenPreview(authToken)
-            : "null",
-        });
+        // console.log("🔑 Token retrieval:", {
+        //   ...tokenInfo,
+        //   tokenPreview: authToken
+        //     ? TokenUtils.getTokenPreview(authToken)
+        //     : "null",
+        // });
 
         if (!authToken || authToken.trim() === "") {
-          console.log(
-            "⚠️ No valid auth token found, skipping Socket.IO initialization"
-          );
+          // console.log(
+          //   "⚠️ No valid auth token found, skipping Socket.IO initialization"
+          // );
           return;
         }
 
         if (!TokenUtils.isValidJWTFormat(authToken)) {
-          console.warn(
-            "⚠️ Invalid token format detected, skipping Socket.IO initialization"
-          );
+          // console.warn(
+          //   "⚠️ Invalid token format detected, skipping Socket.IO initialization"
+          // );
           return;
         }
 
@@ -407,7 +406,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         const socket = (manager as any).socket;
         if (socket) {
           socket.on("content-reaction", (data: any) => {
-            console.log("📡 Real-time like update:", data);
+            // console.log("📡 Real-time like update:", data);
             setRealTimeCounts((prev) => ({
               ...prev,
               [data.contentId]: {
@@ -419,7 +418,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           });
 
           socket.on("content-comment", (data: any) => {
-            console.log("📡 Real-time comment update:", data);
+            // console.log("📡 Real-time comment update:", data);
             setRealTimeCounts((prev) => ({
               ...prev,
               [data.contentId]: {
@@ -433,15 +432,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         try {
           await manager.connect();
           setSocketManager(manager);
-          console.log("✅ Socket.IO initialized successfully");
+          // console.log("✅ Socket.IO initialized successfully");
         } catch (connectError) {
-          console.warn(
-            "⚠️ Socket connection failed, continuing without real-time features:",
-            connectError
-          );
+          // console.warn(
+          //   "⚠️ Socket connection failed, continuing without real-time features:",
+          //   connectError
+          // );
         }
       } catch (error) {
-        console.error("❌ Failed to initialize Socket.IO:", error);
+        // console.error("❌ Failed to initialize Socket.IO:", error);
       }
     };
 
@@ -491,43 +490,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     return audioItems;
   }, [contentType, filteredMediaList, user, searchQuery, getUserDisplayNameFromContent]);
 
-  // Reusable renderer for Hymn mini-cards (for ALL tab only)
-  const renderHymnMiniCards = useCallback(() => {
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
-      >
-        {loadingHymns
-          ? Array.from({ length: 8 }).map((_, i) => (
-              <View
-                key={`hym-skel-${i}`}
-                className="mr-4 w-[154px] flex-col items-center"
-              >
-                <Skeleton variant="thumbnail" />
-                <View className="mt-2 flex flex-col w-full">
-                  <Skeleton variant="text" width={"70%"} />
-                  <View style={{ height: 6 }} />
-                  <Skeleton variant="text" width={"50%"} />
-                </View>
-              </View>
-            ))
-          : (hymns || []).map((h) => (
-              <HymnMiniCard
-                key={h.id}
-                item={h}
-                onPress={(item) =>
-                  router.push({
-                    pathname: "/reader/HymnDetail",
-                    params: { id: item.id },
-                  })
-                }
-              />
-            ))}
-      </ScrollView>
-    );
-  }, [hymns, loadingHymns, router]);
 
   const filteredHymns = useMemo(() => {
     const q = hymnSearchQuery.trim().toLowerCase();
@@ -578,11 +540,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
     // If user just logged in (went from null/undefined to having an ID)
     if (!previousUserId && currentUserId && filteredMediaList.length > 0) {
-      console.log("🔄 User just logged in, refreshing interaction stats for visible content...");
+      // console.log("🔄 User just logged in, refreshing interaction stats for visible content...");
       // Refresh stats for currently visible content
       // Refresh all stats after login (no arguments needed)
       refreshAllStatsAfterLogin().catch((error) => {
-        console.warn("⚠️ Failed to refresh stats after login:", error);
+        // console.warn("⚠️ Failed to refresh stats after login:", error);
       });
     }
 
@@ -637,7 +599,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Load persisted data including likes (like reels does)
   useEffect(() => {
     const loadAllData = async () => {
-      console.log("📱 AllContent: Loading persisted data...");
+      // console.log("📱 AllContent: Loading persisted data...");
       setIsLoadingContent(true);
 
       try {
@@ -735,20 +697,20 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }
 
     if (isLoadingAudio) {
-      console.log("🚨 Audio is already loading, skipping...");
+      // console.log("🚨 Audio is already loading, skipping...");
       return;
     }
 
     if (!uri.startsWith("http://") && !uri.startsWith("https://")) {
-      console.warn("🚨 Audio URI is not a valid HTTP/HTTPS URL:", { uri, id });
+      // console.warn("🚨 Audio URI is not a valid HTTP/HTTPS URL:", { uri, id });
       return;
     }
 
-    console.log(`🎵 Playing audio "${id}":`, {
-      audioUri: uri,
-      id,
-      uriLength: uri.length,
-    });
+    // console.log(`🎵 Playing audio "${id}":`, {
+    //   audioUri: uri,
+    //   id,
+    //   uriLength: uri.length,
+    // });
 
     setIsLoadingAudio(true);
     const audioManager = GlobalAudioInstanceManager.getInstance();
@@ -861,14 +823,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       
       // Set current playing audio in store for mini player
       if (mediaItem) {
-        console.log("🎵 Setting current audio in store:", {
-          id: id,
-          title: mediaItem.title,
-          audioId: id,
-        });
+        // console.log("🎵 Setting current audio in store:", {
+        //   id: id,
+        //   title: mediaItem.title,
+        //   audioId: id,
+        // });
         setCurrentAudio(mediaItem, id);
       } else {
-        console.warn("⚠️ MediaItem not found for audio ID:", id);
+        // console.warn("⚠️ MediaItem not found for audio ID:", id);
       }
 
       // Get initial status for duration/progress
@@ -1182,8 +1144,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     globalVideoStore.toggleVideoMute(key);
 
   const togglePlay = (key: string) => {
-    console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
-    console.log("🎮 Current playing state:", playingVideos[key]);
+    // console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
+    // console.log("🎮 Current playing state:", playingVideos[key]);
 
     // Clear any autoplay state and play the video immediately
     setCurrentlyVisibleVideo(key);
@@ -1191,7 +1153,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     // ✅ Use unified media store for consistent video playback
     playMedia(key, "video");
 
-    console.log("✅ Video play request sent for key:", key);
+    // console.log("✅ Video play request sent for key:", key);
   };
 
   // Handle video visibility changes during scroll for autoplay
@@ -1298,9 +1260,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         );
         if (!item || !item.fileUrl) return; // do not jump
 
-        console.log(
-          `🎬 Scroll autoplay → ${targetKey} (center-preferred) (dir: ${scrollDirection})`
-        );
+        // console.log(
+        //   `🎬 Scroll autoplay → ${targetKey} (center-preferred) (dir: ${scrollDirection})`
+        // );
         pauseAllMedia();
         setCurrentlyVisibleVideo(targetKey);
         playMedia(targetKey, "video");
@@ -1311,7 +1273,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       // If nothing meets threshold and current is mostly out of view, pause
       if (!bestKey || bestRatio < PAUSE_THRESHOLD) {
         if (currentlyVisibleVideo) {
-          console.log("⏸️ Pausing – no sufficiently visible video");
+          // console.log("⏸️ Pausing – no sufficiently visible video");
           pauseAllMedia();
           setCurrentlyVisibleVideo(null);
         }
@@ -1359,8 +1321,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           setIsScrolling(false);
         }, 150) as any;
 
-        // Early return if content isn't ready or no layouts - skip heavy processing but allow scroll
-        if (!isContentReadyRef.current || loading || filteredMediaList.length === 0) {
+        // Early return if no content - skip heavy processing but allow scroll
+        // Don't block on loading if we have cached content
+        if (filteredMediaList.length === 0) {
           return;
         }
 
@@ -1401,7 +1364,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                 handleVideoVisibilityChange(scrollY);
               }
             } catch (error) {
-              console.warn("⚠️ Error in handleVideoVisibilityChange:", error);
+              // console.warn("⚠️ Error in handleVideoVisibilityChange:", error);
             }
 
             // Enhanced auto-pause logic for all media types
@@ -1550,23 +1513,21 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
   }, []);
 
-  // Mark content as ready when filtered media list is available and not loading
+  // Mark content as ready immediately if we have content (from cache or fresh)
   useEffect(() => {
-    if (!loading && filteredMediaList.length > 0 && !isLoadingContent) {
-      // Small delay to ensure layouts are calculated
-      const timer = setTimeout(() => {
-        isContentReadyRef.current = true;
-      }, 100);
-      return () => clearTimeout(timer);
-    } else if (loading || isLoadingContent) {
+    if (filteredMediaList.length > 0) {
+      // Mark as ready immediately - no delay needed since cache loads synchronously
+      isContentReadyRef.current = true;
+    } else if (loading && filteredMediaList.length === 0) {
+      // Only mark as not ready if we're loading AND have no content
       isContentReadyRef.current = false;
     }
   }, [loading, filteredMediaList.length, isLoadingContent]);
 
   // Reset scroll state when contentType changes (category switch)
   useEffect(() => {
-    // Reset content ready flag to allow immediate scrolling after category change
-    isContentReadyRef.current = !loading && filteredMediaList.length > 0 && !isLoadingContent;
+    // Mark content as ready immediately if we have content (from cache or fresh)
+    isContentReadyRef.current = filteredMediaList.length > 0;
     
     // Reset scroll position to top when category changes
     if (scrollViewRef.current) {
@@ -1595,8 +1556,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Reset scroll state when component gains focus (navigation back from reels, etc.)
   useFocusEffect(
     useCallback(() => {
-      // Reset content ready flag to allow immediate scrolling after navigation
-      isContentReadyRef.current = !loading && filteredMediaList.length > 0 && !isLoadingContent;
+      // Mark content as ready immediately if we have content (from cache or fresh)
+      // This ensures instant scrolling when navigating back
+      // Cache is already loaded synchronously by useMedia hook, so content should be available
+      isContentReadyRef.current = filteredMediaList.length > 0;
       
       // Reset scroll position to top when navigating back
       if (scrollViewRef.current) {
@@ -2877,30 +2840,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Hymns section (mini cards) - Only show in ALL tab */}
-          {contentType === "ALL" && (
-            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                  fontWeight: "600",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  marginBottom: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                Hymns
-              </Text>
-              {renderHymnMiniCards()}
-            </View>
-          )}
-
-          {/* Songs Section - Only show in ALL tab (without heading text) */}
-          {contentType === "ALL" && (
-            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              <CopyrightFreeSongs />
-            </View>
-          )}
 
           {/* Music Section - Only show in MUSIC tab (new style with list view) */}
           {(String(contentType) === "MUSIC" || String(contentType) === "music") && String(contentType) !== "videos" && contentType !== "ALL" && (

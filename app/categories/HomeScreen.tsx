@@ -28,6 +28,8 @@ export default function HomeScreen() {
   }, [defaultTabParam]);
 
   const renderTabContent = () => {
+    // Only render the active tab - React Native compatible approach
+    // This still provides performance benefits without breaking lazy loading
     switch (selectedTab) {
       case "Home":
         return <HomeTabContent />;

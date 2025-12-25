@@ -91,11 +91,11 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     contentOwnerName?: string
   ) => {
     // INSTANT RESPONSE - No blocking conditions
-    console.log("📣 showCommentModal called INSTANTLY", {
-      contentId,
-      contentType,
-      incomingCount: newComments?.length || 0,
-    });
+    // console.log("📣 showCommentModal called INSTANTLY", {
+    //   contentId,
+    //   contentType,
+    //   incomingCount: newComments?.length || 0,
+    // });
     
     // Try to load cached comments immediately for instant display
     let cachedComments: Comment[] = [];
@@ -117,10 +117,10 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             replies: c.replies || [],
             userId: c.userId,
           }));
-          console.log("⚡ Using cached comments from store:", cachedComments.length);
+          // console.log("⚡ Using cached comments from store:", cachedComments.length);
         }
       } catch (e) {
-        console.warn("Failed to load cached comments:", e);
+        // console.warn("Failed to load cached comments:", e);
       }
     }
     
@@ -139,7 +139,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     setHasMore(true);
     setIsOpening(false);
     
-    console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
+    // console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
     // Load latest comments from backend and join realtime room ASYNC (non-blocking)
     // Defer all async work using InteractionManager to ensure modal opens instantly
@@ -173,7 +173,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
 
   const hideCommentModal = () => {
     try {
-      console.log("📣 hideCommentModal called");
+      // console.log("📣 hideCommentModal called");
     } catch {}
     setIsVisible(false);
     setIsOpening(false); // Reset opening state
@@ -219,7 +219,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       // Call backend reaction toggle
       await contentInteractionAPI.toggleCommentLike(commentId);
     } catch (error) {
-      console.error("Error liking comment:", error);
+      // console.error("Error liking comment:", error);
       // Revert the local state if the store update failed
       setComments((prev) =>
         prev.map((comment) =>
@@ -244,7 +244,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
                    await AsyncStorage.getItem("token");
       
       if (!token) {
-        console.warn("⚠️ User not authenticated. Cannot submit reply.");
+        // console.warn("⚠️ User not authenticated. Cannot submit reply.");
         return;
       }
 
@@ -278,7 +278,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       );
       // Re-fetch replies or top-level if needed
     } catch (error) {
-      console.error("Error adding reply:", error);
+      // console.error("Error adding reply:", error);
       // Remove optimistic reply if API call failed
       setComments((prev) =>
         prev.map((c) =>
@@ -300,7 +300,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         (await AsyncStorage.getItem("token"));
       
       if (!token) {
-        console.warn("⚠️ User not authenticated. Cannot submit comment.");
+        // console.warn("⚠️ User not authenticated. Cannot submit comment.");
         // You could show an alert here to prompt user to login
         return;
       }
@@ -375,7 +375,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         false
       );
     } catch (e) {
-      console.error("Error submitting comment:", e);
+      // console.error("Error submitting comment:", e);
       // Remove any optimistic comments if API call failed
       setComments((prev) =>
         prev.filter((comment) => !comment.id.startsWith("temp-"))
@@ -404,7 +404,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache
             
             if (cacheAge < CACHE_TTL && parsedCache.comments && parsedCache.comments.length > 0) {
-              console.log("⚡ Loading comments from cache (age:", Math.round(cacheAge / 1000), "s)");
+              // console.log("⚡ Loading comments from cache (age:", Math.round(cacheAge / 1000), "s)");
               const cachedComments: Comment[] = parsedCache.comments.map((c: any) => ({
                 id: c.id,
                 userName: c.userName || "User",
@@ -439,7 +439,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             }
           }
         } catch (cacheError) {
-          console.warn("Cache read error:", cacheError);
+          // console.warn("Cache read error:", cacheError);
         }
       }
       
@@ -448,7 +448,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
                    await AsyncStorage.getItem("token");
       
       if (!token) {
-        console.warn("⚠️ No authentication token found. Skipping comment load from server.");
+        // console.warn("⚠️ No authentication token found. Skipping comment load from server.");
         // Set empty comments instead of throwing error
         if (replace) {
           setComments([]);
@@ -467,14 +467,14 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         sort
       );
       
-      console.log("📥 Comments loaded from server:", {
-        contentId,
-        contentType,
-        commentCount: res.comments?.length || 0,
-        totalComments: res.totalComments,
-        hasMore: res.hasMore,
-        firstComment: res.comments?.[0],
-      });
+      // console.log("📥 Comments loaded from server:", {
+      //   contentId,
+      //   contentType,
+      //   commentCount: res.comments?.length || 0,
+      //   totalComments: res.totalComments,
+      //   hasMore: res.hasMore,
+      //   firstComment: res.comments?.[0],
+      // });
       
       // Helper function to recursively map comments and their replies
       const mapComment = (c: any): Comment => {
@@ -508,11 +508,11 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         return sum + 1 + (c.replies?.length || 0);
       }, 0);
       
-      console.log("📊 Mapped comments:", {
-        topLevel: mapped.length,
-        totalWithReplies,
-        expectedTotal: res.totalComments,
-      });
+      // console.log("📊 Mapped comments:", {
+      //   topLevel: mapped.length,
+      //   totalWithReplies,
+      //   expectedTotal: res.totalComments,
+      // });
       setComments((prev) => {
         if (replace) return mapped;
         // Merge by id to keep any optimistic items not yet returned by server
@@ -542,18 +542,18 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             page: pageNum,
             timestamp: Date.now(),
           }));
-          console.log("💾 Cached comments for faster next load");
+          // console.log("💾 Cached comments for faster next load");
         } catch (cacheError) {
-          console.warn("Cache write error:", cacheError);
+          // console.warn("Cache write error:", cacheError);
         }
       }
     } catch (e) {
-      console.error("❌ Failed loading comments from server:", {
-        contentId,
-        contentType,
-        error: e,
-        pageNum,
-      });
+      // console.error("❌ Failed loading comments from server:", {
+      //   contentId,
+      //   contentType,
+      //   error: e,
+      //   pageNum,
+      // });
       // Don't throw error, just log it and continue with empty state
       if (replace) {
         setComments([]);
@@ -617,7 +617,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       }
       socketManagerRef.current.joinContentRoom(contentId, contentType);
     } catch (e) {
-      console.warn("Realtime room join failed:", e);
+      // console.warn("Realtime room join failed:", e);
     }
   };
 

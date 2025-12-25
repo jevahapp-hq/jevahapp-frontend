@@ -11,7 +11,14 @@ export interface MediaItem extends BaseEntity {
   fileUrl: string;
   title: string;
   speaker?: string;
-  uploadedBy?: string;
+  uploadedBy?: string | {
+    _id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    avatar?: string;
+    name?: string;
+  };
   description?: string;
   speakerAvatar?: string | number | { uri: string };
   views?: number;

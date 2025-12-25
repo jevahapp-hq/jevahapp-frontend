@@ -22,7 +22,7 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
 
   // Debug password visibility
-  console.log("Password visibility state:", showPassword);
+  // console.log("Password visibility state:", showPassword);
 
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -54,15 +54,15 @@ export default function LoginScreen() {
           // If we still have a token and the user chose Remember Me,
           // skip the form and take them back into the app.
           if (storedToken) {
-            console.log(
-              "🔐 Remember Me active with stored token – redirecting to HomeScreen"
-            );
+            // console.log(
+            //   "🔐 Remember Me active with stored token – redirecting to HomeScreen"
+            // );
             router.replace("/categories/HomeScreen");
             return;
           }
         }
       } catch (err) {
-        console.warn("Failed to restore login prefs from storage:", err);
+        // console.warn("Failed to restore login prefs from storage:", err);
       }
     };
 
@@ -107,7 +107,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       // Debug the login attempt
-      console.log("🔍 Starting login debug...");
+      // console.log("🔍 Starting login debug...");
       await loginDebugger.validateEmail(emailAddress.trim().toLowerCase());
       await loginDebugger.validatePassword(password.trim());
 
@@ -119,29 +119,22 @@ export default function LoginScreen() {
       );
 
       if (result.success && "data" in result && result.data?.token) {
-        console.log("✅ Login successful");
+        // console.log("✅ Login successful");
 
-        // Persist last login details for future sessions
-        try {
-          await AsyncStorage.setItem(
-            "lastEmail",
-            emailAddress.trim().toLowerCase()
-          );
-          await AsyncStorage.setItem(
-            "rememberMe",
-            rememberMe ? "true" : "false"
-          );
-          await AsyncStorage.setItem(
-            "lastLoginAt",
-            new Date().toISOString()
-          );
-        } catch (storageErr) {
-          console.warn("Failed to persist login preferences:", storageErr);
-        }
+        // Persist last login details for future sessions (non-blocking - fire and forget)
+        // Don't await - navigate immediately for instant UI response
+        Promise.all([
+          AsyncStorage.setItem("lastEmail", emailAddress.trim().toLowerCase()),
+          AsyncStorage.setItem("rememberMe", rememberMe ? "true" : "false"),
+          AsyncStorage.setItem("lastLoginAt", new Date().toISOString()),
+        ]).catch(() => {
+          // Non-critical, continue with navigation
+        });
 
+        // Navigate immediately without waiting for storage
         router.replace("/categories/HomeScreen");
       } else {
-        console.log("❌ Login failed:", result);
+        // console.log("❌ Login failed:", result);
         const errorMessage =
           ("data" in result && result.data?.message) ||
           result.error ||
@@ -149,7 +142,7 @@ export default function LoginScreen() {
         Alert.alert("Login Failed", errorMessage);
       }
     } catch (error) {
-      console.error("❌ Login error:", error);
+      // console.error("❌ Login error:", error);
       Alert.alert(
         "Login Failed",
         "An error occurred during login. Please try again."

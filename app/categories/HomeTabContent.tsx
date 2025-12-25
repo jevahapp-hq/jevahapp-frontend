@@ -100,7 +100,7 @@ export default function HomeTabContent() {
   const [selectedCategory, setSelectedCategory] = useState(() => {
     if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
       const mapped = mapContentTypeToCategory(defaultCategoryValue);
-      console.log(`🏠 HomeTabContent: Initial category from param "${defaultCategoryValue}" mapped to "${mapped}"`);
+      // console.log(`🏠 HomeTabContent: Initial category from param "${defaultCategoryValue}" mapped to "${mapped}"`);
       return mapped;
     }
     return "ALL";
@@ -112,15 +112,15 @@ export default function HomeTabContent() {
   useEffect(() => {
     if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
       const mappedCategory = mapContentTypeToCategory(defaultCategoryValue);
-      console.log(`🏠 HomeTabContent: Category param changed "${defaultCategoryValue}" -> "${mappedCategory}"`);
+      // console.log(`🏠 HomeTabContent: Category param changed "${defaultCategoryValue}" -> "${mappedCategory}"`);
       if (categories.includes(mappedCategory)) {
         setSelectedCategory(mappedCategory);
-        console.log(`🏠 HomeTabContent: Updated selectedCategory to "${mappedCategory}"`);
+        // console.log(`🏠 HomeTabContent: Updated selectedCategory to "${mappedCategory}"`);
       } else {
-        console.warn(`🏠 HomeTabContent: Mapped category "${mappedCategory}" not in categories list`);
+        // console.warn(`🏠 HomeTabContent: Mapped category "${mappedCategory}" not in categories list`);
       }
     } else {
-      console.log(`🏠 HomeTabContent: No valid defaultCategory param, keeping current category`);
+      // console.log(`🏠 HomeTabContent: No valid defaultCategory param, keeping current category`);
     }
   }, [defaultCategoryValue]);
 
@@ -188,7 +188,7 @@ export default function HomeTabContent() {
         const contentTypeParam = mapCategoryToContentType(category);
         router.setParams({ defaultCategory: contentTypeParam });
       } catch (error) {
-        console.warn("🏠 HomeTabContent: Failed to set defaultCategory param", error);
+        // console.warn("🏠 HomeTabContent: Failed to set defaultCategory param", error);
       }
 
       // Only stop media if actually switching to a different category
