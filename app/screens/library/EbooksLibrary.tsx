@@ -125,6 +125,7 @@ export default function EbooksLibrary () {
                 pathname: "/reader/PdfViewer",
                 params: {
                   url: pdfUrl,
+                  ebookId: item?._id || item?.id || "",
                   title: item.title || "Untitled",
                   desc: item.description || "",
                 },

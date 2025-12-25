@@ -584,7 +584,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         const token = await TokenUtils.getAuthToken();
         if (!token) return;
         const manager = new SocketManager({
-          serverUrl: "https://jevahapp-backend-rped.onrender.com",
+          serverUrl: "https://jevahapp-backend.onrender.com",
           authToken: token,
         });
         await manager.connect();

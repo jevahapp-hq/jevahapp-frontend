@@ -6,6 +6,20 @@ import { persist } from "zustand/middleware";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 import { useCurrentPlayingAudioStore } from "./useCurrentPlayingAudioStore";
 
+/**
+ * Professional Global Audio Player Store
+ *
+ * Key Features:
+ * - Batched state updates to prevent React's "Maximum update depth exceeded"
+ * - Throttled playback callbacks to avoid excessive re-renders
+ * - Proper guards against re-entrant operations
+ * - Comprehensive error handling
+ *
+ * WARNING: Components should use the hook `useGlobalAudioPlayerStore()` instead of
+ * `useGlobalAudioPlayerStore.getState()` in render functions to avoid cascading updates.
+ * Multiple `getState()` calls in render can trigger excessive re-renders.
+ */
+
 export interface AudioTrack {
   id: string;
   title: string;
@@ -57,6 +71,12 @@ interface GlobalAudioPlayerState {
   setPosition: (position: number) => void;
   setDuration: (duration: number) => void;
   setProgressValue: (progress: number) => void;
+
+  // Internal (non-persisted) guards for professional update management
+  __isAdvancing?: boolean;
+  __completionTimeout?: boolean;
+  __completionTimeoutId?: any;
+  __lastStatusUpdateTs?: number;
 }
 
 export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
@@ -73,6 +93,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       soundInstance: null,
       queue: [],
       currentIndex: -1,
+
+      // Professional audio store: Internal guards for update management
+      __isAdvancing: false,
+      __completionTimeout: false,
+      __completionTimeoutId: null,
+      __lastStatusUpdateTs: 0,
+      __isAdvancing: false,
 
       setTrack: async (track: AudioTrack, shouldPlayImmediately: boolean = false) => {
         const { stop, soundInstance, currentTrack } = get();
@@ -170,16 +197,71 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
                 const newProgress =
                   newDuration > 0 ? newPosition / newDuration : 0;
 
-                set({
-                  position: newPosition,
-                  duration: newDuration,
-                  progress: newProgress,
-                  isPlaying: status.isPlaying,
-                });
+                // Professional audio store implementation: Batch and throttle updates
+                // to prevent React's maximum update depth exceeded errors
+                const prev = get();
+                const now = Date.now();
+                const lastTs = (prev as any).__lastStatusUpdateTs || 0;
 
-                // Handle playback completion
+                // More conservative update logic to prevent cascading renders
+                const timeSinceLastUpdate = now - lastTs;
+                const positionChanged = Math.abs(prev.position - newPosition) > 1000; // Increased threshold
+                const playingChanged = prev.isPlaying !== status.isPlaying;
+                const durationChanged = prev.duration !== newDuration;
+
+                // Only update if significant change OR enough time has passed (prevents spam)
+                const shouldUpdateNow =
+                  timeSinceLastUpdate > 300 || // Reduced frequency to ~3 updates/sec
+                  playingChanged || // Always update on play/pause changes
+                  (positionChanged && timeSinceLastUpdate > 200) || // Position only if time allows
+                  durationChanged; // Duration changes are important
+
+                if (shouldUpdateNow) {
+                  // Batch all state updates into a single set() call
+                  const updates: any = {
+                    position: newPosition,
+                    duration: newDuration,
+                    progress: newProgress,
+                    isPlaying: status.isPlaying,
+                    __lastStatusUpdateTs: now,
+                  };
+
+                  // Only include position updates if they meet criteria
+                  if (!(positionChanged && timeSinceLastUpdate < 200)) {
+                    updates.position = newPosition;
+                    updates.progress = newProgress;
+                  }
+
+                  set(updates);
+                }
+
+                // Handle playback completion with proper debouncing
                 if (status.didJustFinish) {
-                  get().next();
+                  // Professional guard: Use a timeout to debounce multiple didJustFinish calls
+                  const st: any = get();
+                  if (!st.__isAdvancing && !st.__completionTimeout) {
+                    set({ __isAdvancing: true, __completionTimeout: true } as any);
+
+                    // Clear any existing timeout and set new one
+                    if (st.__completionTimeoutId) {
+                      clearTimeout(st.__completionTimeoutId);
+                    }
+
+                    const timeoutId = setTimeout(async () => {
+                      try {
+                        await get().next();
+                      } finally {
+                        // Reset guards
+                        set({
+                          __isAdvancing: false,
+                          __completionTimeout: false,
+                          __completionTimeoutId: null
+                        } as any);
+                      }
+                    }, 100); // Small delay to debounce
+
+                    set({ __completionTimeoutId: timeoutId } as any);
+                  }
                 }
               }
             }

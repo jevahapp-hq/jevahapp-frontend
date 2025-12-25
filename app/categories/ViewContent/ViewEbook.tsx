@@ -94,6 +94,22 @@ export default function ViewEbook() {
   };
 
   const handleEbookPress = (ebook: EbookItem) => {
+    // Open ebook in PdfViewer for reading + TTS
+    const pdfUrl = ebook.fileUrl || "";
+    if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
+      router.push({
+        pathname: "/reader/PdfViewer",
+        params: {
+          url: pdfUrl,
+          ebookId: (ebook as any)?._id || "",
+          title: ebook.title || "Untitled",
+          desc: ebook.description || "",
+        },
+      });
+      return;
+    }
+
+    // Fallback to details view if file URL is missing
     router.push({
       pathname: "/categories/ViewContent/ViewEbook",
       params: {

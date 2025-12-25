@@ -62,14 +62,14 @@ export default function Music() {
     {
       id: "1",
       title: "Discover Weekly",
-      description: "The original slow instrumental best playlists.",
+      description: "New copyright-free gospel music curated just for you.",
       thumbnailUrl: "",
       color: "#256E63", // Jevah Primary (Green)
     },
     {
       id: "2",
       title: "Featured Playlist",
-      description: "Top trending gospel songs this week.",
+      description: "Most popular copyright-free songs everyone's listening to.",
       thumbnailUrl: "",
       color: "#FEA74E", // Jevah Secondary (Orange)
     },

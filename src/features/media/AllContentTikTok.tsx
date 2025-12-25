@@ -400,7 +400,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         }
 
         const manager = new SocketManager({
-          serverUrl: "https://jevahapp-backend-rped.onrender.com",
+          serverUrl: "https://jevahapp-backend.onrender.com",
           authToken,
         });
 
@@ -1745,13 +1745,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     {
       id: "1",
       title: "Discover Weekly",
-      description: "The original slow instrumental best playlists.",
+      description: "New copyright-free gospel music curated just for you.",
       color: UI_CONFIG.COLORS.PRIMARY, // "#256E63"
     },
     {
       id: "2",
       title: "Featured Playlist",
-      description: "Top trending gospel songs this week.",
+      description: "Most popular copyright-free songs everyone's listening to.",
       color: UI_CONFIG.COLORS.SECONDARY, // "#FEA74E"
     },
   ];
@@ -2877,7 +2877,30 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-          {/* Hymns moved to its own category (HYMS/HYMNS). Intentionally not shown in ALL. */}
+          {/* Hymns section (mini cards) - Only show in ALL tab */}
+          {contentType === "ALL" && (
+            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+              <Text
+                style={{
+                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+                  fontWeight: "600",
+                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                  paddingHorizontal: UI_CONFIG.SPACING.MD,
+                  marginBottom: UI_CONFIG.SPACING.MD,
+                }}
+              >
+                Hymns
+              </Text>
+              {renderHymnMiniCards()}
+            </View>
+          )}
+
+          {/* Songs Section - Only show in ALL tab (without heading text) */}
+          {contentType === "ALL" && (
+            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
+              <CopyrightFreeSongs />
+            </View>
+          )}
 
           {/* Music Section - Only show in MUSIC tab (new style with list view) */}
           {(String(contentType) === "MUSIC" || String(contentType) === "music") && String(contentType) !== "videos" && contentType !== "ALL" && (

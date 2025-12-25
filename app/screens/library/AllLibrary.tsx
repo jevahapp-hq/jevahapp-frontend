@@ -999,6 +999,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             pathname: "/reader/PdfViewer",
             params: {
               url: pdfUrl,
+              ebookId: book?._id || book?.id || "",
               title: book.title || "Untitled",
               desc: book.description || "",
             },
