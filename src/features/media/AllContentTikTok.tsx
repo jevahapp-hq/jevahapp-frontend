@@ -52,7 +52,7 @@ import HymnMiniCard, {
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
-import { VirtualizedContentList } from "./components/VirtualizedContentList";
+import { VirtualizedContentList } from "./AllContentTikTok/components/VirtualizedContentList";
 
 // Import original stores and hooks (these will be bridged)
 import { LinearGradient } from "expo-linear-gradient";
