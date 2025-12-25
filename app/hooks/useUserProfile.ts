@@ -97,6 +97,17 @@ export const useUserProfile = () => {
           setUser(userWithSection);
           await AsyncStorage.setItem("user", JSON.stringify(userWithSection));
           console.log("💾 User data stored in AsyncStorage");
+
+          // Cache user profile by userId for content enrichment
+          const userId = userWithSection.id || userWithSection._id;
+          if (userId) {
+            try {
+              const { userProfileCache } = await import("../utils/dataFetching");
+              userProfileCache.cacheUserProfile(userId, userWithSection);
+            } catch (error) {
+              console.warn("⚠️ Failed to cache user profile:", error);
+            }
+          }
         } else {
           console.warn(
             "⚠️ Ignoring incomplete user profile from API (to avoid stale default)"

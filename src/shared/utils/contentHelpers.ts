@@ -5,49 +5,56 @@
 
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
 import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
+import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
 import { ContentType, MediaItem } from "../types";
 
 /**
  * Transform API response to MediaItem format
+ * Enriches content with cached user data (fullname and avatar) if backend doesn't populate them
  */
 export const transformApiResponseToMediaItem = (item: any): MediaItem => {
   if (!item) {
     throw new Error("Cannot transform null or undefined item");
   }
 
+  // Enrich content with cached user data (fullname and avatar)
+  const enrichedItem = enrichContentWithUserData(item);
+
   return {
-    _id: item._id || item.id,
-    contentType: item.contentType || "media",
-    fileUrl: item.fileUrl || item.file || item.url || "",
-    title: item.title || "Untitled",
-    speaker: item.speaker || item.author?.firstName || item.uploadedBy?.firstName,
+    _id: enrichedItem._id || enrichedItem.id,
+    contentType: enrichedItem.contentType || "media",
+    fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
+    title: enrichedItem.title || "Untitled",
+    speaker: enrichedItem.speaker || enrichedItem.author?.firstName || enrichedItem.uploadedBy?.firstName,
     // Preserve the full uploadedBy object if it exists, otherwise keep as string
-    uploadedBy: item.uploadedBy || undefined,
-    description: item.description || item.title || "",
-    speakerAvatar: item.speakerAvatar || item.author?.avatar || item.uploadedBy?.avatar,
-    views: item.views || item.viewCount || item.totalViews || 0,
-    sheared: item.sheared || item.shares || item.shareCount || item.totalShares || 0,
-    saved: item.saved || item.saves || 0,
-    comment: item.comment || item.comments || item.commentCount || 0,
-    favorite: item.favorite || item.likes || item.likeCount || item.totalLikes || 0,
-    imageUrl: item.imageUrl || item.thumbnailUrl || item.fileUrl,
-    thumbnailUrl: item.thumbnailUrl || item.imageUrl,
-    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
-    duration: item.duration,
+    uploadedBy: typeof enrichedItem.uploadedBy === "object" 
+      ? enrichedItem.uploadedBy._id || enrichedItem.uploadedBy 
+      : enrichedItem.uploadedBy,
+    description: enrichedItem.description || enrichedItem.title || "",
+    speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar,
+    views: enrichedItem.views || enrichedItem.viewCount || enrichedItem.totalViews || 0,
+    sheared: enrichedItem.sheared || enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
+    saved: enrichedItem.saved || enrichedItem.saves || 0,
+    comment: enrichedItem.comment || enrichedItem.comments || enrichedItem.commentCount || 0,
+    favorite: enrichedItem.favorite || enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
+    imageUrl: enrichedItem.imageUrl || enrichedItem.thumbnailUrl || enrichedItem.fileUrl,
+    thumbnailUrl: enrichedItem.thumbnailUrl || enrichedItem.imageUrl,
+    createdAt: enrichedItem.createdAt || enrichedItem.created_at || new Date().toISOString(),
+    duration: enrichedItem.duration,
     // Additional fields
-    likes: item.likes || item.likeCount || item.totalLikes || 0,
-    shares: item.shares || item.shareCount || item.totalShares || 0,
-    saves: item.saves || 0,
-    comments: item.comments || item.commentCount || 0,
-    authorInfo: item.authorInfo || item.author,
-    author: item.author || item.authorInfo,
-    viewCount: item.viewCount || item.totalViews || item.views || 0,
-    totalViews: item.totalViews || item.viewCount || item.views || 0,
-    shareCount: item.shareCount || item.totalShares || item.shares || 0,
-    totalShares: item.totalShares || item.shareCount || item.shares || 0,
-    likeCount: item.likeCount || item.totalLikes || item.likes || 0,
-    totalLikes: item.totalLikes || item.likeCount || item.likes || 0,
-    commentCount: item.commentCount || item.comments || 0,
+    likes: enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
+    shares: enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
+    saves: enrichedItem.saves || 0,
+    comments: enrichedItem.comments || enrichedItem.commentCount || 0,
+    authorInfo: enrichedItem.authorInfo || enrichedItem.author,
+    author: enrichedItem.author || enrichedItem.authorInfo,
+    viewCount: enrichedItem.viewCount || enrichedItem.totalViews || enrichedItem.views || 0,
+    totalViews: enrichedItem.totalViews || enrichedItem.viewCount || enrichedItem.views || 0,
+    shareCount: enrichedItem.shareCount || enrichedItem.totalShares || enrichedItem.shares || 0,
+    totalShares: enrichedItem.totalShares || enrichedItem.shareCount || enrichedItem.shares || 0,
+    likeCount: enrichedItem.likeCount || enrichedItem.totalLikes || enrichedItem.likes || 0,
+    totalLikes: enrichedItem.totalLikes || enrichedItem.likeCount || enrichedItem.likes || 0,
+    commentCount: enrichedItem.commentCount || enrichedItem.comments || 0,
   };
 };
 

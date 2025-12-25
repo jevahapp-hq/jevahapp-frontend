@@ -45,26 +45,58 @@ export const useDownloadHandler = () => {
       }
 
       console.log(`📥 Starting download for: ${item.title} (${item.id})`);
+      console.log(`📥 Download item details:`, {
+        id: item.id,
+        contentType: item.contentType,
+        fileSize: item.fileSize,
+        fileUrl: item.fileUrl,
+      });
 
       // Step 1: Initiate download with backend (get downloadUrl)
+      console.log(`📥 Calling backend to initiate download...`);
       const initiateResult = await downloadAPI.initiateDownload(
         item.id,
         item.fileSize
       );
+      console.log(`📥 Backend response:`, {
+        success: initiateResult.success,
+        hasDownloadUrl: !!initiateResult.downloadUrl,
+        error: initiateResult.error,
+      });
 
       if (!initiateResult.success || !initiateResult.downloadUrl) {
         const errorMsg = initiateResult.error || "Failed to get download URL";
         console.error("❌ Failed to initiate download:", errorMsg);
         
-        // Handle specific backend error message gracefully
-        if (errorMsg.includes("Invalid interaction type download")) {
-          const friendlyMsg = "This content cannot be downloaded at this time";
-          Alert.alert("Download Unavailable", friendlyMsg);
-          return { success: false, message: friendlyMsg };
+        // Handle specific backend error codes gracefully
+        let friendlyMsg = errorMsg;
+        let alertTitle = "Download Failed";
+        
+        if (errorMsg.includes("DOWNLOAD_NOT_ALLOWED") || errorMsg.includes("not available for download")) {
+          friendlyMsg = "This content is not available for download";
+          alertTitle = "Download Unavailable";
+        } else if (errorMsg.includes("MEDIA_NOT_FOUND") || errorMsg.includes("Media not found")) {
+          friendlyMsg = "Content not found";
+          alertTitle = "Not Found";
+        } else if (errorMsg.includes("UNAUTHORIZED") || errorMsg.includes("401") || errorMsg.includes("Authentication required")) {
+          friendlyMsg = "Please log in to download content";
+          alertTitle = "Authentication Required";
+        } else if (errorMsg.includes("Invalid interaction type download")) {
+          friendlyMsg = "This content cannot be downloaded at this time";
+          alertTitle = "Download Unavailable";
+        } else if (errorMsg.includes("INVALID_MEDIA_ID")) {
+          friendlyMsg = "Invalid content ID";
+          alertTitle = "Invalid Request";
+        } else if (errorMsg.includes("Failed to record download") || errorMsg.includes("500") || errorMsg.includes("Internal Server Error")) {
+          friendlyMsg = "Server error occurred. Please try again later or contact support if the issue persists.";
+          alertTitle = "Server Error";
+        } else if (errorMsg.includes("500")) {
+          friendlyMsg = "A server error occurred. Please try again in a moment.";
+          alertTitle = "Server Error";
         }
         
-        Alert.alert("Download Failed", errorMsg);
-        return { success: false, message: errorMsg };
+        Alert.alert(alertTitle, friendlyMsg);
+        return { success: false, message: friendlyMsg };
       }
 
       console.log("✅ Got download URL from backend");
@@ -80,18 +112,18 @@ export const useDownloadHandler = () => {
         thumbnailUrl: item.thumbnailUrl,
         duration: item.duration,
         size: item.size || String(initiateResult.fileSize || 0),
+      }, 'DOWNLOADING');
+
+      // Step 2b: Update backend status to downloading (non-blocking)
+      downloadAPI.updateDownloadStatus(item.id, {
+        downloadStatus: "downloading",
+        downloadProgress: 0,
+      }).catch((err) => {
+        console.warn("Failed to update initial download status (non-critical):", err);
       });
 
-      // Update status to downloading (if item exists in store)
-      const store = useDownloadStore.getState();
-      if (store.downloadedItems.find(d => d.id === item.id)) {
-        await updateDownloadItem(item.id, {
-          status: 'DOWNLOADING',
-          localPath: undefined,
-        });
-      }
-
       // Step 3: Download actual file to app storage
+      console.log(`📥 Starting file download to local storage...`);
       const downloadResult = await fileDownloadManager.downloadFile(
         item.id,
         initiateResult.downloadUrl,
@@ -99,6 +131,11 @@ export const useDownloadHandler = () => {
         initiateResult.contentType,
         onProgress
       );
+      console.log(`📥 File download result:`, {
+        success: downloadResult.success,
+        hasLocalPath: !!downloadResult.localPath,
+        error: downloadResult.error,
+      });
 
       if (!downloadResult.success || !downloadResult.localPath) {
         const errorMsg = downloadResult.error || "File download failed";
@@ -119,7 +156,7 @@ export const useDownloadHandler = () => {
       console.log(`✅ File downloaded successfully: ${downloadResult.localPath}`);
 
       // Step 4: Update local store with local path
-      updateDownloadItem(item.id, {
+      await updateDownloadItem(item.id, {
         status: 'DOWNLOADED',
         localPath: downloadResult.localPath,
       });
@@ -177,6 +214,22 @@ export const useDownloadHandler = () => {
   };
 
   /**
+   * Get download status from backend
+   */
+  const getDownloadStatus = async (itemId: string) => {
+    try {
+      const result = await downloadAPI.getDownloadStatus(itemId);
+      if (result.success && result.data) {
+        return result.data;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error getting download status:", error);
+      return null;
+    }
+  };
+
+  /**
    * Delete downloaded file
    */
   const deleteDownload = async (itemId: string): Promise<boolean> => {
@@ -208,6 +261,7 @@ export const useDownloadHandler = () => {
     checkIfDownloaded,
     getLocalPath,
     deleteDownload,
+    getDownloadStatus,
   };
 };
 

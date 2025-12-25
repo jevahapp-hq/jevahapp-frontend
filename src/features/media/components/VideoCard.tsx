@@ -64,6 +64,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
   const progress = progresses[key] || 0;
   
+  // View tracking state (thresholds: 3s or 25%, or completion) - declared early for use in useEffect
+  const [hasTrackedView, setHasTrackedView] = useState(false);
+  
   // Get duration from backend metadata (in seconds) as fallback
   const backendDurationSeconds = (video as any)?.duration;
   const backendDurationMs = backendDurationSeconds && Number.isFinite(backendDurationSeconds) && backendDurationSeconds > 0
@@ -751,8 +754,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       : fallbackViewCount;
   useHydrateContentStats(contentId, "media");
 
-  // View tracking state (thresholds: 3s or 25%, or completion)
-  const [hasTrackedView, setHasTrackedView] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const storeRef = useRef<any>(null);
   useEffect(() => {
@@ -810,15 +811,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               }}
               contentFit="cover"
               nativeControls={false}
-              fullscreenOptions={{ enterFullscreenButton: false }}
-              onLoadStart={() => {
-                console.log(`🔄 Video loading started: ${video.title}`, {
-                  key,
-                  shouldPlay: isPlaying,
-                  videoUrl: getBestVideoUrl(video.fileUrl),
-                });
-                setVideoLoaded(false);
-              }}
+              fullscreenOptions={{ enable: false }}
             />
           ) : (
             /* Thumbnail for audio sermons or fallback */
@@ -962,8 +955,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       </TouchableWithoutFeedback>
 
       {/* Footer with User Info and compact left-aligned stats/actions - matching MusicCard */}
-      <View className="flex-row items-center justify-between mt-2 px-2">
-        <View className="flex flex-row items-center">
+      <View 
+        className="flex-row items-center justify-between mt-2 px-2"
+        style={{ zIndex: 100 }}
+        pointerEvents="box-none"
+      >
+        <View className="flex flex-row items-center" pointerEvents="box-none">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
             {/* Avatar with initial fallback */}
             <AvatarWithInitialFallback
@@ -1016,15 +1013,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             />
           </View>
         </View>
-        <ThreeDotsMenuButton
-          onPress={() => {
-            openModal();
-            // Also update parent if callback exists
-            if (onModalToggle) {
-              onModalToggle(modalKey);
-            }
-          }}
-        />
+        <View style={{ zIndex: 1001 }}>
+          <ThreeDotsMenuButton
+            onPress={() => {
+              openModal();
+              // Also update parent if callback exists
+              if (onModalToggle) {
+                onModalToggle(modalKey);
+              }
+            }}
+          />
+        </View>
       </View>
 
       {/* Slide-up Content Action Modal */}

@@ -21,7 +21,7 @@ interface DownloadStore {
   downloadedItems: DownloadItem[];
   isLoaded: boolean;
   
-  addToDownloads: (item: Omit<DownloadItem, 'downloadedAt' | 'status'>) => Promise<void>;
+  addToDownloads: (item: Omit<DownloadItem, 'downloadedAt' | 'status'>, status?: 'DOWNLOADED' | 'DOWNLOADING' | 'FAILED') => Promise<void>;
   updateDownloadItem: (itemId: string, updates: Partial<DownloadItem>) => Promise<void>;
   removeFromDownloads: (itemId: string) => Promise<void>;
   isItemDownloaded: (itemId: string) => boolean;
@@ -37,13 +37,17 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
   downloadedItems: [],
   isLoaded: false,
 
-  addToDownloads: async (item: Omit<DownloadItem, 'downloadedAt' | 'status'>) => {
+  addToDownloads: async (item: Omit<DownloadItem, 'downloadedAt' | 'status'>, status: 'DOWNLOADED' | 'DOWNLOADING' | 'FAILED' = 'DOWNLOADING') => {
     const { downloadedItems } = get();
     
     // Check if item already exists
     const existingItem = downloadedItems.find(downloaded => downloaded.id === item.id);
     if (existingItem) {
-      console.log(`📥 Item already downloaded: ${item.title}`);
+      console.log(`📥 Item already in downloads: ${item.title}`);
+      // Update existing item if status is different
+      if (existingItem.status !== status) {
+        await get().updateDownloadItem(item.id, { status });
+      }
       return;
     }
 
@@ -51,7 +55,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     const downloadItem: DownloadItem = {
       ...item,
       downloadedAt: new Date().toISOString(),
-      status: 'DOWNLOADED'
+      status: status
     };
 
     const updatedItems = [downloadItem, ...downloadedItems];
@@ -59,7 +63,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
       set({ downloadedItems: updatedItems });
-      console.log(`✅ Added to downloads: ${item.title} (${item.contentType})`);
+      console.log(`✅ Added to downloads: ${item.title} (${item.contentType}) - Status: ${status}`);
     } catch (error) {
       console.error("❌ Failed to save item to downloads:", error);
     }

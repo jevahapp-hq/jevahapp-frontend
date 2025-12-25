@@ -145,10 +145,19 @@ class FileDownloadManager {
             });
           }
 
-          // Update backend progress (throttle to every 10%)
-          if (Math.floor(progress) % 10 === 0) {
+          // Update backend progress (throttle to every 10% or at completion)
+          const progressFloor = Math.floor(progress);
+          const lastUpdate = this.lastProgressUpdate.get(mediaId) || -1;
+          
+          // Update every 10% or at 100%
+          if ((progressFloor % 10 === 0 && progressFloor !== lastUpdate) || progress === 100) {
+            this.lastProgressUpdate.set(mediaId, progressFloor);
+            
+            // Non-blocking status update (don't await)
             downloadAPI.updateDownloadStatus(mediaId, {
-              downloadProgress: Math.floor(progress),
+              downloadProgress: progressFloor,
+            }).catch((err) => {
+              console.warn("Failed to update download progress (non-critical):", err);
             });
           }
         }
@@ -164,8 +173,9 @@ class FileDownloadManager {
         throw new Error("Download returned no result");
       }
 
-      // Remove from active downloads
+      // Remove from active downloads and progress tracking
       this.activeDownloads.delete(mediaId);
+      this.lastProgressUpdate.delete(mediaId);
 
       // Verify file exists
       const fileInfo = await FileSystem.getInfoAsync(result.uri);
@@ -190,8 +200,9 @@ class FileDownloadManager {
     } catch (error) {
       console.error(`❌ Download failed for ${mediaId}:`, error);
 
-      // Remove from active downloads
+      // Remove from active downloads and progress tracking
       this.activeDownloads.delete(mediaId);
+      this.lastProgressUpdate.delete(mediaId);
 
       // Update backend: status = failed
       await downloadAPI.updateDownloadStatus(mediaId, {
