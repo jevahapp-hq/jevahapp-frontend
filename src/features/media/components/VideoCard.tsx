@@ -7,6 +7,7 @@ import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import { VideoCardSkeleton } from "../../../shared/components";
+import { AvatarWithInitialFallback } from "../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
@@ -750,9 +751,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       : fallbackViewCount;
   useHydrateContentStats(contentId, "media");
 
-  // View tracking state (thresholds: 3s or 25%, or completion) & avatar fallback initial
+  // View tracking state (thresholds: 3s or 25%, or completion)
   const [hasTrackedView, setHasTrackedView] = useState(false);
-  const [avatarErrored, setAvatarErrored] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const storeRef = useRef<any>(null);
   useEffect(() => {
@@ -781,14 +781,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     typeof thumbnailSource === "string"
       ? thumbnailSource
       : (thumbnailSource as any)?.uri;
-
-  let displayNameSafe: string = "Unknown";
-  try {
-    const maybe = getUserDisplayNameFromContent(video as any);
-    displayNameSafe =
-      typeof maybe === "string" && maybe.trim().length > 0 ? maybe : "Unknown";
-  } catch {}
-  const firstInitial = (displayNameSafe || "?").trim().charAt(0).toUpperCase();
 
   return (
     <View
@@ -974,18 +966,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         <View className="flex flex-row items-center">
           <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
             {/* Avatar with initial fallback */}
-            {!avatarErrored ? (
-              <Image
-                source={getUserAvatarFromContent(video)}
-                style={{ width: 30, height: 30, borderRadius: 999 }}
-                resizeMode="cover"
-                onError={() => setAvatarErrored(true)}
-              />
-            ) : (
-              <Text className="text-[14px] font-semibold text-[#344054]">
-                {firstInitial}
-              </Text>
-            )}
+            <AvatarWithInitialFallback
+              imageSource={getUserAvatarFromContent(video) as any}
+              name={getUserDisplayNameFromContent(video)}
+              size={30}
+              fontSize={14}
+              backgroundColor="transparent"
+              textColor="#344054"
+            />
           </View>
           <View className="ml-3">
             <View className="flex-row items-center">

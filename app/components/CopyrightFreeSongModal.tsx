@@ -1,14 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     Image,
+    ImageBackground,
     InteractionManager,
     Modal,
     PanResponder,
+    Platform,
     ScrollView,
+    StatusBar,
     Text,
     TextInput,
     TouchableOpacity,
@@ -23,18 +28,12 @@ import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
 import { UI_CONFIG } from "../../src/shared/constants";
 import copyrightFreeMusicAPI from "../services/copyrightFreeMusicAPI";
 import SocketManager from "../services/SocketManager";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import { useLibraryStore } from "../store/useLibraryStore";
 import { usePlaylistStore, type Playlist } from "../store/usePlaylistStore";
 import { getApiBaseUrl } from "../utils/api";
-import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import { playlistAPI } from "../utils/playlistAPI";
 import TokenUtils from "../utils/tokenUtils";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const PLAYER_MODAL_HEIGHT = SCREEN_HEIGHT * 0.9;
-// Keep player compact so the songs list is always clearly visible.
-const ARTWORK_SIZE = 130;
 
 interface CopyrightFreeSongModalProps {
   visible: boolean;
@@ -50,8 +49,6 @@ interface CopyrightFreeSongModalProps {
   onToggleMute?: () => void;
   onSeek?: (progress: number) => void;
   formatTime?: (ms: number) => string;
-  initialAction?: "options" | "playlist" | null;
-  variant?: "player" | "options";
 }
 
 export default function CopyrightFreeSongModal({
@@ -73,8 +70,6 @@ export default function CopyrightFreeSongModal({
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   },
-  initialAction = null,
-  variant = "player",
 }: CopyrightFreeSongModalProps) {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
@@ -90,13 +85,8 @@ export default function CopyrightFreeSongModal({
   
   // Options modal state
   const [showOptionsModal, setShowOptionsModal] = useState(false);
-
-  // Save to library helper
-  const libraryStore = useLibraryStore();
-  const { handleDownload, checkIfDownloaded } = useDownloadHandler();
-
-  // Global queue for "Up next"
-  const { queue, currentIndex, playAtIndex } = useGlobalAudioPlayerStore();
+  const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
+  const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
   
   // Like and Views state
   const [isLiked, setIsLiked] = useState(song?.isLiked || false);
@@ -486,42 +476,100 @@ export default function CopyrightFreeSongModal({
 
   const handleOptionsPress = useCallback(() => {
     if (!song) return;
+    setOptionsSongData(null); // Reset to force fresh fetch
     setShowOptionsModal(true);
   }, [song]);
 
-  const handleOpenAddToPlaylist = useCallback(async () => {
-    try {
-      // Ensure we have fresh playlists before deciding what to show
-      await loadPlaylistsFromBackend();
-      // Always open the playlist picker; if there are no playlists,
-      // it will show the same "Create Playlist" card UI as the Library tab.
-      setShowPlaylistModal(true);
-    } catch (e) {
-      Alert.alert("Error", "Could not load playlists");
-    }
-  }, [loadPlaylistsFromBackend]);
+  // Transform backend song format to frontend format
+  const transformBackendSong = useCallback((backendSong: any): any => {
+    const id = backendSong.id ?? backendSong._id ?? "";
+    const audioUrl = backendSong.audioUrl ?? backendSong.fileUrl ?? "";
+    const views = backendSong.views ?? backendSong.viewCount ?? 0;
+    const likes = backendSong.likes ?? backendSong.likeCount ?? 0;
+    const artist = backendSong.artist ?? backendSong.singer ?? "";
 
-  // When opening from a context action, optionally jump straight to options/playlist
-  const didApplyInitialActionRef = useRef(false);
+    return {
+      id,
+      title: backendSong.title,
+      artist,
+      year: backendSong.year,
+      audioUrl,
+      thumbnailUrl: backendSong.thumbnailUrl,
+      category: backendSong.category,
+      duration: backendSong.duration,
+      contentType: backendSong.contentType,
+      description: backendSong.description,
+      speaker: backendSong.speaker ?? artist,
+      uploadedBy: backendSong.uploadedBy,
+      createdAt: backendSong.createdAt,
+      views,
+      viewCount: views,
+      likes,
+      likeCount: likes,
+      isLiked: backendSong.isLiked ?? false,
+      isInLibrary: backendSong.isInLibrary ?? false,
+      isPublicDomain: backendSong.isPublicDomain ?? true,
+    };
+  }, []);
+
+  // Fetch latest song data when options modal opens
   useEffect(() => {
-    if (!visible || !song) return;
-    if (!initialAction) return;
-    if (didApplyInitialActionRef.current) return;
+    const fetchOptionsSongData = async () => {
+      if (!showOptionsModal || !song) {
+        return;
+      }
 
-    didApplyInitialActionRef.current = true;
-    if (initialAction === "options") {
-      setShowOptionsModal(true);
-    } else if (initialAction === "playlist") {
-      setShowPlaylistModal(true);
-    }
-  }, [visible, song, initialAction]);
+      const songId = song.id || song._id;
+      if (!songId) {
+        return;
+      }
 
-  useEffect(() => {
-    // Reset latch when modal closes so next open can apply initial action again
-    if (!visible) {
-      didApplyInitialActionRef.current = false;
-    }
-  }, [visible]);
+      setLoadingOptionsSong(true);
+      try {
+        if (__DEV__) {
+          console.log(`🔍 Fetching latest song data for options modal:`, { songId, songTitle: song?.title });
+        }
+        const response = await copyrightFreeMusicAPI.getSongById(songId);
+        if (__DEV__) {
+          console.log(`📥 Song data API response:`, {
+            success: response.success,
+            viewCount: response.data?.viewCount || response.data?.views,
+            likeCount: response.data?.likeCount || response.data?.likes,
+          });
+        }
+        
+        if (response.success && response.data) {
+          const transformedSong = transformBackendSong(response.data);
+          setOptionsSongData(transformedSong);
+          
+          // Update the view count in the main state
+          const newViewCount = transformedSong.views || transformedSong.viewCount || 0;
+          setViewCount(newViewCount);
+          if (__DEV__) {
+            console.log(`✅ Updated view count from backend:`, {
+              oldCount: viewCount,
+              newCount: newViewCount,
+              songTitle: song?.title,
+            });
+          }
+        } else {
+          if (__DEV__) {
+            console.warn(`⚠️ Song data fetch unsuccessful:`, response);
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.error("❌ Failed to fetch song data for options modal:", error);
+        }
+        // Fallback to using the existing song data
+        setOptionsSongData(song);
+      } finally {
+        setLoadingOptionsSong(false);
+      }
+    };
+
+    fetchOptionsSongData();
+  }, [showOptionsModal, song, transformBackendSong, viewCount]);
 
   // Optimized close handler for playlist modal
   const handleClosePlaylistModal = useCallback(() => {
@@ -748,292 +796,21 @@ export default function CopyrightFreeSongModal({
     [onSeek, audioDuration, audioPosition, song]
   );
 
+  // Memoize image source for performance
+  const imageSource = useMemo(() => {
+    if (!song?.thumbnailUrl) return null;
+    return typeof song.thumbnailUrl === "string"
+      ? { uri: song.thumbnailUrl }
+      : song.thumbnailUrl;
+  }, [song?.thumbnailUrl]);
+
+  // Memoize album art dimensions for performance
+  const albumArtSize = useMemo(() => {
+    const screenWidth = Dimensions.get("window").width;
+    return Math.min(screenWidth * 0.75, 340); // Max 340px, 75% of screen width
+  }, []);
+
   if (!song) return null;
-
-  // Options-only variant: show a simple bottom sheet with Save + Favourite
-  // (used by the 3-dot menu on the Music category list)
-  if (variant === "options") {
-    return (
-      <Modal
-        visible={visible}
-        transparent
-        animationType="slide"
-        onRequestClose={onClose}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={onClose}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={() => {}}
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 20,
-              paddingTop: 16,
-              paddingBottom: 28,
-            }}
-          >
-            {/* Handle bar */}
-            <View
-              style={{
-                alignSelf: "center",
-                width: 40,
-                height: 4,
-                borderRadius: 999,
-                backgroundColor: "#E5E7EB",
-                marginBottom: 16,
-              }}
-            />
-
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: "#111827",
-                marginBottom: 4,
-                fontFamily: "Rubik-SemiBold",
-              }}
-              numberOfLines={1}
-            >
-              {song.title}
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                color: "#6B7280",
-                marginBottom: 12,
-                fontFamily: "Rubik",
-              }}
-              numberOfLines={1}
-            >
-              {song.artist}
-            </Text>
-
-            {/* Option: Save to library */}
-            <TouchableOpacity
-              onPress={async () => {
-                try {
-                  const songId = song?._id || song?.id;
-                  if (!songId) return;
-
-                  const alreadySaved = libraryStore.isItemSaved(String(songId));
-                  if (alreadySaved) {
-                    await libraryStore.removeFromLibrary(String(songId));
-                    Alert.alert("Removed", "Removed from your library");
-                  } else {
-                    await libraryStore.addToLibrary({
-                      id: String(songId),
-                      contentType: "music",
-                      fileUrl: String(song.audioUrl || song.fileUrl || ""),
-                      title: String(song.title || "Untitled"),
-                      speaker: String(song.artist || song.speaker || ""),
-                      uploadedBy: String(song.uploadedBy || ""),
-                      description: String(song.description || ""),
-                      createdAt: String(song.createdAt || new Date().toISOString()),
-                      thumbnailUrl:
-                        typeof song.thumbnailUrl === "string"
-                          ? song.thumbnailUrl
-                          : undefined,
-                      imageUrl:
-                        typeof song.thumbnailUrl === "string"
-                          ? song.thumbnailUrl
-                          : song.thumbnailUrl,
-                      views: song.views ?? song.viewCount,
-                      saved: 1,
-                    } as any);
-                    Alert.alert("Saved", "Saved to your library");
-                  }
-
-                  onClose();
-                } catch (e) {
-                  Alert.alert("Error", "Could not update library");
-                }
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-              }}
-              activeOpacity={0.7}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#ECFDF5",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="bookmark" size={18} color="#256E63" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: "#111827",
-                  fontWeight: "500",
-                  fontFamily: "Rubik-Medium",
-                }}
-              >
-                {libraryStore.isItemSaved(String(song?._id || song?.id))
-                  ? "Remove from library"
-                  : "Save to library"}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Option: Add to playlist */}
-            <TouchableOpacity
-              onPress={async () => {
-                await handleOpenAddToPlaylist();
-                onClose();
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-              }}
-              activeOpacity={0.7}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#EEF2FF",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="list" size={18} color="#4F46E5" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: "#111827",
-                  fontWeight: "500",
-                  fontFamily: "Rubik-Medium",
-                }}
-              >
-                Add to playlist
-              </Text>
-            </TouchableOpacity>
-
-            {/* Option: Add to favourite */}
-            <TouchableOpacity
-              onPress={async () => {
-                await handleToggleLike();
-                onClose();
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-              }}
-              activeOpacity={0.7}
-              disabled={isTogglingLike}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#FEF2F2",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons
-                  name={isLiked ? "heart" : "heart-outline"}
-                  size={18}
-                  color="#EF4444"
-                />
-              </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: "#111827",
-                  fontWeight: "500",
-                  fontFamily: "Rubik-Medium",
-                  opacity: isTogglingLike ? 0.6 : 1,
-                }}
-              >
-                {isLiked ? "Remove from favourite" : "Add to favourite"}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Option: Download */}
-            <TouchableOpacity
-              onPress={async () => {
-                const songId = song?._id || song?.id;
-                if (!songId) return;
-                if (checkIfDownloaded(String(songId))) {
-                  Alert.alert("Downloaded", "This song is already downloaded");
-                  return;
-                }
-
-                const downloadableItem = convertToDownloadableItem(
-                  {
-                    ...song,
-                    id: songId,
-                    fileUrl: song.audioUrl || song.fileUrl,
-                    thumbnailUrl: song.thumbnailUrl,
-                    author: song.artist,
-                  },
-                  "audio"
-                );
-                const result = await handleDownload(downloadableItem);
-                if (result.success) {
-                  onClose();
-                }
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-              }}
-              activeOpacity={0.7}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#FFF7ED",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="download-outline" size={18} color="#FEA74E" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: "#111827",
-                  fontWeight: "500",
-                  fontFamily: "Rubik-Medium",
-                }}
-              >
-                Download
-              </Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-    );
-  }
 
   return (
     <>
@@ -1042,141 +819,172 @@ export default function CopyrightFreeSongModal({
         transparent
         animationType="none"
         onRequestClose={onClose}
+        statusBarTranslucent
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
+        <StatusBar barStyle="light-content" />
+        {/* Full-screen background with blurred album art */}
+        <View style={{ flex: 1 }}>
+          {imageSource && (
+            <>
+              {/* Blurred background image */}
+              <ImageBackground
+                source={imageSource}
+                style={{
+                  position: "absolute",
+                  top: -100,
+                  left: -100,
+                  right: -100,
+                  bottom: -100,
+                  width: "150%",
+                  height: "150%",
+                }}
+                resizeMode="cover"
+                blurRadius={Platform.OS === "ios" ? 80 : 50}
+              >
+                {/* Dark overlay for better text readability */}
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: "rgba(0, 0, 0, 0.75)",
+                  }}
+                />
+              </ImageBackground>
+              {/* Additional gradient overlay for depth */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0.4)", "rgba(0,0,0,0.8)", "rgba(0,0,0,0.95)"]}
+                locations={[0, 0.5, 1]}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                }}
+              />
+            </>
+          )}
+          
+          {/* Content Container */}
           <Animated.View
             style={[
               {
-                backgroundColor: UI_CONFIG.COLORS.BACKGROUND,
-                borderRadius: 32,
-                width: "92%",
-                height: PLAYER_MODAL_HEIGHT,
-                paddingTop: UI_CONFIG.SPACING.MD,
-                paddingBottom: UI_CONFIG.SPACING.XL,
+                flex: 1,
+                paddingTop: Platform.OS === "ios" ? 50 : 40,
+                paddingBottom: Platform.OS === "ios" ? 40 : 30,
               },
               modalAnimatedStyle,
             ]}
           >
-            {/* Header - Now Playing style */}
+            {/* Header - Minimal with close and options */}
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
                 paddingHorizontal: UI_CONFIG.SPACING.LG,
-                paddingVertical: UI_CONFIG.SPACING.SM,
+                paddingVertical: UI_CONFIG.SPACING.MD,
+                zIndex: 10,
               }}
             >
               <TouchableOpacity
                 onPress={onClose}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   justifyContent: "center",
                   alignItems: "center",
-                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
                 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons
                   name="chevron-down"
-                  size={20}
-                  color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                  size={24}
+                  color="#FFFFFF"
                 />
               </TouchableOpacity>
-
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-                  fontFamily: "Rubik-SemiBold",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                }}
-              >
-                Now Playing
-              </Text>
 
               <TouchableOpacity
                 onPress={handleOptionsPress}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   justifyContent: "center",
                   alignItems: "center",
-                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
                 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons
-                  name="ellipsis-vertical"
-                  size={18}
-                  color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                  name="ellipsis-horizontal"
+                  size={22}
+                  color="#FFFFFF"
                 />
               </TouchableOpacity>
             </View>
 
-            <View
-              style={{
-                flex: 1,
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                flexGrow: 1,
                 paddingHorizontal: UI_CONFIG.SPACING.LG,
-                paddingTop: UI_CONFIG.SPACING.MD,
+                paddingTop: UI_CONFIG.SPACING.XL,
+                paddingBottom: UI_CONFIG.SPACING.XL,
               }}
             >
-              {/* Fixed (non-scroll) player section */}
-              <View
-                style={{
-                  flex: 54,
-                  minHeight: 0,
-                  justifyContent: "space-between",
-                  paddingBottom: UI_CONFIG.SPACING.MD,
-                }}
-              >
-                <View style={{ flexShrink: 0 }}>
-              {/* Artwork */}
+              {/* Large Album Artwork - Centered */}
               <View
                 style={{
                   alignItems: "center",
-                  marginBottom: UI_CONFIG.SPACING.SM,
+                  marginBottom: UI_CONFIG.SPACING.XL,
+                  marginTop: UI_CONFIG.SPACING.LG,
                 }}
               >
-                {/** Support both backend URL strings and local require() thumbnails */}
-                {song?.thumbnailUrl && (
-                  <Image
-                    source={
-                      typeof song.thumbnailUrl === "string"
-                        ? { uri: song.thumbnailUrl }
-                        : song.thumbnailUrl
-                    }
+                {imageSource && (
+                  <View
                     style={{
-                      width: ARTWORK_SIZE,
-                      height: ARTWORK_SIZE,
+                      width: albumArtSize,
+                      height: albumArtSize,
                       borderRadius: 24,
+                      overflow: "hidden",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 20 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 30,
+                      elevation: 20,
                     }}
-                    resizeMode="cover"
-                  />
+                  >
+                    <Image
+                      source={imageSource}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      resizeMode="cover"
+                    />
+                  </View>
                 )}
               </View>
 
-              {/* Song Info */}
+              {/* Song Info - Modern Style */}
               <View
                 style={{
                   alignItems: "center",
-                  marginBottom: 6,
+                  marginBottom: UI_CONFIG.SPACING.XL,
                 }}
               >
                 <Text
                   style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XL,
+                    fontSize: 26,
                     fontFamily: "Rubik-SemiBold",
-                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                    marginBottom: 4,
+                    color: "#FFFFFF",
+                    marginBottom: 8,
                     textAlign: "center",
+                    textShadowColor: "rgba(0, 0, 0, 0.5)",
+                    textShadowOffset: { width: 0, height: 2 },
+                    textShadowRadius: 4,
                   }}
                   numberOfLines={2}
                 >
@@ -1184,41 +992,31 @@ export default function CopyrightFreeSongModal({
                 </Text>
                 <Text
                   style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                    fontSize: 18,
                     fontFamily: "Rubik",
-                    color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                    marginBottom: 4,
+                    color: "rgba(255, 255, 255, 0.8)",
+                    marginBottom: 16,
                     textAlign: "center",
+                    textShadowColor: "rgba(0, 0, 0, 0.3)",
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 2,
                   }}
                   numberOfLines={1}
                 >
                   {song.artist}
                 </Text>
-                {song.category && (
-                  <Text
-                    style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                      marginBottom: 6,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {song.category}
-                  </Text>
-                )}
 
-                {/* Like and Views Icons */}
+                {/* Like and Views - Glassmorphic Pills */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: UI_CONFIG.SPACING.MD,
-                    marginTop: 4,
+                    marginTop: UI_CONFIG.SPACING.MD,
                   }}
                 >
-                  {/* Like Icon */}
+                  {/* Like Pill */}
                   <TouchableOpacity
                     onPress={handleToggleLike}
                     disabled={isTogglingLike}
@@ -1226,52 +1024,54 @@ export default function CopyrightFreeSongModal({
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      paddingHorizontal: UI_CONFIG.SPACING.SM,
-                      paddingVertical: 6,
-                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                      backgroundColor: isLiked 
-                        ? UI_CONFIG.COLORS.ERROR + "15" 
-                        : UI_CONFIG.COLORS.SURFACE,
+                      paddingHorizontal: UI_CONFIG.SPACING.LG,
+                      paddingVertical: UI_CONFIG.SPACING.SM,
+                      borderRadius: 20,
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255, 255, 255, 0.2)",
                     }}
                   >
                     <Ionicons
                       name={isLiked ? "heart" : "heart-outline"}
-                      size={20}
-                      color={isLiked ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY}
+                      size={18}
+                      color={isLiked ? "#FF6B6B" : "rgba(255, 255, 255, 0.9)"}
                     />
                     <Text
                       style={{
                         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
                         fontFamily: "Rubik-SemiBold",
-                        color: isLiked ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY,
+                        color: "#FFFFFF",
                       }}
                     >
                       {likeCount > 0 ? likeCount.toLocaleString() : "0"}
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Views Icon */}
+                  {/* Views Pill */}
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      paddingHorizontal: UI_CONFIG.SPACING.SM,
-                      paddingVertical: 6,
-                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                      paddingHorizontal: UI_CONFIG.SPACING.LG,
+                      paddingVertical: UI_CONFIG.SPACING.SM,
+                      borderRadius: 20,
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255, 255, 255, 0.2)",
                     }}
                   >
                     <Ionicons
                       name="eye-outline"
-                      size={20}
-                      color={UI_CONFIG.COLORS.TEXT_SECONDARY}
+                      size={18}
+                      color="rgba(255, 255, 255, 0.9)"
                     />
                     <Text
                       style={{
                         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
                         fontFamily: "Rubik-SemiBold",
-                        color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                        color: "#FFFFFF",
                       }}
                     >
                       {viewCount > 0 ? viewCount.toLocaleString() : "0"}
@@ -1280,80 +1080,22 @@ export default function CopyrightFreeSongModal({
                 </View>
               </View>
 
-              {/* Progress + controls */}
-              <View style={{ marginBottom: 6 }}>
-                {/* Progress bar with draggable thumb for easier scrubbing */}
-                <View
-                  ref={progressBarRef}
-                  style={{
-                    height: 20, // taller touch area for bigger fingers
-                    justifyContent: "center",
-                    marginBottom: 8,
-                  }}
-                  {...panResponder.panHandlers}
-                >
-                  {/* Track */}
-                  <View
-                    style={{
-                      height: 4,
-                      borderRadius: 999,
-                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: "100%",
-                        borderRadius: 999,
-                        width: `${
-                          (isSeeking ? seekProgress : audioProgress) * 100
-                        }%`,
-                        backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                      }}
-                    />
-                  </View>
-                  {/* Thumb/handle */}
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: "absolute",
-                      left: `${
-                        (isSeeking ? seekProgress : audioProgress) * 100
-                      }%`,
-                      transform: [{ translateX: -10 }],
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        backgroundColor: "#FFFFFF",
-                        borderWidth: 2,
-                        borderColor: UI_CONFIG.COLORS.SECONDARY,
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.25,
-                        shadowRadius: 3.5,
-                        elevation: 4,
-                      }}
-                    />
-                  </View>
-                </View>
-
-                {/* Time row */}
+              {/* Progress + controls - Modern Style */}
+              <View style={{ marginBottom: UI_CONFIG.SPACING.XL }}>
+                {/* Time row - Above progress bar */}
                 <View
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: 6,
+                    marginBottom: 12,
+                    paddingHorizontal: 4,
                   }}
                 >
                   <Text
                     style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      fontSize: 13,
+                      fontFamily: "Rubik-Medium",
+                      color: "rgba(255, 255, 255, 0.8)",
                     }}
                   >
                     {formatTime(
@@ -1364,113 +1106,189 @@ export default function CopyrightFreeSongModal({
                   </Text>
                   <Text
                     style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      fontSize: 13,
+                      fontFamily: "Rubik-Medium",
+                      color: "rgba(255, 255, 255, 0.8)",
                     }}
                   >
                     {formatTime(audioDuration || song.duration * 1000)}
                   </Text>
                 </View>
 
-                {/* Transport controls (with skip back/forward using seek) */}
+                {/* Progress bar with draggable thumb - Modern style */}
+                <View
+                  ref={progressBarRef}
+                  style={{
+                    height: 24, // Larger touch area
+                    justifyContent: "center",
+                    marginBottom: UI_CONFIG.SPACING.XL,
+                  }}
+                  {...panResponder.panHandlers}
+                >
+                  {/* Track */}
+                  <View
+                    style={{
+                      height: 5,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(255, 255, 255, 0.25)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#FEA74E", "#FF8C42"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        height: "100%",
+                        borderRadius: 999,
+                        width: `${
+                          (isSeeking ? seekProgress : audioProgress) * 100
+                        }%`,
+                      }}
+                    />
+                  </View>
+                  {/* Thumb/handle - Larger and more visible */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      left: `${
+                        (isSeeking ? seekProgress : audioProgress) * 100
+                      }%`,
+                      transform: [{ translateX: -12 }],
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: "#FFFFFF",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 6,
+                        elevation: 8,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Transport controls - Modern large buttons */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    paddingHorizontal: UI_CONFIG.SPACING.LG,
-                    marginTop: -6,
+                    paddingHorizontal: UI_CONFIG.SPACING.XL,
+                    marginBottom: UI_CONFIG.SPACING.LG,
                   }}
                 >
                   {/* Skip back 15 seconds */}
-                  <AnimatedButton
+                  <TouchableOpacity
                     onPress={() => handleSkip(-15)}
                     style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 18,
-                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
                       justifyContent: "center",
                       alignItems: "center",
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
                     }}
+                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name="play-skip-back"
-                      size={22}
-                      color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                      size={26}
+                      color="#FFFFFF"
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
 
-                  <AnimatedButton
+                  {/* Large Play/Pause Button */}
+                  <TouchableOpacity
                     onPress={onTogglePlay || (() => onPlay?.(song))}
+                    activeOpacity={0.8}
                     style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 28,
-                      backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green
+                      width: 80,
+                      height: 80,
+                      borderRadius: 40,
+                      backgroundColor: "#FFFFFF",
                       justifyContent: "center",
                       alignItems: "center",
-                      ...UI_CONFIG.SHADOWS.MD,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 16,
+                      elevation: 12,
                     }}
                   >
                     <Ionicons
                       name={isPlaying ? "pause" : "play"}
-                      size={28}
-                      color="#FFFFFF"
+                      size={36}
+                      color="#256E63"
+                      style={{ marginLeft: isPlaying ? 0 : 3 }}
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
 
                   {/* Skip forward 15 seconds */}
-                  <AnimatedButton
+                  <TouchableOpacity
                     onPress={() => handleSkip(15)}
                     style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 18,
-                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
                       justifyContent: "center",
                       alignItems: "center",
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
                     }}
+                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name="play-skip-forward"
-                      size={22}
-                      color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                      size={26}
+                      color="#FFFFFF"
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Repeat and Shuffle controls */}
+                {/* Repeat and Shuffle controls - Modern style */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: UI_CONFIG.SPACING.XL,
-                    marginTop: UI_CONFIG.SPACING.MD,
+                    gap: UI_CONFIG.SPACING.XXL,
+                    marginBottom: UI_CONFIG.SPACING.XL,
                   }}
                 >
                   {/* Shuffle button */}
-                  <AnimatedButton
+                  <TouchableOpacity
                     onPress={() => setIsShuffled(!isShuffled)}
                     style={{
-                      padding: UI_CONFIG.SPACING.XS,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: isShuffled
+                        ? "rgba(255, 255, 255, 0.25)"
+                        : "rgba(255, 255, 255, 0.15)",
+                      borderWidth: isShuffled ? 1.5 : 1,
+                      borderColor: isShuffled
+                        ? "#FFFFFF"
+                        : "rgba(255, 255, 255, 0.3)",
                     }}
+                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name="shuffle"
                       size={22}
-                      color={
-                        isShuffled
-                          ? UI_CONFIG.COLORS.PRIMARY
-                          : UI_CONFIG.COLORS.TEXT_SECONDARY
-                      }
+                      color={isShuffled ? "#FFFFFF" : "rgba(255, 255, 255, 0.8)"}
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
 
                   {/* Repeat button */}
-                  <AnimatedButton
+                  <TouchableOpacity
                     onPress={() => {
                       // Cycle through: none -> all -> one -> none
                       if (repeatMode === "none") {
@@ -1482,190 +1300,120 @@ export default function CopyrightFreeSongModal({
                       }
                     }}
                     style={{
-                      padding: UI_CONFIG.SPACING.XS,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor:
+                        repeatMode !== "none"
+                          ? "rgba(255, 255, 255, 0.25)"
+                          : "rgba(255, 255, 255, 0.15)",
+                      borderWidth: repeatMode !== "none" ? 1.5 : 1,
+                      borderColor:
+                        repeatMode !== "none"
+                          ? "#FFFFFF"
+                          : "rgba(255, 255, 255, 0.3)",
                       position: "relative",
                     }}
+                    activeOpacity={0.7}
                   >
-                    <View style={{ position: "relative" }}>
-                      <Ionicons
-                        name={
-                          repeatMode === "one"
-                            ? "repeat"
-                            : repeatMode === "all"
-                            ? "repeat"
-                            : "repeat-outline"
-                        }
-                        size={22}
-                        color={
-                          repeatMode !== "none"
-                            ? UI_CONFIG.COLORS.PRIMARY
-                            : UI_CONFIG.COLORS.TEXT_SECONDARY
-                        }
+                    <Ionicons
+                      name={
+                        repeatMode === "one"
+                          ? "repeat"
+                          : repeatMode === "all"
+                          ? "repeat"
+                          : "repeat-outline"
+                      }
+                      size={22}
+                      color={
+                        repeatMode !== "none"
+                          ? "#FFFFFF"
+                          : "rgba(255, 255, 255, 0.8)"
+                      }
+                    />
+                    {repeatMode === "one" && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          right: 4,
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: "#FEA74E",
+                          borderWidth: 2,
+                          borderColor: "#FFFFFF",
+                        }}
                       />
-                      {repeatMode === "one" && (
-                        <View
-                          style={{
-                            position: "absolute",
-                            top: -4,
-                            right: -4,
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: UI_CONFIG.COLORS.PRIMARY,
-                            borderWidth: 1,
-                            borderColor: "#FFFFFF",
-                          }}
-                        />
-                      )}
-                    </View>
-                  </AnimatedButton>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
-                </View>
 
-              {/* Bottom row: mute + playlist pill */}
+              {/* Bottom row: mute + playlist pill - Modern style */}
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  paddingTop: UI_CONFIG.SPACING.LG,
                 }}
               >
-                <AnimatedButton onPress={onToggleMute}>
+                <TouchableOpacity
+                  onPress={onToggleMute}
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: "rgba(255, 255, 255, 0.15)",
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.2)",
+                  }}
+                  activeOpacity={0.7}
+                >
                   <Ionicons
                     name={isMuted ? "volume-mute" : "volume-high"}
                     size={22}
-                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                    color="#FFFFFF"
                   />
-                </AnimatedButton>
+                </TouchableOpacity>
 
-                <AnimatedButton
+                <TouchableOpacity
                   onPress={() => setShowPlaylistView(true)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     paddingHorizontal: UI_CONFIG.SPACING.LG,
-                    paddingVertical: UI_CONFIG.SPACING.SM,
-                    borderRadius: 999,
-                    backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                    paddingVertical: UI_CONFIG.SPACING.MD,
+                    borderRadius: 25,
+                    backgroundColor: "rgba(255, 255, 255, 0.2)",
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.3)",
                   }}
+                  activeOpacity={0.8}
                 >
                   <Ionicons
                     name="list"
-                    size={18}
-                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                    size={20}
+                    color="#FFFFFF"
                   />
                   <Text
                     style={{
-                      marginLeft: 6,
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                      marginLeft: 8,
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+                      fontFamily: "Rubik-SemiBold",
+                      color: "#FFFFFF",
                     }}
                   >
                     Playlist
                   </Text>
-                  <Ionicons
-                    name="chevron-up"
-                    size={16}
-                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
-                    style={{ marginLeft: 4 }}
-                  />
-                </AnimatedButton>
+                </TouchableOpacity>
               </View>
-              </View>
-
-              {/* Queue (rest of songs at the bottom) */}
-              {Array.isArray(queue) && queue.length > 0 && (
-                <View
-                  style={{
-                    flex: 46,
-                    minHeight: 0,
-                    // Move the scrollable list down *within* its own half,
-                    // without stealing space from the player controls.
-                    paddingTop: UI_CONFIG.SPACING.MD,
-                  }}
-                >
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    style={{ flex: 1 }}
-                    contentContainerStyle={{ paddingBottom: UI_CONFIG.SPACING.LG }}
-                  >
-                    <View style={{ gap: UI_CONFIG.SPACING.SM }}>
-                      {queue.map((t, idx) => {
-                        const isCurrent = idx === currentIndex;
-                        return (
-                          <TouchableOpacity
-                            key={t.id || `${idx}`}
-                            onPress={() => playAtIndex(idx)}
-                            activeOpacity={0.8}
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              backgroundColor: UI_CONFIG.COLORS.SURFACE,
-                              borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                              padding: UI_CONFIG.SPACING.MD,
-                              borderWidth: 1,
-                              borderColor: isCurrent
-                                ? UI_CONFIG.COLORS.PRIMARY
-                                : UI_CONFIG.COLORS.BORDER,
-                            }}
-                          >
-                            <Image
-                              source={
-                                typeof t.thumbnailUrl === "string"
-                                  ? { uri: t.thumbnailUrl }
-                                  : t.thumbnailUrl
-                              }
-                              style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: UI_CONFIG.BORDER_RADIUS.MD,
-                                backgroundColor: "#E5E7EB",
-                                marginRight: UI_CONFIG.SPACING.MD,
-                              }}
-                              resizeMode="cover"
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text
-                                style={{
-                                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-                                  fontFamily: "Rubik-SemiBold",
-                                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                                }}
-                                numberOfLines={1}
-                              >
-                                {t.title}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                                  fontFamily: "Rubik",
-                                  color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                                  marginTop: 2,
-                                }}
-                                numberOfLines={1}
-                              >
-                                {t.artist}
-                              </Text>
-                            </View>
-                            <Ionicons
-                              name={isCurrent ? (isPlaying ? "pause" : "play") : "play"}
-                              size={18}
-                              color={
-                                isCurrent
-                                  ? UI_CONFIG.COLORS.PRIMARY
-                                  : UI_CONFIG.COLORS.TEXT_SECONDARY
-                              }
-                            />
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
-                </View>
-              )}
-            </View>
+            </ScrollView>
           </Animated.View>
         </View>
       </Modal>
@@ -1705,6 +1453,38 @@ export default function CopyrightFreeSongModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ padding: 16 }}
             >
+              {/* Create New Playlist Button - Matches app theme */}
+              <AnimatedButton
+                onPress={async () => {
+                  // Refresh playlists before opening create modal
+                  await loadPlaylistsFromBackend();
+                  setShowCreatePlaylist(true);
+                  setShowPlaylistModal(false);
+                }}
+                style={{
+                  backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+                  paddingVertical: UI_CONFIG.SPACING.MD,
+                  borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
+                  marginBottom: UI_CONFIG.SPACING.LG,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ...UI_CONFIG.SHADOWS.MD,
+                }}
+              >
+                <Ionicons name="add-circle" size={22} color="#FFFFFF" />
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontFamily: "Rubik-SemiBold",
+                    marginLeft: 8,
+                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+                  }}
+                >
+                  Create New Playlist
+                </Text>
+              </AnimatedButton>
+
               {/* Existing Playlists */}
               {isLoadingPlaylists ? (
                 <View className="py-8 items-center">
@@ -1713,101 +1493,12 @@ export default function CopyrightFreeSongModal({
                   </Text>
                 </View>
               ) : playlists.length === 0 ? (
-                // Match Library tab empty state CTA ("Create Playlist" card)
-                <View
-                  style={{
-                    justifyContent: "center",
-                    alignItems: "center",
-                    paddingHorizontal: 24,
-                    paddingVertical: 24,
-                  }}
-                >
-                  <Ionicons
-                    name="musical-notes-outline"
-                    size={64}
-                    color="#D1D5DB"
-                  />
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontFamily: "Rubik-SemiBold",
-                      color: "#6B7280",
-                      marginTop: 16,
-                      textAlign: "center",
-                    }}
-                  >
-                    No playlists yet
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontFamily: "Rubik",
-                      color: "#9CA3AF",
-                      marginTop: 8,
-                      textAlign: "center",
-                    }}
-                  >
-                    Create your first playlist to organize your favorite songs
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowCreatePlaylist(true);
-                      setShowPlaylistModal(false);
-                    }}
-                    style={{
-                      marginTop: 24,
-                      backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                      paddingHorizontal: 24,
-                      paddingVertical: 12,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontFamily: "Rubik-SemiBold",
-                        color: "#FFFFFF",
-                      }}
-                    >
-                      Create Playlist
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <Text className="text-center text-gray-500 font-rubik py-8">
+                  No playlists yet. Create one to get started!
+                </Text>
               ) : (
-                <>
-                  {/* Create New Playlist Button - Matches app theme */}
-                  <AnimatedButton
-                    onPress={async () => {
-                      // Refresh playlists before opening create modal
-                      await loadPlaylistsFromBackend();
-                      setShowCreatePlaylist(true);
-                      setShowPlaylistModal(false);
-                    }}
-                    style={{
-                      backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                      paddingVertical: UI_CONFIG.SPACING.MD,
-                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                      marginBottom: UI_CONFIG.SPACING.LG,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      ...UI_CONFIG.SHADOWS.MD,
-                    }}
-                  >
-                    <Ionicons name="add-circle" size={22} color="#FFFFFF" />
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontFamily: "Rubik-SemiBold",
-                        marginLeft: 8,
-                        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-                      }}
-                    >
-                      Create New Playlist
-                    </Text>
-                  </AnimatedButton>
-                  <View className="gap-2">
-                    {playlists.map((playlist) => (
+                <View className="gap-2">
+                  {playlists.map((playlist) => (
                     <View
                       key={playlist.id}
                       className="flex-row items-center justify-between p-4 bg-white border border-gray-200 rounded-xl mb-3 shadow-sm"
@@ -1869,8 +1560,7 @@ export default function CopyrightFreeSongModal({
                       </View>
                     </View>
                   ))}
-                  </View>
-                </>
+                </View>
               )}
             </ScrollView>
             </TouchableOpacity>
@@ -2608,15 +2298,17 @@ export default function CopyrightFreeSongModal({
       <Modal
         visible={showOptionsModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => {
           setShowOptionsModal(false);
+          setOptionsSongData(null);
         }}
       >
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => {
             setShowOptionsModal(false);
+            setOptionsSongData(null);
           }}
           style={{
             flex: 1,
@@ -2624,9 +2316,7 @@ export default function CopyrightFreeSongModal({
             justifyContent: "flex-end",
           }}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={() => {}}
+          <View
             style={{
               backgroundColor: "#FFFFFF",
               borderTopLeftRadius: 24,
@@ -2673,85 +2363,58 @@ export default function CopyrightFreeSongModal({
                 >
                   {song.artist}
                 </Text>
+
+                {/* Views Display with Icon */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 16,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#F9FAFB",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Ionicons name="eye" size={20} color="#256E63" />
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#6B7280",
+                        fontFamily: "Rubik",
+                        marginBottom: 2,
+                      }}
+                    >
+                      Total Views
+                    </Text>
+                    {loadingOptionsSong ? (
+                      <ActivityIndicator size="small" color="#256E63" />
+                    ) : (
+                      <Text
+                        style={{
+                          fontSize: 18,
+                          color: "#111827",
+                          fontWeight: "600",
+                          fontFamily: "Rubik-SemiBold",
+                        }}
+                      >
+                        {(optionsSongData?.views || optionsSongData?.viewCount || viewCount || 0).toLocaleString()}
+                      </Text>
+                    )}
+                  </View>
+                </View>
               </>
             )}
 
-            {/* Option: Save to library */}
-            <TouchableOpacity
-              onPress={async () => {
-                try {
-                  const songId = song?._id || song?.id;
-                  if (!songId) return;
-
-                  const alreadySaved = libraryStore.isItemSaved(String(songId));
-                  if (alreadySaved) {
-                    await libraryStore.removeFromLibrary(String(songId));
-                    Alert.alert("Removed", "Removed from your library");
-                  } else {
-                    await libraryStore.addToLibrary({
-                      id: String(songId),
-                      contentType: "music",
-                      fileUrl: String(song.audioUrl || song.fileUrl || ""),
-                      title: String(song.title || "Untitled"),
-                      speaker: String(song.artist || song.speaker || ""),
-                      uploadedBy: String(song.uploadedBy || ""),
-                      description: String(song.description || ""),
-                      createdAt: String(song.createdAt || new Date().toISOString()),
-                      thumbnailUrl: typeof song.thumbnailUrl === "string" ? song.thumbnailUrl : undefined,
-                      imageUrl:
-                        typeof song.thumbnailUrl === "string"
-                          ? song.thumbnailUrl
-                          : song.thumbnailUrl,
-                      views: song.views ?? song.viewCount,
-                      saved: 1,
-                    } as any);
-                    Alert.alert("Saved", "Saved to your library");
-                  }
-
-                  setShowOptionsModal(false);
-                } catch (e) {
-                  Alert.alert("Error", "Could not update library");
-                }
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-              }}
-              activeOpacity={0.7}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#ECFDF5",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="bookmark" size={18} color="#256E63" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: "#111827",
-                  fontWeight: "500",
-                  fontFamily: "Rubik-Medium",
-                }}
-              >
-                {libraryStore.isItemSaved(String(song?._id || song?.id))
-                  ? "Remove from library"
-                  : "Save to library"}
-              </Text>
-            </TouchableOpacity>
-
             {/* Option: Add to playlist */}
             <TouchableOpacity
-              onPress={async () => {
+              onPress={() => {
                 setShowOptionsModal(false);
-                await handleOpenAddToPlaylist();
+                setOptionsSongData(null);
+                setShowPlaylistModal(true);
               }}
               style={{
                 flexDirection: "row",
@@ -2785,110 +2448,35 @@ export default function CopyrightFreeSongModal({
               </Text>
             </TouchableOpacity>
 
-            {/* Option: Add to favourite */}
+            {/* Option: Cancel */}
             <TouchableOpacity
-              onPress={async () => {
-                await handleToggleLike();
+              onPress={() => {
                 setShowOptionsModal(false);
+                setOptionsSongData(null);
               }}
               style={{
-                flexDirection: "row",
-                alignItems: "center",
+                marginTop: 8,
                 paddingVertical: 12,
-              }}
-              activeOpacity={0.7}
-              disabled={isTogglingLike}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#FEF2F2",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons
-                  name={isLiked ? "heart" : "heart-outline"}
-                  size={18}
-                  color="#EF4444"
-                />
-              </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: "#111827",
-                  fontWeight: "500",
-                  fontFamily: "Rubik-Medium",
-                  opacity: isTogglingLike ? 0.6 : 1,
-                }}
-              >
-                {isLiked ? "Remove from favourite" : "Add to favourite"}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Option: Download */}
-            <TouchableOpacity
-              onPress={async () => {
-                const songId = song?._id || song?.id;
-                if (!songId) return;
-                if (checkIfDownloaded(String(songId))) {
-                  Alert.alert("Downloaded", "This song is already downloaded");
-                  return;
-                }
-
-                const downloadableItem = convertToDownloadableItem(
-                  {
-                    ...song,
-                    id: songId,
-                    fileUrl: song.audioUrl || song.fileUrl,
-                    thumbnailUrl: song.thumbnailUrl,
-                    author: song.artist,
-                  },
-                  "audio"
-                );
-                const result = await handleDownload(downloadableItem);
-                if (result.success) {
-                  setShowOptionsModal(false);
-                }
-              }}
-              style={{
-                flexDirection: "row",
                 alignItems: "center",
-                paddingVertical: 12,
               }}
               activeOpacity={0.7}
             >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#FFF7ED",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="download-outline" size={18} color="#FEA74E" />
-              </View>
               <Text
                 style={{
                   fontSize: 15,
-                  color: "#111827",
+                  color: "#6B7280",
                   fontWeight: "500",
                   fontFamily: "Rubik-Medium",
                 }}
               >
-                Download
+                Cancel
               </Text>
             </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
     </>
   );
 }
+
 

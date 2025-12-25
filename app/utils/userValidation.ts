@@ -114,26 +114,60 @@ export function getUserAvatarFromContent(
   content: any,
   fallbackAvatar: any = require("../../assets/images/Avatar-1.png")
 ): any {
-  // Check if content has uploadedBy object with user profile data
+  // Priority 1: Check if content has uploadedBy object with user profile data
   if (content.uploadedBy && typeof content.uploadedBy === 'object' && content.uploadedBy.avatar) {
     const avatarUrl = content.uploadedBy.avatar;
-    if (typeof avatarUrl === 'string' && avatarUrl.startsWith('http')) {
+    if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
+      if (avatarUrl.startsWith('http')) {
+        return { uri: avatarUrl.trim() };
+      }
+      // Handle relative paths or other formats
       return { uri: avatarUrl.trim() };
     }
     return avatarUrl;
   }
 
-  // Check if content has speakerAvatar (legacy format)
+  // Priority 2: Check author object avatar (for Devotional content)
+  if (content.author && typeof content.author === 'object' && content.author.avatar) {
+    const avatarUrl = content.author.avatar;
+    if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
+      if (avatarUrl.startsWith('http')) {
+        return { uri: avatarUrl.trim() };
+      }
+      return { uri: avatarUrl.trim() };
+    }
+    return avatarUrl;
+  }
+
+  // Priority 3: Check authorInfo object avatar
+  if (content.authorInfo && typeof content.authorInfo === 'object' && content.authorInfo.avatar) {
+    const avatarUrl = content.authorInfo.avatar;
+    if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
+      if (avatarUrl.startsWith('http')) {
+        return { uri: avatarUrl.trim() };
+      }
+      return { uri: avatarUrl.trim() };
+    }
+    return avatarUrl;
+  }
+
+  // Priority 4: Check if content has speakerAvatar (legacy format)
   if (content.speakerAvatar) {
-    if (typeof content.speakerAvatar === 'string' && content.speakerAvatar.startsWith('http')) {
+    if (typeof content.speakerAvatar === 'string' && content.speakerAvatar.trim().length > 0) {
+      if (content.speakerAvatar.startsWith('http')) {
+        return { uri: content.speakerAvatar.trim() };
+      }
       return { uri: content.speakerAvatar.trim() };
     }
     return content.speakerAvatar;
   }
 
-  // Check if content has userAvatar (alternative field name)
+  // Priority 5: Check if content has userAvatar (alternative field name)
   if (content.userAvatar) {
-    if (typeof content.userAvatar === 'string' && content.userAvatar.startsWith('http')) {
+    if (typeof content.userAvatar === 'string' && content.userAvatar.trim().length > 0) {
+      if (content.userAvatar.startsWith('http')) {
+        return { uri: content.userAvatar.trim() };
+      }
       return { uri: content.userAvatar.trim() };
     }
     return content.userAvatar;
@@ -153,7 +187,7 @@ export function getUserDisplayNameFromContent(
   content: any,
   fallback: string = "Anonymous User"
 ): string {
-  // Check if content has uploadedBy object with user profile data
+  // Priority 1: Check if content has uploadedBy object with user profile data
   if (content.uploadedBy && typeof content.uploadedBy === 'object') {
     const user = content.uploadedBy;
     if (user.firstName && user.lastName) {
@@ -168,15 +202,65 @@ export function getUserDisplayNameFromContent(
     if (user.email) {
       return user.email.split('@')[0]; // Use email prefix as fallback
     }
+    if (user.name) {
+      return user.name;
+    }
   }
 
-  // Check legacy fields
-  if (content.speaker) {
+  // Priority 2: Check author object (for Devotional content)
+  if (content.author && typeof content.author === 'object') {
+    const author = content.author;
+    if (author.firstName && author.lastName) {
+      return `${author.firstName} ${author.lastName}`.trim();
+    }
+    if (author.firstName) {
+      return author.firstName;
+    }
+    if (author.lastName) {
+      return author.lastName;
+    }
+    if (author.name) {
+      return author.name;
+    }
+  }
+
+  // Priority 3: Check authorInfo object
+  if (content.authorInfo && typeof content.authorInfo === 'object') {
+    const authorInfo = content.authorInfo;
+    if (authorInfo.firstName && authorInfo.lastName) {
+      return `${authorInfo.firstName} ${authorInfo.lastName}`.trim();
+    }
+    if (authorInfo.firstName) {
+      return authorInfo.firstName;
+    }
+    if (authorInfo.lastName) {
+      return authorInfo.lastName;
+    }
+    if (authorInfo.name) {
+      return authorInfo.name;
+    }
+  }
+
+  // Priority 4: Check legacy speaker field (for audio/sermon content)
+  if (content.speaker && typeof content.speaker === 'string') {
     return content.speaker;
   }
 
+  // Priority 5: Check if uploadedBy is a string but looks like a name (not an ID)
   if (content.uploadedBy && typeof content.uploadedBy === 'string') {
-    return content.uploadedBy;
+    // Check if it looks like an ObjectId (24 hex characters) - if so, don't display it
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(content.uploadedBy.trim());
+    if (!isObjectId) {
+      return content.uploadedBy;
+    }
+  }
+
+  // Priority 6: Check if author is a string (non-ID)
+  if (content.author && typeof content.author === 'string') {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(content.author.trim());
+    if (!isObjectId) {
+      return content.author;
+    }
   }
 
   return fallback;
