@@ -1112,7 +1112,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
       setModalVisible(null);
     },
-    [toggleSave, getLikeCount, getCommentCount, libraryStore]
+    [toggleSave, getLikeCount, getCommentCount, addToLibrary, removeFromLibrary]
   );
 
   const handleShare = useCallback(async (key: string, item: MediaItem) => {
