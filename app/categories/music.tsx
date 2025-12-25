@@ -738,9 +738,15 @@ export default function Music() {
             )}
           </View>
         ) : (
-          <>
-            {/* Removed "Music" title text to match requested header */}
-            <View style={{ flex: 1 }} />
+          <View
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+            }}
+          >
             <TouchableOpacity
               onPress={() => setShowSearchInput(true)}
               style={{
@@ -767,51 +773,49 @@ export default function Music() {
             >
               <Ionicons name="filter" size={20} color="#256E63" />
             </TouchableOpacity>
-          </>
-        )}
 
-        {/* Display Mode Toggle */}
-        {!showSearchInput && (
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: "#F3F4F6",
-              borderRadius: 12,
-              padding: 4,
-              gap: 4,
-            }}
-          >
-            {(["list", "grid", "small", "large"] as DisplayMode[]).map(
-              (mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setDisplayMode(mode)}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    backgroundColor:
-                      displayMode === mode ? "#256E63" : "transparent",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <Ionicons
-                    name={
-                      mode === "list"
-                        ? "list"
-                        : mode === "grid"
-                        ? "grid"
-                        : mode === "small"
-                        ? "apps"
-                        : "square"
-                    }
-                    size={18}
-                    color={displayMode === mode ? "#FFFFFF" : "#98A2B3"}
-                  />
-                </TouchableOpacity>
-              )
-            )}
+            {/* Display Mode Toggle (kept alongside icons; centered as a group) */}
+            <View
+              style={{
+                flexDirection: "row",
+                backgroundColor: "#F3F4F6",
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(["list", "grid", "small", "large"] as DisplayMode[]).map(
+                (mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => setDisplayMode(mode)}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      backgroundColor:
+                        displayMode === mode ? "#256E63" : "transparent",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        mode === "list"
+                          ? "list"
+                          : mode === "grid"
+                          ? "grid"
+                          : mode === "small"
+                          ? "apps"
+                          : "square"
+                      }
+                      size={18}
+                      color={displayMode === mode ? "#FFFFFF" : "#98A2B3"}
+                    />
+                  </TouchableOpacity>
+                )
+              )}
+            </View>
           </View>
         )}
       </View>

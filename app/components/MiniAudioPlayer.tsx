@@ -40,7 +40,7 @@ export default function MiniAudioPlayer() {
   // Check global manager for currently playing audio
   const globalPlayingId = audioManager.getCurrentlyPlayingId();
   const effectiveAudioId = audioId || globalPlayingId;
-  const shouldShow = (mediaItem && audioId) || globalPlayingId;
+  const shouldShow = mediaItem && ((audioId) || globalPlayingId);
 
   // Debug logging
   useEffect(() => {
@@ -144,8 +144,8 @@ export default function MiniAudioPlayer() {
     pathname?.startsWith("/reader") ||
     segments.some((seg) => String(seg).toLowerCase() === "reader");
 
-  // Don't render if no audio is loaded or we should hide in this route
-  if (!shouldShow || inReaderRoute) {
+  // Don't render if no audio is loaded, or we should hide in this route
+  if (!shouldShow || !mediaItem || inReaderRoute) {
     return null;
   }
 
@@ -211,8 +211,8 @@ export default function MiniAudioPlayer() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  // Get thumbnail/image URL
-  const thumbnailUrl = mediaItem.imageUrl || mediaItem.thumbnailUrl;
+  // Get thumbnail/image URL (mediaItem is guaranteed to exist due to early return above)
+  const thumbnailUrl = mediaItem?.imageUrl || mediaItem?.thumbnailUrl;
   const imageSource = thumbnailUrl
     ? typeof thumbnailUrl === "string"
       ? { uri: thumbnailUrl }

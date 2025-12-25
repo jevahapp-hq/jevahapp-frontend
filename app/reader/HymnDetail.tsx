@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { FlatList, Text, View } from "react-native";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import AuthHeader from "../components/AuthHeader";
 

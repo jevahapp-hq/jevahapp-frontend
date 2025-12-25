@@ -18,8 +18,8 @@ import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 import AllContentTikTok from "./AllContentTikTok";
 import Music from "./music";
 
-// NOTE: "HYMS" (hymns) requested as its own category, positioned between LIVE and SERMON.
-const categories = ["ALL", "LIVE", "HYMS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
+// NOTE: "HYMNS" requested as its own category, positioned between LIVE and SERMON.
+const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 
 // Map uppercase category names to ContentType format expected by AllContentTikTok
 const mapCategoryToContentType = (
@@ -44,7 +44,7 @@ const mapCategoryToContentType = (
       return "videos";
     case "MUSIC":
       return "music";
-    case "HYMS":
+    case "HYMNS":
       return "hymns";
     case "SERMON":
       return "sermon";
@@ -72,7 +72,7 @@ const mapContentTypeToCategory = (contentType: string): string => {
     return "SERMON";
   }
   if (contentTypeLower === "hymns" || contentTypeLower === "hyms") {
-    return "HYMS";
+    return "HYMNS";
   }
   if (contentTypeLower === "e-books" || contentTypeLower === "ebook" || contentTypeLower === "books") {
     return "E-BOOKS";
@@ -200,8 +200,8 @@ export default function HomeTabContent() {
           } catch (e) {
             // no-op
           }
-          // HYMS: ensure global audio mini-players are cleared so they don't show on hymns browsing.
-          if (category === "HYMS") {
+          // HYMNS: ensure global audio mini-players are cleared so they don't show on hymns browsing.
+          if (category === "HYMNS") {
             try {
               // Stop any legacy audio instances
               GlobalAudioInstanceManager.getInstance().stopAllAudio?.();

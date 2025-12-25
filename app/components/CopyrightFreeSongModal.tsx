@@ -106,6 +106,10 @@ export default function CopyrightFreeSongModal({
   const [hasTrackedView, setHasTrackedView] = useState(false); // Track if view has been recorded
   const isRecordingViewRef = useRef(false); // Prevent concurrent view recording requests
 
+  // Repeat and shuffle state
+  const [repeatMode, setRepeatMode] = useState<"none" | "all" | "one">("none");
+  const [isShuffled, setIsShuffled] = useState(false);
+
   // Socket.IO manager for real-time updates (scoped to this modal)
   const socketManagerRef = useRef<SocketManager | null>(null);
 
@@ -1434,6 +1438,86 @@ export default function CopyrightFreeSongModal({
                       size={22}
                       color={UI_CONFIG.COLORS.TEXT_PRIMARY}
                     />
+                  </AnimatedButton>
+                </View>
+
+                {/* Repeat and Shuffle controls */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: UI_CONFIG.SPACING.XL,
+                    marginTop: UI_CONFIG.SPACING.MD,
+                  }}
+                >
+                  {/* Shuffle button */}
+                  <AnimatedButton
+                    onPress={() => setIsShuffled(!isShuffled)}
+                    style={{
+                      padding: UI_CONFIG.SPACING.XS,
+                    }}
+                  >
+                    <Ionicons
+                      name="shuffle"
+                      size={22}
+                      color={
+                        isShuffled
+                          ? UI_CONFIG.COLORS.PRIMARY
+                          : UI_CONFIG.COLORS.TEXT_SECONDARY
+                      }
+                    />
+                  </AnimatedButton>
+
+                  {/* Repeat button */}
+                  <AnimatedButton
+                    onPress={() => {
+                      // Cycle through: none -> all -> one -> none
+                      if (repeatMode === "none") {
+                        setRepeatMode("all");
+                      } else if (repeatMode === "all") {
+                        setRepeatMode("one");
+                      } else {
+                        setRepeatMode("none");
+                      }
+                    }}
+                    style={{
+                      padding: UI_CONFIG.SPACING.XS,
+                      position: "relative",
+                    }}
+                  >
+                    <View style={{ position: "relative" }}>
+                      <Ionicons
+                        name={
+                          repeatMode === "one"
+                            ? "repeat"
+                            : repeatMode === "all"
+                            ? "repeat"
+                            : "repeat-outline"
+                        }
+                        size={22}
+                        color={
+                          repeatMode !== "none"
+                            ? UI_CONFIG.COLORS.PRIMARY
+                            : UI_CONFIG.COLORS.TEXT_SECONDARY
+                        }
+                      />
+                      {repeatMode === "one" && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: -4,
+                            right: -4,
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+                            borderWidth: 1,
+                            borderColor: "#FFFFFF",
+                          }}
+                        />
+                      )}
+                    </View>
                   </AnimatedButton>
                 </View>
               </View>

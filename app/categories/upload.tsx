@@ -38,6 +38,7 @@ import AuthHeader from "../components/AuthHeader";
 import { useMediaStore } from "../store/useUploadStore";
 import SocketManager from "../services/SocketManager";
 import TokenUtils from "../utils/tokenUtils";
+import { getApiBaseUrl } from "../utils/api";
 
 import {
   logUserDataStatus,
@@ -105,6 +106,11 @@ export default function UploadScreen() {
   const socketManagerRef = useRef<SocketManager | null>(null);
   const currentUploadIdRef = useRef<string | null>(null);
   const isUsingRealTimeProgressRef = useRef<boolean>(false);
+  
+  // AI Description Generation state
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [descriptionGenerationError, setDescriptionGenerationError] = useState<string | null>(null);
+  const [bibleVerses, setBibleVerses] = useState<string[]>([]);
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -148,6 +154,60 @@ export default function UploadScreen() {
   }, []);
 
   const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
+
+  // Helper function to format friendly rejection messages
+  const formatFriendlyRejectionMessage = (
+    status: string | undefined,
+    reason: string | undefined,
+    flags: string[] | undefined,
+    defaultMessage: string
+  ): { title: string; message: string; isReview: boolean } => {
+    const isReview = status === "under_review";
+    
+    // Friendly title
+    const title = isReview 
+      ? "📋 Under Review" 
+      : "💡 Upload Needs Adjustment";
+
+    // Build friendly message
+    let message = "";
+    
+    if (isReview) {
+      message = "Your content is being reviewed by our team. We'll notify you once it's approved!";
+      if (reason) {
+        message += `\n\nNote: ${reason}`;
+      }
+    } else {
+      // Friendly rejection message
+      if (reason) {
+        // Use the reason as the main message, make it friendlier
+        message = reason.endsWith(".") ? reason.slice(0, -1) : reason;
+        message += ". Don't worry, you can make adjustments and try again!";
+      } else if (flags && flags.length > 0) {
+        // Format flags into friendly message
+        const friendlyFlags = flags.map(flag => {
+          const formatted = flag.replace(/_/g, " ").toLowerCase();
+          // Make flags more user-friendly
+          if (formatted.includes("explicit")) return "inappropriate language";
+          if (formatted.includes("violence")) return "violent content";
+          if (formatted.includes("hateful")) return "harmful content";
+          if (formatted.includes("not gospel")) return "content doesn't align with gospel values";
+          return formatted;
+        });
+        
+        if (friendlyFlags.length === 1) {
+          message = `We noticed ${friendlyFlags[0]} in your content. Please review and adjust before uploading again.`;
+        } else {
+          message = `We noticed some content that needs adjustment: ${friendlyFlags.slice(0, 2).join(" and ")}. Please review and try again!`;
+        }
+      } else {
+        // Default friendly message
+        message = "Your content needs a few adjustments to meet our community guidelines. No worries - you can edit and try again!";
+      }
+    }
+
+    return { title, message, isReview };
+  };
 
   const getMimeTypeFromName = (filename: string): string => {
     if (filename.endsWith(".mp4")) return "video/mp4";
@@ -548,6 +608,165 @@ export default function UploadScreen() {
       user,
       userRaw,
     };
+  };
+
+  // AI Description Generation function
+  const generateAIDescription = async () => {
+    console.log("🔵 Generate AI Description clicked", { title, file: !!file, thumbnail: !!thumbnail });
+    
+    // Validation - require title, file, and thumbnail for best results
+    if (!title || title.trim().length === 0) {
+      Alert.alert(
+        "Title Required",
+        "Please enter a title before generating a description.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    if (!file) {
+      Alert.alert(
+        "File Required",
+        "Please upload a video or audio file for AI analysis.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    if (!thumbnail) {
+      Alert.alert(
+        "Thumbnail Required",
+        "Please upload a thumbnail image for AI analysis.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    setIsGeneratingDescription(true);
+    setDescriptionGenerationError(null);
+    setBibleVerses([]);
+
+    try {
+      const token = await TokenUtils.getAuthToken();
+      const formData = new FormData();
+      
+      formData.append("title", title);
+      formData.append("contentType", selectedType || "videos"); // Default to videos if not set
+      
+      if (selectedCategory) {
+        formData.append("category", selectedCategory);
+      }
+
+      // Add files for AI analysis (required at this point due to validation above)
+      // Format file for FormData (React Native format)
+      const fileSizeMB = file.size ? file.size / (1024 * 1024) : 0;
+      if (fileSizeMB > 50) {
+        console.warn(`File too large (${fileSizeMB.toFixed(1)}MB) for AI analysis. Backend will handle it.`);
+      }
+      formData.append("file", {
+        uri: file.uri,
+        type: file.mimeType,
+        name: file.name,
+        size: file.size,
+      } as any);
+      
+      // Format thumbnail for FormData (React Native format)
+      // Note: ImagePicker doesn't always provide size, so we estimate or skip validation
+      formData.append("thumbnail", {
+        uri: thumbnail.uri,
+        type: thumbnail.mimeType || "image/jpeg",
+        name: thumbnail.name || `thumbnail_${Date.now()}.jpg`,
+      } as any);
+      
+      console.log("📤 Sending AI description request with:", {
+        title,
+        contentType: selectedType || "videos",
+        hasFile: !!file,
+        fileSizeMB: fileSizeMB > 0 ? fileSizeMB.toFixed(2) : "unknown",
+        hasThumbnail: !!thumbnail,
+        fileUri: file.uri?.substring(0, 50) + "...",
+        thumbnailUri: thumbnail.uri?.substring(0, 50) + "...",
+      });
+
+      const headers: HeadersInit = {};
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      // Note: Don't set Content-Type header when using FormData
+      // The runtime will automatically set it with the correct boundary
+
+      const apiUrl = `${getApiBaseUrl()}/api/media/generate-description`;
+      console.log("🌐 API URL:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      
+      console.log("📥 Response status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "Unknown error");
+        console.error("❌ API Error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        });
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      let data: any;
+      
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.warn("⚠️ Non-JSON response:", text);
+        throw new Error("Server returned non-JSON response");
+      }
+
+      if (data.success && data.description) {
+        // Populate description field
+        setDescription(data.description);
+        
+        // Store Bible verses if available
+        if (data.bibleVerses && Array.isArray(data.bibleVerses) && data.bibleVerses.length > 0) {
+          setBibleVerses(data.bibleVerses);
+        }
+
+        // Show warning message if present (file too large, timeout, etc.)
+        if (data.warning) {
+          setDescriptionGenerationError(data.message || "Description generated with limitations");
+          setTimeout(() => setDescriptionGenerationError(null), 5000);
+        } else {
+          // Success - clear any previous errors
+          setDescriptionGenerationError(null);
+        }
+      } else {
+        setDescriptionGenerationError(data.message || "Failed to generate description. Please try again.");
+        setTimeout(() => setDescriptionGenerationError(null), 5000);
+      }
+    } catch (error: any) {
+      console.error("Error generating description:", error);
+      
+      // Handle specific error cases
+      if (error.response?.status === 429) {
+        setDescriptionGenerationError("Too many requests. Please wait a minute before trying again.");
+      } else if (error.response?.status === 400) {
+        setDescriptionGenerationError(error.response.data?.message || "Invalid request. Please check your inputs.");
+      } else if (error.message?.includes("Network")) {
+        setDescriptionGenerationError("Network error. Please check your connection and try again.");
+      } else {
+        setDescriptionGenerationError("Failed to generate description. Please try again.");
+      }
+      setTimeout(() => setDescriptionGenerationError(null), 5000);
+    } finally {
+      setIsGeneratingDescription(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -1006,27 +1225,33 @@ export default function UploadScreen() {
             status: moderationResult.status,
           });
 
-          // Show detailed rejection message
-          let alertMessage = errorMessage;
-          if (moderationResult.reason) {
-            alertMessage += `\n\nReason: ${moderationResult.reason}`;
-          }
-          if (moderationResult.flags && moderationResult.flags.length > 0) {
-            alertMessage += `\n\nIssues found:\n${moderationResult.flags.map((flag: string) => `• ${flag.replace(/_/g, " ")}`).join("\n")}`;
-          }
+          // Format friendly rejection message
+          const friendlyMessage = formatFriendlyRejectionMessage(
+            moderationResult.status,
+            moderationResult.reason,
+            moderationResult.flags,
+            errorMessage
+          );
 
           Alert.alert(
-            moderationResult.status === "under_review"
-              ? "Review Required"
-              : "Content Rejected",
-            alertMessage,
+            friendlyMessage.title,
+            friendlyMessage.message,
             [
-              { text: "OK", onPress: () => setModerationError(null) },
+              { 
+                text: "Got it", 
+                style: "default",
+                onPress: () => setModerationError(null) 
+              },
               {
-                text: "Retry",
+                text: friendlyMessage.isReview ? "OK" : "Try Again",
+                style: friendlyMessage.isReview ? "default" : "default",
                 onPress: () => {
-                  setModerationError(null);
-                  setUploadState({ status: "idle", progress: 0, message: "" });
+                  if (!friendlyMessage.isReview) {
+                    setModerationError(null);
+                    setUploadState({ status: "idle", progress: 0, message: "" });
+                  } else {
+                    setModerationError(null);
+                  }
                 },
               },
             ]
@@ -1588,6 +1813,45 @@ export default function UploadScreen() {
               {/* Media and Thumbnail Pickers */}
               <View className="mt-2 mb-6">{renderMediaPickers()}</View>
 
+              {/* Upload Limits Disclaimer */}
+              <View
+                className="flex-row items-center px-4 py-3 mb-4 rounded-lg border"
+                style={{
+                  backgroundColor: "rgba(255, 193, 7, 0.12)",
+                  borderColor: "#FFC107",
+                  borderStyle: "dashed",
+                  maxWidth: Math.min(
+                    getScreenDimensions().width -
+                      getResponsiveSpacing(16, 20, 24, 32) * 2,
+                    320
+                  ),
+                  alignSelf: "center",
+                }}
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={18}
+                  color="#856404"
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  className="flex-1 text-xs"
+                  style={{
+                    color: "#856404",
+                    fontFamily: "Rubik-Regular",
+                    lineHeight: 16,
+                  }}
+                >
+                  {selectedType === "music"
+                    ? "Upload Limits: Max 50 MB per file, 50 songs total per user. Max 10 uploads per hour."
+                    : selectedType === "sermon" || selectedType === "videos"
+                    ? "Upload Limits: Max 300 MB per file, 30 videos total per user. Max 10 uploads per hour."
+                    : selectedType === "books" || selectedType === "ebook"
+                    ? "Upload Limits: Max 100 MB per file. Max 10 uploads per hour."
+                    : "Upload Limits: Max 300 MB per file (videos/sermons), 50 MB (music), 100 MB (books). Max 10 uploads per hour."}
+                </Text>
+              </View>
+
               {/* Form Fields */}
               <View className="flex-1">
               <Text className="text-xs text-gray-600 mb-1 font-medium">
@@ -1625,13 +1889,193 @@ export default function UploadScreen() {
                 onChangeText={setDescription}
                 multiline
                 textAlignVertical="top"
-                className="border border-gray-300 rounded-md mb-4 px-3 py-3 bg-white"
+                className="border border-gray-300 rounded-md mb-2 px-3 py-3 bg-white"
                 style={{
                   minHeight: getResponsiveSpacing(80, 100, 120),
                   maxHeight: 200,
                   fontSize: getInputSize().fontSize,
                 }}
               />
+              
+              {/* AI Description Generation Button */}
+              {(() => {
+                const isReady = title && file && thumbnail;
+                const isDisabled = isGeneratingDescription || !isReady;
+                
+                return (
+                  <View className="mb-3" style={{ zIndex: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        console.log("🔵 Button pressed", { 
+                          isGeneratingDescription, 
+                          title: !!title, 
+                          file: !!file, 
+                          thumbnail: !!thumbnail,
+                          isReady 
+                        });
+                        generateAIDescription();
+                      }}
+                      disabled={isDisabled}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{
+                        opacity: isDisabled ? 0.5 : 1,
+                      }}
+                    >
+                      <View
+                        className="flex-row items-center justify-center rounded-lg"
+                        style={{
+                          backgroundColor: isGeneratingDescription 
+                            ? "rgba(223, 147, 14, 0.3)" 
+                            : isReady
+                            ? "rgba(223, 147, 14, 0.12)"
+                            : "rgba(223, 147, 14, 0.08)",
+                          borderWidth: 1,
+                          borderColor: isGeneratingDescription 
+                            ? "rgba(223, 147, 14, 0.4)" 
+                            : isReady
+                            ? "rgba(223, 147, 14, 0.3)"
+                            : "rgba(223, 147, 14, 0.2)",
+                          paddingVertical: getResponsiveSpacing(10, 12, 14),
+                          paddingHorizontal: getResponsiveSpacing(16, 18, 20),
+                          minHeight: getTouchTargetSize(),
+                        }}
+                      >
+                        {isGeneratingDescription ? (
+                          <>
+                            <ActivityIndicator 
+                              size="small" 
+                              color="#DF930E" 
+                              style={{ marginRight: 8 }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: getResponsiveFontSize(13, 14, 15),
+                                color: "#DF930E",
+                                fontFamily: "Rubik-Medium",
+                              }}
+                            >
+                              Analyzing content...
+                            </Text>
+                          </>
+                        ) : !isReady ? (
+                          <>
+                            <Ionicons
+                              name="sparkles-outline"
+                              size={16}
+                              color="#94a3b8"
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: getResponsiveFontSize(13, 14, 15),
+                                color: "#94a3b8",
+                                fontFamily: "Rubik-Medium",
+                              }}
+                            >
+                              {!title ? "Enter title to enable" : !file ? "Upload file to enable" : "Upload thumbnail to enable"}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Ionicons
+                              name="sparkles"
+                              size={16}
+                              color="#DF930E"
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: getResponsiveFontSize(13, 14, 15),
+                                color: "#DF930E",
+                                fontFamily: "Rubik-Medium",
+                              }}
+                            >
+                              Generate Description with AI
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })()}
+
+              {/* Bible Verses Display */}
+              {bibleVerses.length > 0 && (
+                <View
+                  className="mb-3 p-3 rounded-lg"
+                  style={{
+                    backgroundColor: "rgba(223, 147, 14, 0.05)",
+                    borderLeftWidth: 3,
+                    borderLeftColor: "#DF930E",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: getResponsiveFontSize(11, 12, 13),
+                      color: "#475569",
+                      fontFamily: "Rubik-Medium",
+                      marginBottom: 6,
+                    }}
+                  >
+                    📖 Suggested Bible Verses:
+                  </Text>
+                  {bibleVerses.map((verse, index) => (
+                    <Text
+                      key={index}
+                      style={{
+                        fontSize: getResponsiveFontSize(11, 12, 13),
+                        color: "#64748b",
+                        fontFamily: "Rubik-Regular",
+                        marginLeft: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      • {verse}
+                    </Text>
+                  ))}
+                </View>
+              )}
+
+              {/* Error/Warning Message */}
+              {descriptionGenerationError && (
+                <View
+                  className="mb-3 p-2.5 rounded-lg"
+                  style={{
+                    backgroundColor: descriptionGenerationError.includes("too large") || 
+                                    descriptionGenerationError.includes("timed out") ||
+                                    descriptionGenerationError.includes("limitations")
+                      ? "rgba(255, 193, 7, 0.1)"
+                      : "rgba(239, 68, 68, 0.1)",
+                    borderWidth: 1,
+                    borderColor: descriptionGenerationError.includes("too large") || 
+                                 descriptionGenerationError.includes("timed out") ||
+                                 descriptionGenerationError.includes("limitations")
+                      ? "rgba(255, 193, 7, 0.3)"
+                      : "rgba(239, 68, 68, 0.3)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: getResponsiveFontSize(11, 12, 13),
+                      color: descriptionGenerationError.includes("too large") || 
+                            descriptionGenerationError.includes("timed out") ||
+                            descriptionGenerationError.includes("limitations")
+                        ? "#92400e"
+                        : "#991b1b",
+                      fontFamily: "Rubik-Regular",
+                    }}
+                  >
+                    {descriptionGenerationError.includes("too large") || 
+                     descriptionGenerationError.includes("timed out") ||
+                     descriptionGenerationError.includes("limitations")
+                      ? "⚠️ "
+                      : "❌ "}
+                    {descriptionGenerationError}
+                  </Text>
+                </View>
+              )}
 
               {/* Categories */}
               <Text className="text-xs text-gray-600 mb-2 font-medium">
@@ -1777,126 +2221,116 @@ export default function UploadScreen() {
             </View>
 
             {/* Moderation Error Display */}
-            {moderationError && (
-              <View
-                className="mt-4 p-4 rounded-lg border"
-                style={{
-                  backgroundColor:
-                    moderationError.status === "under_review"
-                      ? "rgba(255, 193, 7, 0.1)"
-                      : "rgba(220, 53, 69, 0.1)",
-                  borderColor:
-                    moderationError.status === "under_review"
-                      ? "#ffc107"
-                      : "#dc3545",
-                }}
-              >
-                <View className="flex-row items-center mb-2">
-                  <Ionicons
-                    name={
-                      moderationError.status === "under_review"
-                        ? "warning-outline"
-                        : "close-circle-outline"
-                    }
-                    size={24}
-                    color={
-                      moderationError.status === "under_review"
-                        ? "#ffc107"
-                        : "#dc3545"
-                    }
-                  />
-                  <Text
-                    className="ml-2 font-semibold"
-                    style={{
-                      fontSize: getResponsiveFontSize(16, 18, 20),
-                      color:
-                        moderationError.status === "under_review"
-                          ? "#856404"
-                          : "#721c24",
-                    }}
-                  >
-                    {moderationError.status === "under_review"
-                      ? "Review Required"
-                      : "Content Rejected"}
-                  </Text>
-                </View>
-                <Text
-                  className="mb-2"
+            {moderationError && (() => {
+              const friendlyMessage = formatFriendlyRejectionMessage(
+                moderationError.status,
+                moderationError.reason,
+                moderationError.flags,
+                moderationError.message
+              );
+              
+              return (
+                <View
+                  className="mt-4 p-4 rounded-lg border"
                   style={{
-                    fontSize: getResponsiveFontSize(14, 16, 18),
-                    color: "#333",
+                    backgroundColor:
+                      friendlyMessage.isReview
+                        ? "rgba(255, 193, 7, 0.1)"
+                        : "rgba(255, 152, 0, 0.1)",
+                    borderColor:
+                      friendlyMessage.isReview
+                        ? "#ffc107"
+                        : "#ff9800",
                   }}
                 >
-                  {moderationError.message}
-                </Text>
-                {moderationError.reason && (
-                  <View className="mb-2">
+                  <View className="flex-row items-center mb-3">
+                    <Ionicons
+                      name={
+                        friendlyMessage.isReview
+                          ? "time-outline"
+                          : "bulb-outline"
+                      }
+                      size={24}
+                      color={
+                        friendlyMessage.isReview
+                          ? "#ffc107"
+                          : "#ff9800"
+                      }
+                    />
                     <Text
-                      className="font-medium mb-1"
+                      className="ml-2 font-semibold"
                       style={{
-                        fontSize: getResponsiveFontSize(12, 14, 16),
-                        color: "#666",
+                        fontSize: getResponsiveFontSize(16, 18, 20),
+                        color:
+                          friendlyMessage.isReview
+                            ? "#856404"
+                            : "#e65100",
+                        fontFamily: "Rubik-Medium",
                       }}
                     >
-                      Reason:
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: getResponsiveFontSize(12, 14, 16),
-                        color: "#666",
-                      }}
-                    >
-                      {moderationError.reason}
+                      {friendlyMessage.title}
                     </Text>
                   </View>
-                )}
-                {moderationError.flags && moderationError.flags.length > 0 && (
-                  <View>
-                    <Text
-                      className="font-medium mb-1"
-                      style={{
-                        fontSize: getResponsiveFontSize(12, 14, 16),
-                        color: "#666",
-                      }}
-                    >
-                      Issues found:
-                    </Text>
-                    {moderationError.flags.map((flag, index) => (
-                      <Text
-                        key={index}
-                        className="ml-2"
-                        style={{
-                          fontSize: getResponsiveFontSize(12, 14, 16),
-                          color: "#666",
-                        }}
-                      >
-                        • {flag.replace(/_/g, " ")}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-                <TouchableOpacity
-                  onPress={() => {
-                    setModerationError(null);
-                    setUploadState({ status: "idle", progress: 0, message: "" });
-                  }}
-                  className="mt-3 bg-gray-200 rounded-lg py-2 px-4 items-center"
-                >
                   <Text
-                    className="font-medium"
+                    className="mb-3"
                     style={{
                       fontSize: getResponsiveFontSize(14, 16, 18),
                       color: "#333",
+                      lineHeight: 22,
+                      fontFamily: "Rubik-Regular",
                     }}
                   >
-                    Dismiss
+                    {friendlyMessage.message}
                   </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                  {!friendlyMessage.isReview && (
+                    <View
+                      className="p-3 rounded-md mb-3"
+                      style={{
+                        backgroundColor: "rgba(255, 193, 7, 0.05)",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: getResponsiveFontSize(12, 13, 14),
+                          color: "#666",
+                          fontFamily: "Rubik-Regular",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        💡 Tip: Review your content and make sure it aligns with our gospel community guidelines.
+                      </Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setModerationError(null);
+                      if (!friendlyMessage.isReview) {
+                        setUploadState({ status: "idle", progress: 0, message: "" });
+                      }
+                    }}
+                    className="bg-gray-200 rounded-lg py-3 px-4 items-center"
+                    style={{
+                      backgroundColor: friendlyMessage.isReview ? "#ffc107" : "#ff9800",
+                    }}
+                  >
+                    <Text
+                      className="font-medium"
+                      style={{
+                        fontSize: getResponsiveFontSize(14, 16, 18),
+                        color: "#fff",
+                        fontFamily: "Rubik-Medium",
+                      }}
+                    >
+                      {friendlyMessage.isReview ? "Got it" : "Try Again"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
 
             {/* Upload Button */}
             <View className="items-center mt-4">
+              {/* AI Verification Disclaimer */}
               <View
                 className="flex-row items-center px-4 py-3 mb-3 rounded-lg border"
                 style={{
