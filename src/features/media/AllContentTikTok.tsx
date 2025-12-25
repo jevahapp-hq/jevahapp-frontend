@@ -100,11 +100,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     hasContent,
   } = useMedia({ immediate: true });
 
-  // Global state from original stores
-  const globalMediaStore = useGlobalMediaStore();
-  const globalVideoStore = useGlobalVideoStore();
-
-  // Get global video state - FIX: Read from the same store we write to with REACTIVE SUBSCRIPTIONS
+  // OPTIMIZED: Use selectors for state values (only re-render when specific values change)
+  // Get global video state - Using selectors to prevent unnecessary re-renders
   const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
   const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
   const progresses = useGlobalVideoStore((s) => s.progresses);
@@ -113,46 +110,55 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     (s) => s.currentlyPlayingVideo
   );
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
+
+  // OPTIMIZED: Extract actions without subscribing (actions don't change)
+  const playVideoGlobally = useGlobalVideoStore((s) => s.playVideoGlobally);
+  const pauseVideo = useGlobalVideoStore((s) => s.pauseVideo);
   const pauseAllVideos = useGlobalVideoStore((s) => s.pauseAllVideos);
   const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
   const enableAutoPlay = useGlobalVideoStore((s) => s.enableAutoPlay);
+  const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
 
   // Create functions to match what components expect
-  const playMedia = (key: string, type: "video" | "audio") => {
+  const playMedia = useCallback((key: string, type: "video" | "audio") => {
     if (type === "video") {
-      globalVideoStore.playVideoGlobally(key);
+      playVideoGlobally(key);
     } else {
-      globalMediaStore.playMediaGlobally(key, "audio");
+      playMediaGlobally(key, "audio");
     }
-  };
+  }, [playVideoGlobally, playMediaGlobally]);
 
-  const pauseMedia = (key: string) => {
-    globalVideoStore.pauseVideo(key);
-  };
+  const pauseMedia = useCallback((key: string) => {
+    pauseVideo(key);
+  }, [pauseVideo]);
 
-  const pauseAllMedia = () => {
-    globalVideoStore.pauseAllVideos();
-  };
+  const pauseAllMedia = useCallback(() => {
+    pauseAllVideos();
+  }, [pauseAllVideos]);
 
-  const toggleMute = (key: string) => {
-    globalVideoStore.toggleVideoMute(key);
-  };
+  const toggleMute = useCallback((key: string) => {
+    toggleVideoMuteAction(key);
+  }, [toggleVideoMuteAction]);
 
   const { showCommentModal } = useCommentModal();
-  const { comments } = useInteractionStore();
-  const libraryStore = useLibraryStore();
+  
+  // OPTIMIZED: Use selectors for interaction store (prevents unnecessary re-renders)
+  const comments = useInteractionStore((s) => s.comments);
+  const contentStats = useInteractionStore((s) => s.contentStats);
+  const toggleLike = useInteractionStore((s) => s.toggleLike);
+  const toggleSave = useInteractionStore((s) => s.toggleSave);
+  const loadContentStats = useInteractionStore((s) => s.loadContentStats);
+  const loadingInteraction = useInteractionStore((s) => s.loadingInteraction);
+  const refreshAllStatsAfterLogin = useInteractionStore((s) => s.refreshAllStatsAfterLogin);
+  
+  // OPTIMIZED: Use selectors for library store (only subscribe to state we need)
+  const libraryIsLoaded = useLibraryStore((s) => s.isLoaded);
+  const loadSavedItems = useLibraryStore((s) => s.loadSavedItems);
+  const addToLibrary = useLibraryStore((s) => s.addToLibrary);
+  const removeFromLibrary = useLibraryStore((s) => s.removeFromLibrary);
+  
   const { loadDownloadedItems } = useDownloadStore();
   const { navigateToReels } = useVideoNavigation();
-
-  // Interaction store
-  const {
-    contentStats,
-    toggleLike,
-    toggleSave,
-    loadContentStats,
-    loadingInteraction,
-    refreshAllStatsAfterLogin,
-  } = useInteractionStore();
 
   // User profile for authentication state detection
   const { user } = useUserProfile();
@@ -607,9 +613,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         const [stats, viewed, libraryLoaded] = await Promise.all([
           getPersistedStats(),
           getViewed(),
-          libraryStore.isLoaded
+          libraryIsLoaded
             ? Promise.resolve()
-            : libraryStore.loadSavedItems(),
+            : loadSavedItems(),
         ]);
 
         setPreviouslyViewed(viewed || []);
@@ -1093,11 +1099,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             })(),
             originalKey: key,
           };
-          await libraryStore.addToLibrary(libraryItem);
+          await addToLibrary(libraryItem);
           setSuccessMessage("Saved to library!");
           setShowSuccessCard(true);
         } else {
-          await libraryStore.removeFromLibrary(contentId);
+          await removeFromLibrary(contentId);
           setSuccessMessage("Removed from library!");
           setShowSuccessCard(true);
         }
