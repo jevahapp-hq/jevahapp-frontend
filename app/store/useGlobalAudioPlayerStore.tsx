@@ -188,6 +188,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             {
               shouldPlay: shouldPlayImmediately, // Start playing immediately if requested
               isMuted: get().isMuted,
+              progressUpdateIntervalMillis: 300, // Update every 300ms to prevent excessive callbacks
             },
             (status) => {
               if (status.isLoaded) {
@@ -204,34 +205,46 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
                 // More conservative update logic to prevent cascading renders
                 const timeSinceLastUpdate = now - lastTs;
-                const positionChanged = Math.abs(prev.position - newPosition) > 1000; // Increased threshold
+                const positionChangedSignificantly = Math.abs(prev.position - newPosition) > 1000; // 1 second threshold
                 const playingChanged = prev.isPlaying !== status.isPlaying;
                 const durationChanged = prev.duration !== newDuration;
 
-                // Only update if significant change OR enough time has passed (prevents spam)
-                const shouldUpdateNow =
-                  timeSinceLastUpdate > 300 || // Reduced frequency to ~3 updates/sec
-                  playingChanged || // Always update on play/pause changes
-                  (positionChanged && timeSinceLastUpdate > 200) || // Position only if time allows
-                  durationChanged; // Duration changes are important
+                // Throttle position updates: only update if enough time passed OR significant change
+                const shouldUpdatePosition = 
+                  timeSinceLastUpdate > 300 || // Update every ~300ms max (~3 updates/sec)
+                  positionChangedSignificantly; // Or if position jumped significantly
 
-                if (shouldUpdateNow) {
-                  // Batch all state updates into a single set() call
-                  const updates: any = {
-                    position: newPosition,
-                    duration: newDuration,
-                    progress: newProgress,
-                    isPlaying: status.isPlaying,
-                    __lastStatusUpdateTs: now,
-                  };
+                // Always update critical state changes immediately
+                const shouldUpdateCritical = playingChanged || durationChanged;
 
-                  // Only include position updates if they meet criteria
-                  if (!(positionChanged && timeSinceLastUpdate < 200)) {
+                // Only update if we need to (prevents infinite loops)
+                if (shouldUpdatePosition || shouldUpdateCritical) {
+                  // Build updates object conditionally - only include what actually changed
+                  const updates: any = {};
+
+                  // Only update position/progress if throttling allows and values actually changed
+                  if (shouldUpdatePosition && (
+                    Math.abs(prev.position - newPosition) > 50 || // At least 50ms difference
+                    Math.abs(prev.progress - newProgress) > 0.001 // Or progress changed meaningfully
+                  )) {
                     updates.position = newPosition;
                     updates.progress = newProgress;
                   }
 
-                  set(updates);
+                  // Always update critical state if it changed
+                  if (playingChanged) {
+                    updates.isPlaying = status.isPlaying;
+                  }
+                  
+                  if (durationChanged) {
+                    updates.duration = newDuration;
+                  }
+
+                  // Always update timestamp when we're making any update
+                  if (Object.keys(updates).length > 0) {
+                    updates.__lastStatusUpdateTs = now;
+                    set(updates);
+                  }
                 }
 
                 // Handle playback completion with proper debouncing

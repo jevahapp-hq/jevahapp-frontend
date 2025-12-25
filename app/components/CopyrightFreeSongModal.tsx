@@ -1,14 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     Image,
+    ImageBackground,
     InteractionManager,
     Modal,
     PanResponder,
+    Platform,
     ScrollView,
+    StatusBar,
     Text,
     TextInput,
     TouchableOpacity,
@@ -791,6 +796,20 @@ export default function CopyrightFreeSongModal({
     [onSeek, audioDuration, audioPosition, song]
   );
 
+  // Memoize image source for performance
+  const imageSource = useMemo(() => {
+    if (!song?.thumbnailUrl) return null;
+    return typeof song.thumbnailUrl === "string"
+      ? { uri: song.thumbnailUrl }
+      : song.thumbnailUrl;
+  }, [song?.thumbnailUrl]);
+
+  // Memoize album art dimensions for performance
+  const albumArtSize = useMemo(() => {
+    const screenWidth = Dimensions.get("window").width;
+    return Math.min(screenWidth * 0.75, 340); // Max 340px, 75% of screen width
+  }, []);
+
   if (!song) return null;
 
   return (
@@ -800,81 +819,108 @@ export default function CopyrightFreeSongModal({
         transparent
         animationType="none"
         onRequestClose={onClose}
+        statusBarTranslucent
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
+        <StatusBar barStyle="light-content" />
+        {/* Full-screen background with blurred album art */}
+        <View style={{ flex: 1 }}>
+          {imageSource && (
+            <>
+              {/* Blurred background image */}
+              <ImageBackground
+                source={imageSource}
+                style={{
+                  position: "absolute",
+                  top: -100,
+                  left: -100,
+                  right: -100,
+                  bottom: -100,
+                  width: "150%",
+                  height: "150%",
+                }}
+                resizeMode="cover"
+                blurRadius={Platform.OS === "ios" ? 80 : 50}
+              >
+                {/* Dark overlay for better text readability */}
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: "rgba(0, 0, 0, 0.75)",
+                  }}
+                />
+              </ImageBackground>
+              {/* Additional gradient overlay for depth */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0.4)", "rgba(0,0,0,0.8)", "rgba(0,0,0,0.95)"]}
+                locations={[0, 0.5, 1]}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                }}
+              />
+            </>
+          )}
+          
+          {/* Content Container */}
           <Animated.View
             style={[
               {
-                backgroundColor: UI_CONFIG.COLORS.BACKGROUND,
-                borderRadius: 32,
-                width: "92%",
-                maxHeight: SCREEN_HEIGHT * 0.9,
-                paddingTop: UI_CONFIG.SPACING.MD,
-                paddingBottom: UI_CONFIG.SPACING.XL,
+                flex: 1,
+                paddingTop: Platform.OS === "ios" ? 50 : 40,
+                paddingBottom: Platform.OS === "ios" ? 40 : 30,
               },
               modalAnimatedStyle,
             ]}
           >
-            {/* Header - Now Playing style */}
+            {/* Header - Minimal with close and options */}
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
                 paddingHorizontal: UI_CONFIG.SPACING.LG,
-                paddingVertical: UI_CONFIG.SPACING.SM,
+                paddingVertical: UI_CONFIG.SPACING.MD,
+                zIndex: 10,
               }}
             >
               <TouchableOpacity
                 onPress={onClose}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   justifyContent: "center",
                   alignItems: "center",
-                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
                 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons
                   name="chevron-down"
-                  size={20}
-                  color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                  size={24}
+                  color="#FFFFFF"
                 />
               </TouchableOpacity>
-
-              <Text
-                style={{
-                  fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-                  fontFamily: "Rubik-SemiBold",
-                  color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                }}
-              >
-                Now Playing
-              </Text>
 
               <TouchableOpacity
                 onPress={handleOptionsPress}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   justifyContent: "center",
                   alignItems: "center",
-                  backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
                 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons
                   name="ellipsis-horizontal"
-                  size={18}
-                  color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                  size={22}
+                  color="#FFFFFF"
                 />
               </TouchableOpacity>
             </View>
@@ -882,49 +928,63 @@ export default function CopyrightFreeSongModal({
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
+                flexGrow: 1,
                 paddingHorizontal: UI_CONFIG.SPACING.LG,
-                paddingTop: UI_CONFIG.SPACING.LG,
+                paddingTop: UI_CONFIG.SPACING.XL,
+                paddingBottom: UI_CONFIG.SPACING.XL,
               }}
             >
-              {/* Artwork */}
+              {/* Large Album Artwork - Centered */}
+              <View
+                style={{
+                  alignItems: "center",
+                  marginBottom: UI_CONFIG.SPACING.XL,
+                  marginTop: UI_CONFIG.SPACING.LG,
+                }}
+              >
+                {imageSource && (
+                  <View
+                    style={{
+                      width: albumArtSize,
+                      height: albumArtSize,
+                      borderRadius: 24,
+                      overflow: "hidden",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 20 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 30,
+                      elevation: 20,
+                    }}
+                  >
+                    <Image
+                      source={imageSource}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Song Info - Modern Style */}
               <View
                 style={{
                   alignItems: "center",
                   marginBottom: UI_CONFIG.SPACING.XL,
                 }}
               >
-                {/** Support both backend URL strings and local require() thumbnails */}
-                {song?.thumbnailUrl && (
-                  <Image
-                    source={
-                      typeof song.thumbnailUrl === "string"
-                        ? { uri: song.thumbnailUrl }
-                        : song.thumbnailUrl
-                    }
-                    style={{
-                      width: 260,
-                      height: 260,
-                      borderRadius: 32,
-                    }}
-                    resizeMode="cover"
-                  />
-                )}
-              </View>
-
-              {/* Song Info */}
-              <View
-                style={{
-                  alignItems: "center",
-                  marginBottom: UI_CONFIG.SPACING.LG,
-                }}
-              >
                 <Text
                   style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XL,
+                    fontSize: 26,
                     fontFamily: "Rubik-SemiBold",
-                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                    marginBottom: 4,
+                    color: "#FFFFFF",
+                    marginBottom: 8,
                     textAlign: "center",
+                    textShadowColor: "rgba(0, 0, 0, 0.5)",
+                    textShadowOffset: { width: 0, height: 2 },
+                    textShadowRadius: 4,
                   }}
                   numberOfLines={2}
                 >
@@ -932,41 +992,31 @@ export default function CopyrightFreeSongModal({
                 </Text>
                 <Text
                   style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+                    fontSize: 18,
                     fontFamily: "Rubik",
-                    color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                    marginBottom: 4,
+                    color: "rgba(255, 255, 255, 0.8)",
+                    marginBottom: 16,
                     textAlign: "center",
+                    textShadowColor: "rgba(0, 0, 0, 0.3)",
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 2,
                   }}
                   numberOfLines={1}
                 >
                   {song.artist}
                 </Text>
-                {song.category && (
-                  <Text
-                    style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                      marginBottom: UI_CONFIG.SPACING.MD,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {song.category}
-                  </Text>
-                )}
 
-                {/* Like and Views Icons */}
+                {/* Like and Views - Glassmorphic Pills */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: UI_CONFIG.SPACING.LG,
-                    marginTop: UI_CONFIG.SPACING.SM,
+                    gap: UI_CONFIG.SPACING.MD,
+                    marginTop: UI_CONFIG.SPACING.MD,
                   }}
                 >
-                  {/* Like Icon */}
+                  {/* Like Pill */}
                   <TouchableOpacity
                     onPress={handleToggleLike}
                     disabled={isTogglingLike}
@@ -974,52 +1024,54 @@ export default function CopyrightFreeSongModal({
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      paddingHorizontal: UI_CONFIG.SPACING.MD,
+                      paddingHorizontal: UI_CONFIG.SPACING.LG,
                       paddingVertical: UI_CONFIG.SPACING.SM,
-                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                      backgroundColor: isLiked 
-                        ? UI_CONFIG.COLORS.ERROR + "15" 
-                        : UI_CONFIG.COLORS.SURFACE,
+                      borderRadius: 20,
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255, 255, 255, 0.2)",
                     }}
                   >
                     <Ionicons
                       name={isLiked ? "heart" : "heart-outline"}
-                      size={20}
-                      color={isLiked ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY}
+                      size={18}
+                      color={isLiked ? "#FF6B6B" : "rgba(255, 255, 255, 0.9)"}
                     />
                     <Text
                       style={{
                         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
                         fontFamily: "Rubik-SemiBold",
-                        color: isLiked ? UI_CONFIG.COLORS.ERROR : UI_CONFIG.COLORS.TEXT_SECONDARY,
+                        color: "#FFFFFF",
                       }}
                     >
                       {likeCount > 0 ? likeCount.toLocaleString() : "0"}
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Views Icon */}
+                  {/* Views Pill */}
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      paddingHorizontal: UI_CONFIG.SPACING.MD,
+                      paddingHorizontal: UI_CONFIG.SPACING.LG,
                       paddingVertical: UI_CONFIG.SPACING.SM,
-                      borderRadius: UI_CONFIG.BORDER_RADIUS.LG,
-                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                      borderRadius: 20,
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255, 255, 255, 0.2)",
                     }}
                   >
                     <Ionicons
                       name="eye-outline"
-                      size={20}
-                      color={UI_CONFIG.COLORS.TEXT_SECONDARY}
+                      size={18}
+                      color="rgba(255, 255, 255, 0.9)"
                     />
                     <Text
                       style={{
                         fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
                         fontFamily: "Rubik-SemiBold",
-                        color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                        color: "#FFFFFF",
                       }}
                     >
                       {viewCount > 0 ? viewCount.toLocaleString() : "0"}
@@ -1028,80 +1080,22 @@ export default function CopyrightFreeSongModal({
                 </View>
               </View>
 
-              {/* Progress + controls */}
+              {/* Progress + controls - Modern Style */}
               <View style={{ marginBottom: UI_CONFIG.SPACING.XL }}>
-                {/* Progress bar with draggable thumb for easier scrubbing */}
-                <View
-                  ref={progressBarRef}
-                  style={{
-                    height: 20, // taller touch area for bigger fingers
-                    justifyContent: "center",
-                    marginBottom: 8,
-                  }}
-                  {...panResponder.panHandlers}
-                >
-                  {/* Track */}
-                  <View
-                    style={{
-                      height: 4,
-                      borderRadius: 999,
-                      backgroundColor: UI_CONFIG.COLORS.SURFACE,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: "100%",
-                        borderRadius: 999,
-                        width: `${
-                          (isSeeking ? seekProgress : audioProgress) * 100
-                        }%`,
-                        backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-                      }}
-                    />
-                  </View>
-                  {/* Thumb/handle */}
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: "absolute",
-                      left: `${
-                        (isSeeking ? seekProgress : audioProgress) * 100
-                      }%`,
-                      transform: [{ translateX: -10 }],
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        backgroundColor: "#FFFFFF",
-                        borderWidth: 2,
-                        borderColor: UI_CONFIG.COLORS.SECONDARY,
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.25,
-                        shadowRadius: 3.5,
-                        elevation: 4,
-                      }}
-                    />
-                  </View>
-                </View>
-
-                {/* Time row */}
+                {/* Time row - Above progress bar */}
                 <View
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: UI_CONFIG.SPACING.LG,
+                    marginBottom: 12,
+                    paddingHorizontal: 4,
                   }}
                 >
                   <Text
                     style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      fontSize: 13,
+                      fontFamily: "Rubik-Medium",
+                      color: "rgba(255, 255, 255, 0.8)",
                     }}
                   >
                     {formatTime(
@@ -1112,92 +1106,189 @@ export default function CopyrightFreeSongModal({
                   </Text>
                   <Text
                     style={{
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                      fontSize: 13,
+                      fontFamily: "Rubik-Medium",
+                      color: "rgba(255, 255, 255, 0.8)",
                     }}
                   >
                     {formatTime(audioDuration || song.duration * 1000)}
                   </Text>
                 </View>
 
-                {/* Transport controls (with skip back/forward using seek) */}
+                {/* Progress bar with draggable thumb - Modern style */}
+                <View
+                  ref={progressBarRef}
+                  style={{
+                    height: 24, // Larger touch area
+                    justifyContent: "center",
+                    marginBottom: UI_CONFIG.SPACING.XL,
+                  }}
+                  {...panResponder.panHandlers}
+                >
+                  {/* Track */}
+                  <View
+                    style={{
+                      height: 5,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(255, 255, 255, 0.25)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#FEA74E", "#FF8C42"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        height: "100%",
+                        borderRadius: 999,
+                        width: `${
+                          (isSeeking ? seekProgress : audioProgress) * 100
+                        }%`,
+                      }}
+                    />
+                  </View>
+                  {/* Thumb/handle - Larger and more visible */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      left: `${
+                        (isSeeking ? seekProgress : audioProgress) * 100
+                      }%`,
+                      transform: [{ translateX: -12 }],
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: "#FFFFFF",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 6,
+                        elevation: 8,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Transport controls - Modern large buttons */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
                     paddingHorizontal: UI_CONFIG.SPACING.XL,
+                    marginBottom: UI_CONFIG.SPACING.LG,
                   }}
                 >
                   {/* Skip back 15 seconds */}
-                  <AnimatedButton onPress={() => handleSkip(-15)}>
-                    <Ionicons
-                      name="play-skip-back"
-                      size={24}
-                      color={UI_CONFIG.COLORS.TEXT_PRIMARY}
-                    />
-                  </AnimatedButton>
-
-                  <AnimatedButton
-                    onPress={onTogglePlay || (() => onPlay?.(song))}
+                  <TouchableOpacity
+                    onPress={() => handleSkip(-15)}
                     style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: 36,
-                      backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
                       justifyContent: "center",
                       alignItems: "center",
-                      ...UI_CONFIG.SHADOWS.MD,
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="play-skip-back"
+                      size={26}
+                      color="#FFFFFF"
+                    />
+                  </TouchableOpacity>
+
+                  {/* Large Play/Pause Button */}
+                  <TouchableOpacity
+                    onPress={onTogglePlay || (() => onPlay?.(song))}
+                    activeOpacity={0.8}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 40,
+                      backgroundColor: "#FFFFFF",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 16,
+                      elevation: 12,
                     }}
                   >
                     <Ionicons
                       name={isPlaying ? "pause" : "play"}
-                      size={32}
-                      color="#FFFFFF"
+                      size={36}
+                      color="#256E63"
+                      style={{ marginLeft: isPlaying ? 0 : 3 }}
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
 
                   {/* Skip forward 15 seconds */}
-                  <AnimatedButton onPress={() => handleSkip(15)}>
+                  <TouchableOpacity
+                    onPress={() => handleSkip(15)}
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: "rgba(255, 255, 255, 0.15)",
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <Ionicons
                       name="play-skip-forward"
-                      size={24}
-                      color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                      size={26}
+                      color="#FFFFFF"
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Repeat and Shuffle controls */}
+                {/* Repeat and Shuffle controls - Modern style */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: UI_CONFIG.SPACING.XL,
-                    marginTop: UI_CONFIG.SPACING.MD,
+                    gap: UI_CONFIG.SPACING.XXL,
+                    marginBottom: UI_CONFIG.SPACING.XL,
                   }}
                 >
                   {/* Shuffle button */}
-                  <AnimatedButton
+                  <TouchableOpacity
                     onPress={() => setIsShuffled(!isShuffled)}
                     style={{
-                      padding: UI_CONFIG.SPACING.XS,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: isShuffled
+                        ? "rgba(255, 255, 255, 0.25)"
+                        : "rgba(255, 255, 255, 0.15)",
+                      borderWidth: isShuffled ? 1.5 : 1,
+                      borderColor: isShuffled
+                        ? "#FFFFFF"
+                        : "rgba(255, 255, 255, 0.3)",
                     }}
+                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name="shuffle"
                       size={22}
-                      color={
-                        isShuffled
-                          ? UI_CONFIG.COLORS.PRIMARY
-                          : UI_CONFIG.COLORS.TEXT_SECONDARY
-                      }
+                      color={isShuffled ? "#FFFFFF" : "rgba(255, 255, 255, 0.8)"}
                     />
-                  </AnimatedButton>
+                  </TouchableOpacity>
 
                   {/* Repeat button */}
-                  <AnimatedButton
+                  <TouchableOpacity
                     onPress={() => {
                       // Cycle through: none -> all -> one -> none
                       if (repeatMode === "none") {
@@ -1209,95 +1300,118 @@ export default function CopyrightFreeSongModal({
                       }
                     }}
                     style={{
-                      padding: UI_CONFIG.SPACING.XS,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor:
+                        repeatMode !== "none"
+                          ? "rgba(255, 255, 255, 0.25)"
+                          : "rgba(255, 255, 255, 0.15)",
+                      borderWidth: repeatMode !== "none" ? 1.5 : 1,
+                      borderColor:
+                        repeatMode !== "none"
+                          ? "#FFFFFF"
+                          : "rgba(255, 255, 255, 0.3)",
                       position: "relative",
                     }}
+                    activeOpacity={0.7}
                   >
-                    <View style={{ position: "relative" }}>
-                      <Ionicons
-                        name={
-                          repeatMode === "one"
-                            ? "repeat"
-                            : repeatMode === "all"
-                            ? "repeat"
-                            : "repeat-outline"
-                        }
-                        size={22}
-                        color={
-                          repeatMode !== "none"
-                            ? UI_CONFIG.COLORS.PRIMARY
-                            : UI_CONFIG.COLORS.TEXT_SECONDARY
-                        }
+                    <Ionicons
+                      name={
+                        repeatMode === "one"
+                          ? "repeat"
+                          : repeatMode === "all"
+                          ? "repeat"
+                          : "repeat-outline"
+                      }
+                      size={22}
+                      color={
+                        repeatMode !== "none"
+                          ? "#FFFFFF"
+                          : "rgba(255, 255, 255, 0.8)"
+                      }
+                    />
+                    {repeatMode === "one" && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          right: 4,
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: "#FEA74E",
+                          borderWidth: 2,
+                          borderColor: "#FFFFFF",
+                        }}
                       />
-                      {repeatMode === "one" && (
-                        <View
-                          style={{
-                            position: "absolute",
-                            top: -4,
-                            right: -4,
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: UI_CONFIG.COLORS.PRIMARY,
-                            borderWidth: 1,
-                            borderColor: "#FFFFFF",
-                          }}
-                        />
-                      )}
-                    </View>
-                  </AnimatedButton>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Bottom row: mute + playlist pill */}
+              {/* Bottom row: mute + playlist pill - Modern style */}
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  paddingTop: UI_CONFIG.SPACING.LG,
                 }}
               >
-                <AnimatedButton onPress={onToggleMute}>
+                <TouchableOpacity
+                  onPress={onToggleMute}
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: "rgba(255, 255, 255, 0.15)",
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.2)",
+                  }}
+                  activeOpacity={0.7}
+                >
                   <Ionicons
                     name={isMuted ? "volume-mute" : "volume-high"}
                     size={22}
-                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                    color="#FFFFFF"
                   />
-                </AnimatedButton>
+                </TouchableOpacity>
 
-                <AnimatedButton
+                <TouchableOpacity
                   onPress={() => setShowPlaylistView(true)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     paddingHorizontal: UI_CONFIG.SPACING.LG,
-                    paddingVertical: UI_CONFIG.SPACING.SM,
-                    borderRadius: 999,
-                    backgroundColor: UI_CONFIG.COLORS.SURFACE,
+                    paddingVertical: UI_CONFIG.SPACING.MD,
+                    borderRadius: 25,
+                    backgroundColor: "rgba(255, 255, 255, 0.2)",
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.3)",
                   }}
+                  activeOpacity={0.8}
                 >
                   <Ionicons
                     name="list"
-                    size={18}
-                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
+                    size={20}
+                    color="#FFFFFF"
                   />
                   <Text
                     style={{
-                      marginLeft: 6,
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-                      fontFamily: "Rubik",
-                      color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+                      marginLeft: 8,
+                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+                      fontFamily: "Rubik-SemiBold",
+                      color: "#FFFFFF",
                     }}
                   >
                     Playlist
                   </Text>
-                  <Ionicons
-                    name="chevron-up"
-                    size={16}
-                    color={UI_CONFIG.COLORS.TEXT_PRIMARY}
-                    style={{ marginLeft: 4 }}
-                  />
-                </AnimatedButton>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </Animated.View>
@@ -2364,4 +2478,5 @@ export default function CopyrightFreeSongModal({
     </>
   );
 }
+
 
