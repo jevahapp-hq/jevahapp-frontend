@@ -247,6 +247,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const lastSwitchTimeRef = useRef<number>(0);
   const scrollAnimationFrameRef = useRef<number | null>(null);
   const isContentReadyRef = useRef<boolean>(false);
+  // Track previous contentType to detect actual category changes
+  const prevContentTypeRef = useRef(contentType);
+  // Track if we've already reset scroll on focus (prevent multiple resets)
+  const hasResetScrollOnFocusRef = useRef(false);
 
   // OPTIMIZED: Memoize helper functions to prevent recreation on every render
   const getVideoState = useCallback((key: string) => ({
@@ -1687,13 +1691,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }
   }, [loading, filteredMediaList.length, isLoadingContent]);
 
-  // Reset scroll state when contentType changes (category switch)
+  // Reset scroll state ONLY when contentType actually changes (category switch)
   useEffect(() => {
+    // Only reset scroll if contentType actually changed (not on loading/data updates)
+    const contentTypeChanged = prevContentTypeRef.current !== contentType;
+    prevContentTypeRef.current = contentType;
+    
     // Mark content as ready immediately if we have content (from cache or fresh)
     isContentReadyRef.current = filteredMediaList.length > 0;
     
-    // Reset scroll position to top when category changes
-    if (scrollViewRef.current) {
+    // ONLY reset scroll position when category actually changes, not on data updates
+    if (contentTypeChanged && scrollViewRef.current) {
       // Small delay to ensure component is ready
       const timer = setTimeout(() => {
         try {
@@ -1714,18 +1722,19 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       cancelAnimationFrame(scrollAnimationFrameRef.current);
       scrollAnimationFrameRef.current = null;
     }
-  }, [contentType, loading, filteredMediaList.length, isLoadingContent]);
+  }, [contentType]); // Only depend on contentType - don't reset on loading/data changes!
 
   // Reset scroll state when component gains focus (navigation back from reels, etc.)
+  // BUT only if we haven't already reset it (prevents resetting during normal interactions)
   useFocusEffect(
     useCallback(() => {
       // Mark content as ready immediately if we have content (from cache or fresh)
-      // This ensures instant scrolling when navigating back
-      // Cache is already loaded synchronously by useMedia hook, so content should be available
       isContentReadyRef.current = filteredMediaList.length > 0;
       
-      // Reset scroll position to top when navigating back
-      if (scrollViewRef.current) {
+      // Only reset scroll position if we haven't already reset it in this focus session
+      // This prevents unwanted scroll resets when user is interacting with videos
+      if (!hasResetScrollOnFocusRef.current && scrollViewRef.current) {
+        hasResetScrollOnFocusRef.current = true;
         // Small delay to ensure component is mounted
         setTimeout(() => {
           try {
@@ -1747,6 +1756,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
 
       return () => {
+        // Reset flag when component loses focus so it can reset on next focus if needed
+        hasResetScrollOnFocusRef.current = false;
         // Cleanup on blur
         if (scrollTimeoutRef.current) {
           clearTimeout(scrollTimeoutRef.current);
@@ -1757,7 +1768,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           scrollAnimationFrameRef.current = null;
         }
       };
-    }, [loading, filteredMediaList.length, isLoadingContent])
+    }, [filteredMediaList.length]) // Only depend on content length, not loading states
   );
 
   const handleScrollEnd = useCallback(() => {
