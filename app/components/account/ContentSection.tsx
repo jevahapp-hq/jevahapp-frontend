@@ -45,6 +45,177 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   }, []);
 
+  // Handle video press - memoized
+  const handleVideoPress = useCallback((video: Video, index: number) => {
+    // Get user's actual avatar URL, fallback to placeholder if not available
+    const userAvatarUrl = user && getAvatarUrl(user) 
+      ? getAvatarUrl(user) 
+      : "https://via.placeholder.com/40x40/cccccc/ffffff?text=U";
+    
+    // Prepare video list for navigation
+    const videoListForNavigation = videos.map((v, idx) => ({
+      title: v.title || "Untitled Video",
+      speaker: v.userId || "Unknown",
+      timeAgo: new Date(v.createdAt).toLocaleDateString(),
+      views: v.viewsCount || 0,
+      sheared: 0,
+      saved: 0,
+      favorite: v.likesCount || 0,
+      fileUrl: v.url || "",
+      imageUrl: v.thumbnail || v.url || "",
+      speakerAvatar: userAvatarUrl,
+      _id: v._id,
+      contentType: "videos",
+      description: v.description || "",
+      createdAt: v.createdAt,
+      uploadedBy: v.userId,
+    }));
+
+    // Set video list in reels store BEFORE navigation for immediate access
+    reelsStore.setVideoList(videoListForNavigation);
+    reelsStore.setCurrentIndex(index);
+
+    // Navigate to reels screen
+    router.push({
+      pathname: "/reels/Reelsviewscroll",
+      params: {
+        title: video.title || "Untitled Video",
+        speaker: video.userId || "Unknown",
+        timeAgo: new Date(video.createdAt).toLocaleDateString(),
+        views: String(video.viewsCount || 0),
+        sheared: "0",
+        saved: "0",
+        favorite: String(video.likesCount || 0),
+        imageUrl: video.url || "",
+        speakerAvatar: userAvatarUrl,
+        category: "videos",
+        currentIndex: String(index),
+        source: "AccountScreen",
+        videoList: JSON.stringify(videoListForNavigation),
+      },
+    });
+  }, [router, reelsStore, user, getAvatarUrl, videos]);
+
+  // Render post item - memoized
+  const renderPostItem = useCallback(({ item }: { item: Post }) => {
+    const thumbnailUrl = item.media?.[0]?.thumbnail || item.media?.[0]?.url;
+
+    return (
+      <TouchableOpacity
+        className="w-[32%] mb-2 aspect-square"
+        onPress={() => {
+          // Navigate to post detail
+          // navigation.navigate('PostDetail', { postId: item._id });
+        }}
+      >
+        {thumbnailUrl ? (
+          <Image
+            source={{ uri: thumbnailUrl }}
+            className="w-full h-full rounded-lg"
+            resizeMode="cover"
+          />
+        ) : (
+          <View className="w-full h-full rounded-lg bg-gray-200 items-center justify-center">
+            <Ionicons name="image-outline" size={32} color="#999" />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  }, []);
+
+  // Render media item - memoized
+  const renderMediaItem = useCallback(({ item }: { item: MediaItem }) => {
+    return (
+      <TouchableOpacity
+        className="w-[32%] mb-2 aspect-square"
+        onPress={() => {
+          // Navigate to media detail
+        }}
+      >
+        <Image
+          source={{ uri: item.thumbnail || item.url }}
+          className="w-full h-full rounded-lg"
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
+    );
+  }, []);
+
+  // Render video item - memoized
+  const renderVideoItem = useCallback(({ item, index }: { item: Video; index: number }) => {
+    return (
+      <TouchableOpacity
+        className="w-[32%] mb-2 aspect-square relative"
+        onPress={() => handleVideoPress(item, index)}
+        activeOpacity={0.8}
+      >
+        <Image
+          source={{ uri: item.thumbnail || item.url }}
+          className="w-full h-full rounded-lg"
+          resizeMode="cover"
+        />
+        {/* Semi-transparent overlay for better play icon visibility */}
+        <View className="absolute inset-0 bg-black/20 rounded-lg" />
+        {/* Play icon with background circle - smaller for compact grid */}
+        <View className="absolute inset-0 items-center justify-center">
+          <View className="bg-black/60 rounded-full p-1">
+            <Ionicons name="play" size={16} color="white" />
+          </View>
+        </View>
+        {item.duration && (
+          <View className="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded">
+            <Text className="text-white text-[10px] font-medium">
+              {formatDuration(item.duration)}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  }, [handleVideoPress, formatDuration]);
+
+  // Analytics metrics - memoized
+  const analyticsMetrics = useMemo(() => {
+    if (!analytics) return [];
+    return [
+      {
+        icon: "albums-outline",
+        label: "Posts",
+        value: formatNumber(analytics.posts.published),
+        sub: "Total published posts",
+      },
+      {
+        icon: "heart-outline",
+        label: "Likes",
+        value: formatNumber(analytics.likes.total),
+        sub: 'Number of "Like" engagements on all posts',
+      },
+      {
+        icon: "radio-outline",
+        label: "Live Sessions",
+        value: analytics.liveSessions.total.toString(),
+        sub: "Number of times you went Live",
+      },
+      {
+        icon: "chatbubble-ellipses-outline",
+        label: "Comments",
+        value: formatNumber(analytics.comments.total),
+        sub: 'Number of "comments" on all posts',
+      },
+      {
+        icon: "document-text-outline",
+        label: "Drafts",
+        value: analytics.drafts.total.toString(),
+        sub: "Unpublished posts",
+      },
+      {
+        icon: "share-social-outline",
+        label: "Shares",
+        value: formatNumber(analytics.shares.total),
+        sub: "Number of times people shared your contents",
+      },
+    ];
+  }, [analytics, formatNumber]);
+
   if (loading && selectedIndex !== 3) {
     return (
       <View className="flex-1 items-center justify-center py-8">
@@ -63,32 +234,6 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Posts Tab (Index 0)
   if (selectedIndex === 0) {
-    const renderPostItem = useCallback(({ item }: { item: Post }) => {
-      const thumbnailUrl = item.media?.[0]?.thumbnail || item.media?.[0]?.url;
-
-      return (
-        <TouchableOpacity
-          className="w-[32%] mb-2 aspect-square"
-          onPress={() => {
-            // Navigate to post detail
-            // navigation.navigate('PostDetail', { postId: item._id });
-          }}
-        >
-          {thumbnailUrl ? (
-            <Image
-              source={{ uri: thumbnailUrl }}
-              className="w-full h-full rounded-lg"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="w-full h-full rounded-lg bg-gray-200 items-center justify-center">
-              <Ionicons name="image-outline" size={32} color="#999" />
-            </View>
-          )}
-        </TouchableOpacity>
-      );
-    }, []);
-
     return (
       <FlatList
         data={posts}
@@ -124,23 +269,6 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Media Tab (Index 1)
   if (selectedIndex === 1) {
-    const renderMediaItem = useCallback(({ item }: { item: MediaItem }) => {
-      return (
-        <TouchableOpacity
-          className="w-[32%] mb-2 aspect-square"
-          onPress={() => {
-            // Navigate to media detail
-          }}
-        >
-          <Image
-            source={{ uri: item.thumbnail || item.url }}
-            className="w-full h-full rounded-lg"
-            resizeMode="cover"
-          />
-        </TouchableOpacity>
-      );
-    }, []);
-
     return (
       <FlatList
         data={media}
@@ -176,87 +304,6 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Videos Tab (Index 2)
   if (selectedIndex === 2) {
-    const handleVideoPress = useCallback((video: Video, index: number) => {
-      // Get user's actual avatar URL, fallback to placeholder if not available
-      const userAvatarUrl = user && getAvatarUrl(user) 
-        ? getAvatarUrl(user) 
-        : "https://via.placeholder.com/40x40/cccccc/ffffff?text=U";
-      
-      // Prepare video list for navigation
-      const videoListForNavigation = videos.map((v, idx) => ({
-        title: v.title || "Untitled Video",
-        speaker: v.userId || "Unknown",
-        timeAgo: new Date(v.createdAt).toLocaleDateString(),
-        views: v.viewsCount || 0,
-        sheared: 0,
-        saved: 0,
-        favorite: v.likesCount || 0,
-        fileUrl: v.url || "",
-        imageUrl: v.thumbnail || v.url || "",
-        speakerAvatar: userAvatarUrl,
-        _id: v._id,
-        contentType: "videos",
-        description: v.description || "",
-        createdAt: v.createdAt,
-        uploadedBy: v.userId,
-      }));
-
-      // Set video list in reels store BEFORE navigation for immediate access
-      reelsStore.setVideoList(videoListForNavigation);
-      reelsStore.setCurrentIndex(index);
-
-      // Navigate to reels screen
-      router.push({
-        pathname: "/reels/Reelsviewscroll",
-        params: {
-          title: video.title || "Untitled Video",
-          speaker: video.userId || "Unknown",
-          timeAgo: new Date(video.createdAt).toLocaleDateString(),
-          views: String(video.viewsCount || 0),
-          sheared: "0",
-          saved: "0",
-          favorite: String(video.likesCount || 0),
-          imageUrl: video.url || "",
-          speakerAvatar: userAvatarUrl,
-          category: "videos",
-          currentIndex: String(index),
-          source: "AccountScreen",
-          videoList: JSON.stringify(videoListForNavigation),
-        },
-      });
-    }, [router, reelsStore, user, getAvatarUrl, videos]);
-
-    const renderVideoItem = useCallback(({ item, index }: { item: Video; index: number }) => {
-      return (
-        <TouchableOpacity
-          className="w-[32%] mb-2 aspect-square relative"
-          onPress={() => handleVideoPress(item, index)}
-          activeOpacity={0.8}
-        >
-          <Image
-            source={{ uri: item.thumbnail || item.url }}
-            className="w-full h-full rounded-lg"
-            resizeMode="cover"
-          />
-          {/* Semi-transparent overlay for better play icon visibility */}
-          <View className="absolute inset-0 bg-black/20 rounded-lg" />
-          {/* Play icon with background circle - smaller for compact grid */}
-          <View className="absolute inset-0 items-center justify-center">
-            <View className="bg-black/60 rounded-full p-1">
-              <Ionicons name="play" size={16} color="white" />
-            </View>
-          </View>
-          {item.duration && (
-            <View className="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded">
-              <Text className="text-white text-[10px] font-medium">
-                {formatDuration(item.duration)}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      );
-    }, [handleVideoPress, formatDuration]);
-
     return (
       <FlatList
         data={videos}
@@ -320,45 +367,6 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
         </ScrollView>
       );
     }
-
-    const analyticsMetrics = useMemo(() => [
-      {
-        icon: "albums-outline",
-        label: "Posts",
-        value: formatNumber(analytics.posts.published),
-        sub: "Total published posts",
-      },
-      {
-        icon: "heart-outline",
-        label: "Likes",
-        value: formatNumber(analytics.likes.total),
-        sub: 'Number of "Like" engagements on all posts',
-      },
-      {
-        icon: "radio-outline",
-        label: "Live Sessions",
-        value: analytics.liveSessions.total.toString(),
-        sub: "Number of times you went Live",
-      },
-      {
-        icon: "chatbubble-ellipses-outline",
-        label: "Comments",
-        value: formatNumber(analytics.comments.total),
-        sub: 'Number of "comments" on all posts',
-      },
-      {
-        icon: "document-text-outline",
-        label: "Drafts",
-        value: analytics.drafts.total.toString(),
-        sub: "Unpublished posts",
-      },
-      {
-        icon: "share-social-outline",
-        label: "Shares",
-        value: formatNumber(analytics.shares.total),
-        sub: "Number of times people shared your contents",
-      },
-    ], [analytics, formatNumber]);
 
     return (
       <ScrollView 
