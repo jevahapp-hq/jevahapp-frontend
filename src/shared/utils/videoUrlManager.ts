@@ -75,6 +75,13 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
     return result;
   }
 
+  // Handle local file URLs - they're valid but don't need URL parsing
+  if (url.startsWith('file://') || url.startsWith('/')) {
+    result.isValid = true;
+    result.convertedUrl = url;
+    return result;
+  }
+
   try {
     const urlObj = new URL(url);
     
@@ -103,8 +110,11 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
       }
     }
 
-    // Basic URL validation
-    result.isValid = url.startsWith('http://') || url.startsWith('https://');
+    // Basic URL validation - support both network and local file URLs
+    result.isValid = url.startsWith('http://') || 
+                     url.startsWith('https://') || 
+                     url.startsWith('file://') ||
+                     url.startsWith('/'); // Support absolute paths
     
     if (!result.isValid) {
       result.error = 'Invalid URL format';
@@ -126,6 +136,12 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
   if (!originalUrl || typeof originalUrl !== 'string' || originalUrl.trim() === '') {
     console.warn("⚠️ Empty original URL, using fallback");
     return fallback;
+  }
+
+  // Handle local file URLs (downloaded content) - return immediately without validation
+  if (originalUrl.startsWith('file://') || originalUrl.startsWith('/')) {
+    console.log(`📁 Using local file URL: ${originalUrl.substring(0, 100)}...`);
+    return originalUrl;
   }
 
   const urlInfo = analyzeVideoUrl(originalUrl);

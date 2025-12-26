@@ -12,6 +12,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  InteractionManager,
   RefreshControl,
   ScrollView,
   Share,
@@ -100,15 +101,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     hasContent,
   } = useMedia({ immediate: true });
 
-  // OPTIMIZED: Use selectors for state values (only re-render when specific values change)
-  // Get global video state - Using selectors to prevent unnecessary re-renders
+  // OPTIMIZED: Use individual selectors to prevent unnecessary re-renders
+  // Each subscription only triggers re-render when that specific value changes
   const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
   const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
   const progresses = useGlobalVideoStore((s) => s.progresses);
   const showOverlay = useGlobalVideoStore((s) => s.showOverlay);
-  const currentlyPlayingVideo = useGlobalVideoStore(
-    (s) => s.currentlyPlayingVideo
-  );
+  const currentlyPlayingVideo = useGlobalVideoStore((s) => s.currentlyPlayingVideo);
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
 
   // OPTIMIZED: Extract actions without subscribing (actions don't change)
@@ -142,17 +141,20 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const { showCommentModal } = useCommentModal();
   
-  // OPTIMIZED: Use selectors for interaction store (prevents unnecessary re-renders)
+  // OPTIMIZED: Use individual selectors to prevent unnecessary re-renders
   const comments = useInteractionStore((s) => s.comments);
   const contentStats = useInteractionStore((s) => s.contentStats);
+  const loadingInteraction = useInteractionStore((s) => s.loadingInteraction);
+  
+  // OPTIMIZED: Extract actions separately (actions don't change, don't subscribe)
   const toggleLike = useInteractionStore((s) => s.toggleLike);
   const toggleSave = useInteractionStore((s) => s.toggleSave);
   const loadContentStats = useInteractionStore((s) => s.loadContentStats);
-  const loadingInteraction = useInteractionStore((s) => s.loadingInteraction);
   const refreshAllStatsAfterLogin = useInteractionStore((s) => s.refreshAllStatsAfterLogin);
   
-  // OPTIMIZED: Use selectors for library store (only subscribe to state we need)
+  // OPTIMIZED: Extract library store state and actions separately
   const libraryIsLoaded = useLibraryStore((s) => s.isLoaded);
+  // Actions don't change, extract without subscribing
   const loadSavedItems = useLibraryStore((s) => s.loadSavedItems);
   const addToLibrary = useLibraryStore((s) => s.addToLibrary);
   const removeFromLibrary = useLibraryStore((s) => s.removeFromLibrary);
@@ -243,17 +245,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const scrollAnimationFrameRef = useRef<number | null>(null);
   const isContentReadyRef = useRef<boolean>(false);
 
-  // Helper functions to get state for specific keys
-  const getVideoState = (key: string) => ({
+  // OPTIMIZED: Memoize helper functions to prevent recreation on every render
+  const getVideoState = useCallback((key: string) => ({
     isPlaying: playingVideos[key] ?? false,
     isMuted: mutedVideos[key] ?? false,
     progress: progresses[key] ?? 0,
     showOverlay: showOverlay[key] ?? false,
-  });
-  const isVideoPlaying = (key: string) => playingVideos[key] ?? false;
-  const isVideoMuted = (key: string) => mutedVideos[key] ?? false;
-  const getVideoProgress = (key: string) => progresses[key] ?? 0;
-  const getVideoOverlay = (key: string) => showOverlay[key] ?? false;
+  }), [playingVideos, mutedVideos, progresses, showOverlay]);
+  
+  const isVideoPlaying = useCallback((key: string) => playingVideos[key] ?? false, [playingVideos]);
+  const isVideoMuted = useCallback((key: string) => mutedVideos[key] ?? false, [mutedVideos]);
+  const getVideoProgress = useCallback((key: string) => progresses[key] ?? 0, [progresses]);
+  const getVideoOverlay = useCallback((key: string) => showOverlay[key] ?? false, [showOverlay]);
 
   // Transform and filter content
   const mediaList: MediaItem[] = useMemo(() => {
@@ -559,10 +562,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     previousUserIdRef.current = currentUserId;
   }, [user, filteredMediaList, refreshAllStatsAfterLogin]);
 
+  // OPTIMIZED: Defer stats loading until after interactions complete (prevents blocking UI)
   useEffect(() => {
-    const loadStatsForVisibleContent = async () => {
-      const items = filteredMediaList || [];
-      if (items.length === 0) return;
+    const interactionHandle = InteractionManager.runAfterInteractions(() => {
+      const loadStatsForVisibleContent = async () => {
+        const items = filteredMediaList || [];
+        if (items.length === 0) return;
 
       const groupedIds = items.reduce((acc, item) => {
         const id = item?._id;
@@ -598,75 +603,88 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           }
         }
       }
-    };
+      };
 
-    loadStatsForVisibleContent();
+      loadStatsForVisibleContent();
+    });
+
+    // Cleanup: cancel interaction handle if component unmounts
+    return () => {
+      interactionHandle.cancel();
+    };
   }, [filteredMediaList, loadContentStats, mapContentTypeToBackend]);
 
-  // Load persisted data including likes (like reels does)
+  // OPTIMIZED: Defer persisted data loading to prevent blocking initial render
   useEffect(() => {
-    const loadAllData = async () => {
-      // console.log("📱 AllContent: Loading persisted data...");
-      setIsLoadingContent(true);
+    const interactionHandle = InteractionManager.runAfterInteractions(() => {
+      const loadAllData = async () => {
+        // console.log("📱 AllContent: Loading persisted data...");
+        setIsLoadingContent(true);
 
-      try {
-        const [stats, viewed, libraryLoaded] = await Promise.all([
-          getPersistedStats(),
-          getViewed(),
-          libraryIsLoaded
-            ? Promise.resolve()
-            : loadSavedItems(),
-        ]);
+        try {
+          const [stats, viewed, libraryLoaded] = await Promise.all([
+            getPersistedStats(),
+            getViewed(),
+            libraryIsLoaded
+              ? Promise.resolve()
+              : loadSavedItems(),
+          ]);
 
-        setPreviouslyViewed(viewed || []);
-        
-        // Load persisted likes and merge with backend state
-        if (mediaList.length > 0) {
-          try {
-            const userId = await getUserId();
-            const persistedFavorites = await getUserFavorites(userId);
-            
-            // Merge persisted likes into contentStats
-            const store = useInteractionStore.getState();
-            for (const item of mediaList) {
-              const contentId = item._id || getContentKey(item);
-              if (persistedFavorites[contentId]) {
-                // Update store with persisted like state
-                store.mutateStats(contentId, (s) => ({
-                  userInteractions: {
-                    ...s.userInteractions,
-                    liked: true, // Persisted state takes priority
-                  },
-                }));
+          setPreviouslyViewed(viewed || []);
+          
+          // Load persisted likes and merge with backend state
+          if (mediaList.length > 0) {
+            try {
+              const userId = await getUserId();
+              const persistedFavorites = await getUserFavorites(userId);
+              
+              // Merge persisted likes into contentStats
+              const store = useInteractionStore.getState();
+              for (const item of mediaList) {
+                const contentId = item._id || getContentKey(item);
+                if (persistedFavorites[contentId]) {
+                  // Update store with persisted like state
+                  store.mutateStats(contentId, (s) => ({
+                    userInteractions: {
+                      ...s.userInteractions,
+                      liked: true, // Persisted state takes priority
+                    },
+                  }));
+                }
               }
+              
+              console.log(
+                `✅ AllContent: Loaded ${
+                  mediaList.length
+                } media items, ${Object.keys(stats || {}).length} stats, and ${Object.keys(persistedFavorites).length} persisted likes`
+              );
+            } catch (persistError) {
+              console.warn("⚠️ Failed to load persisted likes:", persistError);
             }
-            
-            console.log(
-              `✅ AllContent: Loaded ${
-                mediaList.length
-              } media items, ${Object.keys(stats || {}).length} stats, and ${Object.keys(persistedFavorites).length} persisted likes`
-            );
-          } catch (persistError) {
-            console.warn("⚠️ Failed to load persisted likes:", persistError);
           }
+        } catch (error) {
+          console.error("❌ Error loading AllContent data:", error);
+        } finally {
+          setIsLoadingContent(false);
+          // Mark content as ready after loading completes
+          isContentReadyRef.current = true;
         }
-      } catch (error) {
-        console.error("❌ Error loading AllContent data:", error);
-      } finally {
+      };
+
+      if (mediaList.length > 0) {
+        loadAllData();
+      } else {
         setIsLoadingContent(false);
-        // Mark content as ready after loading completes
+        // Mark as ready even if no content (prevents blocking)
         isContentReadyRef.current = true;
       }
-    };
+    });
 
-    if (mediaList.length > 0) {
-      loadAllData();
-    } else {
-      setIsLoadingContent(false);
-      // Mark as ready even if no content (prevents blocking)
-      isContentReadyRef.current = true;
-    }
-  }, [mediaList.length]);
+    // Cleanup: cancel interaction handle if component unmounts
+    return () => {
+      interactionHandle.cancel();
+    };
+  }, [mediaList.length, libraryIsLoaded, loadSavedItems]);
 
   // Helper functions to get interaction state - merge persisted and backend state
   // Synchronous version for immediate UI updates (persisted state is loaded on mount)
@@ -676,25 +694,26 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     return stats?.userInteractions?.liked || false;
   }, [contentStats]);
 
-  const getLikeCount = (contentId: string) => {
+  // OPTIMIZED: Memoize helper functions to prevent recreation
+  const getLikeCount = useCallback((contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.likes || 0;
-  };
+  }, [contentStats]);
 
-  const getUserSaveState = (contentId: string) => {
+  const getUserSaveState = useCallback((contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.userInteractions?.saved || false;
-  };
+  }, [contentStats]);
 
-  const getSaveCount = (contentId: string) => {
+  const getSaveCount = useCallback((contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.saves || 0;
-  };
+  }, [contentStats]);
 
-  const getCommentCount = (contentId: string) => {
+  const getCommentCount = useCallback((contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.comments || 0;
-  };
+  }, [contentStats]);
 
   // Audio playback functions
   const playAudio = async (uri: string, id: string) => {
@@ -918,7 +937,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
 
-  const handleDownloadPress = async (item: MediaItem) => {
+  // OPTIMIZED: Memoize download handler
+  const handleDownloadPress = useCallback(async (item: MediaItem) => {
     const downloadableItem = convertToDownloadableItem(
       item,
       item.contentType as "video" | "audio" | "ebook"
@@ -929,7 +949,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       setShowSuccessCard(true);
       await loadDownloadedItems();
     }
-  };
+  }, [handleDownload, loadDownloadedItems]);
 
   // Event handlers
   const handleRefresh = useCallback(async () => {
@@ -1147,10 +1167,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [handleLike]
   );
 
-  const toggleVideoMute = (key: string) =>
-    globalVideoStore.toggleVideoMute(key);
+  // OPTIMIZED: Memoize toggle functions to prevent unnecessary re-renders
+  const toggleVideoMute = useCallback((key: string) => {
+    toggleVideoMuteAction(key);
+  }, [toggleVideoMuteAction]);
 
-  const togglePlay = (key: string) => {
+  const togglePlay = useCallback((key: string) => {
     // console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
     // console.log("🎮 Current playing state:", playingVideos[key]);
 
@@ -1161,7 +1183,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     playMedia(key, "video");
 
     // console.log("✅ Video play request sent for key:", key);
-  };
+  }, [playMedia]);
 
   // Handle video visibility changes during scroll for autoplay
   const handleVideoVisibilityChange = useCallback(
@@ -2470,13 +2492,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
     },
     [
-      getContentKey,
+      // Helper functions (memoized)
       getUserLikeState,
       getLikeCount,
+      // State values
       contentStats,
       playingVideos,
+      mutedVideos,
+      progresses,
+      showOverlay,
       videoVolume,
       currentlyVisibleVideo,
+      isAutoPlayEnabled,
+      modalVisible,
+      comments,
+      playingAudioId,
+      audioProgressMap,
+      // Handlers (memoized)
       handleVideoTap,
       handleFavorite,
       handleComment,
@@ -2484,15 +2516,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       handleShare,
       handleDownloadPress,
       handleDeleteMedia,
-      modalVisible,
-      comments,
       checkIfDownloaded,
+      playAudio,
+      togglePlay,
+      toggleVideoMute,
+      handleContentLayout,
+      toggleModal,
+      // Stable utility functions (imported, never change, but included for React exhaustive-deps compliance)
+      getContentKey,
       getTimeAgo,
       getUserDisplayNameFromContent,
       getUserAvatarFromContent,
-      playAudio,
-      playingAudioId,
-      audioProgressMap,
     ]
   );
 
@@ -2504,7 +2538,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         pauseAllMedia();
       } catch {}
     };
-  }, []);
+  }, [pauseAllMedia]);
 
   // Pause all media when component loses focus
   useFocusEffect(
@@ -2516,7 +2550,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         setCurrentlyVisibleVideo(null);
         pauseAllAudio();
       };
-    }, [pauseAllAudio])
+    }, [pauseAllMedia, pauseAllAudio])
   );
 
   // Loading state

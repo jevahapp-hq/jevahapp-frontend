@@ -213,6 +213,27 @@ export function getUserDisplayNameFromContent(
     if (user.name) {
       return user.name;
     }
+    // If uploadedBy is an object but missing name fields, try to get from cache
+    const userId = user._id || user.id;
+    if (userId) {
+      try {
+        const { UserProfileCache } = require('./cache/UserProfileCache');
+        const cachedUser = UserProfileCache.getUserProfile(userId);
+        if (cachedUser) {
+          if (cachedUser.firstName && cachedUser.lastName) {
+            return `${cachedUser.firstName} ${cachedUser.lastName}`.trim();
+          }
+          if (cachedUser.firstName) {
+            return cachedUser.firstName;
+          }
+          if (cachedUser.lastName) {
+            return cachedUser.lastName;
+          }
+        }
+      } catch (e) {
+        // Silently fail if cache is not available
+      }
+    }
   }
 
   // Priority 2: Check author object (for Devotional content)
@@ -229,6 +250,27 @@ export function getUserDisplayNameFromContent(
     }
     if (author.name) {
       return author.name;
+    }
+    // If author is an object but missing name fields, try to get from cache
+    const authorId = author._id || author.id;
+    if (authorId) {
+      try {
+        const { UserProfileCache } = require('./cache/UserProfileCache');
+        const cachedUser = UserProfileCache.getUserProfile(authorId);
+        if (cachedUser) {
+          if (cachedUser.firstName && cachedUser.lastName) {
+            return `${cachedUser.firstName} ${cachedUser.lastName}`.trim();
+          }
+          if (cachedUser.firstName) {
+            return cachedUser.firstName;
+          }
+          if (cachedUser.lastName) {
+            return cachedUser.lastName;
+          }
+        }
+      } catch (e) {
+        // Silently fail if cache is not available
+      }
     }
   }
 
@@ -254,11 +296,33 @@ export function getUserDisplayNameFromContent(
     return content.speaker;
   }
 
-  // Priority 5: Check if uploadedBy is a string but looks like a name (not an ID)
+  // Priority 5: Check if uploadedBy is a string ID - try to get from cache
   if (content.uploadedBy && typeof content.uploadedBy === 'string') {
-    // Check if it looks like an ObjectId (24 hex characters) - if so, don't display it
+    // Check if it looks like an ObjectId (24 hex characters)
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(content.uploadedBy.trim());
-    if (!isObjectId) {
+    if (isObjectId) {
+      // It's an ID, try to get user from cache
+      try {
+        const { UserProfileCache } = require('./cache/UserProfileCache');
+        const cachedUser = UserProfileCache.getUserProfile(content.uploadedBy.trim());
+        if (cachedUser) {
+          if (cachedUser.firstName && cachedUser.lastName) {
+            return `${cachedUser.firstName} ${cachedUser.lastName}`.trim();
+          }
+          if (cachedUser.firstName) {
+            return cachedUser.firstName;
+          }
+          if (cachedUser.lastName) {
+            return cachedUser.lastName;
+          }
+        }
+      } catch (e) {
+        // Silently fail if cache is not available
+      }
+      // If not in cache, return fallback (don't show ID)
+      return fallback;
+    } else {
+      // It's a name string, use it
       return content.uploadedBy;
     }
   }
@@ -266,7 +330,29 @@ export function getUserDisplayNameFromContent(
   // Priority 6: Check if author is a string (non-ID)
   if (content.author && typeof content.author === 'string') {
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(content.author.trim());
-    if (!isObjectId) {
+    if (isObjectId) {
+      // It's an ID, try to get user from cache
+      try {
+        const { UserProfileCache } = require('./cache/UserProfileCache');
+        const cachedUser = UserProfileCache.getUserProfile(content.author.trim());
+        if (cachedUser) {
+          if (cachedUser.firstName && cachedUser.lastName) {
+            return `${cachedUser.firstName} ${cachedUser.lastName}`.trim();
+          }
+          if (cachedUser.firstName) {
+            return cachedUser.firstName;
+          }
+          if (cachedUser.lastName) {
+            return cachedUser.lastName;
+          }
+        }
+      } catch (e) {
+        // Silently fail if cache is not available
+      }
+      // If not in cache, return fallback (don't show ID)
+      return fallback;
+    } else {
+      // It's a name string, use it
       return content.author;
     }
   }

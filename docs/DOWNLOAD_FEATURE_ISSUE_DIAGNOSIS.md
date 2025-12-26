@@ -8,19 +8,22 @@ This document details the current state of the download feature implementation, 
 ## 🔍 Current Issue
 
 ### Error Summary
-- **HTTP Status**: `500 Internal Server Error`
-- **Error Message**: `"Failed to record download"`
+- **HTTP Status**: `403 Forbidden`
+- **Error Code**: `DOWNLOAD_NOT_ALLOWED`
+- **Error Message**: `"This media is not available for download"`
 - **Endpoint**: `POST /api/media/:mediaId/download`
-- **Occurrence**: When attempting to initiate a download for any media item
+- **Occurrence**: When attempting to initiate a download for specific media items
 
 ### Error Response Structure
 ```json
 {
-  "error": "{\"success\":false,\"message\":\"Failed to record download\"}"
+  "error": "DOWNLOAD_NOT_ALLOWED",
+  "hasDownloadUrl": false,
+  "success": false
 }
 ```
 
-**Note**: The error is double-encoded JSON (a JSON string inside a JSON object).
+**Note**: This is different from the previous 500 error. The backend is now correctly rejecting downloads that are not allowed, but we need to understand why certain media items are being rejected.
 
 ---
 

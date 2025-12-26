@@ -44,7 +44,8 @@ import {
   getPersistedStats,
   persistStats,
 } from "../utils/persistentStorage";
-import { getUserAvatarFromContent } from "../utils/userValidation";
+import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
+import { UserProfileCache } from "../utils/cache/UserProfileCache";
 
 // ✅ Route Params Type
 type Params = {
@@ -125,25 +126,38 @@ export default function Reelsviewscroll() {
   const videoVolume = 1.0;
 
   // Parse video list and current index - prioritize reels store, fallback to URL param
+  // ENRICHED: Enrich video list with user profile data (avatars, names) from cache
   const parsedVideoList = (() => {
-    if (reelsStore.videoList.length > 0) {
-      return reelsStore.videoList;
-    }
+    let rawList: any[] = [];
     
-    if (videoList) {
+    if (reelsStore.videoList.length > 0) {
+      rawList = reelsStore.videoList;
+    } else if (videoList) {
       try {
         const parsed = JSON.parse(videoList);
         // Set in store for future use
         reelsStore.setVideoList(parsed);
-        return parsed;
+        rawList = parsed;
       } catch (error) {
         console.error("❌ Failed to parse video list:", error);
         return [];
       }
+    } else {
+      console.warn("⚠️ No video list found in store or params");
+      return [];
     }
     
-    console.warn("⚠️ No video list found in store or params");
-    return [];
+    // Enrich all videos with user profile data (avatars, names) from cache
+    if (rawList.length > 0) {
+      const enrichedList = UserProfileCache.enrichContentArray(rawList);
+      // Update store with enriched data
+      if (enrichedList.length > 0 && enrichedList !== rawList) {
+        reelsStore.setVideoList(enrichedList);
+      }
+      return enrichedList;
+    }
+    
+    return rawList;
   })();
 
   const currentVideoIndex = reelsStore.currentIndex !== undefined && reelsStore.currentIndex !== null
@@ -196,8 +210,21 @@ export default function Reelsviewscroll() {
     }
   })();
 
+  // SAFE: Extract speaker name for reel key
+  const getSpeakerNameForReel = (video: any): string => {
+    const speaker = video?.speaker;
+    if (typeof speaker === 'string') return speaker;
+    if (speaker && typeof speaker === 'object') {
+      return speaker.fullName || 
+             (speaker.firstName && speaker.lastName 
+               ? `${speaker.firstName} ${speaker.lastName}`.trim()
+               : speaker.firstName || speaker.lastName || 'Unknown');
+    }
+    return getUserDisplayNameFromContent(video, "Unknown");
+  };
+  
   // Create a unique key for this reel content (for video playback tracking, stats, etc.)
-  const reelKey = `reel-${currentVideo.title}-${currentVideo.speaker}`;
+  const reelKey = `reel-${currentVideo.title}-${getSpeakerNameForReel(currentVideo)}`;
   const modalKey = reelKey;
   
   // Extract real contentId for API calls (comments, interactions, etc.)
@@ -882,6 +909,26 @@ export default function Reelsviewscroll() {
     }
   }, [modalKey, playingVideos, userHasManuallyPaused]);
 
+  // Helper function to safely extract speaker name (handles both string and object)
+  const getSpeakerName = (videoData: any, fallback: string = "Unknown"): string => {
+    const speaker = videoData?.speaker;
+    if (typeof speaker === 'string') {
+      return speaker || fallback;
+    }
+    if (speaker && typeof speaker === 'object') {
+      return speaker.fullName || 
+             (speaker.firstName && speaker.lastName 
+               ? `${speaker.firstName} ${speaker.lastName}`.trim()
+               : speaker.firstName || speaker.lastName || fallback);
+    }
+    // Fallback: try getUserDisplayNameFromContent if available
+    try {
+      return getUserDisplayNameFromContent(videoData, fallback);
+    } catch {
+      return fallback;
+    }
+  };
+
   // Function to render a single video item
   // NOTE: This helper MUST NOT use hooks internally (to avoid breaking Rules of Hooks).
   const renderVideoItem = (
@@ -910,15 +957,21 @@ export default function Reelsviewscroll() {
       );
     }
 
+    // ENRICHED: Enrich video data with user profile (avatar, name) from cache before rendering
+    // This ensures avatars are fetched even if backend didn't populate uploadedBy
+    const enrichedVideoData = UserProfileCache.enrichContentWithUserData(videoData);
+
+    // SAFE: Extract speaker name for video key (use enriched data)
+    const speakerName = getSpeakerName(enrichedVideoData, "Unknown");
     const videoKey =
-      passedVideoKey || `reel-${videoData.title}-${videoData.speaker}`;
+      passedVideoKey || `reel-${enrichedVideoData.title}-${speakerName}`;
 
     // Use direct fileUrl/imageUrl - prioritize fileUrl, fallback to imageUrl
-    const videoUrl = videoData.fileUrl || videoData.imageUrl || videoData.url || "";
+    const videoUrl = enrichedVideoData.fileUrl || enrichedVideoData.imageUrl || enrichedVideoData.url || "";
     
     // Validate video URL
     if (!videoUrl || String(videoUrl).trim() === "") {
-      console.warn("⚠️ No valid video URL for:", videoData.title, "Data:", videoData);
+      console.warn("⚠️ No valid video URL for:", enrichedVideoData.title, "Data:", enrichedVideoData);
       return (
         <View
           key={videoKey}
@@ -934,7 +987,7 @@ export default function Reelsviewscroll() {
             Video not available
           </Text>
           <Text style={{ color: "#888", fontSize: 12 }}>
-            {videoData.title || "No title"}
+            {enrichedVideoData.title || "No title"}
           </Text>
         </View>
       );
@@ -1001,7 +1054,7 @@ export default function Reelsviewscroll() {
               isLooping={true}
               onError={async (error) => {
                 console.error(
-                  `❌ Video loading error in reels for ${videoData.title}:`,
+                  `❌ Video loading error in reels for ${enrichedVideoData.title}:`,
                   error
                 );
               }}
@@ -1205,9 +1258,9 @@ export default function Reelsviewscroll() {
                     >
                       {canUseBackendLikes
                         ? activeLikesCount
-                        : (videoData?.likeCount ??
-                            videoData?.likes ??
-                            videoData?.favorite ??
+                        : (enrichedVideoData?.likeCount ??
+                            enrichedVideoData?.likes ??
+                            enrichedVideoData?.favorite ??
                             video.favorite ??
                             0)}
                     </Text>
@@ -1372,12 +1425,12 @@ export default function Reelsviewscroll() {
                       }}
                       activeOpacity={0.8}
                       accessibilityLabel={`${
-                        videoData.speaker || "Unknown"
+                        getSpeakerName(enrichedVideoData, "Unknown")
                       } profile picture`}
                       accessibilityRole="image"
                     >
                       <Image
-                        source={getUserAvatarFromContent(videoData)}
+                        source={getUserAvatarFromContent(enrichedVideoData)}
                         style={{
                           width: getResponsiveSize(20, 24, 28), // Reduced size
                           height: getResponsiveSize(20, 24, 28), // Reduced size
@@ -1411,13 +1464,13 @@ export default function Reelsviewscroll() {
                           numberOfLines={1}
                           accessibilityLabel={
                             source === "AccountScreen"
-                              ? `Video: ${videoData.title || "Untitled"}`
-                              : `Posted by ${videoData.speaker || "Unknown"}`
+                              ? `Video: ${enrichedVideoData.title || "Untitled"}`
+                              : `Posted by ${getSpeakerName(enrichedVideoData, "Unknown")}`
                           }
                         >
                           {source === "AccountScreen"
-                            ? videoData.title || "Untitled Video"
-                            : videoData.speaker || "No Speaker"}
+                            ? enrichedVideoData.title || "Untitled Video"
+                            : getSpeakerName(enrichedVideoData, "No Speaker")}
                         </Text>
                         <Text
                           style={{
@@ -1429,10 +1482,10 @@ export default function Reelsviewscroll() {
                             textShadowRadius: 3,
                           }}
                           accessibilityLabel={`Posted ${
-                            videoData.timeAgo || "recently"
+                            enrichedVideoData.timeAgo || "recently"
                           }`}
                         >
-                          {videoData.timeAgo || "No Time"}
+                          {enrichedVideoData.timeAgo || "No Time"}
                         </Text>
                       </View>
                     </View>

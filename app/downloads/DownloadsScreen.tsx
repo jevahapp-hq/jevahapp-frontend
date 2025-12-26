@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
-import { Pause, Play, Search, Volume2 } from "lucide-react-native";
+import { Pause, Play, Search, Volume2, X } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
     Dimensions,
@@ -50,21 +50,38 @@ type User = {
 interface DownloadCardProps {
   item: DownloadItem;
   onOpen: (item: DownloadItem) => void;
+  onPreview?: (item: DownloadItem) => void;
 }
 
-const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen }) => {
+const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen, onPreview }) => {
   const isVideo = item.contentType === 'video' || item.contentType === 'videos';
   const isAudio = item.contentType === 'audio' || item.contentType === 'music';
   const isEbook = item.contentType === 'ebook';
 
+  const handleThumbnailPress = () => {
+    // Preview on thumbnail tap
+    if (onPreview) {
+      onPreview(item);
+    }
+  };
+
+  const handleCardPress = () => {
+    // Full open on card tap
+    onOpen(item);
+  };
+
   return (
     <TouchableOpacity
       activeOpacity={0.75}
-      onPress={() => onOpen(item)}
+      onPress={handleCardPress}
       className="mb-5 flex-row w-[362px] gap-6 justify-between"
     >
-      {/* Thumbnail/Video/Audio Display */}
-      <View className="w-[60px] h-[72px] rounded-xl overflow-hidden">
+      {/* Thumbnail/Video/Audio Display - Tappable for preview */}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handleThumbnailPress}
+        className="w-[60px] h-[72px] rounded-xl overflow-hidden relative"
+      >
         <Image
           source={
             item.thumbnailUrl
@@ -74,7 +91,15 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen }) => {
           className="w-full h-full"
           resizeMode="cover"
         />
-      </View>
+        {/* Play overlay for videos/audio */}
+        {(isVideo || isAudio) && (
+          <View className="absolute inset-0 bg-black/20 items-center justify-center">
+            <View className="bg-white/90 rounded-full p-2">
+              <Play size={16} color="#256E63" fill="#256E63" />
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
 
       <View className="flex-col w-[268px]">
         <Text className="mt-2 font-rubik-semibold text-[16px] text-[#1D2939]">
@@ -104,7 +129,9 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen }) => {
           <Image source={profileImage} className="w-6 h-6 rounded-full" />
           <View className="flex-row items-center flex-wrap">
             <Text className="ml-2 text-[14px] font-rubik-semibold text-[#344054]">
-              {item.author}
+              {typeof item.author === 'string' 
+                ? item.author 
+                : item.author?.fullName || item.author?.firstName || 'Unknown'}
             </Text>
             <View className="flex-row items-center mt-2">
               <View className="flex-row items-center">
@@ -140,6 +167,7 @@ const DownloadScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isAutomaticDownloadsModalVisible, setIsAutomaticDownloadsModalVisible] = useState(false);
+  const [previewItem, setPreviewItem] = useState<DownloadItem | null>(null);
   const router = useRouter();
   const { navigateToReels } = useVideoNavigation();
   
@@ -199,12 +227,17 @@ const DownloadScreen: React.FC = () => {
     if (!searchQuery.trim()) return downloads;
 
     const query = searchQuery.toLowerCase();
-    return downloads.filter(
-      (item) =>
+    return downloads.filter((item) => {
+      const authorStr = typeof item.author === 'string' 
+        ? item.author 
+        : item.author?.fullName || item.author?.firstName || '';
+      
+      return (
         item.title.toLowerCase().includes(query) ||
         item.description.toLowerCase().includes(query) ||
-        item.author.toLowerCase().includes(query)
-    );
+        authorStr.toLowerCase().includes(query)
+      );
+    });
   };
 
   const filteredDownloads = filterDownloads(downloadedItems);
@@ -348,6 +381,7 @@ const DownloadScreen: React.FC = () => {
                 key={item.id || String(index)}
                 item={item}
                 onOpen={openDownloadedItem}
+                onPreview={setPreviewItem}
               />
             ))
           )}
@@ -373,6 +407,28 @@ const DownloadScreen: React.FC = () => {
         isVisible={isAutomaticDownloadsModalVisible}
         onClose={() => setIsAutomaticDownloadsModalVisible(false)}
       />
+
+      {/* Media Preview Modal */}
+      {previewItem && (
+        <MediaPreviewModal
+          item={previewItem}
+          onClose={() => {
+            console.log("Closing preview modal");
+            setPreviewItem(null);
+          }}
+          onOpenFull={() => {
+            console.log("Opening full viewer for:", previewItem.title);
+            // Store item reference before closing
+            const itemToOpen = { ...previewItem };
+            setPreviewItem(null);
+            // Navigate after modal closes (small delay ensures state updates)
+            setTimeout(() => {
+              console.log("Navigating to full viewer with item:", itemToOpen.title);
+              openDownloadedItem(itemToOpen);
+            }, 300);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -526,6 +582,268 @@ const AutomaticDownloadsModal: React.FC<{
         </Animated.View>
       </PanGestureHandler>
     </GestureHandlerRootView>
+  );
+};
+
+// Media Preview Modal Component
+interface MediaPreviewModalProps {
+  item: DownloadItem;
+  onClose: () => void;
+  onOpenFull: () => void;
+}
+
+const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, onOpenFull }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef<Video>(null);
+  const audioRef = useRef<Audio.Sound | null>(null);
+  const isVideo = item.contentType === 'video' || item.contentType === 'videos';
+  const isAudio = item.contentType === 'audio' || item.contentType === 'music';
+  const isEbook = item.contentType === 'ebook';
+  const mediaUrl = item.localPath || item.fileUrl || "";
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.unloadAsync().catch(() => {});
+      }
+      if (audioRef.current) {
+        audioRef.current.unloadAsync().catch(() => {});
+      }
+    };
+  }, []);
+
+  const handlePlayPause = async () => {
+    try {
+      if (isVideo && videoRef.current) {
+        if (isPlaying) {
+          await videoRef.current.pauseAsync();
+        } else {
+          await videoRef.current.playAsync();
+        }
+        setIsPlaying(!isPlaying);
+      } else if (isAudio && audioRef.current) {
+        if (isPlaying) {
+          await audioRef.current.pauseAsync();
+        } else {
+          await audioRef.current.playAsync();
+        }
+        setIsPlaying(!isPlaying);
+      }
+    } catch (error) {
+      console.error("Error toggling playback:", error);
+    }
+  };
+
+  const handleToggleMute = async () => {
+    try {
+      if (isVideo && videoRef.current) {
+        await videoRef.current.setIsMutedAsync(!isMuted);
+        setIsMuted(!isMuted);
+      } else if (isAudio && audioRef.current) {
+        await audioRef.current.setVolumeAsync(isMuted ? 1 : 0);
+        setIsMuted(!isMuted);
+      }
+    } catch (error) {
+      console.error("Error toggling mute:", error);
+    }
+  };
+
+  // Initialize audio player for audio files
+  useEffect(() => {
+    if (isAudio && mediaUrl) {
+      const loadAudio = async () => {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: mediaUrl },
+            { shouldPlay: false }
+          );
+          audioRef.current = sound;
+        } catch (error) {
+          console.error("Error loading audio:", error);
+        }
+      };
+      loadAudio();
+    }
+  }, [isAudio, mediaUrl]);
+
+  return (
+    <View 
+      className="absolute inset-0 bg-black/90 z-50 items-center justify-center"
+      style={{ zIndex: 9999 }}
+    >
+      {/* Backdrop - tappable to close */}
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="absolute inset-0" style={{ zIndex: 1 }} />
+      </TouchableWithoutFeedback>
+
+      {/* Close button */}
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          console.log("Close button pressed");
+          onClose();
+        }}
+        className="absolute top-12 right-4 bg-white/20 rounded-full p-3"
+        style={{ zIndex: 10000 }}
+        activeOpacity={0.7}
+      >
+        <X size={24} color="white" />
+      </TouchableOpacity>
+
+      {/* Preview content */}
+      <View 
+        className="w-full h-full items-center justify-center px-4"
+        style={{ zIndex: 10001 }}
+        pointerEvents="box-none"
+      >
+        {isVideo && mediaUrl ? (
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View className="w-full max-w-md aspect-video rounded-xl overflow-hidden bg-black" style={{ zIndex: 10001 }}>
+            <Video
+              ref={videoRef}
+              source={{ uri: mediaUrl }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode={ResizeMode.CONTAIN}
+              useNativeControls={false}
+              isMuted={isMuted}
+              shouldPlay={isPlaying}
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded) {
+                  setIsPlaying(status.isPlaying);
+                }
+              }}
+            />
+            {/* Video controls overlay */}
+            <View className="absolute inset-0 items-center justify-center" pointerEvents="box-none">
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handlePlayPause();
+                }}
+                className="bg-white/20 rounded-full p-4"
+                activeOpacity={0.7}
+              >
+                {isPlaying ? (
+                  <Pause size={32} color="white" fill="white" />
+                ) : (
+                  <Play size={32} color="white" fill="white" />
+                )}
+              </TouchableOpacity>
+            </View>
+            {/* Mute button */}
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                handleToggleMute();
+              }}
+              className="absolute bottom-4 right-4 bg-white/20 rounded-full p-2"
+              activeOpacity={0.7}
+            >
+              <Volume2 size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+          </TouchableWithoutFeedback>
+        ) : isAudio ? (
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View className="w-full max-w-md items-center" style={{ zIndex: 10001 }}>
+              {/* Audio thumbnail */}
+              <View className="w-64 h-64 rounded-xl overflow-hidden mb-6">
+                <Image
+                  source={
+                    item.thumbnailUrl
+                      ? { uri: item.thumbnailUrl }
+                      : require("../../assets/images/1.png")
+                  }
+                  className="w-full h-full"
+                  resizeMode="cover"
+                />
+              </View>
+              {/* Audio controls */}
+              <View className="flex-row items-center gap-4">
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handlePlayPause();
+                  }}
+                  className="bg-[#256E63] rounded-full p-4"
+                  activeOpacity={0.7}
+                >
+                  {isPlaying ? (
+                    <Pause size={32} color="white" fill="white" />
+                  ) : (
+                    <Play size={32} color="white" fill="white" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleToggleMute();
+                  }}
+                  className="bg-white/20 rounded-full p-3"
+                  activeOpacity={0.7}
+                >
+                  <Volume2 size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+              <Text className="text-white text-lg font-rubik-semibold mt-4 text-center">
+                {item.title}
+              </Text>
+            </View>
+          </TouchableWithoutFeedback>
+        ) : isEbook ? (
+          <View className="w-full max-w-md items-center">
+            <View className="w-64 h-80 rounded-xl overflow-hidden mb-6 bg-white">
+              <Image
+                source={
+                  item.thumbnailUrl
+                    ? { uri: item.thumbnailUrl }
+                    : require("../../assets/images/1.png")
+                }
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            </View>
+            <Text className="text-white text-lg font-rubik-semibold mb-4 text-center">
+              {item.title}
+            </Text>
+          </View>
+        ) : (
+          <View className="w-full max-w-md items-center">
+            <Image
+              source={
+                item.thumbnailUrl
+                  ? { uri: item.thumbnailUrl }
+                  : require("../../assets/images/1.png")
+              }
+              className="w-64 h-64 rounded-xl"
+              resizeMode="cover"
+            />
+            <Text className="text-white text-lg font-rubik-semibold mt-4 text-center">
+              {item.title}
+            </Text>
+          </View>
+        )}
+
+        {/* Open full viewer button */}
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            console.log("Open full viewer pressed for:", item.title);
+            // onOpenFull already handles closing and navigation
+            onOpenFull();
+          }}
+          className="mt-8 bg-[#256E63] px-6 py-3 rounded-xl"
+          style={{ zIndex: 10002 }}
+          activeOpacity={0.8}
+        >
+          <Text className="text-white font-rubik-semibold">
+            {isVideo ? "Open in Reels" : isAudio ? "Open Player" : isEbook ? "Open Reader" : "Open Full Viewer"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 

@@ -1,9 +1,12 @@
 import { CacheManager } from "./CacheManager";
 import { UserData, AVATAR_CACHE_DURATION } from "../api/types";
+import { API_BASE_URL } from "../api";
+import { authUtils } from "../authUtils";
 
 // User profile cache and enrichment utilities
 export class UserProfileCache {
   private static cache = CacheManager.getInstance();
+  private static fetchingUsers = new Set<string>(); // Track users being fetched to avoid duplicate requests
 
   /**
    * Get cached user profile by userId
@@ -12,6 +15,62 @@ export class UserProfileCache {
     if (!userId) return null;
     const cacheKey = `user:${userId}`;
     return this.cache.get(cacheKey) || null;
+  }
+
+  /**
+   * Fetch user profile from API by userId and cache it
+   */
+  static async fetchAndCacheUserProfile(userId: string): Promise<UserData | null> {
+    if (!userId) return null;
+
+    // Check cache first
+    const cached = this.getUserProfile(userId);
+    if (cached) return cached;
+
+    // Avoid duplicate requests
+    if (this.fetchingUsers.has(userId)) {
+      // Wait a bit and check cache again
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return this.getUserProfile(userId);
+    }
+
+    try {
+      this.fetchingUsers.add(userId);
+      
+      const token = await authUtils.getStoredToken();
+      if (!token) {
+        console.warn(`⚠️ No auth token, cannot fetch user profile for ${userId}`);
+        return null;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ Failed to fetch user profile for ${userId}: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.success && data.user) {
+        this.cacheUserProfile(userId, data.user);
+        return data.user;
+      } else if (data.data && data.data.user) {
+        // Handle different response formats
+        this.cacheUserProfile(userId, data.data.user);
+        return data.data.user;
+      }
+
+      return null;
+    } catch (error) {
+      console.warn(`⚠️ Error fetching user profile for ${userId}:`, error);
+      return null;
+    } finally {
+      this.fetchingUsers.delete(userId);
+    }
   }
 
   /**
@@ -54,8 +113,29 @@ export class UserProfileCache {
       } else if (typeof content.uploadedBy === 'string') {
         // uploadedBy is just an ID string, try to enrich with cached user data
         userId = content.uploadedBy;
-        const cachedUser = this.getUserProfile(userId);
-        if (cachedUser) {
+        let cachedUser = this.getUserProfile(userId);
+        
+        // If not in cache, try to fetch from API (async, but we'll update cache for next time)
+        if (!cachedUser) {
+          // Fetch in background (don't await to avoid blocking)
+          this.fetchAndCacheUserProfile(userId).then((fetchedUser) => {
+            if (fetchedUser) {
+              // Re-enrich this content item with the fetched user data
+              content.uploadedBy = {
+                _id: userId,
+                id: userId,
+                firstName: fetchedUser.firstName || "",
+                lastName: fetchedUser.lastName || "",
+                avatar: fetchedUser.avatar || fetchedUser.avatarUpload || "",
+                email: fetchedUser.email || "",
+              };
+              console.log(`✅ Enriched uploadedBy string ID for content ${content._id || content.id} with fetched user data`);
+            }
+          }).catch(() => {
+            // Silently fail
+          });
+        } else {
+          // Use cached user data
           content.uploadedBy = {
             _id: userId,
             id: userId,

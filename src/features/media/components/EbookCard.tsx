@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
@@ -34,6 +35,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onDelete,
   checkIfDownloaded,
 }) => {
+  const router = useRouter();
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -165,21 +167,46 @@ export const EbookCard: React.FC<EbookCardProps> = ({
       <TouchableWithoutFeedback
         onPress={() => {
           try {
-            const { router } = require("expo-router");
             const pdfUrl =
               (ebook as any)?.fileUrl || (ebook as any)?.pdfUrl || "";
-            if (typeof pdfUrl === "string" && /^https?:\/\//.test(pdfUrl)) {
-              router.push({
-                pathname: "/reader/PdfViewer",
-                params: {
-                  url: pdfUrl,
-                  ebookId: (ebook as any)?._id || (ebook as any)?.id || "",
-                  title: ebook.title,
-                  desc: (ebook as any)?.description || "",
-                },
-              });
+            
+            console.log("📖 EbookCard pressed:", {
+              title: ebook.title,
+              pdfUrl,
+              hasUrl: !!pdfUrl,
+              urlType: typeof pdfUrl,
+            });
+
+            // Check if URL is valid (http, https, or file://)
+            if (typeof pdfUrl === "string" && pdfUrl.trim().length > 0) {
+              const isValidUrl = /^(https?|file):\/\//.test(pdfUrl.trim());
+              
+              if (isValidUrl) {
+                console.log("📖 Navigating to PdfViewer with URL:", pdfUrl);
+                router.push({
+                  pathname: "/reader/PdfViewer",
+                  params: {
+                    url: pdfUrl.trim(),
+                    ebookId: (ebook as any)?._id || (ebook as any)?.id || "",
+                    title: ebook.title || "Untitled",
+                    desc: (ebook as any)?.description || "",
+                  },
+                });
+              } else {
+                console.warn("⚠️ Invalid PDF URL format:", pdfUrl);
+                // Fallback: show details modal if URL is invalid
+                setShowDetailsModal(true);
+              }
+            } else {
+              console.warn("⚠️ No PDF URL found for ebook:", ebook.title);
+              // Fallback: show details modal if no URL
+              setShowDetailsModal(true);
             }
-          } catch {}
+          } catch (error) {
+            console.error("❌ Error opening ebook:", error);
+            // Fallback: show details modal on error
+            setShowDetailsModal(true);
+          }
         }}
       >
         <View className="w-full h-[400px] overflow-hidden relative">

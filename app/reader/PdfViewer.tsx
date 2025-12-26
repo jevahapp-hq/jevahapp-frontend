@@ -42,12 +42,40 @@ export default function PdfViewer() {
     title?: string;
     desc?: string;
   }>();
-  const url = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
+  // Decode URL parameters - expo-router may encode them
+  const decodedUrl = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
+  // Safely decode URL - try decodeURIComponent, but fallback to original if it fails
+  const url = decodedUrl ? (() => {
+    try {
+      // Only decode if it looks encoded (contains %)
+      if (decodedUrl.includes('%')) {
+        return decodeURIComponent(decodedUrl);
+      }
+      return decodedUrl;
+    } catch (e) {
+      console.warn("⚠️ URL decode failed, using original:", e);
+      return decodedUrl;
+    }
+  })() : undefined;
   const ebookId = Array.isArray(rawEbookId) ? rawEbookId[0] : rawEbookId;
   const title = Array.isArray(rawTitle) ? rawTitle[0] : rawTitle;
   const desc = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
 
-  const [loading, setLoading] = useState(true);
+  // Log received params for debugging
+  useEffect(() => {
+    console.log("📖 PdfViewer received params:", {
+      rawUrl,
+      decodedUrl,
+      url,
+      ebookId,
+      title,
+      hasUrl: !!url,
+      urlType: typeof url,
+    });
+  }, [rawUrl, decodedUrl, url, ebookId, title]);
+
+  // On Android, start with loading false and prepare fallback immediately
+  const [loading, setLoading] = useState(Platform.OS !== "android");
   const [progress, setProgress] = useState(0);
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [fallbackUri, setFallbackUri] = useState<string | null>(null);
@@ -83,7 +111,10 @@ export default function PdfViewer() {
       
       if (result.success && result.pages.length > 0) {
         setPageTexts(result.pages);
-        setTotalPages(result.totalPages);
+        if (result.totalPages > 0) {
+          setTotalPages(result.totalPages);
+          console.log(`📚 Set total pages from extraction: ${result.totalPages}`);
+        }
       } else {
         console.log('⚠️ All extraction methods failed');
       }
@@ -123,6 +154,22 @@ export default function PdfViewer() {
   }, [url]);
 
   useEffect(() => {
+    // On Android, set up Google Docs viewer IMMEDIATELY (synchronous, no async operations)
+    if (Platform.OS === "android" && url) {
+      const trimmedUrl = String(url).trim();
+      const isValidUrl = /^(https?|file):\/\//.test(trimmedUrl);
+      
+      // Only use online viewer for remote URLs, not local files
+      if (isValidUrl && !trimmedUrl.startsWith("file://") && !trimmedUrl.startsWith(FileSystem.documentDirectory || "")) {
+        const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(trimmedUrl)}`;
+        console.log("🤖 Android: Setting Google Docs viewer as default (immediate)");
+        setFallbackUri(docsUri);
+        setLoading(false);
+        setErrorText(null);
+        return; // Exit early, don't run download logic
+      }
+    }
+    
     let cancelled = false;
     const ensureDir = async () => {
       try {
@@ -135,7 +182,19 @@ export default function PdfViewer() {
 
     const download = async () => {
       if (!url) {
+        console.error("❌ No PDF URL provided");
         setErrorText("No PDF URL provided");
+        setLoading(false);
+        return;
+      }
+
+      // Validate URL format
+      const trimmedUrl = String(url).trim();
+      const isValidUrl = /^(https?|file):\/\//.test(trimmedUrl);
+      
+      if (!isValidUrl) {
+        console.error("❌ Invalid URL format:", trimmedUrl);
+        setErrorText(`Invalid URL format: ${trimmedUrl.substring(0, 50)}...`);
         setLoading(false);
         return;
       }
@@ -143,34 +202,57 @@ export default function PdfViewer() {
       // If this is already a local file (e.g. coming from offline downloads),
       // skip remote downloading/caching and render directly.
       const isLocalFile =
-        typeof url === "string" &&
-        (url.startsWith("file://") || url.startsWith(FileSystem.documentDirectory || ""));
+        typeof trimmedUrl === "string" &&
+        (trimmedUrl.startsWith("file://") || trimmedUrl.startsWith(FileSystem.documentDirectory || ""));
       if (isLocalFile) {
+        console.log("📁 Using local file:", trimmedUrl);
         setFallbackUri(null);
-        setLocalUri(String(url));
+        setLocalUri(trimmedUrl);
         setLoading(false);
         return;
       }
 
-      // Always prepare a docs viewer URL for Android (WebView doesn't render PDFs natively)
+      // Prepare Google Docs viewer URL (for iOS fallback)
       const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
-        String(url)
+        trimmedUrl
       )}`;
-      if (Platform.OS === "android") {
-        setFallbackUri(docsUri);
-      }
+      console.log("🌐 Prepared Google Docs viewer URL:", docsUri.substring(0, 100) + "...");
+      
+      // iOS: Try to download and cache, with fallback to Google Docs viewer
+      // (Android already handled above with early return)
+      
+      // iOS: Try to download and cache, with fallback to Google Docs viewer
+      setFallbackUri(docsUri); // Set as backup
       setLoading(true);
       setErrorText(null);
+      
+      // Set a timeout to automatically use fallback if download takes too long (15 seconds)
+      const timeoutId = setTimeout(() => {
+        if (!cancelled && !localUri) {
+          console.warn("⏱️ Download timeout - switching to Google Docs viewer");
+          setLoading(false);
+          // Fallback URI already set above
+        }
+      }, 15000);
+      
       try {
         await ensureDir();
+        
         // Use cached file if available
         const info = await FileSystem.getInfoAsync(cachePath, { size: true });
         if (info.exists && (info.size || 0) > 1000) {
-          if (!cancelled) setLocalUri(cachePath);
+          console.log("✅ Using cached PDF:", cachePath);
+          clearTimeout(timeoutId);
+          if (!cancelled) {
+            setLocalUri(cachePath);
+            setLoading(false);
+          }
           return;
         }
+        
+        console.log("⬇️ Downloading PDF from:", trimmedUrl);
         const dl = FileSystem.createDownloadResumable(
-          url,
+          trimmedUrl,
           cachePath,
           {},
           (d) => {
@@ -183,22 +265,35 @@ export default function PdfViewer() {
             }
           }
         );
+        
         const res = await dl.downloadAsync();
+        clearTimeout(timeoutId);
+        
         if (!cancelled && res?.uri) {
+          console.log("✅ PDF downloaded successfully:", res.uri);
           setLocalUri(res.uri);
+          setLoading(false);
+        } else if (!cancelled) {
+          console.warn("⚠️ Download completed but no URI returned, using fallback");
+          setLoading(false);
+          // Fallback URI already set above
         }
       } catch (e: any) {
+        clearTimeout(timeoutId);
+        console.error("❌ PDF download failed:", e);
+        console.error("❌ Error details:", {
+          message: e?.message,
+          code: e?.code,
+          stack: e?.stack?.substring(0, 200),
+        });
+        
         // Fallback to Google Docs viewer for broad compatibility
         if (!cancelled) {
-          setFallbackUri(
-            `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
-              String(url)
-            )}`
-          );
-          setErrorText("Falling back to online viewer");
+          console.log("🔄 Falling back to Google Docs viewer");
+          setFallbackUri(docsUri);
+          setErrorText(null); // Clear error text, fallback should work
+          setLoading(false);
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     };
     download();
@@ -264,7 +359,7 @@ export default function PdfViewer() {
             >
               {title || "PDF"}
             </Text>
-            {totalPages > 0 && (
+            {(totalPages > 0 || currentViewingPage > 0) && (
               <Text
                 style={{
                   fontSize: 12,
@@ -274,7 +369,9 @@ export default function PdfViewer() {
                   marginTop: 2,
                 }}
               >
-                Page {currentViewingPage} of {totalPages}
+                {totalPages > 0 
+                  ? `Page ${currentViewingPage} of ${totalPages}`
+                  : `Page ${currentViewingPage}`}
               </Text>
             )}
           </View>
@@ -293,9 +390,11 @@ export default function PdfViewer() {
               : "Preparing document…"}
           </Text>
         </View>
-      ) : (
+      ) : fallbackUri || localUri ? (
         <View style={{ flex: 1 }}>
           {/* PDF Viewer - Always visible */}
+          {/* On iOS, try localUri first, but fall back to Google Docs viewer if download failed */}
+          {/* On Android, always use fallbackUri (Google Docs viewer) */}
           {Platform.OS === "ios" && localUri ? (
             <WebView
               style={{ flex: 1, backgroundColor: "#fff" }}
@@ -583,42 +682,61 @@ export default function PdfViewer() {
             setLoading(false);
           }}
           onError={(error) => {
-            console.error("❌ PDF WebView error:", error);
-            setFallbackUri(
-              `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
+            console.error("❌ PDF WebView error on iOS:", error);
+            // If local file fails to load, switch to Google Docs viewer
+            if (url) {
+              const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
                 String(url)
-              )}`
-            );
+              )}`;
+              console.log("🔄 Switching to Google Docs viewer due to WebView error");
+              setLocalUri(null);
+              setFallbackUri(docsUri);
+            } else {
+              setErrorText("Unable to load PDF");
+            }
           }}
         />
-      ) : fallbackUri ? (
-        <WebView
+          ) : fallbackUri ? (
+            <WebView
           style={{ flex: 1, backgroundColor: "#fff" }}
           source={{ uri: fallbackUri }}
           originWhitelist={["*"]}
-          javaScriptEnabled
-          domStorageEnabled
-          scalesPageToFit
-          startInLoadingState
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          scalesPageToFit={true}
+          startInLoadingState={true}
+          mixedContentMode="always"
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          androidHardwareAccelerationDisabled={false}
+          androidLayerType="hardware"
+          cacheEnabled={true}
+          cacheMode="LOAD_DEFAULT"
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data || "{}");
-                  console.log(`📨 Received fallback message:`, data);
-                  
+              console.log(`📨 Received fallback message:`, data);
+              
               if (data.type === "pageChange") {
                 const pageNumber = data.page || 1;
-                const total = data.totalPages || 102;
-                setCurrentViewingPage(pageNumber);
-                setTotalPages(total);
+                const total = data.totalPages || 0;
                 console.log(`📄 Page changed to ${pageNumber}/${total}`);
+                setCurrentViewingPage(pageNumber);
+                if (total > 0) {
+                  setTotalPages(total);
+                }
               } else if (data.type === "pageUpdate") {
                 const pageNumber = data.page || 1;
-                const total = data.totalPages || 102;
-                setCurrentViewingPage(pageNumber);
-                setTotalPages(total);
+                const total = data.totalPages || 0;
                 console.log(`📄 Page update to ${pageNumber}/${total}`);
+                setCurrentViewingPage(pageNumber);
+                if (total > 0) {
+                  setTotalPages(total);
+                }
               }
-            } catch (e) {}
+            } catch (e) {
+              console.error("❌ Error parsing WebView message:", e);
+            }
           }}
           injectedJavaScript={`
             (function() {
@@ -654,16 +772,25 @@ export default function PdfViewer() {
                 return 100; // Final fallback
               }
               
-              // Initialize total pages
-              setTimeout(() => {
-                totalPages = detectTotalPages();
-                console.log('📄 Detected total pages (fallback viewer):', totalPages);
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'pageChange',
-                  page: currentPage,
-                  totalPages: totalPages
-                }));
-              }, 2500);
+              // Initialize total pages - try multiple times as Google Docs viewer loads
+              function initializePages() {
+                const detected = detectTotalPages();
+                if (detected > 0 && detected !== totalPages) {
+                  totalPages = detected;
+                  console.log('📄 Detected total pages (fallback viewer):', totalPages);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'pageChange',
+                    page: currentPage,
+                    totalPages: totalPages
+                  }));
+                }
+              }
+              
+              // Try multiple times as the viewer loads
+              setTimeout(initializePages, 1000);
+              setTimeout(initializePages, 2500);
+              setTimeout(initializePages, 5000);
+              setTimeout(initializePages, 8000);
               
               // Better page detection for Google Docs viewer
               function detectCurrentPage() {
@@ -781,16 +908,68 @@ export default function PdfViewer() {
               <ActivityIndicator size="large" color="#090E24" />
             </View>
           )}
-          onError={() => setErrorText("Unable to load PDF")}
-        />
+          onLoadStart={() => {
+            console.log("🌐 Google Docs viewer started loading");
+            setLoading(true);
+          }}
+          onLoadEnd={() => {
+            console.log("✅ Google Docs viewer loaded successfully");
+            setLoading(false);
+            setErrorText(null);
+          }}
+          onError={(error) => {
+            console.error("❌ Fallback WebView error:", error);
+            setLoading(false);
+            setErrorText("Unable to load PDF. Please check your internet connection.");
+          }}
+          onHttpError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.error("❌ Fallback WebView HTTP error:", nativeEvent);
+            setLoading(false);
+            if (nativeEvent.statusCode >= 400) {
+              setErrorText(`Unable to load PDF (Error ${nativeEvent.statusCode})`);
+            } else {
+              setErrorText("Unable to load PDF. Please check your internet connection.");
+            }
+          }}
+          onShouldStartLoadWithRequest={(request) => {
+            // Allow navigation within Google Docs viewer
+            console.log("🔗 WebView navigation request:", request.url.substring(0, 100));
+            return true;
+          }}
+            />
+          ) : null}
+        </View>
       ) : (
         <View
           style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
         >
-          <Text style={{ color: "#666" }}>
+          <Text style={{ color: "#666", textAlign: "center", paddingHorizontal: 20 }}>
             {errorText || "Unable to open document"}
           </Text>
-            </View>
+          {url && (
+            <TouchableOpacity
+              onPress={() => {
+                // Retry with Google Docs viewer
+                const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
+                  String(url)
+                )}`;
+                console.log("🔄 Retrying with Google Docs viewer");
+                setFallbackUri(docsUri);
+                setErrorText(null);
+              }}
+              style={{
+                marginTop: 16,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                backgroundColor: "#090E24",
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "#fff", fontFamily: "Rubik-SemiBold" }}>
+                Retry with Online Viewer
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
       )}

@@ -54,8 +54,10 @@ export interface UnifiedInteractionButtonsProps {
 /**
  * Unified InteractionButtons Component
  * Supports both prop-based and hook-based patterns
+ * 
+ * Memoized for performance - only re-renders when props actually change
  */
-export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps> = ({
+export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps> = React.memo(({
   contentId,
   contentType = "media",
   contentTitle,
@@ -355,7 +357,40 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
       </TouchableOpacity>
     </View>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memoization
+  // Only re-render if these props change
+  return (
+    prevProps.contentId === nextProps.contentId &&
+    prevProps.contentType === nextProps.contentType &&
+    prevProps.userLikeState === nextProps.userLikeState &&
+    prevProps.userSaveState === nextProps.userSaveState &&
+    prevProps.likeCount === nextProps.likeCount &&
+    prevProps.saveCount === nextProps.saveCount &&
+    prevProps.commentCount === nextProps.commentCount &&
+    prevProps.viewCount === nextProps.viewCount &&
+    prevProps.shareCount === nextProps.shareCount &&
+    prevProps.isDownloaded === nextProps.isDownloaded &&
+    prevProps.layout === nextProps.layout &&
+    prevProps.iconSize === nextProps.iconSize &&
+    prevProps.showCounts === nextProps.showCounts &&
+    prevProps.iconColor === nextProps.iconColor &&
+    prevProps.activeIconColor === nextProps.activeIconColor &&
+    prevProps.textColor === nextProps.textColor &&
+    prevProps.useHooks === nextProps.useHooks &&
+    // Note: Function props (onLike, onComment, etc.) are compared by reference
+    // If parent creates new functions on each render, this will still re-render
+    // Parent should use useCallback for these handlers
+    prevProps.onLike === nextProps.onLike &&
+    prevProps.onComment === nextProps.onComment &&
+    prevProps.onSave === nextProps.onSave &&
+    prevProps.onShare === nextProps.onShare &&
+    prevProps.onDownload === nextProps.onDownload &&
+    prevProps.onCommentPress === nextProps.onCommentPress
+  );
+});
+
+UnifiedInteractionButtons.displayName = "UnifiedInteractionButtons";
 
 export default UnifiedInteractionButtons;
 
