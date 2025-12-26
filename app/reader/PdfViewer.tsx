@@ -71,14 +71,43 @@ export default function PdfViewer() {
       title,
       hasUrl: !!url,
       urlType: typeof url,
+      platform: Platform.OS,
     });
   }, [rawUrl, decodedUrl, url, ebookId, title]);
+
+  // On Android, set fallbackUri immediately when URL is available
+  useEffect(() => {
+    if (Platform.OS === "android" && url && !fallbackUri && !localUri) {
+      const trimmedUrl = String(url).trim();
+      const isValidUrl = /^(https?|file):\/\//.test(trimmedUrl);
+      
+      if (isValidUrl && !trimmedUrl.startsWith("file://") && !trimmedUrl.startsWith(FileSystem.documentDirectory || "")) {
+        const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(trimmedUrl)}`;
+        console.log("🤖 Android: Setting Google Docs viewer immediately from useEffect");
+        setFallbackUri(docsUri);
+        setLoading(false);
+        setErrorText(null);
+      }
+    }
+  }, [url, fallbackUri, localUri]);
 
   // On Android, start with loading false and prepare fallback immediately
   const [loading, setLoading] = useState(Platform.OS !== "android");
   const [progress, setProgress] = useState(0);
   const [localUri, setLocalUri] = useState<string | null>(null);
-  const [fallbackUri, setFallbackUri] = useState<string | null>(null);
+  // Initialize fallbackUri for Android immediately if URL is available
+  const [fallbackUri, setFallbackUri] = useState<string | null>(() => {
+    if (Platform.OS === "android" && url) {
+      const trimmedUrl = String(url).trim();
+      const isValidUrl = /^(https?|file):\/\//.test(trimmedUrl);
+      if (isValidUrl && !trimmedUrl.startsWith("file://") && !trimmedUrl.startsWith(FileSystem.documentDirectory || "")) {
+        const docsUri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(trimmedUrl)}`;
+        console.log("🤖 Android: Initializing Google Docs viewer immediately");
+        return docsUri;
+      }
+    }
+    return null;
+  });
   const [errorText, setErrorText] = useState<string | null>(null);
   const [extractionReady, setExtractionReady] = useState(false);
   const [pageTexts, setPageTexts] = useState<string[]>([]);
@@ -112,7 +141,7 @@ export default function PdfViewer() {
       if (result.success && result.pages.length > 0) {
         setPageTexts(result.pages);
         if (result.totalPages > 0) {
-          setTotalPages(result.totalPages);
+        setTotalPages(result.totalPages);
           console.log(`📚 Set total pages from extraction: ${result.totalPages}`);
         }
       } else {
@@ -379,7 +408,149 @@ export default function PdfViewer() {
           <View style={{ width: 40, height: 40 }} />
         </View>
       </SafeAreaView>
-      {loading && !fallbackUri && !localUri ? (
+      {/* Render PDF Viewer */}
+      {Platform.OS === "android" && url ? (
+        // Android: Always use Google Docs viewer directly
+        <View style={{ flex: 1 }}>
+          <WebView
+            style={{ flex: 1, backgroundColor: "#fff" }}
+            source={{ 
+              uri: fallbackUri || `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(String(url).trim())}`
+            }}
+            originWhitelist={["*"]}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            scalesPageToFit={true}
+            startInLoadingState={true}
+            mixedContentMode="always"
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            androidHardwareAccelerationDisabled={false}
+            androidLayerType="hardware"
+            cacheEnabled={true}
+            cacheMode="LOAD_DEFAULT"
+            onMessage={(event) => {
+              try {
+                const data = JSON.parse(event.nativeEvent.data || "{}");
+                console.log(`📨 Received Android message:`, data);
+                
+                if (data.type === "pageChange") {
+                  const pageNumber = data.page || 1;
+                  const total = data.totalPages || 0;
+                  console.log(`📄 Page changed to ${pageNumber}/${total}`);
+                  setCurrentViewingPage(pageNumber);
+                  if (total > 0) {
+                    setTotalPages(total);
+                  }
+                }
+              } catch (e) {
+                console.error("❌ Error parsing Android WebView message:", e);
+              }
+            }}
+            onLoadStart={() => {
+              console.log("🌐 Android: Google Docs viewer started loading");
+              setLoading(true);
+            }}
+            onLoadEnd={() => {
+              console.log("✅ Android: Google Docs viewer loaded successfully");
+              setLoading(false);
+              setErrorText(null);
+            }}
+            onError={(error) => {
+              console.error("❌ Android WebView error:", error);
+              setLoading(false);
+              setErrorText("Unable to load PDF. Please check your internet connection.");
+            }}
+            onHttpError={(syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
+              console.error("❌ Android WebView HTTP error:", nativeEvent);
+              setLoading(false);
+              if (nativeEvent.statusCode >= 400) {
+                setErrorText(`Unable to load PDF (Error ${nativeEvent.statusCode})`);
+              }
+            }}
+            injectedJavaScript={`
+              (function() {
+                let currentPage = 1;
+                let totalPages = 100;
+                
+                function detectTotalPages() {
+                  const pageIndicators = document.querySelectorAll('*');
+                  for (const element of pageIndicators) {
+                    const text = element.textContent || '';
+                    if (text.includes('of ') && /\\d+\\s*of\\s*(\\d+)/.test(text)) {
+                      const match = text.match(/\\d+\\s*of\\s*(\\d+)/);
+                      if (match) {
+                        const detectedTotal = parseInt(match[1]);
+                        if (detectedTotal > 0 && detectedTotal < 10000) {
+                          return detectedTotal;
+                        }
+                      }
+                    }
+                  }
+                  const docHeight = document.documentElement.scrollHeight;
+                  const windowHeight = window.innerHeight;
+                  if (docHeight > windowHeight) {
+                    const estimated = Math.ceil(docHeight / (windowHeight * 0.8));
+                    return Math.min(1000, Math.max(1, estimated));
+                  }
+                  return 100;
+                }
+                
+                function detectCurrentPage() {
+                  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                  const documentHeight = document.documentElement.scrollHeight;
+                  const windowHeight = window.innerHeight;
+                  const scrollPercent = documentHeight > windowHeight ? scrollTop / (documentHeight - windowHeight) : 0;
+                  return Math.max(1, Math.min(totalPages, Math.ceil(scrollPercent * totalPages)));
+                }
+                
+                function updatePage() {
+                  const newPage = detectCurrentPage();
+                  if (newPage !== currentPage) {
+                    currentPage = newPage;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'pageChange',
+                      page: currentPage,
+                      totalPages: totalPages
+                    }));
+                  }
+                }
+                
+                function initializePages() {
+                  const detected = detectTotalPages();
+                  if (detected > 0 && detected !== totalPages) {
+                    totalPages = detected;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'pageChange',
+                      page: currentPage,
+                      totalPages: totalPages
+                    }));
+                  }
+                }
+                
+                setTimeout(initializePages, 1000);
+                setTimeout(initializePages, 2500);
+                setTimeout(initializePages, 5000);
+                
+                let scrollTimeout;
+                window.addEventListener('scroll', function() {
+                  clearTimeout(scrollTimeout);
+                  scrollTimeout = setTimeout(updatePage, 100);
+                });
+                
+                window.addEventListener('resize', updatePage);
+                window.addEventListener('orientationchange', updatePage);
+                
+                setTimeout(updatePage, 1000);
+                setTimeout(updatePage, 2500);
+                setInterval(updatePage, 3000);
+              })();
+              true;
+            `}
+          />
+        </View>
+      ) : loading && !fallbackUri && !localUri ? (
         <View
           style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
         >
@@ -392,9 +563,7 @@ export default function PdfViewer() {
         </View>
       ) : fallbackUri || localUri ? (
         <View style={{ flex: 1 }}>
-          {/* PDF Viewer - Always visible */}
-          {/* On iOS, try localUri first, but fall back to Google Docs viewer if download failed */}
-          {/* On Android, always use fallbackUri (Google Docs viewer) */}
+          {/* PDF Viewer - iOS or fallback */}
           {Platform.OS === "ios" && localUri ? (
             <WebView
               style={{ flex: 1, backgroundColor: "#fff" }}
@@ -696,8 +865,8 @@ export default function PdfViewer() {
             }
           }}
         />
-          ) : fallbackUri ? (
-            <WebView
+      ) : fallbackUri ? (
+        <WebView
           style={{ flex: 1, backgroundColor: "#fff" }}
           source={{ uri: fallbackUri }}
           originWhitelist={["*"]}
@@ -715,15 +884,15 @@ export default function PdfViewer() {
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data || "{}");
-              console.log(`📨 Received fallback message:`, data);
-              
+                  console.log(`📨 Received fallback message:`, data);
+                  
               if (data.type === "pageChange") {
                 const pageNumber = data.page || 1;
                 const total = data.totalPages || 0;
                 console.log(`📄 Page changed to ${pageNumber}/${total}`);
                 setCurrentViewingPage(pageNumber);
                 if (total > 0) {
-                  setTotalPages(total);
+                setTotalPages(total);
                 }
               } else if (data.type === "pageUpdate") {
                 const pageNumber = data.page || 1;
@@ -731,8 +900,8 @@ export default function PdfViewer() {
                 console.log(`📄 Page update to ${pageNumber}/${total}`);
                 setCurrentViewingPage(pageNumber);
                 if (total > 0) {
-                  setTotalPages(total);
-                }
+                setTotalPages(total);
+              }
               }
             } catch (e) {
               console.error("❌ Error parsing WebView message:", e);
@@ -777,12 +946,12 @@ export default function PdfViewer() {
                 const detected = detectTotalPages();
                 if (detected > 0 && detected !== totalPages) {
                   totalPages = detected;
-                  console.log('📄 Detected total pages (fallback viewer):', totalPages);
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'pageChange',
-                    page: currentPage,
-                    totalPages: totalPages
-                  }));
+                console.log('📄 Detected total pages (fallback viewer):', totalPages);
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'pageChange',
+                  page: currentPage,
+                  totalPages: totalPages
+                }));
                 }
               }
               
