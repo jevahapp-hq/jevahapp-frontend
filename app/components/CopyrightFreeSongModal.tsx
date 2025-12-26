@@ -697,7 +697,8 @@ export default function CopyrightFreeSongModal({
     }
   };
 
-  const handleToggleLike = async () => {
+  // Optimized with useCallback for instant response
+  const handleToggleLike = useCallback(async () => {
     if (!song || isTogglingLike) return;
 
     const songId = song._id || song.id;
@@ -706,16 +707,15 @@ export default function CopyrightFreeSongModal({
       return;
     }
 
-    try {
-      setIsTogglingLike(true);
-      
-      // Optimistic update
-      const previousLiked = isLiked;
-      const previousLikeCount = likeCount;
-      setIsLiked(!previousLiked);
-      setLikeCount(previousLiked ? previousLikeCount - 1 : previousLikeCount + 1);
+    // Optimistic update FIRST for instant UI feedback
+    const previousLiked = isLiked;
+    const previousLikeCount = likeCount;
+    setIsLiked(!previousLiked);
+    setLikeCount(previousLiked ? previousLikeCount - 1 : previousLikeCount + 1);
 
-      // Call API
+    // Then call API in background
+    setIsTogglingLike(true);
+    try {
       const result = await copyrightFreeMusicAPI.toggleLike(songId);
 
       if (result.success && result.data) {
@@ -733,13 +733,13 @@ export default function CopyrightFreeSongModal({
     } catch (error) {
       console.error("Error toggling like:", error);
       // Revert optimistic update
-      setIsLiked(isLiked);
-      setLikeCount(likeCount);
+      setIsLiked(previousLiked);
+      setLikeCount(previousLikeCount);
       Alert.alert("Error", "Failed to update like");
     } finally {
       setIsTogglingLike(false);
     }
-  };
+  }, [song, isLiked, likeCount, isTogglingLike]);
 
   const handleDeletePlaylist = async (playlistId: string) => {
     Alert.alert(
@@ -1020,6 +1020,8 @@ export default function CopyrightFreeSongModal({
                   <TouchableOpacity
                     onPress={handleToggleLike}
                     disabled={isTogglingLike}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
@@ -1187,6 +1189,9 @@ export default function CopyrightFreeSongModal({
                   {/* Skip back 15 seconds */}
                   <TouchableOpacity
                     onPress={() => handleSkip(-15)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    delayPressIn={0}
                     style={{
                       width: 50,
                       height: 50,
@@ -1195,7 +1200,6 @@ export default function CopyrightFreeSongModal({
                       alignItems: "center",
                       backgroundColor: "rgba(255, 255, 255, 0.15)",
                     }}
-                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name="play-skip-back"
@@ -1207,7 +1211,9 @@ export default function CopyrightFreeSongModal({
                   {/* Large Play/Pause Button */}
                   <TouchableOpacity
                     onPress={onTogglePlay || (() => onPlay?.(song))}
-                    activeOpacity={0.8}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    delayPressIn={0}
                     style={{
                       width: 80,
                       height: 80,
@@ -1233,6 +1239,9 @@ export default function CopyrightFreeSongModal({
                   {/* Skip forward 15 seconds */}
                   <TouchableOpacity
                     onPress={() => handleSkip(15)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    delayPressIn={0}
                     style={{
                       width: 50,
                       height: 50,
@@ -1241,7 +1250,6 @@ export default function CopyrightFreeSongModal({
                       alignItems: "center",
                       backgroundColor: "rgba(255, 255, 255, 0.15)",
                     }}
-                    activeOpacity={0.7}
                   >
                     <Ionicons
                       name="play-skip-forward"
@@ -1363,6 +1371,9 @@ export default function CopyrightFreeSongModal({
               >
                 <TouchableOpacity
                   onPress={onToggleMute}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  delayPressIn={0}
                   style={{
                     width: 50,
                     height: 50,
@@ -1373,7 +1384,6 @@ export default function CopyrightFreeSongModal({
                     borderWidth: 1,
                     borderColor: "rgba(255, 255, 255, 0.2)",
                   }}
-                  activeOpacity={0.7}
                 >
                   <Ionicons
                     name={isMuted ? "volume-mute" : "volume-high"}

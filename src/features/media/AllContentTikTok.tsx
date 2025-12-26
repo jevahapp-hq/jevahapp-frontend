@@ -1275,16 +1275,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, [toggleVideoMuteAction]);
 
   const togglePlay = useCallback((key: string) => {
-    // console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
-    // console.log("🎮 Current playing state:", playingVideos[key]);
-
-    // Clear any autoplay state and play the video immediately
-    setCurrentlyVisibleVideo(key);
-
-    // ✅ Use unified media store for consistent video playback
+    // ✅ CRITICAL: Play video FIRST (imperative, immediate), then update state
+    // This ensures video starts playing immediately without waiting for re-renders
     playMedia(key, "video");
-
-    // console.log("✅ Video play request sent for key:", key);
+    
+    // Update visible video state AFTER play (non-blocking)
+    // Use setTimeout to ensure play happens first
+    setTimeout(() => {
+      setCurrentlyVisibleVideo(key);
+    }, 0);
   }, [playMedia]);
 
   // Handle video visibility changes during scroll for autoplay

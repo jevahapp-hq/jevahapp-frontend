@@ -20,33 +20,59 @@ export default function Skeleton({
   dark = false,
   variant = "none",
 }: SkeletonProps) {
+  // Shimmer animation - light shining across
+  const shimmerTranslateX = useRef(new Animated.Value(-200)).current;
   const opacity = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
-    const loop = Animated.loop(
+    // Shimmer animation - light moving across
+    const shimmerAnimation = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 700,
+        Animated.timing(shimmerTranslateX, {
+          toValue: 400, // Move from left to right
+          duration: 1500,
           useNativeDriver: true,
         }),
-        Animated.timing(opacity, {
-          toValue: 0.6,
-          duration: 700,
+        Animated.timing(shimmerTranslateX, {
+          toValue: -200, // Reset to start
+          duration: 0,
           useNativeDriver: true,
         }),
       ])
     );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
+
+    // Subtle pulse animation for base
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.7,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.5,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    shimmerAnimation.start();
+    pulseAnimation.start();
+
+    return () => {
+      shimmerAnimation.stop();
+      pulseAnimation.stop();
+    };
+  }, [shimmerTranslateX, opacity]);
 
   const baseColor = dark
-    ? UI_CONFIG.COLORS.SKELETON_DARK_BASE
-    : UI_CONFIG.COLORS.SKELETON_BASE;
+    ? UI_CONFIG.COLORS.SKELETON_DARK_BASE || "#2A2A2A"
+    : UI_CONFIG.COLORS.SKELETON_BASE || "#E5E7EB";
   const highlight = dark
-    ? UI_CONFIG.COLORS.SKELETON_DARK_HIGHLIGHT
-    : UI_CONFIG.COLORS.SKELETON_HIGHLIGHT;
+    ? UI_CONFIG.COLORS.SKELETON_DARK_HIGHLIGHT || "#3A3A3A"
+    : UI_CONFIG.COLORS.SKELETON_HIGHLIGHT || "#F3F4F6";
+  const shimmerColor = dark ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.4)";
 
   // Apply variant presets for perfect alignment with cards
   // - card: matches typical media cards (no rounded corners for sharp edges)
@@ -78,7 +104,7 @@ export default function Skeleton({
     presetStyle = {
       width: 40,
       height: 40,
-      borderRadius: UI_CONFIG.BORDER_RADIUS.FULL, // Keep rounded for avatars
+      borderRadius: UI_CONFIG.BORDER_RADIUS.FULL || 20, // Keep rounded for avatars
       backgroundColor: baseColor,
     };
   }
@@ -94,17 +120,40 @@ export default function Skeleton({
           borderRadius: presetStyle.borderRadius ?? borderRadius,
           backgroundColor: baseColor,
           opacity,
+          overflow: "hidden", // Critical for shimmer effect
         },
         style,
       ]}
     >
-      {/* subtle overlay highlight */}
+      {/* Shimmer effect - light shining across */}
+      <Animated.View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          width: "100%",
+          height: "100%",
+          backgroundColor: shimmerColor,
+          transform: [
+            {
+              translateX: shimmerTranslateX,
+            },
+            {
+              skewX: "20deg", // Angled light beam
+            },
+          ],
+          opacity: 0.6,
+        }}
+      />
+      
+      {/* Subtle overlay highlight */}
       <Animated.View
         style={{
           flex: 1,
           backgroundColor: highlight,
-          opacity: 0.18,
-          borderRadius,
+          opacity: 0.12,
+          borderRadius: presetStyle.borderRadius ?? borderRadius,
         }}
       />
     </Animated.View>

@@ -251,42 +251,52 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       });
 
       // STEP 2b: Imperatively PLAY the target video DIRECTLY (critical fix!)
-      const targetPlayer = videoPlayerRegistry.get(videoKey);
-      if (targetPlayer && targetPlayer.play) {
-        try {
-          const playResult = targetPlayer.play();
-          if (playResult instanceof Promise) {
-            playResult.catch((err) => console.warn(`Failed to imperatively play ${videoKey}:`, err));
-          }
-          console.log(`▶️ Imperatively playing video: ${videoKey}`);
-        } catch (err) {
-          console.warn(`Failed to imperatively play ${videoKey}:`, err);
-        }
-      } else if (targetPlayer) {
-        // Player registered but no play method - rely on state sync
-        console.log(`⚠️ Target player for ${videoKey} doesn't have play method, relying on state sync`);
-      } else {
-        console.warn(`⚠️ Video player not registered for key: ${videoKey}. State will update but video may not play until player registers.`);
-      }
-
-      // STEP 3: Update state to reflect the change
+      // Update state FIRST for immediate UI feedback, then play video
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
 
+        // Pause all other videos
         Object.keys(state.playingVideos).forEach((key) => {
           newPlayingVideos[key] = false;
           newShowOverlay[key] = true;
         });
 
+        // Set target video to playing
         newPlayingVideos[videoKey] = true;
         newShowOverlay[videoKey] = false;
+
         return {
           currentlyPlayingVideo: videoKey,
           playingVideos: newPlayingVideos,
           showOverlay: newShowOverlay,
         };
       });
+
+      // NOW play the video imperatively (after state update for instant UI feedback)
+      const targetPlayer = videoPlayerRegistry.get(videoKey);
+      if (targetPlayer && targetPlayer.play) {
+        try {
+          // Play immediately - don't await, fire and forget for instant response
+          const playResult = targetPlayer.play();
+          if (playResult instanceof Promise) {
+            // Don't await - let it play in background, but catch errors
+            playResult.catch((err) => {
+              console.warn(`Failed to imperatively play ${videoKey}:`, err);
+            });
+          }
+        } catch (err) {
+          console.warn(`Failed to imperatively play ${videoKey}:`, err);
+        }
+      } else if (targetPlayer) {
+        // Player registered but no play method - rely on state sync (already updated above)
+        console.log(`⚠️ Target player for ${videoKey} doesn't have play method, relying on state sync`);
+      } else {
+        // Player not registered yet - state already updated, useEffect will sync when player registers
+        console.warn(`⚠️ Video player not registered for key: ${videoKey}. State updated, player will sync when ready.`);
+      }
+
+      // STEP 3: State already updated in STEP 2b - no additional state update needed
     },
 
     // ✅ Toggle function - for cases where toggle behavior is needed
