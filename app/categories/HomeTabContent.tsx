@@ -13,7 +13,6 @@ import { useCurrentPlayingAudioStore } from "../store/useCurrentPlayingAudioStor
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
-import { useFastPerformance } from "../utils/fastPerformance";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 import AllContentTikTok from "./AllContentTikTok";
 import Music from "./music";
@@ -124,7 +123,6 @@ export default function HomeTabContent() {
     }
   }, [defaultCategoryValue]);
 
-  const { fastPress } = useFastPerformance();
   const scrollViewRef = useRef<ScrollView>(null);
   const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
 
@@ -180,21 +178,26 @@ export default function HomeTabContent() {
 
   const handleCategoryPress = useCallback(
     (category: string) => {
-      // Immediate visual feedback
+      // CRITICAL: Immediate state update for instant visual feedback
+      // Don't wait for anything - update state first
       setSelectedCategory(category);
 
-      // Update route params so navigation back restores this category
-      try {
-        const contentTypeParam = mapCategoryToContentType(category);
-        router.setParams({ defaultCategory: contentTypeParam });
-      } catch (error) {
-        // console.warn("🏠 HomeTabContent: Failed to set defaultCategory param", error);
-      }
+      // Update route params asynchronously (non-blocking)
+      // Use setTimeout with 0 delay to defer without blocking UI
+      setTimeout(() => {
+        try {
+          const contentTypeParam = mapCategoryToContentType(category);
+          router.setParams({ defaultCategory: contentTypeParam });
+        } catch (error) {
+          // Silently fail - route param update is not critical for UI
+        }
+      }, 0);
 
       // Only stop media if actually switching to a different category
+      // Defer to next tick to avoid blocking the state update
       if (category !== selectedCategory) {
-        // Defer heavy operations to prevent blocking UI
-        requestAnimationFrame(() => {
+        // Use setTimeout instead of requestAnimationFrame for better responsiveness
+        setTimeout(() => {
           try {
             useMediaStore.getState().stopAudioFn?.();
           } catch (e) {
@@ -226,10 +229,10 @@ export default function HomeTabContent() {
           } catch (e) {
             // no-op
           }
-        });
+        }, 0);
       }
     },
-    [selectedCategory, fastPress, router]
+    [selectedCategory, router]
   );
 
   const renderContent = () => {
@@ -262,23 +265,35 @@ export default function HomeTabContent() {
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
+          scrollEnabled={true}
+          scrollEventThrottle={16}
+          decelerationRate="fast"
+          snapToInterval={undefined}
+          disableIntervalMomentum={true}
+          keyboardShouldPersistTaps="handled"
           style={{
             paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
             marginTop: getResponsiveSpacing(20, 24, 28, 32),
+          }}
+          contentContainerStyle={{
+            paddingHorizontal: 0,
           }}
         >
           {categories.map((category) => (
             <TouchableOpacity
               key={category}
-              onPress={fastPress(() => handleCategoryPress(category), {
-                key: `category_${category}`,
-                priority: "high",
-              })}
+              onPress={() => {
+                // Immediate execution without fastPress wrapper to avoid debounce delays
+                handleCategoryPress(category);
+              }}
               onLayout={(event) => {
                 const { x, width } = event.nativeEvent.layout;
                 buttonLayouts.current[category] = { x, width };
               }}
-              activeOpacity={0.7}
+              activeOpacity={0.6}
+              delayPressIn={0}
+              delayPressOut={0}
+              hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
               style={{
                 paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
                 paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
@@ -294,6 +309,8 @@ export default function HomeTabContent() {
                 minHeight: 44,
                 justifyContent: "center",
                 alignItems: "center",
+                zIndex: 10,
+                elevation: 3,
               }}
             >
               <View style={{ position: "relative" }}>

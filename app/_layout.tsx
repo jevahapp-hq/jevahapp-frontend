@@ -117,7 +117,9 @@ export default function RootLayout() {
         // Suppress "User not found" errors from password reset (expected behavior for security)
         errorMessage.includes("User not found") ||
         errorMessage.includes("Email not found") ||
-        errorMessage.includes("Forgot password failed: User not found")
+        errorMessage.includes("Forgot password failed: User not found") ||
+        // Suppress categories API errors (graceful degradation - app works without categories)
+        errorMessage.includes("Error fetching categories")
       ) {
         // Only log network errors in development
         if (__DEV__ && (errorMessage.includes("Network request failed") || errorMessage.includes("TypeError: Network request failed"))) {

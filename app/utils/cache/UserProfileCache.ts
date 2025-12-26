@@ -129,37 +129,51 @@ export class UserProfileCache {
         }
       } else if (typeof content.uploadedBy === 'string') {
         // uploadedBy is just an ID string, try to enrich with cached user data
-        userId = content.uploadedBy;
-        let cachedUser = this.getUserProfile(userId);
+        userId = content.uploadedBy.trim();
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(userId);
         
-        // If not in cache, try to fetch from API (async, but we'll update cache for next time)
-        if (!cachedUser) {
-          // Fetch in background (don't await to avoid blocking)
-          this.fetchAndCacheUserProfile(userId).then((fetchedUser) => {
-            if (fetchedUser) {
-              // Re-enrich this content item with the fetched user data
-              content.uploadedBy = {
-                _id: userId,
-                id: userId,
-                firstName: fetchedUser.firstName || "",
-                lastName: fetchedUser.lastName || "",
-                avatar: fetchedUser.avatar || fetchedUser.avatarUpload || "",
-                email: fetchedUser.email || "",
-              };
-            }
-          }).catch(() => {
-            // Silently fail
-          });
+        if (isObjectId) {
+          // It's a valid ObjectId, try to get from cache
+          let cachedUser = this.getUserProfile(userId);
+          
+          if (cachedUser) {
+            // Use cached user data - convert string ID to object
+            content.uploadedBy = {
+              _id: userId,
+              id: userId,
+              firstName: cachedUser.firstName || "",
+              lastName: cachedUser.lastName || "",
+              avatar: cachedUser.avatar || cachedUser.avatarUpload || "",
+              email: cachedUser.email || "",
+            };
+          } else {
+            // Not in cache - try to fetch (async, but create minimal object structure first)
+            // This ensures the structure is correct even if fetch fails
+            content.uploadedBy = {
+              _id: userId,
+              id: userId,
+              firstName: "",
+              lastName: "",
+              avatar: "",
+              email: "",
+            };
+            
+            // Fetch in background to update the object
+            this.fetchAndCacheUserProfile(userId).then((fetchedUser) => {
+              if (fetchedUser && content.uploadedBy && typeof content.uploadedBy === 'object') {
+                // Update the object with fetched data
+                content.uploadedBy.firstName = fetchedUser.firstName || "";
+                content.uploadedBy.lastName = fetchedUser.lastName || "";
+                content.uploadedBy.avatar = fetchedUser.avatar || fetchedUser.avatarUpload || "";
+                content.uploadedBy.email = fetchedUser.email || "";
+              }
+            }).catch(() => {
+              // Silently fail - object structure is already correct
+            });
+          }
         } else {
-          // Use cached user data
-          content.uploadedBy = {
-            _id: userId,
-            id: userId,
-            firstName: cachedUser.firstName || "",
-            lastName: cachedUser.lastName || "",
-            avatar: cachedUser.avatar || cachedUser.avatarUpload || "",
-            email: cachedUser.email || "",
-          };
+          // Not an ObjectId, treat as a name string
+          // Keep as string (it's already a name)
         }
       }
     }
@@ -200,9 +214,71 @@ export class UserProfileCache {
 
   /**
    * Enrich an array of content items with cached user data
+   * This version does synchronous enrichment only (uses cache)
    */
   static enrichContentArray(contentArray: any[]): any[] {
     if (!Array.isArray(contentArray)) return contentArray;
+    return contentArray.map(item => this.enrichContentWithUserData(item));
+  }
+
+  /**
+   * Batch enrich content array by fetching all missing user profiles first
+   * This ensures all user data is available before transformation
+   */
+  static async enrichContentArrayBatch(contentArray: any[]): Promise<any[]> {
+    if (!Array.isArray(contentArray) || contentArray.length === 0) return contentArray;
+
+    // Step 1: Collect all unique user IDs that need fetching
+    const userIdsToFetch = new Set<string>();
+    
+    contentArray.forEach((item) => {
+      // Check uploadedBy
+      if (item.uploadedBy) {
+        if (typeof item.uploadedBy === 'object') {
+          const userId = item.uploadedBy._id || item.uploadedBy.id;
+          if (userId && (!item.uploadedBy.firstName || !item.uploadedBy.avatar)) {
+            if (!this.getUserProfile(userId)) {
+              userIdsToFetch.add(userId);
+            }
+          }
+        } else if (typeof item.uploadedBy === 'string') {
+          const isObjectId = /^[0-9a-fA-F]{24}$/.test(item.uploadedBy.trim());
+          if (isObjectId && !this.getUserProfile(item.uploadedBy.trim())) {
+            userIdsToFetch.add(item.uploadedBy.trim());
+          }
+        }
+      }
+      
+      // Check author
+      if (item.author && typeof item.author === 'object') {
+        const authorId = item.author._id || item.author.id;
+        if (authorId && (!item.author.firstName || !item.author.avatar)) {
+          if (!this.getUserProfile(authorId)) {
+            userIdsToFetch.add(authorId);
+          }
+        }
+      }
+      
+      // Check authorInfo
+      if (item.authorInfo && typeof item.authorInfo === 'object') {
+        const authorId = item.authorInfo._id || item.authorInfo.id;
+        if (authorId && (!item.authorInfo.firstName || !item.authorInfo.avatar)) {
+          if (!this.getUserProfile(authorId)) {
+            userIdsToFetch.add(authorId);
+          }
+        }
+      }
+    });
+
+    // Step 2: Fetch all missing user profiles in parallel
+    if (userIdsToFetch.size > 0) {
+      const fetchPromises = Array.from(userIdsToFetch).map(userId => 
+        this.fetchAndCacheUserProfile(userId).catch(() => null)
+      );
+      await Promise.all(fetchPromises);
+    }
+
+    // Step 3: Now enrich all items (all user data should be in cache now)
     return contentArray.map(item => this.enrichContentWithUserData(item));
   }
 }

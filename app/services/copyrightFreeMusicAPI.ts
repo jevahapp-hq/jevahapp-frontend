@@ -171,7 +171,28 @@ class CopyrightFreeMusicAPI {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data: CopyrightFreeSongsResponse = await response.json();
+      // Safe JSON parsing with error handling
+      let data: CopyrightFreeSongsResponse;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // If JSON parsing fails, return graceful error
+        if (__DEV__) {
+          console.warn("Failed to parse JSON response:", parseError);
+        }
+        return {
+          success: false,
+          data: {
+            songs: [],
+            pagination: {
+              page: 1,
+              limit: 20,
+              total: 0,
+              totalPages: 0,
+            },
+          },
+        };
+      }
       return data;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -232,7 +253,19 @@ class CopyrightFreeMusicAPI {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
+      // Safe JSON parsing
+      let result: any;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        if (__DEV__) {
+          console.warn("Failed to parse JSON response:", parseError);
+        }
+        return {
+          success: false,
+          data: null,
+        };
+      }
       // Backend returns { success: true, data: Song }
       return {
         success: result.success,
@@ -381,7 +414,27 @@ class CopyrightFreeMusicAPI {
         };
       }
 
-      const unifiedData = await response.json();
+      // Safe JSON parsing
+      let unifiedData: any;
+      try {
+        unifiedData = await response.json();
+      } catch (parseError) {
+        if (__DEV__) {
+          console.warn("Failed to parse JSON response:", parseError);
+        }
+        return {
+          success: false,
+          data: {
+            songs: [],
+            pagination: {
+              page: 1,
+              limit: 20,
+              total: 0,
+              totalPages: 0,
+            },
+          },
+        };
+      }
 
       // Transform unified search response to CopyrightFreeSongsResponse format
       if (unifiedData.success && unifiedData.data) {
@@ -548,7 +601,8 @@ class CopyrightFreeMusicAPI {
         }
 
         // Non-retryable error or max retries reached
-        if (this.shouldLogError(`categories_error_${status}`)) {
+        // Only log in dev mode - HTTP 400/404 are expected for missing endpoints
+        if (__DEV__ && this.shouldLogError(`categories_error_${status}`)) {
           console.error(`Error fetching categories: HTTP ${status}`);
         }
 
@@ -561,7 +615,21 @@ class CopyrightFreeMusicAPI {
         };
       }
 
-      const data: CopyrightFreeSongCategoriesResponse = await response.json();
+      // Safe JSON parsing
+      let data: CopyrightFreeSongCategoriesResponse;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        if (__DEV__) {
+          console.warn("Failed to parse JSON response:", parseError);
+        }
+        return {
+          success: false,
+          data: {
+            categories: [],
+          },
+        };
+      }
 
       // Cache successful response
       if (data.success) {
@@ -637,7 +705,19 @@ class CopyrightFreeMusicAPI {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Safe JSON parsing
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        if (__DEV__) {
+          console.warn("Failed to parse JSON response:", parseError);
+        }
+        return {
+          success: false,
+          data: null,
+        };
+      }
       return data;
     } catch (error) {
       console.error(`Error toggling like for song ${songId}:`, error);
@@ -673,7 +753,19 @@ class CopyrightFreeMusicAPI {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Safe JSON parsing
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        if (__DEV__) {
+          console.warn("Failed to parse JSON response:", parseError);
+        }
+        return {
+          success: false,
+          data: null,
+        };
+      }
       return data;
     } catch (error) {
       console.error(`Error toggling save for song ${songId}:`, error);

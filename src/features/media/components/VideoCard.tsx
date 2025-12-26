@@ -231,18 +231,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Handle external playing state changes (e.g., from scrolling)
   useEffect(() => {
-    console.log(
-      `🎬 VideoCard ${video.title} playing state changed externally:`,
-      {
-        key,
-        isPlaying,
-        playingVideos: Object.keys(playingVideos).filter(
-          (k) => playingVideos[k]
-        ),
-        videoLoaded,
-        videoRefExists: !!player,
-      }
-    );
+    // State change handled silently for performance
 
     // When video is paused externally (like from scrolling), show overlay icon
     if (!isPlaying) {
@@ -370,7 +359,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Handle hover start - no autoplay functionality
   const handleHoverStart = useCallback(() => {
-    console.log(`👆 Hover started on video: ${video.title}`);
     // No autoplay - user must manually click to play
   }, [video.title]);
 
@@ -397,7 +385,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
     // Double-tap detected (2 taps within time window)
     if (tapCountRef.current === 2 && timeSinceLastTap <= 400) {
-      console.log("👆👆 Double tap - navigating to reels");
       tapCountRef.current = 0;
 
       // Pause if playing
@@ -426,7 +413,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     tapTimeoutRef.current = setTimeout(async () => {
       if (tapCountRef.current === 1) {
         if (isCurrentlyPlaying) {
-          console.log("👆 Single tap - pausing video");
           showOverlayPermanently();
 
           if (isAudioSermon) {
@@ -442,10 +428,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               }
             }
           }
-        } else {
-          console.log(
-            "👆 Single tap on paused video - no action (play icon handles it)"
-          );
         }
       }
 
@@ -468,7 +450,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Handle hover end - video continues playing until scrolled past
   const handleHoverEnd = useCallback(() => {
-    console.log(`👆 Hover ended on video: ${video.title}`);
     // Don't pause on hover end - let it continue playing
     // Only pause when scrolled past or another video is hovered
   }, [video.title]);
@@ -561,19 +542,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       // If it's a retryable error (expired signed URL), retry with converted URL
       if (errorAnalysis.isRetryable) {
-        console.log(`🔄 Retryable error detected - expired signed URL`);
-        console.log(
-          `🔧 Will retry with converted URL: ${errorAnalysis.suggestedUrl}`
-        );
 
         setTimeout(() => {
           if (isMountedRef.current) {
-            console.log(`🔄 Retrying video load for: ${video.title}`);
             setFailedVideoLoad(false);
           }
         }, 3000); // Retry after 3 seconds
-      } else {
-        console.log(`❌ Non-retryable error - network or server issue`);
       }
     },
     [video.title, video.fileUrl]
@@ -586,7 +560,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // Track duration when ready
     const statusSubscription = player.addListener('statusChange', (status) => {
       if (status.status === 'readyToPlay') {
-        console.log(`✅ Video loaded successfully: ${video.title}`);
         setFailedVideoLoad(false);
         setVideoLoaded(true);
         if (player.duration && Number.isFinite(player.duration) && player.duration > 0) {

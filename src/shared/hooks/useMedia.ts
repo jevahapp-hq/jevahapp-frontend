@@ -11,6 +11,7 @@ import {
     UseMediaReturn,
 } from "../types";
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
+import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 
 export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const {
@@ -79,35 +80,56 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const error = allContentError || defaultContentError;
   const hasContent = allContent.length > 0 || defaultContent.length > 0;
 
-  // Fetch all content (TikTok-style endpoint)
-  const fetchAllContent = useCallback(async (useAuth: boolean = false) => {
-    setAllContentLoading(true);
-    setAllContentError(null);
+  // Fetch all content (TikTok-style endpoint) - with pagination support
+  const fetchAllContent = useCallback(async (useAuth: boolean = false, pageNum: number = 1, append: boolean = false) => {
+    if (!append) {
+      setAllContentLoading(true);
+      setAllContentError(null);
+    }
 
     try {
-      if (__DEV__) console.log("🚀 useMedia: Fetching all content (useAuth:", useAuth, ")");
+      if (__DEV__) console.log("🚀 useMedia: Fetching all content (useAuth:", useAuth, ", page:", pageNum, ")");
 
       let response;
       if (useAuth) {
-        response = await mediaApi.getAllContentWithAuth();
+        response = await mediaApi.getAllContentWithAuth({
+          page: pageNum,
+          limit: 50, // Request 50 items per page (backend should enforce max 100)
+          contentType: contentType !== "ALL" ? contentType : undefined,
+        });
       } else {
-        response = await mediaApi.getAllContentPublic();
+        response = await mediaApi.getAllContentPublic({
+          page: pageNum,
+          limit: 50, // Request 50 items per page
+          contentType: contentType !== "ALL" ? contentType : undefined,
+        });
       }
 
       if (response.success) {
-        const transformedMedia = (response.media || []).map(
-          transformApiResponseToMediaItem
-        );
-        setAllContent(transformedMedia);
+        // Batch enrich content with user profiles before transforming
+        // This ensures all user data is available (fetches missing profiles in parallel)
+        const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(response.media || []);
+        const transformedMedia = enrichedMedia
+          .map(transformApiResponseToMediaItem)
+          .filter((item): item is MediaItem => item !== null); // Filter out nulls safely
+        
+        if (append && pageNum > 1) {
+          // Append to existing content for infinite scroll
+          setAllContent((prev) => [...prev, ...transformedMedia]);
+        } else {
+          // Replace content for first page or refresh
+          setAllContent(transformedMedia);
+        }
+        
         // cache write-through
         useContentCacheStore.getState().set("ALL:first", {
-          items: transformedMedia,
-          page: 1,
-          limit: response.limit || 10,
-          total: response.total || 0,
+          items: append ? [...allContent, ...transformedMedia] : transformedMedia,
+          page: pageNum,
+          limit: response.limit || 50,
+          total: response.total || response.pagination?.total || 0,
           fetchedAt: Date.now(),
         });
-        setAllContentTotal(response.total || 0);
+        setAllContentTotal(response.total || response.pagination?.total || 0);
         setAllContentLoading(false);
       } else {
         // Handle 401/402 authentication errors
@@ -124,13 +146,23 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
             console.log("🔄 Auth failed, trying public endpoint...");
           }
           try {
-            const publicResponse = await mediaApi.getAllContentPublic();
+            const publicResponse = await mediaApi.getAllContentPublic({
+              page: pageNum,
+              limit: 50,
+              contentType: contentType !== "ALL" ? contentType : undefined,
+            });
             if (publicResponse.success) {
-              const transformedMedia = (publicResponse.media || []).map(
-                transformApiResponseToMediaItem
-              );
-              setAllContent(transformedMedia);
-              setAllContentTotal(publicResponse.total || 0);
+              // Batch enrich content with user profiles before transforming
+              const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(publicResponse.media || []);
+              const transformedMedia = enrichedMedia
+                .map(transformApiResponseToMediaItem)
+                .filter((item): item is MediaItem => item !== null); // Filter out nulls safely
+              if (append && pageNum > 1) {
+                setAllContent((prev) => [...prev, ...transformedMedia]);
+              } else {
+                setAllContent(transformedMedia);
+              }
+              setAllContentTotal(publicResponse.total || publicResponse.pagination?.total || 0);
               setAllContentLoading(false);
               return; // Success with public endpoint
             }
@@ -140,7 +172,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
             }
           }
           // If both fail, set a user-friendly error message
-          setAllContentError("Session expired. Please login again.");
+          if (!append) {
+            setAllContentError("Session expired. Please login again.");
+          }
           setAllContentLoading(false);
         } else {
           // Handle network errors gracefully
@@ -178,13 +212,21 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       if (isAuthError) {
         // Try public endpoint as fallback
         try {
-          const publicResponse = await mediaApi.getAllContentPublic();
+          const publicResponse = await mediaApi.getAllContentPublic({
+            page: pageNum,
+            limit: 50,
+            contentType: contentType !== "ALL" ? contentType : undefined,
+          });
           if (publicResponse.success) {
             const transformedMedia = (publicResponse.media || []).map(
               transformApiResponseToMediaItem
             );
-            setAllContent(transformedMedia);
-            setAllContentTotal(publicResponse.total || 0);
+            if (append && pageNum > 1) {
+              setAllContent((prev) => [...prev, ...transformedMedia]);
+            } else {
+              setAllContent(transformedMedia);
+            }
+            setAllContentTotal(publicResponse.total || publicResponse.pagination?.total || 0);
             setAllContentLoading(false);
             return; // Success with public endpoint
           }
@@ -194,7 +236,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           }
         }
         // If both fail, set a user-friendly error message
-        setAllContentError("Session expired. Please login again.");
+        if (!append) {
+          setAllContentError("Session expired. Please login again.");
+        }
         setAllContentLoading(false);
       } else {
         const isNetworkError = 
@@ -214,13 +258,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
             );
           }
           // Clean up error message - don't show raw status codes
-          const cleanError = errorMessage.replace(/^\d+\s*/, "") || "Failed to fetch content";
-          setAllContentError(cleanError);
+          if (!append) {
+            const cleanError = errorMessage.replace(/^\d+\s*/, "") || "Failed to fetch content";
+            setAllContentError(cleanError);
+          }
           setAllContentLoading(false);
         }
       }
     }
-  }, []);
+  }, [contentType]);
 
   // Fetch default content (paginated)
   const fetchDefaultContent = useCallback(
@@ -243,9 +289,11 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         const response = await mediaApi.getDefaultContent(filter);
 
         if (response.success) {
-          const transformedMedia = (response.media || []).map(
-            transformApiResponseToMediaItem
-          );
+          // Batch enrich content with user profiles before transforming
+          const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(response.media || []);
+          const transformedMedia = enrichedMedia
+            .map(transformApiResponseToMediaItem)
+            .filter((item): item is MediaItem => item !== null); // Filter out nulls safely
 
           if (filter.page && filter.page > 1) {
             // Append to existing content for pagination
@@ -351,16 +399,37 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     [page, limit, contentType]
   );
 
-  // Refresh all content
+  // Refresh all content (resets to page 1)
   const refreshAllContent = useCallback(async () => {
     try {
       // Try authenticated first, fallback to public
-      await fetchAllContent(true);
+      await fetchAllContent(true, 1, false);
     } catch (error) {
       if (__DEV__) console.log("🔄 Auth failed, trying public endpoint...");
-      await fetchAllContent(false);
+      await fetchAllContent(false, 1, false);
     }
   }, [fetchAllContent]);
+  
+  // Load more content for infinite scroll
+  const loadMoreAllContent = useCallback(async () => {
+    if (allContentLoading) return; // Prevent duplicate requests
+    
+    const currentPage = Math.floor(allContent.length / 50) + 1;
+    const totalPages = Math.ceil((allContentTotal || allContent.length) / 50);
+    
+    if (currentPage >= totalPages) {
+      if (__DEV__) console.log("📄 No more pages to load");
+      return;
+    }
+    
+    try {
+      // Try authenticated first, fallback to public
+      await fetchAllContent(true, currentPage, true);
+    } catch (error) {
+      if (__DEV__) console.log("🔄 Auth failed, trying public endpoint...");
+      await fetchAllContent(false, currentPage, true);
+    }
+  }, [fetchAllContent, allContent.length, allContentTotal, allContentLoading]);
 
   // Refresh default content
   const refreshDefaultContent = useCallback(async () => {
@@ -408,12 +477,21 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
       // Background revalidate - fetch fresh data without blocking UI
       // Content is already shown from cache if available
+      // Request first page with 50 items (optimized for performance)
       Promise.all([
         refreshAllContent().catch(() => {}), // Don't block on errors
-        fetchDefaultContent({ page, limit, contentType }).catch(() => {}),
+        fetchDefaultContent({ page: 1, limit: 50, contentType }).catch(() => {}),
       ]);
     }
-  }, [immediate, refreshAllContent, page, limit, contentType]);
+  }, [immediate, refreshAllContent, contentType]);
+
+  // Calculate if there are more pages to load
+  const hasMorePages = useMemo(() => {
+    if (!allContentTotal) return false;
+    const currentPage = Math.floor(allContent.length / 50) + 1;
+    const totalPages = Math.ceil(allContentTotal / 50);
+    return currentPage < totalPages;
+  }, [allContent.length, allContentTotal]);
 
   // Memoized return value
   const returnValue = useMemo(
@@ -427,6 +505,8 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       refreshAllContent,
       refreshDefaultContent,
       loadMoreContent,
+      loadMoreAllContent,
+      hasMorePages,
       getFilteredContent,
     }),
     [
@@ -440,6 +520,8 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       refreshAllContent,
       refreshDefaultContent,
       loadMoreContent,
+      loadMoreAllContent,
+      hasMorePages,
       getFilteredContent,
     ]
   );

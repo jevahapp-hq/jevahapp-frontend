@@ -112,8 +112,6 @@ export class ApiClient {
     const url = `${API_BASE_URL}${endpoint}`;
     const cacheKey = `${method}:${endpoint}:${JSON.stringify(body || {})}`;
 
-    console.log(`🔍 API: Making ${method} request to: ${url}`);
-
     // Use performance optimizer for caching and request deduplication
     return PerformanceOptimizer.optimizedFetch(
       cacheKey,
@@ -128,7 +126,6 @@ export class ApiClient {
 
         // Get authentication token
         const token = await TokenManager.getToken();
-        console.log(`🔑 API: Token found: ${token ? "Yes" : "No"}`);
         const requestHeaders = { ...headers };
         if (token) {
           requestHeaders.Authorization = `Bearer ${token}`;
@@ -225,7 +222,6 @@ export class ApiClient {
           }
 
           const data = await response.json();
-          console.log(`✅ API: Response data:`, data);
 
           // Cache successful GET responses
           if (cache && method === "GET") {
@@ -247,10 +243,8 @@ export class ApiClient {
 
   // User-related API methods
   async getUserProfile(): Promise<{ user: UserData }> {
-    console.log("🔍 API: Calling getUserProfile endpoint: /auth/me");
     try {
       const result = await this.request("/auth/me", { cache: true });
-      console.log("✅ API: getUserProfile response:", result);
 
       // Validate the response structure
       if (!result) {
@@ -266,16 +260,7 @@ export class ApiClient {
       if (userId && result.user) {
         const userCacheKey = `user:${userId}`;
         this.cache.set(userCacheKey, result.user, AVATAR_CACHE_DURATION); // Cache for 30 minutes
-        console.log(`💾 Cached user profile for userId: ${userId}`);
       }
-
-      // Debug the user data structure
-      console.log("🔍 API: User data structure:", {
-        section: result.user.section,
-        sectionType: typeof result.user.section,
-        userKeys: Object.keys(result.user),
-        fullUserData: result.user,
-      });
 
       return result;
     } catch (error: any) {

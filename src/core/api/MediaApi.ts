@@ -3,25 +3,72 @@ import { ContentFilter, MediaApiResponse, MediaItem } from "../../shared/types";
 import { apiClient } from "./ApiClient";
 
 class MediaApi {
-  // Get all content (public)
-  async getAllContentPublic(): Promise<MediaApiResponse> {
-    const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT);
+  // Get all content (public) - with pagination support
+  async getAllContentPublic(options?: {
+    page?: number;
+    limit?: number;
+    contentType?: string;
+    sort?: string;
+    order?: "asc" | "desc";
+  }): Promise<MediaApiResponse> {
+    const params: Record<string, any> = {};
+    
+    // Add pagination parameters if provided
+    if (options?.page !== undefined) params.page = options.page;
+    if (options?.limit !== undefined) params.limit = Math.min(100, Math.max(1, options.limit)); // Max 100
+    if (options?.contentType && options.contentType !== "ALL") params.contentType = options.contentType;
+    if (options?.sort) params.sort = options.sort;
+    if (options?.order) params.order = options.order;
+
+    const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT, Object.keys(params).length > 0 ? params : undefined);
 
     if (response.success) {
       const data = (response as any).data || {};
-      const mediaArr = Array.isArray(data?.media)
-        ? data.media
-        : Array.isArray(data?.data?.media)
-        ? data.data.media
-        : Array.isArray(data)
-        ? data
-        : [];
+      
+      // Handle both old format (backward compatibility) and new paginated format
+      let mediaArr: any[] = [];
+      let total = 0;
+      let page = 1;
+      let limit = 50;
+      let pagination: any = null;
+
+      // New format: data.media with pagination object
+      if (data?.media && Array.isArray(data.media)) {
+        mediaArr = data.media;
+        pagination = data.pagination;
+        total = pagination?.total || data.total || 0;
+        page = pagination?.page || data.page || 1;
+        limit = pagination?.limit || data.limit || 50;
+      }
+      // Old format: direct array or data.data.media
+      else if (Array.isArray(data?.data?.media)) {
+        mediaArr = data.data.media;
+        total = data.data.total || data.total || 0;
+        page = data.data.page || data.page || 1;
+        limit = data.data.limit || data.limit || 10;
+      }
+      // Fallback: direct array
+      else if (Array.isArray(data)) {
+        mediaArr = data;
+        total = data.length;
+        page = 1;
+        limit = data.length;
+      }
+      // Fallback: response.data is array
+      else if (Array.isArray((response as any).data)) {
+        mediaArr = (response as any).data;
+        total = mediaArr.length;
+        page = 1;
+        limit = mediaArr.length;
+      }
+
       return {
         success: true,
         media: mediaArr,
-        total: data?.total || data?.data?.total || 0,
-        page: data?.page || data?.data?.page || 1,
-        limit: data?.limit || data?.data?.limit || 10,
+        total,
+        page,
+        limit,
+        pagination, // Include pagination metadata if available
       };
     }
 
@@ -31,27 +78,75 @@ class MediaApi {
     };
   }
 
-  // Get all content (authenticated)
-  async getAllContentWithAuth(): Promise<MediaApiResponse> {
+  // Get all content (authenticated) - with pagination support
+  async getAllContentWithAuth(options?: {
+    page?: number;
+    limit?: number;
+    contentType?: string;
+    sort?: string;
+    order?: "asc" | "desc";
+  }): Promise<MediaApiResponse> {
+    const params: Record<string, any> = {};
+    
+    // Add pagination parameters if provided
+    if (options?.page !== undefined) params.page = options.page;
+    if (options?.limit !== undefined) params.limit = Math.min(100, Math.max(1, options.limit)); // Max 100
+    if (options?.contentType && options.contentType !== "ALL") params.contentType = options.contentType;
+    if (options?.sort) params.sort = options.sort;
+    if (options?.order) params.order = options.order;
+
     const response = await apiClient.get<any>(
-      API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH
+      API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH,
+      Object.keys(params).length > 0 ? params : undefined
     );
 
     if (response.success) {
       const data = (response as any).data || {};
-      const mediaArr = Array.isArray(data?.media)
-        ? data.media
-        : Array.isArray(data?.data?.media)
-        ? data.data.media
-        : Array.isArray(data)
-        ? data
-        : [];
+      
+      // Handle both old format (backward compatibility) and new paginated format
+      let mediaArr: any[] = [];
+      let total = 0;
+      let page = 1;
+      let limit = 50;
+      let pagination: any = null;
+
+      // New format: data.media with pagination object
+      if (data?.media && Array.isArray(data.media)) {
+        mediaArr = data.media;
+        pagination = data.pagination;
+        total = pagination?.total || data.total || 0;
+        page = pagination?.page || data.page || 1;
+        limit = pagination?.limit || data.limit || 50;
+      }
+      // Old format: direct array or data.data.media
+      else if (Array.isArray(data?.data?.media)) {
+        mediaArr = data.data.media;
+        total = data.data.total || data.total || 0;
+        page = data.data.page || data.page || 1;
+        limit = data.data.limit || data.limit || 10;
+      }
+      // Fallback: direct array
+      else if (Array.isArray(data)) {
+        mediaArr = data;
+        total = data.length;
+        page = 1;
+        limit = data.length;
+      }
+      // Fallback: response.data is array
+      else if (Array.isArray((response as any).data)) {
+        mediaArr = (response as any).data;
+        total = mediaArr.length;
+        page = 1;
+        limit = mediaArr.length;
+      }
+
       return {
         success: true,
         media: mediaArr,
-        total: data?.total || data?.data?.total || 0,
-        page: data?.page || data?.data?.page || 1,
-        limit: data?.limit || data?.data?.limit || 10,
+        total,
+        page,
+        limit,
+        pagination, // Include pagination metadata if available
       };
     }
 

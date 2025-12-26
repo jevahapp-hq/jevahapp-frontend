@@ -12,13 +12,15 @@ import { ContentType, MediaItem } from "../types";
  * Transform API response to MediaItem format
  * Enriches content with cached user data (fullname and avatar) if backend doesn't populate them
  */
-export const transformApiResponseToMediaItem = (item: any): MediaItem => {
+export const transformApiResponseToMediaItem = (item: any): MediaItem | null => {
+  // Return null instead of throwing - safer for map operations
   if (!item) {
-    throw new Error("Cannot transform null or undefined item");
+    return null;
   }
 
-  // Enrich content with cached user data (fullname and avatar)
-  const enrichedItem = enrichContentWithUserData(item);
+  try {
+    // Enrich content with cached user data (fullname and avatar)
+    const enrichedItem = enrichContentWithUserData(item);
 
   return {
     _id: enrichedItem._id || enrichedItem.id,
@@ -56,6 +58,13 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem => {
     totalLikes: enrichedItem.totalLikes || enrichedItem.likeCount || enrichedItem.likes || 0,
     commentCount: enrichedItem.commentCount || enrichedItem.comments || 0,
   };
+  } catch (error) {
+    // Log error but return null instead of crashing
+    if (__DEV__) {
+      console.warn("Error transforming media item:", error, item);
+    }
+    return null;
+  }
 };
 
 /**

@@ -800,18 +800,14 @@ export const useInteractionStore = create<InteractionState>()(
       const idsToRefresh = contentIds || Object.keys(state.contentStats);
       
       if (idsToRefresh.length === 0) {
-        console.log("🔄 No content to refresh after login");
         return;
       }
-
-      console.log(`🔄 Refreshing interaction stats for ${idsToRefresh.length} items after login...`);
       
       // Group by content type (we'll need to infer or use a default)
       // For now, refresh all as "media" type (most common)
       // Components can call loadBatchContentStats with proper types
       try {
         await state.loadBatchContentStats(idsToRefresh, "media");
-        console.log("✅ Successfully refreshed interaction stats after login");
       } catch (error) {
         console.warn("⚠️ Failed to refresh all stats after login, falling back to per-item:", error);
         // Fallback to per-item refresh
@@ -834,7 +830,6 @@ export const useInteractionStore = create<InteractionState>()(
         loadingComments: {},
         savedContent: [],
       });
-      console.log("🗑️ Interaction store cache cleared");
     },
   }))
 );

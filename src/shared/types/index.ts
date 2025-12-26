@@ -203,6 +203,14 @@ export interface MediaApiResponse {
   total?: number;
   page?: number;
   limit?: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
   error?: string;
 }
 
@@ -393,6 +401,8 @@ export interface UseMediaOptions {
 }
 
 export interface UseMediaReturn {
+  loadMoreAllContent?: () => Promise<void>; // For infinite scroll
+  hasMorePages?: boolean; // Whether there are more pages to load
   allContent: MediaItem[];
   defaultContent: MediaItem[];
   loading: boolean;

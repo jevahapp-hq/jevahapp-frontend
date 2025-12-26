@@ -89,9 +89,11 @@ export function getDisplayName(speaker?: string, uploadedBy?: string, fallback =
 }
 
 /**
- * Logs user data status for debugging
+ * Logs user data status for debugging (only in dev mode)
  */
 export function logUserDataStatus(user: UserData | null, context: string): void {
+  if (!__DEV__) return; // Skip in production
+  
   const normalizedUser = normalizeUserData(user);
   const validation = validateUserForUpload(user);
 
