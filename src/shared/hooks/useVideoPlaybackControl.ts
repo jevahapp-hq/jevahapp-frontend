@@ -60,6 +60,21 @@ export const useVideoPlaybackControl = ({
           }
         }
       },
+      play: () => {
+        if (player) {
+          try {
+            if (isExpoVideoPlayer) {
+              player.play();
+            } else {
+              // expo-av Video
+              return player.playAsync();
+            }
+          } catch (err) {
+            console.warn(`Failed to play ${videoKey}:`, err);
+            throw err;
+          }
+        }
+      },
       showOverlay: () => {
         setOverlayVisible(videoKey, true);
       },

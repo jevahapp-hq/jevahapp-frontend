@@ -9,6 +9,7 @@ import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 // Professional video player registry - stores refs to all active video players
 type VideoPlayerRef = {
   pause: () => Promise<void>;
+  play?: () => void | Promise<void>; // Optional play method for imperative control
   showOverlay: () => void;
   key: string;
 };
@@ -248,6 +249,25 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           player.showOverlay();
         }
       });
+
+      // STEP 2b: Imperatively PLAY the target video DIRECTLY (critical fix!)
+      const targetPlayer = videoPlayerRegistry.get(videoKey);
+      if (targetPlayer && targetPlayer.play) {
+        try {
+          const playResult = targetPlayer.play();
+          if (playResult instanceof Promise) {
+            playResult.catch((err) => console.warn(`Failed to imperatively play ${videoKey}:`, err));
+          }
+          console.log(`▶️ Imperatively playing video: ${videoKey}`);
+        } catch (err) {
+          console.warn(`Failed to imperatively play ${videoKey}:`, err);
+        }
+      } else if (targetPlayer) {
+        // Player registered but no play method - rely on state sync
+        console.log(`⚠️ Target player for ${videoKey} doesn't have play method, relying on state sync`);
+      } else {
+        console.warn(`⚠️ Video player not registered for key: ${videoKey}. State will update but video may not play until player registers.`);
+      }
 
       // STEP 3: Update state to reflect the change
       set((state) => {
