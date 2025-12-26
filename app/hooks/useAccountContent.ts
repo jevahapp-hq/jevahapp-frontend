@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQuery, useInfiniteQuery, useQueries } from "@tanstack/react-query";
 import type {
   MediaItem,
   Post,
@@ -22,197 +23,176 @@ type UseAccountContentResult = {
 };
 
 export function useAccountContent(): UseAccountContentResult {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [media, setMedia] = useState<MediaItem[]>([]);
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
+  // Get userId from React Query cache (from useUserProfile)
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile"],
+    enabled: false, // Don't fetch, just read from cache
+  });
 
-  // Pagination state
-  const [postsPage, setPostsPage] = useState(1);
-  const [mediaPage, setMediaPage] = useState(1);
-  const [videosPage, setVideosPage] = useState(1);
-  const [hasMorePosts, setHasMorePosts] = useState(true);
-  const [hasMoreMedia, setHasMoreMedia] = useState(true);
-  const [hasMoreVideos, setHasMoreVideos] = useState(true);
+  const userId = useMemo(() => {
+    if (userProfile) {
+      return (userProfile as any).id || (userProfile as any)._id;
+    }
+    // Fallback: try to get from AsyncStorage synchronously
+    return null;
+  }, [userProfile]);
 
-  // Helper function to get user ID - matches pattern used in other parts of codebase
+  // Helper to get userId async (fallback)
   const getUserId = useCallback(async (): Promise<string | null> => {
+    if (userId) return userId;
+    
     try {
-      // First, try to get from AsyncStorage (where it's stored with _id from login)
       const userStr = await AsyncStorage.getItem("user");
       if (userStr) {
         const user = JSON.parse(userStr);
-        const userId = user._id || user.id;
-        if (userId) {
-          return userId;
-        }
+        return user._id || user.id || null;
       }
-
-      // Fallback: try API response
       const userProfile = await apiClient.getUserProfile();
-      const userId = userProfile.user._id || userProfile.user.id;
-      if (userId) {
-        return userId;
-      }
-
-      // Last resort: try to extract from JWT token
-      const token = await AsyncStorage.getItem("userToken") || await AsyncStorage.getItem("token");
-      if (token) {
-        try {
-          const tokenParts = token.split(".");
-          if (tokenParts.length === 3) {
-            const payload = JSON.parse(atob(tokenParts[1]));
-            if (payload.userId || payload.user_id || payload.id) {
-              return String(payload.userId || payload.user_id || payload.id).trim();
-            }
-          }
-        } catch (tokenError) {
-          console.warn("⚠️ Failed to extract user ID from token:", tokenError);
-        }
-      }
-
-      return null;
+      return userProfile.user._id || userProfile.user.id || null;
     } catch (error) {
-      console.error("❌ Error getting user ID:", error);
       return null;
     }
-  }, []);
+  }, [userId]);
 
-  const loadContent = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Get user ID using the helper function
-      const userId = await getUserId();
-
-      if (!userId) {
-        throw new Error("User ID not found");
+  // Use React Query for posts with infinite scroll
+  const postsQuery = useInfiniteQuery({
+    queryKey: ["account-posts", userId],
+    queryFn: async ({ pageParam = 1 }) => {
+      const currentUserId = userId || await getUserId();
+      if (!currentUserId) throw new Error("User ID not found");
+      
+      const response = await apiClient.getUserPosts(currentUserId, pageParam, 20);
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to fetch posts");
       }
+      return {
+        posts: response.data.posts || [],
+        hasMore: response.data.pagination?.hasMore ?? false,
+        page: pageParam,
+      };
+    },
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    initialPageParam: 1,
+    enabled: !!userId,
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
-      // Fetch all data in parallel with error handling
-      const [postsData, mediaData, videosData, analyticsData] =
-        await Promise.all([
-          apiClient.getUserPosts(userId, 1, 20).catch((err) => {
-            console.warn("Failed to fetch posts:", err);
-            return { success: false, data: { posts: [], pagination: { hasMore: false } } };
-          }),
-          apiClient.getUserMedia(userId, 1, 20, "image").catch((err) => {
-            console.warn("Failed to fetch media:", err);
-            return { success: false, data: { media: [], pagination: { hasMore: false } } };
-          }),
-          apiClient.getUserVideos(userId, 1, 20).catch((err) => {
-            console.warn("Failed to fetch videos:", err);
-            return { success: false, data: { videos: [], pagination: { hasMore: false } } };
-          }),
-          apiClient.getUserAnalytics(userId).catch((err) => {
-            console.warn("Failed to fetch analytics:", err);
-            return { success: false, data: null };
-          }),
-        ]);
-
-      // Update state with results
-      if (postsData.success && postsData.data) {
-        setPosts(postsData.data.posts || []);
-        setHasMorePosts(postsData.data.pagination?.hasMore ?? false);
+  // Use React Query for media with infinite scroll
+  const mediaQuery = useInfiniteQuery({
+    queryKey: ["account-media", userId],
+    queryFn: async ({ pageParam = 1 }) => {
+      const currentUserId = userId || await getUserId();
+      if (!currentUserId) throw new Error("User ID not found");
+      
+      const response = await apiClient.getUserMedia(currentUserId, pageParam, 20, "image");
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to fetch media");
       }
+      return {
+        media: response.data.media || [],
+        hasMore: response.data.pagination?.hasMore ?? false,
+        page: pageParam,
+      };
+    },
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    initialPageParam: 1,
+    enabled: !!userId,
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
-      if (mediaData.success && mediaData.data) {
-        setMedia(mediaData.data.media || []);
-        setHasMoreMedia(mediaData.data.pagination?.hasMore ?? false);
+  // Use React Query for videos with infinite scroll
+  const videosQuery = useInfiniteQuery({
+    queryKey: ["account-videos", userId],
+    queryFn: async ({ pageParam = 1 }) => {
+      const currentUserId = userId || await getUserId();
+      if (!currentUserId) throw new Error("User ID not found");
+      
+      const response = await apiClient.getUserVideos(currentUserId, pageParam, 20);
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to fetch videos");
       }
+      return {
+        videos: response.data.videos || [],
+        hasMore: response.data.pagination?.hasMore ?? false,
+        page: pageParam,
+      };
+    },
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    initialPageParam: 1,
+    enabled: !!userId,
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
-      if (videosData.success && videosData.data) {
-        setVideos(videosData.data.videos || []);
-        setHasMoreVideos(videosData.data.pagination?.hasMore ?? false);
+  // Use React Query for analytics
+  const analyticsQuery = useQuery({
+    queryKey: ["account-analytics", userId],
+    queryFn: async () => {
+      const currentUserId = userId || await getUserId();
+      if (!currentUserId) throw new Error("User ID not found");
+      
+      const response = await apiClient.getUserAnalytics(currentUserId);
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to fetch analytics");
       }
+      return response.data;
+    },
+    enabled: !!userId,
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
-      if (analyticsData.success && analyticsData.data) {
-        setAnalytics(analyticsData.data);
-      }
-
-      // Reset pagination
-      setPostsPage(1);
-      setMediaPage(1);
-      setVideosPage(1);
-    } catch (err: any) {
-      setError(err.message || "Failed to load content");
-      console.error("Error loading account content:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [getUserId]);
+  // Extract data from queries
+  const posts = postsQuery.data?.pages.flatMap((page) => page.posts) || [];
+  const media = mediaQuery.data?.pages.flatMap((page) => page.media) || [];
+  const videos = videosQuery.data?.pages.flatMap((page) => page.videos) || [];
+  const analytics = analyticsQuery.data || null;
+  
+  const loading = postsQuery.isLoading || mediaQuery.isLoading || videosQuery.isLoading || analyticsQuery.isLoading;
+  const error = postsQuery.error || mediaQuery.error || videosQuery.error || analyticsQuery.error
+    ? ((postsQuery.error || mediaQuery.error || videosQuery.error || analyticsQuery.error) as Error).message || "Failed to load content"
+    : null;
 
   const loadMorePosts = useCallback(async () => {
-    if (!hasMorePosts || loading) return;
-
-    try {
-      const userId = await getUserId();
-      if (!userId) return;
-
-      const nextPage = postsPage + 1;
-      const postsData = await apiClient.getUserPosts(userId, nextPage, 20);
-
-      if (postsData.success && postsData.data) {
-        setPosts((prev) => [...prev, ...(postsData.data.posts || [])]);
-        setHasMorePosts(postsData.data.pagination?.hasMore ?? false);
-        setPostsPage(nextPage);
-      }
-    } catch (err: any) {
-      console.error("Error loading more posts:", err);
+    if (postsQuery.hasNextPage && !postsQuery.isFetchingNextPage) {
+      await postsQuery.fetchNextPage();
     }
-  }, [postsPage, hasMorePosts, loading, getUserId]);
+  }, [postsQuery]);
 
   const loadMoreMedia = useCallback(async () => {
-    if (!hasMoreMedia || loading) return;
-
-    try {
-      const userId = await getUserId();
-      if (!userId) return;
-
-      const nextPage = mediaPage + 1;
-      const mediaData = await apiClient.getUserMedia(
-        userId,
-        nextPage,
-        20,
-        "image"
-      );
-
-      if (mediaData.success && mediaData.data) {
-        setMedia((prev) => [...prev, ...(mediaData.data.media || [])]);
-        setHasMoreMedia(mediaData.data.pagination?.hasMore ?? false);
-        setMediaPage(nextPage);
-      }
-    } catch (err: any) {
-      console.error("Error loading more media:", err);
+    if (mediaQuery.hasNextPage && !mediaQuery.isFetchingNextPage) {
+      await mediaQuery.fetchNextPage();
     }
-  }, [mediaPage, hasMoreMedia, loading, getUserId]);
+  }, [mediaQuery]);
 
   const loadMoreVideos = useCallback(async () => {
-    if (!hasMoreVideos || loading) return;
-
-    try {
-      const userId = await getUserId();
-      if (!userId) return;
-
-      const nextPage = videosPage + 1;
-      const videosData = await apiClient.getUserVideos(userId, nextPage, 20);
-
-      if (videosData.success && videosData.data) {
-        setVideos((prev) => [...prev, ...(videosData.data.videos || [])]);
-        setHasMoreVideos(videosData.data.pagination?.hasMore ?? false);
-        setVideosPage(nextPage);
-      }
-    } catch (err: any) {
-      console.error("Error loading more videos:", err);
+    if (videosQuery.hasNextPage && !videosQuery.isFetchingNextPage) {
+      await videosQuery.fetchNextPage();
     }
-  }, [videosPage, hasMoreVideos, loading, getUserId]);
+  }, [videosQuery]);
 
-  useEffect(() => {
-    loadContent();
-  }, [loadContent]);
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      postsQuery.refetch(),
+      mediaQuery.refetch(),
+      videosQuery.refetch(),
+      analyticsQuery.refetch(),
+    ]);
+  }, [postsQuery, mediaQuery, videosQuery, analyticsQuery]);
 
   return {
     posts,
@@ -221,7 +201,7 @@ export function useAccountContent(): UseAccountContentResult {
     analytics,
     loading,
     error,
-    refresh: loadContent,
+    refresh,
     loadMorePosts,
     loadMoreMedia,
     loadMoreVideos,

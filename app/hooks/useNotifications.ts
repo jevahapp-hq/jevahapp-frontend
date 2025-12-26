@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { io, Socket } from "socket.io-client";
 import {
   Notification,
@@ -23,14 +24,64 @@ interface UseNotificationsReturn {
 }
 
 export const useNotifications = (): UseNotificationsReturn => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<NotificationStats | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+  const queryClient = useQueryClient();
   const [socket, setSocket] = useState<Socket | null>(null);
+  
+  // Use React Query for notifications with infinite scroll (0ms cache hits!)
+  const {
+    data: notificationsData,
+    isLoading: notificationsLoading,
+    error: notificationsError,
+    fetchNextPage,
+    hasNextPage,
+    refetch: refetchNotifications,
+  } = useInfiniteQuery({
+    queryKey: ["notifications"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response: NotificationResponse =
+        await notificationAPIService.getNotifications(pageParam, 20);
+      return {
+        notifications: response.notifications,
+        unreadCount: response.unreadCount,
+        page: pageParam,
+        hasMore: response.notifications.length === 20,
+      };
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.page + 1 : undefined;
+    },
+    initialPageParam: 1,
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
+    refetchOnMount: false, // Use cache if available - 0ms on revisit!
+    refetchOnWindowFocus: false,
+  });
+
+  // Use React Query for stats
+  const {
+    data: stats,
+    refetch: refetchStats,
+  } = useQuery({
+    queryKey: ["notification-stats"],
+    queryFn: async () => {
+      return await notificationAPIService.getStats();
+    },
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Flatten notifications from all pages
+  const notifications = notificationsData?.pages.flatMap((page) => page.notifications) || [];
+  const unreadCount = notificationsData?.pages[0]?.unreadCount || 0;
+  const loading = notificationsLoading;
+  const error = notificationsError
+    ? (notificationsError as Error).message || "Failed to load notifications"
+    : null;
+  const hasMore = hasNextPage || false;
 
   // Initialize socket connection
   useEffect(() => {
@@ -80,19 +131,34 @@ export const useNotifications = (): UseNotificationsReturn => {
 
         newSocket.on("new_notification", (notification: Notification) => {
           console.log("🔔 New notification received:", notification);
-          setNotifications((prev) => [notification, ...prev]);
-          setUnreadCount((prev) => prev + 1);
-
-          // Update stats
-          setStats((prev) => {
-            if (!prev) return null;
+          
+          // Update React Query cache optimistically
+          queryClient.setQueryData(["notifications"], (old: any) => {
+            if (!old) return old;
             return {
-              ...prev,
-              unread: prev.unread + 1,
-              total: prev.total + 1,
+              ...old,
+              pages: [
+                {
+                  notifications: [notification, ...(old.pages[0]?.notifications || [])],
+                  unreadCount: (old.pages[0]?.unreadCount || 0) + 1,
+                  page: 1,
+                  hasMore: old.pages[0]?.hasMore || false,
+                },
+                ...old.pages.slice(1),
+              ],
+            };
+          });
+
+          // Update stats cache
+          queryClient.setQueryData(["notification-stats"], (old: NotificationStats | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              unread: old.unread + 1,
+              total: old.total + 1,
               byType: {
-                ...prev.byType,
-                [notification.type]: (prev.byType[notification.type] || 0) + 1,
+                ...old.byType,
+                [notification.type]: (old.byType[notification.type] || 0) + 1,
               },
             };
           });
@@ -100,19 +166,35 @@ export const useNotifications = (): UseNotificationsReturn => {
 
         newSocket.on("notification_read", (notificationId: string) => {
           console.log("✅ Notification marked as read:", notificationId);
-          setNotifications((prev) =>
-            prev.map((notif) =>
-              notif._id === notificationId ? { ...notif, isRead: true } : notif
-            )
-          );
-          setUnreadCount((prev) => Math.max(0, prev - 1));
+          // Update React Query cache
+          queryClient.setQueryData(["notifications"], (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page: any) => ({
+                ...page,
+                notifications: page.notifications.map((notif: Notification) =>
+                  notif._id === notificationId ? { ...notif, isRead: true } : notif
+                ),
+                unreadCount: page.page === 1 ? Math.max(0, (page.unreadCount || 0) - 1) : page.unreadCount,
+              })),
+            };
+          });
         });
 
         newSocket.on("notification_deleted", (notificationId: string) => {
           console.log("🗑️ Notification deleted:", notificationId);
-          setNotifications((prev) =>
-            prev.filter((notif) => notif._id !== notificationId)
-          );
+          // Update React Query cache
+          queryClient.setQueryData(["notifications"], (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page: any) => ({
+                ...page,
+                notifications: page.notifications.filter((notif: Notification) => notif._id !== notificationId),
+              })),
+            };
+          });
         });
 
         setSocket(newSocket);
@@ -130,83 +212,8 @@ export const useNotifications = (): UseNotificationsReturn => {
     };
   }, []);
 
-  // Load initial notifications
-  const loadNotifications = useCallback(
-    async (page: number = 1, append: boolean = false) => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response: NotificationResponse =
-          await notificationAPIService.getNotifications(page, 20);
-
-        if (append) {
-          setNotifications((prev) => [...prev, ...response.notifications]);
-        } else {
-          setNotifications(response.notifications);
-        }
-
-        setUnreadCount(response.unreadCount);
-        setHasMore(response.notifications.length === 20);
-        setCurrentPage(page);
-      } catch (error) {
-        if ((error as any)?.name === "AbortError") {
-          console.warn(
-            "⏱️ Notifications fetch aborted (timeout). Showing what we have."
-          );
-          setError(null);
-        } else {
-          console.error("Error loading notifications:", error);
-          setError(
-            error instanceof Error
-              ? error.message
-              : "Failed to load notifications"
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
-
-  // Load notification stats
-  const loadStats = useCallback(async () => {
-    try {
-      const statsData = await notificationAPIService.getStats();
-      setStats(statsData);
-    } catch (error) {
-      if ((error as any)?.name === "AbortError") {
-        console.warn("⏱️ Stats fetch aborted (timeout). Using defaults.");
-      } else {
-        console.error("Error loading notification stats:", error);
-      }
-    }
-  }, []);
-
-  // Initial load with cache hydration
-  useEffect(() => {
-    let didHydrate = false;
-    (async () => {
-      try {
-        const cached = await notificationAPIService.getCachedNotifications?.();
-        if (cached) {
-          setNotifications(cached.notifications || []);
-          setUnreadCount(cached.unreadCount || 0);
-          setHasMore((cached.notifications || []).length === 20);
-          didHydrate = true;
-          setLoading(false);
-        }
-        const cachedStats = await notificationAPIService.getCachedStats?.();
-        if (cachedStats) {
-          setStats(cachedStats);
-        }
-      } catch {}
-      // Fetch fresh data afterwards
-      loadNotifications(1, false);
-      loadStats();
-    })();
-  }, [loadNotifications, loadStats]);
+  // React Query handles initial load automatically
+  // No need for manual useEffect - React Query will fetch on mount
 
   // Mark notification as read
   const markAsRead = useCallback(
@@ -214,13 +221,29 @@ export const useNotifications = (): UseNotificationsReturn => {
       try {
         await notificationAPIService.markAsRead(notificationId);
 
-        // Update local state immediately for better UX
-        setNotifications((prev) =>
-          prev.map((notif) =>
-            notif._id === notificationId ? { ...notif, isRead: true } : notif
-          )
-        );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+        // Update React Query cache optimistically
+        queryClient.setQueryData(["notifications"], (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: any) => ({
+              ...page,
+              notifications: page.notifications.map((notif: Notification) =>
+                notif._id === notificationId ? { ...notif, isRead: true } : notif
+              ),
+              unreadCount: page.page === 1 ? Math.max(0, (page.unreadCount || 0) - 1) : page.unreadCount,
+            })),
+          };
+        });
+
+        // Update stats cache
+        queryClient.setQueryData(["notification-stats"], (old: NotificationStats | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            unread: Math.max(0, old.unread - 1),
+          };
+        });
 
         // Emit to socket for real-time updates
         if (socket) {
@@ -231,45 +254,59 @@ export const useNotifications = (): UseNotificationsReturn => {
         throw error;
       }
     },
-    [socket]
+    [socket, queryClient]
   );
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
     try {
-      const count = await notificationAPIService.markAllAsRead();
+      await notificationAPIService.markAllAsRead();
 
-      // Update local state immediately
-      setNotifications((prev) =>
-        prev.map((notif) => ({ ...notif, isRead: true }))
-      );
-      setUnreadCount(0);
+      // Update React Query cache optimistically
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            notifications: page.notifications.map((notif: Notification) => ({
+              ...notif,
+              isRead: true,
+            })),
+            unreadCount: page.page === 1 ? 0 : page.unreadCount,
+          })),
+        };
+      });
+
+      // Update stats cache
+      queryClient.setQueryData(["notification-stats"], (old: NotificationStats | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          unread: 0,
+        };
+      });
 
       // Emit to socket for real-time updates
       if (socket) {
         socket.emit("mark_all_notifications_read");
       }
-
-      return count;
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
       throw error;
     }
-  }, [socket]);
+  }, [socket, queryClient]);
 
-  // Refresh notifications
+  // Refresh notifications using React Query
   const refreshNotifications = useCallback(async () => {
-    await loadNotifications(1, false);
-    await loadStats();
-  }, [loadNotifications, loadStats]);
+    await Promise.all([refetchNotifications(), refetchStats()]);
+  }, [refetchNotifications, refetchStats]);
 
-  // Load more notifications (pagination)
+  // Load more notifications (pagination) using React Query
   const loadMoreNotifications = useCallback(async () => {
     if (!hasMore || loading) return;
-
-    const nextPage = currentPage + 1;
-    await loadNotifications(nextPage, true);
-  }, [hasMore, loading, currentPage, loadNotifications]);
+    await fetchNextPage();
+  }, [hasMore, loading, fetchNextPage]);
 
   return {
     notifications,
