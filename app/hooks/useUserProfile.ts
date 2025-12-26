@@ -58,18 +58,9 @@ export const useUserProfile = () => {
       setLoading(true);
       setError(null);
 
-      console.log("🔍 Fetching user profile...");
       const userData = await apiClient.getUserProfile();
-      console.log("✅ User profile fetched:", userData);
 
       if (userData && userData.user) {
-        console.log("🔍 User section data:", {
-          section: userData.user.section,
-          sectionType: typeof userData.user.section,
-          userKeys: Object.keys(userData.user),
-          fullUserData: userData.user,
-        });
-
         // Ensure section is set if missing and handle optional fields
         const userWithSection = {
           ...userData.user,
@@ -96,7 +87,6 @@ export const useUserProfile = () => {
         ) {
           setUser(userWithSection);
           await AsyncStorage.setItem("user", JSON.stringify(userWithSection));
-          console.log("💾 User data stored in AsyncStorage");
 
           // Cache user profile by userId for content enrichment
           const userId = userWithSection.id || userWithSection._id;
@@ -113,7 +103,6 @@ export const useUserProfile = () => {
             "⚠️ Ignoring incomplete user profile from API (to avoid stale default)"
           );
         }
-        console.log("💾 User data stored in AsyncStorage");
 
         // Refresh any media that was stuck with "Anonymous User"
         try {
@@ -130,7 +119,6 @@ export const useUserProfile = () => {
             "../store/useInteractionStore"
           );
           await useInteractionStore.getState().refreshAllStatsAfterLogin();
-          console.log("✅ Refreshed interaction stats after profile fetch");
         } catch (error) {
           console.warn("⚠️ Failed to refresh interaction stats after profile fetch:", error);
           // Non-critical, continue
@@ -168,9 +156,6 @@ export const useUserProfile = () => {
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
-          console.log("📱 Loaded user from AsyncStorage fallback:", parsedUser);
-        } else {
-          console.log("📱 No user data found in AsyncStorage");
         }
       } catch (storageError) {
         console.error(

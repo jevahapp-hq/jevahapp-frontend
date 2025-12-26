@@ -99,7 +99,6 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       // Imperatively pause the video player directly (no state waiting)
       const player = videoPlayerRegistry.get(videoKey);
       if (player) {
-        console.log(`⏸️ Imperatively pausing video: ${videoKey}`);
         player
           .pause()
           .catch((err) => console.warn(`Failed to pause ${videoKey}:`, err));
@@ -120,7 +119,6 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     pauseAllVideos: () => {
       // Imperatively pause all video players directly (no state waiting)
       videoPlayerRegistry.forEach((player, key) => {
-        console.log(`⏸️ Imperatively pausing video: ${key}`);
         player
           .pause()
           .catch((err) => console.warn(`Failed to pause ${key}:`, err));

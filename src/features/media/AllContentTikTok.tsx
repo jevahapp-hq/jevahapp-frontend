@@ -90,7 +90,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     String(contentType).toLowerCase() === "hymns" ||
     String(contentType).toLowerCase() === "hyms";
 
-  // Media data from the new hook
+  // Media data from the new hook - with infinite scroll support
   const {
     allContent,
     defaultContent,
@@ -99,7 +99,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     refreshAllContent,
     getFilteredContent,
     hasContent,
-  } = useMedia({ immediate: true });
+    loadMoreAllContent,
+    hasMorePages = false,
+  } = useMedia({ immediate: true, contentType });
 
   // OPTIMIZED: Use individual selectors to prevent unnecessary re-renders
   // Each subscription only triggers re-render when that specific value changes
@@ -187,6 +189,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Music section state (only for MUSIC tab) - user uploaded songs only
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchInput, setShowSearchInput] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [displayMode, setDisplayMode] = useState<"list" | "grid" | "small" | "large">("list");
 
   // Audio playback state
@@ -258,23 +261,46 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const getVideoProgress = useCallback((key: string) => progresses[key] ?? 0, [progresses]);
   const getVideoOverlay = useCallback((key: string) => showOverlay[key] ?? false, [showOverlay]);
 
-  // Transform and filter content
+  // Transform and filter content - with error handling for malformed data
   const mediaList: MediaItem[] = useMemo(() => {
-    const sourceData = allContent.length > 0 ? allContent : defaultContent;
+    try {
+      const sourceData = allContent.length > 0 ? allContent : defaultContent;
 
-    if (!sourceData || !Array.isArray(sourceData)) {
+      if (!sourceData || !Array.isArray(sourceData)) {
+        return [];
+      }
+
+      // Safety check: Limit processing to prevent memory issues with very large datasets
+      const MAX_ITEMS = 1000; // Reasonable limit for production
+      const dataToProcess = sourceData.length > MAX_ITEMS 
+        ? sourceData.slice(0, MAX_ITEMS) 
+        : sourceData;
+
+      const transformed = dataToProcess
+        .map((item, index) => {
+          try {
+            return transformApiResponseToMediaItem(item);
+          } catch (error) {
+            console.warn(`⚠️ Error transforming item at index ${index}:`, error);
+            return null;
+          }
+        })
+        .filter((item): item is MediaItem => item !== null);
+
+      // Filter out deleted items
+      return transformed.filter((item) => {
+        if (!item) return false;
+        if (deletedMediaIds.has(item._id || "")) return false;
+        // Remove copyright-free catalog items from AllContentTikTok entirely
+        const ct = String(item.contentType || "").toLowerCase();
+        if (ct === "copyright-free-music") return false;
+        return true;
+      });
+    } catch (error) {
+      console.error("❌ Error processing media list:", error);
+      // Return empty array on error to prevent crash
       return [];
     }
-
-    const transformed = sourceData.map(transformApiResponseToMediaItem);
-    // Filter out deleted items
-    return transformed.filter((item) => {
-      if (deletedMediaIds.has(item._id || "")) return false;
-      // Remove copyright-free catalog items from AllContentTikTok entirely
-      const ct = String(item.contentType || "").toLowerCase();
-      if (ct === "copyright-free-music") return false;
-      return true;
-    });
   }, [allContent, defaultContent, deletedMediaIds]);
 
   // Filter content based on contentType
@@ -380,6 +406,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // Initialize SocketManager for real-time features
   useEffect(() => {
+    let isMounted = true;
+    let currentSocketManager: SocketManager | null = null;
+
     const initializeSocket = async () => {
       try {
         // console.log("🔌 AllContentTikTok: Initializing Socket.IO...");
@@ -413,9 +442,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           authToken,
         });
 
+        currentSocketManager = manager;
+
         const socket = (manager as any).socket;
-        if (socket) {
+        if (socket && isMounted) {
           socket.on("content-reaction", (data: any) => {
+            if (!isMounted) return;
             // console.log("📡 Real-time like update:", data);
             setRealTimeCounts((prev) => ({
               ...prev,
@@ -428,6 +460,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           });
 
           socket.on("content-comment", (data: any) => {
+            if (!isMounted) return;
             // console.log("📡 Real-time comment update:", data);
             setRealTimeCounts((prev) => ({
               ...prev,
@@ -441,8 +474,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
         try {
           await manager.connect();
-          setSocketManager(manager);
-          // console.log("✅ Socket.IO initialized successfully");
+          if (isMounted) {
+            setSocketManager(manager);
+            // console.log("✅ Socket.IO initialized successfully");
+          } else {
+            // Component unmounted during connection, clean up
+            manager.disconnect();
+          }
         } catch (connectError) {
           // console.warn(
           //   "⚠️ Socket connection failed, continuing without real-time features:",
@@ -457,8 +495,21 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     initializeSocket();
 
     return () => {
+      isMounted = false;
+      if (currentSocketManager) {
+        try {
+          currentSocketManager.disconnect();
+        } catch (error) {
+          console.warn("⚠️ Error disconnecting socket on cleanup:", error);
+        }
+      }
+      // Also clean up the state reference
       if (socketManager) {
-        socketManager.disconnect();
+        try {
+          socketManager.disconnect();
+        } catch (error) {
+          // Ignore errors during cleanup
+        }
       }
     };
   }, []);
@@ -564,45 +615,53 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // OPTIMIZED: Defer stats loading until after interactions complete (prevents blocking UI)
   useEffect(() => {
+    let isMounted = true;
+    
     const interactionHandle = InteractionManager.runAfterInteractions(() => {
       const loadStatsForVisibleContent = async () => {
+        // Safety check
+        if (!isMounted) return;
+        
         const items = filteredMediaList || [];
         if (items.length === 0) return;
 
-      const groupedIds = items.reduce((acc, item) => {
-        const id = item?._id;
-        if (!id) return acc;
-        const backendType = mapContentTypeToBackend(item?.contentType);
-        if (!acc[backendType]) {
-          acc[backendType] = [];
-        }
-        acc[backendType].push(id);
-        return acc;
-      }, {} as Record<string, string[]>);
+        const groupedIds = items.reduce((acc, item) => {
+          const id = item?._id;
+          if (!id) return acc;
+          const backendType = mapContentTypeToBackend(item?.contentType);
+          if (!acc[backendType]) {
+            acc[backendType] = [];
+          }
+          acc[backendType].push(id);
+          return acc;
+        }, {} as Record<string, string[]>);
 
-      const store = useInteractionStore.getState();
+        const store = useInteractionStore.getState();
 
-      for (const [backendType, ids] of Object.entries(groupedIds)) {
-        if (!ids?.length) continue;
-        try {
-          await store.loadBatchContentStats(ids, backendType);
-        } catch (error) {
-          console.warn(
-            `⚠️ Batch stats failed for type="${backendType}", falling back to per-item`,
-            error
-          );
-          for (const id of ids) {
-            try {
-              await loadContentStats(id, backendType);
-            } catch (fallbackError) {
-              console.warn(
-                `⚠️ Failed to load stats for ${backendType} ${id}:`,
-                fallbackError
-              );
+        for (const [backendType, ids] of Object.entries(groupedIds)) {
+          if (!isMounted) break; // Stop if unmounted
+          if (!ids?.length) continue;
+          try {
+            await store.loadBatchContentStats(ids, backendType);
+          } catch (error) {
+            if (!isMounted) break;
+            console.warn(
+              `⚠️ Batch stats failed for type="${backendType}", falling back to per-item`,
+              error
+            );
+            for (const id of ids) {
+              if (!isMounted) break;
+              try {
+                await loadContentStats(id, backendType);
+              } catch (fallbackError) {
+                console.warn(
+                  `⚠️ Failed to load stats for ${backendType} ${id}:`,
+                  fallbackError
+                );
+              }
             }
           }
         }
-      }
       };
 
       loadStatsForVisibleContent();
@@ -610,14 +669,20 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
     // Cleanup: cancel interaction handle if component unmounts
     return () => {
+      isMounted = false;
       interactionHandle.cancel();
     };
   }, [filteredMediaList, loadContentStats, mapContentTypeToBackend]);
 
   // OPTIMIZED: Defer persisted data loading to prevent blocking initial render
   useEffect(() => {
+    let isMounted = true;
+    
     const interactionHandle = InteractionManager.runAfterInteractions(() => {
       const loadAllData = async () => {
+        // Safety check
+        if (!isMounted) return;
+        
         // console.log("📱 AllContent: Loading persisted data...");
         setIsLoadingContent(true);
 
@@ -630,17 +695,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               : loadSavedItems(),
           ]);
 
+          if (!isMounted) return;
+
           setPreviouslyViewed(viewed || []);
           
           // Load persisted likes and merge with backend state
-          if (mediaList.length > 0) {
+          if (mediaList.length > 0 && isMounted) {
             try {
               const userId = await getUserId();
+              if (!isMounted) return;
+              
               const persistedFavorites = await getUserFavorites(userId);
+              if (!isMounted) return;
               
               // Merge persisted likes into contentStats
               const store = useInteractionStore.getState();
               for (const item of mediaList) {
+                if (!isMounted) break;
                 const contentId = item._id || getContentKey(item);
                 if (persistedFavorites[contentId]) {
                   // Update store with persisted like state
@@ -653,35 +724,46 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                 }
               }
               
-              console.log(
-                `✅ AllContent: Loaded ${
-                  mediaList.length
-                } media items, ${Object.keys(stats || {}).length} stats, and ${Object.keys(persistedFavorites).length} persisted likes`
-              );
+              if (isMounted) {
+                console.log(
+                  `✅ AllContent: Loaded ${
+                    mediaList.length
+                  } media items, ${Object.keys(stats || {}).length} stats, and ${Object.keys(persistedFavorites).length} persisted likes`
+                );
+              }
             } catch (persistError) {
-              console.warn("⚠️ Failed to load persisted likes:", persistError);
+              if (isMounted) {
+                console.warn("⚠️ Failed to load persisted likes:", persistError);
+              }
             }
           }
         } catch (error) {
-          console.error("❌ Error loading AllContent data:", error);
+          if (isMounted) {
+            console.error("❌ Error loading AllContent data:", error);
+          }
         } finally {
-          setIsLoadingContent(false);
-          // Mark content as ready after loading completes
-          isContentReadyRef.current = true;
+          if (isMounted) {
+            setIsLoadingContent(false);
+            // Mark content as ready after loading completes
+            isContentReadyRef.current = true;
+          }
         }
       };
 
       if (mediaList.length > 0) {
         loadAllData();
       } else {
-        setIsLoadingContent(false);
-        // Mark as ready even if no content (prevents blocking)
-        isContentReadyRef.current = true;
+        if (isMounted) {
+          setIsLoadingContent(false);
+          // Mark as ready even if no content (prevents blocking)
+          isContentReadyRef.current = true;
+        }
       }
     });
 
     // Cleanup: cancel interaction handle if component unmounts
     return () => {
+      isMounted = false;
       interactionHandle.cancel();
     };
   }, [mediaList.length, libraryIsLoaded, loadSavedItems]);
@@ -717,6 +799,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // Audio playback functions
   const playAudio = async (uri: string, id: string) => {
+    // Safety check: Don't proceed if component is unmounted
+    if (!isMountedRef.current) {
+      return;
+    }
+
     if (!uri || uri.trim() === "") {
       console.warn("🚨 Audio URI is empty or invalid:", { uri, id });
       return;
@@ -743,6 +830,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     const { setCurrentAudio } = useCurrentPlayingAudioStore.getState();
 
     try {
+      // Safety check before proceeding
+      if (!isMountedRef.current) {
+        setIsLoadingAudio(false);
+        return;
+      }
+
       playMedia(id, "audio");
 
       // Find the media item for this audio
@@ -909,18 +1002,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       });
     } catch (err) {
       console.error("❌ Audio playback error:", err);
-      setPlayingAudioId(null);
-      setCurrentAudio(null, null);
-      try {
-        await audioManager.unregisterAudio(id);
-      } catch {}
-      setSoundMap((prev) => {
-        const updated = { ...prev };
-        delete updated[id];
-        return updated;
-      });
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setPlayingAudioId(null);
+        setCurrentAudio(null, null);
+        try {
+          await audioManager.unregisterAudio(id);
+        } catch {}
+        setSoundMap((prev) => {
+          const updated = { ...prev };
+          delete updated[id];
+          return updated;
+        });
+      }
     } finally {
-      setIsLoadingAudio(false);
+      if (isMountedRef.current) {
+        setIsLoadingAudio(false);
+      }
     }
   };
 
@@ -1317,16 +1415,34 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     ]
   );
 
-  // Enhanced scroll behavior with auto-pause functionality
+  // Infinite scroll handler - load more when near bottom (like Instagram/TikTok)
+  const handleLoadMore = useCallback(async () => {
+    if (!isMountedRef.current || loading || !hasMorePages || !loadMoreAllContent) {
+      return;
+    }
+
+    try {
+      await loadMoreAllContent();
+    } catch (error) {
+      console.warn("⚠️ Error loading more content:", error);
+    }
+  }, [loading, hasMorePages, loadMoreAllContent]);
+
+  // Enhanced scroll behavior with auto-pause functionality and infinite scroll
   const handleScroll = useCallback(
     (event: any) => {
+      // Safety check: Don't process if component is unmounted
+      if (!isMountedRef.current) {
+        return;
+      }
+
       try {
         // Safety check for event structure - allow scroll even if content isn't ready
         if (!event?.nativeEvent?.contentOffset) {
           return;
         }
 
-        const { contentOffset } = event.nativeEvent;
+        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
         const scrollY = contentOffset.y;
         
         // Validate scrollY is a number
@@ -1335,6 +1451,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         }
 
         lastScrollYRef.current = scrollY;
+
+        // Infinite scroll: Load more when user scrolls within 500px of bottom (like Instagram/TikTok)
+        if (hasMorePages && loadMoreAllContent && !loading) {
+          const distanceFromBottom = contentSize.height - (scrollY + layoutMeasurement.height);
+          if (distanceFromBottom < 500) {
+            // Load more content when within 500px of bottom
+            handleLoadMore();
+          }
+        }
 
         // Set scrolling state (lightweight operation)
         setIsScrolling(true);
@@ -1371,6 +1496,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         // Defer heavy operations to prevent blocking scroll
         // Use requestAnimationFrame with cancellation to prevent accumulation
         scrollAnimationFrameRef.current = requestAnimationFrame(() => {
+          // Safety check: Don't process if component is unmounted
+          if (!isMountedRef.current) {
+            scrollAnimationFrameRef.current = null;
+            return;
+          }
+
           try {
             // Double-check content is still ready - if not, skip processing but allow scroll
             if (!isContentReadyRef.current || loading || layoutsCount === 0) {
@@ -1523,6 +1654,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       pauseAllAudio,
       loading,
       filteredMediaList.length,
+      hasMorePages,
+      loadMoreAllContent,
+      handleLoadMore,
     ]
   );
 
@@ -2530,15 +2664,86 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     ]
   );
 
-  // Cleanup on unmount
+  // Cleanup on unmount - CRITICAL: Clean up all resources to prevent memory leaks
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      
+      // CRITICAL: Mark as unmounted immediately to prevent any new operations
+      // Execute synchronous cleanup first
+      try {
+        // Clean up scroll-related resources (synchronous)
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+          scrollTimeoutRef.current = null;
+        }
+        if (scrollAnimationFrameRef.current !== null) {
+          cancelAnimationFrame(scrollAnimationFrameRef.current);
+          scrollAnimationFrameRef.current = null;
+        }
+      } catch (error) {
+        console.warn("⚠️ Error cleaning up scroll resources:", error);
+      }
+      
+      // Pause all media (synchronous)
       try {
         pauseAllMedia();
-      } catch {}
+        pauseAllAudio();
+      } catch (error) {
+        console.warn("⚠️ Error pausing media on unmount:", error);
+      }
+      
+      // Clean up socket connection (synchronous)
+      try {
+        if (socketManager) {
+          socketManager.disconnect();
+        }
+      } catch (error) {
+        console.warn("⚠️ Error disconnecting socket:", error);
+      }
+      
+      // Async cleanup (don't block unmount, but execute)
+      const asyncCleanup = async () => {
+        try {
+          // Clean up all audio instances
+          const audioManager = GlobalAudioInstanceManager.getInstance();
+          await audioManager.stopAllAudio();
+        } catch (error) {
+          console.warn("⚠️ Error stopping audio on unmount:", error);
+        }
+        
+        // Clean up sound map - FIXED: Use Promise.all instead of async forEach
+        try {
+          const currentSoundMap = soundMapRef.current || soundMap;
+          const cleanupPromises = Object.values(currentSoundMap).map(async (sound) => {
+            try {
+              if (sound) {
+                const status = await sound.getStatusAsync();
+                if (status.isLoaded) {
+                  await sound.stopAsync();
+                  await sound.unloadAsync();
+                }
+              }
+            } catch (error) {
+              // Ignore individual cleanup errors
+            }
+          });
+          // Wait for all cleanup operations to complete
+          await Promise.all(cleanupPromises);
+          setSoundMap({});
+        } catch (error) {
+          console.warn("⚠️ Error cleaning up sound map:", error);
+          // Still clear the map even if cleanup fails
+          setSoundMap({});
+        }
+      };
+      
+      // Execute async cleanup (don't await to avoid blocking unmount)
+      asyncCleanup().catch((error) => {
+        console.warn("⚠️ Error in async cleanup:", error);
+      });
     };
-  }, [pauseAllMedia]);
+  }, [pauseAllMedia, pauseAllAudio, soundMap, socketManager]);
 
   // Pause all media when component loses focus
   useFocusEffect(
@@ -3169,6 +3374,43 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                 }}
               >
                 Loading content...
+              </Text>
+            </View>
+          )}
+
+          {/* Infinite scroll loading indicator */}
+          {hasMorePages && loading && (
+            <View
+              style={{ padding: UI_CONFIG.SPACING.LG, alignItems: "center" }}
+            >
+              <ActivityIndicator
+                size="small"
+                color={UI_CONFIG.COLORS.PRIMARY}
+              />
+              <Text
+                style={{
+                  marginTop: UI_CONFIG.SPACING.SM,
+                  color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                  fontSize: 12,
+                }}
+              >
+                Loading more...
+              </Text>
+            </View>
+          )}
+
+          {/* End of list indicator */}
+          {!hasMorePages && filteredMediaList.length > 0 && (
+            <View
+              style={{ padding: UI_CONFIG.SPACING.LG, alignItems: "center" }}
+            >
+              <Text
+                style={{
+                  color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+                  fontSize: 12,
+                }}
+              >
+                You've reached the end
               </Text>
             </View>
           )}

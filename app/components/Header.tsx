@@ -8,11 +8,6 @@ export default function Header() {
   const { unreadCount, loading: notifLoading } = useNotificationBadge();
   const router = useRouter();
 
-  console.log("🔍 Header: User data:", user);
-  console.log("🔍 Header: User section:", user?.section);
-  console.log("🔍 Header: Loading:", loading);
-  console.log("🔍 Header: Error:", error);
-
   // Helper function to normalize section value
   const normalizeSection = (section: string | undefined | null): string => {
     if (!section) return "ADULT";

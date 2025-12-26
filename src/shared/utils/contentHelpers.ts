@@ -26,10 +26,10 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem => {
     fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
     title: enrichedItem.title || "Untitled",
     speaker: enrichedItem.speaker || enrichedItem.author?.firstName || enrichedItem.uploadedBy?.firstName,
-    // Preserve the full uploadedBy object if it exists, otherwise keep as string
-    uploadedBy: typeof enrichedItem.uploadedBy === "object" 
-      ? enrichedItem.uploadedBy._id || enrichedItem.uploadedBy 
-      : enrichedItem.uploadedBy,
+    // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string
+    uploadedBy: typeof enrichedItem.uploadedBy === "object" && enrichedItem.uploadedBy !== null
+      ? enrichedItem.uploadedBy  // Preserve the full object with all user data
+      : enrichedItem.uploadedBy,  // Keep as string if it's a string ID
     description: enrichedItem.description || enrichedItem.title || "",
     speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar,
     views: enrichedItem.views || enrichedItem.viewCount || enrichedItem.totalViews || 0,

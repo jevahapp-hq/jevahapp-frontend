@@ -80,7 +80,6 @@ export class UserProfileCache {
     if (!userId || !userData) return;
     const cacheKey = `user:${userId}`;
     this.cache.set(cacheKey, userData, AVATAR_CACHE_DURATION); // Cache for 30 minutes
-    console.log(`💾 Cached user profile for userId: ${userId}`);
   }
 
   /**
@@ -99,15 +98,33 @@ export class UserProfileCache {
         
         // If uploadedBy is already populated but missing firstName/lastName/avatar, try to enrich
         if (userId && (!content.uploadedBy.firstName || !content.uploadedBy.avatar)) {
-          const cachedUser = this.getUserProfile(userId);
-          if (cachedUser) {
+          let cachedUser = this.getUserProfile(userId);
+          
+          // If not in cache, try to fetch from API (async, but we'll update cache for next time)
+          if (!cachedUser) {
+            // Fetch in background (don't await to avoid blocking)
+            this.fetchAndCacheUserProfile(userId).then((fetchedUser) => {
+              if (fetchedUser) {
+                // Re-enrich this content item with the fetched user data
+                content.uploadedBy = {
+                  ...content.uploadedBy,
+                  firstName: content.uploadedBy.firstName || fetchedUser.firstName || "",
+                  lastName: content.uploadedBy.lastName || fetchedUser.lastName || "",
+                  avatar: content.uploadedBy.avatar || fetchedUser.avatar || fetchedUser.avatarUpload || "",
+                  email: content.uploadedBy.email || fetchedUser.email || "",
+                };
+              }
+            }).catch(() => {
+              // Silently fail
+            });
+          } else {
+            // Use cached user data
             content.uploadedBy = {
               ...content.uploadedBy,
               firstName: content.uploadedBy.firstName || cachedUser.firstName || "",
               lastName: content.uploadedBy.lastName || cachedUser.lastName || "",
               avatar: content.uploadedBy.avatar || cachedUser.avatar || cachedUser.avatarUpload || "",
             };
-            console.log(`✅ Enriched uploadedBy for content ${content._id || content.id} with cached user data`);
           }
         }
       } else if (typeof content.uploadedBy === 'string') {
@@ -129,7 +146,6 @@ export class UserProfileCache {
                 avatar: fetchedUser.avatar || fetchedUser.avatarUpload || "",
                 email: fetchedUser.email || "",
               };
-              console.log(`✅ Enriched uploadedBy string ID for content ${content._id || content.id} with fetched user data`);
             }
           }).catch(() => {
             // Silently fail
@@ -144,7 +160,6 @@ export class UserProfileCache {
             avatar: cachedUser.avatar || cachedUser.avatarUpload || "",
             email: cachedUser.email || "",
           };
-          console.log(`✅ Enriched uploadedBy string ID for content ${content._id || content.id} with cached user data`);
         }
       }
     }

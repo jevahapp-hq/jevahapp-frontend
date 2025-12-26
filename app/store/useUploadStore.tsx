@@ -186,7 +186,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   // 🎬 Load persisted media on app startup and refresh user data
   loadPersistedMedia: async () => {
     try {
-      console.log("🔄 Loading persisted media list...");
       const persistedMedia = await getPersistedMediaList();
 
       set({
@@ -196,10 +195,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         ),
         isLoaded: true,
       });
-
-      console.log(
-        `✅ Loaded ${persistedMedia.length} media items from storage`
-      );
 
       // 🔄 Automatically refresh user data for existing media items
       if (persistedMedia.length > 0) {
@@ -227,7 +222,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
       // 🚀 Persist immediately when media is added
       persistMediaList(updatedList);
-      console.log(`✅ Added and persisted media: ${item.title}`);
     } catch (error) {
       console.error("❌ Error adding media:", error);
     }
@@ -238,8 +232,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     item: Omit<MediaItem, "speaker" | "speakerAvatar" | "uploadedBy">
   ) => {
     try {
-      console.log("🔍 Validating user data for media upload...");
-
       // Get fresh user data from AsyncStorage
       const userRaw = await AsyncStorage.getItem("user");
       const user = userRaw ? JSON.parse(userRaw) : null;
@@ -257,12 +249,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
           normalizedUser.avatar || require("../../assets/images/Avatar-1.png"),
       };
 
-      console.log("✅ User data validated for upload:", {
-        fullName: normalizedUser.fullName,
-        hasAvatar: !!normalizedUser.avatar,
-        title: item.title,
-      });
-
       // Use the regular addMedia function with complete data
       get().addMedia(completeMediaItem);
     } catch (error) {
@@ -276,7 +262,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         speakerAvatar: require("../../assets/images/Avatar-1.png"),
       };
 
-      console.log("⚠️ Using fallback user data for upload");
       get().addMedia(fallbackMediaItem);
     }
   },
@@ -284,14 +269,11 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   // 🔄 Function to refresh user data for all existing media items
   refreshUserDataForExistingMedia: async () => {
     try {
-      console.log("🔄 Refreshing user data for existing media items...");
-
       // Get fresh user data from AsyncStorage
       const userRaw = await AsyncStorage.getItem("user");
       const user = userRaw ? JSON.parse(userRaw) : null;
 
       if (!user) {
-        console.log("⚠️ No user data found, skipping media refresh");
         return;
       }
 
@@ -320,7 +302,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       const currentMediaList = get().mediaList;
 
       if (currentMediaList.length === 0) {
-        console.log("📱 No media items to refresh");
         return;
       }
 
@@ -339,17 +320,9 @@ export const useMediaStore = create<MediaState>((set, get) => ({
           // Check if the current user data matches what's already in media
           const currentUserFullName = normalizedUser.fullName;
           if (firstItemUploadedBy === currentUserFullName) {
-            console.log(
-              "✅ Media items already have current user's data, no refresh needed"
-            );
             return;
-          } else {
-            console.log(
-              `🔄 Different user logged in: "${currentUserFullName}" vs existing "${firstItemUploadedBy}"`
-            );
-            console.log("📱 Refreshing media with new user's data...");
-            // Continue with refresh for new user
           }
+          // Continue with refresh for new user
         }
       }
 
@@ -371,7 +344,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
           itemUploadedBy === "Anonymous User" ||
           item.speaker === "Anonymous User"
         ) {
-          console.log(`🔧 Fixing anonymous item: ${item.title}`);
           return {
             ...item,
             uploadedBy: normalizedUser.fullName,
@@ -389,14 +361,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       // Update store and persist
       set({ mediaList: updatedMediaList });
       await persistMediaList(updatedMediaList);
-
-      console.log(
-        `✅ Refreshed user data for ${updatedMediaList.length} media items`,
-        {
-          fullName: normalizedUser.fullName,
-          hasAvatar: !!normalizedUser.avatar,
-        }
-      );
     } catch (error) {
       console.error(
         "❌ Failed to refresh user data for existing media:",
@@ -407,7 +371,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
   // 🔄 Force refresh when complete user data becomes available
   forceRefreshWithCompleteUserData: async () => {
-    console.log("🔄 Force refreshing media with complete user data...");
     await get().refreshUserDataForExistingMedia();
   },
 
@@ -421,9 +384,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
     // 🚀 Persist immediately when media list is set
     persistMediaList(sortedItems);
-    console.log(
-      `✅ Set and persisted media list (${sortedItems.length} items)`
-    );
   },
 
   removeMedia: (id: string) => {
@@ -433,7 +393,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
     // 🚀 Persist immediately when media is removed
     persistMediaList(updatedList);
-    console.log(`✅ Removed and persisted media with id: ${id}`);
   },
 
   clearMediaList: () => {
@@ -441,7 +400,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
     // 🚀 Persist immediately when cleared
     persistMediaList([]);
-    console.log("✅ Cleared and persisted empty media list");
   },
 
   // 🔊 Audio control functions
@@ -455,18 +413,9 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     set({ defaultContentLoading: true, defaultContentError: null });
 
     try {
-      if (__DEV__) {
-        console.log("🚀 Store: Fetching default content with params:", params);
-      }
       const response = await allMediaAPI.getDefaultContent(params);
 
       if (response.success) {
-        if (__DEV__) {
-          console.log(
-            "✅ Store: Successfully fetched default content:",
-            response.data
-          );
-        }
         set({
           defaultContent: response.data.content,
           defaultContentPagination: response.data.pagination,
@@ -564,8 +513,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     set({ allContentLoading: true, allContentError: null });
 
     try {
-      console.log("🚀 Store: Fetching all content (useAuth:", useAuth, ")");
-
       let response;
       if (useAuth) {
         response = await allMediaAPI.getAllContentWithAuth();
@@ -574,11 +521,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       }
 
       if (response.success) {
-        console.log(
-          "✅ Store: Successfully fetched all content:",
-          response.media?.length || 0,
-          "items"
-        );
         set({
           allContent: response.media || [],
           allContentTotal: response.total || 0,
@@ -620,7 +562,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     try {
       await get().fetchAllContent(true);
     } catch (error) {
-      console.log("🔄 Auth failed, trying public endpoint...");
       await get().fetchAllContent(false);
     }
   },

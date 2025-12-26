@@ -87,8 +87,6 @@ export default function MobileHeader({
   // Use initialWindowMetrics as a stable fallback to prevent the header jumping into the status bar area.
   const topInset = insets.top || initialWindowMetrics?.insets.top || 0;
 
-  console.log("🔍 MobileHeader: Received user data:", user);
-
   const safeRightActions = Array.isArray(rightActions)
     ? rightActions.filter(
         (action) =>
