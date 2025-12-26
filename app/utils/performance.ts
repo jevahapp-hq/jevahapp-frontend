@@ -222,7 +222,7 @@ export class PerformanceOptimizer {
     } = {}
   ): Promise<T> {
     const {
-      cacheDuration = 5 * 60 * 1000,
+      cacheDuration = 15 * 60 * 1000, // 15 minutes to match backend cache
       forceRefresh = false,
       background = false,
       priority = "high",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     isFresh,
     useContentCacheStore,
@@ -21,420 +22,240 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     limit = 10,
   } = options;
 
-  // INSTANT CACHE LOADING - Load cache synchronously before first render
-  const cacheStore = useContentCacheStore.getState();
-  const cachedAll = cacheStore.get("ALL:first");
-  const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
-  const cachedDefault = cacheStore.get(defaultKey);
-
-  // Initialize state with cached data immediately (no delay)
-  const [allContent, setAllContent] = useState<MediaItem[]>(() => {
-    if (cachedAll && isFresh("ALL:first")) {
-      return cachedAll.items as any;
-    }
-    return [];
-  });
-  const [allContentLoading, setAllContentLoading] = useState(false);
-  const [allContentError, setAllContentError] = useState<string | null>(null);
-  const [allContentTotal, setAllContentTotal] = useState(() => {
-    if (cachedAll && isFresh("ALL:first")) {
-      return cachedAll.total || 0;
-    }
-    return 0;
-  });
-
-  // State for default content (paginated) - Initialize with cache
-  const [defaultContent, setDefaultContent] = useState<MediaItem[]>(() => {
-    if (cachedDefault && isFresh(defaultKey)) {
-      return cachedDefault.items as any;
-    }
-    return [];
-  });
-  const [defaultContentLoading, setDefaultContentLoading] = useState(false);
-  const [defaultContentError, setDefaultContentError] = useState<string | null>(
-    null
-  );
-  const [defaultContentPagination, setDefaultContentPagination] = useState(() => {
-    if (cachedDefault && isFresh(defaultKey)) {
-      return {
-        page: cachedDefault.page,
-        limit: cachedDefault.limit,
-        total: cachedDefault.total || 0,
-        pages: Math.ceil(
-          (cachedDefault.total || 0) / (cachedDefault.limit || 10)
-        ),
-      };
-    }
-    return {
-      page: 1,
-      limit: 10,
-      total: 0,
-      pages: 0,
-    };
-  });
-
-  // Combined loading and error states - Don't show loading if we have cached content
-  const loading = (allContentLoading || defaultContentLoading) && 
-                  allContent.length === 0 && 
-                  defaultContent.length === 0;
-  const error = allContentError || defaultContentError;
-  const hasContent = allContent.length > 0 || defaultContent.length > 0;
-
-  // Fetch all content (TikTok-style endpoint) - with pagination support
-  const fetchAllContent = useCallback(async (useAuth: boolean = false, pageNum: number = 1, append: boolean = false) => {
-    if (!append) {
-      setAllContentLoading(true);
-      setAllContentError(null);
-    }
-
-    try {
-      if (__DEV__) console.log("🚀 useMedia: Fetching all content (useAuth:", useAuth, ", page:", pageNum, ")");
-
-      let response;
-      if (useAuth) {
-        response = await mediaApi.getAllContentWithAuth({
-          page: pageNum,
-          limit: 50, // Request 50 items per page (backend should enforce max 100)
-          contentType: contentType !== "ALL" ? contentType : undefined,
-        });
-      } else {
-        response = await mediaApi.getAllContentPublic({
-          page: pageNum,
-          limit: 50, // Request 50 items per page
-          contentType: contentType !== "ALL" ? contentType : undefined,
-        });
-      }
+  // Use React Query for all content (provides 0ms cache hits)
+  const allContentQuery = useQuery({
+    queryKey: ["all-content", contentType, 1, 50, false],
+    queryFn: async () => {
+      const response = await mediaApi.getAllContentPublic({
+        page: 1,
+        limit: 50,
+        contentType: contentType !== "ALL" ? contentType : undefined,
+      });
 
       if (response.success) {
-        // Batch enrich content with user profiles before transforming
-        // This ensures all user data is available (fetches missing profiles in parallel)
-        const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(response.media || []);
+        const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
+          response.media || []
+        );
         const transformedMedia = enrichedMedia
           .map(transformApiResponseToMediaItem)
-          .filter((item): item is MediaItem => item !== null); // Filter out nulls safely
-        
-        if (append && pageNum > 1) {
-          // Append to existing content for infinite scroll
-          setAllContent((prev) => [...prev, ...transformedMedia]);
-        } else {
-          // Replace content for first page or refresh
-          setAllContent(transformedMedia);
-        }
-        
-        // cache write-through
+          .filter((item): item is MediaItem => item !== null);
+
+        // Also update Zustand cache for backward compatibility
         useContentCacheStore.getState().set("ALL:first", {
-          items: append ? [...allContent, ...transformedMedia] : transformedMedia,
-          page: pageNum,
-          limit: response.limit || 50,
+          items: transformedMedia,
+          page: 1,
+          limit: 50,
           total: response.total || response.pagination?.total || 0,
           fetchedAt: Date.now(),
         });
-        setAllContentTotal(response.total || response.pagination?.total || 0);
-        setAllContentLoading(false);
-      } else {
-        // Handle 401/402 authentication errors
-        const isAuthError = 
-          response.error?.includes("401") ||
-          response.error?.includes("402") ||
-          response.error?.includes("Unauthorized") ||
-          response.error?.includes("UNAUTHORIZED") ||
-          response.error?.includes("Authentication failed");
-        
-        if (isAuthError) {
-          // For auth errors, try public endpoint as fallback
-          if (__DEV__) {
-            console.log("🔄 Auth failed, trying public endpoint...");
-          }
-          try {
-            const publicResponse = await mediaApi.getAllContentPublic({
+
+        return {
+          media: transformedMedia,
+          total: response.total || response.pagination?.total || 0,
+        };
+      }
+
+      throw new Error(response.error || "Failed to fetch content");
+    },
+    enabled: immediate,
+    staleTime: 15 * 60 * 1000, // 15 minutes - matches backend cache
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
+    refetchOnMount: false, // Use cache if available - 0ms on revisit!
+    refetchOnWindowFocus: false,
+  });
+
+  // Use React Query for default content
+  const defaultContentQuery = useQuery({
+    queryKey: ["default-content", page, limit, contentType],
+    queryFn: async () => {
+      const response = await mediaApi.getDefaultContent({
+        page,
+        limit,
+        contentType: contentType !== "ALL" ? contentType : undefined,
+      });
+
+      if (response.success) {
+        const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
+          response.media || []
+        );
+        const transformedMedia = enrichedMedia
+          .map(transformApiResponseToMediaItem)
+          .filter((item): item is MediaItem => item !== null);
+
+        // Also update Zustand cache for backward compatibility
+        const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
+        useContentCacheStore.getState().set(defaultKey, {
+          items: transformedMedia,
+          page: response.page || page,
+          limit: response.limit || limit,
+          total: response.total || 0,
+          fetchedAt: Date.now(),
+        });
+
+        return {
+          media: transformedMedia,
+          total: response.total || 0,
+          page: response.page || page,
+          limit: response.limit || limit,
+          pages: Math.ceil((response.total || 0) / (response.limit || limit)),
+        };
+      }
+
+      throw new Error(response.error || "Failed to fetch content");
+    },
+    enabled: immediate,
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
+    refetchOnMount: false, // Use cache if available - 0ms on revisit!
+    refetchOnWindowFocus: false,
+  });
+
+  // Extract data from React Query (0ms if cached!)
+  const allContent = allContentQuery.data?.media || [];
+  const allContentTotal = allContentQuery.data?.total || 0;
+  const defaultContent = defaultContentQuery.data?.media || [];
+  const defaultContentPagination = {
+    page: defaultContentQuery.data?.page || page,
+    limit: defaultContentQuery.data?.limit || limit,
+    total: defaultContentQuery.data?.total || 0,
+    pages: defaultContentQuery.data?.pages || 0,
+  };
+
+  // Loading states (only show loading if no cached data)
+  const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
+  const defaultContentLoading = defaultContentQuery.isLoading && defaultContent.length === 0;
+  const loading = allContentLoading || defaultContentLoading;
+  
+  // Error states
+  const allContentError = allContentQuery.error
+    ? (allContentQuery.error as Error).message
+    : null;
+  const defaultContentError = defaultContentQuery.error
+    ? (defaultContentQuery.error as Error).message
+    : null;
+  const error = allContentError || defaultContentError;
+  
+  const hasContent = allContent.length > 0 || defaultContent.length > 0;
+
+  // Legacy fetch function - now uses React Query internally
+  // Kept for backward compatibility but React Query handles caching
+  const queryClient = useQueryClient();
+  const fetchAllContent = useCallback(async (useAuth: boolean = false, pageNum: number = 1, append: boolean = false) => {
+    // React Query handles this automatically - just refetch the query
+    if (!append) {
+      await allContentQuery.refetch();
+    } else {
+      // For append, fetch next page using queryClient
+      await queryClient.fetchQuery({
+        queryKey: ["all-content", contentType, pageNum, 50, useAuth],
+        queryFn: async () => {
+          let response;
+          if (useAuth) {
+            response = await mediaApi.getAllContentWithAuth({
               page: pageNum,
               limit: 50,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
-            if (publicResponse.success) {
-              // Batch enrich content with user profiles before transforming
-              const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(publicResponse.media || []);
-              const transformedMedia = enrichedMedia
-                .map(transformApiResponseToMediaItem)
-                .filter((item): item is MediaItem => item !== null); // Filter out nulls safely
-              if (append && pageNum > 1) {
-                setAllContent((prev) => [...prev, ...transformedMedia]);
-              } else {
-                setAllContent(transformedMedia);
-              }
-              setAllContentTotal(publicResponse.total || publicResponse.pagination?.total || 0);
-              setAllContentLoading(false);
-              return; // Success with public endpoint
-            }
-          } catch (fallbackError) {
-            if (__DEV__) {
-              console.warn("⚠️ Public endpoint also failed:", fallbackError);
-            }
-          }
-          // If both fail, set a user-friendly error message
-          if (!append) {
-            setAllContentError("Session expired. Please login again.");
-          }
-          setAllContentLoading(false);
-        } else {
-          // Handle network errors gracefully
-          const isNetworkError = response.error?.includes("Network unavailable");
-          
-          if (isNetworkError) {
-            // Network error - keep existing content, just stop loading
-            setAllContentLoading(false);
-            // Don't set error state for network failures
           } else {
-            if (__DEV__) {
-              console.error(
-                "❌ useMedia: Failed to fetch all content:",
-                response.error
-              );
-            }
-            // Clean up error message - don't show raw status codes
-            const cleanError = response.error?.replace(/^\d+\s*/, "") || "Failed to fetch content";
-            setAllContentError(cleanError);
-            setAllContentLoading(false);
+            response = await mediaApi.getAllContentPublic({
+              page: pageNum,
+              limit: 50,
+              contentType: contentType !== "ALL" ? contentType : undefined,
+            });
           }
-        }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      
-      // Handle 401/402 authentication errors
-      const isAuthError = 
-        errorMessage.includes("401") ||
-        errorMessage.includes("402") ||
-        errorMessage.includes("Unauthorized") ||
-        errorMessage.includes("UNAUTHORIZED") ||
-        errorMessage.includes("Authentication failed");
-      
-      if (isAuthError) {
-        // Try public endpoint as fallback
-        try {
-          const publicResponse = await mediaApi.getAllContentPublic({
-            page: pageNum,
-            limit: 50,
-            contentType: contentType !== "ALL" ? contentType : undefined,
-          });
-          if (publicResponse.success) {
-            const transformedMedia = (publicResponse.media || []).map(
-              transformApiResponseToMediaItem
-            );
-            if (append && pageNum > 1) {
-              setAllContent((prev) => [...prev, ...transformedMedia]);
-            } else {
-              setAllContent(transformedMedia);
-            }
-            setAllContentTotal(publicResponse.total || publicResponse.pagination?.total || 0);
-            setAllContentLoading(false);
-            return; // Success with public endpoint
-          }
-        } catch (fallbackError) {
-          if (__DEV__) {
-            console.warn("⚠️ Public endpoint also failed:", fallbackError);
-          }
-        }
-        // If both fail, set a user-friendly error message
-        if (!append) {
-          setAllContentError("Session expired. Please login again.");
-        }
-        setAllContentLoading(false);
-      } else {
-        const isNetworkError = 
-          errorMessage.includes("Network request failed") ||
-          errorMessage.includes("Failed to fetch") ||
-          errorMessage.includes("NetworkError");
-        
-        if (isNetworkError) {
-          // Network error - keep existing content, just stop loading
-          setAllContentLoading(false);
-          // Don't set error state for network failures
-        } else {
-          if (__DEV__) {
-            console.error(
-              "❌ useMedia: Exception while fetching all content:",
-              error
-            );
-          }
-          // Clean up error message - don't show raw status codes
-          if (!append) {
-            const cleanError = errorMessage.replace(/^\d+\s*/, "") || "Failed to fetch content";
-            setAllContentError(cleanError);
-          }
-          setAllContentLoading(false);
-        }
-      }
-    }
-  }, [contentType]);
 
-  // Fetch default content (paginated)
+          if (response.success) {
+            const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
+              response.media || []
+            );
+            const transformedMedia = enrichedMedia
+              .map(transformApiResponseToMediaItem)
+              .filter((item): item is MediaItem => item !== null);
+
+            return {
+              media: transformedMedia,
+              total: response.total || response.pagination?.total || 0,
+            };
+          }
+
+          throw new Error(response.error || "Failed to fetch content");
+        },
+        staleTime: 15 * 60 * 1000,
+        gcTime: 30 * 60 * 1000,
+      });
+    }
+  }, [allContentQuery, queryClient, contentType]);
+
+  // Legacy fetch function - now uses React Query internally
   const fetchDefaultContent = useCallback(
     async (params?: ContentFilter) => {
-      setDefaultContentLoading(true);
-      setDefaultContentError(null);
+      const filter: ContentFilter = {
+        page: params?.page || page,
+        limit: params?.limit || limit,
+        contentType: params?.contentType || contentType,
+        search: params?.search,
+      };
 
-      try {
-        if (__DEV__) {
-          console.log("🚀 useMedia: Fetching default content:", params);
-        }
+      // Use React Query to fetch (will be cached automatically)
+      await queryClient.fetchQuery({
+        queryKey: ["default-content", filter.page, filter.limit, filter.contentType, filter.search],
+        queryFn: async () => {
+          const response = await mediaApi.getDefaultContent(filter);
 
-        const filter: ContentFilter = {
-          page: params?.page || page,
-          limit: params?.limit || limit,
-          contentType: params?.contentType || contentType,
-          search: params?.search,
-        };
+          if (response.success) {
+            const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
+              response.media || []
+            );
+            const transformedMedia = enrichedMedia
+              .map(transformApiResponseToMediaItem)
+              .filter((item): item is MediaItem => item !== null);
 
-        const response = await mediaApi.getDefaultContent(filter);
+            // Also update Zustand cache for backward compatibility
+            const key = `${filter.contentType || "ALL"}:page:${filter.page || 1}`;
+            useContentCacheStore.getState().set(key, {
+              items: transformedMedia,
+              page: filter.page || 1,
+              limit: filter.limit || limit,
+              total: response.total || 0,
+              fetchedAt: Date.now(),
+            });
 
-        if (response.success) {
-          // Batch enrich content with user profiles before transforming
-          const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(response.media || []);
-          const transformedMedia = enrichedMedia
-            .map(transformApiResponseToMediaItem)
-            .filter((item): item is MediaItem => item !== null); // Filter out nulls safely
-
-          if (filter.page && filter.page > 1) {
-            // Append to existing content for pagination
-            setDefaultContent((prev) => [...prev, ...transformedMedia]);
-          } else {
-            // Replace content for refresh or first load
-            setDefaultContent(transformedMedia);
+            return {
+              media: transformedMedia,
+              total: response.total || 0,
+              page: response.page || 1,
+              limit: response.limit || limit,
+              pages: Math.ceil((response.total || 0) / (response.limit || limit)),
+            };
           }
 
-          // cache write-through by contentType key
-          const key = `${filter.contentType || "ALL"}:page:${filter.page || 1}`;
-          useContentCacheStore.getState().set(key, {
-            items: transformedMedia,
-            page: filter.page || 1,
-            limit: filter.limit || limit,
-            total: response.total || 0,
-            fetchedAt: Date.now(),
-          });
-
-          setDefaultContentPagination({
-            page: response.page || 1,
-            limit: response.limit || 10,
-            total: response.total || 0,
-            pages: Math.ceil((response.total || 0) / (response.limit || 10)),
-          });
-
-          setDefaultContentLoading(false);
-        } else {
-          // Handle 401/402 authentication errors
-          const isAuthError = 
-            response.error?.includes("401") ||
-            response.error?.includes("402") ||
-            response.error?.includes("Unauthorized") ||
-            response.error?.includes("UNAUTHORIZED") ||
-            response.error?.includes("Authentication failed");
-          
-          if (isAuthError) {
-            // Set a user-friendly error message for auth errors
-            setDefaultContentError("Session expired. Please login again.");
-            setDefaultContentLoading(false);
-          } else {
-            // Handle network errors gracefully
-            const isNetworkError = response.error?.includes("Network unavailable");
-            
-            if (isNetworkError) {
-              // Network error - keep existing content, just stop loading
-              setDefaultContentLoading(false);
-              // Don't set error state for network failures
-            } else {
-              if (__DEV__) {
-                console.error(
-                  "❌ useMedia: Failed to fetch default content:",
-                  response.error
-                );
-              }
-              // Clean up error message - don't show raw status codes
-              const cleanError = response.error?.replace(/^\d+\s*/, "") || "Failed to fetch content";
-              setDefaultContentError(cleanError);
-              setDefaultContentLoading(false);
-            }
-          }
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        
-        // Handle 401/402 authentication errors
-        const isAuthError = 
-          errorMessage.includes("401") ||
-          errorMessage.includes("402") ||
-          errorMessage.includes("Unauthorized") ||
-          errorMessage.includes("UNAUTHORIZED") ||
-          errorMessage.includes("Authentication failed");
-        
-        if (isAuthError) {
-          // Set a user-friendly error message for auth errors
-          setDefaultContentError("Session expired. Please login again.");
-          setDefaultContentLoading(false);
-        } else {
-          const isNetworkError = 
-            errorMessage.includes("Network request failed") ||
-            errorMessage.includes("Failed to fetch") ||
-            errorMessage.includes("NetworkError");
-          
-          if (isNetworkError) {
-            // Network error - keep existing content, just stop loading
-            setDefaultContentLoading(false);
-            // Don't set error state for network failures
-          } else {
-            if (__DEV__) {
-              console.error(
-                "❌ useMedia: Exception while fetching default content:",
-                error
-              );
-            }
-            // Clean up error message - don't show raw status codes
-            const cleanError = errorMessage.replace(/^\d+\s*/, "") || "Failed to fetch content";
-            setDefaultContentError(cleanError);
-            setDefaultContentLoading(false);
-          }
-        }
-      }
+          throw new Error(response.error || "Failed to fetch content");
+        },
+        staleTime: 15 * 60 * 1000,
+        gcTime: 30 * 60 * 1000,
+      });
     },
-    [page, limit, contentType]
+    [queryClient, page, limit, contentType]
   );
 
-  // Refresh all content (resets to page 1)
+  // Refresh all content using React Query (maintains cache)
   const refreshAllContent = useCallback(async () => {
-    try {
-      // Try authenticated first, fallback to public
-      await fetchAllContent(true, 1, false);
-    } catch (error) {
-      if (__DEV__) console.log("🔄 Auth failed, trying public endpoint...");
-      await fetchAllContent(false, 1, false);
-    }
-  }, [fetchAllContent]);
-  
-  // Load more content for infinite scroll
-  const loadMoreAllContent = useCallback(async () => {
-    if (allContentLoading) return; // Prevent duplicate requests
-    
-    const currentPage = Math.floor(allContent.length / 50) + 1;
-    const totalPages = Math.ceil((allContentTotal || allContent.length) / 50);
-    
-    if (currentPage >= totalPages) {
-      if (__DEV__) console.log("📄 No more pages to load");
-      return;
-    }
-    
-    try {
-      // Try authenticated first, fallback to public
-      await fetchAllContent(true, currentPage, true);
-    } catch (error) {
-      if (__DEV__) console.log("🔄 Auth failed, trying public endpoint...");
-      await fetchAllContent(false, currentPage, true);
-    }
-  }, [fetchAllContent, allContent.length, allContentTotal, allContentLoading]);
+    await allContentQuery.refetch();
+  }, [allContentQuery]);
 
-  // Refresh default content
+  // Load more content for infinite scroll (TODO: implement with infinite query)
+  const loadMoreAllContent = useCallback(async () => {
+    // For now, just refetch - can be enhanced with infinite query later
+    if (allContentLoading) return;
+    await allContentQuery.refetch();
+  }, [allContentQuery, allContentLoading]);
+
+  // Refresh default content using React Query
   const refreshDefaultContent = useCallback(async () => {
-    await fetchDefaultContent({ page: 1, limit });
-  }, [fetchDefaultContent, limit]);
+    await defaultContentQuery.refetch();
+  }, [defaultContentQuery]);
 
   // Load more default content
   const loadMoreDefaultContent = useCallback(async () => {
@@ -468,22 +289,14 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     [allContent, defaultContent]
   );
 
-  // Initialize content on mount if immediate is true
-  // Cache is already loaded synchronously above, so we just refresh in background
+  // React Query handles initialization automatically via `enabled: immediate`
+  // No need for manual useEffect - React Query will fetch on mount if enabled
   useEffect(() => {
     if (immediate) {
       // Test available endpoints first (non-blocking)
       mediaApi.testAvailableEndpoints();
-
-      // Background revalidate - fetch fresh data without blocking UI
-      // Content is already shown from cache if available
-      // Request first page with 50 items (optimized for performance)
-      Promise.all([
-        refreshAllContent().catch(() => {}), // Don't block on errors
-        fetchDefaultContent({ page: 1, limit: 50, contentType }).catch(() => {}),
-      ]);
     }
-  }, [immediate, refreshAllContent, contentType]);
+  }, [immediate]);
 
   // Calculate if there are more pages to load
   const hasMorePages = useMemo(() => {

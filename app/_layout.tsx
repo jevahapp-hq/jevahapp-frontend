@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { Alert, BackHandler, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingAudioPlayer from "./components/FloatingAudioPlayer";
@@ -78,6 +79,20 @@ const tokenCache = {
       }
     },
 };
+
+// Create React Query client with cache settings matching backend (15 minutes)
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15 * 60 * 1000, // 15 minutes - matches backend cache
+      gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache after stale
+      retry: 1, // Retry once on failure
+      refetchOnWindowFocus: false, // Don't refetch on app focus (React Native)
+      refetchOnReconnect: true, // Refetch when network reconnects
+      refetchOnMount: false, // Use cache if available, don't refetch on mount
+    },
+  },
+});
 
 export default function RootLayout() {
   const router = useRouter();
@@ -302,28 +317,30 @@ export default function RootLayout() {
   // ✅ Normal app rendering
   return (
     <ErrorBoundary>
-      <SafeAreaProvider>
-        <ClerkProvider
-          publishableKey={publishableKey}
-          tokenCache={tokenCache}
-          afterSignInUrl="/"
-          afterSignUpUrl="/"
-        >
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <PersistentNotificationProvider>
-              <NotificationProvider>
-                <CommentModalProvider>
-                  <Slot />
-                  <CommentModalV2 />
-                  <FloatingAudioPlayer />
-                  <MiniAudioPlayer />
-                  <ServerUnavailableModalWrapper />
-                </CommentModalProvider>
-              </NotificationProvider>
-            </PersistentNotificationProvider>
-          </GestureHandlerRootView>
-        </ClerkProvider>
-      </SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <ClerkProvider
+            publishableKey={publishableKey}
+            tokenCache={tokenCache}
+            afterSignInUrl="/"
+            afterSignUpUrl="/"
+          >
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <PersistentNotificationProvider>
+                <NotificationProvider>
+                  <CommentModalProvider>
+                    <Slot />
+                    <CommentModalV2 />
+                    <FloatingAudioPlayer />
+                    <MiniAudioPlayer />
+                    <ServerUnavailableModalWrapper />
+                  </CommentModalProvider>
+                </NotificationProvider>
+              </PersistentNotificationProvider>
+            </GestureHandlerRootView>
+          </ClerkProvider>
+        </SafeAreaProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }
