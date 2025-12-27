@@ -58,11 +58,12 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       throw new Error(response.error || "Failed to fetch content");
     },
     enabled: immediate,
-    staleTime: 15 * 60 * 1000, // 15 minutes - matches backend cache
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
+    gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
     retry: 1,
-    refetchOnMount: false, // Use cache if available - 0ms on revisit!
-    refetchOnWindowFocus: false,
+    refetchOnMount: false, // ✅ Use cache if available - instant load when switching tabs
+    refetchOnWindowFocus: false, // ✅ Don't refetch on focus - preserve user's current view
+    refetchOnReconnect: false, // ✅ Don't refetch on reconnect - use cached data
   });
 
   // Use React Query for default content
@@ -105,11 +106,12 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       throw new Error(response.error || "Failed to fetch content");
     },
     enabled: immediate,
-    staleTime: 15 * 60 * 1000, // 15 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
+    gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
     retry: 1,
-    refetchOnMount: false, // Use cache if available - 0ms on revisit!
-    refetchOnWindowFocus: false,
+    refetchOnMount: false, // ✅ Use cache if available - instant load when switching tabs
+    refetchOnWindowFocus: false, // ✅ Don't refetch on focus - preserve user's current view
+    refetchOnReconnect: false, // ✅ Don't refetch on reconnect - use cached data
   });
 
   // Extract data from React Query (0ms if cached!)

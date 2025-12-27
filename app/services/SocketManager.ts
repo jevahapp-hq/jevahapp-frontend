@@ -245,9 +245,47 @@ class SocketManager {
       this.handleCommentNotification(data);
     });
 
-    // Error handling
+    // Error handling - suppress expected errors that are handled by HTTP fallback
     this.socket.on("error", (error: any) => {
-      console.error("Socket error:", error?.message || error);
+      const errorMessage = error?.message || String(error);
+      
+      // Suppress expected errors that are already handled gracefully:
+      // - 404 errors (content not found) are handled by HTTP API fallback
+      // - These don't need to be logged as errors since the app handles them
+      if (
+        errorMessage.includes("Failed to add reaction") ||
+        errorMessage.includes("404") ||
+        errorMessage.includes("Content not found")
+      ) {
+        // Only log as warning in development, suppress in production
+        if (__DEV__) {
+          console.warn("⚠️ Socket reaction error (handled by fallback):", errorMessage);
+        }
+        return;
+      }
+      
+      // Log unexpected errors
+      console.error("Socket error:", errorMessage);
+    });
+    
+    // Handle reaction-specific errors (if backend sends them)
+    this.socket.on("reaction-error", (error: any) => {
+      const errorMessage = error?.message || String(error);
+      
+      // Suppress expected 404 errors - HTTP API will handle with fallback
+      if (
+        errorMessage.includes("404") ||
+        errorMessage.includes("Content not found") ||
+        errorMessage.includes("not found")
+      ) {
+        if (__DEV__) {
+          console.warn("⚠️ Reaction error (404 - handled by HTTP fallback):", errorMessage);
+        }
+        return;
+      }
+      
+      // Log unexpected reaction errors
+      console.error("Reaction error:", errorMessage);
     });
   }
 
@@ -281,14 +319,28 @@ class SocketManager {
   }
 
   // Real-time interactions
+  // Note: This is a fire-and-forget operation. If it fails, the HTTP API will handle it.
+  // Optimistic updates in the UI are not blocked by socket errors.
   sendLike(contentId: string, contentType: string): void {
-    if (this.socket) {
-      this.socket.emit("content-reaction", {
-        contentId,
-        contentType,
-        actionType: "like",
-      });
-      console.log(`❤️ Sent like: ${contentType}:${contentId}`);
+    if (this.socket && this.socket.connected) {
+      try {
+        this.socket.emit("content-reaction", {
+          contentId,
+          contentType,
+          actionType: "like",
+        });
+        if (__DEV__) {
+          console.log(`❤️ Sent like via socket: ${contentType}:${contentId}`);
+        }
+      } catch (error) {
+        // Don't throw - this is a non-blocking real-time update
+        // The HTTP API call will handle the like, so we can safely ignore socket errors
+        if (__DEV__) {
+          console.warn("⚠️ Socket like send failed (HTTP will handle):", error);
+        }
+      }
+    } else if (__DEV__) {
+      console.log("📡 Socket not connected, skipping real-time like (HTTP will handle)");
     }
   }
 

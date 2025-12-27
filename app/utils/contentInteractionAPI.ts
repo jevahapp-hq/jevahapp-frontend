@@ -704,10 +704,40 @@ class ContentInteractionService {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `HTTP error! status: ${response.status}, body: ${errorText}`
-        );
+        let errorMessage = "Failed to create comment";
+        let errorBody: any = {};
+        
+        try {
+          const errorText = await response.text();
+          errorBody = JSON.parse(errorText);
+          errorMessage = errorBody?.message || errorBody?.error || errorMessage;
+        } catch {
+          // If error text is not JSON, use the raw text
+        }
+        
+        // Create a more descriptive error with status code
+        const error = new Error(errorMessage) as Error & { 
+          status: number; 
+          statusText: string;
+          body?: any;
+        };
+        error.status = response.status;
+        error.statusText = response.statusText;
+        error.body = errorBody;
+        
+        // Log detailed error info for debugging (only in dev)
+        if (__DEV__) {
+          console.error("❌ Comment submission failed:", {
+            status: response.status,
+            statusText: response.statusText,
+            message: errorMessage,
+            body: errorBody,
+            contentId,
+            contentType: backendContentType,
+          });
+        }
+        
+        throw error;
       }
 
       const raw = await response.json();

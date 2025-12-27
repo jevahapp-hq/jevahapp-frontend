@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
+import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
@@ -120,6 +120,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  // ✅ Persist video loaded state across re-renders for better UX (no thumbnails on revisit)
+  const videoLoadedRef = useRef(false);
   // Local playback state for video (non-audio) so the progress bar
   // always reflects the real player position, even if the parent
   // store's `progresses[key]` is stale.
@@ -412,28 +414,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // Single tap - wait to confirm it's not a double-tap, then toggle (like reels mode)
     tapTimeoutRef.current = setTimeout(async () => {
       if (tapCountRef.current === 1) {
-        if (isCurrentlyPlaying) {
-          showOverlayPermanently();
-
-          if (isAudioSermon) {
-            audioControls.pause();
-          } else {
-            // Use modular hook for pause
-            togglePlayback();
-            if (player) {
-              try {
-                player.pause();
-              } catch (error) {
-                console.error("❌ Pause failed:", error);
-              }
-            }
-          }
-        }
+        // ✅ One-click play/pause: Use onTogglePlay for both video and audio for consistent behavior
+        // This ensures proper integration with global media store (audio pauses video and vice versa)
+        onTogglePlay(key);
       }
 
       tapCountRef.current = 0;
       tapTimeoutRef.current = null;
-    }, 400) as any; // 400ms to detect double-tap
+    }, 200) as any; // Reduced to 200ms for faster responsiveness (like Instagram/TikTok)
   }, [
     isPlaying,
     onTogglePlay,
@@ -456,8 +444,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Handle play/pause toggle - now using modular hook with improved responsiveness
   const handleTogglePlay = useCallback(async () => {
+    // ✅ Immediate visual feedback - update state first for instant response
+    setIsPlayTogglePending(true);
+    
     // Use ref-based debounce for immediate response while preventing double-taps
-    if (toggleProcessingRef.current) return; // Prevent double-taps but allow UI feedback
+    if (toggleProcessingRef.current) {
+      setIsPlayTogglePending(false);
+      return; // Prevent double-taps but allow UI feedback
+    }
 
     // Clear any pending tap detection when play icon is clicked
     tapCountRef.current = 0;
@@ -467,24 +461,21 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     }
 
     toggleProcessingRef.current = true;
-    setIsPlayTogglePending(true);
 
-    // Immediate execution for responsive feel
+    // ✅ Immediate execution for responsive feel - use onTogglePlay for both video and audio
     try {
+      // ✅ Use onTogglePlay for ALL media types (video and audio) to ensure proper global media management
+      // This ensures audio sermons pause videos and vice versa
+      onTogglePlay(key);
+      
+      // Update overlay state immediately for instant visual feedback
       if (isAudioSermon) {
-        // Handle audio sermon play/pause
         if (audioState.isPlaying) {
-          audioControls.pause();
           showOverlayPermanently();
         } else {
           hideOverlay();
-          audioControls.play();
         }
       } else {
-        // Use modular hook for video playback control
-        togglePlayback();
-
-        // Update overlay state immediately
         if (isPlaying) {
           showOverlayPermanently();
         } else {
@@ -498,15 +489,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       setTimeout(() => {
         toggleProcessingRef.current = false;
         setIsPlayTogglePending(false);
-      }, 100); // Reduced from 150ms for faster response
+      }, 50); // Reduced to 50ms for faster response
     }
   }, [
     key,
     isAudioSermon,
     audioState.isPlaying,
-    audioControls,
     isPlaying,
-    togglePlayback,
+    onTogglePlay,
     showOverlayPermanently,
     hideOverlay,
   ]);
@@ -562,6 +552,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       if (status.status === 'readyToPlay') {
         setFailedVideoLoad(false);
         setVideoLoaded(true);
+        videoLoadedRef.current = true; // ✅ Persist video loaded state (no thumbnails on revisit)
         if (player.duration && Number.isFinite(player.duration) && player.duration > 0) {
           const durationMs = Math.min(player.duration * 1000, 24 * 60 * 60 * 1000); // Max 24 hours
           if (!isNaN(durationMs)) {
@@ -805,8 +796,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             />
           )}
 
-          {/* Skeleton overlay while video/audio prepares */}
-          {!videoLoaded &&
+          {/* ✅ Only show skeleton on initial load - not when video is already loaded (better UX) */}
+          {!videoLoadedRef.current &&
+            !videoLoaded &&
             !failedVideoLoad &&
             isValidUri(video.fileUrl) &&
             !isAudioSermon && (
@@ -823,26 +815,27 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           />
 
           {/* Fullscreen / expand button (opens reels viewer) - positioned top-right */}
-          <TouchableWithoutFeedback
-            onPress={() => onVideoTap(key, video, index)}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              // ✅ Ensure fullscreen button click navigates to reels
+              onVideoTap(key, video, index);
+            }}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+              flexDirection: "row",
+              alignItems: "center",
+              zIndex: 10,
+            }}
           >
-            <View
-              style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                backgroundColor: "rgba(0,0,0,0.6)",
-                borderRadius: 6,
-                paddingHorizontal: 8,
-                paddingVertical: 6,
-                flexDirection: "row",
-                alignItems: "center",
-                zIndex: 10,
-              }}
-            >
-              <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
-            </View>
-          </TouchableWithoutFeedback>
+            <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
 
           {/* Play/Pause Overlay */}
           <MediaPlayButton

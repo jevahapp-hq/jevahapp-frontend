@@ -67,10 +67,11 @@ interface InteractionState {
   toggleCommentLike: (commentId: string, contentId: string) => Promise<void>;
 
   // Stats actions
-  loadContentStats: (contentId: string, contentType?: string) => Promise<void>;
+  loadContentStats: (contentId: string, contentType?: string, options?: { forceRefresh?: boolean }) => Promise<void>;
   loadBatchContentStats: (
     contentIds: string[],
-    contentType?: string
+    contentType?: string,
+    options?: { forceRefresh?: boolean }
   ) => Promise<void>;
   // Optimistic mutation helper
   mutateStats: (
@@ -587,10 +588,12 @@ export const useInteractionStore = create<InteractionState>()(
     // ============= STATS ACTIONS =============
     loadContentStats: async (
       contentId: string,
-      contentType: string = "media"
+      contentType: string = "media",
+      options?: { forceRefresh?: boolean }
     ) => {
+      const key = `${contentId}_stats`;
       set((state) => ({
-        loadingStats: { ...state.loadingStats, [contentId]: true },
+        loadingStats: { ...state.loadingStats, [key]: true },
       }));
 
       try {
@@ -601,9 +604,12 @@ export const useInteractionStore = create<InteractionState>()(
         set((state) => {
           const existing = state.contentStats[contentId];
 
-          // Prefer whichever source reports a "true" interaction.
-          // This prevents fresh server metadata that hasn't caught up yet
-          // from clearing a like/save the user just performed in this session.
+          // If forceRefresh is true OR this is a fresh load (no existing stats),
+          // trust the backend as source of truth (ensures persistence after refresh)
+          // Otherwise, use OR merge during active session to prevent flickering
+          const isFreshLoad = !existing;
+          const shouldTrustBackend = options?.forceRefresh || isFreshLoad;
+
           const existingLiked = existing?.userInteractions?.liked ?? false;
           const statsLiked = stats.userInteractions?.liked ?? false;
           const existingSaved = existing?.userInteractions?.saved ?? false;
@@ -615,22 +621,25 @@ export const useInteractionStore = create<InteractionState>()(
 
           const merged: ContentStats = {
             contentId,
-            likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-            saves: Math.max(existing?.saves ?? 0, stats.saves ?? 0),
-            shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
-            views: Math.max(existing?.views ?? 0, stats.views ?? 0),
-            comments: Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+            // Use backend values (source of truth for counts)
+            likes: stats.likes ?? existing?.likes ?? 0,
+            saves: stats.saves ?? existing?.saves ?? 0,
+            shares: stats.shares ?? existing?.shares ?? 0,
+            views: stats.views ?? existing?.views ?? 0,
+            comments: stats.comments ?? existing?.comments ?? 0,
             userInteractions: {
-              liked: existingLiked || statsLiked,
-              saved: existingSaved || statsSaved,
-              shared: existingShared || statsShared,
-              viewed: existingViewed || statsViewed,
+              // Trust backend on fresh load/refresh (ensures persistence)
+              // Use OR merge during active session (prevents flickering during rapid interactions)
+              liked: shouldTrustBackend ? statsLiked : (existingLiked || statsLiked),
+              saved: shouldTrustBackend ? statsSaved : (existingSaved || statsSaved),
+              shared: shouldTrustBackend ? statsShared : (existingShared || statsShared),
+              viewed: shouldTrustBackend ? statsViewed : (existingViewed || statsViewed),
             },
           };
 
           return {
             contentStats: { ...state.contentStats, [contentId]: merged },
-            loadingStats: { ...state.loadingStats, [contentId]: false },
+            loadingStats: { ...state.loadingStats, [key]: false },
           };
         });
       } catch (error) {
@@ -667,7 +676,8 @@ export const useInteractionStore = create<InteractionState>()(
 
     loadBatchContentStats: async (
       contentIds: string[],
-      contentType: string = "media"
+      contentType: string = "media",
+      options?: { forceRefresh?: boolean }
     ) => {
       try {
         const fromBatch = await contentInteractionAPI.getBatchMetadata(
@@ -682,6 +692,10 @@ export const useInteractionStore = create<InteractionState>()(
             >;
             for (const [id, stats] of Object.entries(fromBatch)) {
               const existing = state.contentStats[id];
+              
+              // Trust backend on fresh loads or forced refresh (ensures persistence)
+              const isFreshLoad = !existing;
+              const shouldTrustBackend = options?.forceRefresh || isFreshLoad;
 
               const existingLiked = existing?.userInteractions?.liked ?? false;
               const statsLiked = stats.userInteractions?.liked ?? false;
@@ -696,19 +710,19 @@ export const useInteractionStore = create<InteractionState>()(
 
               merged[id] = {
                 contentId: id,
-                likes: Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-                saves: Math.max(existing?.saves ?? 0, stats.saves ?? 0),
-                shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
-                views: Math.max(existing?.views ?? 0, stats.views ?? 0),
-                comments: Math.max(
-                  existing?.comments ?? 0,
-                  stats.comments ?? 0
-                ),
+                // Use backend values (source of truth for counts)
+                likes: stats.likes ?? existing?.likes ?? 0,
+                saves: stats.saves ?? existing?.saves ?? 0,
+                shares: stats.shares ?? existing?.shares ?? 0,
+                views: stats.views ?? existing?.views ?? 0,
+                comments: stats.comments ?? existing?.comments ?? 0,
                 userInteractions: {
-                  liked: existingLiked || statsLiked,
-                  saved: existingSaved || statsSaved,
-                  shared: existingShared || statsShared,
-                  viewed: existingViewed || statsViewed,
+                  // Trust backend on fresh load/refresh (ensures persistence)
+                  // Use OR merge during active session (prevents flickering)
+                  liked: shouldTrustBackend ? statsLiked : (existingLiked || statsLiked),
+                  saved: shouldTrustBackend ? statsSaved : (existingSaved || statsSaved),
+                  shared: shouldTrustBackend ? statsShared : (existingShared || statsShared),
+                  viewed: shouldTrustBackend ? statsViewed : (existingViewed || statsViewed),
                 },
               } as ContentStats;
             }
@@ -719,14 +733,14 @@ export const useInteractionStore = create<InteractionState>()(
         // Fallback to per-item
         for (const id of contentIds) {
           try {
-            await get().loadContentStats(id, contentType);
+            await get().loadContentStats(id, contentType, options);
           } catch {}
         }
       } catch (e) {
         console.warn("Batch metadata failed; falling back per-item", e);
         for (const id of contentIds) {
           try {
-            await get().loadContentStats(id, contentType);
+            await get().loadContentStats(id, contentType, options);
           } catch {}
         }
       }

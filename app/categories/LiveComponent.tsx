@@ -704,29 +704,84 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
       >
         <View
           style={{
-            width: 64,
-            height: 64,
-            borderRadius: 32,
-            backgroundColor: "#FEA74E",
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: "#DC2626",
             alignItems: "center",
             justifyContent: "center",
             marginBottom: 16,
+            position: "relative",
           }}
         >
-          <Ionicons name="radio" size={32} color="#FFFFFF" />
+          <Ionicons name="radio" size={40} color="#FFFFFF" />
+          {/* Live indicator dot */}
+          <View
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 16,
+              height: 16,
+              borderRadius: 8,
+              backgroundColor: "#FFFFFF",
+              borderWidth: 2,
+              borderColor: "#DC2626",
+            }}
+          />
         </View>
-        <Text
+        <View
           style={{
-            fontSize: 18,
-            fontWeight: "600",
-            color: "#1D2939",
+            flexDirection: "row",
+            alignItems: "center",
             marginBottom: 8,
-            textAlign: "center",
-            fontFamily: "Rubik-SemiBold",
+            justifyContent: "center",
           }}
         >
-          Live Streaming Coming Soon
-        </Text>
+          <View
+            style={{
+              backgroundColor: "#DC2626",
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              borderRadius: 12,
+              marginRight: 8,
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: "#FFFFFF",
+                marginRight: 6,
+              }}
+            />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: "#FFFFFF",
+                fontFamily: "Rubik-Bold",
+                letterSpacing: 0.5,
+              }}
+            >
+              LIVE
+            </Text>
+          </View>
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "600",
+              color: "#1D2939",
+              textAlign: "center",
+              fontFamily: "Rubik-SemiBold",
+            }}
+          >
+            Coming Soon
+          </Text>
+        </View>
         <Text
           style={{
             fontSize: 14,

@@ -430,6 +430,23 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           } catch (error) {
             console.warn("⚠️ Failed to access global audio player store:", error);
           }
+          
+          // Also pause all audio via global media store (for normal songs using useAdvancedAudioPlayer)
+          try {
+            const globalMediaModule = require("./useGlobalMediaStore");
+            const globalMediaStore = globalMediaModule.useGlobalMediaStore;
+            if (globalMediaStore) {
+              const state = globalMediaStore.getState();
+              // Pause all audio that's currently playing
+              Object.keys(state.playingAudio || {}).forEach((audioKey) => {
+                if (state.playingAudio[audioKey]) {
+                  state.pauseAudio(audioKey);
+                }
+              });
+            }
+          } catch (error) {
+            // no-op - global media store might not be available
+          }
 
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};

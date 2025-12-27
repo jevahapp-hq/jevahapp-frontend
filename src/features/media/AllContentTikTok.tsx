@@ -1,42 +1,36 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Image,
-  InteractionManager,
-  RefreshControl,
-  ScrollView,
-  Share,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    RefreshControl,
+    ScrollView,
+    Share,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
-import { useCurrentPlayingAudioStore } from "../../../app/store/useCurrentPlayingAudioStore";
-import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-  categorizeContent,
-  devLog,
-  filterContentByType,
-  getContentKey,
-  getMostRecentItem,
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  transformApiResponseToMediaItem,
+    categorizeContent,
+    filterContentByType,
+    getContentKey,
+    getMostRecentItem,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    transformApiResponseToMediaItem,
 } from "../../shared/utils";
 
 // Feature-specific imports
@@ -47,18 +41,12 @@ import { useMedia } from "../../shared/hooks/useMedia";
 import { Ionicons } from "@expo/vector-icons";
 import { ContentErrorBoundary } from "../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../app/components/SuccessCard";
-import HymnMiniCard, {
-  HymnItem,
-} from "../../../app/home/components/HymnMiniCard";
 import EbookCard from "./components/EbookCard";
 import MusicCard from "./components/MusicCard";
 import VideoCard from "./components/VideoCard";
-import { VirtualizedContentList } from "./AllContentTikTok/components/VirtualizedContentList";
 
 // Import original stores and hooks (these will be bridged)
-import { LinearGradient } from "expo-linear-gradient";
 import { useCommentModal } from "../../../app/context/CommentModalContext";
-import { useUserProfile } from "../../../app/hooks/useUserProfile";
 import { useVideoNavigation } from "../../../app/hooks/useVideoNavigation";
 import SocketManager from "../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../app/store/useDownloadStore";
@@ -67,14 +55,12 @@ import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
 import {
-  convertToDownloadableItem,
-  useDownloadHandler,
+    convertToDownloadableItem,
+    useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-  getPersistedStats,
-  getUserFavorites,
-  getUserId,
-  getViewed
+    getPersistedStats,
+    getViewed,
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -86,11 +72,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   contentType = "ALL",
 }) => {
   const router = useRouter();
-  const isHymnsTab =
-    String(contentType).toLowerCase() === "hymns" ||
-    String(contentType).toLowerCase() === "hyms";
 
-  // Media data from the new hook - with infinite scroll support
+  // Media data from the new hook
   const {
     allContent,
     defaultContent,
@@ -99,73 +82,54 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     refreshAllContent,
     getFilteredContent,
     hasContent,
-    loadMoreAllContent,
-    hasMorePages = false,
-  } = useMedia({ immediate: true, contentType });
+  } = useMedia({ immediate: true });
 
-  // OPTIMIZED: Use individual selectors to prevent unnecessary re-renders
-  // Each subscription only triggers re-render when that specific value changes
+  // Global state from original stores
+  const globalMediaStore = useGlobalMediaStore();
+  const globalVideoStore = useGlobalVideoStore();
+
+  // Get global video state - FIX: Read from the same store we write to with REACTIVE SUBSCRIPTIONS
   const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
   const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
   const progresses = useGlobalVideoStore((s) => s.progresses);
   const showOverlay = useGlobalVideoStore((s) => s.showOverlay);
-  const currentlyPlayingVideo = useGlobalVideoStore((s) => s.currentlyPlayingVideo);
+  const currentlyPlayingVideo = useGlobalVideoStore(
+    (s) => s.currentlyPlayingVideo
+  );
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
-
-  // OPTIMIZED: Extract actions without subscribing (actions don't change)
-  const playVideoGlobally = useGlobalVideoStore((s) => s.playVideoGlobally);
-  const pauseVideo = useGlobalVideoStore((s) => s.pauseVideo);
   const pauseAllVideos = useGlobalVideoStore((s) => s.pauseAllVideos);
   const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
   const enableAutoPlay = useGlobalVideoStore((s) => s.enableAutoPlay);
-  const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
 
   // Create functions to match what components expect
   const playMedia = useCallback((key: string, type: "video" | "audio") => {
-    if (type === "video") {
-      playVideoGlobally(key);
-    } else {
-      playMediaGlobally(key, "audio");
-    }
-  }, [playVideoGlobally, playMediaGlobally]);
+    // ✅ Use unified media store for both video and audio to handle mutual pausing
+    // This ensures video pauses audio and audio pauses video
+    globalMediaStore.playMediaGlobally(key, type);
+  }, [globalMediaStore]);
 
   const pauseMedia = useCallback((key: string) => {
-    pauseVideo(key);
-  }, [pauseVideo]);
+    globalVideoStore.pauseVideo(key);
+  }, [globalVideoStore]);
 
-  const pauseAllMedia = useCallback(() => {
-    pauseAllVideos();
-  }, [pauseAllVideos]);
-
-  const toggleMute = useCallback((key: string) => {
-    toggleVideoMuteAction(key);
-  }, [toggleVideoMuteAction]);
+  const toggleMute = (key: string) => {
+    globalVideoStore.toggleVideoMute(key);
+  };
 
   const { showCommentModal } = useCommentModal();
-  
-  // OPTIMIZED: Use individual selectors to prevent unnecessary re-renders
-  const comments = useInteractionStore((s) => s.comments);
-  const contentStats = useInteractionStore((s) => s.contentStats);
-  const loadingInteraction = useInteractionStore((s) => s.loadingInteraction);
-  
-  // OPTIMIZED: Extract actions separately (actions don't change, don't subscribe)
-  const toggleLike = useInteractionStore((s) => s.toggleLike);
-  const toggleSave = useInteractionStore((s) => s.toggleSave);
-  const loadContentStats = useInteractionStore((s) => s.loadContentStats);
-  const refreshAllStatsAfterLogin = useInteractionStore((s) => s.refreshAllStatsAfterLogin);
-  
-  // OPTIMIZED: Extract library store state and actions separately
-  const libraryIsLoaded = useLibraryStore((s) => s.isLoaded);
-  // Actions don't change, extract without subscribing
-  const loadSavedItems = useLibraryStore((s) => s.loadSavedItems);
-  const addToLibrary = useLibraryStore((s) => s.addToLibrary);
-  const removeFromLibrary = useLibraryStore((s) => s.removeFromLibrary);
-  
+  const { comments } = useInteractionStore();
+  const libraryStore = useLibraryStore();
   const { loadDownloadedItems } = useDownloadStore();
   const { navigateToReels } = useVideoNavigation();
 
-  // User profile for authentication state detection
-  const { user } = useUserProfile();
+  // Interaction store
+  const {
+    contentStats,
+    toggleLike,
+    toggleSave,
+    loadContentStats,
+    loadingInteraction,
+  } = useInteractionStore();
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);
@@ -177,20 +141,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const toggleModal = useCallback((val: string | null) => {
     setModalVisible(val);
   }, []);
-  
-  // Track deleted media IDs
-  const [deletedMediaIds, setDeletedMediaIds] = useState<Set<string>>(new Set());
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
-  const [hymns, setHymns] = useState<HymnItem[]>([]);
-  const [loadingHymns, setLoadingHymns] = useState(false);
-  const [hymnSearchQuery, setHymnSearchQuery] = useState("");
-  
-  // Music section state (only for MUSIC tab) - user uploaded songs only
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSearchInput, setShowSearchInput] = useState(false);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [displayMode, setDisplayMode] = useState<"list" | "grid" | "small" | "large">("list");
 
   // Audio playback state
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -245,91 +197,38 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [hoveredVideos, setHoveredVideos] = useState<Set<string>>(new Set());
   const lastScrollY = useRef<number>(0);
   const lastSwitchTimeRef = useRef<number>(0);
-  const scrollAnimationFrameRef = useRef<number | null>(null);
-  const isContentReadyRef = useRef<boolean>(false);
-  // Track previous contentType to detect actual category changes
-  const prevContentTypeRef = useRef(contentType);
-  // Track if we've already reset scroll on focus (prevent multiple resets)
-  const hasResetScrollOnFocusRef = useRef(false);
 
-  // OPTIMIZED: Memoize helper functions to prevent recreation on every render
-  const getVideoState = useCallback((key: string) => ({
+  // Helper functions to get state for specific keys
+  const getVideoState = (key: string) => ({
     isPlaying: playingVideos[key] ?? false,
     isMuted: mutedVideos[key] ?? false,
     progress: progresses[key] ?? 0,
     showOverlay: showOverlay[key] ?? false,
-  }), [playingVideos, mutedVideos, progresses, showOverlay]);
-  
-  const isVideoPlaying = useCallback((key: string) => playingVideos[key] ?? false, [playingVideos]);
-  const isVideoMuted = useCallback((key: string) => mutedVideos[key] ?? false, [mutedVideos]);
-  const getVideoProgress = useCallback((key: string) => progresses[key] ?? 0, [progresses]);
-  const getVideoOverlay = useCallback((key: string) => showOverlay[key] ?? false, [showOverlay]);
+  });
+  const isVideoPlaying = (key: string) => playingVideos[key] ?? false;
+  const isVideoMuted = (key: string) => mutedVideos[key] ?? false;
+  const getVideoProgress = (key: string) => progresses[key] ?? 0;
+  const getVideoOverlay = (key: string) => showOverlay[key] ?? false;
 
-  // Transform and filter content - with error handling for malformed data
+  // Transform and filter content
   const mediaList: MediaItem[] = useMemo(() => {
-    try {
-      const sourceData = allContent.length > 0 ? allContent : defaultContent;
+    const sourceData = allContent.length > 0 ? allContent : defaultContent;
 
-      if (!sourceData || !Array.isArray(sourceData)) {
-        return [];
-      }
-
-      // Safety check: Limit processing to prevent memory issues with very large datasets
-      const MAX_ITEMS = 1000; // Reasonable limit for production
-      const dataToProcess = sourceData.length > MAX_ITEMS 
-        ? sourceData.slice(0, MAX_ITEMS) 
-        : sourceData;
-
-      const transformed = dataToProcess
-        .map((item, index) => {
-          try {
-            return transformApiResponseToMediaItem(item);
-          } catch (error) {
-            console.warn(`⚠️ Error transforming item at index ${index}:`, error);
-            return null;
-          }
-        })
-        .filter((item): item is MediaItem => item !== null);
-
-      // Filter out deleted items
-      return transformed.filter((item) => {
-        if (!item) return false;
-        if (deletedMediaIds.has(item._id || "")) return false;
-        // Remove copyright-free catalog items from AllContentTikTok entirely
-        const ct = String(item.contentType || "").toLowerCase();
-        if (ct === "copyright-free-music") return false;
-        return true;
-      });
-    } catch (error) {
-      console.error("❌ Error processing media list:", error);
-      // Return empty array on error to prevent crash
+    if (!sourceData || !Array.isArray(sourceData)) {
       return [];
     }
-  }, [allContent, defaultContent, deletedMediaIds]);
+
+    return sourceData.map(transformApiResponseToMediaItem);
+  }, [allContent, defaultContent]);
 
   // Filter content based on contentType
   const filteredMediaList = useMemo(() => {
-    const filtered = filterContentByType(mediaList, contentType);
-    devLog.log(`📚 AllContentTikTok: Filtering for contentType="${contentType}"`);
-    devLog.log(`📚 AllContentTikTok: Total media items: ${mediaList.length}`);
-    devLog.log(`📚 AllContentTikTok: Filtered items: ${filtered.length}`);
-    devLog.log(`📚 AllContentTikTok: Ebook items in filtered list:`, 
-      filtered.filter(item => {
-        const ct = (item.contentType || "").toLowerCase();
-        return ct === "ebook" || ct === "e-books" || ct === "books" || ct === "pdf" || (item.fileUrl && /\.pdf$/i.test(item.fileUrl));
-      }).map(item => ({ title: item.title, contentType: item.contentType }))
-    );
-    return filtered;
+    return filterContentByType(mediaList, contentType);
   }, [mediaList, contentType]);
 
   // Categorize content
   const categorizedContent = useMemo(() => {
-    const categorized = categorizeContent(filteredMediaList);
-    devLog.log(`📚 AllContentTikTok: Categorized content - ebooks: ${categorized.ebooks.length}, videos: ${categorized.videos.length}, music: ${categorized.music.length}, sermons: ${categorized.sermons.length}`);
-    if (categorized.ebooks.length > 0) {
-      devLog.log(`📚 AllContentTikTok: Ebook items:`, categorized.ebooks.map(e => ({ title: e.title, contentType: e.contentType })));
-    }
-    return categorized;
+    return categorizeContent(filteredMediaList);
   }, [filteredMediaList]);
 
   // Most recent item
@@ -344,27 +243,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     return getMostRecentItem(allItems);
   }, [categorizedContent]);
 
-  // Memoize filtered content lists for rendering
-  // In MUSIC tab, exclude audio items (they're shown in the dedicated music section)
-  const filteredContentLists = useMemo(() => {
-    let remaining = (filteredMediaList || []).filter(
-      (item) => !mostRecentItem || item._id !== mostRecentItem._id
-    );
-    
-    // In MUSIC tab, exclude audio/music items from "All Content" section
-    if ((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") {
-      remaining = remaining.filter(
-        (item) => item.contentType !== "audio" && item.contentType !== "music"
-      );
-    }
-    
-    return {
-      firstFour: remaining.slice(0, 4),
-      nextFour: remaining.slice(4, 8),
-      rest: remaining.slice(8),
-    };
-  }, [filteredMediaList, mostRecentItem, contentType]);
-
   // Update refs when state changes
   useEffect(() => {
     playingAudioIdRef.current = playingAudioId;
@@ -373,23 +251,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   useEffect(() => {
     soundMapRef.current = soundMap;
   }, [soundMap]);
-
-  // Sync with global audio manager
-  useEffect(() => {
-    const audioManager = GlobalAudioInstanceManager.getInstance();
-    
-    // Subscribe to global audio state changes
-    const unsubscribe = audioManager.subscribe((playingId) => {
-      if (playingId !== playingAudioId) {
-        setPlayingAudioId(playingId);
-      }
-    });
-
-    // Cleanup on unmount
-    return () => {
-      unsubscribe();
-    };
-  }, [playingAudioId]);
 
   // Autoplay disabled - users must manually click to play videos
   useEffect(() => {
@@ -410,34 +271,31 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // Initialize SocketManager for real-time features
   useEffect(() => {
-    let isMounted = true;
-    let currentSocketManager: SocketManager | null = null;
-
     const initializeSocket = async () => {
       try {
-        // console.log("🔌 AllContentTikTok: Initializing Socket.IO...");
+        console.log("🔌 AllContentTikTok: Initializing Socket.IO...");
 
         const authToken = await TokenUtils.getAuthToken();
         const tokenInfo = await TokenUtils.getTokenInfo();
 
-        // console.log("🔑 Token retrieval:", {
-        //   ...tokenInfo,
-        //   tokenPreview: authToken
-        //     ? TokenUtils.getTokenPreview(authToken)
-        //     : "null",
-        // });
+        console.log("🔑 Token retrieval:", {
+          ...tokenInfo,
+          tokenPreview: authToken
+            ? TokenUtils.getTokenPreview(authToken)
+            : "null",
+        });
 
         if (!authToken || authToken.trim() === "") {
-          // console.log(
-          //   "⚠️ No valid auth token found, skipping Socket.IO initialization"
-          // );
+          console.log(
+            "⚠️ No valid auth token found, skipping Socket.IO initialization"
+          );
           return;
         }
 
         if (!TokenUtils.isValidJWTFormat(authToken)) {
-          // console.warn(
-          //   "⚠️ Invalid token format detected, skipping Socket.IO initialization"
-          // );
+          console.warn(
+            "⚠️ Invalid token format detected, skipping Socket.IO initialization"
+          );
           return;
         }
 
@@ -446,13 +304,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           authToken,
         });
 
-        currentSocketManager = manager;
-
         const socket = (manager as any).socket;
-        if (socket && isMounted) {
+        if (socket) {
           socket.on("content-reaction", (data: any) => {
-            if (!isMounted) return;
-            // console.log("📡 Real-time like update:", data);
+            console.log("📡 Real-time like update:", data);
             setRealTimeCounts((prev) => ({
               ...prev,
               [data.contentId]: {
@@ -464,8 +319,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           });
 
           socket.on("content-comment", (data: any) => {
-            if (!isMounted) return;
-            // console.log("📡 Real-time comment update:", data);
+            console.log("📡 Real-time comment update:", data);
             setRealTimeCounts((prev) => ({
               ...prev,
               [data.contentId]: {
@@ -478,569 +332,280 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
         try {
           await manager.connect();
-          if (isMounted) {
-            setSocketManager(manager);
-            // console.log("✅ Socket.IO initialized successfully");
-          } else {
-            // Component unmounted during connection, clean up
-            manager.disconnect();
-          }
+          setSocketManager(manager);
+          console.log("✅ Socket.IO initialized successfully");
         } catch (connectError) {
-          // console.warn(
-          //   "⚠️ Socket connection failed, continuing without real-time features:",
-          //   connectError
-          // );
+          console.warn(
+            "⚠️ Socket connection failed, continuing without real-time features:",
+            connectError
+          );
         }
       } catch (error) {
-        // console.error("❌ Failed to initialize Socket.IO:", error);
+        console.error("❌ Failed to initialize Socket.IO:", error);
       }
     };
 
     initializeSocket();
 
     return () => {
-      isMounted = false;
-      if (currentSocketManager) {
-        try {
-          currentSocketManager.disconnect();
-        } catch (error) {
-          console.warn("⚠️ Error disconnecting socket on cleanup:", error);
-        }
-      }
-      // Also clean up the state reference
       if (socketManager) {
-        try {
-          socketManager.disconnect();
-        } catch (error) {
-          // Ignore errors during cleanup
-        }
+        socketManager.disconnect();
       }
     };
   }, []);
 
-  const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-  // User uploaded songs (current user only) - Only for MUSIC tab
-  const userUploadedSongs = useMemo(() => {
-    if (!(String(contentType) === "MUSIC" || String(contentType) === "music") || contentType === "ALL") {
-      return [] as MediaItem[];
-    }
-
-    const currentUserId = user?._id || (user as any)?.id || null;
-    if (!currentUserId) return [] as MediaItem[];
-
-    const query = (searchQuery || "").toLowerCase().trim();
-
-    const audioItems = (filteredMediaList || []).filter((item) => {
-      const ct = String(item.contentType || "").toLowerCase();
-      const isAudio = ct === "audio" || ct === "music";
-      const isCopyrightFree = ct === "copyright-free-music";
-      if (!isAudio || isCopyrightFree) return false;
-
-      const uploadedBy: any = (item as any).uploadedBy;
-      const uploaderId =
-        typeof uploadedBy === "string"
-          ? uploadedBy
-          : uploadedBy?._id || uploadedBy?.id;
-      if (!uploaderId) return false;
-      if (String(uploaderId) !== String(currentUserId)) return false;
-
-      if (!query) return true;
-      const title = String(item.title || "").toLowerCase();
-      const speaker = String((item as any).speaker || "").toLowerCase();
-      const displayName = String(getUserDisplayNameFromContent(item) || "").toLowerCase();
-      return title.includes(query) || speaker.includes(query) || displayName.includes(query);
-    });
-
-    return audioItems;
-  }, [contentType, filteredMediaList, user, searchQuery, getUserDisplayNameFromContent]);
-
-
-  const filteredHymns = useMemo(() => {
-    const q = hymnSearchQuery.trim().toLowerCase();
-    if (!q) return hymns || [];
-    return (hymns || []).filter((h) => {
-      const title = String(h.title || "").toLowerCase();
-      const author = String(h.author || "").toLowerCase();
-      const refs = String(h.refs || "").toLowerCase();
-      const meter = String(h.meter || "").toLowerCase();
-      return (
-        title.includes(q) ||
-        author.includes(q) ||
-        refs.includes(q) ||
-        meter.includes(q)
-      );
-    });
-  }, [hymns, hymnSearchQuery]);
 
   // Load content stats for all visible items so user-liked/bookmarked states persist
-  const mapContentTypeToBackend = useCallback((type?: string) => {
-    const normalized = (type || "").toLowerCase();
-    switch (normalized) {
-      case "sermon":
-      case "devotional":
-        return "devotional";
-      case "ebook":
-      case "e-books":
-      case "books":
-      case "image":
-        return "ebook";
-      case "music":
-      case "audio":
-      case "live":
-      case "video":
-      case "videos":
-      default:
-        return "media";
-    }
-  }, []);
-
-  // Track previous user state to detect login
-  const previousUserIdRef = useRef<string | null>(null);
-
-  // Refresh stats when user becomes authenticated (after login)
   useEffect(() => {
-    const currentUserId = user?._id || user?.id || null;
-    const previousUserId = previousUserIdRef.current;
+    const loadStatsForVisibleContent = async () => {
+      const items = filteredMediaList || [];
+      if (items.length === 0) return;
 
-    // If user just logged in (went from null/undefined to having an ID)
-    if (!previousUserId && currentUserId && filteredMediaList.length > 0) {
-      // console.log("🔄 User just logged in, refreshing interaction stats for visible content...");
-      // Refresh stats for currently visible content
-      // Refresh all stats after login (no arguments needed)
-      refreshAllStatsAfterLogin().catch((error) => {
-        // console.warn("⚠️ Failed to refresh stats after login:", error);
-      });
-    }
-
-    // Update ref for next comparison
-    previousUserIdRef.current = currentUserId;
-  }, [user, filteredMediaList, refreshAllStatsAfterLogin]);
-
-  // OPTIMIZED: Defer stats loading until after interactions complete (prevents blocking UI)
-  useEffect(() => {
-    let isMounted = true;
-    
-    const interactionHandle = InteractionManager.runAfterInteractions(() => {
-      const loadStatsForVisibleContent = async () => {
-        // Safety check
-        if (!isMounted) return;
-        
-        const items = filteredMediaList || [];
-        if (items.length === 0) return;
-
-        const groupedIds = items.reduce((acc, item) => {
+      // Prefer batch metadata when available
+      const ids = items.map((i) => i._id).filter(Boolean) as string[];
+      try {
+        await useInteractionStore
+          .getState()
+          .loadBatchContentStats(ids, "media");
+      } catch (e) {
+        for (const item of items) {
           const id = item?._id;
-          if (!id) return acc;
-          const backendType = mapContentTypeToBackend(item?.contentType);
-          if (!acc[backendType]) {
-            acc[backendType] = [];
-          }
-          acc[backendType].push(id);
-          return acc;
-        }, {} as Record<string, string[]>);
-
-        const store = useInteractionStore.getState();
-
-        for (const [backendType, ids] of Object.entries(groupedIds)) {
-          if (!isMounted) break; // Stop if unmounted
-          if (!ids?.length) continue;
+          const type = item?.contentType as any;
+          if (!id) continue;
           try {
-            await store.loadBatchContentStats(ids, backendType);
+            await loadContentStats(id, type);
           } catch (error) {
-            if (!isMounted) break;
-            console.warn(
-              `⚠️ Batch stats failed for type="${backendType}", falling back to per-item`,
-              error
-            );
-            for (const id of ids) {
-              if (!isMounted) break;
-              try {
-                await loadContentStats(id, backendType);
-              } catch (fallbackError) {
-                console.warn(
-                  `⚠️ Failed to load stats for ${backendType} ${id}:`,
-                  fallbackError
-                );
-              }
-            }
+            console.warn(`⚠️ Failed to load stats for ${type} ${id}:`, error);
           }
-        }
-      };
-
-      loadStatsForVisibleContent();
-    });
-
-    // Cleanup: cancel interaction handle if component unmounts
-    return () => {
-      isMounted = false;
-      interactionHandle.cancel();
-    };
-  }, [filteredMediaList, loadContentStats, mapContentTypeToBackend]);
-
-  // OPTIMIZED: Defer persisted data loading to prevent blocking initial render
-  useEffect(() => {
-    let isMounted = true;
-    
-    const interactionHandle = InteractionManager.runAfterInteractions(() => {
-      const loadAllData = async () => {
-        // Safety check
-        if (!isMounted) return;
-        
-        // console.log("📱 AllContent: Loading persisted data...");
-        setIsLoadingContent(true);
-
-        try {
-          const [stats, viewed, libraryLoaded] = await Promise.all([
-            getPersistedStats(),
-            getViewed(),
-            libraryIsLoaded
-              ? Promise.resolve()
-              : loadSavedItems(),
-          ]);
-
-          if (!isMounted) return;
-
-          setPreviouslyViewed(viewed || []);
-          
-          // Load persisted likes and merge with backend state
-          if (mediaList.length > 0 && isMounted) {
-            try {
-              const userId = await getUserId();
-              if (!isMounted) return;
-              
-              const persistedFavorites = await getUserFavorites(userId);
-              if (!isMounted) return;
-              
-              // Merge persisted likes into contentStats
-              const store = useInteractionStore.getState();
-              for (const item of mediaList) {
-                if (!isMounted) break;
-                const contentId = item._id || getContentKey(item);
-                if (persistedFavorites[contentId]) {
-                  // Update store with persisted like state
-                  store.mutateStats(contentId, (s) => ({
-                    userInteractions: {
-                      ...s.userInteractions,
-                      liked: true, // Persisted state takes priority
-                    },
-                  }));
-                }
-              }
-              
-              if (isMounted) {
-                console.log(
-                  `✅ AllContent: Loaded ${
-                    mediaList.length
-                  } media items, ${Object.keys(stats || {}).length} stats, and ${Object.keys(persistedFavorites).length} persisted likes`
-                );
-              }
-            } catch (persistError) {
-              if (isMounted) {
-                console.warn("⚠️ Failed to load persisted likes:", persistError);
-              }
-            }
-          }
-        } catch (error) {
-          if (isMounted) {
-            console.error("❌ Error loading AllContent data:", error);
-          }
-        } finally {
-          if (isMounted) {
-            setIsLoadingContent(false);
-            // Mark content as ready after loading completes
-            isContentReadyRef.current = true;
-          }
-        }
-      };
-
-      if (mediaList.length > 0) {
-        loadAllData();
-      } else {
-        if (isMounted) {
-          setIsLoadingContent(false);
-          // Mark as ready even if no content (prevents blocking)
-          isContentReadyRef.current = true;
         }
       }
-    });
-
-    // Cleanup: cancel interaction handle if component unmounts
-    return () => {
-      isMounted = false;
-      interactionHandle.cancel();
     };
-  }, [mediaList.length, libraryIsLoaded, loadSavedItems]);
 
-  // Helper functions to get interaction state - merge persisted and backend state
-  // Synchronous version for immediate UI updates (persisted state is loaded on mount)
-  const getUserLikeState = useCallback((contentId: string): boolean => {
-    // Check backend state (which should have persisted state merged on mount)
+    loadStatsForVisibleContent();
+  }, [filteredMediaList, loadContentStats]);
+
+  // Load persisted data
+  useEffect(() => {
+    const loadAllData = async () => {
+      console.log("📱 AllContent: Loading persisted data...");
+      setIsLoadingContent(true);
+
+      try {
+        const [stats, viewed, libraryLoaded] = await Promise.all([
+          getPersistedStats(),
+          getViewed(),
+          libraryStore.isLoaded
+            ? Promise.resolve()
+            : libraryStore.loadSavedItems(),
+        ]);
+
+        setPreviouslyViewed(viewed || []);
+        console.log(
+          `✅ AllContent: Loaded ${
+            mediaList.length
+          } media items and stats for ${Object.keys(stats || {}).length} items`
+        );
+      } catch (error) {
+        console.error("❌ Error loading AllContent data:", error);
+      } finally {
+        setIsLoadingContent(false);
+      }
+    };
+
+    if (mediaList.length > 0) {
+      loadAllData();
+    } else {
+      setIsLoadingContent(false);
+    }
+  }, [mediaList.length]);
+
+  // Helper functions to get interaction state from backend
+  const getUserLikeState = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.userInteractions?.liked || false;
-  }, [contentStats]);
+  };
 
-  // OPTIMIZED: Memoize helper functions to prevent recreation
-  const getLikeCount = useCallback((contentId: string) => {
+  const getLikeCount = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.likes || 0;
-  }, [contentStats]);
+  };
 
-  const getUserSaveState = useCallback((contentId: string) => {
+  const getUserSaveState = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.userInteractions?.saved || false;
-  }, [contentStats]);
+  };
 
-  const getSaveCount = useCallback((contentId: string) => {
+  const getSaveCount = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.saves || 0;
-  }, [contentStats]);
+  };
 
-  const getCommentCount = useCallback((contentId: string) => {
+  const getCommentCount = (contentId: string) => {
     const stats = contentStats[contentId];
     return stats?.comments || 0;
-  }, [contentStats]);
+  };
 
   // Audio playback functions
   const playAudio = async (uri: string, id: string) => {
-    // Safety check: Don't proceed if component is unmounted
-    if (!isMountedRef.current) {
-      return;
-    }
-
     if (!uri || uri.trim() === "") {
       console.warn("🚨 Audio URI is empty or invalid:", { uri, id });
       return;
     }
 
     if (isLoadingAudio) {
-      // console.log("🚨 Audio is already loading, skipping...");
+      console.log("🚨 Audio is already loading, skipping...");
       return;
     }
 
     if (!uri.startsWith("http://") && !uri.startsWith("https://")) {
-      // console.warn("🚨 Audio URI is not a valid HTTP/HTTPS URL:", { uri, id });
+      console.warn("🚨 Audio URI is not a valid HTTP/HTTPS URL:", { uri, id });
       return;
     }
 
-    // console.log(`🎵 Playing audio "${id}":`, {
-    //   audioUri: uri,
-    //   id,
-    //   uriLength: uri.length,
-    // });
+    console.log(`🎵 Playing audio "${id}":`, {
+      audioUri: uri,
+      id,
+      uriLength: uri.length,
+    });
 
     setIsLoadingAudio(true);
-    const audioManager = GlobalAudioInstanceManager.getInstance();
-    const { setCurrentAudio } = useCurrentPlayingAudioStore.getState();
 
     try {
-      // Safety check before proceeding
-      if (!isMountedRef.current) {
-        setIsLoadingAudio(false);
-        return;
-      }
-
       playMedia(id, "audio");
 
-      // Find the media item for this audio
-      const mediaItem = filteredMediaList.find((item) => item._id === id);
-
-      // Check if this audio is already playing
-      if (audioManager.isPlaying(id)) {
-        // If playing, pause it
-        await audioManager.pauseAudio(id);
-        setPlayingAudioId(null);
-        setCurrentAudio(null, null);
-        setIsLoadingAudio(false);
-        return;
-      }
-
-      // Check if there's an existing sound instance
-      let sound = audioManager.getAudioInstance(id);
-      const resumePos = pausedAudioMap[id] ?? 0;
-
-      // If sound exists, check if it's still valid
-      if (sound) {
+      if (playingAudioId && playingAudioId !== id && soundMap[playingAudioId]) {
         try {
-          const status = await sound.getStatusAsync();
-          if (!status.isLoaded) {
-            // Sound exists but is not loaded, unload it first
-            try {
-              await sound.unloadAsync();
-            } catch {}
-            sound = undefined;
-          }
-        } catch (error) {
-          // Sound instance is invalid, clear it
-          console.warn("⚠️ Existing sound instance is invalid, creating new one");
-          sound = undefined;
-        }
-      }
-
-      if (!sound) {
-        // Clean up any old instance in our local map
-        if (soundMap[id]) {
-          try {
-            const oldSound = soundMap[id];
-            const status = await oldSound.getStatusAsync();
+          const currentSound = soundMap[playingAudioId];
+          if (currentSound) {
+            const status = await currentSound.getStatusAsync();
             if (status.isLoaded) {
-              await oldSound.stopAsync();
-              await oldSound.unloadAsync();
-            }
-          } catch (error) {
-            // Ignore errors
-          }
-          setSoundMap((prev) => {
-            const updated = { ...prev };
-            delete updated[id];
-            return updated;
-          });
-        }
-
-        // Create new sound instance
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri },
-          {
-            shouldPlay: false, // Don't auto-play, let manager handle it
-            isMuted: audioMuteMap[id] ?? false,
-            positionMillis: resumePos,
-          }
-        );
-        sound = newSound;
-        audioManager.registerAudio(id, sound);
-        setSoundMap((prev) => ({ ...prev, [id]: sound! }));
-        
-        // Wait for sound to be loaded
-        let loaded = false;
-        let attempts = 0;
-        while (!loaded && attempts < 10) {
-          const status = await sound.getStatusAsync();
-          if (status.isLoaded) {
-            loaded = true;
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-          }
-        }
-        
-        if (!loaded) {
-          throw new Error("Sound failed to load");
-        }
-      } else {
-        // Resume from paused position if needed
-        try {
-          const status = await sound.getStatusAsync();
-          if (status.isLoaded) {
-            if (resumePos > 0) {
-              await sound.setPositionAsync(resumePos);
+              await currentSound.pauseAsync();
+              setPausedAudioMap((prev) => ({
+                ...prev,
+                [playingAudioId]: status.positionMillis ?? 0,
+              }));
             }
           }
         } catch (error) {
-          console.warn("⚠️ Error setting position:", error);
+          console.warn("⚠️ Error pausing current audio:", error);
         }
       }
 
-      // Use global manager to play (this will stop all other audio)
-      await audioManager.playAudio(id, sound, true);
-      setPlayingAudioId(id);
-      
-      // Set current playing audio in store for mini player
-      if (mediaItem) {
-        // console.log("🎵 Setting current audio in store:", {
-        //   id: id,
-        //   title: mediaItem.title,
-        //   audioId: id,
-        // });
-        setCurrentAudio(mediaItem, id);
-      } else {
-        // console.warn("⚠️ MediaItem not found for audio ID:", id);
+      const existing = soundMap[id];
+      if (existing) {
+        try {
+          const status = await existing.getStatusAsync();
+          if (status.isLoaded) {
+            if (status.isPlaying) {
+              const pos = status.positionMillis ?? 0;
+              await existing.pauseAsync();
+              setPausedAudioMap((prev) => ({ ...prev, [id]: pos }));
+              setPlayingAudioId(null);
+            } else {
+              const resumePos = pausedAudioMap[id] ?? 0;
+              await existing.playFromPositionAsync(resumePos);
+              setPlayingAudioId(id);
+            }
+            setIsLoadingAudio(false);
+            return;
+          }
+        } catch (error) {
+          console.warn("⚠️ Error with existing sound:", error);
+        }
       }
 
-      // Get initial status for duration/progress
+      const resumePos = pausedAudioMap[id] ?? 0;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        {
+          shouldPlay: true,
+          isMuted: audioMuteMap[id] ?? false,
+          positionMillis: resumePos,
+        }
+      );
+
+      setSoundMap((prev) => ({ ...prev, [id]: sound }));
+      setPlayingAudioId(id);
+
       const initial = await sound.getStatusAsync();
       if (initial.isLoaded && typeof initial.durationMillis === "number") {
         const safeDur = initial.durationMillis || 1;
-        const currentPos = initial.positionMillis || 0;
         setAudioDurationMap((prev) => ({ ...prev, [id]: safeDur }));
         setAudioProgressMap((prev) => ({
           ...prev,
-          [id]: currentPos / safeDur,
+          [id]: (resumePos || 0) / safeDur,
         }));
       }
 
-      // Set up playback status updates
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (!status.isLoaded || typeof status.durationMillis !== "number")
           return;
         const safeDur = status.durationMillis || 1;
-        const currentPos = status.positionMillis || 0;
         setAudioProgressMap((prev) => ({
           ...prev,
-          [id]: currentPos / safeDur,
+          [id]: (status.positionMillis || 0) / safeDur,
         }));
         setAudioDurationMap((prev) => ({ ...prev, [id]: safeDur }));
 
-        // Save paused position
-        if (status.isLoaded && !status.isPlaying && currentPos > 0) {
-          setPausedAudioMap((prev) => ({ ...prev, [id]: currentPos }));
-        }
-
-        // Handle playback completion
         if (status.didJustFinish) {
           try {
-            await audioManager.unregisterAudio(id);
-            setSoundMap((prev) => {
-              const u = { ...prev };
-              delete u[id];
-              return u;
-            });
-            setPlayingAudioId((curr) => (curr === id ? null : curr));
-            setPausedAudioMap((prev) => ({ ...prev, [id]: 0 }));
-            setAudioProgressMap((prev) => ({ ...prev, [id]: 0 }));
-            // Clear current audio in store
-            setCurrentAudio(null, null);
-          } catch (error) {
-            console.warn("⚠️ Error cleaning up audio:", error);
-          }
+            await sound.unloadAsync();
+          } catch {}
+          setSoundMap((prev) => {
+            const u = { ...prev };
+            delete u[id];
+            return u;
+          });
+          setPlayingAudioId((curr) => (curr === id ? null : curr));
+          setPausedAudioMap((prev) => ({ ...prev, [id]: 0 }));
+          setAudioProgressMap((prev) => ({ ...prev, [id]: 0 }));
         }
       });
     } catch (err) {
       console.error("❌ Audio playback error:", err);
-      // Only update state if component is still mounted
-      if (isMountedRef.current) {
-        setPlayingAudioId(null);
-        setCurrentAudio(null, null);
-        try {
-          await audioManager.unregisterAudio(id);
-        } catch {}
-        setSoundMap((prev) => {
-          const updated = { ...prev };
-          delete updated[id];
-          return updated;
-        });
-      }
+      setPlayingAudioId(null);
+      setSoundMap((prev) => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
     } finally {
-      if (isMountedRef.current) {
-        setIsLoadingAudio(false);
-      }
+      setIsLoadingAudio(false);
     }
   };
 
   const pauseAllAudio = useCallback(async () => {
     try {
-      const audioManager = GlobalAudioInstanceManager.getInstance();
-      await audioManager.stopAllAudio();
+      const ids = Object.keys(soundMap);
+      for (const id of ids) {
+        const snd = soundMap[id];
+        if (snd) {
+          try {
+            const status = await snd.getStatusAsync();
+            if (status.isLoaded) {
+              await snd.pauseAsync();
+            }
+          } catch (error) {
+            console.warn(`⚠️ Error pausing audio ${id}:`, error);
+          }
+        }
+      }
       setPlayingAudioId(null);
     } catch (error) {
       console.warn("⚠️ Error in pauseAllAudio:", error);
     }
-  }, []);
+  }, [soundMap]);
+
+  // ✅ Pause both videos and audio for scroll autopause functionality
+  const pauseAllMedia = useCallback(() => {
+    globalVideoStore.pauseAllVideos();
+    pauseAllAudio();
+  }, [globalVideoStore, pauseAllAudio]);
 
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
 
-  // OPTIMIZED: Memoize download handler
-  const handleDownloadPress = useCallback(async (item: MediaItem) => {
+  const handleDownloadPress = async (item: MediaItem) => {
     const downloadableItem = convertToDownloadableItem(
       item,
       item.contentType as "video" | "audio" | "ebook"
@@ -1051,7 +616,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       setShowSuccessCard(true);
       await loadDownloadedItems();
     }
-  }, [handleDownload, loadDownloadedItems]);
+  };
 
   // Event handlers
   const handleRefresh = useCallback(async () => {
@@ -1078,7 +643,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         return "Unknown";
       };
       if (video && index !== undefined) {
-        devLog.log(`📱 Video tapped to navigate to reels: ${video.title}`);
+        console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
         navigateToReels({
           video: video as any,
           index,
@@ -1099,26 +664,30 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       contentStats,
       getContentKey,
       getTimeAgo,
-      contentType,
     ]
   );
 
+  /**
+   * Handle like with optimistic update
+   * The toggleLike from store already handles optimistic updates and rollback automatically
+   * Socket errors are non-blocking and won't affect the optimistic update flow
+   */
   const handleLike = useCallback(
     async (contentId: string, contentType: string) => {
+      // Send real-time update via socket if available (non-blocking, fire-and-forget)
+      // This is sent before the HTTP API call and won't block or affect optimistic updates
+      if (socketManager?.isConnected()) {
+        // Socket sendLike is now wrapped with try-catch internally and won't throw
+        // Even if it fails, HTTP API will handle the like properly
+        socketManager.sendLike(contentId, "media");
+      }
+      
       try {
-        if (socketManager && socketManager.isConnected()) {
-          try {
-            socketManager.sendLike(contentId, "media");
-          } catch (socketError) {
-            console.warn(
-              "⚠️ Real-time like failed, continuing with API call:",
-              socketError
-            );
-          }
-        }
+        // Store handles optimistic update immediately, then API call, then rollback on error
         await toggleLike(contentId, contentType);
       } catch (error) {
         console.error("❌ Like error:", error);
+        // Store automatically handles rollback on error - optimistic update is reverted
       }
     },
     [socketManager, toggleLike]
@@ -1126,10 +695,39 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const handleComment = useCallback(
     (key: string, item: MediaItem) => {
-      devLog.log("🔄 Comment button clicked for content:", item.title);
+      console.log("🔄 Comment button clicked for content:", item.title);
       const contentId = item._id || key;
-      // Open modal with empty array - backend will load comments immediately
-      showCommentModal([], contentId);
+      // Create mock comments like in Reels component
+      const mockComments = [
+        {
+          id: "1",
+          userName: "John Doe",
+          avatar: "",
+          timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+          comment: "Great content! Really enjoyed this.",
+          likes: 5,
+          isLiked: false,
+        },
+        {
+          id: "2",
+          userName: "Jane Smith",
+          avatar: "",
+          timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+          comment: "Amazing! Thanks for sharing.",
+          likes: 3,
+          isLiked: true,
+        },
+        {
+          id: "3",
+          userName: "Mike Johnson",
+          avatar: "",
+          timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+          comment: "This is exactly what I needed!",
+          likes: 1,
+          isLiked: false,
+        },
+      ];
+      showCommentModal(mockComments, contentId);
     },
     [showCommentModal]
   );
@@ -1139,58 +737,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        const stats = contentStats[contentId];
-        const fallbackOptions = {
-          initialSaves:
-            stats?.saves ??
-            getSaveCount(contentId) ??
-            item.saves ??
-            item.saved ??
-            (item as any)?.bookmarkCount ??
-            0,
-          initialLikes:
-            stats?.likes ??
-            getLikeCount(contentId) ??
-            item.likeCount ??
-            item.totalLikes ??
-            item.likes ??
-            item.favorite ??
-            0,
-          initialComments:
-            stats?.comments ??
-            getCommentCount(contentId) ??
-            item.commentCount ??
-            item.comments ??
-            item.comment ??
-            0,
-          initialViews:
-            stats?.views ??
-            item.viewCount ??
-            item.totalViews ??
-            item.views ??
-            0,
-          initialShares:
-            stats?.shares ??
-            item.shareCount ??
-            item.totalShares ??
-            item.shares ??
-            0,
-          initialLiked:
-            stats?.userInteractions?.liked ??
-            getUserLikeState(contentId) ??
-            false,
-          initialShared:
-            stats?.userInteractions?.shared ?? false,
-          initialViewed:
-            stats?.userInteractions?.viewed ?? false,
-          initialSaved:
-            stats?.userInteractions?.saved ??
-            getUserSaveState(contentId) ??
-            false,
-        };
-        const result = await toggleSave(contentId, contentType, fallbackOptions);
+        await toggleSave(contentId, contentType);
 
-        if (result?.saved) {
+        const isSaved = getUserSaveState(contentId);
+        if (!isSaved) {
           const libraryItem = {
             id: contentId,
             contentType: item.contentType || "content",
@@ -1221,11 +771,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             })(),
             originalKey: key,
           };
-          await addToLibrary(libraryItem);
+          await libraryStore.addToLibrary(libraryItem);
           setSuccessMessage("Saved to library!");
           setShowSuccessCard(true);
         } else {
-          await removeFromLibrary(contentId);
+          await libraryStore.removeFromLibrary(contentId);
           setSuccessMessage("Removed from library!");
           setShowSuccessCard(true);
         }
@@ -1234,7 +784,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
       setModalVisible(null);
     },
-    [toggleSave, getLikeCount, getCommentCount, addToLibrary, removeFromLibrary]
+    [toggleSave, getUserSaveState, getLikeCount, getCommentCount, libraryStore]
   );
 
   const handleShare = useCallback(async (key: string, item: MediaItem) => {
@@ -1269,22 +819,25 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [handleLike]
   );
 
-  // OPTIMIZED: Memoize toggle functions to prevent unnecessary re-renders
-  const toggleVideoMute = useCallback((key: string) => {
-    toggleVideoMuteAction(key);
-  }, [toggleVideoMuteAction]);
+  const toggleVideoMute = (key: string) =>
+    globalVideoStore.toggleVideoMute(key);
 
   const togglePlay = useCallback((key: string) => {
-    // ✅ CRITICAL: Play video FIRST (imperative, immediate), then update state
-    // This ensures video starts playing immediately without waiting for re-renders
-    playMedia(key, "video");
+    console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
     
-    // Update visible video state AFTER play (non-blocking)
-    // Use setTimeout to ensure play happens first
-    setTimeout(() => {
-      setCurrentlyVisibleVideo(key);
-    }, 0);
-  }, [playMedia]);
+    // Find the media item to determine if it's audio or video
+    const mediaItem = filteredMediaList.find((item) => getContentKey(item) === key);
+    const isAudio = mediaItem?.contentType === "audio" || mediaItem?.contentType === "sermon";
+    
+    // Clear any autoplay state and play the media immediately
+    setCurrentlyVisibleVideo(key);
+
+    // ✅ Use unified media store for consistent playback (handles both video and audio)
+    // This ensures audio pauses video and video pauses audio
+    playMedia(key, isAudio ? "audio" : "video");
+
+    console.log(`✅ ${isAudio ? "Audio" : "Video"} play request sent for key:`, key);
+  }, [filteredMediaList, getContentKey, playMedia]);
 
   // Handle video visibility changes during scroll for autoplay
   const handleVideoVisibilityChange = useCallback(
@@ -1390,9 +943,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         );
         if (!item || !item.fileUrl) return; // do not jump
 
-        // console.log(
-        //   `🎬 Scroll autoplay → ${targetKey} (center-preferred) (dir: ${scrollDirection})`
-        // );
+        console.log(
+          `🎬 Scroll autoplay → ${targetKey} (center-preferred) (dir: ${scrollDirection})`
+        );
         pauseAllMedia();
         setCurrentlyVisibleVideo(targetKey);
         playMedia(targetKey, "video");
@@ -1403,7 +956,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       // If nothing meets threshold and current is mostly out of view, pause
       if (!bestKey || bestRatio < PAUSE_THRESHOLD) {
         if (currentlyVisibleVideo) {
-          // console.log("⏸️ Pausing – no sufficiently visible video");
+          console.log("⏸️ Pausing – no sufficiently visible video");
           pauseAllMedia();
           setCurrentlyVisibleVideo(null);
         }
@@ -1418,231 +971,148 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     ]
   );
 
-  // Infinite scroll handler - load more when near bottom (like Instagram/TikTok)
-  const handleLoadMore = useCallback(async () => {
-    if (!isMountedRef.current || loading || !hasMorePages || !loadMoreAllContent) {
-      return;
-    }
-
-    try {
-      await loadMoreAllContent();
-    } catch (error) {
-      console.warn("⚠️ Error loading more content:", error);
-    }
-  }, [loading, hasMorePages, loadMoreAllContent]);
-
-  // Enhanced scroll behavior with auto-pause functionality and infinite scroll
+  // Enhanced scroll behavior with auto-pause functionality
   const handleScroll = useCallback(
     (event: any) => {
-      // Safety check: Don't process if component is unmounted
-      if (!isMountedRef.current) {
-        return;
+      const { contentOffset } = event.nativeEvent;
+      const scrollY = contentOffset.y;
+      lastScrollYRef.current = scrollY;
+
+      // Set scrolling state
+      setIsScrolling(true);
+
+      // Clear existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
 
-      try {
-        // Safety check for event structure - allow scroll even if content isn't ready
-        if (!event?.nativeEvent?.contentOffset) {
-          return;
-        }
+      // Set timeout to detect when scrolling stops (shorter delay for responsiveness)
+      scrollTimeoutRef.current = setTimeout(() => {
+        setIsScrolling(false);
+        // Manual video play is still allowed during and after scrolling
+      }, 100) as any; // Reduced to 100ms for better responsiveness
 
-        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-        const scrollY = contentOffset.y;
+      // Real-time video control during scrolling
+      handleVideoVisibilityChange(scrollY);
+
+      // Enhanced auto-pause logic for all media types
+      const screenHeight = Dimensions.get("window").height;
+      const viewportTop = scrollY;
+      const viewportBottom = scrollY + screenHeight;
+
+      const viewportCenter = (viewportTop + viewportBottom) / 2;
+
+      // ✅ Enhanced auto-pause: Check ALL playing videos (including those not yet in layout)
+      // This ensures most recent videos are also paused when scrolled past
+      const allPlayingVideoKeys = Object.keys(playingVideos).filter(
+        (key) => playingVideos[key] === true
+      );
+      
+      // Also check the global currentlyPlayingVideo
+      if (currentlyPlayingVideo && !allPlayingVideoKeys.includes(currentlyPlayingVideo)) {
+        allPlayingVideoKeys.push(currentlyPlayingVideo);
+      }
+
+      // Track if we need to pause any video
+      let shouldPauseAnyVideo = false;
+
+      // Check each playing video
+      allPlayingVideoKeys.forEach((key) => {
+        const layout = contentLayoutsRef.current[key];
         
-        // Validate scrollY is a number
-        if (typeof scrollY !== 'number' || isNaN(scrollY) || scrollY < 0) {
-          return;
-        }
+        // If layout exists, check visibility
+        if (layout && layout.type === "video") {
+          const videoTop = layout.y;
+          const videoBottom = layout.y + layout.height;
 
-        lastScrollYRef.current = scrollY;
+          // Calculate visibility ratio
+          const intersectionTop = Math.max(viewportTop, videoTop);
+          const intersectionBottom = Math.min(viewportBottom, videoBottom);
+          const visibleHeight = Math.max(
+            0,
+            intersectionBottom - intersectionTop
+          );
+          const visibilityRatio =
+            layout.height > 0 ? visibleHeight / layout.height : 0;
 
-        // Infinite scroll: Load more when user scrolls within 500px of bottom (like Instagram/TikTok)
-        if (hasMorePages && loadMoreAllContent && !loading) {
-          const distanceFromBottom = contentSize.height - (scrollY + layoutMeasurement.height);
-          if (distanceFromBottom < 500) {
-            // Load more content when within 500px of bottom
-            handleLoadMore();
-          }
-        }
+          // ✅ More aggressive pause: less than 30% visible OR completely out of view
+          const isCompletelyOutOfView =
+            videoBottom < viewportTop || videoTop > viewportBottom;
+          const shouldPause = visibilityRatio < 0.3 || isCompletelyOutOfView;
 
-        // Set scrolling state (lightweight operation)
-        setIsScrolling(true);
+          if (shouldPause && isVideoPlaying(key)) {
+            console.log(
+              `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
+                visibilityRatio * 100
+              ).toFixed(1)}%, out of view: ${isCompletelyOutOfView}`
+            );
+            shouldPauseAnyVideo = true;
 
-        // Clear existing timeout
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
-          scrollTimeoutRef.current = null;
-        }
-
-        // Set timeout to detect when scrolling stops
-        scrollTimeoutRef.current = setTimeout(() => {
-          setIsScrolling(false);
-        }, 150) as any;
-
-        // Early return if no content - skip heavy processing but allow scroll
-        // Don't block on loading if we have cached content
-        if (filteredMediaList.length === 0) {
-          return;
-        }
-
-        // Early return if no content layouts yet (prevents hangs during initial render)
-        const layoutsCount = Object.keys(contentLayoutsRef.current).length;
-        if (layoutsCount === 0) {
-          return;
-        }
-
-        // Cancel any pending animation frame to prevent accumulation
-        if (scrollAnimationFrameRef.current !== null) {
-          cancelAnimationFrame(scrollAnimationFrameRef.current);
-          scrollAnimationFrameRef.current = null;
-        }
-
-        // Defer heavy operations to prevent blocking scroll
-        // Use requestAnimationFrame with cancellation to prevent accumulation
-        scrollAnimationFrameRef.current = requestAnimationFrame(() => {
-          // Safety check: Don't process if component is unmounted
-          if (!isMountedRef.current) {
-            scrollAnimationFrameRef.current = null;
-            return;
-          }
-
-          try {
-            // Double-check content is still ready - if not, skip processing but allow scroll
-            if (!isContentReadyRef.current || loading || layoutsCount === 0) {
-              scrollAnimationFrameRef.current = null;
-              return;
-            }
-
-            // Limit processing to prevent hangs - only process if there are playing items
-            const hasPlayingVideos = Object.values(playingVideos).some(v => v === true);
-            const hasPlayingAudio = playingAudioId !== null;
-
-            if (!hasPlayingVideos && !hasPlayingAudio) {
-              scrollAnimationFrameRef.current = null;
-              return;
-            }
-
-            try {
-              // Real-time video control during scrolling (lightweight check first)
-              if (hasPlayingVideos || currentlyVisibleVideo) {
-                handleVideoVisibilityChange(scrollY);
-              }
-            } catch (error) {
-              // console.warn("⚠️ Error in handleVideoVisibilityChange:", error);
-            }
-
-            // Enhanced auto-pause logic for all media types
-            const screenHeight = Dimensions.get("window").height;
-            const viewportTop = scrollY;
-            const viewportBottom = scrollY + screenHeight;
-
-            // Auto-pause videos that are scrolled out of view
-            try {
-              Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
-                if (!layout || typeof layout !== 'object') return;
-                
-                if (layout.type === "video") {
-                  const videoTop = layout.y;
-                  const videoBottom = layout.y + layout.height;
-
-                  // Calculate visibility ratio
-                  const intersectionTop = Math.max(viewportTop, videoTop);
-                  const intersectionBottom = Math.min(viewportBottom, videoBottom);
-                  const visibleHeight = Math.max(
-                    0,
-                    intersectionBottom - intersectionTop
-                  );
-                  const visibilityRatio =
-                    layout.height > 0 ? visibleHeight / layout.height : 0;
-
-                  // Auto-pause if video is less than 20% visible or completely out of view
-                  const shouldPause =
-                    visibilityRatio < 0.2 ||
-                    videoBottom < viewportTop ||
-                    videoTop > viewportBottom;
-
-                  if (shouldPause && isVideoPlaying(key)) {
-                    devLog.log(
-                      `🎬 Auto-pause: Pausing video ${key} - visibility: ${(
-                        visibilityRatio * 100
-                      ).toFixed(1)}%`
-                    );
-                    // Pause only this specific video, not all videos
-                    try {
-                      pauseMedia(key);
-                    } catch (error) {
-                      console.warn(`⚠️ Error pausing video ${key}:`, error);
-                    }
-
-                    // Remove from hovered videos if it was hover-based
-                    if (hoveredVideos.has(key)) {
-                      setHoveredVideos((prev) => {
-                        const newSet = new Set(prev);
-                        newSet.delete(key);
-                        return newSet;
-                      });
-                    }
-                  }
-                }
+            // Remove from hovered videos if it was hover-based
+            if (hoveredVideos.has(key)) {
+              setHoveredVideos((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(key);
+                return newSet;
               });
-            } catch (error) {
-              console.warn("⚠️ Error processing video layouts during scroll:", error);
             }
-
-            // Auto-pause audio/music that are scrolled out of view
-            try {
-              Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
-                if (!layout || typeof layout !== 'object') return;
-                
-                if (layout.type === "music") {
-                  const musicTop = layout.y;
-                  const musicBottom = layout.y + layout.height;
-
-                  // Calculate visibility ratio
-                  const intersectionTop = Math.max(viewportTop, musicTop);
-                  const intersectionBottom = Math.min(viewportBottom, musicBottom);
-                  const visibleHeight = Math.max(
-                    0,
-                    intersectionBottom - intersectionTop
-                  );
-                  const visibilityRatio =
-                    layout.height > 0 ? visibleHeight / layout.height : 0;
-
-                  // Auto-pause if music is less than 30% visible
-                  const shouldPause = visibilityRatio < 0.3;
-
-                  // Check both local audio state and global media store
-                  const isLocallyPlaying = playingAudioId === key;
-                  const isGloballyPlaying = playingVideos[key] || false;
-
-                  if (shouldPause && (isLocallyPlaying || isGloballyPlaying)) {
-                    devLog.log(
-                      `🎵 Auto-pause: Pausing music ${key} - visibility: ${(
-                        visibilityRatio * 100
-                      ).toFixed(1)}%`
-                    );
-                    // Pause both local and global audio
-                    try {
-                      pauseAllAudio();
-                      pauseMedia(key);
-                    } catch (error) {
-                      console.warn(`⚠️ Error pausing audio ${key}:`, error);
-                    }
-                  }
-                }
-              });
-            } catch (error) {
-              console.warn("⚠️ Error processing music layouts during scroll:", error);
-            }
-          } catch (error) {
-            console.warn("⚠️ Error in scroll animation frame:", error);
-          } finally {
-            scrollAnimationFrameRef.current = null;
           }
-        });
-      } catch (error) {
-        console.error("❌ Error in handleScroll:", error);
-        // Don't throw - allow scrolling to continue
+        } else if (isVideoPlaying(key)) {
+          // ✅ If video is playing but layout not tracked yet, check if we've scrolled significantly
+          // This catches most recent videos that haven't had their layout measured yet
+          const screenHeight = Dimensions.get("window").height;
+          
+          // If we've scrolled down more than 1.5 screen heights, we've likely scrolled past the video
+          // This is especially important for most recent videos at the top of the feed
+          if (scrollY > screenHeight * 1.5) {
+            console.log(
+              `🎬 Auto-pause: Pausing video ${key} - layout not tracked yet, scrolled past (scrollY: ${scrollY.toFixed(0)}, threshold: ${(screenHeight * 1.5).toFixed(0)})`
+            );
+            shouldPauseAnyVideo = true;
+          }
+        }
+      });
+
+      // ✅ Pause all media if any video should be paused
+      if (shouldPauseAnyVideo) {
+        pauseAllMedia();
       }
+
+      // Auto-pause audio/music that are scrolled out of view
+      Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+        if (layout.type === "music") {
+          const musicTop = layout.y;
+          const musicBottom = layout.y + layout.height;
+
+          // Calculate visibility ratio
+          const intersectionTop = Math.max(viewportTop, musicTop);
+          const intersectionBottom = Math.min(viewportBottom, musicBottom);
+          const visibleHeight = Math.max(
+            0,
+            intersectionBottom - intersectionTop
+          );
+          const visibilityRatio =
+            layout.height > 0 ? visibleHeight / layout.height : 0;
+
+          // Auto-pause if music is less than 30% visible
+          const shouldPause = visibilityRatio < 0.3;
+
+          // Check both local audio state and global media store
+          const isLocallyPlaying = playingAudioId === key;
+          const isGloballyPlaying = playingVideos[key] || false;
+
+          if (shouldPause && (isLocallyPlaying || isGloballyPlaying)) {
+            console.log(
+              `🎵 Auto-pause: Pausing music ${key} - visibility: ${(
+                visibilityRatio * 100
+              ).toFixed(1)}%`
+            );
+            // Pause both local and global audio
+            pauseAllAudio();
+            pauseMedia(key);
+          }
+        }
+      });
     },
     [
       handleVideoVisibilityChange,
@@ -1655,206 +1125,76 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       hoveredVideos,
       pauseAllMedia,
       pauseAllAudio,
-      loading,
-      filteredMediaList.length,
-      hasMorePages,
-      loadMoreAllContent,
-      handleLoadMore,
     ]
   );
 
-  // Cleanup scroll timeout and animation frame on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = null;
-      }
-      if (scrollAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(scrollAnimationFrameRef.current);
-        scrollAnimationFrameRef.current = null;
-      }
-      // Reset content ready flag
-      isContentReadyRef.current = false;
-    };
-  }, []);
-
-  // Mark content as ready immediately if we have content (from cache or fresh)
-  useEffect(() => {
-    if (filteredMediaList.length > 0) {
-      // Mark as ready immediately - no delay needed since cache loads synchronously
-      isContentReadyRef.current = true;
-    } else if (loading && filteredMediaList.length === 0) {
-      // Only mark as not ready if we're loading AND have no content
-      isContentReadyRef.current = false;
-    }
-  }, [loading, filteredMediaList.length, isLoadingContent]);
-
-  // Reset scroll state ONLY when contentType actually changes (category switch)
-  useEffect(() => {
-    // Only reset scroll if contentType actually changed (not on loading/data updates)
-    const contentTypeChanged = prevContentTypeRef.current !== contentType;
-    prevContentTypeRef.current = contentType;
-    
-    // Mark content as ready immediately if we have content (from cache or fresh)
-    isContentReadyRef.current = filteredMediaList.length > 0;
-    
-    // ONLY reset scroll position when category actually changes, not on data updates
-    if (contentTypeChanged && scrollViewRef.current) {
-      // Small delay to ensure component is ready
-      const timer = setTimeout(() => {
-        try {
-          scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-        } catch (error) {
-          // Ignore scroll errors during navigation
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-
-    // Clear any pending scroll operations
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = null;
-    }
-    if (scrollAnimationFrameRef.current !== null) {
-      cancelAnimationFrame(scrollAnimationFrameRef.current);
-      scrollAnimationFrameRef.current = null;
-    }
-  }, [contentType]); // Only depend on contentType - don't reset on loading/data changes!
-
-  // Reset scroll state when component gains focus (navigation back from reels, etc.)
-  // BUT only if we haven't already reset it (prevents resetting during normal interactions)
-  useFocusEffect(
-    useCallback(() => {
-      // Mark content as ready immediately if we have content (from cache or fresh)
-      isContentReadyRef.current = filteredMediaList.length > 0;
-      
-      // Only reset scroll position if we haven't already reset it in this focus session
-      // This prevents unwanted scroll resets when user is interacting with videos
-      if (!hasResetScrollOnFocusRef.current && scrollViewRef.current) {
-        hasResetScrollOnFocusRef.current = true;
-        // Small delay to ensure component is mounted
-        setTimeout(() => {
-          try {
-            scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-          } catch (error) {
-            // Ignore scroll errors during navigation
-          }
-        }, 50);
-      }
-
-      // Clear any pending scroll operations
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = null;
-      }
-      if (scrollAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(scrollAnimationFrameRef.current);
-        scrollAnimationFrameRef.current = null;
-      }
-
-      return () => {
-        // Reset flag when component loses focus so it can reset on next focus if needed
-        hasResetScrollOnFocusRef.current = false;
-        // Cleanup on blur
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
-          scrollTimeoutRef.current = null;
-        }
-        if (scrollAnimationFrameRef.current !== null) {
-          cancelAnimationFrame(scrollAnimationFrameRef.current);
-          scrollAnimationFrameRef.current = null;
-        }
-      };
-    }, [filteredMediaList.length]) // Only depend on content length, not loading states
-  );
-
   const handleScrollEnd = useCallback(() => {
-    try {
-      devLog.log("📱 Scroll ended, finalizing auto-pause cleanup");
-      const scrollY = lastScrollYRef.current;
-      const screenHeight = Dimensions.get("window").height;
-      const viewportTop = scrollY;
-      const viewportBottom = scrollY + screenHeight;
+    console.log("📱 Scroll ended, finalizing auto-pause cleanup");
+    const scrollY = lastScrollYRef.current;
+    const screenHeight = Dimensions.get("window").height;
+    const viewportTop = scrollY;
+    const viewportBottom = scrollY + screenHeight;
 
-      // Final cleanup for all media types when scrolling stops
-      try {
-        Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
-          if (!layout || typeof layout !== 'object') return;
-          
-          if (layout.type === "video") {
-            const videoTop = layout.y;
-            const videoBottom = layout.y + layout.height;
+    // Final cleanup for all media types when scrolling stops
+    Object.entries(contentLayoutsRef.current).forEach(([key, layout]) => {
+      if (layout.type === "video") {
+        const videoTop = layout.y;
+        const videoBottom = layout.y + layout.height;
 
-            // Calculate final visibility ratio
-            const intersectionTop = Math.max(viewportTop, videoTop);
-            const intersectionBottom = Math.min(viewportBottom, videoBottom);
-            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-            const visibilityRatio =
-              layout.height > 0 ? visibleHeight / layout.height : 0;
+        // Calculate final visibility ratio
+        const intersectionTop = Math.max(viewportTop, videoTop);
+        const intersectionBottom = Math.min(viewportBottom, videoBottom);
+        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const visibilityRatio =
+          layout.height > 0 ? visibleHeight / layout.height : 0;
 
-            // Final check: pause videos that are less than 20% visible
-            if (visibilityRatio < 0.2 && isVideoPlaying(key)) {
-              devLog.log(
-                `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
-                  visibilityRatio * 100
-                ).toFixed(1)}%`
-              );
-              // Pause only this specific video, not all videos
-              try {
-                pauseMedia(key);
-              } catch (error) {
-                console.warn(`⚠️ Error pausing video ${key} in handleScrollEnd:`, error);
-              }
+        // Final check: pause videos that are less than 20% visible
+        if (visibilityRatio < 0.2 && isVideoPlaying(key)) {
+          console.log(
+            `🎬 Final cleanup: Pausing video ${key} - visibility: ${(
+              visibilityRatio * 100
+            ).toFixed(1)}%`
+          );
+          pauseAllMedia();
 
-              // Remove from hovered videos
-              if (hoveredVideos.has(key)) {
-                setHoveredVideos((prev) => {
-                  const newSet = new Set(prev);
-                  newSet.delete(key);
-                  return newSet;
-                });
-              }
-            }
-          } else if (layout.type === "music") {
-            const musicTop = layout.y;
-            const musicBottom = layout.y + layout.height;
-
-            // Calculate final visibility ratio
-            const intersectionTop = Math.max(viewportTop, musicTop);
-            const intersectionBottom = Math.min(viewportBottom, musicBottom);
-            const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
-            const visibilityRatio =
-              layout.height > 0 ? visibleHeight / layout.height : 0;
-
-            // Check both local audio state and global media store
-            const isLocallyPlaying = playingAudioId === key;
-            const isGloballyPlaying = playingVideos[key] || false;
-
-            // Final check: pause music that is less than 30% visible
-            if (visibilityRatio < 0.3 && (isLocallyPlaying || isGloballyPlaying)) {
-              devLog.log(
-                `🎵 Final cleanup: Pausing music ${key} - visibility: ${(
-                  visibilityRatio * 100
-                ).toFixed(1)}%`
-              );
-              // Pause both local and global audio
-              try {
-                pauseAllAudio();
-                pauseMedia(key);
-              } catch (error) {
-                console.warn(`⚠️ Error pausing music ${key} in handleScrollEnd:`, error);
-              }
-            }
+          // Remove from hovered videos
+          if (hoveredVideos.has(key)) {
+            setHoveredVideos((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(key);
+              return newSet;
+            });
           }
-        });
-      } catch (error) {
-        console.warn("⚠️ Error in handleScrollEnd cleanup:", error);
+        }
+      } else if (layout.type === "music") {
+        const musicTop = layout.y;
+        const musicBottom = layout.y + layout.height;
+
+        // Calculate final visibility ratio
+        const intersectionTop = Math.max(viewportTop, musicTop);
+        const intersectionBottom = Math.min(viewportBottom, musicBottom);
+        const visibleHeight = Math.max(0, intersectionBottom - intersectionTop);
+        const visibilityRatio =
+          layout.height > 0 ? visibleHeight / layout.height : 0;
+
+        // Check both local audio state and global media store
+        const isLocallyPlaying = playingAudioId === key;
+        const isGloballyPlaying = playingVideos[key] || false;
+
+        // Final check: pause music that is less than 30% visible
+        if (visibilityRatio < 0.3 && (isLocallyPlaying || isGloballyPlaying)) {
+          console.log(
+            `🎵 Final cleanup: Pausing music ${key} - visibility: ${(
+              visibilityRatio * 100
+            ).toFixed(1)}%`
+          );
+          // Pause both local and global audio
+          pauseAllAudio();
+          pauseMedia(key);
+        }
       }
-    } catch (error) {
-      console.error("❌ Error in handleScrollEnd:", error);
-    }
+    });
+
     // Manual video play remains available after scrolling ends
   }, [
     playingAudioId,
@@ -1870,661 +1210,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       const { y, height } = event.nativeEvent.layout;
       contentLayoutsRef.current[key] = { y, height, type, uri };
 
+      console.log(
+        `📱 Layout tracked: ${key} (${type}) at y=${Math.round(
+          y
+        )}, height=${Math.round(height)}`
+      );
+
       // No automatic video start on layout - manual play still works
       // Videos will only play when user clicks the play button
     },
     [isAutoPlayEnabled, currentlyVisibleVideo, playMedia]
   );
 
-  // Discover weekly style cards data (using Jevah colors)
-  const discoverCards = [
-    {
-      id: "1",
-      title: "Discover Weekly",
-      description: "New copyright-free gospel music curated just for you.",
-      color: UI_CONFIG.COLORS.PRIMARY, // "#256E63"
-    },
-    {
-      id: "2",
-      title: "Featured Playlist",
-      description: "Most popular copyright-free songs everyone's listening to.",
-      color: UI_CONFIG.COLORS.SECONDARY, // "#FEA74E"
-    },
-  ];
-
-  // Fetch local hymns JSON; fallback to Hymnary sample (MVP) - Only for HYMS/HYMNS tab
-  useEffect(() => {
-    const fetchHymns = async () => {
-      try {
-        setLoadingHymns(true);
-        try {
-          const mod = await import("../../../assets/hymns.json");
-          const local = (mod as any).default as HymnItem[];
-          if (Array.isArray(local) && local.length) {
-            setHymns(local);
-            return;
-          }
-        } catch {}
-
-        // Fallback to external sample
-        try {
-          const res = await fetch(
-            "https://hymnary.org/api/scripture?reference=Psalm+136"
-          );
-          const json = await res.json();
-          const items = Object.values(json || {})
-            .slice(0, 10)
-            .map((h: any) => ({
-              id: h.title || Math.random().toString(36).slice(2),
-              title: h.title,
-              author: h.author || h.paraphraser || h.translator || "Unknown",
-              meter: h.meter,
-              refs: String(h["scripture references"] || "").trim(),
-            }));
-          setHymns(items as HymnItem[]);
-        } catch {}
-      } catch (e) {
-        console.warn("Hymnary fetch failed:", e);
-      } finally {
-        setLoadingHymns(false);
-      }
-    };
-    
-    // Only fetch hymns if in HYMS/HYMNS tab
-    if (isHymnsTab) {
-      // Reset search when switching into hymns tab
-      setHymnSearchQuery("");
-      fetchHymns();
-    }
-  }, [contentType, isHymnsTab]);
-
-  // Handle play/pause for a user-uploaded song (current user only)
-  const handlePlayPress = useCallback(
-    async (item: MediaItem) => {
-      const id = item._id || "";
-      const audioUrl = item.fileUrl || "";
-      if (!id || !audioUrl) return;
-      // `playAudio` already toggles pause if this id is currently playing.
-      await playAudio(audioUrl, id);
-    },
-    [playAudio]
-  );
-
-  // Format duration
-  const formatDuration = useCallback((seconds: number) => {
-    if (!seconds || isNaN(seconds)) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }, []);
-
-  // Format time in milliseconds
-  const formatTime = useCallback((milliseconds: number) => {
-    if (!milliseconds || isNaN(milliseconds)) return "0:00";
-    const seconds = Math.floor(milliseconds / 1000);
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }, []);
-
-  // Render Discover Weekly card
-  const renderDiscoverCard = useCallback(
-    (item: typeof discoverCards[0]) => (
-      <TouchableOpacity
-        key={item.id}
-        activeOpacity={0.9}
-        style={{
-          width: SCREEN_WIDTH - 64,
-          height: 180,
-          marginRight: 16,
-          borderRadius: 16,
-          overflow: "hidden",
-        }}
-      >
-        <LinearGradient
-          colors={[item.color, `${item.color}DD`]}
-          style={{ flex: 1, padding: 20, justifyContent: "space-between" }}
-        >
-          <View>
-            <Text
-              style={{
-                fontSize: 24,
-                fontWeight: "700",
-                color: "#FFFFFF",
-                fontFamily: "Rubik_700Bold",
-                marginBottom: 8,
-              }}
-            >
-              {item.title}
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#FFFFFFDD",
-                fontFamily: "Rubik_400Regular",
-              }}
-            >
-              {item.description}
-            </Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <TouchableOpacity
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons name="play" size={24} color={item.color} />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="download-outline" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    ),
-    [SCREEN_WIDTH]
-  );
-
-  // Format duration
-  const formatSongDuration = useCallback((seconds: number) => {
-    if (!seconds || isNaN(seconds)) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }, []);
-
-  // Render song in list view
-  const renderSongListItem = useCallback(
-    (item: MediaItem) => {
-      const id = item._id || (item as any).id || "";
-      const key = id || getContentKey(item);
-      const title = item.title || "Untitled";
-      const artist =
-        (item as any).speaker ||
-        getUserDisplayNameFromContent(item) ||
-        "Unknown Artist";
-      const duration = (item as any).duration || 0;
-      const thumbnailUrl: any =
-        (item as any).thumbnailUrl || (item as any).imageUrl || "";
-      const isPlaying = !!id && playingAudioId === id;
-      const thumbnailSource =
-        typeof thumbnailUrl === "string" && thumbnailUrl
-          ? { uri: thumbnailUrl }
-          : typeof thumbnailUrl === "object" && thumbnailUrl
-          ? thumbnailUrl
-          : undefined;
-
-      return (
-        <TouchableOpacity
-          key={key}
-          onPress={() => handlePlayPress(item)}
-          activeOpacity={0.7}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: UI_CONFIG.SPACING.MD,
-            paddingVertical: 12,
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              overflow: "hidden",
-              backgroundColor: "#E5E7EB",
-              marginRight: 12,
-            }}
-          >
-            {thumbnailSource ? (
-              <Image
-                source={thumbnailSource}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#9CA3AF",
-                }}
-              >
-                <Ionicons name="musical-notes" size={24} color="#FFFFFF" />
-              </View>
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: "#1D2939",
-                fontFamily: "Rubik_600SemiBold",
-                marginBottom: 4,
-              }}
-              numberOfLines={1}
-            >
-              {title}
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#98A2B3",
-                fontFamily: "Rubik_400Regular",
-              }}
-              numberOfLines={1}
-            >
-              By {artist} • {formatSongDuration(duration)}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              handlePlayPress(item);
-            }}
-            activeOpacity={0.7}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: isPlaying ? "#256E63" : "#F3F4F6",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Ionicons
-              name={isPlaying ? "pause" : "play"}
-              size={20}
-              color={isPlaying ? "#FFFFFF" : "#256E63"}
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      );
-    },
-    [playingAudioId, handlePlayPress, formatSongDuration]
-  );
-
-  // Render song in grid view
-  const renderSongGridItem = useCallback(
-    (item: MediaItem) => {
-      const id = item._id || (item as any).id || "";
-      const key = id || getContentKey(item);
-      const title = item.title || "Untitled";
-      const artist =
-        (item as any).speaker ||
-        getUserDisplayNameFromContent(item) ||
-        "Unknown Artist";
-      const thumbnailUrl: any =
-        (item as any).thumbnailUrl || (item as any).imageUrl || "";
-      const isPlaying = !!id && playingAudioId === id;
-      const thumbnailSource =
-        typeof thumbnailUrl === "string" && thumbnailUrl
-          ? { uri: thumbnailUrl }
-          : typeof thumbnailUrl === "object" && thumbnailUrl
-          ? thumbnailUrl
-          : undefined;
-      const cardWidth = (SCREEN_WIDTH - 48) / 2;
-
-      return (
-        <TouchableOpacity
-          key={key}
-          onPress={() => handlePlayPress(item)}
-          activeOpacity={0.9}
-          style={{
-            width: cardWidth,
-            marginBottom: 16,
-            marginHorizontal: 4,
-          }}
-        >
-          <View
-            style={{
-              width: "100%",
-              height: cardWidth,
-              borderRadius: 12,
-              overflow: "hidden",
-              backgroundColor: "#E5E7EB",
-              marginBottom: 8,
-            }}
-          >
-            {thumbnailSource ? (
-              <Image
-                source={thumbnailSource}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#9CA3AF",
-                }}
-              >
-                <Ionicons name="musical-notes" size={48} color="#FFFFFF" />
-              </View>
-            )}
-            <View
-              style={{
-                position: "absolute",
-                bottom: 8,
-                right: 8,
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={20}
-                color="#256E63"
-              />
-            </View>
-          </View>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#1D2939",
-              fontFamily: "Rubik_600SemiBold",
-              marginBottom: 4,
-            }}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              color: "#98A2B3",
-              fontFamily: "Rubik_400Regular",
-            }}
-            numberOfLines={1}
-          >
-            {artist}
-          </Text>
-        </TouchableOpacity>
-      );
-    },
-    [playingAudioId, handlePlayPress, SCREEN_WIDTH]
-  );
-
-  // Render song in small icons view
-  const renderSongSmallItem = useCallback(
-    (item: MediaItem) => {
-      const id = item._id || (item as any).id || "";
-      const key = id || getContentKey(item);
-      const title = item.title || "Untitled";
-      const thumbnailUrl: any =
-        (item as any).thumbnailUrl || (item as any).imageUrl || "";
-      const thumbnailSource =
-        typeof thumbnailUrl === "string" && thumbnailUrl
-          ? { uri: thumbnailUrl }
-          : typeof thumbnailUrl === "object" && thumbnailUrl
-          ? thumbnailUrl
-          : undefined;
-      const itemWidth = (SCREEN_WIDTH - 48) / 3;
-
-      return (
-        <TouchableOpacity
-          key={key}
-          onPress={() => handlePlayPress(item)}
-          activeOpacity={0.9}
-          style={{ width: itemWidth, marginBottom: 12, marginHorizontal: 4 }}
-        >
-          <View
-            style={{
-              width: "100%",
-              height: itemWidth,
-              borderRadius: 8,
-              overflow: "hidden",
-              backgroundColor: "#E5E7EB",
-              marginBottom: 6,
-            }}
-          >
-            {thumbnailSource ? (
-              <Image
-                source={thumbnailSource}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#9CA3AF",
-                }}
-              >
-                <Ionicons name="musical-notes" size={32} color="#FFFFFF" />
-              </View>
-            )}
-          </View>
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              color: "#1D2939",
-              fontFamily: "Rubik_600SemiBold",
-            }}
-            numberOfLines={2}
-          >
-            {title}
-          </Text>
-        </TouchableOpacity>
-      );
-    },
-    [handlePlayPress, SCREEN_WIDTH]
-  );
-
-  // Render song in large icons view
-  const renderSongLargeItem = useCallback(
-    (item: MediaItem) => {
-      const id = item._id || (item as any).id || "";
-      const key = id || getContentKey(item);
-      const title = item.title || "Untitled";
-      const artist =
-        (item as any).speaker ||
-        getUserDisplayNameFromContent(item) ||
-        "Unknown Artist";
-      const duration = (item as any).duration || 0;
-      const thumbnailUrl: any =
-        (item as any).thumbnailUrl || (item as any).imageUrl || "";
-      const isPlaying = !!id && playingAudioId === id;
-      const thumbnailSource =
-        typeof thumbnailUrl === "string" && thumbnailUrl
-          ? { uri: thumbnailUrl }
-          : typeof thumbnailUrl === "object" && thumbnailUrl
-          ? thumbnailUrl
-          : undefined;
-      const cardWidth = SCREEN_WIDTH - 32;
-
-      return (
-        <TouchableOpacity
-          key={key}
-          onPress={() => handlePlayPress(item)}
-          activeOpacity={0.9}
-          style={{ width: cardWidth, marginBottom: 20, marginHorizontal: 16 }}
-        >
-          <View
-            style={{
-              width: "100%",
-              height: cardWidth,
-              borderRadius: 16,
-              overflow: "hidden",
-              backgroundColor: "#E5E7EB",
-              marginBottom: 12,
-            }}
-          >
-            {thumbnailSource ? (
-              <Image
-                source={thumbnailSource}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#9CA3AF",
-                }}
-              >
-                <Ionicons name="musical-notes" size={64} color="#FFFFFF" />
-              </View>
-            )}
-            <View
-              style={{
-                position: "absolute",
-                bottom: 16,
-                right: 16,
-                width: 56,
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={28}
-                color="#256E63"
-              />
-            </View>
-          </View>
-          <View style={{ paddingHorizontal: 4 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#1D2939",
-                fontFamily: "Rubik_600SemiBold",
-                marginBottom: 4,
-              }}
-              numberOfLines={1}
-            >
-              {title}
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#98A2B3",
-                fontFamily: "Rubik_400Regular",
-              }}
-              numberOfLines={1}
-            >
-              By {artist} • {formatSongDuration(duration)}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      );
-    },
-    [playingAudioId, handlePlayPress, SCREEN_WIDTH, formatSongDuration]
-  );
-
-  // Render song based on display mode
-  const renderSongItem = useCallback(
-    (item: any) => {
-      switch (displayMode) {
-        case "list":
-          return renderSongListItem(item);
-        case "grid":
-          return renderSongGridItem(item);
-        case "small":
-          return renderSongSmallItem(item);
-        case "large":
-          return renderSongLargeItem(item);
-        default:
-          return renderSongListItem(item);
-      }
-    },
-    [displayMode, renderSongListItem, renderSongGridItem, renderSongSmallItem, renderSongLargeItem]
-  );
-
-  // Upcoming feature placeholder for Recommended Live
-  const renderRecommendedLiveCards = useCallback(() => {
-    return (
-      <View
-        style={{
-          paddingHorizontal: UI_CONFIG.SPACING.MD,
-          paddingVertical: UI_CONFIG.SPACING.XL,
-          backgroundColor: UI_CONFIG.COLORS.SURFACE || "#F9FAFB",
-          borderRadius: 12,
-          marginHorizontal: UI_CONFIG.SPACING.MD,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 1,
-          borderColor: UI_CONFIG.COLORS.BORDER || "#E5E7EB",
-          borderStyle: "dashed",
-        }}
-      >
-        <View
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: 32,
-            backgroundColor: UI_CONFIG.COLORS.PRIMARY || "#FEA74E",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: UI_CONFIG.SPACING.MD,
-          }}
-        >
-          <Ionicons name="radio" size={32} color="#FFFFFF" />
-        </View>
-        <Text
-          style={{
-            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-            fontWeight: "600",
-            color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-            marginBottom: UI_CONFIG.SPACING.SM,
-            textAlign: "center",
-          }}
-        >
-          Live Streaming Coming Soon
-        </Text>
-        <Text
-          style={{
-            fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-            color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-            textAlign: "center",
-            lineHeight: 20,
-            paddingHorizontal: UI_CONFIG.SPACING.MD,
-          }}
-        >
-          We're working on bringing you live streaming content. Stay tuned for updates!
-        </Text>
-      </View>
-    );
-  }, []);
-
-  // Handle media deletion
-  const handleDeleteMedia = useCallback((item: MediaItem) => {
-    if (item._id) {
-      setDeletedMediaIds(prev => new Set([...prev, item._id!]));
-      setSuccessMessage("Media deleted successfully");
-      setShowSuccessCard(true);
-    }
-  }, []);
 
   // Render content by type
   const renderContentByType = useCallback(
@@ -2564,7 +1261,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={handleSave}
               onDownload={handleDownloadPress}
               onShare={handleShare}
-              onDelete={handleDeleteMedia}
               onModalToggle={toggleModal}
               modalVisible={modalVisible}
               comments={comments}
@@ -2590,7 +1286,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
-              onDelete={handleDeleteMedia}
               onPlay={playAudio}
               isPlaying={playingAudioId === `music-${item._id || index}`}
               progress={audioProgressMap[`music-${item._id || index}`] || 0}
@@ -2612,7 +1307,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
-              onDelete={handleDeleteMedia}
               checkIfDownloaded={checkIfDownloaded}
             />
           );
@@ -2629,154 +1323,65 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               onSave={() => handleSave(key, item)}
               onShare={() => handleShare(key, item)}
               onDownload={() => handleDownloadPress(item)}
-              onDelete={handleDeleteMedia}
               checkIfDownloaded={checkIfDownloaded}
             />
           );
       }
     },
     [
-      // Helper functions (memoized)
+      getContentKey,
       getUserLikeState,
       getLikeCount,
-      // State values
       contentStats,
       playingVideos,
-      mutedVideos,
-      progresses,
-      showOverlay,
       videoVolume,
       currentlyVisibleVideo,
-      isAutoPlayEnabled,
-      modalVisible,
-      comments,
-      playingAudioId,
-      audioProgressMap,
-      // Handlers (memoized)
       handleVideoTap,
       handleFavorite,
       handleComment,
       handleSave,
       handleShare,
       handleDownloadPress,
-      handleDeleteMedia,
+      modalVisible,
+      comments,
       checkIfDownloaded,
-      playAudio,
-      togglePlay,
-      toggleVideoMute,
-      handleContentLayout,
-      toggleModal,
-      // Stable utility functions (imported, never change, but included for React exhaustive-deps compliance)
-      getContentKey,
       getTimeAgo,
       getUserDisplayNameFromContent,
       getUserAvatarFromContent,
+      playAudio,
+      playingAudioId,
+      audioProgressMap,
     ]
   );
 
-  // Cleanup on unmount - CRITICAL: Clean up all resources to prevent memory leaks
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      
-      // CRITICAL: Mark as unmounted immediately to prevent any new operations
-      // Execute synchronous cleanup first
-      try {
-        // Clean up scroll-related resources (synchronous)
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
-          scrollTimeoutRef.current = null;
-        }
-        if (scrollAnimationFrameRef.current !== null) {
-          cancelAnimationFrame(scrollAnimationFrameRef.current);
-          scrollAnimationFrameRef.current = null;
-        }
-      } catch (error) {
-        console.warn("⚠️ Error cleaning up scroll resources:", error);
-      }
-      
-      // Pause all media (synchronous)
       try {
         pauseAllMedia();
-        pauseAllAudio();
-      } catch (error) {
-        console.warn("⚠️ Error pausing media on unmount:", error);
-      }
-      
-      // Clean up socket connection (synchronous)
-      try {
-        if (socketManager) {
-          socketManager.disconnect();
-        }
-      } catch (error) {
-        console.warn("⚠️ Error disconnecting socket:", error);
-      }
-      
-      // Async cleanup (don't block unmount, but execute)
-      const asyncCleanup = async () => {
-        try {
-          // Clean up all audio instances
-          const audioManager = GlobalAudioInstanceManager.getInstance();
-          await audioManager.stopAllAudio();
-        } catch (error) {
-          console.warn("⚠️ Error stopping audio on unmount:", error);
-        }
-        
-        // Clean up sound map - FIXED: Use Promise.all instead of async forEach
-        try {
-          const currentSoundMap = soundMapRef.current || soundMap;
-          const cleanupPromises = Object.values(currentSoundMap).map(async (sound) => {
-            try {
-              if (sound) {
-                const status = await sound.getStatusAsync();
-                if (status.isLoaded) {
-                  await sound.stopAsync();
-                  await sound.unloadAsync();
-                }
-              }
-            } catch (error) {
-              // Ignore individual cleanup errors
-            }
-          });
-          // Wait for all cleanup operations to complete
-          await Promise.all(cleanupPromises);
-          setSoundMap({});
-        } catch (error) {
-          console.warn("⚠️ Error cleaning up sound map:", error);
-          // Still clear the map even if cleanup fails
-          setSoundMap({});
-        }
-      };
-      
-      // Execute async cleanup (don't await to avoid blocking unmount)
-      asyncCleanup().catch((error) => {
-        console.warn("⚠️ Error in async cleanup:", error);
-      });
+      } catch {}
     };
-  }, [pauseAllMedia, pauseAllAudio, soundMap, socketManager]);
+  }, []);
 
   // Pause all media when component loses focus
   useFocusEffect(
     useCallback(() => {
       return () => {
+        console.log("📱 Pausing all media on focus loss");
         try {
           pauseAllMedia();
         } catch {}
         setCurrentlyVisibleVideo(null);
         pauseAllAudio();
       };
-    }, [pauseAllMedia, pauseAllAudio])
+    }, [pauseAllAudio])
   );
 
   // Loading state
   if (loading && !hasContent) {
     return (
-      <ScrollView 
-        style={{ flex: 1 }} 
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={true}
-        nestedScrollEnabled={true}
-      >
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
           <View
             style={{
@@ -2856,171 +1461,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     );
   }
 
-  // For LIVE content type, only show the Recommended Live component
-  if (contentType === "live" || contentType === "LIVE") {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
-        {showSuccessCard && (
-          <SuccessCard
-            message={successMessage}
-            onClose={() => setShowSuccessCard(false)}
-            duration={3000}
-          />
-        )}
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingVertical: 40,
-            paddingHorizontal: 0,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          {renderRecommendedLiveCards()}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // HYMS/HYMNS category: show hymns only (and do not depend on media list)
-  if (isHymnsTab) {
-    return (
-      <ContentErrorBoundary>
-        <View style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
-          {showSuccessCard && (
-            <SuccessCard
-              message={successMessage}
-              onClose={() => setShowSuccessCard(false)}
-              duration={3000}
-            />
-          )}
-          <FlatList
-            data={filteredHymns}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingTop: UI_CONFIG.SPACING.LG,
-              paddingBottom: 24,
-              paddingHorizontal: UI_CONFIG.SPACING.MD,
-            }}
-            columnWrapperStyle={{
-              gap: 12,
-              marginBottom: 12,
-            }}
-            ListHeaderComponent={
-              <View style={{ marginBottom: 12 }}>
-                <Text
-                  style={{
-                    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                    fontWeight: "600",
-                    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                    marginBottom: UI_CONFIG.SPACING.MD,
-                  }}
-                >
-                  Hymns
-                </Text>
-
-                {/* Search */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor: "#F3F4F6",
-                    borderRadius: 12,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    gap: 8,
-                    borderWidth: 1,
-                    borderColor: "#EAECF0",
-                  }}
-                >
-                  <Ionicons name="search" size={18} color="#98A2B3" />
-                  <TextInput
-                    style={{
-                      flex: 1,
-                      fontSize: 16,
-                      fontFamily: "Rubik_400Regular",
-                      color: "#1D2939",
-                    }}
-                    placeholder="Search hymns..."
-                    placeholderTextColor="#98A2B3"
-                    value={hymnSearchQuery}
-                    onChangeText={setHymnSearchQuery}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                    returnKeyType="search"
-                  />
-                  {!!hymnSearchQuery && (
-                    <TouchableOpacity
-                      onPress={() => setHymnSearchQuery("")}
-                      style={{ padding: 4 }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="close-circle" size={18} color="#98A2B3" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Result count */}
-                {hymnSearchQuery.trim().length > 0 && (
-                  <Text
-                    style={{
-                      marginTop: 8,
-                      color: "#475467",
-                      fontSize: 12,
-                      fontFamily: "Rubik_400Regular",
-                    }}
-                  >
-                    {filteredHymns.length} result
-                    {filteredHymns.length === 1 ? "" : "s"}
-                  </Text>
-                )}
-              </View>
-            }
-            ListEmptyComponent={
-              loadingHymns ? (
-                <View style={{ paddingVertical: 24 }}>
-                  <ActivityIndicator color={UI_CONFIG.COLORS.PRIMARY} />
-                </View>
-              ) : (
-                <View style={{ paddingVertical: 24 }}>
-                  <Text
-                    style={{
-                      textAlign: "center",
-                      color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                      fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-                      fontFamily: "Rubik_400Regular",
-                    }}
-                  >
-                    No hymns found.
-                  </Text>
-                </View>
-              )
-            }
-            renderItem={({ item }) => (
-              <View style={{ flex: 1 }}>
-                <HymnMiniCard
-                  variant="grid"
-                  item={item}
-                  onPress={(h) =>
-                    router.push({
-                      pathname: "/reader/HymnDetail",
-                      params: { id: h.id },
-                    })
-                  }
-                />
-              </View>
-            )}
-          />
-        </View>
-      </ContentErrorBoundary>
-    );
-  }
-
   // Empty state
   if (filteredMediaList.length === 0) {
     return (
@@ -3049,7 +1489,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   return (
     <ContentErrorBoundary>
-      <View style={{ flex: 1 }} collapsable={false}>
+      <View style={{ flex: 1 }}>
         {showSuccessCard && (
           <SuccessCard
             message={successMessage}
@@ -3060,10 +1500,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          scrollEventThrottle={16}
-          removeClippedSubviews={true}
-          scrollEnabled={true}
-          nestedScrollEnabled={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -3076,10 +1512,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           onScroll={handleScroll}
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
+          scrollEventThrottle={8}
         >
-          {/* Most Recent Section - Hide in MUSIC tab */}
-          {mostRecentItem && 
-           !((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") && (
+          {/* Most Recent Section */}
+          {mostRecentItem && (
             <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
               <Text
                 style={{
@@ -3096,205 +1532,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             </View>
           )}
 
-
-          {/* Music Section - Only show in MUSIC tab (new style with list view) */}
-          {(String(contentType) === "MUSIC" || String(contentType) === "music") && String(contentType) !== "videos" && contentType !== "ALL" && (
-            <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-              {/* Header with Search and Display Mode Toggle */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  paddingVertical: 12,
-                }}
-              >
-                {showSearchInput ? (
-                  <View
-                    style={{
-                      flex: 1,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: "#F3F4F6",
-                      borderRadius: 12,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                    }}
-                  >
-                    <Ionicons name="search" size={20} color="#98A2B3" />
-                    <TextInput
-                      style={{
-                        flex: 1,
-                        marginLeft: 8,
-                        fontSize: 16,
-                        fontFamily: "Rubik_400Regular",
-                        color: "#1D2939",
-                      }}
-                      placeholder="Search songs..."
-                      placeholderTextColor="#98A2B3"
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      autoFocus
-                    />
-                    {searchQuery.length > 0 && (
-                      <TouchableOpacity
-                        onPress={() => setSearchQuery("")}
-                        style={{ marginRight: 8 }}
-                      >
-                        <Ionicons name="close-circle" size={20} color="#98A2B3" />
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      onPress={() => {
-                        setShowSearchInput(false);
-                        setSearchQuery("");
-                      }}
-                      style={{ marginLeft: 4 }}
-                    >
-                      <Ionicons name="close" size={20} color="#98A2B3" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <>
-                    {/* Left container: Search and Filter icons */}
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      <TouchableOpacity
-                        onPress={() => setShowSearchInput(true)}
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 20,
-                          backgroundColor: "#F3F4F6",
-                          justifyContent: "center",
-                          alignItems: "center",
-                        }}
-                      >
-                        <Ionicons name="search" size={20} color="#256E63" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setShowFilterModal(true)}
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 20,
-                          backgroundColor: "#F3F4F6",
-                          justifyContent: "center",
-                          alignItems: "center",
-                        }}
-                      >
-                        <Ionicons name="filter" size={20} color="#256E63" />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Right container: Display Mode icons */}
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        backgroundColor: "#F3F4F6",
-                        borderRadius: 12,
-                        padding: 4,
-                        gap: 4,
-                      }}
-                    >
-                      {(["list", "grid", "small", "large"] as const).map((mode) => (
-                        <TouchableOpacity
-                          key={mode}
-                          onPress={() => setDisplayMode(mode)}
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            backgroundColor:
-                              displayMode === mode ? "#256E63" : "transparent",
-                            justifyContent: "center",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Ionicons
-                            name={
-                              mode === "list"
-                                ? "list"
-                                : mode === "grid"
-                                ? "grid"
-                                : mode === "small"
-                                ? "apps"
-                                : "square"
-                            }
-                            size={18}
-                            color={displayMode === mode ? "#FFFFFF" : "#98A2B3"}
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </>
-                )}
-              </View>
-
-              {/* Discover Weekly Cards */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  paddingVertical: 8,
-                }}
-              >
-                {discoverCards.map(renderDiscoverCard)}
-              </ScrollView>
-
-              {/* Songs List (your uploads only) */}
-              {userUploadedSongs.length === 0 ? (
-                <View
-                  style={{
-                    paddingVertical: 40,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    paddingHorizontal: 32,
-                  }}
-                >
-                  <Ionicons name="musical-notes-outline" size={48} color="#98A2B3" />
-                  <Text
-                    style={{
-                      marginTop: 12,
-                      fontSize: 16,
-                      color: "#98A2B3",
-                      fontFamily: "Rubik_400Regular",
-                      textAlign: "center",
-                    }}
-                  >
-                    {(user?._id || (user as any)?.id)
-                      ? "No uploaded songs found"
-                      : "Sign in to see your uploaded songs"}
-                  </Text>
-                </View>
-              ) : displayMode === "list" || displayMode === "large" ? (
-                <View>
-                  {userUploadedSongs.map((song) => renderSongItem(song))}
-                </View>
-              ) : (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    paddingHorizontal: UI_CONFIG.SPACING.MD,
-                  }}
-                >
-                  {userUploadedSongs.map((song) => renderSongItem(song))}
-                </View>
-              )}
-            </View>
-          )}
-
           {/* All Content Section (split into first four, then Recommended Live, then rest) */}
-          {/* In MUSIC tab, hide this section since audio content is shown in the music section above */}
-          {((String(contentType) === "MUSIC" || String(contentType) === "music") && contentType !== "ALL") ? null : (
           <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
             <Text
               style={{
@@ -3311,30 +1549,18 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
             {/* First four big cards (excluding Most Recent if duplicated) */}
             {(() => {
-              const { firstFour, nextFour, rest } = filteredContentLists;
+              const remaining = (filteredMediaList || []).filter(
+                (item) => !mostRecentItem || item._id !== mostRecentItem._id
+              );
+              const firstFour = remaining.slice(0, 4);
+              const nextFour = remaining.slice(4, 8);
+              const rest = remaining.slice(8);
               return (
                 <>
                   {firstFour.map((item, index) =>
                     renderContentByType(item, index)
                   )}
 
-                  {/* Insert Recommended Live for you here with red LIVE badge - Show in LIVE tab, hide in E-BOOKS */}
-                  {contentType !== "e-books" && contentType?.toUpperCase() !== "E-BOOKS" && (
-                    <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
-                      <Text
-                        style={{
-                          fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-                          fontWeight: "600",
-                          color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                          paddingHorizontal: UI_CONFIG.SPACING.MD,
-                          marginBottom: UI_CONFIG.SPACING.LG,
-                        }}
-                      >
-                        Recommended Live for you
-                      </Text>
-                      {renderRecommendedLiveCards()}
-                    </View>
-                  )}
 
                   {/* Gap before next four cards */}
                   <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
@@ -3344,29 +1570,137 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                     renderContentByType(item, index + firstFour.length)
                   )}
 
+                  {/* Live Section - Coming Soon (after 7th content) */}
+                  {(contentType === "ALL" || contentType === "live") && (
+                    <>
+                      <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
+                      <View
+                        style={{
+                          marginHorizontal: UI_CONFIG.SPACING.MD,
+                          paddingHorizontal: 16,
+                          paddingVertical: 32,
+                          backgroundColor: "#F9FAFB",
+                          borderRadius: 12,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "#E5E7EB",
+                          borderStyle: "dashed",
+                          minHeight: 200,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 40,
+                            backgroundColor: "#DC2626",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            marginBottom: 16,
+                            position: "relative",
+                          }}
+                        >
+                          <Ionicons name="radio" size={40} color="#FFFFFF" />
+                          {/* Live indicator dot */}
+                          <View
+                            style={{
+                              position: "absolute",
+                              top: 8,
+                              right: 8,
+                              width: 16,
+                              height: 16,
+                              borderRadius: 8,
+                              backgroundColor: "#FFFFFF",
+                              borderWidth: 2,
+                              borderColor: "#DC2626",
+                            }}
+                          />
+                        </View>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginBottom: 8,
+                            justifyContent: "center",
+                          }}
+                        >
+                          <View
+                            style={{
+                              backgroundColor: "#DC2626",
+                              paddingHorizontal: 12,
+                              paddingVertical: 4,
+                              borderRadius: 12,
+                              marginRight: 8,
+                              flexDirection: "row",
+                              alignItems: "center",
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 4,
+                                backgroundColor: "#FFFFFF",
+                                marginRight: 6,
+                              }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "700",
+                                color: "#FFFFFF",
+                                fontFamily: "Rubik-Bold",
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              LIVE
+                            </Text>
+                          </View>
+                          <Text
+                            style={{
+                              fontSize: 18,
+                              fontWeight: "600",
+                              color: "#1D2939",
+                              textAlign: "center",
+                              fontFamily: "Rubik-SemiBold",
+                            }}
+                          >
+                            Coming Soon
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#6B7280",
+                            textAlign: "center",
+                            lineHeight: 20,
+                            paddingHorizontal: 16,
+                            fontFamily: "Rubik",
+                          }}
+                        >
+                          We're working on bringing you live streaming content. Stay tuned for updates!
+                        </Text>
+                      </View>
+                    </>
+                  )}
+
                   {/* Trending Contents temporarily removed */}
 
                   {/* Gap before remaining content */}
                   <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
 
-                  {/* Render the rest of All Content - OPTIMIZED with FlatList virtualization */}
-                  {rest.length > 0 && (
-                    <VirtualizedContentList
-                      data={rest}
-                      renderItem={(item, index) =>
-                        renderContentByType(
-                          item,
-                          index + firstFour.length + nextFour.length
-                        )
-                      }
-                      startIndex={firstFour.length + nextFour.length}
-                    />
+                  {/* Render the rest of All Content */}
+                  {rest.map((item, index) =>
+                    renderContentByType(
+                      item,
+                      index + firstFour.length + nextFour.length
+                    )
                   )}
                 </>
               );
             })()}
           </View>
-          )}
 
           {/* Loading indicator for refresh */}
           {loading && hasContent && (
@@ -3387,46 +1721,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               </Text>
             </View>
           )}
-
-          {/* Infinite scroll loading indicator */}
-          {hasMorePages && loading && (
-            <View
-              style={{ padding: UI_CONFIG.SPACING.LG, alignItems: "center" }}
-            >
-              <ActivityIndicator
-                size="small"
-                color={UI_CONFIG.COLORS.PRIMARY}
-              />
-              <Text
-                style={{
-                  marginTop: UI_CONFIG.SPACING.SM,
-                  color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                  fontSize: 12,
-                }}
-              >
-                Loading more...
-              </Text>
-            </View>
-          )}
-
-          {/* End of list indicator */}
-          {!hasMorePages && filteredMediaList.length > 0 && (
-            <View
-              style={{ padding: UI_CONFIG.SPACING.LG, alignItems: "center" }}
-            >
-              <Text
-                style={{
-                  color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                  fontSize: 12,
-                }}
-              >
-                You've reached the end
-              </Text>
-            </View>
-          )}
         </ScrollView>
       </View>
     </ContentErrorBoundary>
   );
 };
-

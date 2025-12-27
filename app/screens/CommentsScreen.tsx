@@ -62,6 +62,7 @@ const CommentsScreen = () => {
         if (response.success) {
           const newComments = response.data.comments || [];
 
+          // Functional updates ensure immutability - always create new array reference
           if (append) {
             setComments((prev) => [...prev, ...newComments]);
           } else {
@@ -263,6 +264,7 @@ const CommentsScreen = () => {
           data={comments}
           renderItem={renderComment}
           keyExtractor={(item) => item._id}
+          extraData={comments} // Forces FlatList to re-render when comments state changes
           style={styles.commentsList}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMoreComments}

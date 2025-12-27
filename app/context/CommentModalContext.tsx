@@ -161,8 +161,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             }
           }).catch(() => {}),
           
-          // Load comments from cache first, then refresh from server
-          loadCommentsFromServer(contentId, contentType, 1, sortBy, cachedComments.length === 0).catch(() => {}),
+          // Always load fresh comments from server to ensure persistence
+          // This ensures comments persist correctly after app refresh
+          loadCommentsFromServer(contentId, contentType, 1, sortBy, true).catch(() => {}),
         ]);
         
         // Join realtime room (can happen in parallel)
@@ -190,10 +191,18 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     } catch {}
   };
 
+  /**
+   * Add a comment using functional update to ensure immutability
+   * Creates a new array reference so React detects the change
+   */
   const addComment = (comment: Comment) => {
     setComments((prev) => [comment, ...prev]);
   };
 
+  /**
+   * Update a comment using functional update with immutability
+   * Maps over array and creates new object reference for the updated comment
+   */
   const updateComment = (commentId: string, updates: Partial<Comment>) => {
     setComments((prev) =>
       prev.map((comment) =>
@@ -202,36 +211,53 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     );
   };
 
+  /**
+   * Like a comment with optimistic update and rollback mechanism
+   * Uses functional updates to capture current state before optimistic change
+   * Ensures proper rollback even if multiple rapid clicks occur
+   */
   const likeComment = async (commentId: string) => {
+    // Capture previous state using functional update (best practice for optimistic updates)
+    let previousState: { isLiked: boolean; likes: number } | null = null;
+    
+    // Optimistic update - update UI immediately for better UX
+    setComments((prev) => {
+      return prev.map((comment) => {
+        if (comment.id === commentId) {
+          // Store previous state for potential rollback
+          previousState = { isLiked: comment.isLiked, likes: comment.likes };
+          
+          // Create new object with updated values (immutability)
+          return {
+            ...comment,
+            isLiked: !comment.isLiked,
+            likes: comment.isLiked ? Math.max(0, comment.likes - 1) : comment.likes + 1,
+          };
+        }
+        return comment;
+      });
+    });
+
     try {
-      // Update local state immediately for better UX
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                isLiked: !comment.isLiked,
-                likes: comment.isLiked ? comment.likes - 1 : comment.likes + 1,
-              }
-            : comment
-        )
-      );
       // Call backend reaction toggle
       await contentInteractionAPI.toggleCommentLike(commentId);
     } catch (error) {
-      // console.error("Error liking comment:", error);
-      // Revert the local state if the store update failed
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                isLiked: !comment.isLiked,
-                likes: comment.isLiked ? comment.likes + 1 : comment.likes - 1,
-              }
-            : comment
-        )
-      );
+      console.error("Error liking comment:", error);
+      
+      // Rollback to previous state if API call failed
+      if (previousState !== null) {
+        setComments((prev) =>
+          prev.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  isLiked: previousState!.isLiked,
+                  likes: previousState!.likes,
+                }
+              : comment
+          )
+        );
+      }
     }
   };
 
@@ -248,7 +274,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         return;
       }
 
-      // Optimistic local reply
+      // Optimistic local reply - uses functional update with immutability
       const tempId = `temp-${Date.now()}`;
       const optimisticReply: Comment = {
         id: tempId,
@@ -262,6 +288,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         // @ts-ignore optional
         userId: currentUserIdRef.current,
       };
+      // Functional update: creates new array for replies using spread operator
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId
@@ -278,8 +305,19 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       );
       // Re-fetch replies or top-level if needed
     } catch (error) {
-      // console.error("Error adding reply:", error);
-      // Remove optimistic reply if API call failed
+      const err = error as Error & { status?: number; statusText?: string };
+      
+      // Log error with context
+      console.error("Error adding reply:", {
+        error: err.message,
+        status: err.status,
+        statusText: err.statusText,
+        commentId,
+        contentId: currentContentId,
+      });
+      
+      // Rollback: Remove optimistic reply if API call failed
+      // Functional update ensures immutability - creates new array with filter
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId
@@ -287,6 +325,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             : c
         )
       );
+      
+      // Re-throw error so UI can show user-friendly message if needed
+      throw error;
     }
   };
 
@@ -307,7 +348,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
 
       const trimmed = text.trim();
 
-      // Optimistic insert (temporary id)
+      // Optimistic insert (temporary id) - uses functional update for immutability
       const tempId = `temp-${Date.now()}`;
       const optimistic: Comment = {
         id: tempId,
@@ -323,6 +364,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         // @ts-ignore optional
         userId: currentUserIdRef.current,
       };
+      // Functional update: creates new array reference with spread operator
       setComments((prev) => [optimistic, ...prev]);
 
       // Optimistically bump comment count in the centralized store
@@ -354,8 +396,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         userId: created.userId,
       };
 
+      // Replace optimistic comment with real one - functional update ensures immutability
       setComments((prev) => {
-        // Drop all temp-* entries and insert the real comment at the top
+        // Filter out temp comments and create new array with real comment at top
         const withoutTemps = prev.filter((c) => !c.id.startsWith("temp-"));
         return [createdComment, ...withoutTemps];
       });
@@ -375,11 +418,35 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         false
       );
     } catch (e) {
-      // console.error("Error submitting comment:", e);
-      // Remove any optimistic comments if API call failed
+      const error = e as Error & { status?: number; statusText?: string };
+      
+      // Log error with context
+      console.error("Error submitting comment:", {
+        error: error.message,
+        status: error.status,
+        statusText: error.statusText,
+        contentId: currentContentId,
+      });
+      
+      // Rollback: Remove any optimistic comments if API call failed
+      // Functional update ensures we create new array reference
       setComments((prev) =>
         prev.filter((comment) => !comment.id.startsWith("temp-"))
       );
+      
+      // Rollback comment count that was optimistically incremented
+      try {
+        const store = useInteractionStore.getState();
+        store.mutateStats(currentContentId, (s) => ({
+          comments: Math.max(0, (s?.comments || 0) - 1),
+        }));
+      } catch (rollbackError) {
+        // Silently fail rollback - not critical
+      }
+      
+      // Re-throw error so UI can show user-friendly message if needed
+      // The error is caught by the calling component which can show an alert/toast
+      throw error;
     }
   };
 

@@ -147,6 +147,11 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
   const finalCommentCount = hookBasedState.commentsCount ?? commentCount;
   const finalViewCount = viewCount;
 
+  /**
+   * Handle like with optimistic update
+   * The store (toggleLike) already handles optimistic updates internally,
+   * but we ensure proper loading state and error handling
+   */
   const handleLike = async () => {
     if (isLoading.like) return;
     triggerButtonHaptic();
@@ -157,12 +162,16 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
     }
 
     if (hookBasedState.toggleLike) {
+      // Functional update for loading state
       setIsLoading((prev) => ({ ...prev, like: true }));
       try {
+        // Store handles optimistic update automatically
         await hookBasedState.toggleLike(contentId, contentType);
       } catch (error) {
         console.error("Error toggling like:", error);
+        // Store automatically handles rollback on error
       } finally {
+        // Functional update ensures we update with latest state
         setIsLoading((prev) => ({ ...prev, like: false }));
       }
     }

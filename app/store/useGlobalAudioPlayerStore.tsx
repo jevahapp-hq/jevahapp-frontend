@@ -29,6 +29,7 @@ export interface AudioTrack {
   duration: number;
   category?: string;
   description?: string;
+  isVirtual?: boolean; // If true, this track is played by an external player (e.g., useAdvancedAudioPlayer), don't load audio here
 }
 
 interface GlobalAudioPlayerState {
@@ -77,6 +78,14 @@ interface GlobalAudioPlayerState {
   __completionTimeout?: boolean;
   __completionTimeoutId?: any;
   __lastStatusUpdateTs?: number;
+  
+  // Callback for virtual tracks (played by external players)
+  __virtualTrackControls?: {
+    togglePlayPause: () => Promise<void>;
+    pause: () => Promise<void>;
+    play: () => Promise<void>;
+  };
+  setVirtualTrackControls: (controls: { togglePlayPause: () => Promise<void>; pause: () => Promise<void>; play: () => Promise<void> } | null) => void;
 }
 
 export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
@@ -137,6 +146,23 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           // no-op
         }
         
+        // Pause any normal songs playing via useAdvancedAudioPlayer
+        // by using the global media store to pause all audio
+        try {
+          const globalMediaStore = require("./useGlobalMediaStore").useGlobalMediaStore;
+          if (globalMediaStore) {
+            const state = globalMediaStore.getState();
+            // Pause all audio that's currently playing
+            Object.keys(state.playingAudio || {}).forEach((audioKey) => {
+              if (state.playingAudio[audioKey]) {
+                state.pauseAudio(audioKey);
+              }
+            });
+          }
+        } catch (error) {
+          // no-op - global media store might not be available
+        }
+        
         // Stop current track if playing
         if (soundInstance) {
           try {
@@ -148,12 +174,17 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
         set({
           currentTrack: track,
-          isPlaying: false,
-          isLoading: true,
+          isPlaying: track.isVirtual ? shouldPlayImmediately : false,
+          isLoading: track.isVirtual ? false : true,
           position: 0,
           progress: 0,
           soundInstance: null,
         });
+
+        // If this is a virtual track (played by external player), don't load audio here
+        if (track.isVirtual) {
+          return;
+        }
 
         try {
           // Configure audio mode for background playback
@@ -297,7 +328,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       play: async () => {
-        const { soundInstance } = get();
+        const { soundInstance, currentTrack, __virtualTrackControls } = get();
+        // If this is a virtual track, use the external player's controls
+        if (currentTrack?.isVirtual && __virtualTrackControls) {
+          await __virtualTrackControls.play();
+          return;
+        }
+        // Otherwise use the global player's controls
         if (soundInstance) {
           try {
             // Check if already playing to avoid unnecessary operations
@@ -317,7 +354,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       pause: async () => {
-        const { soundInstance } = get();
+        const { soundInstance, currentTrack, __virtualTrackControls } = get();
+        // If this is a virtual track, use the external player's controls
+        if (currentTrack?.isVirtual && __virtualTrackControls) {
+          await __virtualTrackControls.pause();
+          return;
+        }
+        // Otherwise use the global player's controls
         if (soundInstance) {
           try {
             await soundInstance.pauseAsync();
@@ -329,7 +372,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       togglePlayPause: async () => {
-        const { isPlaying, play, pause } = get();
+        const { isPlaying, play, pause, currentTrack, __virtualTrackControls } = get();
+        // If this is a virtual track, use the external player's controls
+        if (currentTrack?.isVirtual && __virtualTrackControls) {
+          await __virtualTrackControls.togglePlayPause();
+          return;
+        }
+        // Otherwise use the global player's controls
         if (isPlaying) {
           await pause();
         } else {
@@ -458,6 +507,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           position: 0,
           duration: 0,
           progress: 0,
+          __virtualTrackControls: undefined,
         });
       },
 
@@ -475,6 +525,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         const position = duration * progress;
         set({ progress, position });
       },
+      setVirtualTrackControls: (controls) => set({ __virtualTrackControls: controls || undefined }),
     }),
     {
       name: "@jevahapp_global_audio_player",
