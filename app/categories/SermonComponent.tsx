@@ -402,10 +402,33 @@ export default function SermonComponent() {
 
   // Audio playback functions
   const playAudio = async (uri: string, id: string) => {
-    if (!uri) return;
-    if (isLoadingAudio) return;
+    if (!uri || uri.trim() === "") {
+      console.warn("🚨 Audio URI is empty or invalid:", { uri, id });
+      return;
+    }
+
+    if (isLoadingAudio) {
+      console.log("🚨 Audio is already loading, skipping...");
+      return;
+    }
+
+    if (!uri.startsWith("http://") && !uri.startsWith("https://")) {
+      console.warn("🚨 Audio URI is not a valid HTTP/HTTPS URL:", { uri, id });
+      return;
+    }
+    
+    console.log(`🎵 Playing audio sermon "${id}":`, {
+      audioUri: uri,
+      id,
+      uriLength: uri.length,
+    });
+    
     setIsLoadingAudio(true);
     try {
+      // ✅ Use unified media store for consistent playback (same as AllContentTikTok)
+      // This ensures proper coordination between video and audio playback
+      globalMediaStore.playMediaGlobally(id, "audio");
+      
       // Pause currently playing if different
       if (playingAudioId && playingAudioId !== id && soundMap[playingAudioId]) {
         try {

@@ -1253,10 +1253,21 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       const contentId = item._id || key;
       const modalKey = key; // Use the same key for modalKey to ensure consistency
 
+      // Determine if sermon is audio or video based on file extension
+      const isAudioSermon = item.contentType === "sermon" && (() => {
+        const fileUrl = (item.fileUrl || "").toLowerCase();
+        return !(
+          fileUrl.includes(".mp4") ||
+          fileUrl.includes(".mov") ||
+          fileUrl.includes(".avi") ||
+          fileUrl.includes(".webm") ||
+          fileUrl.includes(".mkv")
+        );
+      })();
+
       switch (item.contentType) {
         case "video":
         case "videos":
-        case "sermon":
           const backendUserFavorites = { [key]: getUserLikeState(contentId) };
           const backendGlobalFavoriteCounts = {
             [key]: getLikeCount(contentId),
@@ -1296,6 +1307,69 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
               isAutoPlayEnabled={isAutoPlayEnabled}
             />
           );
+
+        case "sermon":
+          // Render audio sermons as MusicCard, video sermons as VideoCard
+          if (isAudioSermon) {
+            return (
+              <MusicCard
+                key={key}
+                audio={item}
+                index={index}
+                onLike={() => handleFavorite(key, item)}
+                onComment={() => handleComment(key, item)}
+                onSave={() => handleSave(key, item)}
+                onShare={() => handleShare(key, item)}
+                onDownload={() => handleDownloadPress(item)}
+                onPlay={playAudio}
+                isPlaying={playingAudioId === `music-${item._id || index}`}
+                progress={audioProgressMap[`music-${item._id || index}`] || 0}
+                onLayout={handleContentLayout}
+                onPause={pauseAllAudio}
+              />
+            );
+          } else {
+            // Video sermon - render as VideoCard
+            const backendUserFavorites = { [key]: getUserLikeState(contentId) };
+            const backendGlobalFavoriteCounts = {
+              [key]: getLikeCount(contentId),
+            };
+
+            return (
+              <VideoCard
+                key={key}
+                video={item}
+                index={index}
+                modalKey={modalKey}
+                contentStats={contentStats}
+                userFavorites={backendUserFavorites}
+                globalFavoriteCounts={backendGlobalFavoriteCounts}
+                playingVideos={playingVideos}
+                mutedVideos={mutedVideos}
+                progresses={progresses}
+                videoVolume={videoVolume}
+                currentlyVisibleVideo={currentlyVisibleVideo}
+                onVideoTap={handleVideoTap}
+                onTogglePlay={togglePlay}
+                onToggleMute={toggleVideoMute}
+                onFavorite={handleFavorite}
+                onComment={handleComment}
+                onSave={handleSave}
+                onDownload={handleDownloadPress}
+                onShare={handleShare}
+                onModalToggle={toggleModal}
+                modalVisible={modalVisible}
+                comments={comments}
+                checkIfDownloaded={checkIfDownloaded}
+                getContentKey={getContentKey}
+                getTimeAgo={getTimeAgo}
+                getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+                getUserAvatarFromContent={getUserAvatarFromContent}
+                onLayout={handleContentLayout}
+                isAutoPlayEnabled={isAutoPlayEnabled}
+              />
+            );
+          }
 
         case "audio":
         case "music":
