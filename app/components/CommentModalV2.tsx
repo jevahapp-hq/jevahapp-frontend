@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     Keyboard,
     Modal,
@@ -34,6 +36,7 @@ export default function CommentModalV2() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [text, setText] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
   const lastCountRef = useRef<number>(0);
@@ -95,17 +98,53 @@ export default function CommentModalV2() {
 
   // formatTimeAgo is now imported from shared utils
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !isAuthenticated) return;
-    if (replyingTo) {
-      replyToComment(replyingTo.id, trimmed);
-      setReplyingTo(null);
-      setText("");
-      return;
-    }
-    submitComment(trimmed);
+    if (!trimmed || !isAuthenticated || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    const commentText = trimmed;
+    const wasReplying = !!replyingTo;
+    const replyId = replyingTo?.id;
+    
+    // Clear input immediately for better UX (optimistic)
     setText("");
+    if (replyingTo) {
+      setReplyingTo(null);
+    }
+    
+    try {
+      if (wasReplying && replyId) {
+        await replyToComment(replyId, commentText);
+      } else {
+        await submitComment(commentText);
+      }
+      // Success - comment was added optimistically, context handles the rest
+    } catch (error) {
+      const err = error as Error & { status?: number };
+      
+      // Restore text on error so user can retry
+      setText(commentText);
+      if (wasReplying && replyId) {
+        setReplyingTo({ id: replyId, name: "" });
+      }
+      
+      // Show user-friendly error message
+      const errorMessage = 
+        err.status === 500 
+          ? "Server error. Please try again later."
+          : err.status === 404
+          ? "Content not found. Please refresh and try again."
+          : err.message || "Failed to post comment. Please try again.";
+      
+      Alert.alert(
+        "Error",
+        errorMessage,
+        [{ text: "OK" }]
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Pre-check authentication status - don't wait for modal to open
@@ -396,36 +435,30 @@ export default function CommentModalV2() {
                   minHeight: 20,
                 }}
                 multiline
-                editable={isAuthenticated}
+                editable={isAuthenticated && !isSubmitting}
                 returnKeyType="send"
-                onSubmitEditing={() => {
-                  if (text.trim() && isAuthenticated) {
-                    submitComment(text.trim());
-                    setText("");
-                  }
-                }}
+                onSubmitEditing={handleSubmit}
               />
             </View>
             <TouchableOpacity
-              disabled={!text.trim() || !isAuthenticated}
-              onPress={() => {
-                if (text.trim() && isAuthenticated) {
-                  submitComment(text.trim());
-                  setText("");
-                }
-              }}
+              disabled={!text.trim() || !isAuthenticated || isSubmitting}
+              onPress={handleSubmit}
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 8,
-                backgroundColor: (text.trim() && isAuthenticated) ? "#10B981" : "#D1D5DB",
+                backgroundColor: (text.trim() && isAuthenticated && !isSubmitting) ? "#10B981" : "#D1D5DB",
                 justifyContent: "center",
                 alignItems: "center",
                 marginLeft: 8,
               }}
               activeOpacity={0.7}
             >
-              <Ionicons name="send" size={18} color="#FFFFFF" />
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="send" size={18} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
           </View>
         </View>

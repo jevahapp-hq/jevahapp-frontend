@@ -14,6 +14,7 @@ import {
     useContentCount,
     useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
+import { useGlobalAudioPlayerStore, type AudioTrack } from "../../../../app/store/useGlobalAudioPlayerStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
@@ -133,7 +134,64 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 
     setAttemptedPlay(true);
     try {
+      const wasPlaying = playerState.isPlaying;
       await controls.togglePlay();
+      
+      // Wait a bit for the state to update, then check if it's playing
+      setTimeout(async () => {
+        try {
+          const globalAudioStore = useGlobalAudioPlayerStore.getState();
+          const audioId = audio._id || `music-${index}`;
+          const thumbnailSource = audio?.imageUrl || audio?.thumbnailUrl;
+          const thumbnailUri = typeof thumbnailSource === "string"
+            ? thumbnailSource
+            : (thumbnailSource as any)?.uri;
+          
+          if (!wasPlaying) {
+            // We're starting to play - set it in the global audio player store
+            // so the floating player can show it
+            const track: AudioTrack = {
+              id: audioId,
+              title: audio.title || "Unknown Title",
+              artist: getUserDisplayNameFromContent(audio) || "Unknown Artist",
+              audioUrl: audioUrl,
+              thumbnailUrl: thumbnailUri || "",
+              duration: (playerState.duration || 0) / 1000, // Convert from ms to seconds
+              category: audio.category?.[0] || audio.contentType || "music",
+              description: audio.description || "",
+              isVirtual: true, // Mark as virtual - this track is played by useAdvancedAudioPlayer, not the global player
+            };
+            
+            // Set track in global store (this will pause copyright-free songs if playing)
+            // Don't pass shouldPlayImmediately since this is virtual - the local player handles playback
+            await globalAudioStore.setTrack(track, false);
+            // Update playing state to match local player
+            globalAudioStore.setPlaying(true);
+            // Register controls so FloatingAudioPlayer can control this track
+            globalAudioStore.setVirtualTrackControls({
+              togglePlayPause: async () => {
+                await controls.togglePlay();
+              },
+              pause: async () => {
+                await controls.pause();
+              },
+              play: async () => {
+                await controls.play();
+              },
+            });
+          } else {
+            // We're pausing - also pause the global audio player if this track is playing
+            if (globalAudioStore.currentTrack?.id === audioId) {
+              await globalAudioStore.pause();
+              // Clear virtual track controls when pausing
+              globalAudioStore.setVirtualTrackControls(null);
+            }
+          }
+        } catch (err) {
+          console.warn("MusicCard: Failed to sync with global audio player:", err);
+        }
+      }, 100);
+      
       // Optionally notify parent (e.g. to drive a global mini-player)
       if (onPlay) {
         try {
@@ -145,7 +203,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     } catch (err) {
       console.warn("MusicCard play toggle failed:", err);
     }
-  }, [audioUrl, controls, onPlay, audio._id, index, playerState.isLoading]);
+  }, [audioUrl, controls, onPlay, audio._id, index, playerState.isLoading, playerState.isPlaying, playerState.duration, audio]);
 
   const handleOverlayToggle = useCallback(() => {
     setShowOverlay((prev) => !prev);
@@ -171,6 +229,38 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       : (thumbnailSource as any)?.uri;
 
   const formattedProgress = Math.round((playerState.progress || 0) * 100);
+
+  // Sync playback state to global audio player store for virtual tracks
+  useEffect(() => {
+    const audioId = audio._id || `music-${index}`;
+    const globalAudioStore = useGlobalAudioPlayerStore.getState();
+    
+    // Only sync if this is the current track in the global store and it's virtual
+    if (globalAudioStore.currentTrack?.id === audioId && globalAudioStore.currentTrack?.isVirtual) {
+      // Sync playing state
+      if (globalAudioStore.isPlaying !== playerState.isPlaying) {
+        globalAudioStore.setPlaying(playerState.isPlaying);
+      }
+      
+      // Sync position and progress
+      if (playerState.duration > 0) {
+        const positionMs = playerState.position || 0;
+        const durationMs = playerState.duration || 0;
+        const progress = positionMs / durationMs;
+        
+        if (Math.abs(globalAudioStore.position - positionMs) > 500) { // Only update if difference is > 500ms
+          globalAudioStore.setPosition(positionMs);
+        }
+        if (Math.abs(globalAudioStore.progress - progress) > 0.01) { // Only update if difference is > 1%
+          globalAudioStore.setProgressValue(progress);
+        }
+        
+        if (globalAudioStore.duration !== durationMs) {
+          globalAudioStore.setDuration(durationMs);
+        }
+      }
+    }
+  }, [playerState.isPlaying, playerState.position, playerState.duration, playerState.progress, audio._id, index]);
 
   // View tracking state
   const [hasTrackedView, setHasTrackedView] = useState(false);

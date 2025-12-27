@@ -1,7 +1,7 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -20,7 +20,7 @@ import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
-import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
+import { getBestVideoUrl, handleVideoError } from "../../src/shared/utils/videoUrlManager";
 import { getBottomNavHeight } from "../../utils/responsive";
 import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -126,7 +126,7 @@ export default function Reelsviewscroll() {
   const videoVolume = 1.0;
 
   // Parse video list and current index - prioritize reels store, fallback to URL param
-  // ENRICHED: Enrich video list with user profile data (avatars, names) from cache
+  // ✅ DO NOT call setState here - only read and parse data during render
   const parsedVideoList = (() => {
     let rawList: any[] = [];
     
@@ -135,8 +135,6 @@ export default function Reelsviewscroll() {
     } else if (videoList) {
       try {
         const parsed = JSON.parse(videoList);
-        // Set in store for future use
-        reelsStore.setVideoList(parsed);
         rawList = parsed;
       } catch (error) {
         console.error("❌ Failed to parse video list:", error);
@@ -150,15 +148,29 @@ export default function Reelsviewscroll() {
     // Enrich all videos with user profile data (avatars, names) from cache
     if (rawList.length > 0) {
       const enrichedList = UserProfileCache.enrichContentArray(rawList);
-      // Update store with enriched data
-      if (enrichedList.length > 0 && enrichedList !== rawList) {
-        reelsStore.setVideoList(enrichedList);
-      }
       return enrichedList;
     }
     
     return rawList;
   })();
+
+  // ✅ Update store with video list in useEffect (not during render)
+  useEffect(() => {
+    if (!videoList) return;
+    
+    try {
+      const parsed = JSON.parse(videoList);
+      const enrichedList = UserProfileCache.enrichContentArray(parsed);
+      
+      // Only update if store is empty or if enriched list is different
+      if (reelsStore.videoList.length === 0 || 
+          JSON.stringify(enrichedList) !== JSON.stringify(reelsStore.videoList)) {
+        reelsStore.setVideoList(enrichedList);
+      }
+    } catch (error) {
+      console.error("❌ Failed to parse and set video list:", error);
+    }
+  }, [videoList, reelsStore]);
 
   const currentVideoIndex = reelsStore.currentIndex !== undefined && reelsStore.currentIndex !== null
     ? reelsStore.currentIndex
@@ -552,19 +564,30 @@ export default function Reelsviewscroll() {
     );
   }
 
+  /**
+   * Handle like with optimistic update
+   * The toggleLike from store already handles optimistic updates and rollback
+   */
   const handleLike = async () => {
     try {
       if (!canUseBackendLikes) {
         console.warn("⚠️ ReelsView: Missing real contentId; cannot like reliably.");
         return;
       }
+      // Store handles optimistic update automatically
       await toggleLike(contentIdForHooks, activeContentType);
     } catch (error) {
       console.error("❌ Error toggling like in reels:", error);
+      // Store automatically handles rollback on error
     }
   };
 
-  const handleComment = async (key: string) => {
+  /**
+   * Handle comment - opens modal and loads comments
+   * Comment count is updated by the CommentModalContext after a comment is successfully posted
+   * Uses functional updates to ensure immutability
+   */
+  const handleComment = useCallback((key: string) => {
     // Use real contentId for comments API (required for backend to work)
     // Fallback to synthetic key only if no real ID exists (shouldn't happen in production)
     const commentContentId = contentId || key;
@@ -572,30 +595,10 @@ export default function Reelsviewscroll() {
     // Open modal with empty array - backend will load comments immediately
     // Pass contentType explicitly to ensure correct backend routing
     showCommentModal([], commentContentId, "media", currentVideo.speaker);
-
-    // Update comment count (optional - you might want to do this after actually posting a comment)
-    const currentStats = videoStats[key] || {};
-    const newCommentCount = (currentStats.comment || video.comment || 0) + 1;
-
-    // Update stats
-    setVideoStats((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        comment: newCommentCount,
-      },
-    }));
-
-    // Persist the stats
-    const updatedStats = { ...currentStats, comment: newCommentCount };
-    // Get all current stats and update this specific key
-    const getAllStats = async () => {
-      const allStats = await getPersistedStats();
-      allStats[key] = updatedStats;
-      persistStats(allStats);
-    };
-    getAllStats();
-  };
+    
+    // Note: Comment count is updated by CommentModalContext after successful submission
+    // No need to pre-increment here - that would be an incorrect optimistic update
+  }, [contentId, showCommentModal, currentVideo?.speaker]);
 
   const handleSave = async (key: string) => {
     try {
@@ -866,20 +869,51 @@ export default function Reelsviewscroll() {
     setVideoPosition(0);
     setShowPauseOverlay(false); // Reset pause overlay state
     setUserHasManuallyPaused(false); // Reset manual pause flag for new video
-    // Ensure only the active video plays
-    globalVideoStore.pauseAllVideos();
-
+    
     // 🚀 Update last accessed time for cache optimization
     mediaStore.updateLastAccessed(modalKey);
 
-    // Add a small delay to ensure the video component is ready
-    const timeoutId = setTimeout(() => {
+    // ✅ Ensure video ref is registered before playing
+    const videoRef = videoRefs.current[modalKey];
+    if (videoRef) {
+      // Register with global store if not already registered
+      globalVideoStore.registerVideoPlayer(modalKey, {
+        pause: async () => {
+          try {
+            await videoRef.pauseAsync();
+            globalVideoStore.setOverlayVisible(modalKey, true);
+          } catch (err) {
+            console.warn(`Failed to pause ${modalKey}:`, err);
+          }
+        },
+        showOverlay: () => {
+          globalVideoStore.setOverlayVisible(modalKey, true);
+        },
+        key: modalKey,
+      });
+    }
+
+    // ✅ Pause all other videos, then play this one
+    globalVideoStore.pauseAllVideos();
+
+    // ✅ Play video immediately - use multiple attempts to ensure it plays
+    const playVideo = () => {
       try {
         globalVideoStore.playVideoGlobally(modalKey);
+        // Also ensure the video ref plays directly if available
+        if (videoRef) {
+          videoRef.playAsync().catch(() => {
+            // Ignore errors - state will handle it
+          });
+        }
       } catch (error) {
         console.error("Error playing video:", error);
       }
-    }, 100);
+    };
+
+    // Try immediately, then retry after a short delay to ensure video is ready
+    playVideo();
+    const timeoutId = setTimeout(playVideo, 150);
 
     // Close action menu when switching videos
     setMenuVisible(false);
@@ -966,12 +1000,15 @@ export default function Reelsviewscroll() {
     const videoKey =
       passedVideoKey || `reel-${enrichedVideoData.title}-${speakerName}`;
 
-    // Use direct fileUrl/imageUrl - prioritize fileUrl, fallback to imageUrl
-    const videoUrl = enrichedVideoData.fileUrl || enrichedVideoData.imageUrl || enrichedVideoData.url || "";
+    // ✅ Use same URL processing as AllContentTikTok - prioritize fileUrl, validate with isValidUri
+    const rawVideoUrl = enrichedVideoData.fileUrl || enrichedVideoData.imageUrl || enrichedVideoData.url || "";
     
-    // Validate video URL
-    if (!videoUrl || String(videoUrl).trim() === "") {
-      console.warn("⚠️ No valid video URL for:", enrichedVideoData.title, "Data:", enrichedVideoData);
+    // ✅ Validate URL format before using getBestVideoUrl (same as VideoCard)
+    const isValidVideoUrl = rawVideoUrl && typeof rawVideoUrl === 'string' && rawVideoUrl.trim().length > 0 &&
+      (rawVideoUrl.startsWith('http://') || rawVideoUrl.startsWith('https://') || rawVideoUrl.startsWith('file://'));
+    
+    if (!isValidVideoUrl) {
+      console.warn("⚠️ No valid video URL for:", enrichedVideoData.title, "URL:", rawVideoUrl);
       return (
         <View
           key={videoKey}
@@ -992,6 +1029,14 @@ export default function Reelsviewscroll() {
         </View>
       );
     }
+    
+    // ✅ Use getBestVideoUrl to handle signed URLs and URL conversion (same as VideoCard)
+    const videoUrl = getBestVideoUrl(rawVideoUrl);
+    
+    console.log(`🎬 Reels video URL for ${enrichedVideoData.title}:`, {
+      original: rawVideoUrl?.substring(0, 100),
+      processed: videoUrl?.substring(0, 100),
+    });
 
     // 🚀 Check video cache status for optimization (no hooks, pure call)
     mediaStore.getVideoCacheStatus(videoKey);
@@ -1028,10 +1073,34 @@ export default function Reelsviewscroll() {
           >
             <Video
               ref={(ref) => {
-                if (ref && isActive) videoRefs.current[videoKey] = ref;
+                if (ref) {
+                  // ✅ Always register ref (not just when active) for proper global control
+                  videoRefs.current[videoKey] = ref;
+                  
+                  // ✅ Register with global video store immediately (not just when active)
+                  // This ensures playVideoGlobally works even on initial navigation
+                  globalVideoStore.registerVideoPlayer(videoKey, {
+                    pause: async () => {
+                      try {
+                        await ref.pauseAsync();
+                        globalVideoStore.setOverlayVisible(videoKey, true);
+                      } catch (err) {
+                        console.warn(`Failed to pause ${videoKey}:`, err);
+                      }
+                    },
+                    showOverlay: () => {
+                      globalVideoStore.setOverlayVisible(videoKey, true);
+                    },
+                    key: videoKey,
+                  });
+                } else {
+                  // Unregister when ref is cleared
+                  delete videoRefs.current[videoKey];
+                  globalVideoStore.unregisterVideoPlayer(videoKey);
+                }
               }}
               source={{
-                uri: getBestVideoUrl(videoUrl || ""),
+                uri: videoUrl, // ✅ Already processed by getBestVideoUrl above
                 headers: {
                   "User-Agent": "JevahApp/1.0",
                   Accept: "video/*",
@@ -1049,18 +1118,81 @@ export default function Reelsviewscroll() {
               resizeMode={ResizeMode.COVER}
               isMuted={mutedVideos[videoKey] ?? false}
               volume={mutedVideos[videoKey] ? 0.0 : videoVolume}
-              shouldPlay={isActive && (playingVideos[videoKey] ?? false)}
+              // ✅ Play if state says to play, even if not "active" yet (for initial navigation)
+              shouldPlay={playingVideos[videoKey] ?? false}
               useNativeControls={false}
               isLooping={true}
               onError={async (error) => {
+                const errorDetails = error?.error || error;
+                const errorCode = errorDetails?.code;
+                const errorDomain = errorDetails?.domain;
+                
+                // ✅ Use enhanced error handler for better diagnostics
+                const errorAnalysis = handleVideoError(error, videoUrl, enrichedVideoData.title);
+                
                 console.error(
                   `❌ Video loading error in reels for ${enrichedVideoData.title}:`,
-                  error
+                  {
+                    errorCode,
+                    errorDomain,
+                    errorDescription: errorDetails?.localizedDescription,
+                    videoUrl: videoUrl?.substring(0, 100) + '...',
+                    errorAnalysis,
+                  }
                 );
+                
+                // ✅ Pause video on error to prevent infinite retry loops
+                const ref = videoRefs.current[videoKey];
+                if (ref) {
+                  try {
+                    await ref.pauseAsync();
+                    globalVideoStore.pauseVideo(videoKey);
+                  } catch (pauseError) {
+                    // Ignore pause errors
+                  }
+                }
+                
+                // ✅ Unregister failed video player to prevent further attempts
+                try {
+                  globalVideoStore.unregisterVideoPlayer(videoKey);
+                } catch (unregisterError) {
+                  // Ignore unregister errors
+                }
+                
+                // ✅ For timeout errors (-1001), log specific guidance
+                if (errorCode === -1001 || errorDomain === 'NSURLErrorDomain') {
+                  if (errorAnalysis.isRetryable && errorAnalysis.suggestedUrl) {
+                    console.warn(
+                      `⚠️ Timeout error detected. This might be due to:\n` +
+                      `  1. Expired signed URL (backend should provide fresh URLs)\n` +
+                      `  2. Network connectivity issues\n` +
+                      `  3. Server timeout\n` +
+                      `  Suggested URL: ${errorAnalysis.suggestedUrl.substring(0, 100)}...`
+                    );
+                  } else {
+                    console.warn(
+                      `⚠️ Network timeout error. Possible causes:\n` +
+                      `  1. Slow or unstable network connection\n` +
+                      `  2. Video server is down or slow to respond\n` +
+                      `  3. Video file is too large or corrupted`
+                    );
+                  }
+                }
               }}
               onLoad={() => {
                 // 🚀 Mark video as loaded in cache for optimization
                 mediaStore.setVideoLoaded(videoKey, true);
+                
+                // ✅ Auto-play video when it loads if it should be playing
+                // This ensures video plays immediately when navigating from AllContentTikTok
+                if (playingVideos[videoKey] && !userHasManuallyPaused) {
+                  const ref = videoRefs.current[videoKey];
+                  if (ref) {
+                    ref.playAsync().catch(() => {
+                      // Ignore - state will handle it
+                    });
+                  }
+                }
               }}
               onPlaybackStatusUpdate={(status) => {
                 if (!isActive || !status.isLoaded) return;
@@ -2005,21 +2137,50 @@ export default function Reelsviewscroll() {
       // Initialize scroll start index
       scrollStartIndexRef.current = currentIndex_state;
       
+      // ✅ Scroll immediately
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({
           y: initialOffset,
           animated: false,
         });
+      }, 50);
 
-        // Auto-play the initial video using reel key
+      // ✅ Play video after scroll is complete and refs are registered
+      setTimeout(() => {
         const initialVideo = allVideos[currentIndex_state];
         const initialKey = initialVideo
           ? `reel-${initialVideo.title}-${initialVideo.speaker || "unknown"}`
           : `reel-index-${currentIndex_state}`;
         
-        // Ensure video plays immediately
+        // Register video ref if available
+        const videoRef = videoRefs.current[initialKey];
+        if (videoRef) {
+          globalVideoStore.registerVideoPlayer(initialKey, {
+            pause: async () => {
+              try {
+                await videoRef.pauseAsync();
+                globalVideoStore.setOverlayVisible(initialKey, true);
+              } catch (err) {
+                console.warn(`Failed to pause ${initialKey}:`, err);
+              }
+            },
+            showOverlay: () => {
+              globalVideoStore.setOverlayVisible(initialKey, true);
+            },
+            key: initialKey,
+          });
+        }
+        
+        // ✅ Ensure video plays immediately when navigating from AllContentTikTok
         globalVideoStore.playVideoGlobally(initialKey);
-      }, 100);
+        
+        // ✅ Also play directly via ref for immediate playback
+        if (videoRef) {
+          videoRef.playAsync().catch(() => {
+            // Ignore - state will handle it
+          });
+        }
+      }, 200); // Slightly longer delay to ensure everything is ready
       } else {
       console.warn("⚠️ Cannot initialize scroll - no videos or scrollViewRef");
     }

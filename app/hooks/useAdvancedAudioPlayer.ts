@@ -247,6 +247,20 @@ export const useAdvancedAudioPlayer = (
       } catch {
         // manager not available, ignore
       }
+      
+      // Pause global audio player (copyright-free songs) when normal song starts
+      try {
+        const globalAudioStoreModule = require("../store/useGlobalAudioPlayerStore");
+        const globalAudioStore = globalAudioStoreModule.useGlobalAudioPlayerStore;
+        if (globalAudioStore) {
+          const state = globalAudioStore.getState();
+          if (state.isPlaying && state.soundInstance) {
+            await state.pause();
+          }
+        }
+      } catch (error) {
+        // no-op - global audio store might not be available
+      }
 
       useGlobalMediaStore.getState().playMediaGlobally(audioKey, "audio");
       await soundRef.current.playAsync();

@@ -16,6 +16,8 @@ import { useMediaStore } from "../store/useUploadStore";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 import AllContentTikTok from "./AllContentTikTok";
 import Music from "./music";
+import Hymns from "./hymns";
+import LiveComponent from "./LiveComponent";
 
 // NOTE: "HYMNS" requested as its own category, positioned between LIVE and SERMON.
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
@@ -239,6 +241,16 @@ export default function HomeTabContent() {
     // Music category should show copyright-free catalog (not user uploads)
     if (selectedCategory === "MUSIC") {
       return <Music />;
+    }
+
+    // Hymns category should show hymns component
+    if (selectedCategory === "HYMNS") {
+      return <Hymns />;
+    }
+
+    // Live category should show LiveComponent
+    if (selectedCategory === "LIVE") {
+      return <LiveComponent />;
     }
 
     return (
