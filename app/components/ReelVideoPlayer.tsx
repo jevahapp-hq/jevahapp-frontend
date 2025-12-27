@@ -97,6 +97,8 @@ export default function ReelVideoPlayer({
         useNativeControls={false}
         shouldCorrectPitch={isIOS}
         progressUpdateIntervalMillis={isIOS ? 100 : 250}
+        // Increased buffer size for smoother streaming
+        preferredForwardBufferDuration={45}
         onPlaybackStatusUpdate={onPlaybackStatusUpdate}
         onLoad={onLoad}
         onError={onError}

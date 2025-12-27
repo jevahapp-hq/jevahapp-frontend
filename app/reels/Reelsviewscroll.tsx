@@ -1,7 +1,7 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -20,7 +20,7 @@ import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
-import { getBestVideoUrl, handleVideoError } from "../../src/shared/utils/videoUrlManager";
+import { getBestVideoUrl, getVideoUrlFromMedia, handleVideoError } from "../../src/shared/utils/videoUrlManager";
 import { getBottomNavHeight } from "../../utils/responsive";
 import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -126,8 +126,9 @@ export default function Reelsviewscroll() {
   const videoVolume = 1.0;
 
   // Parse video list and current index - prioritize reels store, fallback to URL param
-  // ✅ DO NOT call setState here - only read and parse data during render
-  const parsedVideoList = (() => {
+  // ENRICHED: Enrich video list with user profile data (avatars, names) from cache
+  // CRITICAL FIX: Use useMemo for computation, useEffect for setState (prevents render-time setState error)
+  const parsedVideoList = useMemo(() => {
     let rawList: any[] = [];
     
     if (reelsStore.videoList.length > 0) {
@@ -152,7 +153,36 @@ export default function Reelsviewscroll() {
     }
     
     return rawList;
-  })();
+  }, [reelsStore.videoList, videoList]);
+
+  // CRITICAL FIX: Move setState calls to useEffect (not during render)
+  useEffect(() => {
+    // Parse videoList from params if store is empty
+    if (reelsStore.videoList.length === 0 && videoList) {
+      try {
+        const parsed = JSON.parse(videoList);
+        reelsStore.setVideoList(parsed);
+      } catch (error) {
+        console.error("❌ Failed to parse video list:", error);
+      }
+    }
+    
+    // Update store with enriched data if it's different
+    if (parsedVideoList.length > 0 && parsedVideoList !== reelsStore.videoList) {
+      // Only update if the enriched list is actually different
+      const currentList = reelsStore.videoList;
+      const listsAreDifferent = currentList.length !== parsedVideoList.length ||
+        currentList.some((item, index) => {
+          const enriched = parsedVideoList[index];
+          return !enriched || item._id !== enriched._id || 
+                 item.uploadedBy !== enriched.uploadedBy;
+        });
+      
+      if (listsAreDifferent) {
+        reelsStore.setVideoList(parsedVideoList);
+      }
+    }
+  }, [parsedVideoList, videoList, reelsStore]);
 
   // ✅ Update store with video list in useEffect (not during render)
   useEffect(() => {
@@ -1000,15 +1030,13 @@ export default function Reelsviewscroll() {
     const videoKey =
       passedVideoKey || `reel-${enrichedVideoData.title}-${speakerName}`;
 
-    // ✅ Use same URL processing as AllContentTikTok - prioritize fileUrl, validate with isValidUri
-    const rawVideoUrl = enrichedVideoData.fileUrl || enrichedVideoData.imageUrl || enrichedVideoData.url || "";
+    // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
+    // CRITICAL: NEVER use imageUrl or thumbnailUrl for video playback - they are images!
+    const rawVideoUrl = getVideoUrlFromMedia(enrichedVideoData);
     
-    // ✅ Validate URL format before using getBestVideoUrl (same as VideoCard)
-    const isValidVideoUrl = rawVideoUrl && typeof rawVideoUrl === 'string' && rawVideoUrl.trim().length > 0 &&
-      (rawVideoUrl.startsWith('http://') || rawVideoUrl.startsWith('https://') || rawVideoUrl.startsWith('file://'));
-    
-    if (!isValidVideoUrl) {
-      console.warn("⚠️ No valid video URL for:", enrichedVideoData.title, "URL:", rawVideoUrl);
+    // Validate video URL exists
+    if (!rawVideoUrl) {
+      console.warn("⚠️ No valid video URL (fileUrl/playbackUrl/hlsUrl) for:", enrichedVideoData.title, "Data:", enrichedVideoData);
       return (
         <View
           key={videoKey}
@@ -1100,7 +1128,7 @@ export default function Reelsviewscroll() {
                 }
               }}
               source={{
-                uri: videoUrl, // ✅ Already processed by getBestVideoUrl above
+                uri: getBestVideoUrl(rawVideoUrl || ""),
                 headers: {
                   "User-Agent": "JevahApp/1.0",
                   Accept: "video/*",
@@ -1233,6 +1261,8 @@ export default function Reelsviewscroll() {
               // Platform-specific video optimizations
               shouldCorrectPitch={isIOS}
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
+              // Increased buffer size for smoother streaming
+              preferredForwardBufferDuration={45}
             />
 
             {/* Reload button removed - no per-item error state tracking without hooks */}

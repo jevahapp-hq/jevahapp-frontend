@@ -32,7 +32,7 @@ import {
     VideoCardSkeleton,
 } from "../../src/shared/components/Skeleton";
 import { MediaItem } from "../../src/shared/types";
-import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
+import { getBestVideoUrl, getVideoUrlFromMedia } from "../../src/shared/utils/videoUrlManager";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
@@ -1589,12 +1589,13 @@ export default function VideoComponent() {
                       }}
                       source={{
                         uri: getBestVideoUrl(
-                          item.fileUrl &&
-                            item.fileUrl.trim() &&
-                            item.fileUrl.trim() !==
-                              "https://example.com/placeholder.mp4"
-                            ? item.fileUrl.trim()
-                            : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                          (() => {
+                            // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
+                            const videoUrl = getVideoUrlFromMedia(item);
+                            return videoUrl && videoUrl.trim() !== "https://example.com/placeholder.mp4"
+                              ? videoUrl.trim()
+                              : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+                          })()
                         ),
                         headers: {
                           "User-Agent": "JevahApp/1.0",

@@ -25,33 +25,33 @@ export default function Skeleton({
   const opacity = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
-    // Shimmer animation - light moving across
+    // Shimmer animation - light moving across (more obvious)
     const shimmerAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(shimmerTranslateX, {
-          toValue: 400, // Move from left to right
-          duration: 1500,
+          toValue: 600, // Move further to the right for more visible sweep
+          duration: 1200, // Slightly faster for more noticeable effect
           useNativeDriver: true,
         }),
         Animated.timing(shimmerTranslateX, {
-          toValue: -200, // Reset to start
+          toValue: -300, // Start further left for wider sweep
           duration: 0,
           useNativeDriver: true,
         }),
       ])
     );
 
-    // Subtle pulse animation for base
+    // Subtle pulse animation for base (reduced to make shimmer more prominent)
     const pulseAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 1000,
+          toValue: 0.65,
+          duration: 1200,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 0.5,
-          duration: 1000,
+          duration: 1200,
           useNativeDriver: true,
         }),
       ])
@@ -72,7 +72,8 @@ export default function Skeleton({
   const highlight = dark
     ? UI_CONFIG.COLORS.SKELETON_DARK_HIGHLIGHT || "#3A3A3A"
     : UI_CONFIG.COLORS.SKELETON_HIGHLIGHT || "#F3F4F6";
-  const shimmerColor = dark ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.4)";
+  // More visible shimmer - brighter and more opaque
+  const shimmerColor = dark ? "rgba(255, 255, 255, 0.35)" : "rgba(255, 255, 255, 0.7)";
 
   // Apply variant presets for perfect alignment with cards
   // - card: matches typical media cards (no rounded corners for sharp edges)
@@ -125,14 +126,13 @@ export default function Skeleton({
         style,
       ]}
     >
-      {/* Shimmer effect - light shining across */}
+      {/* Shimmer effect - light shining across (more obvious) */}
       <Animated.View
         style={{
           position: "absolute",
           top: 0,
           left: 0,
-          right: 0,
-          width: "100%",
+          width: "60%", // Wider shimmer beam for more visibility
           height: "100%",
           backgroundColor: shimmerColor,
           transform: [
@@ -140,10 +140,10 @@ export default function Skeleton({
               translateX: shimmerTranslateX,
             },
             {
-              skewX: "20deg", // Angled light beam
+              skewX: "25deg", // More angled for sharper light reflection
             },
           ],
-          opacity: 0.6,
+          opacity: 0.9, // Much more visible
         }}
       />
       

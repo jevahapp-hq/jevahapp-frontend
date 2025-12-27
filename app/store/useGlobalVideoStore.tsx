@@ -240,23 +240,12 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         console.warn("⚠️ Failed to access global audio player store:", error);
       }
 
-      // STEP 2: Imperatively pause ALL other videos DIRECTLY (no state waiting)
-      videoPlayerRegistry.forEach((player, key) => {
-        if (key !== videoKey) {
-          player
-            .pause()
-            .catch((err) => console.warn(`Failed to pause ${key}:`, err));
-          player.showOverlay();
-        }
-      });
-
-      // STEP 2b: Imperatively PLAY the target video DIRECTLY (critical fix!)
-      // Update state FIRST for immediate UI feedback, then play video
+      // STEP 2: Update state FIRST for immediate UI feedback
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
 
-        // Pause all other videos
+        // Pause all other videos in state
         Object.keys(state.playingVideos).forEach((key) => {
           newPlayingVideos[key] = false;
           newShowOverlay[key] = true;
@@ -273,30 +262,59 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         };
       });
 
-      // NOW play the video imperatively (after state update for instant UI feedback)
-      const targetPlayer = videoPlayerRegistry.get(videoKey);
-      if (targetPlayer && targetPlayer.play) {
-        try {
-          // Play immediately - don't await, fire and forget for instant response
-          const playResult = targetPlayer.play();
-          if (playResult instanceof Promise) {
-            // Don't await - let it play in background, but catch errors
-            playResult.catch((err) => {
-              console.warn(`Failed to imperatively play ${videoKey}:`, err);
-            });
-          }
-        } catch (err) {
-          console.warn(`Failed to imperatively play ${videoKey}:`, err);
+      // STEP 3: Imperatively pause ALL other videos FIRST (await to ensure they're paused)
+      // This prevents race conditions where new video starts before old one stops
+      const pausePromises: Promise<void>[] = [];
+      videoPlayerRegistry.forEach((player, key) => {
+        if (key !== videoKey) {
+          pausePromises.push(
+            player.pause().catch((err) => {
+              console.warn(`Failed to pause ${key}:`, err);
+            })
+          );
+          player.showOverlay();
         }
-      } else if (targetPlayer) {
-        // Player registered but no play method - rely on state sync (already updated above)
-        console.log(`⚠️ Target player for ${videoKey} doesn't have play method, relying on state sync`);
-      } else {
-        // Player not registered yet - state already updated, useEffect will sync when player registers
-        console.warn(`⚠️ Video player not registered for key: ${videoKey}. State updated, player will sync when ready.`);
-      }
+      });
 
-      // STEP 3: State already updated in STEP 2b - no additional state update needed
+      // STEP 4: Wait for all pauses to complete, then play target video
+      // This ensures only one video plays at a time
+      Promise.all(pausePromises).then(() => {
+        const targetPlayer = videoPlayerRegistry.get(videoKey);
+        if (targetPlayer && targetPlayer.play) {
+          try {
+            // Play immediately after all pauses complete
+            const playResult = targetPlayer.play();
+            if (playResult instanceof Promise) {
+              playResult.catch((err) => {
+                console.warn(`Failed to imperatively play ${videoKey}:`, err);
+              });
+            }
+          } catch (err) {
+            console.warn(`Failed to imperatively play ${videoKey}:`, err);
+          }
+        } else if (!targetPlayer) {
+          // Player not registered yet - retry after a short delay
+          // This handles cases where component just mounted and player is still initializing
+          setTimeout(() => {
+            const retryPlayer = videoPlayerRegistry.get(videoKey);
+            if (retryPlayer && retryPlayer.play) {
+              try {
+                const playResult = retryPlayer.play();
+                if (playResult instanceof Promise) {
+                  playResult.catch((err) => {
+                    console.warn(`Failed to play ${videoKey} on retry:`, err);
+                  });
+                }
+              } catch (err) {
+                console.warn(`Failed to play ${videoKey} on retry:`, err);
+              }
+            } else {
+              // State already updated, useEffect will sync when player registers
+              console.warn(`⚠️ Video player not registered for key: ${videoKey} after retry. State updated, player will sync when ready.`);
+            }
+          }, 100); // Retry after 100ms
+        }
+      });
     },
 
     // ✅ Toggle function - for cases where toggle behavior is needed

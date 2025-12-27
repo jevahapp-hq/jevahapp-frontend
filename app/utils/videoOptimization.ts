@@ -40,7 +40,7 @@ export interface NetworkQuality {
 const NETWORK_CONFIGS: Record<NetworkQuality["type"], VideoOptimizationConfig> =
   {
     excellent: {
-      preferredForwardBufferDuration: 10, // 10 seconds ahead
+      preferredForwardBufferDuration: 30, // Increased from 10 to 30 seconds ahead
       progressUpdateInterval: 100,
       maxRetries: 2,
       retryDelay: 1000,
@@ -49,7 +49,7 @@ const NETWORK_CONFIGS: Record<NetworkQuality["type"], VideoOptimizationConfig> =
       preloadBehind: 1,
     },
     good: {
-      preferredForwardBufferDuration: 15, // More buffer for stability
+      preferredForwardBufferDuration: 45, // Increased from 15 to 45 seconds for better stability
       progressUpdateInterval: 250,
       maxRetries: 3,
       retryDelay: 1500,
@@ -58,7 +58,7 @@ const NETWORK_CONFIGS: Record<NetworkQuality["type"], VideoOptimizationConfig> =
       preloadBehind: 0,
     },
     fair: {
-      preferredForwardBufferDuration: 20, // Even more buffer
+      preferredForwardBufferDuration: 60, // Increased from 20 to 60 seconds for smoother playback
       progressUpdateInterval: 500,
       maxRetries: 3,
       retryDelay: 2000,
@@ -67,7 +67,7 @@ const NETWORK_CONFIGS: Record<NetworkQuality["type"], VideoOptimizationConfig> =
       preloadBehind: 0,
     },
     poor: {
-      preferredForwardBufferDuration: 30, // Maximum buffer
+      preferredForwardBufferDuration: 90, // Increased from 30 to 90 seconds for maximum buffer
       progressUpdateInterval: 1000,
       maxRetries: 5,
       retryDelay: 3000,
@@ -188,8 +188,14 @@ export async function getOptimizedVideoProps(options?: {
     // iOS specific
     ...(Platform.OS === "ios" && {
       preferredForwardBufferDuration:
-        config.preferredForwardBufferDuration || 15,
+        config.preferredForwardBufferDuration || 30,
       shouldCorrectPitch: true,
+    }),
+
+    // Android specific - expo-av supports preferredForwardBufferDuration on Android too
+    ...(Platform.OS === "android" && {
+      preferredForwardBufferDuration:
+        config.preferredForwardBufferDuration || 30,
     }),
 
     // Error handling

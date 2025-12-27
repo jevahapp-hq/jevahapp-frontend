@@ -128,6 +128,22 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
 };
 
 /**
+ * Gets video URL from media item with proper fallback priority:
+ * fileUrl > playbackUrl > hlsUrl
+ * NEVER use thumbnailUrl or imageUrl for video playback!
+ */
+export const getVideoUrlFromMedia = (media: any): string | null => {
+  // Priority order: fileUrl > playbackUrl > hlsUrl
+  const videoUrl = media?.fileUrl || media?.playbackUrl || media?.hlsUrl;
+  
+  if (!videoUrl || typeof videoUrl !== 'string' || videoUrl.trim() === '') {
+    return null;
+  }
+  
+  return videoUrl.trim();
+};
+
+/**
  * Gets the best URL to use for video playback
  */
 export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): string => {

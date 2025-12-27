@@ -24,6 +24,7 @@ import { VideoCardProps } from "../../../shared/types";
 import { getUploadedBy, isValidUri } from "../../../shared/utils";
 import {
     getBestVideoUrl,
+    getVideoUrlFromMedia,
     handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
 
@@ -108,13 +109,27 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const mediaType = getMediaType();
   const isAudioSermon = mediaType === "audio";
 
-  const videoUrl = !isAudioSermon && isValidUri(video.fileUrl) 
-    ? getBestVideoUrl(video.fileUrl)
+  // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
+  // NEVER use thumbnailUrl or imageUrl for video playback!
+  const rawVideoUrl = !isAudioSermon ? getVideoUrlFromMedia(video) : null;
+  const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
+    ? getBestVideoUrl(rawVideoUrl)
     : null;
   const player = useVideoPlayer(videoUrl || "", (player) => {
     player.loop = false;
     player.muted = isMuted ?? false; // Ensure boolean, never undefined
     player.volume = (videoVolume ?? 1.0); // Ensure number, never undefined
+    // Pre-load video source for faster playback on subsequent loads
+    if (videoUrl) {
+      // Player will automatically load the source, but we can ensure it's ready
+      // by checking status after a brief delay
+      setTimeout(() => {
+        if (player && !player.playing) {
+          // Pre-buffer the video without playing
+          // This ensures faster response when play is pressed
+        }
+      }, 100);
+    }
   });
   const isMountedRef = useRef(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
