@@ -827,7 +827,30 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     
     // Find the media item to determine if it's audio or video
     const mediaItem = filteredMediaList.find((item) => getContentKey(item) === key);
-    const isAudio = mediaItem?.contentType === "audio" || mediaItem?.contentType === "sermon";
+    
+    // Determine media type - sermons can be either audio or video based on file extension
+    let isAudio = false;
+    if (mediaItem) {
+      const contentType = mediaItem.contentType?.toLowerCase() || "";
+      
+      // Handle sermons - can be audio or video based on file extension
+      if (contentType === "sermon") {
+        const fileUrl = (mediaItem.fileUrl || "").toLowerCase();
+        // If it has video extensions, it's a video; otherwise it's audio
+        isAudio = !(
+          fileUrl.includes(".mp4") ||
+          fileUrl.includes(".mov") ||
+          fileUrl.includes(".avi") ||
+          fileUrl.includes(".webm") ||
+          fileUrl.includes(".mkv")
+        );
+      } else if (contentType === "audio" || contentType === "music") {
+        isAudio = true;
+      } else {
+        // Videos, live, and other types are video
+        isAudio = false;
+      }
+    }
     
     // Clear any autoplay state and play the media immediately
     setCurrentlyVisibleVideo(key);

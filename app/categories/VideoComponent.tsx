@@ -36,6 +36,7 @@ import { getBestVideoUrl, getVideoUrlFromMedia } from "../../src/shared/utils/vi
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "../store/useDownloadStore";
+import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
@@ -182,6 +183,7 @@ export default function VideoComponent() {
 
   // ✅ Use unified media store for cross-component media management
   const globalVideoStore = useGlobalVideoStore();
+  const globalMediaStore = useGlobalMediaStore();
 
   // ✅ Use library store for saving content
   const libraryStore = useLibraryStore();
@@ -1060,8 +1062,9 @@ export default function VideoComponent() {
       );
     }
 
-    // ✅ Use global video management - this will pause all other videos across all components
-    globalVideoStore.playVideoGlobally(key);
+    // ✅ Use unified media store for consistent playback (same as AllContentTikTok)
+    // This ensures proper coordination between video and audio playback
+    globalMediaStore.playMediaGlobally(key, "video");
   };
 
   // 🔧 Fix infinite loop: Memoize allIndexedVideos calculation

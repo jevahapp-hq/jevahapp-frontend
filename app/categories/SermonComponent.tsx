@@ -6,7 +6,7 @@ import {
 } from "@expo/vector-icons";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Image,
     ScrollView,
@@ -35,6 +35,7 @@ import {
     getUserAvatarFromContent,
     getUserDisplayNameFromContent,
 } from "../utils/userValidation";
+import { getBestVideoUrl, getVideoUrlFromMedia } from "../../src/shared/utils/videoUrlManager";
 
 interface SermonCard {
   fileUrl: string;
@@ -84,6 +85,9 @@ export default function SermonComponent() {
   const globalVideoStore = useGlobalVideoStore();
   const globalMediaStore = useGlobalMediaStore();
   const libraryStore = useLibraryStore();
+  
+  // Subscribe to playing videos state for sync
+  const playingVideos = useGlobalVideoStore((state) => state.playingVideos);
 
   // ✅ Use global comment modal and interaction store
   const { showCommentModal } = useCommentModal();
@@ -99,6 +103,38 @@ export default function SermonComponent() {
       loadDownloadedItems();
     }, [])
   );
+
+  // Sync video playback state with global store
+  useEffect(() => {
+    console.log("🔄 Sermon video sync effect triggered, playingVideos:", playingVideos);
+    // Check all video refs and sync playback state
+    Object.keys(videoRefs.current).forEach(async (modalKey) => {
+      const videoRef = videoRefs.current[modalKey];
+      const shouldBePlaying = playingVideos[modalKey] ?? false;
+
+      if (videoRef) {
+        try {
+          const status = await videoRef.getStatusAsync();
+          console.log(`🎬 Sermon video ${modalKey} - shouldBePlaying: ${shouldBePlaying}, isLoaded: ${status.isLoaded}, isPlaying: ${status.isPlaying}`);
+          if (status.isLoaded) {
+            if (shouldBePlaying && !status.isPlaying) {
+              console.log("▶️ Starting sermon video playback:", modalKey);
+              await videoRef.playAsync();
+            } else if (!shouldBePlaying && status.isPlaying) {
+              console.log("⏸️ Pausing sermon video:", modalKey);
+              await videoRef.pauseAsync();
+            }
+          } else {
+            console.log(`⏳ Sermon video ${modalKey} not loaded yet`);
+          }
+        } catch (error) {
+          console.error("❌ Error syncing sermon video playback:", error);
+        }
+      } else {
+        console.log(`⚠️ No video ref found for ${modalKey}`);
+      }
+    });
+  }, [playingVideos]);
 
   // Filter sermon content (both music and videos with sermon contentType)
   const sermonContent = useMemo(
@@ -204,12 +240,40 @@ export default function SermonComponent() {
     }
   };
 
-  const handleVideoTap = (key: string, video: any, index: number) => {
+  const handleVideoTap = async (key: string, video: any, index: number) => {
+    console.log(`🎮 Sermon video tap - key: ${key}, video: ${video?.title}`);
     const isCurrentlyPlaying = globalVideoStore.playingVideos[key] ?? false;
+    console.log(`🎮 Currently playing: ${isCurrentlyPlaying}`);
     if (isCurrentlyPlaying) {
+      console.log(`⏸️ Pausing sermon video: ${key}`);
       globalVideoStore.pauseVideo(key);
     } else {
-      globalVideoStore.playVideo(key);
+      console.log(`▶️ Playing sermon video: ${key}`);
+      // ✅ Use unified media store for consistent playback (same as AllContentTikTok)
+      // This ensures proper coordination between video and audio playback
+      globalMediaStore.playMediaGlobally(key, "video");
+      
+      // ✅ Also directly call playAsync as a backup to ensure video plays
+      // This handles cases where the registered player might not be called immediately
+      const videoRef = videoRefs.current[key];
+      if (videoRef) {
+        try {
+          console.log(`🎬 Direct play attempt for sermon video: ${key}`);
+          const status = await videoRef.getStatusAsync();
+          if (status.isLoaded) {
+            await videoRef.playAsync();
+            console.log(`✅ Direct play successful for sermon video: ${key}`);
+          } else {
+            console.log(`⏳ Sermon video ${key} not loaded yet, will play when loaded`);
+            // Video will play via useEffect when it loads
+          }
+        } catch (error) {
+          console.error(`❌ Direct play failed for sermon video ${key}:`, error);
+          // The registered player will still try to play via playVideoGlobally
+        }
+      } else {
+        console.warn(`⚠️ No video ref found for ${key}, relying on registered player`);
+      }
     }
   };
 
@@ -802,29 +866,95 @@ export default function SermonComponent() {
     const stats = contentStats[key] || {};
     const isItemSaved = libraryStore.isItemSaved(key);
 
+    // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
+    // Use the same URL handling as VideoCard for consistency
+    const rawVideoUrl = getVideoUrlFromMedia(video);
     const isValidUri = (u: any) =>
       typeof u === "string" &&
       u.trim().length > 0 &&
       /^https?:\/\//.test(u.trim());
-    const safeVideoUri = isValidUri(video.fileUrl)
-      ? String(video.fileUrl).trim()
+    const safeVideoUri = rawVideoUrl && isValidUri(rawVideoUrl)
+      ? getBestVideoUrl(rawVideoUrl)
       : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+    
+    console.log(`🎬 Sermon video URL for ${video?.title}:`, {
+      original: rawVideoUrl?.substring(0, 100),
+      processed: safeVideoUri?.substring(0, 100),
+    });
 
     return (
       <View className="flex flex-col">
-        <TouchableOpacity
+        <View
           key={modalKey}
-          onPress={video.onPress}
           className="mr-4 w-full h-[436px]"
-          activeOpacity={0.9}
         >
           <View className="w-full h-[393px] overflow-hidden relative">
             <Video
               ref={(ref) => {
                 if (ref) {
+                  console.log(`📹 Registering sermon video player for key: ${modalKey}`);
                   videoRefs.current[modalKey] = ref;
+                  // ✅ CRITICAL: Register player with global store for imperative control
+                  globalVideoStore.registerVideoPlayer(modalKey, {
+                    pause: async () => {
+                      try {
+                        console.log(`⏸️ Registered pause called for sermon video: ${modalKey}`);
+                        await ref.pauseAsync();
+                        globalVideoStore.setOverlayVisible(modalKey, true);
+                      } catch (err) {
+                        console.warn(`Failed to pause ${modalKey}:`, err);
+                      }
+                    },
+                    play: async () => {
+                      try {
+                        console.log(`▶️ Registered play function called for sermon video: ${modalKey}`);
+                        // Ensure video is loaded before playing
+                        const status = await ref.getStatusAsync();
+                        console.log(`📊 Sermon video ${modalKey} status:`, { isLoaded: status?.isLoaded, isPlaying: status?.isPlaying });
+                        if (status?.isLoaded) {
+                          console.log(`✅ Sermon video ${modalKey} is loaded, calling playAsync`);
+                          const result = await ref.playAsync();
+                          console.log(`🎉 Sermon video ${modalKey} playAsync result:`, result);
+                          return result;
+                        } else {
+                          console.log(`⏳ Sermon video ${modalKey} not loaded yet, waiting...`);
+                          // Wait for load, then play
+                          return new Promise((resolve, reject) => {
+                            let attempts = 0;
+                            const maxAttempts = 40; // 2 seconds max wait (40 * 50ms)
+                            const checkStatus = async () => {
+                              attempts++;
+                              const s = await ref.getStatusAsync();
+                              console.log(`🔄 Check ${attempts}: Sermon video ${modalKey} status - isLoaded: ${s?.isLoaded}`);
+                              if (s?.isLoaded) {
+                                console.log(`✅ Sermon video ${modalKey} loaded after ${attempts} attempts, playing now`);
+                                ref.playAsync().then(resolve).catch(reject);
+                              } else if (attempts < maxAttempts) {
+                                setTimeout(checkStatus, 50);
+                              } else {
+                                console.warn(`⚠️ Sermon video ${modalKey} failed to load after ${maxAttempts} attempts`);
+                                reject(new Error(`Video ${modalKey} failed to load after ${maxAttempts} attempts`));
+                              }
+                            };
+                            checkStatus();
+                          });
+                        }
+                      } catch (err) {
+                        console.error(`❌ Registered play function failed for sermon video ${modalKey}:`, err);
+                        throw err;
+                      }
+                    },
+                    showOverlay: () => {
+                      globalVideoStore.setOverlayVisible(modalKey, true);
+                    },
+                    key: modalKey,
+                  });
+                  console.log(`✅ Sermon video player registered successfully for key: ${modalKey}`);
                 } else {
+                  console.log(`🗑️ Unregistering sermon video player for key: ${modalKey}`);
                   delete videoRefs.current[modalKey];
+                  // ✅ Unregister when ref is cleared
+                  globalVideoStore.unregisterVideoPlayer(modalKey);
                 }
               }}
               source={{ uri: safeVideoUri }}
@@ -1102,7 +1232,7 @@ export default function SermonComponent() {
               </View>
             </>
           )}
-        </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -1296,7 +1426,6 @@ export default function SermonComponent() {
                 favorite: item.favorite || 0,
                 saved: item.saved || 0,
                 sheared: item.sheared || 0,
-                onPress: item.onPress,
               },
               index,
               "recent",
