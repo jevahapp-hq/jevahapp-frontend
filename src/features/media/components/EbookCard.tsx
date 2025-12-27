@@ -17,6 +17,7 @@ import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
+import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
     getTimeAgo,
@@ -117,6 +118,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const savedFromStore = useUserInteraction(contentId, "saved");
   const likedFromStore = useUserInteraction(contentId, "liked");
   useHydrateContentStats(contentId, "media");
+  const isLoadingStats = useLoadingStats(contentId);
 
   // Hydrate stats on mount to keep saved highlight after tab switches
   useEffect(() => {
@@ -319,6 +321,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
               contentType="media"
               contentId={contentId}
               useEnhancedComponents={false}
+              isLoading={isLoadingStats}
             />
           </View>
         </View>

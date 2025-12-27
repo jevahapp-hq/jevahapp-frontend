@@ -32,6 +32,7 @@ import {
     getUserDisplayNameFromContent,
     transformApiResponseToMediaItem,
 } from "../../shared/utils";
+import { isAudioSermon, detectMediaType } from "../../shared/utils";
 
 // Feature-specific imports
 import Skeleton from "../../shared/components/Skeleton/Skeleton";
@@ -632,22 +633,44 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     (key: string, video: MediaItem, index: number) => {
       // Build a display name function compatible with navigation signature
       const buildDisplayName = (speaker?: string, uploadedBy?: string) => {
-        if (speaker && typeof speaker === "string" && speaker.trim().length > 0)
-          return speaker;
-        if (
-          uploadedBy &&
-          typeof uploadedBy === "string" &&
-          uploadedBy.trim().length > 0
-        )
-          return uploadedBy;
+        // Handle both string and object formats for uploadedBy
+        let speakerName = speaker;
+        let uploadedByName = uploadedBy;
+        
+        // If uploadedBy is an object, extract the name
+        if (uploadedBy && typeof uploadedBy === "object") {
+          uploadedByName = (uploadedBy as any).firstName || (uploadedBy as any).fullName || (uploadedBy as any).name || "";
+        } else if (uploadedBy && typeof uploadedBy === "string") {
+          uploadedByName = uploadedBy;
+        }
+        
+        if (speakerName && typeof speakerName === "string" && speakerName.trim().length > 0)
+          return speakerName;
+        if (uploadedByName && typeof uploadedByName === "string" && uploadedByName.trim().length > 0)
+          return uploadedByName;
         return "Unknown";
       };
+      
       if (video && index !== undefined) {
         console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
+        
+        // ✅ Include both videos and sermon videos in the list for navigation
+        const allVideoContent = [
+          ...categorizedContent.videos,
+          ...categorizedContent.sermons.filter(s => {
+            // Only include video sermons (not audio sermons) - use centralized utility
+            return detectMediaType(s) === "video";
+          })
+        ];
+        
+        // Find the actual index in the combined list
+        const actualIndex = allVideoContent.findIndex(v => getContentKey(v) === key);
+        const finalIndex = actualIndex >= 0 ? actualIndex : index;
+        
         navigateToReels({
           video: video as any,
-          index,
-          allVideos: categorizedContent.videos as any,
+          index: finalIndex,
+          allVideos: allVideoContent as any,
           contentStats,
           globalFavoriteCounts: {}, // Empty since we're using backend state
           getContentKey,
@@ -828,28 +851,24 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     // Find the media item to determine if it's audio or video
     const mediaItem = filteredMediaList.find((item) => getContentKey(item) === key);
     
-    // Determine media type - sermons can be either audio or video based on file extension
-    let isAudio = false;
-    if (mediaItem) {
-      const contentType = mediaItem.contentType?.toLowerCase() || "";
-      
-      // Handle sermons - can be audio or video based on file extension
-      if (contentType === "sermon") {
-        const fileUrl = (mediaItem.fileUrl || "").toLowerCase();
-        // If it has video extensions, it's a video; otherwise it's audio
-        isAudio = !(
-          fileUrl.includes(".mp4") ||
-          fileUrl.includes(".mov") ||
-          fileUrl.includes(".avi") ||
-          fileUrl.includes(".webm") ||
-          fileUrl.includes(".mkv")
-        );
-      } else if (contentType === "audio" || contentType === "music") {
-        isAudio = true;
+    // ✅ Use centralized utility for media type detection
+    const mediaType = detectMediaType(mediaItem || null);
+    const isAudio = mediaType === "audio";
+    
+    // Check if currently playing to toggle pause
+    const isCurrentlyPlaying = isAudio 
+      ? (playingAudioId === key)
+      : (playingVideos[key] ?? false);
+    
+    if (isCurrentlyPlaying) {
+      // ✅ Pause if currently playing - make it as smooth as play
+      console.log(`⏸️ Pausing ${isAudio ? "audio" : "video"} for key:`, key);
+      if (isAudio) {
+        pauseAllAudio();
       } else {
-        // Videos, live, and other types are video
-        isAudio = false;
+        pauseMedia(key);
       }
+      return;
     }
     
     // Clear any autoplay state and play the media immediately
@@ -860,7 +879,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     playMedia(key, isAudio ? "audio" : "video");
 
     console.log(`✅ ${isAudio ? "Audio" : "Video"} play request sent for key:`, key);
-  }, [filteredMediaList, getContentKey, playMedia]);
+  }, [filteredMediaList, getContentKey, playMedia, pauseMedia, pauseAllAudio, playingVideos, playingAudioId]);
 
   // Handle video visibility changes during scroll for autoplay
   const handleVideoVisibilityChange = useCallback(
@@ -1253,17 +1272,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       const contentId = item._id || key;
       const modalKey = key; // Use the same key for modalKey to ensure consistency
 
-      // Determine if sermon is audio or video based on file extension
-      const isAudioSermon = item.contentType === "sermon" && (() => {
-        const fileUrl = (item.fileUrl || "").toLowerCase();
-        return !(
-          fileUrl.includes(".mp4") ||
-          fileUrl.includes(".mov") ||
-          fileUrl.includes(".avi") ||
-          fileUrl.includes(".webm") ||
-          fileUrl.includes(".mkv")
-        );
-      })();
+      // ✅ Use centralized utility for sermon type detection
+      const isAudioSermonValue = isAudioSermon(item);
 
       switch (item.contentType) {
         case "video":
@@ -1310,7 +1320,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
         case "sermon":
           // Render audio sermons as MusicCard, video sermons as VideoCard
-          if (isAudioSermon) {
+          if (isAudioSermonValue) {
             return (
               <MusicCard
                 key={key}

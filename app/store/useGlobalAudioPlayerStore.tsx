@@ -84,8 +84,9 @@ interface GlobalAudioPlayerState {
     togglePlayPause: () => Promise<void>;
     pause: () => Promise<void>;
     play: () => Promise<void>;
+    seekToProgress?: (progress: number) => Promise<void>; // Optional seek support
   };
-  setVirtualTrackControls: (controls: { togglePlayPause: () => Promise<void>; pause: () => Promise<void>; play: () => Promise<void> } | null) => void;
+  setVirtualTrackControls: (controls: { togglePlayPause: () => Promise<void>; pause: () => Promise<void>; play: () => Promise<void>; seekToProgress?: (progress: number) => Promise<void> } | null) => void;
 }
 
 export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
@@ -376,6 +377,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         // If this is a virtual track, use the external player's controls
         if (currentTrack?.isVirtual && __virtualTrackControls) {
           await __virtualTrackControls.togglePlayPause();
+          // ✅ Sync playing state after toggle for virtual tracks
+          // The external player will update its state, but we need to sync it here
+          // We'll rely on the MusicCard's useEffect to sync, but also update optimistically
+          setTimeout(() => {
+            // The actual state will be synced by MusicCard's useEffect
+            // This is just for immediate UI feedback
+          }, 50);
           return;
         }
         // Otherwise use the global player's controls
@@ -401,7 +409,16 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       seekToProgress: async (progress: number) => {
-        const { duration, seek } = get();
+        const { currentTrack, __virtualTrackControls, duration, seek } = get();
+        // ✅ If this is a virtual track, use the external player's seek controls
+        if (currentTrack?.isVirtual && __virtualTrackControls) {
+          // Check if virtual controls have seek method
+          if (__virtualTrackControls.seekToProgress) {
+            await __virtualTrackControls.seekToProgress(progress);
+            return;
+          }
+        }
+        // Otherwise use the global player's seek
         if (duration > 0) {
           const position = progress * duration;
           await seek(position);

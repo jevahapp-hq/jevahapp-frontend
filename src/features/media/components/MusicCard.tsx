@@ -26,6 +26,7 @@ import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
+import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
     getTimeAgo,
@@ -127,10 +128,45 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     }
   );
 
+  // ✅ Get global audio store state to check if this track is being controlled
+  const globalAudioStore = useGlobalAudioPlayerStore();
+  const audioId = audio._id || `music-${index}`;
+  const isCurrentTrack = globalAudioStore.currentTrack?.id === audioId;
+  const isVirtualTrack = isCurrentTrack && globalAudioStore.currentTrack?.isVirtual;
+  
+  // ✅ Use global store playing state as source of truth when it's a virtual track
+  // This ensures MusicCard and FloatingAudioPlayer stay in sync
+  const isPlayingFromGlobal = isVirtualTrack ? globalAudioStore.isPlaying : playerState.isPlaying;
+  
+  // ✅ Sync virtual track playing state with global audio player store
+  // This ensures FloatingAudioPlayer shows correct play/pause icon
+  useEffect(() => {
+    // Only sync if this is the current track in the global store
+    if (isVirtualTrack) {
+      // Update global store state to match actual player state
+      if (globalAudioStore.isPlaying !== playerState.isPlaying) {
+        globalAudioStore.setPlaying(playerState.isPlaying);
+      }
+    }
+  }, [playerState.isPlaying, audio._id, index, isVirtualTrack, globalAudioStore]);
+
   const handlePlayPress = useCallback(async () => {
     if (!audioUrl || !isValidUri(audioUrl)) return;
     // Prevent rapid double-taps while the player is toggling state
     if (playerState.isLoading) return;
+
+    // ✅ Check if this track is already being controlled by FloatingAudioPlayer
+    const globalAudioStore = useGlobalAudioPlayerStore.getState();
+    const audioId = audio._id || `music-${index}`;
+    const isCurrentTrack = globalAudioStore.currentTrack?.id === audioId;
+    const hasVirtualControls = isCurrentTrack && globalAudioStore.currentTrack?.isVirtual && globalAudioStore.__virtualTrackControls;
+    
+    // ✅ If FloatingAudioPlayer is controlling this track, use its controls instead
+    if (hasVirtualControls && isCurrentTrack) {
+      // Use the virtual track controls (FloatingAudioPlayer's controls)
+      await globalAudioStore.togglePlayPause();
+      return;
+    }
 
     setAttemptedPlay(true);
     try {
@@ -141,7 +177,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       setTimeout(async () => {
         try {
           const globalAudioStore = useGlobalAudioPlayerStore.getState();
-          const audioId = audio._id || `music-${index}`;
           const thumbnailSource = audio?.imageUrl || audio?.thumbnailUrl;
           const thumbnailUri = typeof thumbnailSource === "string"
             ? thumbnailSource
@@ -178,13 +213,24 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               play: async () => {
                 await controls.play();
               },
+              seekToProgress: async (progress: number) => {
+                await controls.seekTo(progress);
+              },
             });
+            
+            // ✅ Also sync position and duration to global store
+            if (playerState.duration > 0) {
+              globalAudioStore.setDuration(playerState.duration);
+              globalAudioStore.setPosition(playerState.position || 0);
+              globalAudioStore.setProgressValue(playerState.progress || 0);
+            }
           } else {
-            // We're pausing - also pause the global audio player if this track is playing
+            // We're pausing - update global store state to match
             if (globalAudioStore.currentTrack?.id === audioId) {
-              await globalAudioStore.pause();
-              // Clear virtual track controls when pausing
-              globalAudioStore.setVirtualTrackControls(null);
+              // Update playing state to false immediately
+              globalAudioStore.setPlaying(false);
+              // Don't clear virtual track controls - keep them so user can resume
+              // Only clear when track changes or component unmounts
             }
           }
         } catch (err) {
@@ -292,6 +338,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     ? useUserInteraction(contentIdForViews, "liked")
     : false;
   useHydrateContentStats(contentId, audio.contentType || "media");
+  const isLoadingStats = useLoadingStats(contentId);
 
   // Ensure saved state is hydrated when card mounts (persists highlight after tab switch)
   useEffect(() => {
@@ -436,9 +483,15 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 
           {/* Bottom Controls Styled (modular overlay) */}
           <AudioControlsOverlay
-            progress={playerState.progress || 0}
-            isMuted={playerState.isMuted}
-            onToggleMute={() => controls.toggleMute()}
+            progress={isVirtualTrack ? (globalAudioStore.progress || 0) : (playerState.progress || 0)}
+            isMuted={isVirtualTrack ? (globalAudioStore.isMuted || false) : (playerState.isMuted || false)}
+            onToggleMute={() => {
+              if (isVirtualTrack && isCurrentTrack) {
+                globalAudioStore.toggleMute();
+              } else {
+                controls.toggleMute();
+              }
+            }}
             onSeekRelative={onSeekRelative}
             onSeekToPercent={onSeekToPercent}
           />
@@ -452,7 +505,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               style={{ marginRight: 12 }}
             >
               <Ionicons
-                name={playerState.isPlaying ? "pause" : "play"}
+                name={isPlayingFromGlobal ? "pause" : "play"}
                 size={24}
                 color="#FFFFFF"
               />
@@ -511,6 +564,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 onSave(audio);
               }}
               onShare={() => onShare(audio)}
+              isLoading={isLoadingStats}
+              contentType={audio.contentType || "media"}
+              contentId={contentId}
               contentType="media"
               contentId={contentId}
               useEnhancedComponents={false}

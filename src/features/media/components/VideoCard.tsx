@@ -19,6 +19,7 @@ import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
+import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
 import { VideoCardProps } from "../../../shared/types";
 import { getUploadedBy, isValidUri } from "../../../shared/utils";
@@ -27,6 +28,7 @@ import {
     getVideoUrlFromMedia,
     handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
+import { isAudioSermon, detectMediaType } from "../../../shared/utils";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -74,44 +76,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     ? (backendDurationSeconds < 86400 ? backendDurationSeconds * 1000 : backendDurationSeconds) // Convert seconds to ms if < 24h, otherwise assume already ms
     : 0;
 
-  // Media type detection - needs to be before useVideoPlayer
-  const getMediaType = useCallback(() => {
-    const contentType = video.contentType?.toLowerCase() || "";
-
-    // Handle sermons - can be audio or video based on file extension
-    if (contentType === "sermon") {
-      const fileUrl = video.fileUrl?.toLowerCase() || "";
-      if (
-        fileUrl.includes(".mp4") ||
-        fileUrl.includes(".mov") ||
-        fileUrl.includes(".avi") ||
-        fileUrl.includes(".webm") ||
-        fileUrl.includes(".mkv")
-      ) {
-        return "video";
-      }
-      return "audio";
-    }
-
-    // Live, videos, and other video content types are all videos
-    if (
-      contentType === "live" ||
-      contentType === "video" ||
-      contentType === "videos"
-    ) {
-      return "video";
-    }
-
-    // Default to video for any other content type with a video file
-    return "video";
-  }, [video.contentType, video.fileUrl]);
-
-  const mediaType = getMediaType();
-  const isAudioSermon = mediaType === "audio";
+  // ✅ Use centralized utility for media type detection
+  const mediaType = detectMediaType(video);
+  const isAudioSermonValue = isAudioSermon(video);
 
   // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
   // NEVER use thumbnailUrl or imageUrl for video playback!
-  const rawVideoUrl = !isAudioSermon ? getVideoUrlFromMedia(video) : null;
+  const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
   const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
     ? getBestVideoUrl(rawVideoUrl)
     : null;
@@ -275,7 +246,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Audio player for audio sermons
   const audioUrl =
-    isAudioSermon && isValidUri(video.fileUrl) ? video.fileUrl : null;
+    isAudioSermonValue && isValidUri(video.fileUrl) ? video.fileUrl : null;
   const [audioState, audioControls] = useAdvancedAudioPlayer(audioUrl, {
     audioKey: key,
     autoPlay: false,
@@ -301,7 +272,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const lastKnownDurationRef = useRef(0);
   const seekBySeconds = useCallback(
     async (deltaSec: number) => {
-      if (isAudioSermon) {
+      if (isAudioSermonValue) {
         // Handle audio seeking
         const currentPosition = audioState.position;
         const duration = audioState.duration;
@@ -337,7 +308,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     },
     [
       progress,
-      isAudioSermon,
+      isAudioSermonValue,
       audioState.position,
       audioState.duration,
       audioControls,
@@ -349,7 +320,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   const seekToPercent = useCallback(
     async (percent: number) => {
-      if (isAudioSermon) {
+      if (isAudioSermonValue) {
         // Handle audio seeking
         const duration = audioState.duration;
         if (duration <= 0) return;
@@ -371,7 +342,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         }
       }
     },
-    [isAudioSermon, audioState.duration, audioControls, player]
+    [isAudioSermonValue, audioState.duration, audioControls, player]
   );
 
   // Handle hover start - no autoplay functionality
@@ -384,7 +355,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
     const isCurrentlyPlaying =
-      isPlaying || (isAudioSermon && audioState.isPlaying);
+      isPlaying || (isAudioSermonValue && audioState.isPlaying);
 
     // Reset if too much time passed (400ms window for double-tap)
     if (timeSinceLastTap > 400) {
@@ -406,7 +377,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       // Pause if playing
       if (isCurrentlyPlaying) {
-        if (isAudioSermon) {
+        if (isAudioSermonValue) {
           audioControls.pause();
         } else {
           // Use modular hook for pause
@@ -445,7 +416,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     video,
     index,
     showOverlayPermanently,
-    isAudioSermon,
+    isAudioSermonValue,
     audioControls,
     audioState.isPlaying,
     togglePlayback,
@@ -484,7 +455,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       onTogglePlay(key);
       
       // Update overlay state immediately for instant visual feedback
-      if (isAudioSermon) {
+      if (isAudioSermonValue) {
         if (audioState.isPlaying) {
           showOverlayPermanently();
         } else {
@@ -508,7 +479,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     }
   }, [
     key,
-    isAudioSermon,
+    isAudioSermonValue,
     audioState.isPlaying,
     isPlaying,
     onTogglePlay,
@@ -518,14 +489,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {
-    if (isAudioSermon) {
+    if (isAudioSermonValue) {
       // Handle audio sermon mute/unmute
       audioControls.toggleMute();
     } else {
       // Handle video mute/unmute
       onToggleMute(key);
     }
-  }, [onToggleMute, key, isAudioSermon, audioState.isMuted, audioControls]);
+  }, [onToggleMute, key, isAudioSermonValue, audioState.isMuted, audioControls]);
 
   // Handle overlay toggle
   const handleOverlayToggle = useCallback(() => {
@@ -560,7 +531,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Handle video load and progress tracking with expo-video
   useEffect(() => {
-    if (!player || isAudioSermon) return;
+    if (!player || isAudioSermonValue) return;
 
     // Track duration when ready
     const statusSubscription = player.addListener('statusChange', (status) => {
@@ -652,7 +623,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       statusSubscription.remove();
       clearInterval(progressInterval);
     };
-  }, [player, video.title, isPlaying, isAudioSermon, contentId, hasTrackedView]);
+  }, [player, video.title, isPlaying, isAudioSermonValue, contentId, hasTrackedView]);
 
   // Note: Video player registration is now handled by useVideoPlaybackControl hook
   // This ensures proper registration/unregistration and prevents duplicate registrations
@@ -732,6 +703,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       ? Math.max(stats.views, fallbackViewCount)
       : fallbackViewCount;
   useHydrateContentStats(contentId, "media");
+  const isLoadingStats = useLoadingStats(contentId);
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const storeRef = useRef<any>(null);
@@ -780,7 +752,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       >
         <View className="w-full h-[400px] overflow-hidden relative">
           {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && videoUrl && !isAudioSermon && player ? (
+          {!failedVideoLoad && videoUrl && !isAudioSermonValue && player ? (
             <VideoView
               player={player}
               style={{
@@ -811,12 +783,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             />
           )}
 
-          {/* ✅ Only show skeleton on initial load - not when video is already loaded (better UX) */}
+          {/* ✅ Show shimmer skeleton until video is fully loaded - shimmer continues swooshing until readyToPlay */}
           {!videoLoadedRef.current &&
             !videoLoaded &&
             !failedVideoLoad &&
             isValidUri(video.fileUrl) &&
-            !isAudioSermon && (
+            !isAudioSermonValue && (
               <View className="absolute inset-0" pointerEvents="none">
                 <VideoCardSkeleton dark={true} />
               </View>
@@ -854,7 +826,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
           {/* Play/Pause Overlay */}
           <MediaPlayButton
-            isPlaying={isAudioSermon ? audioState.isPlaying : isPlaying}
+            isPlaying={isAudioSermonValue ? audioState.isPlaying : isPlaying}
             onPress={handleTogglePlay}
             showOverlay={showOverlay}
             size="medium"
@@ -895,25 +867,25 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           {/* Video/Audio Progress Bar - Full width with proper margins */}
           <VideoProgressBar
             progress={
-              isAudioSermon
+              isAudioSermonValue
                 ? audioState.progress
                 : Math.max(0, Math.min(1, videoProgress || 0))
             }
-            isMuted={isAudioSermon ? audioState.isMuted : isMuted}
+            isMuted={isAudioSermonValue ? audioState.isMuted : isMuted}
             onToggleMute={handleToggleMute}
             onSeekToPercent={seekToPercent}
             // Lift the controls row up so it's visually closer to the title overlay
             // while still anchored near the bottom of the video frame.
             bottomOffset={24}
             currentMs={
-              isAudioSermon
+              isAudioSermonValue
                 ? (Number.isFinite(audioState.position) && audioState.position >= 0 
                     ? audioState.position 
                     : 0)
                 : videoPositionMs
             }
             durationMs={
-              isAudioSermon 
+              isAudioSermonValue 
                 ? (Number.isFinite(audioState.duration) && audioState.duration > 0
                     ? audioState.duration
                     : 0)
@@ -987,6 +959,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               onSave={() => {
                 onSave(modalKey, video);
               }}
+              isLoading={isLoadingStats}
+              contentType="media"
+              contentId={contentId}
               onShare={() => onShare(modalKey, video)}
               contentType="media"
               contentId={contentId}

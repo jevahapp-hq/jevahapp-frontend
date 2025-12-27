@@ -5,6 +5,7 @@ import { CommentIcon } from "./CommentIcon";
 import LikeBurst from "./LikeBurst";
 import LikeButton from "./LikeButton";
 import SaveButton from "./SaveButton";
+import { CardFooterSkeleton } from "./Skeleton/CardFooterSkeleton";
 
 type Props = {
   viewCount: number;
@@ -24,6 +25,8 @@ type Props = {
   contentType?: string;
   contentId?: string;
   useEnhancedComponents?: boolean;
+  // Loading state for skeleton
+  isLoading?: boolean;
 };
 
 export default function CardFooterActions({
@@ -43,7 +46,15 @@ export default function CardFooterActions({
   contentType = "media",
   contentId,
   useEnhancedComponents = false,
+  isLoading = false,
 }: Props) {
+  // ✅ Show skeleton only if loading AND no fallback data available
+  // This ensures we show actual counts immediately if available, even while loading
+  const hasAnyData = viewCount > 0 || likeCount > 0 || commentCount > 0 || saveCount > 0;
+  if (isLoading && !hasAnyData) {
+    return <CardFooterSkeleton dark={false} />;
+  }
+
   // Use gray color scheme from audio-bible branch instead of green theme color
   // Base gray color for inactive icons: #98A2B3 (matching audio-bible branch)
   const baseGrayColor = "#98A2B3";
