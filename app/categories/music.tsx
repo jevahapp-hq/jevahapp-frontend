@@ -55,6 +55,10 @@ export default function Music() {
     isPlaying: globalIsPlaying,
     setTrack,
     togglePlayPause,
+    progress: globalProgress,
+    duration: globalDuration,
+    position: globalPosition,
+    isMuted: globalIsMuted,
   } = useGlobalAudioPlayerStore();
 
   // Discover weekly style cards (placeholder for ads/featured content) - using Jevah colors
@@ -1047,22 +1051,22 @@ export default function Music() {
           }
           audioProgress={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().progress
+              ? globalProgress
               : 0
           }
           audioDuration={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().duration
+              ? globalDuration
               : (selectedSong?.duration * 1000 || 0)
           }
           audioPosition={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().position
+              ? globalPosition
               : 0
           }
           isMuted={
             selectedSong && currentTrack?.id === selectedSong.id
-              ? useGlobalAudioPlayerStore.getState().isMuted
+              ? globalIsMuted
               : false
           }
           onTogglePlay={async () => {

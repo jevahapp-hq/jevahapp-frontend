@@ -29,6 +29,7 @@ import { UI_CONFIG } from "../../src/shared/constants";
 import copyrightFreeMusicAPI from "../services/copyrightFreeMusicAPI";
 import SocketManager from "../services/SocketManager";
 import { usePlaylistStore, type Playlist } from "../store/usePlaylistStore";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { getApiBaseUrl } from "../utils/api";
 import { playlistAPI } from "../utils/playlistAPI";
 import TokenUtils from "../utils/tokenUtils";
@@ -96,9 +97,11 @@ export default function CopyrightFreeSongModal({
   const [hasTrackedView, setHasTrackedView] = useState(false); // Track if view has been recorded
   const isRecordingViewRef = useRef(false); // Prevent concurrent view recording requests
 
-  // Repeat and shuffle state
-  const [repeatMode, setRepeatMode] = useState<"none" | "all" | "one">("none");
-  const [isShuffled, setIsShuffled] = useState(false);
+  // Repeat and shuffle state from global store
+  const repeatMode = useGlobalAudioPlayerStore((state) => state.repeatMode);
+  const isShuffled = useGlobalAudioPlayerStore((state) => state.isShuffled);
+  const setRepeatMode = useGlobalAudioPlayerStore((state) => state.setRepeatMode);
+  const toggleShuffle = useGlobalAudioPlayerStore((state) => state.toggleShuffle);
 
   // Socket.IO manager for real-time updates (scoped to this modal)
   const socketManagerRef = useRef<SocketManager | null>(null);
@@ -1271,7 +1274,7 @@ export default function CopyrightFreeSongModal({
                 >
                   {/* Shuffle button */}
                   <TouchableOpacity
-                    onPress={() => setIsShuffled(!isShuffled)}
+                    onPress={toggleShuffle}
                     style={{
                       width: 44,
                       height: 44,

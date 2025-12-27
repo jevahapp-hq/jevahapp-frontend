@@ -461,6 +461,10 @@ export default function CopyrightFreeSongs({
     isPlaying: globalIsPlaying,
     togglePlayPause,
     isLoading: globalIsLoading,
+    progress: globalProgress,
+    duration: globalDuration,
+    position: globalPosition,
+    isMuted: globalIsMuted,
   } = useGlobalAudioPlayerStore();
 
   // Update selectedSong when currentTrack changes (for auto-advance to next song)
@@ -526,7 +530,9 @@ export default function CopyrightFreeSongs({
 
             useGlobalAudioPlayerStore.setState({
               queue: mappedQueue,
+              originalQueue: mappedQueue, // Save original queue for shuffle/unshuffle
               currentIndex: songIndex,
+              isShuffled: false, // Reset shuffle when queue changes
             });
           } else {
             // Queue already matches current songs; just move the index.
@@ -776,10 +782,10 @@ export default function CopyrightFreeSongs({
         }}
         onPlay={(song) => handlePlayIconPress(song)}
         isPlaying={selectedSong ? currentTrack?.id === selectedSong.id && globalIsPlaying : false}
-        audioProgress={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().progress : 0}
-        audioDuration={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().duration : (selectedSong?.duration * 1000 || 0)}
-        audioPosition={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().position : 0}
-        isMuted={selectedSong && currentTrack?.id === selectedSong.id ? useGlobalAudioPlayerStore.getState().isMuted : false}
+        audioProgress={selectedSong && currentTrack?.id === selectedSong.id ? globalProgress : 0}
+        audioDuration={selectedSong && currentTrack?.id === selectedSong.id ? globalDuration : (selectedSong?.duration * 1000 || 0)}
+        audioPosition={selectedSong && currentTrack?.id === selectedSong.id ? globalPosition : 0}
+        isMuted={selectedSong && currentTrack?.id === selectedSong.id ? globalIsMuted : false}
         onTogglePlay={async () => {
           if (selectedSong) {
             if (currentTrack?.id === selectedSong.id) {

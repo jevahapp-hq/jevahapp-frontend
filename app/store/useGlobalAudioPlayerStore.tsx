@@ -50,6 +50,9 @@ interface GlobalAudioPlayerState {
   // Queue (for future playlist support)
   queue: AudioTrack[];
   currentIndex: number;
+  originalQueue: AudioTrack[]; // Original unshuffled queue
+  repeatMode: "none" | "all" | "one"; // Repeat mode: none, all, or one
+  isShuffled: boolean; // Whether queue is shuffled
   
   // Actions
   setTrack: (track: AudioTrack, shouldPlayImmediately?: boolean) => Promise<void>;
@@ -65,6 +68,8 @@ interface GlobalAudioPlayerState {
   previous: () => Promise<void>;
   playAtIndex: (index: number) => Promise<void>;
   clear: () => Promise<void>;
+  setRepeatMode: (mode: "none" | "all" | "one") => void;
+  toggleShuffle: () => void;
   
   // Internal state setters
   setPlaying: (playing: boolean) => void;
@@ -103,6 +108,9 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       soundInstance: null,
       queue: [],
       currentIndex: -1,
+      originalQueue: [],
+      repeatMode: "none",
+      isShuffled: false,
 
       // Professional audio store: Internal guards for update management
       __isAdvancing: false,
@@ -113,6 +121,20 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
       setTrack: async (track: AudioTrack, shouldPlayImmediately: boolean = false) => {
         const { stop, soundInstance, currentTrack } = get();
+
+        // CRITICAL: Ensure no two copyright-free songs can play at the same time
+        // Stop any currently playing track before loading a new one
+        if (currentTrack && currentTrack.id !== track.id && soundInstance) {
+          try {
+            const status = await soundInstance.getStatusAsync();
+            if (status.isLoaded && status.isPlaying) {
+              await soundInstance.pauseAsync();
+              await soundInstance.unloadAsync();
+            }
+          } catch (error) {
+            console.warn("Error stopping previous track:", error);
+          }
+        }
 
         // If the same track is already loaded, just return (caller can call play() separately)
         if (currentTrack?.id === track.id && soundInstance) {
@@ -465,15 +487,36 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       next: async () => {
-        const { queue, currentIndex, setTrack } = get();
-        if (queue.length > 0 && currentIndex < queue.length - 1) {
-          const nextIndex = currentIndex + 1;
-          const nextTrack = queue[nextIndex];
-          set({ currentIndex: nextIndex });
-          await setTrack(nextTrack);
-          await get().play();
+        const { queue, currentIndex, setTrack, repeatMode } = get();
+        
+        // Handle repeat one: restart the same song
+        if (repeatMode === "one") {
+          const currentTrack = queue[currentIndex];
+          if (currentTrack) {
+            await setTrack(currentTrack, true);
+            return;
+          }
+        }
+        
+        // Handle repeat all: loop back to first song
+        if (queue.length > 0) {
+          if (currentIndex < queue.length - 1) {
+            // Move to next song
+            const nextIndex = currentIndex + 1;
+            const nextTrack = queue[nextIndex];
+            set({ currentIndex: nextIndex });
+            await setTrack(nextTrack, true);
+          } else if (repeatMode === "all") {
+            // End of queue with repeat all: loop to first song
+            const firstTrack = queue[0];
+            set({ currentIndex: 0 });
+            await setTrack(firstTrack, true);
+          } else {
+            // End of queue with no repeat: stop
+            await get().stop();
+          }
         } else {
-          // End of queue - just stop
+          // Empty queue: stop
           await get().stop();
         }
       },
@@ -521,11 +564,84 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           soundInstance: null,
           queue: [],
           currentIndex: -1,
+          originalQueue: [],
           position: 0,
           duration: 0,
           progress: 0,
           __virtualTrackControls: undefined,
         });
+      },
+
+      setRepeatMode: (mode: "none" | "all" | "one") => {
+        set({ repeatMode: mode });
+      },
+
+      toggleShuffle: () => {
+        const { queue, originalQueue, currentIndex, isShuffled, currentTrack } = get();
+        
+        if (isShuffled) {
+          // Unshuffle: restore original queue order
+          if (originalQueue.length > 0 && currentTrack) {
+            // Find current track's position in original queue
+            const originalIndex = originalQueue.findIndex(t => t.id === currentTrack.id);
+            if (originalIndex !== -1) {
+              set({
+                queue: [...originalQueue],
+                currentIndex: originalIndex,
+                isShuffled: false,
+              });
+            } else {
+              set({ isShuffled: false });
+            }
+          } else {
+            set({ isShuffled: false });
+          }
+        } else {
+          // Shuffle: randomize queue while keeping current song in place
+          if (queue.length > 0 && currentTrack && currentIndex >= 0 && currentIndex < queue.length) {
+            // Save original queue if not already saved
+            const original = originalQueue.length > 0 ? originalQueue : [...queue];
+            
+            // Create shuffled queue - separate current track from others
+            const otherTracks = queue.filter((_, idx) => idx !== currentIndex);
+            
+            // Fisher-Yates shuffle for other tracks
+            for (let i = otherTracks.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+            }
+            
+            // Reconstruct queue with current track in same position
+            const shuffled = [
+              ...otherTracks.slice(0, currentIndex),
+              currentTrack,
+              ...otherTracks.slice(currentIndex)
+            ];
+            
+            set({
+              queue: shuffled,
+              originalQueue: original,
+              currentIndex: currentIndex, // Keep current index
+              isShuffled: true,
+            });
+          } else {
+            // No current track or invalid index - just shuffle everything
+            const original = originalQueue.length > 0 ? originalQueue : [...queue];
+            const shuffled = [...queue];
+            
+            // Fisher-Yates shuffle
+            for (let i = shuffled.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            
+            set({
+              queue: shuffled,
+              originalQueue: original,
+              isShuffled: true,
+            });
+          }
+        }
       },
 
       // Internal setters
@@ -611,7 +727,23 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
               ? track.thumbnailUrl
               : (track.thumbnailUrl?.uri || ''),
           })),
+          originalQueue: state.originalQueue.map(track => ({
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            duration: track.duration,
+            category: track.category,
+            description: track.description,
+            audioUrl: typeof track.audioUrl === 'string' 
+              ? track.audioUrl 
+              : (track.audioUrl?.uri || ''),
+            thumbnailUrl: typeof track.thumbnailUrl === 'string'
+              ? track.thumbnailUrl
+              : (track.thumbnailUrl?.uri || ''),
+          })),
           currentIndex: state.currentIndex,
+          repeatMode: state.repeatMode,
+          isShuffled: state.isShuffled,
         };
       },
     }
