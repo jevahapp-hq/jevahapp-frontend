@@ -163,7 +163,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
         </Text>
       )}
 
-      {showCount && !showText && (
+      {showCount && !showText && saveCount > 0 && (
         <Text
           style={{
             marginLeft: 4,

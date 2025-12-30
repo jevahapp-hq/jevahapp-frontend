@@ -550,7 +550,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               likeBurstKey={likeBurstKey}
               likeColor="#D22A2A"
               onLike={() => {
-                setLikeBurstKey((k) => k + 1);
+                // ✅ Only trigger burst animation when LIKING (not unliking)
+                if (!likedFromStore) {
+                  setLikeBurstKey((k) => k + 1);
+                }
                 onLike(audio);
               }}
               commentCount={commentsFromStore || audio.comments || 0}

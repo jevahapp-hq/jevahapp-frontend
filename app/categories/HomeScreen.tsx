@@ -1,12 +1,17 @@
 import BottomNav from "@/app/components/BottomNav";
 import MiniAudioPlayer from "@/app/components/MiniAudioPlayer";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { View } from "react-native";
-import BibleScreen from "../screens/BibleScreen";
-import CommunityScreen from "../screens/CommunityScreen";
-import LibraryScreen from "../screens/library/LibraryScreen";
+import { Suspense, useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
+import { CommunityScreenWithSuspense, LibraryScreenWithSuspense, BibleScreenWithSuspense } from "../utils/lazyImports";
 import HomeTabContent from "./HomeTabContent";
+
+// Loading fallback for lazy-loaded tabs
+const TabLoadingFallback = () => (
+  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+    <ActivityIndicator size="large" color="#000" />
+  </View>
+);
 
 const tabList = ["Home", "Community", "Library", "Bible"];
 
@@ -28,17 +33,28 @@ export default function HomeScreen() {
   }, [defaultTabParam]);
 
   const renderTabContent = () => {
-    // Only render the active tab - React Native compatible approach
-    // This still provides performance benefits without breaking lazy loading
+    // Lazy load heavy screens for better performance
     switch (selectedTab) {
       case "Home":
         return <HomeTabContent />;
       case "Community":
-        return <CommunityScreen />;
+        return (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <CommunityScreenWithSuspense />
+          </Suspense>
+        );
       case "Library":
-        return <LibraryScreen />;
+        return (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <LibraryScreenWithSuspense />
+          </Suspense>
+        );
       case "Bible":
-        return <BibleScreen />;
+        return (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <BibleScreenWithSuspense />
+          </Suspense>
+        );
       default:
         return <HomeTabContent />;
     }

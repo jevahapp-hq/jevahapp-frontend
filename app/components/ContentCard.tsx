@@ -24,6 +24,8 @@ import { useInteractionStore } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import CommentIcon from "./CommentIcon";
 import { CompactAudioControls } from "./CompactAudioControls";
+import ContentCardFooter from "./ContentCardFooter";
+import { getUserDisplayNameFromContent } from "../utils/userValidation";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -470,7 +472,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     }
   }, [isLive, livePulseAnimation]);
 
-  // Helper functions
+  // Helper function - kept for use in other parts of the component
   const getTimeAgo = (createdAt: string): string => {
     const now = new Date();
     const posted = new Date(createdAt);
@@ -482,51 +484,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
     if (minutes < 60) return `${minutes}MIN AGO`;
     if (hours < 24) return `${hours}HRS AGO`;
     return `${days}DAYS AGO`;
-  };
-
-  const getUserAvatarFromContent = (content: any) => {
-    // Use mappedContent for consistent data structure
-    const author = mappedContent.author;
-
-    // Check if author has avatar
-    if (author?.avatar) {
-      return typeof author.avatar === "string"
-        ? { uri: author.avatar }
-        : author.avatar;
-    }
-
-    // Use Cloudinary default avatar like Jentezen Franklin
-    return {
-      uri: "https://res.cloudinary.com/demo/image/upload/w_400,h_400,c_crop,g_face,r_max/w_200/lady.jpg",
-    };
-  };
-
-  const getUserDisplayNameFromContent = (content: any) => {
-    // Use mappedContent for consistent data structure
-    const author = mappedContent.author;
-
-    // Check if author has complete name
-    if (author?.firstName && author?.lastName) {
-      return `${author.firstName} ${author.lastName}`;
-    }
-
-    // Check if author has firstName only
-    if (author?.firstName) {
-      return author.firstName;
-    }
-
-    // Check if author has lastName only
-    if (author?.lastName) {
-      return author.lastName;
-    }
-
-    // Check if author exists but no name
-    if (author && (author._id === null || !author.firstName)) {
-      return "Jevah HQ";
-    }
-
-    // Final fallback
-    return "Jevah HQ";
   };
 
   // Video toggle function using global media store
@@ -1218,89 +1175,19 @@ const ContentCard: React.FC<ContentCardProps> = ({
     <View key={modalKey} className="flex flex-col mb-10">
       {renderMediaContent()}
 
-      {/* Footer - matching your existing design exactly */}
-      <View className="flex-row items-center justify-between mt-1 px-3">
-        <View className="flex flex-row items-center">
-          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 mt-2">
-            <Image
-              source={getUserAvatarFromContent(content)}
-              style={{ width: 30, height: 30, borderRadius: 999 }}
-              resizeMode="cover"
-              onError={(error) => {
-                console.warn(
-                  "❌ Failed to load speaker avatar:",
-                  error.nativeEvent.error
-                );
-              }}
-            />
-          </View>
-          <View className="ml-3">
-            <View className="flex-row items-center">
-              <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
-                {getUserDisplayNameFromContent(content)}
-              </Text>
-
-              {/* Live Stream Indicator */}
-              {isLive && (
-                <Animated.View
-                  style={{
-                    transform: [{ scale: livePulseAnimation }],
-                    marginLeft: 8,
-                    marginTop: 2,
-                  }}
-                >
-                  <View className="flex-row items-center bg-red-500 px-2 py-1 rounded-full">
-                    <View className="w-2 h-2 bg-white rounded-full mr-1" />
-                    <Text className="text-white text-[10px] font-rubik-semibold">
-                      LIVE
-                    </Text>
-                  </View>
-                </Animated.View>
-              )}
-
-              <View className="flex flex-row mt-2 ml-2">
-                <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {getTimeAgo(content.createdAt)}
-                </Text>
-              </View>
-            </View>
-            <View className="flex-row mt-2">
-              <View className="flex-row items-center">
-                <AntDesign name="eye" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
-                  {contentStats[key]?.views ?? mappedContent.viewCount ?? 0}
-                </Text>
-              </View>
-
-              {/* Live Viewer Count */}
-              {isLive && viewerCount > 0 && (
-                <View className="flex-row items-center ml-4">
-                  <Ionicons name="people" size={16} color="#ef4444" />
-                  <Text className="text-[10px] text-red-500 ml-1 font-rubik-semibold">
-                    {viewerCount} watching
-                  </Text>
-                </View>
-              )}
-              <TouchableOpacity
-                onPress={handleShare}
-                className="flex-row items-center ml-4"
-              >
-                <Feather name="send" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                  {contentStats[key]?.sheared ?? mappedContent.shareCount ?? 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => setModalVisible(!modalVisible)}
-          className="mr-2"
-        >
-          <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
-      </View>
+      {/* Footer - using modularized component */}
+      <ContentCardFooter
+        content={content}
+        contentStats={contentStats}
+        viewCount={mappedContent.viewCount}
+        shareCount={mappedContent.shareCount}
+        isLive={isLive}
+        viewerCount={viewerCount}
+        livePulseAnimation={livePulseAnimation}
+        onShare={handleShare}
+        onMenuPress={() => setModalVisible(!modalVisible)}
+        getTimeAgo={getTimeAgo}
+      />
 
       {/* Modal with touch-outside-to-close functionality */}
       {modalVisible && (

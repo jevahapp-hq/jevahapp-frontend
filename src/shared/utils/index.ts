@@ -10,5 +10,6 @@ export * from "./imageOptimizer";
 export * from "./logger";
 export * from "./mediaHelpers";
 export * from "./mediaTypeDetection";
+export * from "./performance";
 export * from "./responsive";
 

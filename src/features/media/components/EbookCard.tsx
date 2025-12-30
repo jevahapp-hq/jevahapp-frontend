@@ -143,7 +143,10 @@ export const EbookCard: React.FC<EbookCardProps> = ({
 
   const handleFavorite = () => {
     try {
-      setLikeBurstKey((k) => k + 1);
+      // ✅ Only trigger burst animation when LIKING (not unliking)
+      if (!likedFromStore) {
+        setLikeBurstKey((k) => k + 1);
+      }
       onLike(ebook);
     } catch {}
   };

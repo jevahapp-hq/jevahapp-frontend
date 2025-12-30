@@ -48,10 +48,9 @@ export default function CardFooterActions({
   useEnhancedComponents = false,
   isLoading = false,
 }: Props) {
-  // ✅ Show skeleton only if loading AND no fallback data available
-  // This ensures we show actual counts immediately if available, even while loading
-  const hasAnyData = viewCount > 0 || likeCount > 0 || commentCount > 0 || saveCount > 0;
-  if (isLoading && !hasAnyData) {
+  // ✅ Show skeleton for ALL icons when loading to prevent staggered appearance
+  // This ensures all icons appear together, not just comment and save icons first
+  if (isLoading) {
     return <CardFooterSkeleton dark={false} />;
   }
 
@@ -67,13 +66,15 @@ export default function CardFooterActions({
 
   return (
     <View className="flex-row items-center pl-1">
-      <View className="flex-row items-center mr-4">
+      <View className="flex-row items-center mr-4" pointerEvents="box-none">
         <MaterialIcons name="visibility" size={24} color={mediumShade} />
-        <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{viewCount}</Text>
+        {viewCount > 0 && (
+          <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{viewCount}</Text>
+        )}
       </View>
 
       {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-4">
+        <View className="flex-row items-center mr-4" pointerEvents="box-none">
           <LikeButton
             contentType={contentType}
             contentId={contentId}
@@ -122,7 +123,7 @@ export default function CardFooterActions({
       />
 
       {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-4">
+        <View className="flex-row items-center mr-4" pointerEvents="box-none">
           <SaveButton
             contentId={contentId}
             contentType={contentType}
@@ -148,7 +149,9 @@ export default function CardFooterActions({
             size={26}
             color={saved ? savedActiveColor : mediumShade}
           />
-          <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{saveCount}</Text>
+          {saveCount > 0 && (
+            <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{saveCount}</Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -199,7 +202,9 @@ function AnimatedLikeButton({
         size={14}
         style={{ marginLeft: -6, marginTop: -8 }}
       />
-      <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{likeCount}</Text>
+      {likeCount > 0 && (
+        <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{likeCount}</Text>
+      )}
     </AnimatedButton>
   );
 }

@@ -976,7 +976,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               likeBurstKey={likeBurstKey}
               likeColor="#D22A2A"
               onLike={() => {
-                setLikeBurstKey((k) => k + 1);
+                // ✅ Only trigger burst animation when LIKING (not unliking)
+                if (!userLikeState) {
+                  setLikeBurstKey((k) => k + 1);
+                }
                 onFavorite(key, video);
               }}
               commentCount={commentCount || video.comment || 0}

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Dimensions, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
     getResponsiveBorderRadius,
     getResponsiveShadow,
@@ -12,9 +12,17 @@ import CopyrightFreeSongs from "../../components/CopyrightFreeSongs";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
 import { useFastPerformance } from "../../utils/fastPerformance";
 import { navigateMainTab } from "../../utils/navigation";
-import AllLibrary from "./AllLibrary";
+import { AllLibraryWithSuspense } from "../../utils/lazyImports";
 import PlaylistsLibrary from "./PlaylistsLibrary";
 import Music from "../../categories/music";
+import { Suspense } from "react";
+
+// Loading fallback for lazy-loaded content
+const ContentLoadingFallback = () => (
+  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", minHeight: 200 }}>
+    <ActivityIndicator size="large" color="#000" />
+  </View>
+);
 
 const categories = ["ALL", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "PLAYLISTS"];
 
@@ -86,15 +94,31 @@ export default function LibraryScreen() {
   const renderContent = () => {
     switch (selectedCategory) {
       case "ALL":
-        return <AllLibrary contentType="ALL" />;
+        return (
+          <Suspense fallback={<ContentLoadingFallback />}>
+            <AllLibraryWithSuspense contentType="ALL" />
+          </Suspense>
+        );
       case "SERMON":
-        return <AllLibrary contentType="SERMON" />;
+        return (
+          <Suspense fallback={<ContentLoadingFallback />}>
+            <AllLibraryWithSuspense contentType="SERMON" />
+          </Suspense>
+        );
       case "MUSIC":
         return <Music />;
       case "E-BOOKS":
-        return <AllLibrary contentType="E-BOOKS" />;
+        return (
+          <Suspense fallback={<ContentLoadingFallback />}>
+            <AllLibraryWithSuspense contentType="E-BOOKS" />
+          </Suspense>
+        );
       case "VIDEO":
-        return <AllLibrary contentType="VIDEO" />;
+        return (
+          <Suspense fallback={<ContentLoadingFallback />}>
+            <AllLibraryWithSuspense contentType="VIDEO" />
+          </Suspense>
+        );
       case "PLAYLISTS":
         return <PlaylistsLibrary />;
       default:
