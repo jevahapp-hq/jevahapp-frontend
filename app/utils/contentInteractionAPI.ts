@@ -36,6 +36,7 @@ export interface CommentData {
   comment: string;
   timestamp: string;
   likes: number;
+  isLiked?: boolean; // Whether current user liked this comment
   replies?: CommentData[];
 }
 
@@ -109,23 +110,22 @@ class ContentInteractionService {
 
   // Map frontend content types to backend expected types
   private mapContentTypeToBackend(contentType: string): string {
-    const typeMap: Record<string, string> = {
-      video: "media",
-      videos: "media",
-      audio: "media",
-      music: "media",
-      sermon: "devotional",
-      ebook: "ebook",
-      "e-books": "ebook",
-      books: "ebook",
-      image: "ebook", // PDFs are treated as ebooks
-      live: "media",
-      podcast: "podcast",
-      merch: "merch",
-      artist: "artist",
-    };
-
-    return typeMap[contentType.toLowerCase()] || "media";
+    // ⭐ SIMPLE RULE: Use "media" for EVERYTHING except artist and merch
+    // Backend only accepts: "media", "artist", "merch", "ebook", "podcast"
+    // But guide says: Use "media" for videos, audio, ebooks, podcasts - EVERYTHING
+    
+    const normalized = contentType.toLowerCase();
+    
+    // Only artist and merch have special endpoints
+    if (normalized === "artist") {
+      return "artist";
+    }
+    if (normalized === "merch") {
+      return "merch";
+    }
+    
+    // EVERYTHING ELSE uses "media" (videos, audio, ebooks, podcasts, devotionals, sermons, etc.)
+    return "media";
   }
 
   // ============= LIKE INTERACTIONS =============
@@ -176,20 +176,53 @@ class ContentInteractionService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        // Graceful fallback on 404 Content not found
-        if (response.status === 404) {
-          console.warn(
-            `⚠️ TOGGLE LIKE: Content not found (404) for ${backendContentType}/${contentId}. Falling back to local like.`
-          );
-          return this.fallbackToggleLike(contentId);
+        let errorData: any = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          // Not JSON, use text as message
         }
+        
+        // Handle specific error codes per guide
+        if (response.status === 401) {
+          // Token expired or invalid - should trigger token refresh
+          throw new Error("Authentication required. Please log in again.");
+        }
+        
+        if (response.status === 400) {
+          // Invalid content type or content ID
+          // If backend says "Invalid content type: devotional", it means mapping failed
+          if (errorData.message?.includes("Invalid content type")) {
+            console.error(
+              `❌ TOGGLE LIKE: Backend rejected contentType "${backendContentType}". ` +
+              `Original contentType was "${contentType}". ` +
+              `This should have been mapped to "media".`
+            );
+          }
+          throw new Error(errorData.message || `Invalid request: ${errorText}`);
+        }
+        
+        if (response.status === 404) {
+          // Content not found
+          console.warn(
+            `⚠️ TOGGLE LIKE: Content not found (404) for ${backendContentType}/${contentId}`
+          );
+          throw new Error("Content not found");
+        }
+        
+        if (response.status === 429) {
+          // Rate limited - don't rollback, user's action was valid
+          throw new Error("Too many requests. Please wait a moment before liking again.");
+        }
+        
+        // Other errors
         console.error(
           "❌ TOGGLE LIKE: Request failed",
           response.status,
           errorText
         );
         throw new Error(
-          `HTTP error! status: ${response.status}, body: ${errorText}`
+          errorData.message || `HTTP error! status: ${response.status}`
         );
       }
 
@@ -537,18 +570,25 @@ class ContentInteractionService {
 
       const result = await response.json();
 
+      // Support both response formats:
+      // 1. Direct format: { success: true, data: { hasLiked, likeCount, ... } }
+      // 2. Nested format: { success: true, data: { userInteraction: { hasLiked }, stats: { likes } } }
+      const data = result.data || {};
+      const userInteraction = data.userInteraction || {};
+      const stats = data.stats || {};
+
       return {
         contentId,
-        likes: result.data?.likeCount || 0,
-        saves: result.data?.bookmarkCount || 0,
-        shares: result.data?.shareCount || 0,
-        views: result.data?.viewCount || 0,
-        comments: result.data?.commentCount || 0,
+        likes: stats.likes ?? data.likeCount ?? 0,
+        saves: stats.saves ?? data.bookmarkCount ?? 0,
+        shares: stats.shares ?? data.shareCount ?? 0,
+        views: stats.views ?? data.viewCount ?? 0,
+        comments: stats.comments ?? data.commentCount ?? 0,
         userInteractions: {
-          liked: result.data?.hasLiked || false,
-          saved: result.data?.hasBookmarked || false,
-          shared: result.data?.hasShared || false,
-          viewed: result.data?.hasViewed || false,
+          liked: userInteraction.hasLiked ?? data.hasLiked ?? false,
+          saved: userInteraction.hasBookmarked ?? data.hasBookmarked ?? false,
+          shared: userInteraction.hasShared ?? data.hasShared ?? false,
+          viewed: userInteraction.hasViewed ?? data.hasViewed ?? false,
         },
       };
     } catch (error) {
@@ -763,10 +803,11 @@ class ContentInteractionService {
           data?.username ||
           user.email ||
           "User",
-        userAvatar: user.avatar || user.avatarUrl || data?.avatar,
-        comment: String(data?.content || ""),
-        timestamp: String(data?.createdAt || new Date().toISOString()),
-        likes: Number(data?.likesCount ?? data?.likes ?? 0),
+        userAvatar: user.avatar || user.avatarUrl || data?.avatar || "",
+        comment: String(data?.content || data?.comment || ""),
+        timestamp: String(data?.createdAt || data?.timestamp || new Date().toISOString()),
+        likes: Number(data?.likesCount ?? data?.likes ?? data?.reactionsCount ?? 0),
+        isLiked: Boolean(data?.isLiked || false),
         replies: [], // replies are loaded separately when needed
       };
       return transformed;
@@ -791,7 +832,24 @@ class ContentInteractionService {
       if (!this.isValidObjectId(contentId)) {
         return { comments: [], totalComments: 0, hasMore: false };
       }
-      const headers = await this.getAuthHeaders();
+      
+      // GET comments is PUBLIC - token is optional (only for isLiked status)
+      // Try to get token but don't fail if not available
+      let headers: HeadersInit = {
+        "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
+      };
+      
+      try {
+        const token = await AsyncStorage.getItem("userToken") || 
+                     await AsyncStorage.getItem("token");
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+      } catch (e) {
+        // Token not available - that's fine, comments are public
+      }
+      
       const backendContentType = this.mapContentTypeToBackend(contentType);
 
       // Build query params
@@ -820,27 +878,32 @@ class ContentInteractionService {
         payload?.total || payload?.totalCount || serverComments.length || 0
       );
       const hasMore = Boolean(payload?.hasMore || page * limit < total);
+      
       // Helper function to transform a single comment (including nested replies)
-      const transformComment = (c: any): CommentData => ({
-        id: String(c?._id || c?.id),
-        contentId: String(contentId),
-        userId: String(c?.userId || c?.authorId || ""),
-        username: String(
-          c?.username || 
-          c?.user?.username || 
-          (c?.author?.firstName && c?.author?.lastName ? `${c.author.firstName} ${c.author.lastName}` : null) ||
-          "User"
-        ),
-        userAvatar: c?.userAvatar || c?.user?.avatarUrl || c?.author?.avatar,
-        comment: String(c?.content || c?.comment || ""),
-        timestamp: String(
-          c?.createdAt || c?.timestamp || new Date().toISOString()
-        ),
-        likes: Number(c?.reactionsCount || c?.likes || 0),
-        replies: Array.isArray(c?.replies)
-          ? c.replies.map((r: any) => transformComment(r))
-          : undefined,
-      });
+      const transformComment = (c: any): CommentData => {
+        // Extract user name - support multiple formats from backend
+        const firstName = c?.user?.firstName || c?.author?.firstName || c?.userFirstName || "";
+        const lastName = c?.user?.lastName || c?.author?.lastName || c?.userLastName || "";
+        const fullName = `${String(firstName).trim()} ${String(lastName).trim()}`.trim();
+        const username = fullName || c?.username || c?.user?.username || "User";
+        
+        return {
+          id: String(c?._id || c?.id),
+          contentId: String(contentId),
+          userId: String(c?.userId || c?.user?._id || c?.author?._id || c?.authorId || ""),
+          username: username,
+          userAvatar: c?.userAvatar || c?.user?.avatar || c?.user?.avatarUrl || c?.author?.avatar || "",
+          comment: String(c?.content || c?.comment || ""),
+          timestamp: String(
+            c?.createdAt || c?.timestamp || new Date().toISOString()
+          ),
+          likes: Number(c?.likesCount || c?.likes || c?.reactionsCount || 0),
+          isLiked: Boolean(c?.isLiked || false), // Backend should provide this
+          replies: Array.isArray(c?.replies)
+            ? c.replies.map((r: any) => transformComment(r))
+            : undefined,
+        };
+      };
 
       const comments: CommentData[] = serverComments.map(transformComment);
       return { comments, totalComments: total, hasMore };

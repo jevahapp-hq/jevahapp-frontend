@@ -50,7 +50,7 @@ export const loginDebugger = {
     // console.log('🔍 === BACKEND CONNECTIVITY TEST ===');
     
     try {
-      const response = await fetch('https://jevahapp-backend.onrender.com/api/auth/login', {
+      const response = await fetch('https://api.jevahapp.com/api/auth/login', {
         method: 'OPTIONS',
         headers: { 'Content-Type': 'application/json' },
       });

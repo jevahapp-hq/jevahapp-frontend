@@ -22,6 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { UI_CONFIG } from "../constants";
 import { useMediaOwnership } from "../hooks/useMediaOwnership";
+import { isAdmin } from "../../../app/utils/mediaDeleteAPI";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -64,6 +65,14 @@ export default function ContentActionModal({
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
   const [internalVisible, setInternalVisible] = useState(isVisible);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  
+  // Check if user is admin when modal opens
+  useEffect(() => {
+    if (internalVisible) {
+      isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
+    }
+  }, [internalVisible]);
   
   // Use ownership hook if mediaItem is provided AND showDelete is not explicitly provided
   // If showDelete is explicitly provided (true/false), trust it and skip the hook check
@@ -84,6 +93,11 @@ export default function ContentActionModal({
     : showDelete === false 
     ? false 
     : isOwnerFromHook;
+  
+  // For admins: always show Delete, never show Report
+  // For regular users: show Delete if owner, show Report if not owner
+  const shouldShowDelete = userIsAdmin || isOwner;
+  const shouldShowReport = !userIsAdmin && !isOwner;
 
   useEffect(() => {
     if (isVisible) {
@@ -348,8 +362,8 @@ export default function ContentActionModal({
                 <Ionicons name="chevron-forward" size={18} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
               </TouchableOpacity>
 
-              {/* Delete button - only show if user is the owner */}
-              {onDelete && isOwner && (
+              {/* Delete button - show if user is admin OR owner */}
+              {onDelete && shouldShowDelete && (
                 <TouchableOpacity
                   onPress={() => {
                     if (onDelete) {
@@ -396,8 +410,8 @@ export default function ContentActionModal({
                 </TouchableOpacity>
               )}
 
-              {/* Report button - only show if user is NOT the owner */}
-              {onReport && !isOwner && (
+              {/* Report button - only show if user is NOT admin and NOT owner */}
+              {onReport && shouldShowReport && (
                 <TouchableOpacity
                   onPress={() => {
                     if (onReport) {

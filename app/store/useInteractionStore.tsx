@@ -199,10 +199,11 @@ export const useInteractionStore = create<InteractionState>()(
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
+        // Return current state (may have been rolled back)
+        const currentState = get().contentStats[contentId];
         return {
-          liked:
-            get().contentStats[contentId]?.userInteractions?.liked ?? false,
-          totalLikes: get().contentStats[contentId]?.likes ?? 0,
+          liked: currentState?.userInteractions?.liked ?? false,
+          totalLikes: currentState?.likes ?? 0,
         };
       }
     },
@@ -621,19 +622,19 @@ export const useInteractionStore = create<InteractionState>()(
 
           const merged: ContentStats = {
             contentId,
-            // Use backend values (source of truth for counts)
-            likes: stats.likes ?? existing?.likes ?? 0,
-            saves: stats.saves ?? existing?.saves ?? 0,
-            shares: stats.shares ?? existing?.shares ?? 0,
-            views: stats.views ?? existing?.views ?? 0,
-            comments: stats.comments ?? existing?.comments ?? 0,
+            // Counts: Use max during active session to prevent UI regression, but trust server on fresh load
+            likes: shouldTrustBackend ? (stats.likes ?? 0) : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
+            saves: shouldTrustBackend ? (stats.saves ?? 0) : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+            shares: shouldTrustBackend ? (stats.shares ?? 0) : Math.max(existing?.shares ?? 0, stats.shares ?? 0),
+            views: shouldTrustBackend ? (stats.views ?? 0) : Math.max(existing?.views ?? 0, stats.views ?? 0),
+            comments: shouldTrustBackend ? (stats.comments ?? 0) : Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+            // User interactions: ALWAYS trust server (ensures persistence after logout/login)
+            // Server is source of truth - this is what makes heart stay red after login
             userInteractions: {
-              // Trust backend on fresh load/refresh (ensures persistence)
-              // Use OR merge during active session (prevents flickering during rapid interactions)
-              liked: shouldTrustBackend ? statsLiked : (existingLiked || statsLiked),
-              saved: shouldTrustBackend ? statsSaved : (existingSaved || statsSaved),
-              shared: shouldTrustBackend ? statsShared : (existingShared || statsShared),
-              viewed: shouldTrustBackend ? statsViewed : (existingViewed || statsViewed),
+              liked: stats.userInteractions?.liked ?? false, // ⭐ Server is source of truth
+              saved: stats.userInteractions?.saved ?? false, // ⭐ Server is source of truth
+              shared: stats.userInteractions?.shared ?? false, // ⭐ Server is source of truth
+              viewed: stats.userInteractions?.viewed ?? false, // ⭐ Server is source of truth
             },
           };
 
@@ -710,19 +711,19 @@ export const useInteractionStore = create<InteractionState>()(
 
               merged[id] = {
                 contentId: id,
-                // Use backend values (source of truth for counts)
-                likes: stats.likes ?? existing?.likes ?? 0,
-                saves: stats.saves ?? existing?.saves ?? 0,
-                shares: stats.shares ?? existing?.shares ?? 0,
-                views: stats.views ?? existing?.views ?? 0,
-                comments: stats.comments ?? existing?.comments ?? 0,
+                // Counts: Use max during active session to prevent UI regression, but trust server on fresh load
+                likes: shouldTrustBackend ? (stats.likes ?? 0) : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
+                saves: shouldTrustBackend ? (stats.saves ?? 0) : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+                shares: shouldTrustBackend ? (stats.shares ?? 0) : Math.max(existing?.shares ?? 0, stats.shares ?? 0),
+                views: shouldTrustBackend ? (stats.views ?? 0) : Math.max(existing?.views ?? 0, stats.views ?? 0),
+                comments: shouldTrustBackend ? (stats.comments ?? 0) : Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+                // User interactions: ALWAYS trust server (ensures persistence after logout/login)
+                // Server is source of truth - this is what makes heart stay red after login
                 userInteractions: {
-                  // Trust backend on fresh load/refresh (ensures persistence)
-                  // Use OR merge during active session (prevents flickering)
-                  liked: shouldTrustBackend ? statsLiked : (existingLiked || statsLiked),
-                  saved: shouldTrustBackend ? statsSaved : (existingSaved || statsSaved),
-                  shared: shouldTrustBackend ? statsShared : (existingShared || statsShared),
-                  viewed: shouldTrustBackend ? statsViewed : (existingViewed || statsViewed),
+                  liked: stats.userInteractions?.liked ?? false, // ⭐ Server is source of truth
+                  saved: stats.userInteractions?.saved ?? false, // ⭐ Server is source of truth
+                  shared: stats.userInteractions?.shared ?? false, // ⭐ Server is source of truth
+                  viewed: stats.userInteractions?.viewed ?? false, // ⭐ Server is source of truth
                 },
               } as ContentStats;
             }

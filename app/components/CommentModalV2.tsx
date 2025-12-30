@@ -26,11 +26,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCommentModal } from "../context/CommentModalContext";
 import { formatTimeAgo } from "../../src/shared/utils";
 import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
+import { CommentSkeleton } from "../../src/shared/components/CommentSkeleton";
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function CommentModalV2() {
-  const { isVisible, comments, hideCommentModal, submitComment, likeComment, replyToComment, contentOwnerName } =
+  const { isVisible, comments, isLoadingComments, hideCommentModal, submitComment, likeComment, replyToComment, contentOwnerName } =
     useCommentModal();
 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -291,7 +292,9 @@ export default function CommentModalV2() {
             }}
             showsVerticalScrollIndicator={false}
           >
-            {comments.length > 0 ? (
+            {isLoadingComments ? (
+              <CommentSkeleton count={5} />
+            ) : comments.length > 0 ? (
               comments.map((c: any) => (
                 <View
                   key={c.id}
@@ -385,10 +388,10 @@ export default function CommentModalV2() {
               <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                 <Ionicons name="chatbubble-outline" size={48} color="#D1D5DB" />
                 <Text style={{ fontSize: 16, color: "#6B7280", marginTop: 12, textAlign: 'center' }}>
-                  {isAuthenticated ? "No comments yet" : "Sign in to view and add comments"}
+                  {"No comments yet"}
                 </Text>
                 <Text style={{ fontSize: 14, color: "#9CA3AF", marginTop: 4, textAlign: 'center' }}>
-                  {isAuthenticated ? "Be the first to share your thoughts!" : "Join the conversation"}
+                  {"Be the first to share your thoughts!"}
                 </Text>
               </View>
             )}

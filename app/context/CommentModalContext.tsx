@@ -76,6 +76,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "top">("newest");
   const isLoadingRef = useRef(false);
   const [isOpening, setIsOpening] = useState(false);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
 
   const { addComment: addCommentToStore, toggleCommentLike } =
     useInteractionStore();
@@ -126,8 +127,15 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     
     // Set modal visible IMMEDIATELY - no delays
     setIsVisible(true);
-    // Use cached comments if available, otherwise use provided comments
-    setComments(cachedComments.length > 0 ? cachedComments : (newComments || []));
+    // Show loading skeleton if no cached comments, otherwise show cached
+    if (cachedComments.length > 0) {
+      setComments(cachedComments);
+      setIsLoadingComments(false);
+    } else {
+      // Don't show dummy comments - show skeleton instead
+      setComments([]);
+      setIsLoadingComments(true);
+    }
     if (contentId) {
       setCurrentContentId(contentId);
     }
@@ -459,6 +467,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   ) => {
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
+    if (pageNum === 1) {
+      setIsLoadingComments(true);
+    }
     try {
       // Check cache first for instant display (only on first page)
       if (pageNum === 1) {
@@ -510,18 +521,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         }
       }
       
-      // Check if user is authenticated before making API call
-      const token = await AsyncStorage.getItem("userToken") || 
-                   await AsyncStorage.getItem("token");
-      
-      if (!token) {
-        // console.warn("⚠️ No authentication token found. Skipping comment load from server.");
-        // Set empty comments instead of throwing error
-        if (replace) {
-          setComments([]);
-        }
-        return;
-      }
+      // GET comments is PUBLIC - no auth required
+      // Token is optional (only needed for isLiked status)
+      // Don't block comment loading if no token - comments should be publicly viewable
 
       // Use smaller limit for first page (10) for faster loading, larger for pagination (20)
       const limit = pageNum === 1 ? 10 : 20;
@@ -545,24 +547,25 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       
       // Helper function to recursively map comments and their replies
       const mapComment = (c: any): Comment => {
-        const first = c.firstName || c.userFirstName || c.user?.firstName || "";
-        const last = c.lastName || c.userLastName || c.user?.lastName || "";
+        // Extract user name - support multiple formats from backend
+        const first = c.firstName || c.userFirstName || c.user?.firstName || c.author?.firstName || "";
+        const last = c.lastName || c.userLastName || c.user?.lastName || c.author?.lastName || "";
         const fullName = `${String(first).trim()} ${String(last).trim()}`.trim();
-        const name = fullName || c.username || "User";
+        const name = fullName || c.username || c.user?.username || "User";
         
         const mappedComment: Comment = {
-          id: c.id,
+          id: c.id || c._id,
           userName: name,
-          avatar: c.userAvatar || c.avatar || c.user?.avatar || "",
-          timestamp: c.timestamp,
-          comment: c.comment,
-          likes: c.likes || 0,
-          isLiked: c.isLiked || false,
+          avatar: c.userAvatar || c.avatar || c.user?.avatar || c.user?.avatarUrl || c.author?.avatar || "",
+          timestamp: c.timestamp || c.createdAt,
+          comment: c.comment || c.content,
+          likes: c.likes || c.likesCount || 0,
+          isLiked: Boolean(c.isLiked || false), // Backend should provide this
           replies: Array.isArray(c.replies) && c.replies.length > 0
             ? c.replies.map((r: any) => mapComment(r))
             : [],
           // @ts-ignore optional
-          userId: c.userId,
+          userId: c.userId || c.user?._id || c.author?._id,
         };
         
         return mappedComment;
@@ -598,6 +601,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       });
       setHasMore(Boolean(res.hasMore));
       setPage(pageNum);
+      setIsLoadingComments(false);
       
       // Cache the results for faster subsequent loads (only cache first page)
       if (pageNum === 1) {
@@ -625,6 +629,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       if (replace) {
         setComments([]);
       }
+      setIsLoadingComments(false);
       // If we have a comment count but no comments loaded, this might indicate an API issue
       // The UI will show empty, but the count badge will still show the number
     } finally {
@@ -651,7 +656,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         const token = await TokenUtils.getAuthToken();
         if (!token) return;
         const manager = new SocketManager({
-          serverUrl: "https://jevahapp-backend.onrender.com",
+          serverUrl: "https://api.jevahapp.com",
           authToken: token,
         });
         await manager.connect();
@@ -691,6 +696,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   const value: CommentModalContextType = {
     isVisible,
     comments,
+    isLoadingComments,
     showCommentModal,
     hideCommentModal,
     addComment,

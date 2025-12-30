@@ -10,7 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { deleteMedia } from "../utils/mediaDeleteAPI";
+import { deleteMedia, adminDeleteContent } from "../utils/mediaDeleteAPI";
 import TopToast from "./TopToast";
 
 interface DeleteMediaConfirmationProps {
@@ -19,6 +19,7 @@ interface DeleteMediaConfirmationProps {
   mediaTitle: string;
   onClose: () => void;
   onSuccess: () => void;
+  isAdmin?: boolean; // If true, use admin delete endpoint
 }
 
 export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = ({
@@ -27,6 +28,7 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
   mediaTitle,
   onClose,
   onSuccess,
+  isAdmin = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,11 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
     setError(null);
 
     try {
-      const result = await deleteMedia(mediaId);
+      // Use admin delete endpoint if user is admin, otherwise use regular delete
+      const result = isAdmin 
+        ? await adminDeleteContent(mediaId)
+        : await deleteMedia(mediaId);
+      
       if (result.success) {
         setHasDeleted(true);
         // Show success notification
@@ -88,15 +94,16 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
             <Ionicons name="trash-outline" size={48} color="#EF4444" />
           </View>
 
-          <Text style={styles.title}>Delete Media</Text>
+          <Text style={styles.title}>{isAdmin ? "Delete Content" : "Delete Media"}</Text>
 
           <Text style={styles.message}>
             Are you sure you want to delete "{mediaTitle}"?
           </Text>
 
           <Text style={styles.warning}>
-            This action cannot be undone. The media will be permanently deleted
-            from your account and all storage.
+            {isAdmin 
+              ? "This action cannot be undone. The content will be permanently deleted from the platform, all storage, and related reports will be resolved."
+              : "This action cannot be undone. The media will be permanently deleted from your account and all storage."}
           </Text>
 
           {error && (
@@ -132,7 +139,7 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
       {/* Success Toast Notification */}
       <TopToast
         visible={showSuccessToast}
-        text="Media deleted successfully"
+        text={isAdmin ? "Content deleted successfully" : "Media deleted successfully"}
         type="success"
         topOffset={20}
         onClose={() => setShowSuccessToast(false)}

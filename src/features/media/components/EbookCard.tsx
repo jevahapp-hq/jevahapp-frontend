@@ -16,6 +16,7 @@ import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
+import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { EbookCardProps } from "../../../shared/types";
@@ -41,6 +42,12 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  
+  // Check if user is admin
+  useEffect(() => {
+    isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
+  }, []);
   
   // Delete media functionality - using reusable hook
   const {
@@ -344,7 +351,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         mediaId={ebook._id}
         uploadedBy={ebook.uploadedBy || ebook.author?._id || ebook.authorInfo?._id}
         onDelete={handleDeletePress}
-        showDelete={isOwner}
+        showDelete={userIsAdmin || isOwner}
         onReport={() => setShowReportModal(true)}
       />
       
@@ -355,6 +362,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         mediaTitle={ebook.title || "this media"}
         onClose={() => setShowDeleteModal(false)}
         onSuccess={handleDeleteConfirm}
+        isAdmin={userIsAdmin}
       />
 
       {/* Report Modal */}
