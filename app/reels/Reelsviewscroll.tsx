@@ -46,6 +46,11 @@ import {
 } from "../utils/persistentStorage";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 import { UserProfileCache } from "../utils/cache/UserProfileCache";
+import { ReelsProgressBar } from "./components/ReelsProgressBar";
+import { ReelsHeader } from "./components/ReelsHeader";
+import { ReelsActionButtons } from "./components/ReelsActionButtons";
+import { ReelsSpeakerInfo } from "./components/ReelsSpeakerInfo";
+import { ReelsMenu } from "./components/ReelsMenu";
 
 // ✅ Route Params Type
 type Params = {
@@ -155,52 +160,45 @@ export default function Reelsviewscroll() {
     return rawList;
   }, [reelsStore.videoList, videoList]);
 
-  // CRITICAL FIX: Move setState calls to useEffect (not during render)
+  // ✅ FIX: Consolidated useEffect to prevent infinite loops
+  // Use refs to track if we've already processed the video list
+  const videoListProcessedRef = useRef(false);
+  const lastVideoListRef = useRef<string | undefined>(undefined);
+  
   useEffect(() => {
+    // Skip if we've already processed this videoList
+    if (videoList === lastVideoListRef.current && reelsStore.videoList.length > 0) {
+      return;
+    }
+    
     // Parse videoList from params if store is empty
     if (reelsStore.videoList.length === 0 && videoList) {
       try {
         const parsed = JSON.parse(videoList);
-        reelsStore.setVideoList(parsed);
+        const enrichedList = UserProfileCache.enrichContentArray(parsed);
+        reelsStore.setVideoList(enrichedList);
+        lastVideoListRef.current = videoList;
+        videoListProcessedRef.current = true;
+        return;
       } catch (error) {
         console.error("❌ Failed to parse video list:", error);
       }
     }
     
-    // Update store with enriched data if it's different
-    if (parsedVideoList.length > 0 && parsedVideoList !== reelsStore.videoList) {
-      // Only update if the enriched list is actually different
+    // Only update if parsedVideoList is different and we haven't processed it
+    if (parsedVideoList.length > 0 && !videoListProcessedRef.current) {
       const currentList = reelsStore.videoList;
+      // Quick comparison - check length and first item ID
       const listsAreDifferent = currentList.length !== parsedVideoList.length ||
-        currentList.some((item, index) => {
-          const enriched = parsedVideoList[index];
-          return !enriched || item._id !== enriched._id || 
-                 item.uploadedBy !== enriched.uploadedBy;
-        });
+        (currentList.length > 0 && parsedVideoList.length > 0 && 
+         currentList[0]?._id !== parsedVideoList[0]?._id);
       
       if (listsAreDifferent) {
         reelsStore.setVideoList(parsedVideoList);
+        videoListProcessedRef.current = true;
       }
     }
-  }, [parsedVideoList, videoList, reelsStore]);
-
-  // ✅ Update store with video list in useEffect (not during render)
-  useEffect(() => {
-    if (!videoList) return;
-    
-    try {
-      const parsed = JSON.parse(videoList);
-      const enrichedList = UserProfileCache.enrichContentArray(parsed);
-      
-      // Only update if store is empty or if enriched list is different
-      if (reelsStore.videoList.length === 0 || 
-          JSON.stringify(enrichedList) !== JSON.stringify(reelsStore.videoList)) {
-        reelsStore.setVideoList(enrichedList);
-      }
-    } catch (error) {
-      console.error("❌ Failed to parse and set video list:", error);
-    }
-  }, [videoList, reelsStore]);
+  }, [parsedVideoList.length, videoList]); // Only depend on length and videoList string, not store object
 
   const currentVideoIndex = reelsStore.currentIndex !== undefined && reelsStore.currentIndex !== null
     ? reelsStore.currentIndex
@@ -271,25 +269,26 @@ export default function Reelsviewscroll() {
   
   // Extract real contentId for API calls (comments, interactions, etc.)
   // Prefer _id or id from the video object, fallback to synthetic key only if needed
+  // ✅ CRITICAL: Use the same contentId format as AllContentTikTok for state persistence
   const contentId = currentVideo._id || currentVideo.id || null;
   const contentIdForHooks = (contentId || "") as string;
   const canUseBackendLikes = Boolean(contentIdForHooks);
   const activeContentType = (currentVideo.contentType || "video") as string;
 
   // Read like state for the currently active reel (one reel at a time -> hooks are safe here).
+  // ✅ These hooks automatically sync with the interaction store used by AllContentTikTok
   const activeStats = useContentStats(contentIdForHooks);
   const activeIsLiked = useUserInteraction(contentIdForHooks, "liked");
   const activeLikesCount = useContentCount(contentIdForHooks, "likes");
 
-  // Hydrate stats when we have a real content id.
+  // Hydrate stats when we have a real content id or when contentId changes.
+  // ✅ This ensures stats are loaded when switching videos, maintaining state persistence
   useEffect(() => {
     if (!canUseBackendLikes) return;
-    if (!activeStats) {
-      loadContentStats(contentIdForHooks, activeContentType);
-    }
+    // Always reload stats when contentId changes to ensure fresh data
+    loadContentStats(contentIdForHooks, activeContentType);
   }, [
     canUseBackendLikes,
-    activeStats,
     loadContentStats,
     contentIdForHooks,
     activeContentType,
@@ -1029,6 +1028,21 @@ export default function Reelsviewscroll() {
     const speakerName = getSpeakerName(enrichedVideoData, "Unknown");
     const videoKey =
       passedVideoKey || `reel-${enrichedVideoData.title}-${speakerName}`;
+    
+    // ✅ FIX: Clear any stale video refs when rendering a new video to prevent overlap
+    // Only clear if this is the active video and we're switching to it
+    if (isActive) {
+      // Ensure we're using the correct video ref for this specific video
+      const existingRef = videoRefs.current[videoKey];
+      if (existingRef && index !== currentIndex_state) {
+        // If there's a ref mismatch, clear it
+        try {
+          existingRef.pauseAsync().catch(() => {});
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+    }
 
     // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
     // CRITICAL: NEVER use imageUrl or thumbnailUrl for video playback - they are images!
@@ -1102,6 +1116,18 @@ export default function Reelsviewscroll() {
             <Video
               ref={(ref) => {
                 if (ref) {
+                  // ✅ FIX: Clear any existing ref for this videoKey to prevent overlap
+                  const existingRef = videoRefs.current[videoKey];
+                  if (existingRef && existingRef !== ref) {
+                    // Clean up old ref if it exists and is different
+                    try {
+                      existingRef.pauseAsync().catch(() => {});
+                      globalVideoStore.unregisterVideoPlayer(videoKey);
+                    } catch (e) {
+                      // Ignore cleanup errors
+                    }
+                  }
+                  
                   // ✅ Always register ref (not just when active) for proper global control
                   videoRefs.current[videoKey] = ref;
                   
@@ -1142,12 +1168,14 @@ export default function Reelsviewscroll() {
                 left: 0,
                 right: 0,
                 bottom: 0,
+                // ✅ FIX: Ensure video is properly positioned and doesn't overlap
+                zIndex: isActive ? 1 : 0,
               }}
               resizeMode={ResizeMode.COVER}
               isMuted={mutedVideos[videoKey] ?? false}
               volume={mutedVideos[videoKey] ? 0.0 : videoVolume}
-              // ✅ Play if state says to play, even if not "active" yet (for initial navigation)
-              shouldPlay={playingVideos[videoKey] ?? false}
+              // ✅ FIX: Only play if this is the active video to prevent wrong video playing
+              shouldPlay={isActive && (playingVideos[videoKey] ?? false)}
               useNativeControls={false}
               isLooping={true}
               onError={async (error) => {
@@ -1371,715 +1399,81 @@ export default function Reelsviewscroll() {
             {isActive && (
               <>
                 {/* Action Buttons - Vertical right side like TikTok */}
-                <View
-                  style={{
-                    position: "absolute",
-                    right: getResponsiveSpacing(8, 10, 12),
-                    top: screenHeight * 0.3,
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: getResponsiveSpacing(8, 10, 12),
-                    zIndex: 20,
-                  }}
-                >
-                  <TouchableOpacity
-                    onPress={() => {
-                      triggerHapticFeedback();
-                      handleLike();
-                    }}
-                    style={{
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: getResponsiveSpacing(8, 10, 12),
-                      minWidth: getTouchTargetSize(),
-                      minHeight: getTouchTargetSize(),
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel={`${
-                      activeIsLiked ? "Unlike" : "Like"
-                    } this video`}
-                    accessibilityRole="button"
-                  >
-                    <MaterialIcons
-                      name={
-                        activeIsLiked ? "favorite" : "favorite-border"
-                      }
-                      size={getResponsiveSize(28, 32, 36)}
-                      color={activeIsLiked ? "#D22A2A" : "#FFFFFF"}
-                    />
-                    <Text
-                      style={{
-                        fontSize: getResponsiveFontSize(9, 10, 11),
-                        color: "#FFFFFF",
-                        marginTop: getResponsiveSpacing(2, 4, 5),
-                        fontFamily: "Rubik-SemiBold",
-                        textShadowColor: "rgba(0, 0, 0, 0.5)",
-                        textShadowOffset: { width: 0, height: 1 },
-                        textShadowRadius: 2,
-                      }}
-                    >
-                      {canUseBackendLikes
-                        ? activeLikesCount
-                        : (enrichedVideoData?.likeCount ??
-                            enrichedVideoData?.likes ??
-                            enrichedVideoData?.favorite ??
-                            video.favorite ??
-                            0)}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      triggerHapticFeedback();
-                      handleComment(videoKey);
-                    }}
-                    style={{
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: getResponsiveSpacing(8, 10, 12),
-                      minWidth: getTouchTargetSize(),
-                      minHeight: getTouchTargetSize(),
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Add comment to this video"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons
-                      name="chatbubble-outline"
-                      size={getResponsiveSize(28, 32, 36)}
-                      color="white"
-                    />
-                    <Text
-                      style={{
-                        fontSize: getResponsiveFontSize(9, 10, 11),
-                        color: "#FFFFFF",
-                        marginTop: getResponsiveSpacing(2, 4, 5),
-                        fontFamily: "Rubik-SemiBold",
-                        textShadowColor: "rgba(0, 0, 0, 0.5)",
-                        textShadowOffset: { width: 0, height: 1 },
-                        textShadowRadius: 2,
-                      }}
-                    >
-                      {videoStats[videoKey]?.comment === 1
-                        ? (video.comment ?? 0) + 1
-                        : video.comment ?? 0}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      triggerHapticFeedback();
-                      handleSave(videoKey);
-                    }}
-                    style={{
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: getResponsiveSpacing(8, 10, 12),
-                      minWidth: getTouchTargetSize(),
-                      minHeight: getTouchTargetSize(),
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel={`${
-                      libraryStore.isItemSaved(modalKey)
-                        ? "Remove from"
-                        : "Save to"
-                    } library`}
-                    accessibilityRole="button"
-                  >
-                    <MaterialIcons
-                      name={
-                        libraryStore.isItemSaved(videoKey)
-                          ? "bookmark"
-                          : "bookmark-border"
-                      }
-                      size={getResponsiveSize(28, 32, 36)}
-                      color={
-                        libraryStore.isItemSaved(videoKey)
-                          ? "#FEA74E"
-                          : "#FFFFFF"
-                      }
-                    />
-                    <Text
-                      style={{
-                        fontSize: getResponsiveFontSize(9, 10, 11),
-                        color: "#FFFFFF",
-                        marginTop: getResponsiveSpacing(2, 4, 5),
-                        fontFamily: "Rubik-SemiBold",
-                        textShadowColor: "rgba(0, 0, 0, 0.5)",
-                        textShadowOffset: { width: 0, height: 1 },
-                        textShadowRadius: 2,
-                      }}
-                    >
-                      {videoStats[videoKey]?.totalSaves || video.saved || 0}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      triggerHapticFeedback();
-                      handleShare(videoKey);
-                    }}
-                    style={{
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: getResponsiveSpacing(8, 10, 12),
-                      minWidth: getTouchTargetSize(),
-                      minHeight: getTouchTargetSize(),
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Share this video"
-                    accessibilityRole="button"
-                  >
-                    <Feather
-                      name="send"
-                      size={getResponsiveSize(28, 32, 36)}
-                      color="white"
-                    />
-                    <Text
-                      style={{
-                        fontSize: getResponsiveFontSize(9, 10, 11),
-                        color: "#FFFFFF",
-                        marginTop: getResponsiveSpacing(2, 4, 5),
-                        fontFamily: "Rubik-SemiBold",
-                        textShadowColor: "rgba(0, 0, 0, 0.5)",
-                        textShadowOffset: { width: 0, height: 1 },
-                        textShadowRadius: 2,
-                      }}
-                    >
-                      {videoStats[videoKey]?.sheared || video.sheared || 0}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <ReelsActionButtons
+                  videoKey={videoKey}
+                  modalKey={modalKey}
+                  screenHeight={screenHeight}
+                  activeIsLiked={activeIsLiked}
+                  activeLikesCount={activeLikesCount}
+                  canUseBackendLikes={canUseBackendLikes}
+                  videoStats={videoStats}
+                  video={video}
+                  enrichedVideoData={enrichedVideoData}
+                  libraryStore={libraryStore}
+                  onLike={handleLike}
+                  onComment={handleComment}
+                  onSave={handleSave}
+                  onShare={handleShare}
+                  getResponsiveSpacing={getResponsiveSpacing}
+                  getResponsiveSize={getResponsiveSize}
+                  getResponsiveFontSize={getResponsiveFontSize}
+                  getTouchTargetSize={getTouchTargetSize}
+                  triggerHapticFeedback={triggerHapticFeedback}
+                />
 
                 {/* Speaker Info Section - Enhanced user experience */}
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: getResponsiveSpacing(100, 120, 140), // Position above progress bar for proper centering
-                    left: getResponsiveSpacing(12, 16, 20),
-                    right: getResponsiveSpacing(12, 16, 20),
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    zIndex: 20,
-                  }}
-                >
-                  {/* Avatar and Name Row */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      flex: 1,
-                    }}
-                  >
-                    {/* Avatar */}
-                    <TouchableOpacity
-                      style={{
-                        width: getResponsiveSize(28, 32, 36), // Reduced size
-                        height: getResponsiveSize(28, 32, 36), // Reduced size
-                        borderRadius: getResponsiveSize(14, 16, 18), // Reduced radius
-                        backgroundColor: "#f3f4f6",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginRight: getResponsiveSpacing(8, 10, 12), // Reduced margin
-                        borderWidth: 2,
-                        borderColor: "rgba(255, 255, 255, 0.3)",
-                      }}
-                      activeOpacity={0.8}
-                      accessibilityLabel={`${
-                        getSpeakerName(enrichedVideoData, "Unknown")
-                      } profile picture`}
-                      accessibilityRole="image"
-                    >
-                      <Image
-                        source={getUserAvatarFromContent(enrichedVideoData)}
-                        style={{
-                          width: getResponsiveSize(20, 24, 28), // Reduced size
-                          height: getResponsiveSize(20, 24, 28), // Reduced size
-                          borderRadius: getResponsiveSize(10, 12, 14), // Reduced radius
-                        }}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-
-                    {/* Speaker Name and Time - Now next to avatar */}
-                    <View style={{ flex: 1 }}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        {/* Show video title if coming from profile page (AccountScreen), otherwise show speaker name */}
-                        <Text
-                          style={{
-                            fontSize: getResponsiveFontSize(12, 14, 16),
-                            color: "#FFFFFF",
-                            fontWeight: "600",
-                            fontFamily: "Rubik-SemiBold",
-                            textShadowColor: "rgba(0, 0, 0, 0.5)",
-                            textShadowOffset: { width: 0, height: 1 },
-                            textShadowRadius: 3,
-                            marginRight: getResponsiveSpacing(6, 8, 10),
-                          }}
-                          numberOfLines={1}
-                          accessibilityLabel={
-                            source === "AccountScreen"
-                              ? `Video: ${enrichedVideoData.title || "Untitled"}`
-                              : `Posted by ${getSpeakerName(enrichedVideoData, "Unknown")}`
-                          }
-                        >
-                          {source === "AccountScreen"
-                            ? enrichedVideoData.title || "Untitled Video"
-                            : getSpeakerName(enrichedVideoData, "No Speaker")}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: getResponsiveFontSize(9, 10, 11),
-                            color: "#D0D5DD",
-                            fontFamily: "Rubik",
-                            textShadowColor: "rgba(0, 0, 0, 0.5)",
-                            textShadowOffset: { width: 0, height: 1 },
-                            textShadowRadius: 3,
-                          }}
-                          accessibilityLabel={`Posted ${
-                            enrichedVideoData.timeAgo || "recently"
-                          }`}
-                        >
-                          {enrichedVideoData.timeAgo || "No Time"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Menu Button */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      triggerHapticFeedback();
-                      setMenuVisible((v) => !v);
-                    }}
-                    style={{
-                      width: getResponsiveSize(28, 32, 36), // Reduced size
-                      height: getResponsiveSize(28, 32, 36), // Reduced size
-                      borderRadius: getResponsiveSize(14, 16, 18), // Reduced radius
-                      backgroundColor: "rgba(255, 255, 255, 0.9)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 3,
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel="More options menu"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons
-                      name="ellipsis-vertical"
-                      size={getResponsiveSize(14, 16, 18)} // Reduced icon size
-                      color="#3A3E50"
-                    />
-                  </TouchableOpacity>
-                </View>
+                <ReelsSpeakerInfo
+                  enrichedVideoData={enrichedVideoData}
+                  source={source}
+                  menuVisible={menuVisible}
+                  onMenuToggle={() => setMenuVisible((v) => !v)}
+                  getSpeakerName={getSpeakerName}
+                  getResponsiveSpacing={getResponsiveSpacing}
+                  getResponsiveSize={getResponsiveSize}
+                  getResponsiveFontSize={getResponsiveFontSize}
+                  triggerHapticFeedback={triggerHapticFeedback}
+                />
 
                 {/* Action Menu - White background popup with ContentActionModal options */}
-                {menuVisible && (
-                  <>
-                    <TouchableWithoutFeedback
-                      onPress={() => setMenuVisible(false)}
-                    >
-                      <View className="absolute inset-0 z-10" />
-                    </TouchableWithoutFeedback>
-
-                    <View
-                      style={{
-                        position: "absolute",
-                        bottom: 200,
-                        right: 100,
-                        backgroundColor: "#FFFFFF",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.25,
-                        shadowRadius: 8,
-                        elevation: 5,
-                        borderRadius: 16,
-                        padding: 16,
-                        width: 180,
-                        zIndex: 20,
-                      }}
-                    >
-                      {/* View Details */}
-                      <TouchableOpacity
-                        onPress={() => {
-                          handleViewDetails();
-                          setMenuVisible(false);
-                        }}
-                        style={{
-                          paddingVertical: 10,
-                          borderBottomWidth: 1,
-                          borderBottomColor: "#f3f4f6",
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#1D2939",
-                            fontSize: 14,
-                            fontFamily: "Rubik",
-                          }}
-                        >
-                          View Details
-                        </Text>
-                        <Ionicons
-                          name="eye-outline"
-                          size={22}
-                          color="#1D2939"
-                        />
-                      </TouchableOpacity>
-
-                      {/* Save to Library / Remove from Library */}
-                      <TouchableOpacity
-                        onPress={() => {
-                          handleSave(modalKey);
-                          setMenuVisible(false);
-                        }}
-                        style={{
-                          paddingVertical: 10,
-                          borderBottomWidth: 1,
-                          borderBottomColor: "#f3f4f6",
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#1D2939",
-                            fontSize: 14,
-                            fontFamily: "Rubik",
-                          }}
-                        >
-                          {libraryStore.isItemSaved(modalKey)
-                            ? "Remove from Library"
-                            : "Save to Library"}
-                        </Text>
-                        <MaterialIcons
-                          name={
-                            libraryStore.isItemSaved(modalKey)
-                              ? "bookmark"
-                              : "bookmark-border"
-                          }
-                          size={22}
-                          color="#1D2939"
-                        />
-                      </TouchableOpacity>
-
-                      {/* Delete - Only show if owner */}
-                      {isOwner && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            openDeleteModal();
-                            setMenuVisible(false);
-                          }}
-                          style={{
-                            paddingVertical: 10,
-                            borderBottomWidth: 1,
-                            borderBottomColor: "#f3f4f6",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: "#FF6B6B",
-                              fontSize: 14,
-                              fontFamily: "Rubik",
-                            }}
-                          >
-                            Delete
-                          </Text>
-                          <Ionicons
-                            name="trash-outline"
-                            size={22}
-                            color="#FF6B6B"
-                          />
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Report - Only show if not owner */}
-                      {!isOwner && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setShowReportModal(true);
-                            setMenuVisible(false);
-                          }}
-                          style={{
-                            paddingVertical: 10,
-                            borderBottomWidth: 1,
-                            borderBottomColor: "#f3f4f6",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: "#FF6B6B",
-                              fontSize: 14,
-                              fontFamily: "Rubik",
-                            }}
-                          >
-                            Report
-                          </Text>
-                          <Ionicons
-                            name="flag-outline"
-                            size={22}
-                            color="#FF6B6B"
-                          />
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Download / Remove Download */}
-                      <TouchableOpacity
-                        onPress={() => {
-                          handleDownloadAction();
-                          setMenuVisible(false);
-                        }}
-                        style={{
-                          paddingVertical: 10,
-                          borderTopWidth: 1,
-                          borderTopColor: "#f3f4f6",
-                          marginTop: 6,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#1D2939",
-                            fontSize: 14,
-                            fontFamily: "Rubik",
-                          }}
-                        >
-                          {checkIfDownloaded(currentVideo._id || modalKey)
-                            ? "Remove Download"
-                            : "Download"}
-                        </Text>
-                        <Ionicons
-                          name={
-                            checkIfDownloaded(currentVideo._id || modalKey)
-                              ? "checkmark-circle"
-                              : "download-outline"
-                          }
-                          size={24}
-                          color={
-                            checkIfDownloaded(currentVideo._id || modalKey)
-                              ? "#256E63"
-                              : "#090E24"
-                          }
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
+                <ReelsMenu
+                  visible={menuVisible}
+                  modalKey={modalKey}
+                  currentVideo={currentVideo}
+                  isOwner={isOwner}
+                  libraryStore={libraryStore}
+                  checkIfDownloaded={checkIfDownloaded}
+                  onClose={() => setMenuVisible(false)}
+                  onViewDetails={handleViewDetails}
+                  onSave={handleSave}
+                  onDelete={openDeleteModal}
+                  onReport={() => setShowReportModal(true)}
+                  onDownload={handleDownloadAction}
+                />
 
                 {/* Draggable Progress Bar with Timer - Enhanced user experience */}
-                <View
-                  style={{
-                    position: "absolute",
-                    // Keep the progress bar above the BottomNav + floating FAB (especially on iOS)
-                    bottom: getBottomNavHeight() + getResponsiveSpacing(-18, -16, -14),
-                    left: 0,
-                    right: 0,
-                    // Ensure the timer/seek UI isn't covered by the avatar/speaker overlay
-                    zIndex: 30,
+                <ReelsProgressBar
+                  videoKey={videoKey}
+                  videoDuration={videoDuration}
+                  videoPosition={videoPosition}
+                  isDragging={isDragging}
+                  mutedVideos={mutedVideos}
+                  progressBarWidth={reelsProgressBarWidth}
+                  onLayout={setReelsProgressBarWidth}
+                  onSeek={seekToPosition}
+                  onToggleMute={toggleMute}
+                  onDragStart={() => {
+                    setIsDragging(true);
+                    globalVideoStore.pauseVideo(videoKey);
                   }}
-                >
-                  <View
-                    style={{
-                      alignItems: "center",
-                      justifyContent: "center",
-                      paddingBottom: 12,
-                      paddingTop: 6,
-                      bottom: 0, // Match VideoProgressBar positioning
-                      width: "100%",
-                    }}
-                  >
-                    {/* Full-width Reels progress bar (subtle unless dragging) */}
-                    <View
-                      {...createPanResponder(videoKey, null).panHandlers}
-                      style={{
-                        width: "100%",
-                        position: "relative",
-                        height: isDragging ? 48 : 40, // thicker/clearer while dragging
-                      }}
-                      onLayout={(e) => {
-                        const w = e.nativeEvent.layout.width;
-                        if (w && Math.abs(w - reelsProgressBarWidth) > 0.5) {
-                          setReelsProgressBarWidth(w);
-                        }
-                      }}
-                      accessibilityLabel="Video progress bar - slide to seek"
-                      accessibilityRole="adjustable"
-                      accessibilityValue={{
-                        min: 0,
-                        max: 100,
-                        now: Math.round(progressPercentage),
-                      }}
-                      accessibilityHint="Double tap and hold to drag, or tap to seek to position"
-                    >
-                      {/* Time labels - always visible (even when not dragging/playing) */}
-                      <View
-                        pointerEvents="none"
-                        style={{
-                          position: "absolute",
-                          left: 12,
-                          right: 12,
-                          top: 8, // keep off the very top edge
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          paddingRight: 44, // leave room for mute button
-                          zIndex: 35,
-                          opacity: isDragging ? 1 : 0.9,
-                        }}
-                      >
-                        <View
-                          style={{
-                            backgroundColor: isDragging
-                              ? "rgba(0, 0, 0, 0.35)"
-                              : "rgba(0, 0, 0, 0.22)",
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: "rgba(255, 255, 255, 0.98)",
-                              fontSize: 10,
-                              fontFamily: "Rubik-Medium",
-                              textShadowColor: "rgba(0, 0, 0, 0.65)",
-                              textShadowOffset: { width: 0, height: 1 },
-                              textShadowRadius: 2,
-                            }}
-                          >
-                            {videoDuration > 0 ? formatTime(videoPosition) : "0:00"}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            backgroundColor: isDragging
-                              ? "rgba(0, 0, 0, 0.35)"
-                              : "rgba(0, 0, 0, 0.22)",
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: "rgba(255, 255, 255, 0.98)",
-                              fontSize: 10,
-                              fontFamily: "Rubik-Medium",
-                              textShadowColor: "rgba(0, 0, 0, 0.65)",
-                              textShadowOffset: { width: 0, height: 1 },
-                              textShadowRadius: 2,
-                            }}
-                          >
-                            {videoDuration > 0 ? formatTime(videoDuration) : "0:00"}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Background Track */}
-                      <View
-                        style={{
-                          height: isDragging ? 6 : 2,
-                          backgroundColor: isDragging
-                            ? "rgba(255, 255, 255, 0.45)"
-                            : "rgba(255, 255, 255, 0.15)",
-                          borderRadius: 999,
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
-                          top:
-                            ((isDragging ? 48 : 40) - (isDragging ? 6 : 2)) / 2,
-                        }}
-                      />
-
-                      {/* Progress Fill - Orange */}
-                      <View
-                        style={{
-                          height: isDragging ? 6 : 2,
-                          backgroundColor: isDragging
-                            ? "rgba(254, 167, 78, 0.95)"
-                            : "rgba(254, 167, 78, 0.25)",
-                          borderRadius: 999,
-                          width: `${progressPercentage}%`,
-                          position: "absolute",
-                          left: 0,
-                          top:
-                            ((isDragging ? 48 : 40) - (isDragging ? 6 : 2)) / 2,
-                        }}
-                      />
-
-                      {/* Draggable knob (only obvious while dragging) */}
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: ((isDragging ? 48 : 40) - 16) / 2,
-                          width: 16,
-                          height: 16,
-                          backgroundColor: "#FFFFFF",
-                          borderRadius: 8,
-                          borderWidth: 3,
-                          borderColor: "#FEA74E",
-                          left: `${Math.max(0, Math.min(progressPercentage, 100))}%`,
-                          transform: [{ translateX: -8 }],
-                          opacity: isDragging ? 1 : 0,
-                          zIndex: 10,
-                        }}
-                      />
-
-                      {/* Mute Button - positioned on the right */}
-                      <TouchableOpacity
-                        onPress={() => toggleMute(videoKey)}
-                        style={{
-                          position: "absolute",
-                          right: 12,
-                          // Lift slightly so it doesn't touch the progress bar / track
-                          top: isDragging ? -2 : 4,
-                          backgroundColor: isDragging
-                            ? "rgba(0, 0, 0, 0.65)"
-                            : "rgba(0, 0, 0, 0.35)",
-                          padding: 6,
-                          borderRadius: 16,
-                        }}
-                        activeOpacity={0.7}
-                        accessibilityLabel={`${
-                          mutedVideos[videoKey] ? "Unmute" : "Mute"
-                        } video`}
-                        accessibilityRole="button"
-                      >
-                        <Ionicons
-                          name={
-                            mutedVideos[videoKey]
-                              ? "volume-mute"
-                              : "volume-high"
-                          }
-                          size={16}
-                          color="rgba(255, 255, 255, 0.95)"
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
+                  onDragEnd={() => {
+                    setIsDragging(false);
+                    setTimeout(() => {
+                      globalVideoStore.playVideoGlobally(videoKey);
+                    }, 100);
+                  }}
+                  getResponsiveSpacing={getResponsiveSpacing}
+                  formatTime={formatTime}
+                />
               </>
             )}
           </View>
@@ -2167,6 +1561,9 @@ export default function Reelsviewscroll() {
       // Initialize scroll start index
       scrollStartIndexRef.current = currentIndex_state;
       
+      // ✅ FIX: Pause all videos first to prevent overlap/confusion
+      globalVideoStore.pauseAllVideos();
+      
       // ✅ Scroll immediately
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({
@@ -2178,9 +1575,26 @@ export default function Reelsviewscroll() {
       // ✅ Play video after scroll is complete and refs are registered
       setTimeout(() => {
         const initialVideo = allVideos[currentIndex_state];
+        if (!initialVideo) {
+          console.warn("⚠️ No initial video found at index:", currentIndex_state);
+          return;
+        }
+        
         const initialKey = initialVideo
-          ? `reel-${initialVideo.title}-${initialVideo.speaker || "unknown"}`
+          ? `reel-${initialVideo.title}-${getSpeakerName(initialVideo, "unknown")}`
           : `reel-index-${currentIndex_state}`;
+        
+        // ✅ FIX: Clear any stale refs before registering new one
+        Object.keys(videoRefs.current).forEach((key) => {
+          if (key !== initialKey && videoRefs.current[key]) {
+            try {
+              videoRefs.current[key].pauseAsync().catch(() => {});
+              globalVideoStore.unregisterVideoPlayer(key);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          }
+        });
         
         // Register video ref if available
         const videoRef = videoRefs.current[initialKey];
@@ -2330,9 +1744,9 @@ export default function Reelsviewscroll() {
         {allVideos.map((videoData: any, index: number) => {
           try {
             const isActive = index === currentIndex_state;
-            const videoKey = `reel-${videoData.title}-${
-              videoData.speaker || "unknown"
-            }`;
+            // ✅ FIX: Use consistent key generation with getSpeakerName helper
+            const speakerName = getSpeakerName(videoData, "unknown");
+            const videoKey = `reel-${videoData.title}-${speakerName}`;
 
             return (
               <View
@@ -2341,6 +1755,8 @@ export default function Reelsviewscroll() {
                   height: screenHeight,
                   width: "100%",
                   backgroundColor: "#000000", // Ensure black background
+                  // ✅ FIX: Ensure proper z-index ordering to prevent overlap
+                  zIndex: isActive ? 10 : 0,
                 }}
               >
                 {renderVideoItem(videoData, index, isActive, videoKey)}
@@ -2368,76 +1784,12 @@ export default function Reelsviewscroll() {
       </ScrollView>
 
       {/* Clean Header - Back, Title, Close */}
-      <View
-        style={{
-          position: "absolute",
-          top: getResponsiveSpacing(40, 48, 56) + (isIOS ? 20 : 0),
-          left: 0,
-          right: 0,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-          zIndex: 50,
-        }}
-      >
-        {/* Back Arrow */}
-        <TouchableOpacity
-          onPress={handleBackNavigation}
-          style={{
-            padding: getResponsiveSpacing(8, 10, 12),
-            minWidth: getTouchTargetSize(),
-            minHeight: getTouchTargetSize(),
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          activeOpacity={0.7}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={getResponsiveSize(24, 28, 32)}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-
-        {/* Title */}
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(18, 20, 22),
-            color: "#FFFFFF",
-            fontWeight: "600",
-            fontFamily: "Rubik-SemiBold",
-            textShadowColor: "rgba(0, 0, 0, 0.5)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 3,
-          }}
-        >
-          Reels
-        </Text>
-
-        {/* Close Icon */}
-        <TouchableOpacity
-          onPress={handleBackNavigation}
-          style={{
-            padding: getResponsiveSpacing(8, 10, 12),
-            minWidth: getTouchTargetSize(),
-            minHeight: getTouchTargetSize(),
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          activeOpacity={0.7}
-          accessibilityLabel="Close video player"
-          accessibilityRole="button"
-        >
-          <MaterialIcons
-            name="close"
-            size={getResponsiveSize(24, 28, 32)}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-      </View>
+      <ReelsHeader
+        onBackPress={handleBackNavigation}
+        getResponsiveSpacing={getResponsiveSpacing}
+        getResponsiveSize={getResponsiveSize}
+        getTouchTargetSize={getTouchTargetSize}
+      />
 
       {/* Bottom Nav - Enhanced for better platform compatibility */}
       <View

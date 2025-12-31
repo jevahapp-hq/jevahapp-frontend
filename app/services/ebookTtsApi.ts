@@ -14,7 +14,8 @@ export interface EbookTtsAudioResponse {
     durationMs?: number;
     generatedAt?: string;
     cached?: boolean;
-    canGenerate?: boolean;
+    // PHASE 2: Commented out - ebook to audio conversion functionality
+    // canGenerate?: boolean;
     textHash?: string;
     ttsConfig?: any;
     timings?: any;
@@ -64,7 +65,9 @@ export async function getEbookTts(
     return {
       success: false,
       message: typeof body === "string" && body ? body : "TTS audio not generated for this ebook",
-      data: { canGenerate: true },
+      // PHASE 2: Commented out - ebook to audio conversion functionality
+      // data: { canGenerate: true },
+      data: {},
     };
   }
 

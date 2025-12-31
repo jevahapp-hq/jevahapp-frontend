@@ -72,9 +72,11 @@ export default function EbookTtsPlayer({
         setAudioUrl(existingUrl);
         return;
       }
+      // PHASE 2: Commented out - ebook to audio conversion functionality
       // If not generated yet (common response: success=false + canGenerate=true),
       // auto-generate immediately when enabled.
-      if (autoGenerate && existing?.data?.canGenerate !== false) {
+      // if (autoGenerate && existing?.data?.canGenerate !== false) {
+      if (false) { // PHASE 2: Disabled - ebook to audio conversion
         setIsGenerating(true);
         const created = await generateEbookTts(ebookId, {
           voice: voicePreset,
@@ -97,7 +99,8 @@ export default function EbookTtsPlayer({
             "Audio is being prepared. Please wait a moment and tap refresh."
         );
       } else {
-        setError(existing?.message || "Audio is not available for this ebook.");
+        // PHASE 2: Updated message - ebook to audio conversion is disabled
+        setError(existing?.message || "Audio conversion for ebooks is not available yet. This feature is coming in Phase 2.");
       }
     } catch (e: any) {
       setError(e?.message || "Failed to load audio.");
