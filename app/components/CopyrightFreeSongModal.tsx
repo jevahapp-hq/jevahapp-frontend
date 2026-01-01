@@ -810,7 +810,9 @@ export default function CopyrightFreeSongModal({
   // Memoize album art dimensions for performance
   const albumArtSize = useMemo(() => {
     const screenWidth = Dimensions.get("window").width;
-    return Math.min(screenWidth * 0.75, 340); // Max 340px, 75% of screen width
+    const screenHeight = Dimensions.get("window").height;
+    // Reduce size to ensure everything fits on screen without scrolling
+    return Math.min(screenWidth * 0.65, screenHeight * 0.35, 280); // Max 280px, 65% of screen width or 35% of height
   }, []);
 
   if (!song) return null;
@@ -928,21 +930,21 @@ export default function CopyrightFreeSongModal({
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                flexGrow: 1,
+            <View
+              style={{
+                flex: 1,
                 paddingHorizontal: UI_CONFIG.SPACING.LG,
                 paddingTop: UI_CONFIG.SPACING.XL,
                 paddingBottom: UI_CONFIG.SPACING.XL,
+                justifyContent: "space-between",
               }}
             >
               {/* Large Album Artwork - Centered */}
               <View
                 style={{
                   alignItems: "center",
-                  marginBottom: UI_CONFIG.SPACING.XL,
-                  marginTop: UI_CONFIG.SPACING.LG,
+                  marginBottom: UI_CONFIG.SPACING.MD,
+                  marginTop: UI_CONFIG.SPACING.SM,
                 }}
               >
                 {imageSource && (
@@ -975,15 +977,15 @@ export default function CopyrightFreeSongModal({
               <View
                 style={{
                   alignItems: "center",
-                  marginBottom: UI_CONFIG.SPACING.XL,
+                  marginBottom: UI_CONFIG.SPACING.MD,
                 }}
               >
                 <Text
                   style={{
-                    fontSize: 26,
+                    fontSize: 24,
                     fontFamily: "Rubik-SemiBold",
                     color: "#FFFFFF",
-                    marginBottom: 8,
+                    marginBottom: 6,
                     textAlign: "center",
                     textShadowColor: "rgba(0, 0, 0, 0.5)",
                     textShadowOffset: { width: 0, height: 2 },
@@ -995,10 +997,10 @@ export default function CopyrightFreeSongModal({
                 </Text>
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 16,
                     fontFamily: "Rubik",
                     color: "rgba(255, 255, 255, 0.8)",
-                    marginBottom: 16,
+                    marginBottom: 12,
                     textAlign: "center",
                     textShadowColor: "rgba(0, 0, 0, 0.3)",
                     textShadowOffset: { width: 0, height: 1 },
@@ -1016,7 +1018,7 @@ export default function CopyrightFreeSongModal({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: UI_CONFIG.SPACING.MD,
-                    marginTop: UI_CONFIG.SPACING.MD,
+                    marginTop: UI_CONFIG.SPACING.SM,
                   }}
                 >
                   {/* Like Pill */}
@@ -1086,7 +1088,7 @@ export default function CopyrightFreeSongModal({
               </View>
 
               {/* Progress + controls - Modern Style */}
-              <View style={{ marginBottom: UI_CONFIG.SPACING.XL }}>
+              <View style={{ marginBottom: UI_CONFIG.SPACING.MD }}>
                 {/* Time row - Above progress bar */}
                 <View
                   style={{
@@ -1186,7 +1188,7 @@ export default function CopyrightFreeSongModal({
                     alignItems: "center",
                     justifyContent: "space-between",
                     paddingHorizontal: UI_CONFIG.SPACING.XL,
-                    marginBottom: UI_CONFIG.SPACING.LG,
+                    marginBottom: UI_CONFIG.SPACING.MD,
                   }}
                 >
                   {/* Skip back 15 seconds */}
@@ -1269,7 +1271,7 @@ export default function CopyrightFreeSongModal({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: UI_CONFIG.SPACING.XXL,
-                    marginBottom: UI_CONFIG.SPACING.XL,
+                    marginBottom: UI_CONFIG.SPACING.MD,
                   }}
                 >
                   {/* Shuffle button */}
@@ -1369,7 +1371,8 @@ export default function CopyrightFreeSongModal({
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  paddingTop: UI_CONFIG.SPACING.LG,
+                  paddingTop: UI_CONFIG.SPACING.SM,
+                  marginTop: -UI_CONFIG.SPACING.MD,
                 }}
               >
                 <TouchableOpacity
@@ -1426,7 +1429,7 @@ export default function CopyrightFreeSongModal({
                   </Text>
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </View>
           </Animated.View>
         </View>
       </Modal>

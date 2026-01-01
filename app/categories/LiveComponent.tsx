@@ -707,7 +707,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
             width: 80,
             height: 80,
             borderRadius: 40,
-            backgroundColor: "#DC2626",
+            backgroundColor: "#256E63",
             alignItems: "center",
             justifyContent: "center",
             marginBottom: 16,
@@ -726,7 +726,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
               borderRadius: 8,
               backgroundColor: "#FFFFFF",
               borderWidth: 2,
-              borderColor: "#DC2626",
+              borderColor: "#256E63",
             }}
           />
         </View>
@@ -740,7 +740,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
         >
           <View
             style={{
-              backgroundColor: "#DC2626",
+              backgroundColor: "#256E63",
               paddingHorizontal: 12,
               paddingVertical: 4,
               borderRadius: 12,

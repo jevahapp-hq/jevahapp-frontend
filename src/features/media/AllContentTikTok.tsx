@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
     Dimensions,
     Image,
+    Platform,
     RefreshControl,
     ScrollView,
     Share,
@@ -1619,7 +1620,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           onScroll={handleScroll}
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={8}
+          scrollEventThrottle={Platform.OS === "ios" ? 16 : 8}
+          // iOS Performance Optimizations
+          removeClippedSubviews={Platform.OS === "ios"}
+          decelerationRate={Platform.OS === "ios" ? "normal" : "fast"}
+          bounces={Platform.OS === "ios"}
+          scrollsToTop={Platform.OS === "ios"}
+          // Better scroll performance on iOS
+          {...(Platform.OS === "ios" && {
+            automaticallyAdjustContentInsets: false,
+            contentInsetAdjustmentBehavior: "never",
+          })}
         >
           {/* Most Recent Section */}
           {mostRecentItem && (
@@ -1701,7 +1712,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                             width: 80,
                             height: 80,
                             borderRadius: 40,
-                            backgroundColor: "#DC2626",
+                            backgroundColor: "#256E63",
                             alignItems: "center",
                             justifyContent: "center",
                             marginBottom: 16,
@@ -1720,7 +1731,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                               borderRadius: 8,
                               backgroundColor: "#FFFFFF",
                               borderWidth: 2,
-                              borderColor: "#DC2626",
+                              borderColor: "#256E63",
                             }}
                           />
                         </View>
@@ -1734,7 +1745,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
                         >
                           <View
                             style={{
-                              backgroundColor: "#DC2626",
+                              backgroundColor: "#256E63",
                               paddingHorizontal: 12,
                               paddingVertical: 4,
                               borderRadius: 12,

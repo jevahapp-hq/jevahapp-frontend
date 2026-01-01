@@ -1,23 +1,29 @@
 // Performance configuration constants
+import { Platform } from 'react-native';
+
+// Platform-specific performance settings
+const isIOS = Platform.OS === 'ios';
+const isAndroid = Platform.OS === 'android';
+
 export const PERFORMANCE_CONFIG = {
   // Image optimization
   IMAGE: {
     LAZY_LOADING_THRESHOLD: 0.1, // Load when 10% visible
-    PRELOAD_DISTANCE: 50, // Preload 50px before visible
+    PRELOAD_DISTANCE: isIOS ? 30 : 50, // iOS: less aggressive preloading
     QUALITY: {
       LOW: 'q_auto:low',
       MEDIUM: 'q_auto:good', 
       HIGH: 'q_auto:best'
     },
-    CACHE_SIZE: 100, // Max cached images
-    CACHE_DURATION: 300000, // 5 minutes
+    CACHE_SIZE: isIOS ? 150 : 100, // iOS: larger cache for better performance
+    CACHE_DURATION: isIOS ? 600000 : 300000, // iOS: 10 minutes, Android: 5 minutes
   },
 
   // Video optimization
   VIDEO: {
-    MAX_CONCURRENT: 3, // Max videos playing simultaneously
-    PRELOAD_DISTANCE: 2, // Preload 2 videos ahead
-    MEMORY_THRESHOLD: 0.8, // Cleanup at 80% memory usage
+    MAX_CONCURRENT: isIOS ? 2 : 3, // iOS: fewer concurrent videos
+    PRELOAD_DISTANCE: isIOS ? 1 : 2, // iOS: less aggressive preloading
+    MEMORY_THRESHOLD: isIOS ? 0.7 : 0.8, // iOS: more conservative memory usage
     CACHE_DURATION: 600000, // 10 minutes
     QUALITY: {
       LOW: 'q_auto:low',
@@ -26,13 +32,14 @@ export const PERFORMANCE_CONFIG = {
     }
   },
 
-  // Scroll optimization
+  // Scroll optimization - iOS optimized
   SCROLL: {
-    THROTTLE_MS: 16, // 60fps
+    THROTTLE_MS: isIOS ? 16 : 8, // iOS: 60fps, Android: can be faster
     VIRTUAL_SCROLL_THRESHOLD: 100, // Enable virtual scroll for 100+ items
-    BATCH_SIZE: 10, // Render 10 items per batch
-    WINDOW_SIZE: 10, // Viewport size multiplier
-    UPDATE_INTERVAL: 50, // Update every 50ms
+    BATCH_SIZE: isIOS ? 5 : 10, // iOS: smaller batches for smoother scrolling
+    WINDOW_SIZE: isIOS ? 5 : 10, // iOS: smaller window for better memory
+    UPDATE_INTERVAL: isIOS ? 50 : 100, // iOS: more frequent updates
+    REMOVE_CLIPPED_SUBVIEWS: isIOS, // iOS: enable for better performance
   },
 
   // Memory management

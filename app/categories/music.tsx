@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -340,10 +341,11 @@ export default function Music() {
           onPress={() => {
             // Tap should open Now Playing view like the reference screenshot
             // and start playback with the current queue.
-            handlePlayPress(item);
             setSelectedSong(item);
             setSongModalInitialAction(null);
             setShowSongModal(true);
+            // Start playing immediately (fire and forget - don't await to avoid blocking UI)
+            handlePlayPress(item).catch(err => console.warn("Play error:", err));
           }}
           activeOpacity={0.7}
           style={{
@@ -451,10 +453,11 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
-            handlePlayPress(item);
             setSelectedSong(item);
             setSongModalInitialAction(null);
             setShowSongModal(true);
+            // Start playing immediately (fire and forget - don't await to avoid blocking UI)
+            handlePlayPress(item).catch(err => console.warn("Play error:", err));
           }}
           activeOpacity={0.9}
           style={{
@@ -534,10 +537,11 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
-            handlePlayPress(item);
             setSelectedSong(item);
             setSongModalInitialAction(null);
             setShowSongModal(true);
+            // Start playing immediately (fire and forget - don't await to avoid blocking UI)
+            handlePlayPress(item).catch(err => console.warn("Play error:", err));
           }}
           activeOpacity={0.9}
           style={{ width: itemWidth, marginBottom: 12, marginHorizontal: 4 }}
@@ -602,10 +606,11 @@ export default function Music() {
       return (
         <TouchableOpacity
           onPress={() => {
-            handlePlayPress(item);
             setSelectedSong(item);
             setSongModalInitialAction(null);
             setShowSongModal(true);
+            // Start playing immediately (fire and forget - don't await to avoid blocking UI)
+            handlePlayPress(item).catch(err => console.warn("Play error:", err));
           }}
           activeOpacity={0.9}
           style={{ width: cardWidth, marginBottom: 20, marginHorizontal: 16 }}
@@ -916,6 +921,18 @@ export default function Music() {
             paddingBottom: 100, // Space for bottom nav
           }}
           showsVerticalScrollIndicator={false}
+          // iOS Performance Optimizations
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={Platform.OS === "ios" ? 5 : 10}
+          windowSize={Platform.OS === "ios" ? 5 : 10}
+          initialNumToRender={Platform.OS === "ios" ? 5 : 10}
+          updateCellsBatchingPeriod={Platform.OS === "ios" ? 50 : 100}
+          scrollEventThrottle={Platform.OS === "ios" ? 16 : 8}
+          // iOS-specific: Better memory management
+          {...(Platform.OS === "ios" && {
+            maintainVisibleContentPosition: null,
+            disableVirtualization: false,
+          })}
         />
       )}
 
