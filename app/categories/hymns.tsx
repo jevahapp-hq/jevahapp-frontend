@@ -6,7 +6,6 @@ import {
   Dimensions,
   FlatList,
   Image,
-  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -235,13 +234,6 @@ export default function Hymns() {
             paddingBottom: 100, // Space for bottom nav
           }}
           showsVerticalScrollIndicator={true}
-          // iOS Performance Optimizations
-          removeClippedSubviews={Platform.OS === "ios"}
-          maxToRenderPerBatch={Platform.OS === "ios" ? 5 : 10}
-          windowSize={Platform.OS === "ios" ? 5 : 10}
-          initialNumToRender={Platform.OS === "ios" ? 5 : 10}
-          updateCellsBatchingPeriod={Platform.OS === "ios" ? 50 : 100}
-          scrollEventThrottle={Platform.OS === "ios" ? 16 : 8}
           ListHeaderComponent={
             <View
               style={{

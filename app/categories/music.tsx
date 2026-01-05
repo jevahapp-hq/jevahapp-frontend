@@ -7,7 +7,6 @@ import {
   FlatList,
   Image,
   Modal,
-  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -921,18 +920,6 @@ export default function Music() {
             paddingBottom: 100, // Space for bottom nav
           }}
           showsVerticalScrollIndicator={false}
-          // iOS Performance Optimizations
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={Platform.OS === "ios" ? 5 : 10}
-          windowSize={Platform.OS === "ios" ? 5 : 10}
-          initialNumToRender={Platform.OS === "ios" ? 5 : 10}
-          updateCellsBatchingPeriod={Platform.OS === "ios" ? 50 : 100}
-          scrollEventThrottle={Platform.OS === "ios" ? 16 : 8}
-          // iOS-specific: Better memory management
-          {...(Platform.OS === "ios" && {
-            maintainVisibleContentPosition: null,
-            disableVirtualization: false,
-          })}
         />
       )}
 
