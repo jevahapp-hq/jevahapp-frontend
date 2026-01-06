@@ -18,6 +18,7 @@ import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
+import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
@@ -86,23 +87,43 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
     ? getBestVideoUrl(rawVideoUrl)
     : null;
+  
+  // Initialize refs before useVideoPlayer hook (needed in callback)
+  const preloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+  
   const player = useVideoPlayer(videoUrl || "", (player) => {
     player.loop = false;
     player.muted = isMuted ?? false; // Ensure boolean, never undefined
     player.volume = (videoVolume ?? 1.0); // Ensure number, never undefined
     // Pre-load video source for faster playback on subsequent loads
     if (videoUrl) {
+      // Clear any existing timeout
+      if (preloadTimeoutRef.current) {
+        clearTimeout(preloadTimeoutRef.current);
+      }
       // Player will automatically load the source, but we can ensure it's ready
       // by checking status after a brief delay
-      setTimeout(() => {
-        if (player && !player.playing) {
-          // Pre-buffer the video without playing
-          // This ensures faster response when play is pressed
+      preloadTimeoutRef.current = setTimeout(() => {
+        // Check if component is still mounted and player is still valid
+        if (!isMountedRef.current) {
+          return;
         }
-      }, 100);
+        try {
+          // Safely check player status - player may have been released
+          if (player && typeof player.playing === 'boolean') {
+            // Pre-buffer the video without playing
+            // This ensures faster response when play is pressed
+          }
+        } catch (error) {
+          // Player was released, ignore silently
+          if (__DEV__) {
+            console.warn('Video player was released before timeout callback:', error);
+          }
+        }
+      }, 100) as NodeJS.Timeout;
     }
   });
-  const isMountedRef = useRef(true);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
@@ -120,6 +141,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const toggleProcessingRef = useRef(false); // Ref for debouncing play toggle
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  
+  // Check if user is admin
+  useEffect(() => {
+    isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
+  }, []);
   
   // Delete media functionality - using reusable hook
   const {
@@ -635,6 +662,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      // Clear preload timeout
+      if (preloadTimeoutRef.current) {
+        clearTimeout(preloadTimeoutRef.current);
+        preloadTimeoutRef.current = null;
+      }
       // Clear overlay timeout
       if (overlayTimeoutRef.current) {
         clearTimeout(overlayTimeoutRef.current);
@@ -944,7 +976,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               likeBurstKey={likeBurstKey}
               likeColor="#D22A2A"
               onLike={() => {
-                setLikeBurstKey((k) => k + 1);
+                // ✅ Only trigger burst animation when LIKING (not unliking)
+                if (!userLikeState) {
+                  setLikeBurstKey((k) => k + 1);
+                }
                 onFavorite(key, video);
               }}
               commentCount={commentCount || video.comment || 0}
@@ -1005,7 +1040,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         uploadedBy={getUploadedBy(video)}
         mediaItem={video}
         onDelete={handleDeletePress}
-        showDelete={isOwner}
+        showDelete={userIsAdmin || isOwner}
         onReport={() => setShowReportModal(true)}
       />
 
@@ -1016,6 +1051,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         mediaTitle={video.title || "this media"}
         onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}
+        isAdmin={userIsAdmin}
       />
 
       {/* Report Modal */}

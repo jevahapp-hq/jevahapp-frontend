@@ -146,3 +146,4 @@ export const isVideoSermon = (item: MediaItem | null | undefined): boolean => {
   return detectMediaType(item) === "video";
 };
 
+

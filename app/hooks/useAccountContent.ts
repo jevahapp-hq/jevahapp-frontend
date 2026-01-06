@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useMemo } from "react";
-import { useQuery, useInfiniteQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   MediaItem,
   Post,
@@ -23,11 +23,10 @@ type UseAccountContentResult = {
 };
 
 export function useAccountContent(): UseAccountContentResult {
-  // Get userId from React Query cache (from useUserProfile)
-  const { data: userProfile } = useQuery({
-    queryKey: ["user-profile"],
-    enabled: false, // Don't fetch, just read from cache
-  });
+  const queryClient = useQueryClient();
+  
+  // Get userId from React Query cache (from useUserProfile) - read directly from cache
+  const userProfile = queryClient.getQueryData(["user-profile"]);
 
   const userId = useMemo(() => {
     if (userProfile) {

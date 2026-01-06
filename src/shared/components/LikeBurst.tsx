@@ -17,6 +17,7 @@ export interface LikeBurstProps {
   bubbles?: number;
   distance?: number; // how far bubbles travel up
   duration?: number; // base duration per bubble
+  enabled?: boolean; // if false, won't trigger even if triggerKey changes
 }
 
 export const LikeBurst: React.FC<LikeBurstProps> = ({
@@ -24,9 +25,10 @@ export const LikeBurst: React.FC<LikeBurstProps> = ({
   color = "#FF1744",
   size = 16,
   style,
-  bubbles = 5,
-  distance = 60,
-  duration = 600,
+  bubbles = 8, // Increased from 5 for more visual impact
+  distance = 80, // Increased from 60 for more dramatic effect
+  duration = 800, // Increased from 600 for smoother animation
+  enabled = true, // Only trigger if enabled
 }) => {
   const bubblesRef = useRef<Bubble[]>([]);
 
@@ -36,45 +38,71 @@ export const LikeBurst: React.FC<LikeBurstProps> = ({
       translateY: new Animated.Value(0),
       translateX: new Animated.Value(0),
       opacity: new Animated.Value(0),
-      scale: new Animated.Value(0.6),
+      scale: new Animated.Value(0.3), // Start smaller for more dramatic pop
     }));
   }
 
   const sequences = useMemo(() => {
     return bubblesRef.current.map((b, i) => {
-      const upward = -distance * (0.8 + Math.random() * 0.6);
-      const horizontal = (Math.random() - 0.5) * 24; // left/right spread
-      const t = duration * (0.8 + Math.random() * 0.5);
+      // More varied trajectories for natural feel
+      const upward = -distance * (0.7 + Math.random() * 0.8);
+      const horizontal = (Math.random() - 0.5) * 40; // Wider spread
+      const t = duration * (0.7 + Math.random() * 0.6); // More variation in timing
+      
       return Animated.parallel([
+        // Smoother upward motion with better easing
         Animated.timing(b.translateY, {
           toValue: upward,
           duration: t,
-          easing: Easing.out(Easing.quad),
+          easing: Easing.out(Easing.cubic), // Smoother than quad
           useNativeDriver: true,
         }),
+        // Horizontal drift with smoother easing
         Animated.timing(b.translateX, {
           toValue: horizontal,
           duration: t,
-          easing: Easing.out(Easing.quad),
+          easing: Easing.inOut(Easing.sin), // Sinusoidal for natural drift
           useNativeDriver: true,
         }),
-        Animated.timing(b.opacity, {
-          toValue: 1,
-          duration: Math.min(180, t * 0.3),
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
+        // Fade in faster, fade out slower for better visibility
+        Animated.sequence([
+          Animated.timing(b.opacity, {
+            toValue: 1,
+            duration: Math.min(150, t * 0.25), // Faster fade in
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(b.opacity, {
+            toValue: 0.8,
+            duration: t * 0.4, // Hold at high opacity
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(b.opacity, {
+            toValue: 0,
+            duration: t * 0.35, // Smooth fade out
+            easing: Easing.in(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        // More dramatic scale animation with bounce
         Animated.sequence([
           Animated.timing(b.scale, {
-            toValue: 1.2,
-            duration: Math.min(200, t * 0.35),
-            easing: Easing.out(Easing.back(1.2)),
+            toValue: 1.4, // Bigger initial pop
+            duration: Math.min(180, t * 0.3),
+            easing: Easing.out(Easing.back(1.5)), // More bounce
             useNativeDriver: true,
           }),
           Animated.timing(b.scale, {
-            toValue: 1,
-            duration: Math.min(160, t * 0.25),
+            toValue: 1.1, // Slight shrink
+            duration: Math.min(120, t * 0.2),
             easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(b.scale, {
+            toValue: 0.8, // Fade out while shrinking
+            duration: t * 0.5,
+            easing: Easing.in(Easing.cubic),
             useNativeDriver: true,
           }),
         ]),
@@ -83,29 +111,26 @@ export const LikeBurst: React.FC<LikeBurstProps> = ({
   }, [bubbles, distance, duration]);
 
   useEffect(() => {
+    // ✅ Only trigger animation if enabled (prevents burst on unlikes)
+    if (!enabled || triggerKey === 0) return;
+    
     // reset
     bubblesRef.current.forEach((b) => {
       b.translateY.setValue(0);
       b.translateX.setValue(0);
       b.opacity.setValue(0);
-      b.scale.setValue(0.6);
+      b.scale.setValue(0.3); // Start smaller for more dramatic pop
     });
 
-    // slight stagger for each bubble
+    // Staggered launch for cascading effect (reduced delay for smoother flow)
     const animations = sequences.map((anim, i) =>
       Animated.sequence([
-        Animated.delay(i * 40),
+        Animated.delay(i * 25), // Reduced from 40ms for tighter cascade
         anim,
-        Animated.timing(bubblesRef.current[i].opacity, {
-          toValue: 0,
-          duration: 200,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
       ])
     );
     Animated.parallel(animations).start();
-  }, [triggerKey, sequences]);
+  }, [triggerKey, sequences, enabled]);
 
   return (
     <>

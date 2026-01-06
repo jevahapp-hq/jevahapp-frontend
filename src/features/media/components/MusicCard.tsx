@@ -25,6 +25,7 @@ import { AudioCardSkeleton } from "../../../shared/components/Skeleton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
+import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { MusicCardProps } from "../../../shared/types";
@@ -81,6 +82,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  
+  // Check if user is admin
+  useEffect(() => {
+    isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
+  }, []);
   
   // Delete media functionality - using reusable hook
   const {
@@ -543,7 +550,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               likeBurstKey={likeBurstKey}
               likeColor="#D22A2A"
               onLike={() => {
-                setLikeBurstKey((k) => k + 1);
+                // ✅ Only trigger burst animation when LIKING (not unliking)
+                if (!likedFromStore) {
+                  setLikeBurstKey((k) => k + 1);
+                }
                 onLike(audio);
               }}
               commentCount={commentsFromStore || audio.comments || 0}
@@ -592,7 +602,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         uploadedBy={audio.uploadedBy || audio.author?._id || audio.authorInfo?._id}
         mediaItem={audio}
         onDelete={handleDeletePress}
-        showDelete={isOwner}
+        showDelete={userIsAdmin || isOwner}
         onReport={() => setShowReportModal(true)}
       />
       
@@ -603,6 +613,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         mediaTitle={audio.title || "this media"}
         onClose={() => setShowDeleteModal(false)}
         onSuccess={handleDeleteConfirm}
+        isAdmin={userIsAdmin}
       />
 
       {/* Report Modal */}

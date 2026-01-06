@@ -296,7 +296,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
       {showCounts && (
         <TouchableOpacity style={buttonStyle} disabled>
           <MaterialIcons name="visibility" size={iconSize} color={iconColor} />
-          {showCounts && <Text style={textStyle}>{finalViewCount}</Text>}
+          {showCounts && finalViewCount > 0 && <Text style={textStyle}>{finalViewCount}</Text>}
         </TouchableOpacity>
       )}
 
@@ -316,13 +316,13 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
             textShadowRadius: finalLikeState ? 10 : 0,
           }}
         />
-        {showCounts && <Text style={textStyle}>{finalLikeCount}</Text>}
+        {showCounts && finalLikeCount > 0 && <Text style={textStyle}>{finalLikeCount}</Text>}
       </TouchableOpacity>
 
       {/* Comment */}
       <TouchableOpacity style={buttonStyle} onPress={handleComment}>
         <Ionicons name="chatbubble-outline" size={iconSize} color={iconColor} />
-        {showCounts && <Text style={textStyle}>{finalCommentCount}</Text>}
+        {showCounts && finalCommentCount > 0 && <Text style={textStyle}>{finalCommentCount}</Text>}
       </TouchableOpacity>
 
       {/* Save */}
@@ -336,7 +336,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
           size={iconSize}
           color={saveColor}
         />
-        {showCounts && <Text style={textStyle}>{finalSaveCount}</Text>}
+        {showCounts && finalSaveCount > 0 && <Text style={textStyle}>{finalSaveCount}</Text>}
       </TouchableOpacity>
 
       {/* Download (if handler provided) */}

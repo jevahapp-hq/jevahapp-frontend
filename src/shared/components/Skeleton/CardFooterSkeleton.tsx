@@ -67,3 +67,4 @@ export const CardFooterSkeleton: React.FC<CardFooterSkeletonProps> = ({
 
 export default CardFooterSkeleton;
 
+

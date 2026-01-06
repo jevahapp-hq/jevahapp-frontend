@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -26,7 +26,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -35,7 +35,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -46,7 +46,7 @@
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -57,7 +57,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -68,7 +68,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -78,7 +78,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
@@ -88,7 +88,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jevahapp-backend.onrender.com",
+        "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     }

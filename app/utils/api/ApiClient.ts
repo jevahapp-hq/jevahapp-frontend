@@ -298,6 +298,134 @@ export class ApiClient {
     });
   }
 
+  // Profile Settings API Methods
+  async getProfileSettingsConfig(): Promise<{
+    success: boolean;
+    data: Record<string, any>;
+  }> {
+    return this.request("/user/profile/settings-config", {
+      method: "GET",
+      cache: true,
+    });
+  }
+
+  async getProfile(): Promise<{
+    success: boolean;
+    data: { user: UserData };
+  }> {
+    return this.request("/user/profile", {
+      method: "GET",
+      cache: true,
+    });
+  }
+
+  async uploadProfileAvatar(fileUri: string): Promise<{
+    success: boolean;
+    data: {
+      avatar: string;
+      avatarUpload: string;
+      previewUrl?: string;
+      message: string;
+    };
+  }> {
+    const token = await TokenManager.getToken();
+    if (!token) throw new Error("No authentication token");
+
+    const formData = new FormData();
+    formData.append("avatar", {
+      uri: fileUri,
+      type: "image/jpeg",
+      name: "avatar.jpg",
+    } as any);
+
+    // Use direct fetch for FormData to avoid issues with request method
+    const response = await enhancedFetch(`${API_BASE_URL}/user/profile/upload-avatar`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+        "expo-platform": Platform.OS,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || error.message || "Failed to upload avatar");
+    }
+
+    return response.json();
+  }
+
+  async updateProfileName(firstName?: string, lastName?: string): Promise<{
+    success: boolean;
+    data: {
+      user: {
+        _id: string;
+        firstName: string;
+        lastName: string;
+        updatedAt: string;
+      };
+      message: string;
+    };
+  }> {
+    return this.request("/user/profile/update-name", {
+      method: "PUT",
+      body: { firstName, lastName },
+    });
+  }
+
+  async updateProfileLock(profileLock: boolean): Promise<{
+    success: boolean;
+    data: {
+      settings: { profileLock: boolean };
+      message: string;
+    };
+  }> {
+    return this.request("/user/profile/update-lock", {
+      method: "PUT",
+      body: { profileLock },
+    });
+  }
+
+  async updatePushNotifications(pushNotifications: boolean): Promise<{
+    success: boolean;
+    data: {
+      settings: { pushNotifications: boolean };
+      message: string;
+    };
+  }> {
+    return this.request("/user/profile/update-push-notifications", {
+      method: "PUT",
+      body: { pushNotifications },
+    });
+  }
+
+  async updateRecommendations(recommendationSettings: boolean): Promise<{
+    success: boolean;
+    data: {
+      settings: { recommendationSettings: boolean };
+      message: string;
+    };
+  }> {
+    return this.request("/user/profile/update-recommendations", {
+      method: "PUT",
+      body: { recommendationSettings },
+    });
+  }
+
+  async updateLiveSettings(liveSettings: boolean): Promise<{
+    success: boolean;
+    error?: string;
+    code?: string;
+    comingSoon?: boolean;
+  }> {
+    return this.request("/user/profile/update-live-settings", {
+      method: "PUT",
+      body: { liveSettings },
+    });
+  }
+
   async uploadAvatar(fileUri: string): Promise<{ avatarUrl: string }> {
     const token = await TokenManager.getToken();
     if (!token) throw new Error("No authentication token");

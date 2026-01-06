@@ -61,44 +61,13 @@ import {
 // import { testFavoriteSystem } from "../utils/testFavoriteSystem";
 // import { testPersistenceBehavior } from "../utils/testPersistence";
 import useVideoViewport from "../hooks/useVideoViewport";
-
-interface VideoCard {
-  fileUrl: string;
-  title: string;
-  speaker: string;
-  uploadedBy?: string;
-  timeAgo: string;
-  speakerAvatar: any;
-  favorite: number;
-  views: number;
-  saved: number;
-  sheared: number;
-  comment: number;
-  imageUrl?: any;
-  onPress?: () => void;
-  createdAt?: string;
-}
-
-interface RecommendedItem {
-  fileUrl: string;
-  imageUrl: ImageSourcePropType;
-  title: string;
-  subTitle: string;
-  views: number;
-  onPress?: () => void;
-  isHot?: boolean;
-  isRising?: boolean;
-  trendingScore?: number;
-}
-
-const videosA: VideoCard[] = [];
-const videosB: VideoCard[] = [];
-const recommendedItems: RecommendedItem[] = [];
+import { videosA, videosB, recommendedItems } from "./VideoComponent/constants";
+import { VideoCardData, RecommendedItem } from "./VideoComponent/types";
+import { formatTime, getVideoKey } from "./VideoComponent/utils";
 
 export default function VideoComponent() {
   const router = useRouter();
   const [videoVolume, setVideoVolume] = useState<number>(1.0); // 🔊 Add volume control
-  const getVideoKey = (fileUrl: string): string => `video-${fileUrl}`;
 
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
@@ -141,7 +110,7 @@ export default function VideoComponent() {
 
   const miniCardRefs = useRef<Record<string, any>>({});
   const [videoStats, setVideoStats] = useState<
-    Record<string, Partial<VideoCard>>
+    Record<string, Partial<VideoCardData>>
   >({});
   const [previouslyViewedState, setPreviouslyViewedState] = useState<
     RecommendedItem[]
@@ -170,13 +139,6 @@ export default function VideoComponent() {
   // Track playback times for display
   const [positions, setPositions] = useState<Record<string, number>>({});
   const [durations, setDurations] = useState<Record<string, number>>({});
-
-  const formatTime = (milliseconds: number) => {
-    const totalSeconds = Math.floor((milliseconds || 0) / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
 
   // ✅ Use global comment modal
   const { showCommentModal } = useCommentModal();
@@ -414,7 +376,7 @@ export default function VideoComponent() {
     }
   };
 
-  const togglePlay = (key: string, video?: VideoCard) => {
+  const togglePlay = (key: string, video?: VideoCardData) => {
     const isCurrentlyPlaying = globalVideoStore.playingVideos[key] || false;
 
     console.log(
@@ -490,7 +452,7 @@ export default function VideoComponent() {
     }
   };
 
-  const incrementView = (key: string, video: VideoCard) => {
+  const incrementView = (key: string, video: VideoCardData) => {
     console.log("🔄 incrementView called for:", video.title, "key:", key);
     console.log("📊 Current videoStats for key:", videoStats[key]);
 
@@ -541,7 +503,7 @@ export default function VideoComponent() {
     });
   };
 
-  const handleShare = async (key: string, video: VideoCard) => {
+  const handleShare = async (key: string, video: VideoCardData) => {
     console.log("🔄 Share button clicked for:", video.title);
     try {
       const result = await Share.share({
@@ -578,7 +540,7 @@ export default function VideoComponent() {
     }
   };
 
-  const handleSave = async (key: string, video: VideoCard) => {
+  const handleSave = async (key: string, video: VideoCardData) => {
     console.log("🔄 Save button clicked for:", video.title);
 
     try {
@@ -698,7 +660,7 @@ export default function VideoComponent() {
     setModalVisible(null);
   };
 
-  const handleFavorite = async (key: string, video: VideoCard) => {
+  const handleFavorite = async (key: string, video: VideoCardData) => {
     console.log(`🎯 Handling favorite for: ${video.title}`);
 
     try {
@@ -719,7 +681,7 @@ export default function VideoComponent() {
     }
   };
 
-  const handleComment = (key: string, video: VideoCard) => {
+  const handleComment = (key: string, video: VideoCardData) => {
     // Get the content ID for this video - use key as fallback since VideoCard doesn't have _id
     const contentId = key;
 
@@ -1041,7 +1003,7 @@ export default function VideoComponent() {
     // handleVideoVisibilityChange(mostVisibleKey);
   }, [isAutoPlayEnabled, uploadedVideos]);
 
-  const handleVideoTap = (key: string, video?: VideoCard) => {
+  const handleVideoTap = (key: string, video?: VideoCardData) => {
     const isCurrentlyPlaying = globalVideoStore.playingVideos[key] ?? false;
     const wasCompleted = globalVideoStore.hasCompleted[key] ?? false;
 
@@ -1373,7 +1335,7 @@ export default function VideoComponent() {
   };
 
   // Helper to convert VideoCard to MediaItem for shared component
-  const convertToMediaItem = (video: VideoCard): MediaItem => {
+  const convertToMediaItem = (video: VideoCardData): MediaItem => {
     return {
       _id: getVideoKey(video.fileUrl),
       contentType: "videos",
@@ -1394,9 +1356,9 @@ export default function VideoComponent() {
   };
 
   // getContentKey helper for shared component
-  const getContentKey = (video: VideoCard | MediaItem): string => {
+  const getContentKey = (video: VideoCardData | MediaItem): string => {
     if ("fileUrl" in video && typeof video === "object" && video !== null) {
-      return getVideoKey((video as VideoCard).fileUrl);
+      return getVideoKey((video as VideoCardData).fileUrl);
     }
     if (video && typeof video === "object" && "_id" in video) {
       return (
@@ -1416,7 +1378,7 @@ export default function VideoComponent() {
   };
 
   const renderVideoCard = (
-    video: VideoCard,
+    video: VideoCardData,
     index: number,
     sectionId: string,
     playType: "progress" | "center" = "center"

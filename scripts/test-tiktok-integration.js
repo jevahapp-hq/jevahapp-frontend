@@ -7,7 +7,7 @@
  * Run this script to verify that all endpoints are working correctly.
  */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://jevahapp-backend.onrender.com";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://api.jevahapp.com";
 
 // Test endpoints
 const ENDPOINTS = [

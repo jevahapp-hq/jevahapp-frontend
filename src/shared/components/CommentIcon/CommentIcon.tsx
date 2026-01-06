@@ -90,11 +90,17 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
       {...buttonProps}
     >
       <Ionicons name="chatbubble-outline" size={iconSize} color={color} />
-      {showCount && (
-        <Text style={textStyle} pointerEvents="none">
-          {count !== undefined ? count : comments.length}
-        </Text>
-      )}
+      {showCount && (() => {
+        const displayCount = count !== undefined ? count : comments.length;
+        if (displayCount > 0) {
+          return (
+            <Text style={textStyle} pointerEvents="none">
+              {displayCount}
+            </Text>
+          );
+        }
+        return null;
+      })()}
     </ButtonComponent>
   );
 };

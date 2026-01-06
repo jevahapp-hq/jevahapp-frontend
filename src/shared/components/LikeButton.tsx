@@ -154,7 +154,7 @@ const LikeButton: React.FC<LikeButtonProps> = ({
         <Ionicons name={iconName as any} size={size} color={currentColor} />
       )}
 
-      {showCount && (
+      {showCount && likeCount > 0 && (
         <Text
           style={{
             marginLeft: 4,

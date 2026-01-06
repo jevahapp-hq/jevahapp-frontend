@@ -23,6 +23,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   } = options;
 
   // Use React Query for all content (provides 0ms cache hits)
+  const queryClient = useQueryClient();
   const allContentQuery = useQuery({
     queryKey: ["all-content", contentType, 1, 50, false],
     queryFn: async () => {
@@ -33,9 +34,33 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       });
 
       if (response.success) {
-        const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
+        // Don't cache empty results - this indicates a parsing issue
+        if (!response.media || response.media.length === 0) {
+          console.warn("⚠️ useMedia: Received empty media array - not caching this result");
+          queryClient.invalidateQueries({ queryKey: ["all-content"] });
+          throw new Error("API returned empty media array - possible parsing issue");
+        }
+
+        // Add timeout to prevent hanging (10 second timeout)
+        const enrichmentPromise = UserProfileCache.enrichContentArrayBatch(
           response.media || []
         );
+        
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Enrichment timeout after 10 seconds")), 10000);
+        });
+        
+        let enrichedMedia;
+        try {
+          enrichedMedia = await Promise.race([enrichmentPromise, timeoutPromise]);
+        } catch (enrichError) {
+          console.error("❌ useMedia: Enrichment failed, using original data", {
+            error: enrichError instanceof Error ? enrichError.message : String(enrichError),
+          });
+          // Fallback to original data if enrichment fails or times out
+          enrichedMedia = response.media || [];
+        }
+        
         const transformedMedia = enrichedMedia
           .map(transformApiResponseToMediaItem)
           .filter((item): item is MediaItem => item !== null);
@@ -143,7 +168,6 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
   // Legacy fetch function - now uses React Query internally
   // Kept for backward compatibility but React Query handles caching
-  const queryClient = useQueryClient();
   const fetchAllContent = useCallback(async (useAuth: boolean = false, pageNum: number = 1, append: boolean = false) => {
     // React Query handles this automatically - just refetch the query
     if (!append) {

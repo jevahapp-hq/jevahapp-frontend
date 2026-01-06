@@ -377,3 +377,177 @@ export const isMediaOwner = async (
   }
 };
 
+/**
+ * Check if current user is an admin
+ * @returns Promise<boolean> - True if current user has admin role
+ */
+export const isAdmin = async (): Promise<boolean> => {
+  try {
+    const userStr = await AsyncStorage.getItem("user");
+    if (!userStr) {
+      return false;
+    }
+
+    const user = JSON.parse(userStr);
+    const role = user?.role || user?.userRole;
+    
+    // Check if role is "admin" (case-insensitive)
+    return String(role).toLowerCase() === "admin";
+  } catch (error) {
+    console.error("❌ Error checking admin status:", error);
+    return false;
+  }
+};
+
+/**
+ * Admin delete content endpoint - permanently delete content that violates platform rules
+ * @param mediaId - The ID of the media item to delete
+ * @returns Promise with deletion result
+ * @throws Error if deletion fails or user is not authorized
+ */
+export const adminDeleteContent = async (
+  mediaId: string
+): Promise<DeleteMediaResponse & { data?: any }> => {
+  // 1. Get authentication token
+  let token = await AsyncStorage.getItem("userToken");
+  if (!token) {
+    token = await AsyncStorage.getItem("token");
+  }
+  if (!token) {
+    try {
+      const { default: SecureStore } = await import("expo-secure-store");
+      token = await SecureStore.getItemAsync("jwt");
+    } catch (secureStoreError) {
+      // Silent fallback
+    }
+  }
+  
+  if (!token) {
+    throw new Error("Please log in to delete content.");
+  }
+
+  // 2. Validate mediaId format (MongoDB ObjectId is 24 hex characters)
+  if (!mediaId || typeof mediaId !== "string") {
+    throw new Error("Invalid media ID");
+  }
+  
+  // Validate ObjectId format
+  const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+  if (!objectIdPattern.test(mediaId.trim())) {
+    console.error("❌ Invalid media ID format:", {
+      mediaId,
+      length: mediaId.length,
+      pattern: objectIdPattern.test(mediaId.trim()),
+    });
+    throw new Error("Invalid media ID format. Please try again.");
+  }
+  
+  // Trim the ID to ensure no whitespace
+  const trimmedMediaId = mediaId.trim();
+
+  // 3. Get API base URL and construct full URL for admin delete endpoint
+  const baseURL = getApiBaseUrl();
+  const fullURL = `${baseURL}/api/media/reports/${trimmedMediaId}/delete`;
+  
+  // Log token info for debugging
+  console.log("🔨 Admin delete request:", {
+    hasToken: !!token,
+    tokenLength: token?.length,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : "none",
+    mediaId: trimmedMediaId,
+    mediaIdLength: trimmedMediaId.length,
+    fullURL,
+  });
+  
+  // 4. Make DELETE request to admin endpoint
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  
+  try {
+    const response = await fetch(fullURL, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "expo-platform": Platform.OS,
+      },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // Log full response for debugging
+    console.log("📥 Admin delete response:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+    
+    // Parse response
+    let data: any;
+    try {
+      const text = await response.text();
+      console.log("📥 Admin delete response text:", text);
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error("❌ Failed to parse admin delete response:", parseError);
+      throw new Error("Invalid response from server");
+    }
+
+    // Check if successful
+    if (response.ok && data.success) {
+      console.log("✅ Admin delete successful:", data);
+      return {
+        success: true,
+        message: data.message || "Content deleted successfully",
+        data: data.data,
+      };
+    }
+    
+    // Handle errors - log full error details
+    const errorMessage = data.message || data.error || "Failed to delete content";
+    console.error("❌ Admin delete failed - full error:", {
+      status: response.status,
+      statusText: response.statusText,
+      errorMessage,
+      fullResponse: data,
+      tokenWasSent: !!token,
+      tokenLength: token?.length,
+    });
+    
+    if (response.status === 401) {
+      throw new Error(errorMessage || "Your session has expired. Please log in again.");
+    }
+    
+    if (response.status === 403) {
+      throw new Error(errorMessage || "You don't have permission to delete content. Admin access required.");
+    }
+    
+    if (response.status === 404) {
+      throw new Error(errorMessage || "Content not found. It may have already been deleted or the ID is incorrect.");
+    }
+    
+    throw new Error(errorMessage);
+    
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    
+    // Handle network errors
+    if (error.name === 'AbortError') {
+      throw new Error("Request timed out. Please try again.");
+    }
+    
+    if (error.message?.includes('Network') || error.message === 'Network request failed') {
+      throw new Error("Network error. Please check your connection and try again.");
+    }
+    
+    // Re-throw if it's already a formatted error
+    if (error.message) {
+      throw error;
+    }
+    
+    throw new Error("Failed to delete content. Please try again.");
+  }
+};
+

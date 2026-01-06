@@ -13,7 +13,7 @@ export default {
     extra: {
       API_URL:
         process.env.EXPO_PUBLIC_API_URL ||
-        "https://jevahapp-backend.onrender.com",
+        "https://api.jevahapp.com",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
         projectId: "9ccc6cfe-5736-477b-b6d6-801debb2a124",

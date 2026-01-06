@@ -4,3 +4,6 @@ export const createSafeVideoSource = (uri?: string | null, fallback = 'https://c
   }
   return { uri: uri.trim() };
 };
+
+// Re-export getBottomNavHeight from responsiveOptimized for backward compatibility
+export { getBottomNavHeight } from './responsiveOptimized';

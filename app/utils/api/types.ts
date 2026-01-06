@@ -33,7 +33,7 @@ export interface UserData {
 }
 
 // API Configuration
-export const API_BASE_URL = "https://jevahapp-backend.onrender.com/api";
+export const API_BASE_URL = "https://api.jevahapp.com/api";
 
 // Cache configuration
 export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes

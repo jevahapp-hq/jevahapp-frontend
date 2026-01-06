@@ -22,57 +22,13 @@ import { useInteractionStore } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
 import allMediaAPI from "../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../utils/downloadUtils";
-
-const sampleMedia = [
-  {
-    id: "1",
-    title: "2 Hours time with God with Dunsin Oy...",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "2",
-    title: "Living with the Holy Spirit",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "3",
-    title: "The power of confidence",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "4",
-    title: "30 minutes songs of worship",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "5",
-    title: "The Prophetic",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "6",
-    title: "Lagos open field praise",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "7",
-    title: "Jesus preaches",
-    image: require("../../../assets/images/image (10).png"),
-  },
-  {
-    id: "8",
-    title: "AI Jams in Lekki Lagos Stadium",
-    image: require("../../../assets/images/image (10).png"),
-  },
-];
-
-const pastSearchesInitial = [
-  "Miracles",
-  "Spiritual growth",
-  "Mega worship",
-  "Soaking worship",
-  "Love and Light",
-];
+import { sampleMedia, pastSearchesInitial } from "./AllLibrary/constants";
+import {
+  mapContentTypeToAPI,
+  isEbookContent,
+  getEffectiveContentType,
+  getContentTypeIcon,
+} from "./AllLibrary/utils";
 
 export default function AllLibrary({ contentType }: { contentType?: string }) {
   const router = useRouter();
@@ -192,20 +148,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     [savedItemIds, libraryStore]
   );
 
-  // Helper function to map LibraryScreen category to API contentType format
-  const mapContentTypeToAPI = useCallback((category?: string): string | undefined => {
-    if (!category || category === "ALL") return undefined;
-    
-    const mapping: Record<string, string> = {
-      "SERMON": "sermon",
-      "MUSIC": "music",
-      "E-BOOKS": "ebook",
-      "VIDEO": "video",
-      "LIVE": "live",
-    };
-    
-    return mapping[category] || category.toLowerCase().replace("-", "");
-  }, []);
+  // Using imported mapContentTypeToAPI from utils
 
   useEffect(() => {
     const loadSavedItems = async () => {
