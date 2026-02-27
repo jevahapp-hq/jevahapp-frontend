@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,13 +14,13 @@ import {
   View,
 } from "react-native";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import {
   getButtonSize,
   getInputSize,
@@ -36,10 +36,11 @@ import {
   isSmallScreen,
 } from "../../utils/responsive";
 import AuthHeader from "../components/AuthHeader";
-import { useMediaStore } from "../store/useUploadStore";
+import { useNotification } from "../context/NotificationContext";
 import SocketManager from "../services/SocketManager";
-import TokenUtils from "../utils/tokenUtils";
+import { useMediaStore } from "../store/useUploadStore";
 import { getApiBaseUrl } from "../utils/api";
+import TokenUtils from "../utils/tokenUtils";
 
 import {
   logUserDataStatus,
@@ -48,14 +49,15 @@ import {
 import { API_BASE_URL, categories, contentTypes, getMaxFileSizeBytes } from "./upload/constants";
 import {
   detectFileType,
+  formatFriendlyRejectionMessage,
   getMimeTypeFromName,
   isImage,
-  formatFriendlyRejectionMessage,
   validateMediaEligibility,
 } from "./upload/utils";
 
 export default function UploadScreen() {
   const router = useRouter();
+  const { showNotification } = useNotification();
   const [file, setFile] = useState<any>(null);
   const [thumbnail, setThumbnail] = useState<any>(null);
   const [title, setTitle] = useState("");
@@ -96,7 +98,7 @@ export default function UploadScreen() {
   const isUsingRealTimeProgressRef = useRef<boolean>(false);
   const successNavigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
-  
+
   // AI Description Generation state
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [descriptionGenerationError, setDescriptionGenerationError] = useState<string | null>(null);
@@ -155,7 +157,7 @@ export default function UploadScreen() {
       selectedCategory,
       selectedType,
     });
-    
+
     // Add warnings that depend on local state
     const warnings = [...result.warnings];
     if (file) {
@@ -167,7 +169,7 @@ export default function UploadScreen() {
     if (description && description.length > 500) {
       warnings.push("Description should be 500 characters or less");
     }
-    
+
     return {
       ...result,
       warnings,
@@ -319,7 +321,7 @@ export default function UploadScreen() {
   // AI Description Generation function
   const generateAIDescription = async () => {
     console.log("🔵 Generate AI Description clicked", { title, file: !!file, thumbnail: !!thumbnail });
-    
+
     // Validation - require title, file, and thumbnail for best results
     if (!title || title.trim().length === 0) {
       Alert.alert(
@@ -355,10 +357,10 @@ export default function UploadScreen() {
     try {
       const token = await TokenUtils.getAuthToken();
       const formData = new FormData();
-      
+
       formData.append("title", title);
       formData.append("contentType", selectedType || "videos"); // Default to videos if not set
-      
+
       if (selectedCategory) {
         formData.append("category", selectedCategory);
       }
@@ -375,7 +377,7 @@ export default function UploadScreen() {
         name: file.name,
         size: file.size,
       } as any);
-      
+
       // Format thumbnail for FormData (React Native format)
       // Note: ImagePicker doesn't always provide size, so we estimate or skip validation
       formData.append("thumbnail", {
@@ -383,7 +385,7 @@ export default function UploadScreen() {
         type: thumbnail.mimeType || "image/jpeg",
         name: thumbnail.name || `thumbnail_${Date.now()}.jpg`,
       } as any);
-      
+
       console.log("📤 Sending AI description request with:", {
         title,
         contentType: selectedType || "videos",
@@ -405,13 +407,13 @@ export default function UploadScreen() {
 
       const apiUrl = `${getApiBaseUrl()}/api/media/generate-description`;
       console.log("🌐 API URL:", apiUrl);
-      
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers,
         body: formData,
       });
-      
+
       console.log("📥 Response status:", response.status, response.statusText);
 
       if (!response.ok) {
@@ -426,7 +428,7 @@ export default function UploadScreen() {
 
       const contentType = response.headers.get("content-type") || "";
       let data: any;
-      
+
       if (contentType.includes("application/json")) {
         data = await response.json();
       } else {
@@ -438,7 +440,7 @@ export default function UploadScreen() {
       if (data.success && data.description) {
         // Populate description field
         setDescription(data.description);
-        
+
         // Store Bible verses if available
         if (data.bibleVerses && Array.isArray(data.bibleVerses) && data.bibleVerses.length > 0) {
           setBibleVerses(data.bibleVerses);
@@ -458,7 +460,7 @@ export default function UploadScreen() {
       }
     } catch (error: any) {
       console.error("Error generating description:", error);
-      
+
       // Handle specific error cases
       if (error.response?.status === 429) {
         setDescriptionGenerationError("Too many requests. Please wait a minute before trying again.");
@@ -753,12 +755,12 @@ export default function UploadScreen() {
               // Only process progress for current upload
               if (progressData.uploadId === uploadId) {
                 console.log("📊 Real-time progress update:", progressData);
-                
+
                 // Switch to real-time progress if we were using simulated
                 if (!isUsingRealTimeProgressRef.current) {
                   console.log("🔄 Switching from simulated to real-time progress");
                   isUsingRealTimeProgressRef.current = true;
-                  
+
                   // Clear simulated progress interval
                   if (progressIntervalRef.current) {
                     clearInterval(progressIntervalRef.current);
@@ -814,7 +816,7 @@ export default function UploadScreen() {
                 clearTimeout(connectionTimeout);
                 console.log("✅ Socket.IO connected for real-time progress");
                 isUsingRealTimeProgressRef.current = true;
-                
+
                 // Clear simulated progress if it was started
                 if (progressIntervalRef.current) {
                   clearInterval(progressIntervalRef.current);
@@ -865,16 +867,16 @@ export default function UploadScreen() {
       });
 
       clearTimeout(timeoutId);
-      
+
       // Clear progress interval when request completes (if still running)
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
-      
+
       const uploadDuration = Date.now() - uploadStartTime;
       console.log(`✅ Upload request completed in ${uploadDuration}ms`);
-      
+
       // Update progress to 90% when response is received (only if not using real-time)
       if (!isUsingRealTimeProgressRef.current) {
         setUploadState((prev) => ({
@@ -896,7 +898,7 @@ export default function UploadScreen() {
       } catch (parseError) {
         try {
           rawText = await res.text();
-        } catch {}
+        } catch { }
       }
 
       // Handle different response statuses
@@ -906,7 +908,7 @@ export default function UploadScreen() {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
-        
+
         setLoading(false);
         setUploadState({
           status: "error",
@@ -914,7 +916,7 @@ export default function UploadScreen() {
           message: "",
         });
 
-        console.error("❌ Upload failed:", {
+        console.warn("❌ Upload failed:", {
           status: res.status,
           contentType,
           result,
@@ -935,10 +937,12 @@ export default function UploadScreen() {
 
         // Handle 413 Payload Too Large (nginx/server body size limit)
         if (res.status === 413) {
-          Alert.alert(
-            "File too large",
-            "The file exceeds the server's size limit. Please choose a smaller file or compress your media (e.g. lower resolution or bitrate)."
-          );
+          showNotification({
+            type: "warning",
+            title: "File too large",
+            message: "The file exceeds the server's size limit. Please choose a smaller file or compress your media.",
+            duration: 5000
+          });
           return;
         }
 
@@ -946,6 +950,21 @@ export default function UploadScreen() {
         if (res.status === 403 && result) {
           const moderationResult = result.moderationResult || {};
           const errorMessage = result.message || "Content does not meet our community guidelines.";
+
+          // Also show a non-blocking notification for quick feedback
+          const friendly = formatFriendlyRejectionMessage(
+            moderationResult.status,
+            moderationResult.reason,
+            moderationResult.flags,
+            errorMessage
+          );
+
+          showNotification({
+            type: friendly.isReview ? "info" : "warning",
+            title: friendly.title,
+            message: friendly.message,
+            duration: 6000
+          });
 
           setModerationError({
             message: errorMessage,
@@ -963,7 +982,13 @@ export default function UploadScreen() {
           (rawText
             ? `Unexpected response (${res.status}).`
             : `HTTP ${res.status}`);
-        Alert.alert("Upload failed", message || "Please try again.");
+
+        showNotification({
+          type: "error",
+          title: "Upload failed",
+          message: message || "Please try again.",
+          duration: 5000
+        });
         return;
       }
 
@@ -1093,7 +1118,7 @@ export default function UploadScreen() {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
-      
+
       // Clean up Socket.IO connection
       if (socketManagerRef.current) {
         const socket = (socketManagerRef.current as any).socket;
@@ -1105,15 +1130,15 @@ export default function UploadScreen() {
       }
       currentUploadIdRef.current = null;
       isUsingRealTimeProgressRef.current = false;
-      
+
       setLoading(false);
       setUploadState({
         status: "error",
         progress: 0,
         message: "",
       });
-      console.error("❌ Upload error:", error?.message ?? error);
-      console.error("❌ Upload error details:", {
+      console.warn("❌ Upload error:", error?.message ?? error);
+      console.warn("❌ Upload error details:", {
         name: error?.name,
         message: error?.message,
         status: error?.status,
@@ -1138,7 +1163,12 @@ export default function UploadScreen() {
         errorMessage = error.message;
       }
 
-      Alert.alert("Upload Failed", errorMessage);
+      showNotification({
+        type: "error",
+        title: "Upload Failed",
+        message: errorMessage,
+        duration: 5000
+      });
     }
   };
 
@@ -1171,9 +1201,8 @@ export default function UploadScreen() {
             setEligibilityStatus(validation);
           }, 100);
         }}
-        className={`rounded-full mr-2 mb-2 border ${
-          isSelected ? "bg-black border-black" : "bg-white border-gray-300"
-        }`}
+        className={`rounded-full mr-2 mb-2 border ${isSelected ? "bg-black border-black" : "bg-white border-gray-300"
+          }`}
         style={{
           paddingHorizontal: tagPaddingHorizontal,
           paddingVertical: tagPaddingVertical,
@@ -1511,7 +1540,7 @@ export default function UploadScreen() {
             alignItems: "center",
             padding: getResponsiveSpacing(20, 24, 32),
           }}
-          onPress={() => {}}
+          onPress={() => { }}
         >
           <TouchableOpacity
             activeOpacity={1}
@@ -1673,7 +1702,7 @@ export default function UploadScreen() {
                   borderStyle: "dashed",
                   maxWidth: Math.min(
                     getScreenDimensions().width -
-                      getResponsiveSpacing(16, 20, 24, 32) * 2,
+                    getResponsiveSpacing(16, 20, 24, 32) * 2,
                     320
                   ),
                   alignSelf: "center",
@@ -1696,551 +1725,551 @@ export default function UploadScreen() {
                   {selectedType === "music"
                     ? "Upload Limits: Max 50 MB per file, 50 songs total per user. Max 10 uploads per hour."
                     : selectedType === "sermon" || selectedType === "videos"
-                    ? "Upload Limits: Max 300 MB per file, 30 videos total per user. Max 10 uploads per hour."
-                    : selectedType === "books" || selectedType === "ebook"
-                    ? "Upload Limits: Max 100 MB per file. Max 10 uploads per hour."
-                    : "Upload Limits: Max 300 MB per file (videos/sermons), 50 MB (music), 100 MB (books). Max 10 uploads per hour."}
+                      ? "Upload Limits: Max 300 MB per file, 30 videos total per user. Max 10 uploads per hour."
+                      : selectedType === "books" || selectedType === "ebook"
+                        ? "Upload Limits: Max 100 MB per file. Max 10 uploads per hour."
+                        : "Upload Limits: Max 300 MB per file (videos/sermons), 50 MB (music), 100 MB (books). Max 10 uploads per hour."}
                 </Text>
               </View>
 
               {/* Form Fields */}
               <View className="flex-1">
-              <Text className="text-xs text-gray-600 mb-1 font-medium">
-                TITLE
-              </Text>
-              <TextInput
-                placeholder="Enter title..."
-                value={title}
-                onChangeText={(text) => {
-                  setTitle(text);
-                  // Re-validate when title changes
-                  if (file && selectedCategory && selectedType) {
-                    setTimeout(() => {
-                      const validation = validateMediaEligibilityLocal();
-                      setEligibilityStatus(validation);
-                    }, 100);
-                  }
-                }}
-                multiline
-                textAlignVertical="top"
-                className="border border-gray-300 rounded-md mb-4 px-3 py-3 bg-white"
-                style={{
-                  minHeight: getInputSize().height,
-                  maxHeight: 100,
-                  fontSize: getInputSize().fontSize,
-                }}
-              />
+                <Text className="text-xs text-gray-600 mb-1 font-medium">
+                  TITLE
+                </Text>
+                <TextInput
+                  placeholder="Enter title..."
+                  value={title}
+                  onChangeText={(text) => {
+                    setTitle(text);
+                    // Re-validate when title changes
+                    if (file && selectedCategory && selectedType) {
+                      setTimeout(() => {
+                        const validation = validateMediaEligibilityLocal();
+                        setEligibilityStatus(validation);
+                      }, 100);
+                    }
+                  }}
+                  multiline
+                  textAlignVertical="top"
+                  className="border border-gray-300 rounded-md mb-4 px-3 py-3 bg-white"
+                  style={{
+                    minHeight: getInputSize().height,
+                    maxHeight: 100,
+                    fontSize: getInputSize().fontSize,
+                  }}
+                />
 
-              <Text className="text-xs text-gray-600 mb-1 font-medium">
-                DESCRIPTION
-              </Text>
-              <TextInput
-                placeholder="Enter description..."
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                textAlignVertical="top"
-                className="border border-gray-300 rounded-md mb-2 px-3 py-3 bg-white"
-                style={{
-                  minHeight: getResponsiveSpacing(80, 100, 120),
-                  maxHeight: 200,
-                  fontSize: getInputSize().fontSize,
-                }}
-              />
-              
-              {/* AI Description Generation Button */}
-              {(() => {
-                const isReady = title && file && thumbnail;
-                const isDisabled = isGeneratingDescription || !isReady;
-                
-                return (
-                  <View className="mb-3" style={{ zIndex: 10 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("🔵 Button pressed", { 
-                          isGeneratingDescription, 
-                          title: !!title, 
-                          file: !!file, 
-                          thumbnail: !!thumbnail,
-                          isReady 
-                        });
-                        generateAIDescription();
-                      }}
-                      disabled={isDisabled}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{
-                        opacity: isDisabled ? 0.5 : 1,
-                      }}
-                    >
-                      <View
-                        className="flex-row items-center justify-center rounded-lg"
+                <Text className="text-xs text-gray-600 mb-1 font-medium">
+                  DESCRIPTION
+                </Text>
+                <TextInput
+                  placeholder="Enter description..."
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  textAlignVertical="top"
+                  className="border border-gray-300 rounded-md mb-2 px-3 py-3 bg-white"
+                  style={{
+                    minHeight: getResponsiveSpacing(80, 100, 120),
+                    maxHeight: 200,
+                    fontSize: getInputSize().fontSize,
+                  }}
+                />
+
+                {/* AI Description Generation Button */}
+                {(() => {
+                  const isReady = title && file && thumbnail;
+                  const isDisabled = isGeneratingDescription || !isReady;
+
+                  return (
+                    <View className="mb-3" style={{ zIndex: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("🔵 Button pressed", {
+                            isGeneratingDescription,
+                            title: !!title,
+                            file: !!file,
+                            thumbnail: !!thumbnail,
+                            isReady
+                          });
+                          generateAIDescription();
+                        }}
+                        disabled={isDisabled}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         style={{
-                          backgroundColor: isGeneratingDescription 
-                            ? "rgba(223, 147, 14, 0.3)" 
-                            : isReady
-                            ? "rgba(223, 147, 14, 0.12)"
-                            : "rgba(223, 147, 14, 0.08)",
-                          borderWidth: 1,
-                          borderColor: isGeneratingDescription 
-                            ? "rgba(223, 147, 14, 0.4)" 
-                            : isReady
-                            ? "rgba(223, 147, 14, 0.3)"
-                            : "rgba(223, 147, 14, 0.2)",
-                          paddingVertical: getResponsiveSpacing(10, 12, 14),
-                          paddingHorizontal: getResponsiveSpacing(16, 18, 20),
-                          minHeight: getTouchTargetSize(),
+                          opacity: isDisabled ? 0.5 : 1,
                         }}
                       >
-                        {isGeneratingDescription ? (
-                          <>
-                            <ActivityIndicator 
-                              size="small" 
-                              color="#DF930E" 
-                              style={{ marginRight: 8 }}
-                            />
-                            <Text
-                              style={{
-                                fontSize: getResponsiveFontSize(13, 14, 15),
-                                color: "#DF930E",
-                                fontFamily: "Rubik-Medium",
-                              }}
-                            >
-                              Analyzing content...
-                            </Text>
-                          </>
-                        ) : !isReady ? (
-                          <>
-                            <Ionicons
-                              name="sparkles-outline"
-                              size={16}
-                              color="#94a3b8"
-                              style={{ marginRight: 6 }}
-                            />
-                            <Text
-                              style={{
-                                fontSize: getResponsiveFontSize(13, 14, 15),
-                                color: "#94a3b8",
-                                fontFamily: "Rubik-Medium",
-                              }}
-                            >
-                              {!title ? "Enter title to enable" : !file ? "Upload file to enable" : "Upload thumbnail to enable"}
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <Ionicons
-                              name="sparkles"
-                              size={16}
-                              color="#DF930E"
-                              style={{ marginRight: 6 }}
-                            />
-                            <Text
-                              style={{
-                                fontSize: getResponsiveFontSize(13, 14, 15),
-                                color: "#DF930E",
-                                fontFamily: "Rubik-Medium",
-                              }}
-                            >
-                              Generate Description with AI
-                            </Text>
-                          </>
-                        )}
+                        <View
+                          className="flex-row items-center justify-center rounded-lg"
+                          style={{
+                            backgroundColor: isGeneratingDescription
+                              ? "rgba(223, 147, 14, 0.3)"
+                              : isReady
+                                ? "rgba(223, 147, 14, 0.12)"
+                                : "rgba(223, 147, 14, 0.08)",
+                            borderWidth: 1,
+                            borderColor: isGeneratingDescription
+                              ? "rgba(223, 147, 14, 0.4)"
+                              : isReady
+                                ? "rgba(223, 147, 14, 0.3)"
+                                : "rgba(223, 147, 14, 0.2)",
+                            paddingVertical: getResponsiveSpacing(10, 12, 14),
+                            paddingHorizontal: getResponsiveSpacing(16, 18, 20),
+                            minHeight: getTouchTargetSize(),
+                          }}
+                        >
+                          {isGeneratingDescription ? (
+                            <>
+                              <ActivityIndicator
+                                size="small"
+                                color="#DF930E"
+                                style={{ marginRight: 8 }}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: getResponsiveFontSize(13, 14, 15),
+                                  color: "#DF930E",
+                                  fontFamily: "Rubik-Medium",
+                                }}
+                              >
+                                Analyzing content...
+                              </Text>
+                            </>
+                          ) : !isReady ? (
+                            <>
+                              <Ionicons
+                                name="sparkles-outline"
+                                size={16}
+                                color="#94a3b8"
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: getResponsiveFontSize(13, 14, 15),
+                                  color: "#94a3b8",
+                                  fontFamily: "Rubik-Medium",
+                                }}
+                              >
+                                {!title ? "Enter title to enable" : !file ? "Upload file to enable" : "Upload thumbnail to enable"}
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons
+                                name="sparkles"
+                                size={16}
+                                color="#DF930E"
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: getResponsiveFontSize(13, 14, 15),
+                                  color: "#DF930E",
+                                  fontFamily: "Rubik-Medium",
+                                }}
+                              >
+                                Generate Description with AI
+                              </Text>
+                            </>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })()}
+
+                {/* Bible Verses Display */}
+                {bibleVerses.length > 0 && (
+                  <View
+                    className="mb-3 p-3 rounded-lg"
+                    style={{
+                      backgroundColor: "rgba(223, 147, 14, 0.05)",
+                      borderLeftWidth: 3,
+                      borderLeftColor: "#DF930E",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: getResponsiveFontSize(11, 12, 13),
+                        color: "#475569",
+                        fontFamily: "Rubik-Medium",
+                        marginBottom: 6,
+                      }}
+                    >
+                      📖 Suggested Bible Verses:
+                    </Text>
+                    {bibleVerses.map((verse, index) => (
+                      <Text
+                        key={index}
+                        style={{
+                          fontSize: getResponsiveFontSize(11, 12, 13),
+                          color: "#64748b",
+                          fontFamily: "Rubik-Regular",
+                          marginLeft: 8,
+                          marginBottom: 4,
+                        }}
+                      >
+                        • {verse}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
+                {/* Error/Warning Message */}
+                {descriptionGenerationError && (
+                  <View
+                    className="mb-3 p-2.5 rounded-lg"
+                    style={{
+                      backgroundColor: descriptionGenerationError.includes("too large") ||
+                        descriptionGenerationError.includes("timed out") ||
+                        descriptionGenerationError.includes("limitations")
+                        ? "rgba(255, 193, 7, 0.1)"
+                        : "rgba(239, 68, 68, 0.1)",
+                      borderWidth: 1,
+                      borderColor: descriptionGenerationError.includes("too large") ||
+                        descriptionGenerationError.includes("timed out") ||
+                        descriptionGenerationError.includes("limitations")
+                        ? "rgba(255, 193, 7, 0.3)"
+                        : "rgba(239, 68, 68, 0.3)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: getResponsiveFontSize(11, 12, 13),
+                        color: descriptionGenerationError.includes("too large") ||
+                          descriptionGenerationError.includes("timed out") ||
+                          descriptionGenerationError.includes("limitations")
+                          ? "#92400e"
+                          : "#991b1b",
+                        fontFamily: "Rubik-Regular",
+                      }}
+                    >
+                      {descriptionGenerationError.includes("too large") ||
+                        descriptionGenerationError.includes("timed out") ||
+                        descriptionGenerationError.includes("limitations")
+                        ? "⚠️ "
+                        : "❌ "}
+                      {descriptionGenerationError}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Categories */}
+                <Text className="text-xs text-gray-600 mb-2 font-medium">
+                  CATEGORY
+                </Text>
+                <View className="flex-row flex-wrap mb-4">
+                  {categories.map((item) =>
+                    renderTag(item, item, selectedCategory, setSelectedCategory)
+                  )}
+                </View>
+
+                {/* Content Types */}
+                <Text className="text-xs text-gray-600 mb-2 font-medium">
+                  CONTENT TYPE
+                </Text>
+                {file && (
+                  <Text
+                    className="text-[11px] text-gray-500 mb-1"
+                    style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+                  >
+                    {detectedFileType === "video" && "Detected file: Video (e.g. MP4)"}
+                    {detectedFileType === "audio" && "Detected file: Audio (e.g. MP3, WAV)"}
+                    {detectedFileType === "ebook" &&
+                      "Detected file: Document / Ebook (e.g. PDF, EPUB)"}
+                    {detectedFileType === "unknown" &&
+                      "File type not recognized yet. Please choose the correct content type."}
+                  </Text>
+                )}
+                <View className="flex-row flex-wrap mb-4">
+                  {contentTypes.map((item) =>
+                    renderTag(
+                      item.label,
+                      item.value,
+                      selectedType,
+                      setSelectedType
+                    )
+                  )}
+                </View>
+
+                {/* Eligibility Status Indicator */}
+                {eligibilityStatus && (
+                  <View
+                    className="mb-4 p-3 rounded-lg border"
+                    style={{
+                      backgroundColor: eligibilityStatus.isValid
+                        ? "rgba(34, 197, 94, 0.1)"
+                        : "rgba(239, 68, 68, 0.1)",
+                      borderColor: eligibilityStatus.isValid ? "#22c55e" : "#ef4444",
+                    }}
+                  >
+                    {eligibilityStatus.isValid ? (
+                      <View className="flex-row items-center">
+                        <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                        <Text
+                          className="ml-2 font-medium"
+                          style={{
+                            fontSize: getResponsiveFontSize(12, 14, 16),
+                            color: "#166534",
+                          }}
+                        >
+                          ✓ Ready to upload - Content will be verified automatically
+                        </Text>
                       </View>
+                    ) : (
+                      <View>
+                        <View className="flex-row items-center mb-2">
+                          <Ionicons name="close-circle" size={20} color="#ef4444" />
+                          <Text
+                            className="ml-2 font-semibold"
+                            style={{
+                              fontSize: getResponsiveFontSize(14, 16, 18),
+                              color: "#991b1b",
+                            }}
+                          >
+                            Please fix the following issues:
+                          </Text>
+                        </View>
+                        {eligibilityStatus.errors.map((error, index) => (
+                          <Text
+                            key={index}
+                            className="ml-7 mb-1"
+                            style={{
+                              fontSize: getResponsiveFontSize(12, 14, 16),
+                              color: "#991b1b",
+                            }}
+                          >
+                            • {error}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    {eligibilityStatus.warnings.length > 0 && (
+                      <View className="mt-2">
+                        {eligibilityStatus.warnings.map((warning, index) => (
+                          <View key={index} className="flex-row items-center mt-1">
+                            <Ionicons
+                              name="information-circle"
+                              size={16}
+                              color="#f59e0b"
+                            />
+                            <Text
+                              className="ml-2"
+                              style={{
+                                fontSize: getResponsiveFontSize(11, 13, 15),
+                                color: "#92400e",
+                              }}
+                            >
+                              {warning}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Multilingual Support Hint */}
+                {eligibilityStatus?.isValid && (
+                  <View
+                    className="mb-4 p-3 rounded-lg"
+                    style={{
+                      backgroundColor: "rgba(59, 130, 246, 0.1)",
+                      borderWidth: 1,
+                      borderColor: "#3b82f6",
+                    }}
+                  >
+                    <View className="flex-row items-center">
+                      <Ionicons name="language" size={18} color="#3b82f6" />
+                      <Text
+                        className="ml-2 flex-1"
+                        style={{
+                          fontSize: getResponsiveFontSize(11, 13, 15),
+                          color: "#1e40af",
+                        }}
+                      >
+                        <Text className="font-semibold">Multilingual Support: </Text>
+                        Your content will be automatically detected and verified in any
+                        language (English, Yoruba, Hausa, Igbo, and more).
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Moderation Error Display */}
+              {moderationError && (() => {
+                const friendlyMessage = formatFriendlyRejectionMessage(
+                  moderationError.status,
+                  moderationError.reason,
+                  moderationError.flags,
+                  moderationError.message
+                );
+
+                return (
+                  <View
+                    className="mt-4 p-4 rounded-lg border"
+                    style={{
+                      backgroundColor:
+                        friendlyMessage.isReview
+                          ? "rgba(255, 193, 7, 0.1)"
+                          : "rgba(255, 152, 0, 0.1)",
+                      borderColor:
+                        friendlyMessage.isReview
+                          ? "#ffc107"
+                          : "#ff9800",
+                    }}
+                  >
+                    <View className="flex-row items-center mb-3">
+                      <Ionicons
+                        name={
+                          friendlyMessage.isReview
+                            ? "time-outline"
+                            : "bulb-outline"
+                        }
+                        size={24}
+                        color={
+                          friendlyMessage.isReview
+                            ? "#ffc107"
+                            : "#ff9800"
+                        }
+                      />
+                      <Text
+                        className="ml-2 font-semibold"
+                        style={{
+                          fontSize: getResponsiveFontSize(16, 18, 20),
+                          color:
+                            friendlyMessage.isReview
+                              ? "#856404"
+                              : "#e65100",
+                          fontFamily: "Rubik-Medium",
+                        }}
+                      >
+                        {friendlyMessage.title}
+                      </Text>
+                    </View>
+                    <Text
+                      className="mb-3"
+                      style={{
+                        fontSize: getResponsiveFontSize(14, 16, 18),
+                        color: "#333",
+                        lineHeight: 22,
+                        fontFamily: "Rubik-Regular",
+                      }}
+                    >
+                      {friendlyMessage.message}
+                    </Text>
+                    {!friendlyMessage.isReview && (
+                      <View
+                        className="p-3 rounded-md mb-3"
+                        style={{
+                          backgroundColor: "rgba(255, 193, 7, 0.05)",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: getResponsiveFontSize(12, 13, 14),
+                            color: "#666",
+                            fontFamily: "Rubik-Regular",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          💡 Tip: Review your content and make sure it aligns with our gospel community guidelines.
+                        </Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setModerationError(null);
+                        if (!friendlyMessage.isReview) {
+                          setUploadState({ status: "idle", progress: 0, message: "" });
+                        }
+                      }}
+                      className="bg-gray-200 rounded-lg py-3 px-4 items-center"
+                      style={{
+                        backgroundColor: friendlyMessage.isReview ? "#ffc107" : "#ff9800",
+                      }}
+                    >
+                      <Text
+                        className="font-medium"
+                        style={{
+                          fontSize: getResponsiveFontSize(14, 16, 18),
+                          color: "#fff",
+                          fontFamily: "Rubik-Medium",
+                        }}
+                      >
+                        {friendlyMessage.isReview ? "Got it" : "Try Again"}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 );
               })()}
 
-              {/* Bible Verses Display */}
-              {bibleVerses.length > 0 && (
+              {/* Upload Button */}
+              <View className="items-center mt-4">
+                {/* AI Verification Disclaimer */}
                 <View
-                  className="mb-3 p-3 rounded-lg"
+                  className="flex-row items-center px-4 py-3 mb-3 rounded-lg border"
                   style={{
-                    backgroundColor: "rgba(223, 147, 14, 0.05)",
-                    borderLeftWidth: 3,
-                    borderLeftColor: "#DF930E",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: getResponsiveFontSize(11, 12, 13),
-                      color: "#475569",
-                      fontFamily: "Rubik-Medium",
-                      marginBottom: 6,
-                    }}
-                  >
-                    📖 Suggested Bible Verses:
-                  </Text>
-                  {bibleVerses.map((verse, index) => (
-                    <Text
-                      key={index}
-                      style={{
-                        fontSize: getResponsiveFontSize(11, 12, 13),
-                        color: "#64748b",
-                        fontFamily: "Rubik-Regular",
-                        marginLeft: 8,
-                        marginBottom: 4,
-                      }}
-                    >
-                      • {verse}
-                    </Text>
-                  ))}
-                </View>
-              )}
-
-              {/* Error/Warning Message */}
-              {descriptionGenerationError && (
-                <View
-                  className="mb-3 p-2.5 rounded-lg"
-                  style={{
-                    backgroundColor: descriptionGenerationError.includes("too large") || 
-                                    descriptionGenerationError.includes("timed out") ||
-                                    descriptionGenerationError.includes("limitations")
-                      ? "rgba(255, 193, 7, 0.1)"
-                      : "rgba(239, 68, 68, 0.1)",
-                    borderWidth: 1,
-                    borderColor: descriptionGenerationError.includes("too large") || 
-                                 descriptionGenerationError.includes("timed out") ||
-                                 descriptionGenerationError.includes("limitations")
-                      ? "rgba(255, 193, 7, 0.3)"
-                      : "rgba(239, 68, 68, 0.3)",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: getResponsiveFontSize(11, 12, 13),
-                      color: descriptionGenerationError.includes("too large") || 
-                            descriptionGenerationError.includes("timed out") ||
-                            descriptionGenerationError.includes("limitations")
-                        ? "#92400e"
-                        : "#991b1b",
-                      fontFamily: "Rubik-Regular",
-                    }}
-                  >
-                    {descriptionGenerationError.includes("too large") || 
-                     descriptionGenerationError.includes("timed out") ||
-                     descriptionGenerationError.includes("limitations")
-                      ? "⚠️ "
-                      : "❌ "}
-                    {descriptionGenerationError}
-                  </Text>
-                </View>
-              )}
-
-              {/* Categories */}
-              <Text className="text-xs text-gray-600 mb-2 font-medium">
-                CATEGORY
-              </Text>
-              <View className="flex-row flex-wrap mb-4">
-                {categories.map((item) =>
-                  renderTag(item, item, selectedCategory, setSelectedCategory)
-                )}
-              </View>
-
-              {/* Content Types */}
-              <Text className="text-xs text-gray-600 mb-2 font-medium">
-                CONTENT TYPE
-              </Text>
-              {file && (
-                <Text
-                  className="text-[11px] text-gray-500 mb-1"
-                  style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
-                >
-                  {detectedFileType === "video" && "Detected file: Video (e.g. MP4)"}
-                  {detectedFileType === "audio" && "Detected file: Audio (e.g. MP3, WAV)"}
-                  {detectedFileType === "ebook" &&
-                    "Detected file: Document / Ebook (e.g. PDF, EPUB)"}
-                  {detectedFileType === "unknown" &&
-                    "File type not recognized yet. Please choose the correct content type."}
-                </Text>
-              )}
-              <View className="flex-row flex-wrap mb-4">
-                {contentTypes.map((item) =>
-                  renderTag(
-                    item.label,
-                    item.value,
-                    selectedType,
-                    setSelectedType
-                  )
-                )}
-              </View>
-
-              {/* Eligibility Status Indicator */}
-              {eligibilityStatus && (
-                <View
-                  className="mb-4 p-3 rounded-lg border"
-                  style={{
-                    backgroundColor: eligibilityStatus.isValid
-                      ? "rgba(34, 197, 94, 0.1)"
-                      : "rgba(239, 68, 68, 0.1)",
-                    borderColor: eligibilityStatus.isValid ? "#22c55e" : "#ef4444",
-                  }}
-                >
-                  {eligibilityStatus.isValid ? (
-                    <View className="flex-row items-center">
-                      <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-                      <Text
-                        className="ml-2 font-medium"
-                        style={{
-                          fontSize: getResponsiveFontSize(12, 14, 16),
-                          color: "#166534",
-                        }}
-                      >
-                        ✓ Ready to upload - Content will be verified automatically
-                      </Text>
-                    </View>
-                  ) : (
-                    <View>
-                      <View className="flex-row items-center mb-2">
-                        <Ionicons name="close-circle" size={20} color="#ef4444" />
-                        <Text
-                          className="ml-2 font-semibold"
-                          style={{
-                            fontSize: getResponsiveFontSize(14, 16, 18),
-                            color: "#991b1b",
-                          }}
-                        >
-                          Please fix the following issues:
-                        </Text>
-                      </View>
-                      {eligibilityStatus.errors.map((error, index) => (
-                        <Text
-                          key={index}
-                          className="ml-7 mb-1"
-                          style={{
-                            fontSize: getResponsiveFontSize(12, 14, 16),
-                            color: "#991b1b",
-                          }}
-                        >
-                          • {error}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                  {eligibilityStatus.warnings.length > 0 && (
-                    <View className="mt-2">
-                      {eligibilityStatus.warnings.map((warning, index) => (
-                        <View key={index} className="flex-row items-center mt-1">
-                          <Ionicons
-                            name="information-circle"
-                            size={16}
-                            color="#f59e0b"
-                          />
-                          <Text
-                            className="ml-2"
-                            style={{
-                              fontSize: getResponsiveFontSize(11, 13, 15),
-                              color: "#92400e",
-                            }}
-                          >
-                            {warning}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Multilingual Support Hint */}
-              {eligibilityStatus?.isValid && (
-                <View
-                  className="mb-4 p-3 rounded-lg"
-                  style={{
-                    backgroundColor: "rgba(59, 130, 246, 0.1)",
-                    borderWidth: 1,
-                    borderColor: "#3b82f6",
-                  }}
-                >
-                  <View className="flex-row items-center">
-                    <Ionicons name="language" size={18} color="#3b82f6" />
-                    <Text
-                      className="ml-2 flex-1"
-                      style={{
-                        fontSize: getResponsiveFontSize(11, 13, 15),
-                        color: "#1e40af",
-                      }}
-                    >
-                      <Text className="font-semibold">Multilingual Support: </Text>
-                      Your content will be automatically detected and verified in any
-                      language (English, Yoruba, Hausa, Igbo, and more).
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* Moderation Error Display */}
-            {moderationError && (() => {
-              const friendlyMessage = formatFriendlyRejectionMessage(
-                moderationError.status,
-                moderationError.reason,
-                moderationError.flags,
-                moderationError.message
-              );
-              
-              return (
-                <View
-                  className="mt-4 p-4 rounded-lg border"
-                  style={{
-                    backgroundColor:
-                      friendlyMessage.isReview
-                        ? "rgba(255, 193, 7, 0.1)"
-                        : "rgba(255, 152, 0, 0.1)",
-                    borderColor:
-                      friendlyMessage.isReview
-                        ? "#ffc107"
-                        : "#ff9800",
-                  }}
-                >
-                  <View className="flex-row items-center mb-3">
-                    <Ionicons
-                      name={
-                        friendlyMessage.isReview
-                          ? "time-outline"
-                          : "bulb-outline"
-                      }
-                      size={24}
-                      color={
-                        friendlyMessage.isReview
-                          ? "#ffc107"
-                          : "#ff9800"
-                      }
-                    />
-                    <Text
-                      className="ml-2 font-semibold"
-                      style={{
-                        fontSize: getResponsiveFontSize(16, 18, 20),
-                        color:
-                          friendlyMessage.isReview
-                            ? "#856404"
-                            : "#e65100",
-                        fontFamily: "Rubik-Medium",
-                      }}
-                    >
-                      {friendlyMessage.title}
-                    </Text>
-                  </View>
-                  <Text
-                    className="mb-3"
-                    style={{
-                      fontSize: getResponsiveFontSize(14, 16, 18),
-                      color: "#333",
-                      lineHeight: 22,
-                      fontFamily: "Rubik-Regular",
-                    }}
-                  >
-                    {friendlyMessage.message}
-                  </Text>
-                  {!friendlyMessage.isReview && (
-                    <View
-                      className="p-3 rounded-md mb-3"
-                      style={{
-                        backgroundColor: "rgba(255, 193, 7, 0.05)",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: getResponsiveFontSize(12, 13, 14),
-                          color: "#666",
-                          fontFamily: "Rubik-Regular",
-                          fontStyle: "italic",
-                        }}
-                      >
-                        💡 Tip: Review your content and make sure it aligns with our gospel community guidelines.
-                      </Text>
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setModerationError(null);
-                      if (!friendlyMessage.isReview) {
-                        setUploadState({ status: "idle", progress: 0, message: "" });
-                      }
-                    }}
-                    className="bg-gray-200 rounded-lg py-3 px-4 items-center"
-                    style={{
-                      backgroundColor: friendlyMessage.isReview ? "#ffc107" : "#ff9800",
-                    }}
-                  >
-                    <Text
-                      className="font-medium"
-                      style={{
-                        fontSize: getResponsiveFontSize(14, 16, 18),
-                        color: "#fff",
-                        fontFamily: "Rubik-Medium",
-                      }}
-                    >
-                      {friendlyMessage.isReview ? "Got it" : "Try Again"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
-
-            {/* Upload Button */}
-            <View className="items-center mt-4">
-              {/* AI Verification Disclaimer */}
-              <View
-                className="flex-row items-center px-4 py-3 mb-3 rounded-lg border"
-                style={{
-                  backgroundColor: "rgba(223, 147, 14, 0.12)",
-                  borderColor: "#DF930E",
-                  borderStyle: "dashed",
-                  maxWidth: Math.min(
-                    getScreenDimensions().width -
+                    backgroundColor: "rgba(223, 147, 14, 0.12)",
+                    borderColor: "#DF930E",
+                    borderStyle: "dashed",
+                    maxWidth: Math.min(
+                      getScreenDimensions().width -
                       getResponsiveSpacing(16, 20, 24, 32) * 2,
-                    320
-                  ),
-                }}
-              >
-                <Ionicons
-                  name="information-circle-outline"
-                  size={18}
-                  color="#8C5A00"
-                  style={{ marginRight: 8 }}
-                />
-                <Text
-                  className="flex-1 text-xs"
-                  style={{
-                    color: "#4B2C00",
-                    fontFamily: "Rubik-Regular",
-                    lineHeight: 16,
+                      320
+                    ),
                   }}
                 >
-                  Your content will be verified by AI. By uploading, you confirm you own or have the right to distribute this content.
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={async () => {
-                  const stopAudio = useMediaStore.getState().stopAudioFn;
-                  if (stopAudio) await stopAudio();
-                  handleUpload();
-                }}
-                className="bg-black justify-center rounded-full items-center"
-                style={{
-                  width: Math.min(
-                    getScreenDimensions().width -
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={18}
+                    color="#8C5A00"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text
+                    className="flex-1 text-xs"
+                    style={{
+                      color: "#4B2C00",
+                      fontFamily: "Rubik-Regular",
+                      lineHeight: 16,
+                    }}
+                  >
+                    Your content will be verified by AI. By uploading, you confirm you own or have the right to distribute this content.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const stopAudio = useMediaStore.getState().stopAudioFn;
+                    if (stopAudio) await stopAudio();
+                    handleUpload();
+                  }}
+                  className="bg-black justify-center rounded-full items-center"
+                  style={{
+                    width: Math.min(
+                      getScreenDimensions().width -
                       getResponsiveSpacing(16, 20, 24, 32) * 2,
-                    300
-                  ),
-                  height: getButtonSize().height,
-                  minHeight: getTouchTargetSize(), // Ensure minimum touch target
-                  opacity: uploadState.status === "verifying" ? 0.5 : 1,
-                }}
-                activeOpacity={0.8}
-                disabled={uploadState.status === "verifying"}
-              >
-                <Text
-                  className="text-white font-semibold"
-                  style={{ fontSize: getResponsiveFontSize(16, 18, 20) }}
+                      300
+                    ),
+                    height: getButtonSize().height,
+                    minHeight: getTouchTargetSize(), // Ensure minimum touch target
+                    opacity: uploadState.status === "verifying" ? 0.5 : 1,
+                  }}
+                  activeOpacity={0.8}
+                  disabled={uploadState.status === "verifying"}
                 >
-                  {uploadState.status === "verifying" ? "Verifying..." : "Post"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {/* Close scroll content container View */}
+                  <Text
+                    className="text-white font-semibold"
+                    style={{ fontSize: getResponsiveFontSize(16, 18, 20) }}
+                  >
+                    {uploadState.status === "verifying" ? "Verifying..." : "Post"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* Close scroll content container View */}
             </View>
           </ScrollView>
         </View>

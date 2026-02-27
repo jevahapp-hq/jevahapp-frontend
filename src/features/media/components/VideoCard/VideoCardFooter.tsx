@@ -1,12 +1,11 @@
 /**
  * VideoCardFooter - Avatar, stats, actions, three-dots menu
  */
-import React from "react";
-import { Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useCommentModal } from "@/app/context/CommentModalContext";
-import CardFooterActions from "../../../../shared/components/CardFooterActions";
+import { Ionicons } from "@expo/vector-icons";
+import { Text, View } from "react-native";
 import { AvatarWithInitialFallback } from "../../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
+import CardFooterActions from "../../../../shared/components/CardFooterActions";
 import ThreeDotsMenuButton from "../../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import type { MediaItem } from "../../../../shared/types";
 
@@ -90,6 +89,13 @@ export function VideoCardFooter({
               </Text>
             </View>
           </View>
+          {video.moderationStatus === 'under_review' && (
+            <View className="mt-1 bg-orange-50 p-2 rounded-md border border-orange-100">
+              <Text className="text-[10px] text-orange-700 leading-3">
+                This content is currently under review and is only visible to you. It will be made public once approved.
+              </Text>
+            </View>
+          )}
           <CardFooterActions
             viewCount={viewCount}
             liked={!!userLikeState}
@@ -104,7 +110,7 @@ export function VideoCardFooter({
             onComment={() => {
               try {
                 showCommentModal([], String(contentId));
-              } catch {}
+              } catch { }
               onComment(contentKey, video);
             }}
             saved={!!userSaveState}

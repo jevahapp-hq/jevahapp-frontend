@@ -58,22 +58,25 @@ export interface MediaItem extends BaseEntity {
   hasBookmarked?: boolean;
   hasViewed?: boolean;
   hasShared?: boolean;
+  moderationStatus?: "approved" | "under_review" | "rejected";
+  isHidden?: boolean;
+  category?: string[];
+  userId?: string;
 }
 
 // Content type definitions
-export type ContentType =
-  | "video"
-  | "videos"
-  | "audio"
-  | "music"
-  | "sermon"
-  | "image"
-  | "ebook"
-  | "books"
-  | "live"
-  | "teachings"
-  | "e-books"
+export type ContentType = "video" | "audio" | "ebook" | "sermon" | "music"
   | "hymns";
+
+export interface UserInfo {
+  _id: string;
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  avatar?: string;
+  name?: string;
+}
 
 // Content filtering options
 export interface ContentFilter {
@@ -191,7 +194,7 @@ export interface InteractionButtonsProps {
 
 // Comment interfaces - re-exported from comment.types for convenience
 export type {
-    Comment, CommentData, CommentIconProps
+  Comment, CommentData, CommentIconProps
 } from "./comment.types";
 
 // API response interfaces

@@ -7,34 +7,35 @@ import {
   View,
 } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
+import { SafeImage } from "../../../../app/components/SafeImage";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import {
-    useContentCount,
-    useUserInteraction,
-} from "../../../../app/store/useInteractionStore";
 import { useGlobalAudioPlayerStore, type AudioTrack } from "../../../../app/store/useGlobalAudioPlayerStore";
+import {
+  useContentCount,
+  useUserInteraction,
+} from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
+import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import AudioControlsOverlay from "../../../shared/components/AudioControlsOverlay";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import MediaDetailsModal from "../../../shared/components/MediaDetailsModal";
+import { ModerationBadge } from "../../../shared/components/ModerationBadge";
 import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import { AudioCardSkeleton } from "../../../shared/components/Skeleton";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
-import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { MusicCardProps } from "../../../shared/types";
 import {
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
-    isValidUri,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+  isValidUri,
 } from "../../../shared/utils";
-import { SafeImage } from "../../../../app/components/SafeImage";
 
 const ORANGE = "#FF8A00";
 
@@ -84,12 +85,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
-  
+
   // Check if user is admin
   useEffect(() => {
     isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
   }, []);
-  
+
   // Delete media functionality - using reusable hook
   const {
     isOwner,
@@ -141,11 +142,11 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const audioId = audio._id || `music-${index}`;
   const isCurrentTrack = globalAudioStore.currentTrack?.id === audioId;
   const isVirtualTrack = isCurrentTrack && globalAudioStore.currentTrack?.isVirtual;
-  
+
   // ✅ Use global store playing state as source of truth when it's a virtual track
   // This ensures MusicCard and FloatingAudioPlayer stay in sync
   const isPlayingFromGlobal = isVirtualTrack ? globalAudioStore.isPlaying : playerState.isPlaying;
-  
+
   // ✅ Sync virtual track playing state with global audio player store
   // This ensures FloatingAudioPlayer shows correct play/pause icon
   useEffect(() => {
@@ -168,7 +169,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     const audioId = audio._id || `music-${index}`;
     const isCurrentTrack = globalAudioStore.currentTrack?.id === audioId;
     const hasVirtualControls = isCurrentTrack && globalAudioStore.currentTrack?.isVirtual && globalAudioStore.__virtualTrackControls;
-    
+
     // ✅ If FloatingAudioPlayer is controlling this track, use its controls instead
     if (hasVirtualControls && isCurrentTrack) {
       // Use the virtual track controls (FloatingAudioPlayer's controls)
@@ -180,7 +181,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     try {
       const wasPlaying = playerState.isPlaying;
       await controls.togglePlay();
-      
+
       // Wait a bit for the state to update, then check if it's playing
       setTimeout(async () => {
         try {
@@ -189,7 +190,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           const thumbnailUri = typeof thumbnailSource === "string"
             ? thumbnailSource
             : (thumbnailSource as any)?.uri;
-          
+
           if (!wasPlaying) {
             // We're starting to play - set it in the global audio player store
             // so the floating player can show it
@@ -204,7 +205,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               description: audio.description || "",
               isVirtual: true, // Mark as virtual - this track is played by useAdvancedAudioPlayer, not the global player
             };
-            
+
             // Set track in global store (this will pause copyright-free songs if playing)
             // Don't pass shouldPlayImmediately since this is virtual - the local player handles playback
             await globalAudioStore.setTrack(track, false);
@@ -225,7 +226,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 await controls.seekTo(progress);
               },
             });
-            
+
             // ✅ Also sync position and duration to global store
             if (playerState.duration > 0) {
               globalAudioStore.setDuration(playerState.duration);
@@ -245,7 +246,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           console.warn("MusicCard: Failed to sync with global audio player:", err);
         }
       }, 100);
-      
+
       // Optionally notify parent (e.g. to drive a global mini-player)
       if (onPlay) {
         try {
@@ -288,27 +289,27 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   useEffect(() => {
     const audioId = audio._id || `music-${index}`;
     const globalAudioStore = useGlobalAudioPlayerStore.getState();
-    
+
     // Only sync if this is the current track in the global store and it's virtual
     if (globalAudioStore.currentTrack?.id === audioId && globalAudioStore.currentTrack?.isVirtual) {
       // Sync playing state
       if (globalAudioStore.isPlaying !== playerState.isPlaying) {
         globalAudioStore.setPlaying(playerState.isPlaying);
       }
-      
+
       // Sync position and progress
       if (playerState.duration > 0) {
         const positionMs = playerState.position || 0;
         const durationMs = playerState.duration || 0;
         const progress = positionMs / durationMs;
-        
+
         if (Math.abs(globalAudioStore.position - positionMs) > 500) { // Only update if difference is > 500ms
           globalAudioStore.setPosition(positionMs);
         }
         if (Math.abs(globalAudioStore.progress - progress) > 0.01) { // Only update if difference is > 1%
           globalAudioStore.setProgressValue(progress);
         }
-        
+
         if (globalAudioStore.duration !== durationMs) {
           globalAudioStore.setDuration(durationMs);
         }
@@ -325,7 +326,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         useInteractionStore,
       } = require("../../../../app/store/useInteractionStore");
       storeRef.current = useInteractionStore.getState();
-    } catch {}
+    } catch { }
   }, []);
 
   // Derive current view and comment counts from store if available
@@ -361,7 +362,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       if (contentId) {
         loadFn(contentId, audio.contentType || "media");
       }
-    } catch {}
+    } catch { }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentId]);
   const commentsFromStore = contentIdForViews
@@ -398,7 +399,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               views: Number(result.totalViews) || 0,
             }));
           }
-        } catch {}
+        } catch { }
       })();
     }
   }, [
@@ -431,12 +432,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       onLayout={
         onLayout
           ? (event) =>
-              onLayout(
-                event,
-                `music-${audio._id || index}`,
-                "music",
-                audio.fileUrl
-              )
+            onLayout(
+              event,
+              `music-${audio._id || index}`,
+              "music",
+              audio.fileUrl
+            )
           : undefined
       }
     >
@@ -541,6 +542,16 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                 </Text>
               </View>
             </View>
+            {audio.moderationStatus === 'under_review' && (
+              <View className="mt-1 bg-orange-50 p-2 rounded-md border border-orange-100 mb-2">
+                <View className="flex-row items-center mb-1">
+                  <ModerationBadge status="under_review" />
+                </View>
+                <Text className="text-[10px] text-orange-700 leading-3">
+                  This content is currently under review and is only visible to you. It will be made public once approved.
+                </Text>
+              </View>
+            )}
             <CardFooterActions
               viewCount={viewsFromStore || audio.views || 0}
               liked={!!likedFromStore}
@@ -563,7 +574,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
                   });
                   // Open modal with empty array - backend will load comments immediately
                   showCommentModal([], String(contentId));
-                } catch {}
+                } catch { }
                 onComment && onComment(audio);
               }}
               saved={!!savedFromStore}
@@ -573,8 +584,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               }}
               onShare={() => onShare(audio)}
               isLoading={isLoadingStats}
-              contentType={audio.contentType || "media"}
-              contentId={contentId}
               contentType="media"
               contentId={contentId}
               useEnhancedComponents={false}
@@ -603,13 +612,13 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         showDelete={userIsAdmin || isOwner}
         onReport={() => setShowReportModal(true)}
       />
-      
+
       {/* Delete Confirmation Modal */}
       <DeleteMediaConfirmation
         visible={showDeleteModal}
         mediaId={audio._id || ""}
         mediaTitle={audio.title || "this media"}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}
         isAdmin={false}
       />

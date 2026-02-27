@@ -4,11 +4,12 @@
  * when this item's data changes, not when other items or global state changes.
  */
 import React from "react";
+import type { MediaItem } from "../../../../shared/types";
+import { isAudioSermon } from "../../../../shared/utils";
 import EbookCard from "../../components/EbookCard";
 import MusicCard from "../../components/MusicCard";
 import VideoCard from "../../components/VideoCard";
-import { isAudioSermon } from "../../../../shared/utils";
-import type { MediaItem } from "../../../../shared/types";
+import { ContentUnavailableState } from "./ContentFeedStates";
 
 export interface ContentItemRendererProps {
   item: MediaItem;
@@ -45,6 +46,7 @@ export interface ContentItemRendererProps {
   getUserDisplayNameFromContent: (item: MediaItem) => string;
   getUserAvatarFromContent: (item: MediaItem) => string | undefined;
   isAutoPlayEnabled: boolean;
+  currentUserId: string | null;
 }
 
 function ContentItemRendererInner(props: ContentItemRendererProps) {
@@ -83,6 +85,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     getUserDisplayNameFromContent,
     getUserAvatarFromContent,
     isAutoPlayEnabled,
+    currentUserId,
   } = props;
 
   const key = getKey(item);
@@ -158,20 +161,52 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
   switch (item.contentType) {
     case "video":
     case "videos":
+      if (item.moderationStatus === 'rejected') {
+        const isOwner = currentUserId && (
+          (item.userId === currentUserId) ||
+          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
+          (item.uploadedBy === currentUserId)
+        );
+        if (!isOwner) return <ContentUnavailableState />;
+      }
       return <VideoCard key={key} {...videoCardProps} />;
 
     case "sermon":
+      if (item.moderationStatus === 'rejected') {
+        const isOwner = currentUserId && (
+          (item.userId === currentUserId) ||
+          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
+          (item.uploadedBy === currentUserId)
+        );
+        if (!isOwner) return <ContentUnavailableState />;
+      }
       if (isAudioSermonValue) return <MusicCard key={key} {...musicCardProps} />;
       return <VideoCard key={key} {...videoCardProps} />;
 
     case "audio":
     case "music":
+      if (item.moderationStatus === 'rejected') {
+        const isOwner = currentUserId && (
+          (item.userId === currentUserId) ||
+          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
+          (item.uploadedBy === currentUserId)
+        );
+        if (!isOwner) return <ContentUnavailableState />;
+      }
       return <MusicCard key={key} {...musicCardProps} />;
 
     case "image":
     case "ebook":
     case "books":
     default:
+      if (item.moderationStatus === 'rejected') {
+        const isOwner = currentUserId && (
+          (item.userId === currentUserId) ||
+          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
+          (item.uploadedBy === currentUserId)
+        );
+        if (!isOwner) return <ContentUnavailableState />;
+      }
       return <EbookCard key={key} {...ebookCardProps} />;
   }
 }
@@ -194,10 +229,11 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     prev.progresses[prevKey] === next.progresses[nextKey] &&
     (prev.currentlyVisibleVideo === prevKey) === (next.currentlyVisibleVideo === nextKey) &&
     (prev.playingAudioId === `music-${prev.item._id || prev.index}`) ===
-      (next.playingAudioId === musicId) &&
+    (next.playingAudioId === musicId) &&
     (prev.audioProgressMap[`music-${prev.item._id || prev.index}`] ?? 0) ===
-      (next.audioProgressMap[musicId] ?? 0) &&
-    (prev.modalVisible === prevKey) === (next.modalVisible === nextKey)
+    (next.audioProgressMap[musicId] ?? 0) &&
+    (prev.modalVisible === prevKey) === (next.modalVisible === nextKey) &&
+    prev.currentUserId === next.currentUserId
   );
 }
 

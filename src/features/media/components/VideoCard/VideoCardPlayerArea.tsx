@@ -1,16 +1,17 @@
 /**
  * VideoCardPlayerArea - Video/thumbnail, overlay, progress bar
  */
-import React from "react";
-import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { VideoView } from "expo-video";
+import React from "react";
+import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { VideoCardSkeleton } from "../../../../shared/components";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
+import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
 import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
-import { isValidUri } from "../../../../shared/utils";
 import type { MediaItem } from "../../../../shared/types";
+import { isValidUri } from "../../../../shared/utils";
 
 export interface VideoCardPlayerAreaProps {
   video: MediaItem;
@@ -109,6 +110,12 @@ export function VideoCardPlayerArea({
             </View>
           )}
 
+        {video.moderationStatus && video.moderationStatus !== 'approved' && (
+          <View style={{ position: 'absolute', top: 50, left: 12, zIndex: 11 }}>
+            <ModerationBadge status={video.moderationStatus} />
+          </View>
+        )}
+
         <ContentTypeBadge
           contentType={video.contentType || "video"}
           position="top-left"
@@ -195,7 +202,7 @@ export function VideoCardPlayerArea({
                 ? (audioState?.duration ?? 0)
                 : 0
               : Number.isFinite(lastKnownDurationRef.current) &&
-                  lastKnownDurationRef.current > 0
+                lastKnownDurationRef.current > 0
                 ? lastKnownDurationRef.current
                 : backendDurationMs > 0
                   ? backendDurationMs

@@ -1,8 +1,8 @@
 /**
  * ContentFeedStates - Loading, Error, Empty states for AllContentTikTok
  */
-import React from "react";
-import { View, Text, ScrollView } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, Text, View } from "react-native";
 import Skeleton from "../../../../shared/components/Skeleton/Skeleton";
 import { UI_CONFIG } from "../../../../shared/constants";
 
@@ -63,6 +63,31 @@ export function EmptyState({ contentType }: { contentType: string }) {
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: UI_CONFIG.SPACING.LG }}>
       <Text style={{ color: UI_CONFIG.COLORS.TEXT_SECONDARY, textAlign: "center", fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD }}>
         {message}
+      </Text>
+    </View>
+  );
+}
+
+export function ContentUnavailableState() {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: UI_CONFIG.SPACING.LG }}>
+      <Ionicons name="lock-closed-outline" size={48} color={UI_CONFIG.COLORS.TEXT_SECONDARY} />
+      <Text style={{
+        color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+        textAlign: "center",
+        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+        fontWeight: "bold",
+        marginTop: 16
+      }}>
+        Content Unavailable
+      </Text>
+      <Text style={{
+        color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+        textAlign: "center",
+        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
+        marginTop: 8
+      }}>
+        This content may be under review or has been removed.
       </Text>
     </View>
   );

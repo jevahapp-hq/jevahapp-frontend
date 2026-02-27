@@ -1,6 +1,6 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   Modal,
@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useUserProfile } from "../../../app/hooks/useUserProfile";
+import { ModerationBadge } from "../../shared/components/ModerationBadge";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -59,6 +60,7 @@ export default function MediaDetailsModal({
     viewCount,
     likes,
     likeCount,
+    moderationStatus,
   } = mediaItem || {};
 
   const displayTitle = title || "Untitled";
@@ -72,7 +74,7 @@ export default function MediaDetailsModal({
 
     // Get the author ID from various possible fields (priority order)
     let authorId: string | null = null;
-    
+
     if (typeof uploadedBy === "object" && uploadedBy?._id) {
       authorId = String(uploadedBy._id);
     } else if (typeof uploadedBy === "string" && uploadedBy.trim()) {
@@ -220,6 +222,15 @@ export default function MediaDetailsModal({
               <Ionicons name="close" size={18} color="#6B7280" />
             </TouchableOpacity>
           </View>
+
+          {moderationStatus === 'under_review' && (
+            <View style={{ marginBottom: 16 }}>
+              <ModerationBadge status="under_review" />
+              <Text style={{ fontSize: 12, color: '#D97706', marginTop: 4 }}>
+                This content is currently under review and is only visible to you.
+              </Text>
+            </View>
+          )}
 
           {/* Meta tags */}
           <View

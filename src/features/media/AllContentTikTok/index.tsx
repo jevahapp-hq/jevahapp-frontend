@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -44,6 +44,7 @@ import { ContentErrorBoundary } from "../../../../app/components/ContentErrorBou
 import SuccessCard from "../../../../app/components/SuccessCard";
 
 // Import original stores and hooks (these will be bridged)
+import { useUserProfile } from "../../../../app/hooks/useUserProfile";
 import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
 import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
@@ -60,7 +61,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   contentType = "ALL",
   useAuthFeed = false,
 }) => {
-  const router = useRouter();
+  const { user } = useUserProfile();
+  const currentUserId = user?._id || user?.id || null;
 
   // Media data from the new hook (useAuthFeed so newly uploaded content appears when logged in)
   const {
@@ -78,11 +80,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     queryClient.invalidateQueries({ queryKey: ["all-content"] });
   }, [queryClient]);
 
-  // Global state from original stores
-  // ⚠️ NEVER call useGlobalVideoStore() or useGlobalMediaStore() without a selector!
-  // Without a selector, Zustand returns the entire state object = new ref every render = infinite loops.
+  // Get global video state - FIX: Read from the same store we write to with REACTIVE SUBSCRIPTIONS
+  // Using specific selectors for stability
+  const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
+  const pauseAllMediaGlobally = useGlobalMediaStore((s) => s.pauseAllMedia);
 
-  // Get global video state - select only what we need with REACTIVE SUBSCRIPTIONS
+  const pauseVideoAction = useGlobalVideoStore((s) => s.pauseVideo);
+  const pauseAllVideosAction = useGlobalVideoStore((s) => s.pauseAllVideos);
+  const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
+  const enableAutoPlayAction = useGlobalVideoStore((s) => s.enableAutoPlay);
+
   const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
   const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
   const progresses = useGlobalVideoStore((s) => s.progresses);
@@ -91,25 +98,21 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     (s) => s.currentlyPlayingVideo
   );
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
-  const pauseAllVideos = useGlobalVideoStore((s) => s.pauseAllVideos);
-  const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
-  const enableAutoPlay = useGlobalVideoStore((s) => s.enableAutoPlay);
-  const pauseVideoAction = useGlobalVideoStore((s) => s.pauseVideo);
-  const toggleVideoMuteStore = useGlobalVideoStore((s) => s.toggleVideoMute);
 
   // Create functions to match what components expect
-  // ✅ Use .getState() for imperative calls so function references stay stable
   const playMedia = useCallback((key: string, type: "video" | "audio") => {
-    useGlobalMediaStore.getState().playMediaGlobally(key, type);
-  }, []);
+    // ✅ Use unified media store for both video and audio to handle mutual pausing
+    // This ensures video pauses audio and audio pauses video
+    playMediaGlobally(key, type);
+  }, [playMediaGlobally]);
 
   const pauseMedia = useCallback((key: string) => {
-    useGlobalVideoStore.getState().pauseVideo(key);
-  }, []);
+    pauseVideoAction(key);
+  }, [pauseVideoAction]);
 
   const toggleMute = useCallback((key: string) => {
-    useGlobalVideoStore.getState().toggleVideoMute(key);
-  }, []);
+    toggleVideoMuteAction(key);
+  }, [toggleVideoMuteAction]);
 
   const {
     isLoadingAudio,
@@ -198,11 +201,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     getCommentCount,
   } = useContentStatsHelpers(contentStats);
 
-  // ✅ Stable reference: use .getState() so this callback never changes
   const pauseAllMedia = useCallback(() => {
-    useGlobalVideoStore.getState().pauseAllVideos();
+    pauseAllVideosAction();
     pauseAllAudio();
-  }, [pauseAllAudio]);
+  }, [pauseAllVideosAction, pauseAllAudio]);
 
   const {
     handleScroll,
@@ -223,7 +225,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     isVideoPlaying,
   });
 
-  const toggleVideoMute = useCallback((key: string) => useGlobalVideoStore.getState().toggleVideoMute(key), []);
+  const toggleVideoMute = useCallback((key: string) => toggleVideoMuteAction(key), [toggleVideoMuteAction]);
 
   const {
     handleVideoTap,
@@ -258,8 +260,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     refreshAllContent,
     setRefreshing,
     socketManager,
-    toggleLike,
-    toggleSave,
+    toggleLike: toggleLike as any,
+    toggleSave: toggleSave as any,
     loadDownloadedItems,
   });
 
@@ -300,6 +302,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         getUserDisplayNameFromContent={getUserDisplayNameFromContent}
         getUserAvatarFromContent={getUserAvatarFromContent}
         isAutoPlayEnabled={isAutoPlayEnabled}
+        currentUserId={currentUserId}
       />
     ),
     [
@@ -345,33 +348,28 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
   }, []);
 
-  // Keep a ref to filteredMediaList so we can access it in useFocusEffect
-  // without adding it as a dependency (which would cause cleanup to fire on every data change)
-  const filteredMediaListRef = useRef(filteredMediaList);
+  // Handle batch stats loading separately from focus effect to avoid loop
   useEffect(() => {
-    filteredMediaListRef.current = filteredMediaList;
+    const ids = (filteredMediaList || []).slice(0, 32).map((i) => i._id).filter(Boolean) as string[];
+    if (ids.length > 0) {
+      InteractionManager.runAfterInteractions(() => {
+        useInteractionStore.getState().loadBatchContentStats(ids, "media", { forceRefresh: true }).catch(() => { });
+      });
+    }
   }, [filteredMediaList]);
 
   // Pause all media when component loses focus
-  // CRITICAL: Use EMPTY deps [] — all callbacks use .getState() or refs so they're always stable.
-  // Any dependency here that changes on render will re-run cleanup = infinite pause loop.
   useFocusEffect(
     useCallback(() => {
-      // Defer batch stats to avoid blocking initial render; refresh likes after login
-      const ids = (filteredMediaListRef.current || []).slice(0, 32).map((i) => i._id).filter(Boolean) as string[];
-      if (ids.length > 0) {
-        InteractionManager.runAfterInteractions(() => {
-          useInteractionStore.getState().loadBatchContentStats(ids, "media", { forceRefresh: true }).catch(() => { });
-        });
-      }
       return () => {
         if (__DEV__) console.log("📱 Pausing all media on focus loss");
         try {
-          useGlobalVideoStore.getState().pauseAllVideos();
+          pauseAllMedia();
         } catch { }
         setCurrentlyVisibleVideo(null);
+        pauseAllAudio();
       };
-    }, [])
+    }, [pauseAllMedia, pauseAllAudio])
   );
 
   // FlatList hooks must run unconditionally (before any early return) to satisfy Rules of Hooks

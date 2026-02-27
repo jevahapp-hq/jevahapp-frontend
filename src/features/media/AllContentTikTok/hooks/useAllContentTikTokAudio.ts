@@ -36,9 +36,10 @@ export function useAllContentTikTokAudio({
 
   const pauseAllAudio = useCallback(async () => {
     try {
-      const ids = Object.keys(soundMap);
+      const currentSoundMap = soundMapRef.current;
+      const ids = Object.keys(currentSoundMap);
       for (const id of ids) {
-        const snd = soundMap[id];
+        const snd = currentSoundMap[id];
         if (snd) {
           try {
             const status = await snd.getStatusAsync();
@@ -54,7 +55,7 @@ export function useAllContentTikTokAudio({
     } catch (error) {
       console.warn("⚠️ Error in pauseAllAudio:", error);
     }
-  }, [soundMap]);
+  }, []);
 
   const playAudio = useCallback(
     async (uri: string, id: string) => {
@@ -155,7 +156,7 @@ export function useAllContentTikTokAudio({
           if (status.didJustFinish) {
             try {
               await sound.unloadAsync();
-            } catch {}
+            } catch { }
             setSoundMap((prev) => {
               const u = { ...prev };
               delete u[id];

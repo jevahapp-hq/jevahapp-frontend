@@ -3,29 +3,30 @@ import { useRouter } from "expo-router";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Text, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
+import { SafeImage } from "../../../../app/components/SafeImage";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
-    useContentCount,
-    useUserInteraction,
+  useContentCount,
+  useUserInteraction,
 } from "../../../../app/store/useInteractionStore";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
+import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
 import MediaDetailsModal from "../../../shared/components/MediaDetailsModal";
+import { ModerationBadge } from "../../../shared/components/ModerationBadge";
 import ReportMediaModal from "../../../shared/components/ReportMediaModal";
 import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
-import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { EbookCardProps } from "../../../shared/types";
 import {
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
 } from "../../../shared/utils";
-import { SafeImage } from "../../../../app/components/SafeImage";
 
 export const EbookCard: React.FC<EbookCardProps> = ({
   ebook,
@@ -44,12 +45,12 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
-  
+
   // Check if user is admin
   useEffect(() => {
     isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
   }, []);
-  
+
   // Delete media functionality - using reusable hook
   const {
     isOwner,
@@ -140,7 +141,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
       if (contentId) {
         loadContentStats(contentId, "media");
       }
-    } catch {}
+    } catch { }
   }, [contentId]);
 
   const handleFavorite = () => {
@@ -150,7 +151,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         setLikeBurstKey((k) => k + 1);
       }
       onLike(ebook);
-    } catch {}
+    } catch { }
   };
 
   const handleComment = () => onComment(ebook);
@@ -170,7 +171,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             isComplete: false,
           });
           setHasTrackedView(true);
-        } catch {}
+        } catch { }
       }
     }, 5000);
     return () => clearTimeout(t);
@@ -183,7 +184,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
           try {
             const pdfUrl =
               (ebook as any)?.fileUrl || (ebook as any)?.pdfUrl || "";
-            
+
             console.log("📖 EbookCard pressed:", {
               title: ebook.title,
               pdfUrl,
@@ -194,7 +195,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
             // Check if URL is valid (http, https, or file://)
             if (typeof pdfUrl === "string" && pdfUrl.trim().length > 0) {
               const isValidUrl = /^(https?|file):\/\//.test(pdfUrl.trim());
-              
+
               if (isValidUrl) {
                 console.log("📖 Navigating to PdfViewer with URL:", pdfUrl);
                 router.push({
@@ -303,6 +304,16 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                 </Text>
               </View>
             </View>
+            {ebook.moderationStatus === 'under_review' && (
+              <View className="mt-1 bg-orange-50 p-2 rounded-md border border-orange-100 mb-2">
+                <View className="flex-row items-center mb-1">
+                  <ModerationBadge status="under_review" />
+                </View>
+                <Text className="text-[10px] text-orange-700 leading-3">
+                  This content is currently under review and is only visible to you. It will be made public once approved.
+                </Text>
+              </View>
+            )}
             <CardFooterActions
               viewCount={viewCount}
               liked={!!likedFromStore}
@@ -319,7 +330,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
                   });
                   // Open modal with empty array - backend will load comments immediately
                   showCommentModal([], String(contentId));
-                } catch {}
+                } catch { }
                 handleComment();
               }}
               saved={!!savedFromStore}
@@ -357,13 +368,13 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         showDelete={userIsAdmin || isOwner}
         onReport={() => setShowReportModal(true)}
       />
-      
+
       {/* Delete Confirmation Modal */}
       <DeleteMediaConfirmation
         visible={showDeleteModal}
         mediaId={ebook._id || ""}
         mediaTitle={ebook.title || "this media"}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={closeDeleteModal}
         onSuccess={handleDeleteConfirm}
         isAdmin={false}
       />
