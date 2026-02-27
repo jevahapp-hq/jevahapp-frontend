@@ -1,5 +1,6 @@
+import { Image, ImageProps } from 'expo-image';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ImageProps, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { optimizeImageUrl } from '../../src/shared/utils/imageOptimizer';
 
 interface SafeImageProps extends Omit<ImageProps, 'source'> {
@@ -8,12 +9,15 @@ interface SafeImageProps extends Omit<ImageProps, 'source'> {
   fallbackStyle?: any;
   showFallback?: boolean;
   showLoadingIndicator?: boolean;
-  // Optional optimization props (backward compatible)
-  optimize?: boolean; // Enable image optimization
-  containerWidth?: number; // Width for optimization
-  containerHeight?: number; // Height for optimization
-  size?: 'small' | 'medium' | 'large'; // Size preset
+  /** Enable URL optimization (size/quality). Default true for remote (http) URIs. */
+  optimize?: boolean;
+  containerWidth?: number;
+  containerHeight?: number;
+  size?: 'small' | 'medium' | 'large';
 }
+
+const isRemoteUri = (u: string) =>
+  u.startsWith('http://') || u.startsWith('https://');
 
 export const SafeImage: React.FC<SafeImageProps> = ({
   uri,
@@ -21,7 +25,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   fallbackStyle,
   showFallback = true,
   showLoadingIndicator = true,
-  optimize = false, // Default to false for backward compatibility
+  optimize: optimizeProp,
   containerWidth,
   containerHeight,
   size = 'medium',
@@ -31,39 +35,34 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  // Check if URI is valid
-  const isValidUri = uri && 
-    typeof uri === 'string' && 
-    uri.trim().length > 0 && 
-    (uri.startsWith('http') || uri.startsWith('file://') || uri.startsWith('content://'));
+  const isValidUri =
+    uri &&
+    typeof uri === 'string' &&
+    uri.trim().length > 0 &&
+    (uri.startsWith('http') || uri.startsWith('//') || uri.startsWith('file://') || uri.startsWith('content://'));
 
-  // Extract dimensions from style if not provided
   const extractedDimensions = useMemo(() => {
     if (containerWidth && containerHeight) {
       return { width: containerWidth, height: containerHeight };
     }
-
-    // Try to extract from style
-    const flattenedStyle = StyleSheet.flatten(style);
+    const flattenedStyle = StyleSheet.flatten(style as any);
     const width = containerWidth || (flattenedStyle?.width as number) || 200;
     const height = containerHeight || (flattenedStyle?.height as number) || width;
-
     return { width, height };
   }, [style, containerWidth, containerHeight]);
 
-  // Optimize image URL if enabled
+  // Default optimize=true for remote URIs (best practice); allow override via prop
+  const optimize =
+    optimizeProp !== undefined ? optimizeProp : (isValidUri && uri ? isRemoteUri(uri) : false);
+
   const optimizedUri = useMemo(() => {
     if (!optimize || !isValidUri || !uri) return uri;
-    
-    return optimizeImageUrl(
-      uri,
-      extractedDimensions.width,
-      extractedDimensions.height,
-      {
+    return (
+      optimizeImageUrl(uri, extractedDimensions.width, extractedDimensions.height, {
         quality: size === 'small' ? 75 : size === 'large' ? 90 : 85,
         format: 'webp',
-      }
-    ) || uri;
+      }) || uri
+    );
   }, [optimize, uri, isValidUri, extractedDimensions.width, extractedDimensions.height, size]);
 
   const handleLoadStart = () => {
@@ -71,18 +70,15 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     setHasError(false);
   };
 
-  const handleLoadEnd = () => {
-    setIsLoading(false);
-  };
+  const handleLoadEnd = () => setIsLoading(false);
 
   const handleError = () => {
     setIsLoading(false);
     setHasError(true);
-    console.warn('❌ SafeImage: Failed to load image:', uri);
+    if (__DEV__) console.warn('SafeImage: Failed to load', uri);
   };
 
   if (!isValidUri || hasError) {
-    // Show fallback if enabled
     if (showFallback) {
       return (
         <View
@@ -103,7 +99,6 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         </View>
       );
     }
-    // Return null if no fallback
     return null;
   }
 
@@ -112,13 +107,13 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       <Image
         source={{ uri: optimizedUri }}
         style={[{ width: '100%', height: '100%' }, style]}
+        contentFit="cover"
+        cachePolicy="disk"
         onLoadStart={handleLoadStart}
         onLoadEnd={handleLoadEnd}
         onError={handleError}
         {...props}
       />
-      
-      {/* Loading indicator */}
       {isLoading && showLoadingIndicator && (
         <View
           style={{

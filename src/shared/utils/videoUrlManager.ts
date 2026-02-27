@@ -22,10 +22,10 @@ export const convertSignedToPublicUrl = (signedUrl: string): string => {
 
   try {
     const url = new URL(signedUrl);
-    
+
     // Check if it's a signed URL
     const isSignedUrl = url.searchParams.has('X-Amz-Algorithm');
-    
+
     if (!isSignedUrl) {
       return signedUrl; // Already a public URL
     }
@@ -33,7 +33,7 @@ export const convertSignedToPublicUrl = (signedUrl: string): string => {
     // Remove AWS signature parameters
     const paramsToRemove = [
       "X-Amz-Algorithm",
-      "X-Amz-Content-Sha256", 
+      "X-Amz-Content-Sha256",
       "X-Amz-Credential",
       "X-Amz-Date",
       "X-Amz-Expires",
@@ -48,9 +48,9 @@ export const convertSignedToPublicUrl = (signedUrl: string): string => {
     });
 
     const publicUrl = url.toString();
-    
+
     console.log(`🔗 URL Conversion: ${signedUrl.substring(0, 100)}... → ${publicUrl.substring(0, 100)}...`);
-    
+
     return publicUrl;
   } catch (error) {
     console.warn("⚠️ Error converting signed URL:", error);
@@ -75,7 +75,6 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
     return result;
   }
 
-  // Handle local file URLs - they're valid but don't need URL parsing
   if (url.startsWith('file://') || url.startsWith('/')) {
     result.isValid = true;
     result.convertedUrl = url;
@@ -83,25 +82,32 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
   }
 
   try {
-    const urlObj = new URL(url);
-    
+    // Fix for protocol-relative URLs (like //res.cloudinary.com/...)
+    const urlToParse = url.startsWith('//') ? `https:${url}` : url;
+    const urlObj = new URL(urlToParse);
+
+    // Update the converted URL if it was protocol-relative
+    if (url.startsWith('//')) {
+      result.convertedUrl = urlToParse;
+    }
+
     // Check if it's a signed URL
     result.isSignedUrl = urlObj.searchParams.has('X-Amz-Algorithm');
-    
+
     if (result.isSignedUrl) {
-      result.convertedUrl = convertSignedToPublicUrl(url);
-      
+      result.convertedUrl = convertSignedToPublicUrl(urlToParse);
+
       // Check if URL might be expired (rough estimation)
       const expiresParam = urlObj.searchParams.get('X-Amz-Expires');
       const dateParam = urlObj.searchParams.get('X-Amz-Date');
-      
+
       if (expiresParam && dateParam) {
         try {
           const date = new Date(dateParam);
           const expires = parseInt(expiresParam);
           const expirationTime = new Date(date.getTime() + expires * 1000);
           const now = new Date();
-          
+
           result.isExpired = expirationTime < now;
         } catch (e) {
           // If we can't parse dates, assume it might be expired
@@ -111,11 +117,11 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
     }
 
     // Basic URL validation - support both network and local file URLs
-    result.isValid = url.startsWith('http://') || 
-                     url.startsWith('https://') || 
-                     url.startsWith('file://') ||
-                     url.startsWith('/'); // Support absolute paths
-    
+    result.isValid = urlToParse.startsWith('http://') ||
+      urlToParse.startsWith('https://') ||
+      urlToParse.startsWith('file://') ||
+      urlToParse.startsWith('/'); // Support absolute paths
+
     if (!result.isValid) {
       result.error = 'Invalid URL format';
     }
@@ -135,11 +141,11 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
 export const getVideoUrlFromMedia = (media: any): string | null => {
   // Priority order: fileUrl > playbackUrl > hlsUrl
   const videoUrl = media?.fileUrl || media?.playbackUrl || media?.hlsUrl;
-  
+
   if (!videoUrl || typeof videoUrl !== 'string' || videoUrl.trim() === '') {
     return null;
   }
-  
+
   return videoUrl.trim();
 };
 
@@ -148,7 +154,7 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
  */
 export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): string => {
   const fallback = fallbackUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-  
+
   if (!originalUrl || typeof originalUrl !== 'string' || originalUrl.trim() === '') {
     console.warn("⚠️ Empty original URL, using fallback");
     return fallback;
@@ -161,7 +167,7 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
   }
 
   const urlInfo = analyzeVideoUrl(originalUrl);
-  
+
   // If it's a signed URL, use the converted version
   if (urlInfo.isSignedUrl) {
     if (urlInfo.isExpired) {
@@ -186,7 +192,7 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
  */
 export const handleVideoError = (error: any, videoUrl: string, videoTitle: string) => {
   const urlInfo = analyzeVideoUrl(videoUrl);
-  
+
   console.error(`❌ Video error for ${videoTitle}:`, {
     error: error,
     errorCode: error?.error?.code,

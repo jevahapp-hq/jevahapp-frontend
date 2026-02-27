@@ -3,8 +3,12 @@ import MiniAudioPlayer from "@/app/components/MiniAudioPlayer";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { CommunityScreenWithSuspense, LibraryScreenWithSuspense, BibleScreenWithSuspense } from "../utils/lazyImports";
-import HomeTabContent from "./HomeTabContent";
+import {
+  CommunityScreenWithSuspense,
+  HomeTabContentWithSuspense,
+  LibraryScreenWithSuspense,
+  BibleScreenWithSuspense,
+} from "../utils/lazyImports";
 
 // Loading fallback for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -33,10 +37,14 @@ export default function HomeScreen() {
   }, [defaultTabParam]);
 
   const renderTabContent = () => {
-    // Lazy load heavy screens for better performance
+    // Lazy load all tab content for smaller initial bundle and faster first paint
     switch (selectedTab) {
       case "Home":
-        return <HomeTabContent />;
+        return (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <HomeTabContentWithSuspense />
+          </Suspense>
+        );
       case "Community":
         return (
           <Suspense fallback={<TabLoadingFallback />}>
@@ -56,7 +64,11 @@ export default function HomeScreen() {
           </Suspense>
         );
       default:
-        return <HomeTabContent />;
+        return (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <HomeTabContentWithSuspense />
+          </Suspense>
+        );
     }
   };
 

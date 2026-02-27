@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Image, Text, TouchableWithoutFeedback, View } from "react-native";
+import { Text, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
@@ -25,6 +25,7 @@ import {
     getUserAvatarFromContent,
     getUserDisplayNameFromContent,
 } from "../../../shared/utils";
+import { SafeImage } from "../../../../app/components/SafeImage";
 
 export const EbookCard: React.FC<EbookCardProps> = ({
   ebook,
@@ -89,10 +90,11 @@ export const EbookCard: React.FC<EbookCardProps> = ({
     const [errored, setErrored] = useState(false);
     const initial = (name || "?").trim().charAt(0).toUpperCase();
     return !errored ? (
-      <Image
-        source={imageSource}
+      <SafeImage
+        uri={(imageSource as any)?.uri}
         style={{ width: 30, height: 30, borderRadius: 999 }}
-        resizeMode="cover"
+        size="small"
+        showFallback={false}
         onError={() => setErrored(true)}
       />
     ) : (
@@ -223,16 +225,14 @@ export const EbookCard: React.FC<EbookCardProps> = ({
       >
         <View className="w-full h-[400px] overflow-hidden relative">
           {shouldShowImage ? (
-            <Image
-              source={{ uri: initialThumb! } as any}
+            <SafeImage
+              uri={initialThumb!}
               style={{
                 width: "100%",
                 height: "100%",
                 position: "absolute",
               }}
-              resizeMode="cover"
-              onLoadStart={() => {}}
-              onLoad={() => {}}
+              size="large"
               onError={() => setImageErrored(true)}
             />
           ) : (
@@ -365,7 +365,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         mediaTitle={ebook.title || "this media"}
         onClose={() => setShowDeleteModal(false)}
         onSuccess={handleDeleteConfirm}
-        isAdmin={userIsAdmin}
+        isAdmin={false}
       />
 
       {/* Report Modal */}

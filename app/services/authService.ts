@@ -243,34 +243,38 @@ class AuthService {
           // console.log("💾 User data stored in AsyncStorage");
         }
 
-        // Refresh interaction stats after login to restore like/bookmark state (non-blocking)
-        // Don't await - let it run in background while user navigates
-        import("../store/useInteractionStore")
-          .then(({ useInteractionStore }) => {
-            useInteractionStore.getState().refreshAllStatsAfterLogin().catch(() => {
-              // Non-critical, continue silently
-            });
-          })
-          .catch(() => {
-            // Non-critical, continue with login
-          });
-
         // Preload content for all categories in background for instant navigation
         try {
           const { mediaApi } = await import("../../src/core/api/MediaApi");
           const { useContentCacheStore } = await import("../store/useContentCacheStore");
+          const { useInteractionStore } = await import("../store/useInteractionStore");
           
           // Preload content for all major categories (non-blocking)
           Promise.all([
-            mediaApi.getAllContentWithAuth().then((resp) => {
+            mediaApi.getAllContentWithAuth().then(async (resp) => {
               if (resp.success && Array.isArray(resp.media)) {
+                const items = resp.media as any[];
                 useContentCacheStore.getState().set("ALL:first", {
-                  items: resp.media as any,
+                  items,
                   page: 1,
                   limit: resp.limit || 10,
                   total: resp.total || 0,
                   fetchedAt: Date.now(),
                 });
+                // Hydrate liked/saved from feed response for instant UI (before batch stats)
+                const withInteractions = items
+                  .filter((i) => i._id && (i.hasLiked === true || i.hasBookmarked === true))
+                  .map((i) => ({ contentId: i._id, hasLiked: i.hasLiked, hasBookmarked: i.hasBookmarked }));
+                if (withInteractions.length > 0) {
+                  useInteractionStore.getState().hydrateUserInteractionsFromFeed(withInteractions);
+                }
+                // Fetch full stats from API (server source of truth)
+                const ids = items.map((m) => m._id).filter(Boolean) as string[];
+                if (ids.length > 0) {
+                  try {
+                    await useInteractionStore.getState().loadBatchContentStats(ids, "media", { forceRefresh: true });
+                  } catch {}
+                }
               }
             }).catch(() => {}),
             // Preload for different content types

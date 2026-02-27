@@ -13,6 +13,9 @@ interface ReelsSpeakerInfoProps {
   getResponsiveSize: (small: number, medium: number, large: number) => number;
   getResponsiveFontSize: (small: number, medium: number, large: number) => number;
   triggerHapticFeedback: () => void;
+  /** Current user - when content is from current user, use their avatar/name (fixes "Unknown" when in session) */
+  currentUser?: { _id?: string; id?: string; avatar?: string | null; avatarUpload?: string | null } | null;
+  getAvatarUrl?: (user: any) => string | null;
 }
 
 export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
@@ -25,7 +28,17 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
   getResponsiveSize,
   getResponsiveFontSize,
   triggerHapticFeedback,
+  currentUser,
+  getAvatarUrl,
 }) => {
+  const contentUploaderId = typeof enrichedVideoData?.uploadedBy === "string"
+    ? enrichedVideoData.uploadedBy?.trim()
+    : enrichedVideoData?.uploadedBy?._id || enrichedVideoData?.uploadedBy?.id;
+  const isCurrentUserContent = currentUser && contentUploaderId &&
+    String(contentUploaderId) === String(currentUser._id || currentUser.id);
+  const avatarSource = isCurrentUserContent && getAvatarUrl && currentUser
+    ? (getAvatarUrl(currentUser) ? { uri: getAvatarUrl(currentUser)! } : getUserAvatarFromContent(enrichedVideoData))
+    : getUserAvatarFromContent(enrichedVideoData);
   return (
     <View
       style={{
@@ -61,11 +74,11 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
             borderColor: "rgba(255, 255, 255, 0.3)",
           }}
           activeOpacity={0.8}
-          accessibilityLabel={`${getSpeakerName(enrichedVideoData, "Unknown")} profile picture`}
+          accessibilityLabel={`${getSpeakerName(enrichedVideoData, "Creator")} profile picture`}
           accessibilityRole="image"
         >
           <Image
-            source={getUserAvatarFromContent(enrichedVideoData)}
+            source={avatarSource}
             style={{
               width: getResponsiveSize(20, 24, 28),
               height: getResponsiveSize(20, 24, 28),
@@ -99,12 +112,12 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
               accessibilityLabel={
                 source === "AccountScreen"
                   ? `Video: ${enrichedVideoData.title || "Untitled"}`
-                  : `Posted by ${getSpeakerName(enrichedVideoData, "Unknown")}`
+                  : `Posted by ${getSpeakerName(enrichedVideoData, "Creator")}` 
               }
             >
               {source === "AccountScreen"
                 ? enrichedVideoData.title || "Untitled Video"
-                : getSpeakerName(enrichedVideoData, "No Speaker")}
+                : getSpeakerName(enrichedVideoData, "Creator")}
             </Text>
             <Text
               style={{

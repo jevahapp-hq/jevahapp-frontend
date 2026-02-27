@@ -9,8 +9,9 @@ import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
 import { Slot, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { Alert, BackHandler, Platform, Text, View } from "react-native";
+import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { warmupBackend } from "./utils/apiWarmup";
 import { PerformanceOptimizer } from "./utils/performance";
+import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
 
 // ✅ Initialize Sentry
 Sentry.init({
@@ -37,11 +39,12 @@ Sentry.init({
   // Adds more context data to events (IP address, cookies, user, etc.)
   // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
   sendDefaultPii: true,
-  tracesSampleRate: 1.0,
-  profilesSampleRate: 1.0,
+  // Perf: 1.0 = 100% sampling causes significant overhead; use 0.1 in prod
+  tracesSampleRate: __DEV__ ? 1.0 : 0.1,
+  profilesSampleRate: __DEV__ ? 1.0 : 0.1,
 
   // Configure Session Replay
-  replaysSessionSampleRate: 0.1,
+  replaysSessionSampleRate: __DEV__ ? 0.1 : 0.01,
   replaysOnErrorSampleRate: 1,
   integrations: [
     Sentry.mobileReplayIntegration(),
@@ -79,6 +82,9 @@ const tokenCache = {
       }
     },
 };
+
+// Keep native splash visible until we're ready (fonts + critical init)
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Create React Query client with cache settings matching backend (15 minutes)
 const queryClient = new QueryClient({
@@ -170,87 +176,63 @@ export default function RootLayout() {
   const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
   const { signOut } = useAuth();
 
+  // Critical path: only persisted media (current playback). Show app shell ASAP.
   useEffect(() => {
-    const initializeApp = async () => {
+    if (!fontsLoaded || isInitialized) return;
+
+    let cancelled = false;
+
+    const runCriticalInit = async () => {
       try {
-        // console.log("🚀 App initializing...");
-        // console.log("✅ API_URL =", API_BASE_URL);
-        // console.log("✅ CLERK_KEY =", publishableKey ? "Present" : "Missing");
-        // console.log("🔧 Environment:", __DEV__ ? "Development" : "Production");
-
-        // Try to load persisted media
-        try {
-          await loadPersistedMedia();
-          // console.log("✅ Media loaded successfully");
-        } catch (mediaErr) {
-          // console.warn(
-          //   "⚠️ Media loading failed (continuing anyway):",
-          //   mediaErr
-          // );
-        }
-
-        // Try to load downloaded items
-        try {
-          await loadDownloadedItems();
-          // console.log("✅ Downloads loaded successfully");
-        } catch (downloadErr) {
-          // console.warn(
-          //   "⚠️ Downloads loading failed (continuing anyway):",
-          //   downloadErr
-          // );
-        }
-
-        // Try to load saved library items
-        try {
-          await loadSavedItems();
-          // console.log("✅ Library items loaded successfully");
-        } catch (libraryErr) {
-          // console.warn(
-          //   "⚠️ Library items loading failed (continuing anyway):",
-          //   libraryErr
-          // );
-        }
-
-        // Preload critical data for better performance
-        try {
-          await PerformanceOptimizer.getInstance().preloadCriticalData();
-          // console.log("✅ Critical data preloaded successfully");
-        } catch (preloadErr) {
-          // console.warn(
-          //   "⚠️ Critical data preloading failed (continuing anyway):",
-          //   preloadErr
-          // );
-        }
-
-        // Warm up backend to prevent Render cold starts
-        try {
-          // console.log("🔥 Warming up backend...");
-          warmupBackend().catch((warmupErr) => {
-            // console.warn("⚠️ Backend warmup failed:", warmupErr);
-          });
-        } catch (warmupErr) {
-          // console.warn("⚠️ Backend warmup error (continuing anyway):", warmupErr);
-        }
-
-        // console.log("✅ App initialization complete");
-        setIsInitialized(true);
-      } catch (err) {
-        // console.error("❌ App initialization failed:", err);
-        setError("Initialization failed");
+        await loadPersistedMedia();
+      } catch {
+        // Non-blocking; app works without it
+      }
+      if (!cancelled) {
         setIsInitialized(true);
       }
     };
 
-    if (fontsLoaded && !isInitialized) {
-      initializeApp();
+    runCriticalInit();
+    return () => {
+      cancelled = true;
+    };
+  }, [fontsLoaded, loadPersistedMedia, isInitialized]);
+
+  // Deferred init: run after first paint so content appears faster
+  useEffect(() => {
+    if (!fontsLoaded || !isInitialized) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      (async () => {
+        try {
+          await loadDownloadedItems();
+        } catch {}
+        try {
+          await loadSavedItems();
+        } catch {}
+        try {
+          await PerformanceOptimizer.getInstance().preloadCriticalData();
+        } catch {}
+        // Stagger requests to avoid 429 - warmup first, then prefetch after delay
+        await warmupBackend().catch(() => {});
+        await new Promise((r) => setTimeout(r, 800));
+        queryClient.prefetchQuery({
+          queryKey: ["all-content", "ALL", 1, 50, false],
+          queryFn: () => fetchAllContentPublic("ALL"),
+        }).catch(() => {});
+      })();
+    });
+
+    return () => task.cancel();
+  }, [fontsLoaded, isInitialized, loadDownloadedItems, loadSavedItems]);
+
+  // Hide splash when app is ready to show (fonts + critical init done)
+  useEffect(() => {
+    if (fontsLoaded && isInitialized && !error) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [
-    fontsLoaded,
-    loadPersistedMedia,
-    loadDownloadedItems,
-    loadSavedItems,
-    isInitialized,
-  ]);
+  }, [fontsLoaded, isInitialized, error]);
 
   // Intercept Android hardware back to properly exit app instead of logging out
   useEffect(() => {

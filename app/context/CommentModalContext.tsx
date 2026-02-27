@@ -27,6 +27,7 @@ interface Comment {
 interface CommentModalContextType {
   isVisible: boolean;
   comments: Comment[];
+  isLoadingComments: boolean;
   showCommentModal: (
     comments: Comment[],
     contentId?: string,
@@ -50,9 +51,25 @@ const CommentModalContext = createContext<CommentModalContextType | undefined>(
 export const useCommentModal = () => {
   const context = useContext(CommentModalContext);
   if (!context) {
-    throw new Error(
-      "useCommentModal must be used within a CommentModalProvider"
+    console.warn(
+      "useCommentModal called outside of CommentModalProvider. Returning no-op implementation."
     );
+    // Return a safe no-op implementation so the app doesn't crash if the hook
+    // is accidentally used without the provider (similar pattern to useNotification).
+    return {
+      isVisible: false,
+      comments: [] as Comment[],
+      isLoadingComments: false,
+      showCommentModal: () => {},
+      hideCommentModal: () => {},
+      addComment: () => {},
+      updateComment: () => {},
+      likeComment: () => {},
+      replyToComment: async () => {},
+      submitComment: async () => {},
+      loadMoreComments: async () => {},
+      contentOwnerName: undefined as string | undefined,
+    } as CommentModalContextType;
   }
   return context;
 };

@@ -149,10 +149,12 @@ export function getUserAvatarFromContent(
     return avatarUrl;
   }
 
-  // Priority 3: Check authorInfo object avatar
-  if (content.authorInfo && typeof content.authorInfo === 'object' && content.authorInfo.avatar) {
-    const avatarUrl = content.authorInfo.avatar;
-    if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
+  // Priority 3: Check authorInfo object avatar (supports multiple field names)
+  if (content.authorInfo && typeof content.authorInfo === 'object') {
+    const authorInfo = content.authorInfo;
+    const avatarUrl = authorInfo.avatar ?? (authorInfo as any).avatarUpload ?? (authorInfo as any).avatarUrl ??
+      (authorInfo as any).profileImage ?? (authorInfo as any).profilePicture ?? (authorInfo as any).imageUrl;
+    if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
       if (avatarUrl.startsWith('http')) {
         return { uri: avatarUrl.trim() };
       }
@@ -189,6 +191,7 @@ export function getUserAvatarFromContent(
 
 /**
  * Get user display name from content data with fallback logic
+ * Primary source for media: authorInfo (populated by /api/media/*)
  * @param content - Content item that may have user information
  * @param fallback - Default name to use if none found
  * @returns User's display name
@@ -197,7 +200,46 @@ export function getUserDisplayNameFromContent(
   content: any,
   fallback: string = "Anonymous User"
 ): string {
-  // Priority 1: Check if content has uploadedBy object with user profile data
+  // Priority 1: authorInfo (primary source for media feeds - /api/media/all-content)
+  if (content.authorInfo && typeof content.authorInfo === 'object') {
+    const authorInfo = content.authorInfo;
+    if (authorInfo.firstName && authorInfo.lastName) {
+      return `${authorInfo.firstName} ${authorInfo.lastName}`.trim();
+    }
+    if (authorInfo.firstName) {
+      return authorInfo.firstName;
+    }
+    if (authorInfo.lastName) {
+      return authorInfo.lastName;
+    }
+    const fullName = (authorInfo as any).fullName ?? authorInfo.name;
+    if (fullName && typeof fullName === 'string' && fullName.trim()) {
+      return fullName.trim();
+    }
+    // If authorInfo exists but missing name fields, try cache by ID
+    const authorId = authorInfo._id || authorInfo.id;
+    if (authorId) {
+      try {
+        const { UserProfileCache } = require('./cache/UserProfileCache');
+        const cachedUser = UserProfileCache.getUserProfile(authorId);
+        if (cachedUser) {
+          if (cachedUser.firstName && cachedUser.lastName) {
+            return `${cachedUser.firstName} ${cachedUser.lastName}`.trim();
+          }
+          if (cachedUser.firstName) {
+            return cachedUser.firstName;
+          }
+          if (cachedUser.lastName) {
+            return cachedUser.lastName;
+          }
+        }
+      } catch (e) {
+        // Silently fail if cache is not available
+      }
+    }
+  }
+
+  // Priority 2: Check if content has uploadedBy object with user profile data
   if (content.uploadedBy && typeof content.uploadedBy === 'object') {
     const user = content.uploadedBy;
     if (user.firstName && user.lastName) {
@@ -238,7 +280,7 @@ export function getUserDisplayNameFromContent(
     }
   }
 
-  // Priority 2: Check author object (for Devotional content)
+  // Priority 3: Check author object (for Devotional content)
   if (content.author && typeof content.author === 'object') {
     const author = content.author;
     if (author.firstName && author.lastName) {
@@ -276,29 +318,12 @@ export function getUserDisplayNameFromContent(
     }
   }
 
-  // Priority 3: Check authorInfo object
-  if (content.authorInfo && typeof content.authorInfo === 'object') {
-    const authorInfo = content.authorInfo;
-    if (authorInfo.firstName && authorInfo.lastName) {
-      return `${authorInfo.firstName} ${authorInfo.lastName}`.trim();
-    }
-    if (authorInfo.firstName) {
-      return authorInfo.firstName;
-    }
-    if (authorInfo.lastName) {
-      return authorInfo.lastName;
-    }
-    if (authorInfo.name) {
-      return authorInfo.name;
-    }
-  }
-
   // Priority 4: Check legacy speaker field (for audio/sermon content)
   if (content.speaker && typeof content.speaker === 'string') {
     return content.speaker;
   }
 
-  // Priority 5: Check if uploadedBy is a string ID - try to get from cache
+  // Priority 5: Check if uploadedBy is a string ID - try to get from cache (fallback when authorInfo missing)
   if (content.uploadedBy && typeof content.uploadedBy === 'string') {
     // Check if it looks like an ObjectId (24 hex characters)
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(content.uploadedBy.trim());

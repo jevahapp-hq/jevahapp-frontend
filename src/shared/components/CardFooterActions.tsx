@@ -1,3 +1,4 @@
+import React from "react";
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Text, TouchableOpacity, View } from "react-native";
 import { AnimatedButton } from "./AnimatedButton";
@@ -29,7 +30,7 @@ type Props = {
   isLoading?: boolean;
 };
 
-export default function CardFooterActions({
+function CardFooterActions({
   viewCount,
   liked,
   likeCount,
@@ -160,6 +161,8 @@ export default function CardFooterActions({
     </View>
   );
 }
+
+export default React.memo(CardFooterActions);
 
 // Optimized Like Button with instant scale feedback
 function AnimatedLikeButton({

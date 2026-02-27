@@ -288,13 +288,24 @@ class MediaApi {
     };
   }
 
+  private mapContentTypeForBookmark(contentType: string): string {
+    const n = (contentType || "").toLowerCase();
+    if (n === "artist") return "artist";
+    if (n === "merch") return "merch";
+    if (["ebook", "e-books", "ebooks", "books"].includes(n)) return "ebook";
+    if (["podcast", "podcasts"].includes(n)) return "podcast";
+    return "media";
+  }
+
   // Save/Unsave content (Universal bookmark endpoint - Recommended)
   async toggleSave(
     contentId: string,
     contentType: string
   ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const backendType = this.mapContentTypeForBookmark(contentType);
     const response = await apiClient.post<any>(
-      `/api/bookmark/${contentId}/toggle`
+      `/api/bookmark/${contentId}/toggle`,
+      { contentType: backendType }
     );
 
     if (response.success) {
@@ -695,6 +706,29 @@ class MediaApi {
     return {
       success: false,
       error: response.error || "Failed to end playback session",
+    };
+  }
+
+  /**
+   * Get a single media item by ID (e.g. for fresh playback URL when cached URL fails).
+   * Backend can return a new signed URL or CDN URL from Redis/cache.
+   */
+  async getMediaById(id: string): Promise<{
+    success: boolean;
+    data?: { fileUrl?: string; playbackUrl?: string; hlsUrl?: string; [key: string]: any };
+    error?: string;
+  }> {
+    if (!id || typeof id !== "string" || id.trim() === "") {
+      return { success: false, error: "Invalid media ID" };
+    }
+    const response = await apiClient.get<any>(`/api/media/${id.trim()}`);
+    if (response.success) {
+      const data = (response as any).data ?? response;
+      return { success: true, data: typeof data === "object" ? data : {} };
+    }
+    return {
+      success: false,
+      error: (response as any).error || "Failed to fetch media",
     };
   }
 

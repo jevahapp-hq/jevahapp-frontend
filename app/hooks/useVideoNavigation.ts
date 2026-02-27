@@ -2,6 +2,8 @@ import { useRouter } from "expo-router";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useReelsStore } from "../store/useReelsStore";
 import { MediaItem } from "../types/media";
+import { UserProfileCache } from "../utils/cache/UserProfileCache";
+import { getUserDisplayNameFromContent } from "../utils/userValidation";
 
 interface VideoNavigationOptions {
   video: MediaItem;
@@ -11,7 +13,7 @@ interface VideoNavigationOptions {
   globalFavoriteCounts: Record<string, number>;
   getContentKey: (item: MediaItem) => string;
   getTimeAgo: (createdAt: string) => string;
-  getDisplayName: (speaker?: string, uploadedBy?: string) => string;
+  getDisplayName: (speaker?: string, uploadedBy?: string | object) => string;
   source?: string; // Source component that navigated to reels
   category?: string; // Category context for proper back navigation
 }
@@ -21,7 +23,7 @@ export const useVideoNavigation = () => {
   const globalVideoStore = useGlobalVideoStore();
   const reelsStore = useReelsStore();
 
-  const navigateToReels = ({
+  const navigateToReels = async ({
     video,
     index,
     allVideos,
@@ -41,9 +43,10 @@ export const useVideoNavigation = () => {
     globalVideoStore.pauseAllVideos();
 
     // Prepare the full video list for TikTok-style navigation
+    // Preserve authorInfo and uploadedBy so Reels can derive display name (authorInfo is primary source)
     const videoListForNavigation = allVideos.map((v, idx) => ({
       title: v.title,
-      speaker: getDisplayName(v.speaker, v.uploadedBy),
+      speaker: v.speaker,
       timeAgo: getTimeAgo(v.createdAt),
       views: contentStats[getContentKey(v)]?.views || v.views || 0,
       sheared: contentStats[getContentKey(v)]?.sheared || v.sheared || 0,
@@ -56,26 +59,32 @@ export const useVideoNavigation = () => {
           ? v.speakerAvatar
           : v.speakerAvatar || require("../../assets/images/Avatar-1.png"),
       _id: v._id,
+      id: v.id ?? v._id,
       contentType: v.contentType,
       description: v.description,
       createdAt: v.createdAt,
       uploadedBy: v.uploadedBy,
+      authorInfo: v.authorInfo,
+      author: v.author,
     }));
 
-    // console.log(
-    //   "🔍 Setting video list in store:",
-    //   videoListForNavigation.length,
-    //   "videos"
-    // );
+    // Fetch user profiles so Reels shows names/avatars (data exists in DB)
+    const enrichedList = await UserProfileCache.enrichContentArrayBatch(videoListForNavigation);
+    const listToUse = enrichedList.length > 0 ? enrichedList : videoListForNavigation;
 
-    // Store the video list in global store
-    reelsStore.setVideoList(videoListForNavigation);
+    reelsStore.setVideoList(listToUse);
     reelsStore.setCurrentIndex(index);
 
-    // Navigate to reels with current video data
+    const currentItem = listToUse[index] || listToUse[0];
+    // Use same extraction logic as Reels (authorInfo primary, then uploadedBy, cache fallback)
+    const fallbackName = getDisplayName(video.speaker, video.uploadedBy);
+    const speakerName = getUserDisplayNameFromContent(
+      currentItem,
+      /^(Unknown|Anonymous User)$/i.test(fallbackName || "") ? "Creator" : fallbackName || "Creator"
+    );
     const navigationParams = {
       title: video.title,
-      speaker: getDisplayName(video.speaker, video.uploadedBy),
+      speaker: speakerName,
       timeAgo: getTimeAgo(video.createdAt),
       views: String(
         contentStats[getContentKey(video)]?.views || video.views || 0

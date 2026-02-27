@@ -1,35 +1,27 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { useVideoPlayer } from "expo-video";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
-import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
-import { useCommentModal } from "../../../../app/context/CommentModalContext";
+import { View } from "react-native";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
-import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
-import { VideoCardSkeleton } from "../../../shared/components";
-import { AvatarWithInitialFallback } from "../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
-import CardFooterActions from "../../../shared/components/CardFooterActions";
-import ContentActionModal from "../../../shared/components/ContentActionModal";
-import { ContentTypeBadge } from "../../../shared/components/ContentTypeBadge";
-import MediaDetailsModal from "../../../shared/components/MediaDetailsModal";
-import { MediaPlayButton } from "../../../shared/components/MediaPlayButton";
-import ReportMediaModal from "../../../shared/components/ReportMediaModal";
-import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
-import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
-import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
-import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
 import { VideoCardProps } from "../../../shared/types";
-import { getUploadedBy, isValidUri } from "../../../shared/utils";
+import { mediaApi } from "../../../core/api/MediaApi";
+import { isValidUri } from "../../../shared/utils";
 import {
     getBestVideoUrl,
     getVideoUrlFromMedia,
     handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
 import { isAudioSermon, detectMediaType } from "../../../shared/utils";
+import { VideoCardFooter } from "./VideoCard/VideoCardFooter";
+import { VideoCardModals } from "./VideoCard/VideoCardModals";
+import { VideoCardPlayerArea } from "./VideoCard/VideoCardPlayerArea";
+import { useVideoCardInteractionStats } from "./VideoCard/hooks/useVideoCardInteractionStats";
+import { useVideoCardPlayback } from "./VideoCard/hooks/useVideoCardPlayback";
+import { useVideoCardSeek } from "./VideoCard/hooks/useVideoCardSeek";
+import { useVideoCardTapLogic } from "./VideoCard/hooks/useVideoCardTapLogic";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -84,10 +76,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
   // NEVER use thumbnailUrl or imageUrl for video playback!
   const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
-  const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
+  const initialVideoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
     ? getBestVideoUrl(rawVideoUrl)
     : null;
-  
+
+  // Resolved URL from backend (fresh playback URL on retry – Redis/CDN pattern)
+  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
+  const effectiveVideoUrl = resolvedVideoUrl ?? initialVideoUrl;
+  const videoUrl = effectiveVideoUrl;
+
+  const hasTriedFreshUrlRef = useRef(false);
+
   // Initialize refs before useVideoPlayer hook (needed in callback)
   const preloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
@@ -96,6 +95,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     player.loop = false;
     player.muted = isMuted ?? false; // Ensure boolean, never undefined
     player.volume = (videoVolume ?? 1.0); // Ensure number, never undefined
+    // Required: when 0, timeUpdate never fires; progress bar circle stays stuck
+    player.timeUpdateEventInterval = 0.25; // Emit every 250ms for smooth progress updates
     // Pre-load video source for faster playback on subsequent loads
     if (videoUrl) {
       // Clear any existing timeout
@@ -129,17 +130,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [videoLoaded, setVideoLoaded] = useState(false);
   // ✅ Persist video loaded state across re-renders for better UX (no thumbnails on revisit)
   const videoLoadedRef = useRef(false);
-  // Local playback state for video (non-audio) so the progress bar
-  // always reflects the real player position, even if the parent
-  // store's `progresses[key]` is stale.
-  const [videoProgress, setVideoProgress] = useState(0);
-  const [videoPositionMs, setVideoPositionMs] = useState(0);
+  const storeRef = useRef<any>(null);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const toggleProcessingRef = useRef(false); // Ref for debouncing play toggle
-  const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [userIsAdmin, setUserIsAdmin] = useState(false);
   
@@ -179,12 +174,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       onDelete(video);
     }
   }, [video, closeDeleteModal, closeModal, onDelete]);
-
-  // Double-tap detection
-  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastTapRef = useRef<number>(0);
-  const tapCountRef = useRef<number>(0);
-
 
   // Update player settings when mute/volume changes
   useEffect(() => {
@@ -271,248 +260,63 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     showOverlayPermanently(); // Always show play icon on mount
   }, [showOverlayPermanently]); // Only run on mount
 
-  // Audio player for audio sermons
+  // Audio player for audio sermons - must be before useVideoCardTapLogic (which uses audioState)
   const audioUrl =
     isAudioSermonValue && isValidUri(video.fileUrl) ? video.fileUrl : null;
-  const [audioState, audioControls] = useAdvancedAudioPlayer(audioUrl, {
+  const [audioStateRaw, audioControls] = useAdvancedAudioPlayer(audioUrl, {
     audioKey: key,
     autoPlay: false,
     loop: false,
     volume: videoVolume,
     onPlaybackStatusUpdate: (status) => {
-      // Update global progress for audio sermons
       if (status.duration > 0) {
-        const audioProgress = status.position / status.duration;
-        // This will be handled by the parent component's progress tracking
+        // Progress tracked by parent
       }
     },
     onError: (error) => {
       console.error(`❌ Audio sermon error for ${video.title}:`, error);
       setFailedVideoLoad(true);
     },
-    onFinished: () => {
-      // Audio playback completed
-    },
+    onFinished: () => {},
   });
+  // Defensive: ensure audioState is never undefined (avoids "Cannot read property 'isPlaying' of undefined")
+  const audioState = audioStateRaw ?? {
+    isPlaying: false,
+    isLoading: false,
+    isMuted: false,
+    progress: 0,
+    duration: 0,
+    position: 0,
+    error: null,
+  };
 
-  // Track last known duration from playback updates
-  const lastKnownDurationRef = useRef(0);
-  const seekBySeconds = useCallback(
-    async (deltaSec: number) => {
-      if (isAudioSermonValue) {
-        // Handle audio seeking
-        const currentPosition = audioState.position;
-        const duration = audioState.duration;
-        if (duration <= 0) return;
-        const nextMs = Math.max(
-          0,
-          Math.min(currentPosition + deltaSec * 1000, duration)
-        );
-        try {
-          await audioControls.seekTo(nextMs);
-        } catch (e) {
-          console.warn("Audio seekBySeconds failed", e);
-        }
-      } else {
-        // Handle video seeking with expo-video
-        const durationMs =
-          lastKnownDurationRef.current || backendDurationMs || 0;
-        if (!player || durationMs <= 0) return;
-        // Use the last known position rather than external `progress`
-        // so that skipping is stable even if the parent store isn't
-        // updating progresses for this video.
-        const currentMs = Math.max(0, Math.min(videoPositionMs, durationMs));
-        const nextMs = Math.max(
-          0,
-          Math.min(currentMs + deltaSec * 1000, durationMs)
-        );
-        try {
-          player.currentTime = nextMs / 1000; // expo-video uses seconds
-        } catch (e) {
-          console.warn("Video seekBySeconds failed", e);
-        }
-      }
-    },
-    [
-      progress,
-      isAudioSermonValue,
-      audioState.position,
-      audioState.duration,
-      audioControls,
-      player,
-      videoPositionMs,
-      backendDurationMs,
-    ]
-  );
-
-  const seekToPercent = useCallback(
-    async (percent: number) => {
-      if (isAudioSermonValue) {
-        // Handle audio seeking
-        const duration = audioState.duration;
-        if (duration <= 0) return;
-        const clamped = Math.max(0, Math.min(percent, 1));
-        try {
-          await audioControls.seekTo(clamped * duration);
-        } catch (e) {
-          console.warn("Audio seekToPercent failed", e);
-        }
-      } else {
-        // Handle video seeking with expo-video
-        const durationMs = lastKnownDurationRef.current || 0;
-        if (!player || durationMs <= 0) return;
-        const clamped = Math.max(0, Math.min(percent, 1));
-        try {
-          player.currentTime = (clamped * durationMs) / 1000; // expo-video uses seconds
-        } catch (e) {
-          console.warn("Video seekToPercent failed", e);
-        }
-      }
-    },
-    [isAudioSermonValue, audioState.duration, audioControls, player]
-  );
+  const {
+    handleVideoTap,
+    handleTogglePlay,
+    tapTimeoutRef,
+  } = useVideoCardTapLogic({
+    key,
+    video,
+    index,
+    isPlaying,
+    isAudioSermon: isAudioSermonValue,
+    audioIsPlaying: audioState?.isPlaying ?? false,
+    onTogglePlay,
+    onVideoTap,
+    audioControlsPause: audioControls?.pause ?? (() => {}),
+    togglePlayback,
+    player,
+    showOverlayPermanently,
+    hideOverlay,
+  });
 
   // Handle hover start - no autoplay functionality
   const handleHoverStart = useCallback(() => {
     // No autoplay - user must manually click to play
   }, [video.title]);
 
-  // Handle video area tap - SIMPLIFIED & RELIABLE
-  const handleVideoTap = useCallback(async () => {
-    const now = Date.now();
-    const timeSinceLastTap = now - lastTapRef.current;
-    const isCurrentlyPlaying =
-      isPlaying || (isAudioSermonValue && audioState.isPlaying);
-
-    // Reset if too much time passed (400ms window for double-tap)
-    if (timeSinceLastTap > 400) {
-      tapCountRef.current = 0;
-    }
-
-    tapCountRef.current += 1;
-    lastTapRef.current = now;
-
-    // Clear any existing timeout
-    if (tapTimeoutRef.current) {
-      clearTimeout(tapTimeoutRef.current);
-      tapTimeoutRef.current = null;
-    }
-
-    // Double-tap detected (2 taps within time window)
-    if (tapCountRef.current === 2 && timeSinceLastTap <= 400) {
-      tapCountRef.current = 0;
-
-      // Pause if playing
-      if (isCurrentlyPlaying) {
-        if (isAudioSermonValue) {
-          audioControls.pause();
-        } else {
-          // Use modular hook for pause
-          togglePlayback();
-          if (player) {
-            try {
-              player.pause();
-            } catch (error) {
-              console.error("❌ Pause failed:", error);
-            }
-          }
-        }
-      }
-
-      // Navigate to reels
-      onVideoTap(key, video, index);
-      return;
-    }
-
-    // Single tap - wait to confirm it's not a double-tap, then toggle (like reels mode)
-    tapTimeoutRef.current = setTimeout(async () => {
-      if (tapCountRef.current === 1) {
-        // ✅ One-click play/pause: Use onTogglePlay for both video and audio for consistent behavior
-        // This ensures proper integration with global media store (audio pauses video and vice versa)
-        onTogglePlay(key);
-      }
-
-      tapCountRef.current = 0;
-      tapTimeoutRef.current = null;
-    }, 200) as any; // Reduced to 200ms for faster responsiveness (like Instagram/TikTok)
-  }, [
-    isPlaying,
-    onTogglePlay,
-    key,
-    onVideoTap,
-    video,
-    index,
-    showOverlayPermanently,
-    isAudioSermonValue,
-    audioControls,
-    audioState.isPlaying,
-    togglePlayback,
-  ]);
-
   // Handle hover end - video continues playing until scrolled past
-  const handleHoverEnd = useCallback(() => {
-    // Don't pause on hover end - let it continue playing
-    // Only pause when scrolled past or another video is hovered
-  }, [video.title]);
-
-  // Handle play/pause toggle - now using modular hook with improved responsiveness
-  const handleTogglePlay = useCallback(async () => {
-    // ✅ Immediate visual feedback - update state first for instant response
-    setIsPlayTogglePending(true);
-    
-    // Use ref-based debounce for immediate response while preventing double-taps
-    if (toggleProcessingRef.current) {
-      setIsPlayTogglePending(false);
-      return; // Prevent double-taps but allow UI feedback
-    }
-
-    // Clear any pending tap detection when play icon is clicked
-    tapCountRef.current = 0;
-    if (tapTimeoutRef.current) {
-      clearTimeout(tapTimeoutRef.current);
-      tapTimeoutRef.current = null;
-    }
-
-    toggleProcessingRef.current = true;
-
-    // ✅ Immediate execution for responsive feel - use onTogglePlay for both video and audio
-    try {
-      // ✅ Use onTogglePlay for ALL media types (video and audio) to ensure proper global media management
-      // This ensures audio sermons pause videos and vice versa
-      onTogglePlay(key);
-      
-      // Update overlay state immediately for instant visual feedback
-      if (isAudioSermonValue) {
-        if (audioState.isPlaying) {
-          showOverlayPermanently();
-        } else {
-          hideOverlay();
-        }
-      } else {
-        if (isPlaying) {
-          showOverlayPermanently();
-        } else {
-          hideOverlay();
-        }
-      }
-    } catch (error) {
-      console.error("Error in handleTogglePlay:", error);
-    } finally {
-      // Reset pending state quickly for better responsiveness
-      setTimeout(() => {
-        toggleProcessingRef.current = false;
-        setIsPlayTogglePending(false);
-      }, 50); // Reduced to 50ms for faster response
-    }
-  }, [
-    key,
-    isAudioSermonValue,
-    audioState.isPlaying,
-    isPlaying,
-    onTogglePlay,
-    showOverlayPermanently,
-    hideOverlay,
-  ]);
+  const handleHoverEnd = useCallback(() => {}, [video.title]);
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {
@@ -523,134 +327,89 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       // Handle video mute/unmute
       onToggleMute(key);
     }
-  }, [onToggleMute, key, isAudioSermonValue, audioState.isMuted, audioControls]);
+  }, [onToggleMute, key, isAudioSermonValue, audioState?.isMuted, audioControls]);
 
-  // Handle overlay toggle
-  const handleOverlayToggle = useCallback(() => {
-    setShowOverlay((prev) => !prev);
-  }, []);
+  // Fetch fresh playback URL from backend (Redis/CDN pattern – backend can return new signed or CDN URL)
+  const fetchFreshPlaybackUrl = useCallback(async () => {
+    if (!contentId || hasTriedFreshUrlRef.current || isAudioSermonValue) return;
+    hasTriedFreshUrlRef.current = true;
+    try {
+      const result = await mediaApi.getMediaById(contentId);
+      if (!result.success || !result.data) return;
+      const data = result.data as any;
+      const raw =
+        data.fileUrl ?? data.playbackUrl ?? data.hlsUrl ?? data.url ?? "";
+      if (!raw || typeof raw !== "string" || !isValidUri(raw)) return;
+      const newUrl = getBestVideoUrl(raw.trim());
+      if (isMountedRef.current && newUrl) {
+        setResolvedVideoUrl(newUrl);
+        setFailedVideoLoad(false);
+        if (__DEV__) {
+          console.log(
+            `🔄 VideoCard: using fresh playback URL for ${video.title} (Redis/CDN retry)`
+          );
+        }
+      }
+    } catch (e) {
+      if (__DEV__) console.warn("Fresh playback URL fetch failed:", e);
+    }
+  }, [contentId, isAudioSermonValue, video.title]);
 
-  // Handle video error with intelligent retry mechanism
+  // Handle video error with intelligent retry: try fresh URL from backend first (Redis/CDN), then legacy retry
   const handleVideoError = useCallback(
     (error: any) => {
-      // Use the enhanced error handler
       const errorAnalysis = handleVideoErrorUtil(
         error,
         video.fileUrl,
         video.title
       );
 
-      // Set failed state
       setFailedVideoLoad(true);
 
-      // If it's a retryable error (expired signed URL), retry with converted URL
-      if (errorAnalysis.isRetryable) {
+      // 1) Try fresh playback URL from backend (e.g. new signed URL or CDN URL from Redis)
+      fetchFreshPlaybackUrl();
 
+      // 2) Legacy: if retryable (e.g. expired signed URL), also allow UI retry after delay
+      if (errorAnalysis.isRetryable) {
         setTimeout(() => {
           if (isMountedRef.current) {
             setFailedVideoLoad(false);
           }
-        }, 3000); // Retry after 3 seconds
+        }, 3000);
       }
     },
-    [video.title, video.fileUrl]
+    [video.title, video.fileUrl, fetchFreshPlaybackUrl]
   );
 
-  // Handle video load and progress tracking with expo-video
-  useEffect(() => {
-    if (!player || isAudioSermonValue) return;
+  const {
+    lastKnownDurationRef,
+    videoPositionMs,
+    videoProgress,
+  } = useVideoCardPlayback({
+    player,
+    isAudioSermon: isAudioSermonValue,
+    videoTitle: video.title,
+    contentId,
+    isPlaying,
+    handleVideoError,
+    setFailedVideoLoad,
+    setVideoLoaded,
+    videoLoadedRef,
+    hasTrackedView,
+    setHasTrackedView,
+    storeRef,
+    isMountedRef,
+  });
 
-    // Track duration when ready
-    const statusSubscription = player.addListener('statusChange', (status) => {
-      if (status.status === 'readyToPlay') {
-        setFailedVideoLoad(false);
-        setVideoLoaded(true);
-        videoLoadedRef.current = true; // ✅ Persist video loaded state (no thumbnails on revisit)
-        if (player.duration && Number.isFinite(player.duration) && player.duration > 0) {
-          const durationMs = Math.min(player.duration * 1000, 24 * 60 * 60 * 1000); // Max 24 hours
-          if (!isNaN(durationMs)) {
-            lastKnownDurationRef.current = durationMs;
-          }
-        }
-        
-        if (isPlaying) {
-          player.play();
-        }
-      } else if (status.status === 'error') {
-        console.error(`❌ Video load error for ${video.title}:`, status);
-        setFailedVideoLoad(true);
-        handleVideoError(status);
-      }
-    });
-
-    // Track progress and view completion
-    const progressInterval = setInterval(() => {
-      if (!player || !isMountedRef.current) return;
-      
-      const currentTime = player.currentTime || 0;
-      const duration = player.duration || 0;
-      
-      // Validate and clamp duration (prevent invalid values)
-      const durationMs = Math.max(0, Math.min(duration * 1000, 24 * 60 * 60 * 1000)); // Max 24 hours
-      const positionMs = Math.max(0, Math.min(currentTime * 1000, durationMs));
-      
-      // Only update duration ref if it's valid and finite
-      if (Number.isFinite(durationMs) && durationMs > 0 && !isNaN(durationMs)) {
-        lastKnownDurationRef.current = durationMs;
-      }
-      
-      const progress = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
-      // Keep local video progress/position in sync with the player so
-      // the UI progress bar always moves smoothly with playback.
-      setVideoPositionMs(positionMs);
-      setVideoProgress(progress);
-
-      const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
-      const finished = player.currentTime >= player.duration && player.duration > 0;
-
-      // Auto-restart video when finished
-      if (finished && isMountedRef.current) {
-        try {
-          player.currentTime = 0;
-          if (player.playing) {
-            player.play();
-          }
-        } catch (error) {
-          console.warn("Failed to restart video:", error);
-        }
-      }
-
-      // Track view
-      if (!hasTrackedView && (qualifies || finished)) {
-        try {
-          contentInteractionAPI.recordView(
-            contentId,
-            "media",
-            {
-              durationMs: finished ? durationMs : positionMs,
-              progressPct: Math.round(progress * 100),
-              isComplete: finished,
-            }
-          ).then((result) => {
-            setHasTrackedView(true);
-            if (
-              result?.totalViews != null &&
-              storeRef.current?.mutateStats
-            ) {
-              storeRef.current.mutateStats(contentId, () => ({
-                views: Number(result.totalViews) || 0,
-              }));
-            }
-          }).catch(() => {});
-        } catch {}
-      }
-    }, 1000);
-
-    return () => {
-      statusSubscription.remove();
-      clearInterval(progressInterval);
-    };
-  }, [player, video.title, isPlaying, isAudioSermonValue, contentId, hasTrackedView]);
+  const { seekToPercent } = useVideoCardSeek({
+    isAudioSermon: isAudioSermonValue,
+    audioState,
+    audioControls,
+    player,
+    videoPositionMs,
+    lastKnownDurationRef,
+    backendDurationMs,
+  });
 
   // Note: Video player registration is now handled by useVideoPlaybackControl hook
   // This ensures proper registration/unregistration and prevents duplicate registrations
@@ -678,67 +437,24 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     };
   }, []);
 
-  // Get interaction state
-  const bookmarkCount =
-    typeof (video as any)?.bookmarkCount === "number"
-      ? (video as any).bookmarkCount
-      : undefined;
-  const stats = contentStats[contentId] || {};
-  const fallbackLikeCount =
-    globalFavoriteCounts[key] ??
-    video.likeCount ??
-    video.totalLikes ??
-    video.likes ??
-    video.favorite ??
-    0;
-  const fallbackSaveCount =
-    video.saves ??
-    video.saved ??
-    (video as any)?.saveCount ??
-    bookmarkCount ??
-    0;
-  const fallbackCommentCount =
-    video.commentCount ??
-    video.comments ??
-    video.comment ??
-    0;
-  const fallbackViewCount =
-    video.viewCount ??
-    video.totalViews ??
-    video.views ??
-    0;
-  const backendUserLiked =
-    contentStats[contentId]?.userInteractions?.liked ??
-    (video as any)?.hasLiked ??
-    (video as any)?.userHasLiked ??
-    userFavorites[key];
-  const backendUserSaved =
-    contentStats[contentId]?.userInteractions?.saved ??
-    (video as any)?.hasBookmarked ??
-    (video as any)?.isBookmarked;
-  const userLikeState = Boolean(backendUserLiked);
-  const userSaveState = Boolean(backendUserSaved);
-  const likeCount =
-    stats?.likes != null
-      ? Math.max(stats.likes, fallbackLikeCount)
-      : fallbackLikeCount;
-  const saveCount =
-    stats?.saves != null
-      ? Math.max(stats.saves, fallbackSaveCount)
-      : fallbackSaveCount;
-  const commentCount =
-    stats?.comments != null
-      ? Math.max(stats.comments, fallbackCommentCount)
-      : fallbackCommentCount;
-  const viewCount =
-    stats?.views != null
-      ? Math.max(stats.views, fallbackViewCount)
-      : fallbackViewCount;
-  useHydrateContentStats(contentId, "media");
-  const isLoadingStats = useLoadingStats(contentId);
+  const {
+    likeCount,
+    saveCount,
+    commentCount,
+    viewCount,
+    userLikeState,
+    userSaveState,
+    isLoadingStats,
+  } = useVideoCardInteractionStats({
+    video,
+    contentId,
+    contentKey: key,
+    contentStats,
+    userFavorites,
+    globalFavoriteCounts,
+  });
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const storeRef = useRef<any>(null);
   useEffect(() => {
     try {
       const {
@@ -747,18 +463,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       storeRef.current = useInteractionStore.getState();
     } catch {}
   }, []);
-
-  // Build formatted comments for the CommentIcon
-  const currentComments = comments[contentId] || [];
-  const formattedComments = currentComments.map((comment: any) => ({
-    id: comment.id,
-    userName: comment.username || "Anonymous",
-    avatar: comment.userAvatar || "",
-    timestamp: comment.timestamp,
-    comment: comment.comment,
-    likes: comment.likes || 0,
-    isLiked: comment.isLiked || false,
-  }));
 
   const thumbnailSource = video?.imageUrl || video?.thumbnailUrl;
   const thumbnailUri =
@@ -777,296 +481,83 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           : undefined
       }
     >
-      <TouchableWithoutFeedback
-        onPress={handleVideoTap}
-        onPressIn={handleHoverStart}
-        onPressOut={handleHoverEnd}
-      >
-        <View className="w-full h-[400px] overflow-hidden relative">
-          {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && videoUrl && !isAudioSermonValue && player ? (
-            <VideoView
-              player={player}
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-              }}
-              contentFit="cover"
-              nativeControls={false}
-              fullscreenOptions={{ enable: false }}
-            />
-          ) : (
-            /* Thumbnail for audio sermons or fallback */
-            <Image
-              source={
-                thumbnailUri
-                  ? { uri: thumbnailUri }
-                  : {
-                      uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Audio",
-                    }
-              }
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-              }}
-              resizeMode="cover"
-            />
-          )}
-
-          {/* ✅ Show shimmer skeleton until video is fully loaded - shimmer continues swooshing until readyToPlay */}
-          {!videoLoadedRef.current &&
-            !videoLoaded &&
-            !failedVideoLoad &&
-            isValidUri(video.fileUrl) &&
-            !isAudioSermonValue && (
-              <View className="absolute inset-0" pointerEvents="none">
-                <VideoCardSkeleton dark={true} />
-              </View>
-            )}
-
-          {/* Content Type Badge */}
-          <ContentTypeBadge
-            contentType={video.contentType || "video"}
-            position="top-left"
-            size="medium"
-          />
-
-          {/* Fullscreen / expand button (opens reels viewer) - positioned top-right */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => {
-              // ✅ Ensure fullscreen button click navigates to reels
-              onVideoTap(key, video, index);
-            }}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 6,
-              flexDirection: "row",
-              alignItems: "center",
-              zIndex: 10,
-            }}
-          >
-            <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          {/* Play/Pause Overlay */}
-          <MediaPlayButton
-            isPlaying={isAudioSermonValue ? audioState.isPlaying : isPlaying}
-            onPress={handleTogglePlay}
-            showOverlay={showOverlay}
-            size="medium"
-            disabled={isPlayTogglePending}
-          />
-
-          {/* Title Overlay - positioned above progress bar */}
-          <View
-            style={{
-              position: "absolute",
-              bottom: 52,
-              left: 12,
-              right: 12,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              pointerEvents: "none",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontFamily: "Rubik_600SemiBold",
-                color: "#FFFFFF",
-                lineHeight: 16,
-                textShadowColor: "rgba(0, 0, 0, 0.75)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 3,
-              }}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {video.title && video.title.length > 70
-                ? `${video.title.substring(0, 70)}...`
-                : video.title}
-            </Text>
-          </View>
-
-          {/* Video/Audio Progress Bar - Full width with proper margins */}
-          <VideoProgressBar
-            progress={
-              isAudioSermonValue
-                ? audioState.progress
-                : Math.max(0, Math.min(1, videoProgress || 0))
-            }
-            isMuted={isAudioSermonValue ? audioState.isMuted : isMuted}
-            onToggleMute={handleToggleMute}
-            onSeekToPercent={seekToPercent}
-            // Lift the controls row up so it's visually closer to the title overlay
-            // while still anchored near the bottom of the video frame.
-            bottomOffset={24}
-            currentMs={
-              isAudioSermonValue
-                ? (Number.isFinite(audioState.position) && audioState.position >= 0 
-                    ? audioState.position 
-                    : 0)
-                : videoPositionMs
-            }
-            durationMs={
-              isAudioSermonValue 
-                ? (Number.isFinite(audioState.duration) && audioState.duration > 0
-                    ? audioState.duration
-                    : 0)
-                : (Number.isFinite(lastKnownDurationRef.current) && lastKnownDurationRef.current > 0
-                    ? lastKnownDurationRef.current
-                    : (backendDurationMs > 0 ? backendDurationMs : 0))
-            }
-            showControls={true}
-            // Pro config to avoid jumpbacks and ensure usability
-            showFloatingLabel={true}
-            enlargeOnDrag={true}
-            knobSize={8}
-            knobSizeDragging={10}
-            trackHeights={{ normal: 4, dragging: 8 }}
-            seekSyncTicks={4}
-            seekMsTolerance={200}
-            minProgressEpsilon={0.005}
-          />
-        </View>
-      </TouchableWithoutFeedback>
-
-      {/* Footer with User Info and compact left-aligned stats/actions - matching MusicCard */}
-      <View 
-        className="flex-row items-center justify-between mt-2 px-2"
-        style={{ zIndex: 100 }}
-        pointerEvents="box-none"
-      >
-        <View className="flex flex-row items-center" pointerEvents="box-none">
-          <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
-            {/* Avatar with initial fallback */}
-            <AvatarWithInitialFallback
-              imageSource={getUserAvatarFromContent(video) as any}
-              name={getUserDisplayNameFromContent(video)}
-              size={30}
-              fontSize={14}
-              backgroundColor="transparent"
-              textColor="#344054"
-            />
-          </View>
-          <View className="ml-3">
-            <View className="flex-row items-center">
-              <Text className="text-sm font-semibold text-gray-800">
-                {getUserDisplayNameFromContent(video)}
-              </Text>
-              <View className="flex flex-row mt-1 ml-2">
-                <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                <Text className="text-xs text-gray-500 ml-1">
-                  {getTimeAgo(video.createdAt)}
-                </Text>
-              </View>
-            </View>
-            <CardFooterActions
-              viewCount={viewCount}
-              liked={!!userLikeState}
-              likeCount={likeCount}
-              likeBurstKey={likeBurstKey}
-              likeColor="#D22A2A"
-              onLike={() => {
-                // ✅ Only trigger burst animation when LIKING (not unliking)
-                if (!userLikeState) {
-                  setLikeBurstKey((k) => k + 1);
-                }
-                onFavorite(key, video);
-              }}
-              commentCount={commentCount || video.comment || 0}
-              onComment={() => {
-                try {
-                  showCommentModal([], String(contentId));
-                } catch {}
-                onComment(key, video);
-              }}
-              saved={!!userSaveState}
-              saveCount={saveCount || 0}
-              onSave={() => {
-                onSave(modalKey, video);
-              }}
-              isLoading={isLoadingStats}
-              contentType="media"
-              contentId={contentId}
-              onShare={() => onShare(modalKey, video)}
-              contentType="media"
-              contentId={contentId}
-              useEnhancedComponents={false}
-            />
-          </View>
-        </View>
-        <View style={{ zIndex: 1001 }}>
-          <ThreeDotsMenuButton
-            onPress={() => {
-              openModal();
-              // Also update parent if callback exists
-              if (onModalToggle) {
-                onModalToggle(modalKey);
-              }
-            }}
-          />
-        </View>
-      </View>
-
-      {/* Slide-up Content Action Modal */}
-      <ContentActionModal
-        isVisible={isModalVisible || modalVisible === modalKey}
-        onClose={() => {
-          closeModal();
-          if (onModalToggle) {
-            onModalToggle(null);
-          }
-        }}
-        onViewDetails={() => {
-          // Close the action modal and open the details sheet for this media
-          closeModal();
-          setShowDetailsModal(true);
-        }}
-        onSaveToLibrary={() => onSave(modalKey, video)}
-        onDownload={() => onDownload(video)}
-        isSaved={!!contentStats[contentId]?.userInteractions?.saved}
-        isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
-        contentTitle={video.title}
-        mediaId={video._id}
-        uploadedBy={getUploadedBy(video)}
-        mediaItem={video}
-        onDelete={handleDeletePress}
-        showDelete={userIsAdmin || isOwner}
-        onReport={() => setShowReportModal(true)}
+      <VideoCardPlayerArea
+        video={video}
+        contentKey={key}
+        index={index}
+        videoUrl={videoUrl}
+        failedVideoLoad={failedVideoLoad}
+        isAudioSermon={isAudioSermonValue}
+        player={player}
+        thumbnailUri={thumbnailUri}
+        videoLoaded={videoLoaded}
+        videoLoadedRef={videoLoadedRef}
+        showOverlay={showOverlay}
+        isPlaying={isPlaying}
+        audioState={audioState}
+        videoProgress={videoProgress}
+        videoPositionMs={videoPositionMs}
+        lastKnownDurationRef={lastKnownDurationRef}
+        backendDurationMs={backendDurationMs}
+        isMuted={isMuted}
+        onVideoTap={onVideoTap}
+        handleVideoTap={handleVideoTap}
+        handleHoverStart={handleHoverStart}
+        handleHoverEnd={handleHoverEnd}
+        handleTogglePlay={handleTogglePlay}
+        setIsPlayTogglePending={setIsPlayTogglePending}
+        isPlayTogglePending={isPlayTogglePending}
+        handleToggleMute={handleToggleMute}
+        seekToPercent={seekToPercent}
       />
 
-      {/* Delete Confirmation Modal */}
-      <DeleteMediaConfirmation
-        visible={showDeleteModal}
-        mediaId={video._id || ""}
-        mediaTitle={video.title || "this media"}
-        onClose={closeDeleteModal}
-        onSuccess={handleDeleteConfirm}
-        isAdmin={userIsAdmin}
+      <VideoCardFooter
+        video={video}
+        contentKey={key}
+        modalKey={modalKey}
+        contentId={contentId}
+        getUserAvatarFromContent={getUserAvatarFromContent}
+        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+        getTimeAgo={getTimeAgo}
+        viewCount={viewCount}
+        userLikeState={userLikeState}
+        likeCount={likeCount}
+        likeBurstKey={likeBurstKey}
+        setLikeBurstKey={setLikeBurstKey}
+        onFavorite={onFavorite}
+        onComment={onComment}
+        commentCount={commentCount}
+        userSaveState={userSaveState}
+        saveCount={saveCount}
+        onSave={onSave}
+        onShare={onShare}
+        isLoadingStats={isLoadingStats}
+        openModal={openModal}
+        onModalToggle={onModalToggle}
       />
 
-      {/* Report Modal */}
-      <ReportMediaModal
-        visible={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        mediaId={video._id || ""}
-        mediaTitle={video.title}
-      />
-
-      {/* Media Details Slider */}
-      <MediaDetailsModal
-        visible={showDetailsModal}
-        onClose={() => setShowDetailsModal(false)}
-        mediaItem={video}
+      <VideoCardModals
+        isModalVisible={isModalVisible}
+        modalVisible={modalVisible}
+        modalKey={modalKey}
+        onModalToggle={onModalToggle}
+        closeModal={closeModal}
+        setShowDetailsModal={setShowDetailsModal}
+        onSave={onSave}
+        video={video}
+        contentStats={contentStats}
+        contentId={contentId}
+        checkIfDownloaded={checkIfDownloaded}
+        handleDeletePress={handleDeletePress}
+        userIsAdmin={userIsAdmin}
+        isOwner={isOwner}
+        showDeleteModal={showDeleteModal}
+        closeDeleteModal={closeDeleteModal}
+        handleDeleteConfirm={handleDeleteConfirm}
+        showReportModal={showReportModal}
+        setShowReportModal={setShowReportModal}
+        showDetailsModal={showDetailsModal}
+        onDownload={onDownload}
       />
 
       {/* AI Description Box removed in src version; exists only in app layer */}

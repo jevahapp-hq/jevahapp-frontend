@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -44,7 +45,7 @@ import {
   logUserDataStatus,
   validateUserForUpload,
 } from "../utils/userValidation";
-import { API_BASE_URL, categories, contentTypes } from "./upload/constants";
+import { API_BASE_URL, categories, contentTypes, getMaxFileSizeBytes } from "./upload/constants";
 import {
   detectFileType,
   getMimeTypeFromName,
@@ -93,6 +94,8 @@ export default function UploadScreen() {
   const socketManagerRef = useRef<SocketManager | null>(null);
   const currentUploadIdRef = useRef<string | null>(null);
   const isUsingRealTimeProgressRef = useRef<boolean>(false);
+  const successNavigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryClient = useQueryClient();
   
   // AI Description Generation state
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
@@ -115,7 +118,7 @@ export default function UploadScreen() {
     checkAuth();
   }, []);
 
-  // Cleanup Socket.IO connection on unmount
+  // Cleanup Socket.IO connection and success timeout on unmount
   useEffect(() => {
     return () => {
       if (socketManagerRef.current) {
@@ -125,6 +128,10 @@ export default function UploadScreen() {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
+      }
+      if (successNavigateTimeoutRef.current) {
+        clearTimeout(successNavigateTimeoutRef.current);
+        successNavigateTimeoutRef.current = null;
       }
     };
   }, []);
@@ -559,6 +566,20 @@ export default function UploadScreen() {
         userKeys: authStatus.user ? Object.keys(authStatus.user) : null,
       });
 
+      // Client-side file size check (avoids 413 from server)
+      const maxBytes = getMaxFileSizeBytes(selectedType || "videos");
+      const fileSize = file?.size ?? 0;
+      if (fileSize > maxBytes) {
+        setLoading(false);
+        const maxMB = Math.round(maxBytes / (1024 * 1024));
+        const fileMB = (fileSize / (1024 * 1024)).toFixed(1);
+        Alert.alert(
+          "File too large",
+          `This file is ${fileMB} MB. Maximum allowed is ${maxMB} MB for ${selectedType || "this type"}. Please choose a smaller file or compress it.`
+        );
+        return;
+      }
+
       if (!authStatus.hasToken || !authStatus.hasUser) {
         setLoading(false);
         console.error("❌ Upload failed: Missing token or user data", {
@@ -912,7 +933,16 @@ export default function UploadScreen() {
         currentUploadIdRef.current = null;
         isUsingRealTimeProgressRef.current = false;
 
-        // Handle 403 Forbidden - Content Rejected or Requires Review
+        // Handle 413 Payload Too Large (nginx/server body size limit)
+        if (res.status === 413) {
+          Alert.alert(
+            "File too large",
+            "The file exceeds the server's size limit. Please choose a smaller file or compress your media (e.g. lower resolution or bitrate)."
+          );
+          return;
+        }
+
+        // Handle 403 Forbidden - Content Rejected or Requires Review (show in-app modal)
         if (res.status === 403 && result) {
           const moderationResult = result.moderationResult || {};
           const errorMessage = result.message || "Content does not meet our community guidelines.";
@@ -923,38 +953,7 @@ export default function UploadScreen() {
             flags: moderationResult.flags || [],
             status: moderationResult.status,
           });
-
-          // Format friendly rejection message
-          const friendlyMessage = formatFriendlyRejectionMessage(
-            moderationResult.status,
-            moderationResult.reason,
-            moderationResult.flags,
-            errorMessage
-          );
-
-          Alert.alert(
-            friendlyMessage.title,
-            friendlyMessage.message,
-            [
-              { 
-                text: "Got it", 
-                style: "default",
-                onPress: () => setModerationError(null) 
-              },
-              {
-                text: friendlyMessage.isReview ? "OK" : "Try Again",
-                style: friendlyMessage.isReview ? "default" : "default",
-                onPress: () => {
-                  if (!friendlyMessage.isReview) {
-                    setModerationError(null);
-                    setUploadState({ status: "idle", progress: 0, message: "" });
-                  } else {
-                    setModerationError(null);
-                  }
-                },
-              },
-            ]
-          );
+          setUploadState({ status: "idle", progress: 0, message: "" });
           return;
         }
 
@@ -1046,31 +1045,44 @@ export default function UploadScreen() {
         message: "Content has been verified and approved!",
       });
 
+      queryClient.invalidateQueries({ queryKey: ["all-content"] });
+
+      const destination =
+        selectedType.toUpperCase() === "BOOKS"
+          ? "E-BOOKS"
+          : selectedType.toUpperCase();
+
+      const navigateToFeed = () => {
+        setTitle("");
+        setDescription("");
+        setSelectedCategory("");
+        setSelectedType("");
+        setIsSermonContent(false);
+        setFile(null);
+        setThumbnail(null);
+        setModerationError(null);
+        setEligibilityStatus(null);
+        setUploadState({ status: "idle", progress: 0, message: "" });
+        router.push(`/categories/HomeScreen?default=${destination}`);
+      };
+
+      if (successNavigateTimeoutRef.current) {
+        clearTimeout(successNavigateTimeoutRef.current);
+      }
+      successNavigateTimeoutRef.current = setTimeout(navigateToFeed, 1500);
+
       Alert.alert(
         "Upload Successful",
-        "Your content has been verified and approved. It is now live!",
+        "Your content is live. Taking you to the feed in a moment, or tap OK to go now.",
         [
           {
             text: "OK",
             onPress: () => {
-              // Reset
-              setTitle("");
-              setDescription("");
-              setSelectedCategory("");
-              setSelectedType("");
-              setIsSermonContent(false);
-              setFile(null);
-              setThumbnail(null);
-              setModerationError(null);
-              setEligibilityStatus(null);
-              setUploadState({ status: "idle", progress: 0, message: "" });
-
-              const destination =
-                selectedType.toUpperCase() === "BOOKS"
-                  ? "E-BOOKS"
-                  : selectedType.toUpperCase();
-
-              router.push(`/categories/HomeScreen?default=${destination}`);
+              if (successNavigateTimeoutRef.current) {
+                clearTimeout(successNavigateTimeoutRef.current);
+                successNavigateTimeoutRef.current = null;
+              }
+              navigateToFeed();
             },
           },
         ]
@@ -1479,6 +1491,146 @@ export default function UploadScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Moderation / under review modal - shown for 403 (rejected or under_review) */}
+      <Modal
+        visible={!!moderationError}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setModerationError(null);
+          setUploadState({ status: "idle", progress: 0, message: "" });
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: getResponsiveSpacing(20, 24, 32),
+          }}
+          onPress={() => {}}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 20,
+              padding: getResponsiveSpacing(24, 28, 36),
+              width: "100%",
+              maxWidth: 400,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+          >
+            {moderationError && (() => {
+              const friendly = formatFriendlyRejectionMessage(
+                moderationError.status,
+                moderationError.reason,
+                moderationError.flags,
+                moderationError.message
+              );
+              const isReview = friendly.isReview;
+              return (
+                <>
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      backgroundColor: isReview ? "rgba(255, 193, 7, 0.2)" : "rgba(255, 152, 0, 0.2)",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      alignSelf: "center",
+                      marginBottom: getResponsiveSpacing(16, 20, 24),
+                    }}
+                  >
+                    <Ionicons
+                      name={isReview ? "time-outline" : "bulb-outline"}
+                      size={32}
+                      color={isReview ? "#b38600" : "#e65100"}
+                    />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: getResponsiveFontSize(18, 20, 22),
+                      fontWeight: "600",
+                      textAlign: "center",
+                      color: "#1a1a1a",
+                      marginBottom: getResponsiveSpacing(12, 14, 16),
+                    }}
+                  >
+                    {friendly.title}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: getResponsiveFontSize(14, 15, 16),
+                      lineHeight: 22,
+                      textAlign: "center",
+                      color: "#444",
+                      marginBottom: getResponsiveSpacing(16, 20, 24),
+                    }}
+                  >
+                    {friendly.message}
+                  </Text>
+                  {!isReview && (
+                    <View
+                      style={{
+                        backgroundColor: "rgba(255, 193, 7, 0.08)",
+                        padding: getResponsiveSpacing(12, 14, 16),
+                        borderRadius: 12,
+                        marginBottom: getResponsiveSpacing(16, 20, 24),
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: getResponsiveFontSize(12, 13, 14),
+                          color: "#666",
+                          fontStyle: "italic",
+                          textAlign: "center",
+                        }}
+                      >
+                        Tip: Review your content to align with our gospel community guidelines, then try again.
+                      </Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setModerationError(null);
+                      if (!isReview) {
+                        setUploadState({ status: "idle", progress: 0, message: "" });
+                      }
+                    }}
+                    style={{
+                      backgroundColor: isReview ? "#b38600" : "#e65100",
+                      paddingVertical: getResponsiveSpacing(14, 16, 18),
+                      borderRadius: 12,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: getResponsiveFontSize(15, 16, 17),
+                        fontWeight: "600",
+                        color: "#fff",
+                      }}
+                    >
+                      {isReview ? "Got it" : "Try again"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <KeyboardAvoidingView
         {...getKeyboardAdjustment()}
         className="flex-1 bg-white"

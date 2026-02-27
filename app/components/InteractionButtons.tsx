@@ -6,7 +6,7 @@
  */
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { Text, View } from "react-native";
 import { UnifiedInteractionButtons } from "../../src/shared/components/InteractionButtons/UnifiedInteractionButtons";
 import {
@@ -27,7 +27,7 @@ interface InteractionButtonsProps {
   onCommentPress?: () => void;
 }
 
-export default function InteractionButtons({
+function InteractionButtons({
   contentId,
   contentType,
   contentTitle,
@@ -54,6 +54,8 @@ export default function InteractionButtons({
     />
   );
 }
+
+export default React.memo(InteractionButtons);
 
 // Alternative horizontal layout component for feed views
 export function HorizontalInteractionStats({

@@ -33,25 +33,16 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
 
   const config = SIZE_CONFIG[size];
 
-  // Immediate press handler for better responsiveness
-  const handlePressIn = useCallback((e: any) => {
-    // Stop event propagation immediately to prevent parent handlers
-    e?.stopPropagation?.();
-    e?.preventDefault?.();
-    
-    // Immediate feedback - execute onPress right away for instant response
-    if (!disabled && onPress) {
-      onPress();
-    }
-  }, [disabled, onPress]);
-
-  const handlePress = useCallback((e: any) => {
-    // Also handle onPress for fallback compatibility
-    e?.stopPropagation?.();
-    if (!disabled && onPress) {
-      onPress();
-    }
-  }, [disabled, onPress]);
+  // Single handler: onPress only. Do NOT use onPressIn+onPress - that fires twice per tap
+  // and causes "must click twice" bug (first fires play, second fires pause on same tap).
+  const handlePress = useCallback(
+    (e: any) => {
+      e?.stopPropagation?.();
+      e?.preventDefault?.();
+      if (!disabled && onPress) onPress();
+    },
+    [disabled, onPress]
+  );
 
   return (
     <View
@@ -67,7 +58,6 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
     >
       <Pressable
         onPress={handlePress}
-        onPressIn={handlePressIn}
         disabled={disabled}
         hitSlop={{
           top: config.hitSlop,

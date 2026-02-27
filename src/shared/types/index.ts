@@ -53,6 +53,11 @@ export interface MediaItem extends BaseEntity {
   likeCount?: number;
   totalLikes?: number;
   commentCount?: number;
+  /** Set from API when user is authenticated; keeps like state after login */
+  hasLiked?: boolean;
+  hasBookmarked?: boolean;
+  hasViewed?: boolean;
+  hasShared?: boolean;
 }
 
 // Content type definitions
@@ -398,6 +403,8 @@ export interface UseMediaOptions {
   contentType?: ContentType | "ALL";
   page?: number;
   limit?: number;
+  /** When true, fetches from authenticated endpoint so user's uploads appear in feed */
+  useAuth?: boolean;
 }
 
 export interface UseMediaReturn {

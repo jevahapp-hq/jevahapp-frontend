@@ -3,9 +3,9 @@
  * Shared utilities for working with content items across the application
  */
 
+import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
 import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
-import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
 import { ContentType, MediaItem } from "../types";
 
 /**
@@ -22,42 +22,47 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
     // Enrich content with cached user data (fullname and avatar)
     const enrichedItem = enrichContentWithUserData(item);
 
-  return {
-    _id: enrichedItem._id || enrichedItem.id,
-    contentType: enrichedItem.contentType || "media",
-    fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
-    title: enrichedItem.title || "Untitled",
-    speaker: enrichedItem.speaker || enrichedItem.author?.firstName || enrichedItem.uploadedBy?.firstName,
-    // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string
-    uploadedBy: typeof enrichedItem.uploadedBy === "object" && enrichedItem.uploadedBy !== null
-      ? enrichedItem.uploadedBy  // Preserve the full object with all user data
-      : enrichedItem.uploadedBy,  // Keep as string if it's a string ID
-    description: enrichedItem.description || enrichedItem.title || "",
-    speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar,
-    views: enrichedItem.views || enrichedItem.viewCount || enrichedItem.totalViews || 0,
-    sheared: enrichedItem.sheared || enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
-    saved: enrichedItem.saved || enrichedItem.saves || 0,
-    comment: enrichedItem.comment || enrichedItem.comments || enrichedItem.commentCount || 0,
-    favorite: enrichedItem.favorite || enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
-    imageUrl: enrichedItem.imageUrl || enrichedItem.thumbnailUrl || enrichedItem.fileUrl,
-    thumbnailUrl: enrichedItem.thumbnailUrl || enrichedItem.imageUrl,
-    createdAt: enrichedItem.createdAt || enrichedItem.created_at || new Date().toISOString(),
-    duration: enrichedItem.duration,
-    // Additional fields
-    likes: enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
-    shares: enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
-    saves: enrichedItem.saves || 0,
-    comments: enrichedItem.comments || enrichedItem.commentCount || 0,
-    authorInfo: enrichedItem.authorInfo || enrichedItem.author,
-    author: enrichedItem.author || enrichedItem.authorInfo,
-    viewCount: enrichedItem.viewCount || enrichedItem.totalViews || enrichedItem.views || 0,
-    totalViews: enrichedItem.totalViews || enrichedItem.viewCount || enrichedItem.views || 0,
-    shareCount: enrichedItem.shareCount || enrichedItem.totalShares || enrichedItem.shares || 0,
-    totalShares: enrichedItem.totalShares || enrichedItem.shareCount || enrichedItem.shares || 0,
-    likeCount: enrichedItem.likeCount || enrichedItem.totalLikes || enrichedItem.likes || 0,
-    totalLikes: enrichedItem.totalLikes || enrichedItem.likeCount || enrichedItem.likes || 0,
-    commentCount: enrichedItem.commentCount || enrichedItem.comments || 0,
-  };
+    return {
+      _id: enrichedItem._id || enrichedItem.id,
+      contentType: enrichedItem.contentType || "media",
+      fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
+      title: enrichedItem.title || "Untitled",
+      speaker: enrichedItem.speaker || enrichedItem.author?.firstName || enrichedItem.uploadedBy?.firstName,
+      // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string
+      uploadedBy: typeof enrichedItem.uploadedBy === "object" && enrichedItem.uploadedBy !== null
+        ? enrichedItem.uploadedBy  // Preserve the full object with all user data
+        : enrichedItem.uploadedBy,  // Keep as string if it's a string ID
+      description: enrichedItem.description || enrichedItem.title || "",
+      speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar,
+      views: enrichedItem.views || enrichedItem.viewCount || enrichedItem.totalViews || 0,
+      sheared: enrichedItem.sheared || enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
+      saved: enrichedItem.saved || enrichedItem.saves || 0,
+      comment: enrichedItem.comment || enrichedItem.comments || enrichedItem.commentCount || 0,
+      favorite: enrichedItem.favorite || enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
+      imageUrl: enrichedItem.imageUrl || enrichedItem.thumbnailUrl || enrichedItem.fileUrl,
+      thumbnailUrl: enrichedItem.thumbnailUrl || enrichedItem.imageUrl,
+      createdAt: enrichedItem.createdAt || enrichedItem.created_at || new Date().toISOString(),
+      duration: enrichedItem.duration,
+      // Additional fields
+      likes: enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
+      shares: enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
+      saves: enrichedItem.saves || 0,
+      comments: enrichedItem.comments || enrichedItem.commentCount || 0,
+      authorInfo: enrichedItem.authorInfo || enrichedItem.author,
+      author: enrichedItem.author || enrichedItem.authorInfo,
+      viewCount: enrichedItem.viewCount || enrichedItem.totalViews || enrichedItem.views || 0,
+      totalViews: enrichedItem.totalViews || enrichedItem.viewCount || enrichedItem.views || 0,
+      shareCount: enrichedItem.shareCount || enrichedItem.totalShares || enrichedItem.shares || 0,
+      totalShares: enrichedItem.totalShares || enrichedItem.shareCount || enrichedItem.shares || 0,
+      likeCount: enrichedItem.likeCount || enrichedItem.totalLikes || enrichedItem.likes || 0,
+      totalLikes: enrichedItem.totalLikes || enrichedItem.likeCount || enrichedItem.likes || 0,
+      commentCount: enrichedItem.commentCount || enrichedItem.comments || 0,
+      // Preserve user interaction flags from API so likes/saves persist after login (VideoCard uses these as fallback)
+      hasLiked: Boolean(enrichedItem.hasLiked ?? enrichedItem.userInteraction?.hasLiked ?? false),
+      hasBookmarked: Boolean(enrichedItem.hasBookmarked ?? enrichedItem.hasSaved ?? enrichedItem.userInteraction?.hasBookmarked ?? false),
+      hasViewed: Boolean(enrichedItem.hasViewed ?? enrichedItem.userInteraction?.hasViewed ?? false),
+      hasShared: Boolean(enrichedItem.hasShared ?? enrichedItem.userInteraction?.hasShared ?? false),
+    };
   } catch (error) {
     // Log error but return null instead of crashing
     if (__DEV__) {
@@ -126,7 +131,7 @@ export const categorizeContent = (items: MediaItem[]) => {
 
   items.forEach((item) => {
     const contentType = (item.contentType || "").toLowerCase();
-    
+
     if (contentType === "video" || contentType === "videos") {
       categorized.videos.push(item);
     } else if (contentType === "audio" || contentType === "music") {
@@ -188,7 +193,7 @@ export const getUserDisplayNameFromContent = getUserDisplayNameFromUserValidatio
 export const getUserAvatarFromContent = getUserAvatarFromUserValidation;
 
 /**
- * Check if a URI is valid (non-empty string starting with http:// or https://)
+ * Check if a URI is valid (non-empty string)
  * @param uri - The URI to validate
  * @returns true if the URI is valid, false otherwise
  */
@@ -196,6 +201,6 @@ export const isValidUri = (uri: any): boolean => {
   return (
     typeof uri === "string" &&
     uri.trim().length > 0 &&
-    /^https?:\/\//.test(uri.trim())
+    (/^(https?|file):\/\//.test(uri.trim()) || uri.trim().startsWith("/"))
   );
 };

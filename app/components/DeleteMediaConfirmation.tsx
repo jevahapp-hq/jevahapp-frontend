@@ -19,7 +19,7 @@ interface DeleteMediaConfirmationProps {
   mediaTitle: string;
   onClose: () => void;
   onSuccess: () => void;
-  isAdmin?: boolean; // If true, use admin delete endpoint
+  isAdmin?: boolean; // If true, use admin endpoint (reports). Feed/cards use false so owner delete (DELETE /api/media/:id) is used.
 }
 
 export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = ({

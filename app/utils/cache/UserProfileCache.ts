@@ -50,20 +50,25 @@ export class UserProfileCache {
       });
 
       if (!response.ok) {
-        console.warn(`⚠️ Failed to fetch user profile for ${userId}: ${response.status}`);
+        if (__DEV__ && response.status === 404) {
+          console.warn(
+            `⚠️ Reels author: GET /api/users/${userId} returned 404. ` +
+            `Backend needs this endpoint (or populate uploadedBy in media API). See docs/REELS_UPLOADER_NAME_BACKEND.md`
+          );
+        } else {
+          console.warn(`⚠️ Failed to fetch user profile for ${userId}: ${response.status}`);
+        }
         return null;
       }
 
       const data = await response.json();
-      if (data.success && data.user) {
-        this.cacheUserProfile(userId, data.user);
-        return data.user;
-      } else if (data.data && data.data.user) {
-        // Handle different response formats
-        this.cacheUserProfile(userId, data.data.user);
-        return data.data.user;
+      // Backend may return: { success, user } OR { success, data } where data IS the user (per spec)
+      let user = data?.user ?? data?.data;
+      if (user) {
+        user = this.normalizeUserData(user);
+        this.cacheUserProfile(userId, user);
+        return user;
       }
-
       return null;
     } catch (error) {
       console.warn(`⚠️ Error fetching user profile for ${userId}:`, error);
@@ -71,6 +76,20 @@ export class UserProfileCache {
     } finally {
       this.fetchingUsers.delete(userId);
     }
+  }
+
+  /** Normalize API user (snake_case, name field) for consistent display */
+  private static normalizeUserData(u: any): UserData {
+    const parts = (u.name || "").split(" ");
+    return {
+      _id: u._id || u.id,
+      id: u.id || u._id,
+      firstName: u.firstName || u.first_name || parts[0] || "",
+      lastName: u.lastName || u.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : "") || "",
+      avatar: u.avatar || u.avatarUpload || u.profileImage,
+      avatarUpload: u.avatarUpload || u.avatar || u.profileImage,
+      email: u.email,
+    };
   }
 
   /**
@@ -138,7 +157,7 @@ export class UserProfileCache {
           
           if (cachedUser) {
             // Use cached user data - convert string ID to object
-            content.uploadedBy = {
+            const userObj = {
               _id: userId,
               id: userId,
               firstName: cachedUser.firstName || "",
@@ -146,6 +165,11 @@ export class UserProfileCache {
               avatar: cachedUser.avatar || cachedUser.avatarUpload || "",
               email: cachedUser.email || "",
             };
+            content.uploadedBy = userObj;
+            // Also set authorInfo (primary source for media) so name/avatar display works
+            if (!content.authorInfo || (!content.authorInfo.firstName && !content.authorInfo.fullName)) {
+              content.authorInfo = { ...userObj, fullName: [userObj.firstName, userObj.lastName].filter(Boolean).join(" ").trim() };
+            }
           } else {
             // Not in cache - try to fetch (async, but create minimal object structure first)
             // This ensures the structure is correct even if fetch fails
@@ -166,6 +190,15 @@ export class UserProfileCache {
                 content.uploadedBy.lastName = fetchedUser.lastName || "";
                 content.uploadedBy.avatar = fetchedUser.avatar || fetchedUser.avatarUpload || "";
                 content.uploadedBy.email = fetchedUser.email || "";
+                // Also set authorInfo (primary source) so name display works
+                const fullName = [fetchedUser.firstName, fetchedUser.lastName].filter(Boolean).join(" ").trim();
+                content.authorInfo = content.authorInfo || {};
+                content.authorInfo._id = content.authorInfo._id || userId;
+                content.authorInfo.id = content.authorInfo.id || userId;
+                content.authorInfo.firstName = content.authorInfo.firstName || fetchedUser.firstName || "";
+                content.authorInfo.lastName = content.authorInfo.lastName || fetchedUser.lastName || "";
+                content.authorInfo.fullName = content.authorInfo.fullName || fullName;
+                content.authorInfo.avatar = content.authorInfo.avatar || fetchedUser.avatar || fetchedUser.avatarUpload || "";
               }
             }).catch(() => {
               // Silently fail - object structure is already correct

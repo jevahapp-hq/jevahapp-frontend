@@ -218,6 +218,45 @@ class SocketManager {
       this.handleViewerCountUpdate(data);
     });
 
+    // New like update events from unified content interactions service
+    // - Global broadcast: "content-like-update"
+    // - Room-scoped: "like-updated" to room content:<normalizedContentType>:<contentId>
+    //
+    // Both carry an authoritative likeCount for the content item.
+    this.socket.on("content-like-update", (data: any) => {
+      try {
+        const { useInteractionStore } = require("../store/useInteractionStore");
+        const store = useInteractionStore.getState();
+        const contentId = data?.contentId;
+        const likeCount = data?.likeCount;
+
+        if (contentId && typeof likeCount === "number") {
+          store.mutateStats(String(contentId), () => ({
+            likes: Number(likeCount) || 0,
+          }));
+        }
+      } catch (e) {
+        console.error("Error applying content-like-update socket event:", e);
+      }
+    });
+
+    this.socket.on("like-updated", (data: any) => {
+      try {
+        const { useInteractionStore } = require("../store/useInteractionStore");
+        const store = useInteractionStore.getState();
+        const contentId = data?.contentId;
+        const likeCount = data?.likeCount;
+
+        if (contentId && typeof likeCount === "number") {
+          store.mutateStats(String(contentId), () => ({
+            likes: Number(likeCount) || 0,
+          }));
+        }
+      } catch (e) {
+        console.error("Error applying like-updated socket event:", e);
+      }
+    });
+
     // New production-grade view updates
     this.socket.on("view-updated", (data: any) => {
       try {
@@ -254,6 +293,7 @@ class SocketManager {
       // - These don't need to be logged as errors since the app handles them
       if (
         errorMessage.includes("Failed to add reaction") ||
+        errorMessage.includes("Failed tto add reaction") || // backend typo variant
         errorMessage.includes("404") ||
         errorMessage.includes("Content not found")
       ) {
@@ -272,14 +312,16 @@ class SocketManager {
     this.socket.on("reaction-error", (error: any) => {
       const errorMessage = error?.message || String(error);
       
-      // Suppress expected 404 errors - HTTP API will handle with fallback
+      // Suppress expected errors - HTTP API will handle persistence
       if (
+        errorMessage.includes("Failed to add reaction") ||
+        errorMessage.includes("Failed tto add reaction") ||
         errorMessage.includes("404") ||
         errorMessage.includes("Content not found") ||
         errorMessage.includes("not found")
       ) {
         if (__DEV__) {
-          console.warn("⚠️ Reaction error (404 - handled by HTTP fallback):", errorMessage);
+          console.warn("⚠️ Socket reaction error (handled by HTTP fallback):", errorMessage);
         }
         return;
       }

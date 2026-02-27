@@ -1,30 +1,18 @@
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
+/**
+ * Reelsviewscroll - Main Reels screen
+ * Orchestrates reels playback. Logic is split across:
+ * - hooks/useReelsCurrentVideo: video metadata, keys, speaker resolution
+ * - hooks/useReelsHandlers: like, comment, share, save, navigation
+ * - hooks/useReelsVideoPlayback: seek, formatTime, playback effects
+ * - components/ReelsModals: modals + header + bottom nav
+ */
+import { Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Dimensions,
-  Image,
-  PanResponder,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, StatusBar, Text, View } from "react-native";
 
-import MediaDetailsModal from "../../src/shared/components/MediaDetailsModal";
-import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
-import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
-import { getBestVideoUrl, getVideoUrlFromMedia, handleVideoError } from "../../src/shared/utils/videoUrlManager";
-import { getBottomNavHeight } from "../../utils/responsive";
-import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import ErrorBoundary from "../components/ErrorBoundary";
-import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import {
@@ -36,23 +24,23 @@ import {
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
 import { useReelsStore } from "../store/useReelsStore";
-import allMediaAPI from "../utils/allMediaAPI";
-import { audioConfig } from "../utils/audioConfig";
 import { useDownloadHandler } from "../utils/downloadUtils";
 import { navigateMainTab } from "../utils/navigation";
-import {
-  getPersistedStats,
-  persistStats,
-} from "../utils/persistentStorage";
-import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
+import { getPersistedStats } from "../utils/persistentStorage";
+import { useUserProfile } from "../hooks/useUserProfile";
 import { UserProfileCache } from "../utils/cache/UserProfileCache";
-import { ReelsProgressBar } from "./components/ReelsProgressBar";
-import { ReelsHeader } from "./components/ReelsHeader";
-import { ReelsActionButtons } from "./components/ReelsActionButtons";
-import { ReelsSpeakerInfo } from "./components/ReelsSpeakerInfo";
-import { ReelsMenu } from "./components/ReelsMenu";
+import { ReelsErrorView } from "./components/ReelsErrorView";
+import { ReelsModals } from "./components/ReelsModals";
+import { ReelsVideoItem } from "./components/ReelsVideoItem";
+import {
+  useReelsCurrentVideo,
+  useReelsHandlers,
+  useReelsResponsive,
+  useReelsScroll,
+  useReelsVideoList,
+  useReelsVideoPlayback,
+} from "./hooks";
 
-// ✅ Route Params Type
 type Params = {
   title: string;
   speaker: string;
@@ -63,17 +51,15 @@ type Params = {
   favorite: string;
   imageUrl: string;
   speakerAvatar: string;
-  isLive?: string; // Optional
+  isLive?: string;
   category?: string;
-  videoList?: string; // JSON string of video array
-  currentIndex?: string; // Current video index in the list
-  source?: string; // Source component that navigated to reels
+  videoList?: string;
+  currentIndex?: string;
+  source?: string;
 };
 
 export default function Reelsviewscroll() {
-  // ✅ ALL HOOKS MUST BE CALLED AT THE TOP LEVEL, BEFORE ANY CONDITIONAL LOGIC OR useEffect
-  
-  // Router and params hooks - MUST be called first
+  const params = useLocalSearchParams() as Params;
   const {
     title,
     speaker,
@@ -84,217 +70,103 @@ export default function Reelsviewscroll() {
     favorite,
     imageUrl,
     speakerAvatar,
-    isLive = "false",
     category,
-    videoList,
     currentIndex = "0",
     source,
-  } = useLocalSearchParams() as Params;
+  } = params;
   const router = useRouter();
 
-  // Refs
   const videoRefs = useRef<Record<string, Video>>({});
-  const lastIndexRef = useRef<number>(0);
-  // Note: currentVideoIndex is computed later; avoid referencing it here (would crash at runtime).
-  const scrollStartIndexRef = useRef<number>(0);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // State hooks
-  const [hasError, setHasError] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [videoStats, setVideoStats] = useState<Record<string, any>>({});
-  const [videoDuration, setVideoDuration] = useState<number>(0);
-  const [videoPosition, setVideoPosition] = useState<number>(0);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [reelsProgressBarWidth, setReelsProgressBarWidth] = useState<number>(0);
-  const [showPauseOverlay, setShowPauseOverlay] = useState<boolean>(false);
-  const [userHasManuallyPaused, setUserHasManuallyPaused] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>("Home");
-  const [menuVisible, setMenuVisible] = useState<boolean>(false);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoPosition, setVideoPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [reelsProgressBarWidth, setReelsProgressBarWidth] = useState(0);
+  const [showPauseOverlay, setShowPauseOverlay] = useState(false);
+  const [userHasManuallyPaused, setUserHasManuallyPaused] = useState(false);
+  const [activeTab, setActiveTab] = useState("Home");
+  const [menuVisible, setMenuVisible] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Custom hooks
   const globalVideoStore = useGlobalVideoStore();
   const mediaStore = useMediaPlaybackStore();
   const reelsStore = useReelsStore();
+  const { user: currentUser, getFullName, getAvatarUrl } = useUserProfile();
   const { showCommentModal } = useCommentModal();
   const libraryStore = useLibraryStore();
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
-
-  // Unified interaction store (likes/saves/etc.)
   const toggleLike = useInteractionStore((s) => s.toggleLike);
   const loadContentStats = useInteractionStore((s) => s.loadContentStats);
 
-  // Get video states from global store
   const playingVideos = globalVideoStore.playingVideos;
   const mutedVideos = globalVideoStore.mutedVideos;
-  const videoVolume = 1.0;
 
-  // Parse video list and current index - prioritize reels store, fallback to URL param
-  // ENRICHED: Enrich video list with user profile data (avatars, names) from cache
-  // CRITICAL FIX: Use useMemo for computation, useEffect for setState (prevents render-time setState error)
-  const parsedVideoList = useMemo(() => {
-    let rawList: any[] = [];
-    
-    if (reelsStore.videoList.length > 0) {
-      rawList = reelsStore.videoList;
-    } else if (videoList) {
-      try {
-        const parsed = JSON.parse(videoList);
-        rawList = parsed;
-      } catch (error) {
-        console.error("❌ Failed to parse video list:", error);
-        return [];
-      }
-    } else {
-      console.warn("⚠️ No video list found in store or params");
-      return [];
-    }
-    
-    // Enrich all videos with user profile data (avatars, names) from cache
-    if (rawList.length > 0) {
-      const enrichedList = UserProfileCache.enrichContentArray(rawList);
-      return enrichedList;
-    }
-    
-    return rawList;
-  }, [reelsStore.videoList, videoList]);
-
-  // ✅ FIX: Consolidated useEffect to prevent infinite loops
-  // Use refs to track if we've already processed the video list
-  const videoListProcessedRef = useRef(false);
-  const lastVideoListRef = useRef<string | undefined>(undefined);
-  
   useEffect(() => {
-    // Skip if we've already processed this videoList
-    if (videoList === lastVideoListRef.current && reelsStore.videoList.length > 0) {
-      return;
-    }
-    
-    // Parse videoList from params if store is empty
-    if (reelsStore.videoList.length === 0 && videoList) {
-      try {
-        const parsed = JSON.parse(videoList);
-        const enrichedList = UserProfileCache.enrichContentArray(parsed);
-        reelsStore.setVideoList(enrichedList);
-        lastVideoListRef.current = videoList;
-        videoListProcessedRef.current = true;
-        return;
-      } catch (error) {
-        console.error("❌ Failed to parse video list:", error);
+    if (currentUser) {
+      const userId = currentUser._id || currentUser.id;
+      if (userId) {
+        UserProfileCache.cacheUserProfile(userId, {
+          firstName: currentUser.firstName || "",
+          lastName: currentUser.lastName || "",
+          avatar: currentUser.avatar || currentUser.avatarUpload || "",
+          email: currentUser.email,
+        });
       }
     }
-    
-    // Only update if parsedVideoList is different and we haven't processed it
-    if (parsedVideoList.length > 0 && !videoListProcessedRef.current) {
-      const currentList = reelsStore.videoList;
-      // Quick comparison - check length and first item ID
-      const listsAreDifferent = currentList.length !== parsedVideoList.length ||
-        (currentList.length > 0 && parsedVideoList.length > 0 && 
-         currentList[0]?._id !== parsedVideoList[0]?._id);
-      
-      if (listsAreDifferent) {
-        reelsStore.setVideoList(parsedVideoList);
-        videoListProcessedRef.current = true;
-      }
-    }
-  }, [parsedVideoList.length, videoList]); // Only depend on length and videoList string, not store object
+  }, [currentUser]);
 
-  const currentVideoIndex = reelsStore.currentIndex !== undefined && reelsStore.currentIndex !== null
-    ? reelsStore.currentIndex
-    : parseInt(currentIndex) || 0;
+  const parsedVideoList = useReelsVideoList({
+    reelsStoreVideoList: reelsStore.videoList,
+    videoListParam: params.videoList,
+    reelsStoreSetVideoList: reelsStore.setVideoList,
+  });
+
+  const currentVideoIndex =
+    reelsStore.currentIndex !== undefined && reelsStore.currentIndex !== null
+      ? reelsStore.currentIndex
+      : parseInt(currentIndex) || 0;
   const [currentIndex_state, setCurrentIndex_state] = useState(currentVideoIndex);
-  lastIndexRef.current = currentVideoIndex;
 
-  // Get current video from the list or use passed parameters (computed early for useMediaDeletion hook)
-  const currentVideo = (() => {
-    try {
-      if (
-        parsedVideoList.length > 0 &&
-        currentIndex_state < parsedVideoList.length
-      ) {
-        const video = parsedVideoList[currentIndex_state];
-        if (video && video.title) {
-          return video;
-        }
-      }
+  const {
+    currentVideo,
+    modalKey,
+    contentId,
+    contentIdForHooks,
+    canUseBackendLikes,
+    activeContentType,
+    getSpeakerName,
+    video,
+  } = useReelsCurrentVideo({
+    parsedVideoList,
+    currentIndex: currentIndex_state,
+    fallbackParams: {
+      title,
+      speaker,
+      timeAgo,
+      views,
+      sheared,
+      saved,
+      favorite,
+      imageUrl,
+      speakerAvatar,
+    },
+    currentUser,
+    getFullName,
+  });
 
-      // Fallback to passed parameters
-      return {
-        title: title || "Untitled Video",
-        speaker: speaker || "Unknown Speaker",
-        timeAgo: timeAgo || "Recently",
-        views: parseInt(views) || 0,
-        sheared: parseInt(sheared) || 0,
-        saved: parseInt(saved) || 0,
-        favorite: parseInt(favorite) || 0,
-        imageUrl: imageUrl || "",
-        speakerAvatar: speakerAvatar || "",
-        fileUrl: imageUrl || "",
-      };
-    } catch (error) {
-      console.error("❌ Error creating current video object:", error);
-      // Return safe fallback
-      return {
-        title: "Untitled Video",
-        speaker: "Unknown Speaker",
-        timeAgo: "Recently",
-        views: 0,
-        sheared: 0,
-        saved: 0,
-        favorite: 0,
-        imageUrl: "",
-        speakerAvatar: "",
-        fileUrl: "",
-      };
-    }
-  })();
-
-  // SAFE: Extract speaker name for reel key
-  const getSpeakerNameForReel = (video: any): string => {
-    const speaker = video?.speaker;
-    if (typeof speaker === 'string') return speaker;
-    if (speaker && typeof speaker === 'object') {
-      return speaker.fullName || 
-             (speaker.firstName && speaker.lastName 
-               ? `${speaker.firstName} ${speaker.lastName}`.trim()
-               : speaker.firstName || speaker.lastName || 'Unknown');
-    }
-    return getUserDisplayNameFromContent(video, "Unknown");
-  };
-  
-  // Create a unique key for this reel content (for video playback tracking, stats, etc.)
-  const reelKey = `reel-${currentVideo.title}-${getSpeakerNameForReel(currentVideo)}`;
-  const modalKey = reelKey;
-  
-  // Extract real contentId for API calls (comments, interactions, etc.)
-  // Prefer _id or id from the video object, fallback to synthetic key only if needed
-  // ✅ CRITICAL: Use the same contentId format as AllContentTikTok for state persistence
-  const contentId = currentVideo._id || currentVideo.id || null;
-  const contentIdForHooks = (contentId || "") as string;
-  const canUseBackendLikes = Boolean(contentIdForHooks);
-  const activeContentType = (currentVideo.contentType || "video") as string;
-
-  // Read like state for the currently active reel (one reel at a time -> hooks are safe here).
-  // ✅ These hooks automatically sync with the interaction store used by AllContentTikTok
-  const activeStats = useContentStats(contentIdForHooks);
   const activeIsLiked = useUserInteraction(contentIdForHooks, "liked");
   const activeLikesCount = useContentCount(contentIdForHooks, "likes");
 
-  // Hydrate stats when we have a real content id or when contentId changes.
-  // ✅ This ensures stats are loaded when switching videos, maintaining state persistence
   useEffect(() => {
     if (!canUseBackendLikes) return;
-    // Always reload stats when contentId changes to ensure fresh data
     loadContentStats(contentIdForHooks, activeContentType);
-  }, [
-    canUseBackendLikes,
-    loadContentStats,
-    contentIdForHooks,
-    activeContentType,
-  ]);
+  }, [canUseBackendLikes, loadContentStats, contentIdForHooks, activeContentType]);
 
-  // Media deletion functionality - MUST be called before useEffect hooks
   const {
     isOwner,
     showDeleteModal,
@@ -306,22 +178,19 @@ export default function Reelsviewscroll() {
     isModalVisible: menuVisible,
   });
 
-  // Responsive dimensions (not hooks, just calculations)
-  const screenHeight = Dimensions.get("window").height;
-  const screenWidth = Dimensions.get("window").width;
-  const isSmallScreen = screenHeight < 700;
-  const isMediumScreen = screenHeight >= 700 && screenHeight < 800;
-  const isLargeScreen = screenHeight >= 800;
-  const isIOS = Platform.OS === "ios";
-  const isAndroid = Platform.OS === "android";
-  const live = isLive === "true";
+  const {
+    screenHeight,
+    screenWidth,
+    isIOS,
+    getResponsiveSize,
+    getResponsiveSpacing,
+    getResponsiveFontSize,
+    getTouchTargetSize,
+  } = useReelsResponsive();
 
-  // Ensure we always have data to render even if network fails
   const hasList = Array.isArray(reelsStore.videoList) && reelsStore.videoList.length > 0;
-  
   useEffect(() => {
     if (!hasList) {
-      // Provide a minimal fallback so UI doesn't go black
       reelsStore.setVideoList([
         {
           _id: "fallback",
@@ -332,10 +201,8 @@ export default function Reelsviewscroll() {
           sheared: 0,
           saved: 0,
           favorite: 0,
-          fileUrl:
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          imageUrl:
-            "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217",
+          fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          imageUrl: "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217",
           speakerAvatar: "",
           contentType: "video",
           description: "",
@@ -347,1256 +214,218 @@ export default function Reelsviewscroll() {
     }
   }, [hasList]);
 
-  // Platform-specific responsive sizing functions
-  const getResponsiveSize = (small: number, medium: number, large: number) => {
-    let baseSize = isSmallScreen ? small : isMediumScreen ? medium : large;
-    // iOS devices typically need slightly larger touch targets
-    if (isIOS) baseSize *= 1.1;
-    // Android devices benefit from slightly different scaling
-    if (isAndroid) baseSize *= 1.05;
-    return Math.round(baseSize);
-  };
-
-  const getResponsiveSpacing = (
-    small: number,
-    medium: number,
-    large: number
-  ) => {
-    let baseSpacing = isSmallScreen ? small : isMediumScreen ? medium : large;
-    // iOS devices prefer slightly more spacing
-    if (isIOS) baseSpacing *= 1.15;
-    return Math.round(baseSpacing);
-  };
-
-  const getResponsiveFontSize = (
-    small: number,
-    medium: number,
-    large: number
-  ) => {
-    let baseFontSize = isSmallScreen ? small : isMediumScreen ? medium : large;
-    // iOS devices typically have better font rendering, so we can use slightly smaller fonts
-    if (isIOS) baseFontSize *= 0.95;
-    // Android devices benefit from slightly larger fonts for better readability
-    if (isAndroid) baseFontSize *= 1.05;
-    return Math.round(baseFontSize);
-  };
-
-  // Platform-specific touch target sizes (minimum 44px for iOS, 48px for Android)
-  const getTouchTargetSize = () => {
-    return isIOS ? 44 : 48;
-  };
-
-  // Platform-specific haptic feedback
   const triggerHapticFeedback = () => {
     if (isIOS) {
-      // iOS haptic feedback would be implemented here
-      // You can use expo-haptics for this
-    }
-    // Android has built-in haptic feedback for touch events
-  };
-
-  // Handle back navigation based on source component
-  const handleBackNavigation = () => {
-    triggerHapticFeedback();
-
-    // Downloads: always return to the Downloads screen (tab-like behavior)
-    if (source === "Downloads") {
-      router.replace("/downloads/DownloadsScreen");
-      return;
-    }
-
-    // Special handling for AllContentTikTok: Always use explicit navigation
-    // to preserve category context (even if router.canGoBack() is true)
-    // This ensures we return to the correct category (VIDEO, E-BOOKS, etc.) not ALL
-    if (source === "AllContentTikTok") {
-      // Navigate back to HomeScreen with the specific category the user was viewing
-      // This preserves the category context instead of defaulting to "ALL"
-      const categoryToPass = category || "ALL";
-      // Use replace instead of push to ensure params update properly
-      router.replace({
-        pathname: "/categories/HomeScreen",
-        params: {
-          default: "Home",
-          defaultCategory: categoryToPass, // Category is in ContentType format (videos, music, e-books, etc.)
-        },
-      });
-      return;
-    }
-
-    // For other sources, try router.back() first to maintain proper navigation stack
-    if (router.canGoBack?.()) {
-      router.back();
-    } else {
-      // Only use replace/push as fallback when canGoBack is not available
-
-      if (source === "VideoComponent") {
-        // Navigate back to VideoComponent
-        router.push("/categories/VideoComponent");
-      } else if (source === "SermonComponent") {
-        // Navigate back to SermonComponent
-        router.push("/categories/SermonComponent");
-      } else if (source === "LiveComponent") {
-        // Navigate back to LiveComponent
-        router.push("/categories/LiveComponent");
-      } else if (source === "ExploreSearch") {
-        // Navigate back to ExploreSearch
-        router.push("/ExploreSearch/ExploreSearch");
-      } else if (source === "HorizontalVideoSection") {
-        // Navigate back to home
-        router.push("/");
-      } else {
-        // Default fallback to HomeScreen with the specific category if available
-        router.push({
-          pathname: "/categories/HomeScreen",
-          params: {
-            default: "Home",
-            defaultCategory: category || "ALL",
-          },
-        });
-      }
+      // expo-haptics can be used here
     }
   };
 
-  // 🔁 Helper: try to refresh stale media URL from backend
-  const tryRefreshMediaUrl = async (item: any): Promise<string | null> => {
-    try {
-      if (!item || !item.title) {
-        console.warn("⚠️ Invalid item for URL refresh:", item);
-        return null;
-      }
+  const handlers = useReelsHandlers({
+    router,
+    contentId,
+    contentIdForHooks,
+    canUseBackendLikes,
+    activeContentType,
+    currentVideo,
+    modalKey,
+    menuVisible,
+    videoStats,
+    setVideoStats,
+    setMenuVisible,
+    setShowDetailsModal,
+    setShowReportModal,
+    source,
+    category,
+    title,
+    speaker,
+    timeAgo,
+    imageUrl,
+    sheared,
+    toggleLike,
+    showCommentModal,
+    libraryStore,
+    handleDownload,
+    openDeleteModal,
+    handleDeleteConfirmInternal,
+    triggerHapticFeedback,
+  });
 
-      const response = await allMediaAPI.getAllMedia({
-        search: item.title,
-        contentType: item.contentType as any,
-        limit: 1,
-      });
+  const { seekToPosition, formatTime, toggleMute } = useReelsVideoPlayback({
+    videoRefs: videoRefs as React.RefObject<Record<string, Video>>,
+    videoDuration,
+    modalKey,
+    setVideoDuration,
+    setVideoPosition,
+    setShowPauseOverlay,
+    setUserHasManuallyPaused,
+    setMenuVisible,
+    screenWidth,
+    reelsProgressBarWidth,
+    setIsDragging,
+    globalVideoStore,
+    mediaStore,
+    playingVideos,
+    userHasManuallyPaused,
+  });
 
-      if (!response || !response.media || !Array.isArray(response.media)) {
-        console.warn("⚠️ Invalid response from API:", response);
-        return null;
-      }
-
-      const fresh = response.media[0];
-      if (
-        fresh?.fileUrl &&
-        typeof fresh.fileUrl === "string" &&
-        fresh.fileUrl.trim() !== ""
-      ) {
-        return fresh.fileUrl.trim();
-      }
-
-      return null;
-    } catch (e) {
-      console.error("❌ Refresh media URL failed in reels:", e);
-      return null;
-    }
-  };
-
-
-  // Animation and scroll state
-
-
-  // Create video object for consistency with VideoComponent pattern
-  const video = {
-    fileUrl: currentVideo.fileUrl || currentVideo.imageUrl || imageUrl,
-    title: currentVideo.title,
-    speaker: currentVideo.speaker,
-    timeAgo: currentVideo.timeAgo,
-    speakerAvatar: currentVideo.speakerAvatar,
-    favorite: currentVideo.favorite || 0,
-    views: currentVideo.views || 0,
-    saved: currentVideo.saved || 0,
-    sheared: currentVideo.sheared || 0,
-    comment: 0,
-  };
-
-  // Initialize state on component mount
   useEffect(() => {
-    const initializeData = async () => {
+    const init = async () => {
       try {
-        // Load persisted data for this specific reel
         const stats = await getPersistedStats();
         setVideoStats(stats);
-      } catch (error) {
-        console.error("❌ ReelsView: Failed to load persisted data:", error);
-        // Don't crash the app, just log the error
+      } catch (e) {
+        console.error("❌ ReelsView: Failed to load persisted data:", e);
       }
     };
-
-    initializeData();
+    init();
   }, [modalKey, title]);
 
-  // Smarter cleanup - pause instead of unload to prevent constant reloading
-  useEffect(() => {
-    return () => {
-      // Instead of unloading videos (which causes reload), just pause them
-      Object.values(videoRefs.current).forEach((ref) => {
-        if (ref) {
-          try {
-            // Pause the video but keep it loaded for faster resume
-            ref.pauseAsync();
-          } catch (error) {
-            // Silently handle pause errors during cleanup
-          }
-        }
-      });
-      // Don't clear the refs - keep them for faster resume
-    };
-  }, []);
-
-  // Error boundary - if there's an error, show a fallback UI
-  if (hasError) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#000",
-        }}
-      >
-        <Text style={{ color: "#fff", fontSize: 18, marginBottom: 20 }}>
-          Something went wrong
-        </Text>
-        <Text style={{ color: "#ccc", fontSize: 14, marginBottom: 30 }}>
-          {errorMessage}
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            setHasError(false);
-            setErrorMessage("");
-          }}
-          style={{
-            backgroundColor: "#FEA74E",
-            paddingHorizontal: 20,
-            paddingVertical: 10,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ color: "#fff", fontSize: 16 }}>Try Again</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: "transparent",
-            paddingHorizontal: 20,
-            paddingVertical: 10,
-            borderRadius: 8,
-            marginTop: 10,
-            borderWidth: 1,
-            borderColor: "#FEA74E",
-          }}
-        >
-          <Text style={{ color: "#FEA74E", fontSize: 16 }}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  /**
-   * Handle like with optimistic update
-   * The toggleLike from store already handles optimistic updates and rollback
-   */
-  const handleLike = async () => {
-    try {
-      if (!canUseBackendLikes) {
-        console.warn("⚠️ ReelsView: Missing real contentId; cannot like reliably.");
-        return;
-      }
-      // Store handles optimistic update automatically
-      await toggleLike(contentIdForHooks, activeContentType);
-    } catch (error) {
-      console.error("❌ Error toggling like in reels:", error);
-      // Store automatically handles rollback on error
-    }
-  };
-
-  /**
-   * Handle comment - opens modal and loads comments
-   * Comment count is updated by the CommentModalContext after a comment is successfully posted
-   * Uses functional updates to ensure immutability
-   */
-  const handleComment = useCallback((key: string) => {
-    // Use real contentId for comments API (required for backend to work)
-    // Fallback to synthetic key only if no real ID exists (shouldn't happen in production)
-    const commentContentId = contentId || key;
-    
-    // Open modal with empty array - backend will load comments immediately
-    // Pass contentType explicitly to ensure correct backend routing
-    showCommentModal([], commentContentId, "media", currentVideo.speaker);
-    
-    // Note: Comment count is updated by CommentModalContext after successful submission
-    // No need to pre-increment here - that would be an incorrect optimistic update
-  }, [contentId, showCommentModal, currentVideo?.speaker]);
-
-  const handleSave = async (key: string) => {
-    try {
-      // Check current user-specific save state from library store
-      const isCurrentlyUserSaved = libraryStore.isItemSaved(key);
-
-      if (isCurrentlyUserSaved) {
-        // Remove from library
-        libraryStore.removeFromLibrary(key);
-      } else {
-        // Create a LibraryItem object to save
-        const reelToSave = {
-          id: key,
-          title,
-          speaker,
-          timeAgo,
-          contentType: "Reel" as const,
-          fileUrl: imageUrl, // Using imageUrl as the content URL for reels
-          thumbnailUrl: imageUrl,
-          originalKey: key,
-          createdAt: new Date().toISOString(),
-        };
-
-        // Add to library
-        libraryStore.addToLibrary(reelToSave);
-      }
-    } catch (error) {
-      console.error("❌ Error handling save:", error);
-    }
-  };
-
-  const handleShare = async (key: string) => {
-    try {
-      const shareOptions = {
-        title: currentVideo.title,
-        message: `Check out this video: ${currentVideo.title}`,
-        url: currentVideo.fileUrl || currentVideo.imageUrl || imageUrl,
-      };
-
-      const result = await Share.share(shareOptions);
-
-      // Only record if user actually shared
-      if (result.action === Share.sharedAction) {
-        const currentStats = videoStats[key] || {};
-        const newSharedCount =
-          (currentStats.sheared || parseInt(sheared) || 0) + 1;
-
-        setVideoStats((prev) => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            sheared: newSharedCount,
-          },
-        }));
-
-        const updatedStats = { ...currentStats, sheared: newSharedCount };
-        const allStats = await getPersistedStats();
-        allStats[key] = updatedStats;
-        persistStats(allStats);
-      }
-
-      // Close any open menu after sharing
-      setMenuVisible(false);
-    } catch (error) {
-      console.error("❌ Error handling share:", error);
-      setMenuVisible(false);
-    }
-  };
-
-  // Handle download
-  const handleDownloadAction = async () => {
-    try {
-      const downloadableItem = {
-        id: currentVideo._id || modalKey,
-        title: currentVideo.title || title,
-        description: currentVideo.description || "",
-        author: currentVideo.speaker || speaker || "Unknown",
-        contentType: "video" as const,
-        fileUrl: currentVideo.fileUrl || imageUrl,
-        thumbnailUrl: currentVideo.imageUrl || imageUrl,
-      };
-      
-      await handleDownload(downloadableItem);
-      setMenuVisible(false);
-    } catch (error) {
-      console.error("Error downloading video:", error);
-    }
-  };
-
-  // Handle view details
-  const handleViewDetails = () => {
-    setMenuVisible(false);
-    setShowDetailsModal(true);
-  };
-
-  // Handle delete confirmation
-  const handleDeleteConfirm = async () => {
-    await handleDeleteConfirmInternal();
-    setMenuVisible(false);
-  };
-
-  // Toggle video play/pause when tapped
   const toggleVideoPlay = () => {
-    const isCurrentlyPlaying = playingVideos[modalKey] ?? false;
-
-    // 🚀 Update last accessed time for cache optimization
+    const isPlaying = playingVideos[modalKey] ?? false;
     mediaStore.updateLastAccessed(modalKey);
-
-    if (isCurrentlyPlaying) {
+    if (isPlaying) {
       globalVideoStore.pauseVideo(modalKey);
-      // Mark that user has manually paused the video
       setUserHasManuallyPaused(true);
     } else {
       globalVideoStore.playVideoGlobally(modalKey);
-      // Reset the manual pause flag when user manually plays
       setUserHasManuallyPaused(false);
     }
-
-    // Show pause overlay temporarily when video is playing
-    if (isCurrentlyPlaying) {
+    if (isPlaying) {
       setShowPauseOverlay(true);
-      // Hide the pause overlay after 1 second
-      setTimeout(() => {
-        setShowPauseOverlay(false);
-      }, 1000);
+      setTimeout(() => setShowPauseOverlay(false), 1000);
     } else {
       setShowPauseOverlay(false);
     }
   };
 
-  // Video seeking function - improved for better responsiveness
-  const seekToPosition = async (videoKey: string, position: number) => {
-    const ref = videoRefs.current[videoKey];
-    if (!ref || videoDuration <= 0) {
-      console.warn("⚠️ Cannot seek: video ref not available or duration is 0");
-      return;
-    }
+  if (hasError) {
+    return (
+      <ReelsErrorView
+        errorMessage={errorMessage}
+        onRetry={() => {
+          setHasError(false);
+          setErrorMessage("");
+        }}
+        onGoBack={() => router.back()}
+      />
+    );
+  }
 
-    try {
-      const seekTime = Math.max(
-        0,
-        Math.min((position / 100) * videoDuration, videoDuration)
-      );
-
-      // Update state BEFORE seeking for immediate UI feedback (circle moves instantly)
-      setVideoPosition(seekTime);
-
-      // Then perform the actual seek on the video
-      await ref.setPositionAsync(seekTime);
-    } catch (error) {
-      console.error("❌ Error seeking video:", error);
-      // On error, try to get actual position from video and sync state
-      try {
-        const status = await ref.getStatusAsync();
-        if (status.isLoaded && status.positionMillis !== undefined) {
-          setVideoPosition(status.positionMillis);
-        }
-      } catch (statusError) {
-        console.error("❌ Error getting video status:", statusError);
-      }
-    }
-  };
-
-  // Format time helper function (MM:SS format)
-  const formatTime = (ms: number): string => {
-    // Validate and clamp input to prevent invalid displays
-    if (!Number.isFinite(ms) || ms < 0 || isNaN(ms)) {
-      return "0:00";
-    }
-    
-    // Clamp to reasonable maximum (24 hours)
-    const clampedMs = Math.min(ms, 24 * 60 * 60 * 1000);
-    
-    const totalSeconds = Math.floor(clampedMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const remainingSeconds = totalSeconds % 60;
-    
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-  };
-
-  // Progress bar dimensions and calculations
-  const progressPercentage =
-    videoDuration > 0 ? (videoPosition / videoDuration) * 100 : 0;
-
-  // Create pan responder inside renderVideoItem for proper video ref access
-  const createPanResponder = (videoKey: string, progressBarRef: any) => {
-    return PanResponder.create({
-      onMoveShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        setIsDragging(true);
-        // Pause video while dragging for better UX
-        globalVideoStore.pauseVideo(videoKey);
-
-        // Calculate position based on touch location within the progress bar
-        const touchX = evt.nativeEvent.locationX;
-        const width = Math.max(1, reelsProgressBarWidth || screenWidth);
-        const newProgress = Math.max(
-          0,
-          Math.min(100, (touchX / width) * 100)
-        );
-        seekToPosition(videoKey, newProgress);
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        // Use absolute position instead of relative movement
-        const touchX = evt.nativeEvent.locationX;
-        const width = Math.max(1, reelsProgressBarWidth || screenWidth);
-        const newProgress = Math.max(
-          0,
-          Math.min(100, (touchX / width) * 100)
-        );
-        seekToPosition(videoKey, newProgress);
-      },
-      onPanResponderRelease: () => {
-        setIsDragging(false);
-        // Resume playback after seeking
-        setTimeout(() => {
-          globalVideoStore.playVideoGlobally(videoKey);
-        }, 100);
-      },
-      onPanResponderTerminate: () => {
-        setIsDragging(false);
-        // Resume playback if gesture is terminated
-        setTimeout(() => {
-          globalVideoStore.playVideoGlobally(videoKey);
-        }, 100);
-      },
-    });
-  };
-
-  // Toggle mute function
-  const toggleMute = (key: string) => {
-    globalVideoStore.toggleVideoMute(key);
-  };
-
-  // Initialize video audio on mount with platform-specific optimizations
-  useEffect(() => {
-    const initializeAudio = async () => {
-      try {
-        await audioConfig.configureForVideoPlayback();
-      } catch (error) {
-        console.error(
-          "❌ ReelsView: Failed to initialize audio session:",
-          error
-        );
-      }
-    };
-
-    initializeAudio();
-  }, []);
-
-  // 🚀 Periodic video cache cleanup for memory optimization
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      mediaStore.cleanupVideoCache();
-    }, 5 * 60 * 1000); // Every 5 minutes
-
-    return () => clearInterval(cleanupInterval);
-  }, [mediaStore]);
-
-  // Auto-play or switch play target immediately when the active key changes
-  useEffect(() => {
-    // Early return if modalKey is not available yet
-    if (!modalKey) return;
-
-    // Reset progress state for new video
-    setVideoDuration(0);
-    setVideoPosition(0);
-    setShowPauseOverlay(false); // Reset pause overlay state
-    setUserHasManuallyPaused(false); // Reset manual pause flag for new video
-    
-    // 🚀 Update last accessed time for cache optimization
-    mediaStore.updateLastAccessed(modalKey);
-
-    // ✅ Ensure video ref is registered before playing
-    const videoRef = videoRefs.current[modalKey];
-    if (videoRef) {
-      // Register with global store if not already registered
-      globalVideoStore.registerVideoPlayer(modalKey, {
-        pause: async () => {
-          try {
-            await videoRef.pauseAsync();
-            globalVideoStore.setOverlayVisible(modalKey, true);
-          } catch (err) {
-            console.warn(`Failed to pause ${modalKey}:`, err);
-          }
-        },
-        showOverlay: () => {
-          globalVideoStore.setOverlayVisible(modalKey, true);
-        },
-        key: modalKey,
-      });
-    }
-
-    // ✅ Pause all other videos, then play this one
-    globalVideoStore.pauseAllVideos();
-
-    // ✅ Play video immediately - use multiple attempts to ensure it plays
-    const playVideo = () => {
-      try {
-        globalVideoStore.playVideoGlobally(modalKey);
-        // Also ensure the video ref plays directly if available
-        if (videoRef) {
-          videoRef.playAsync().catch(() => {
-            // Ignore errors - state will handle it
-          });
-        }
-      } catch (error) {
-        console.error("Error playing video:", error);
-      }
-    };
-
-    // Try immediately, then retry after a short delay to ensure video is ready
-    playVideo();
-    const timeoutId = setTimeout(playVideo, 150);
-
-    // Close action menu when switching videos
-    setMenuVisible(false);
-
-    // Cleanup timeout on unmount or dependency change
-    return () => {
-      clearTimeout(timeoutId);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalKey]); // Only depend on modalKey, not mediaStore (which can change frequently)
-
-  // Additional effect to ensure video plays on initial mount
-  useEffect(() => {
-    if (modalKey && !playingVideos[modalKey] && !userHasManuallyPaused) {
-      const timeoutId = setTimeout(() => {
-        try {
-          globalVideoStore.playVideoGlobally(modalKey);
-        } catch (error) {
-          console.error("Error playing video on mount:", error);
-        }
-      }, 200);
-
-      // Cleanup timeout on unmount or dependency change
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [modalKey, playingVideos, userHasManuallyPaused]);
-
-  // Helper function to safely extract speaker name (handles both string and object)
-  const getSpeakerName = (videoData: any, fallback: string = "Unknown"): string => {
-    const speaker = videoData?.speaker;
-    if (typeof speaker === 'string') {
-      return speaker || fallback;
-    }
-    if (speaker && typeof speaker === 'object') {
-      return speaker.fullName || 
-             (speaker.firstName && speaker.lastName 
-               ? `${speaker.firstName} ${speaker.lastName}`.trim()
-               : speaker.firstName || speaker.lastName || fallback);
-    }
-    // Fallback: try getUserDisplayNameFromContent if available
-    try {
-      return getUserDisplayNameFromContent(videoData, fallback);
-    } catch {
-      return fallback;
-    }
-  };
-
-  // Function to render a single video item
-  // NOTE: This helper MUST NOT use hooks internally (to avoid breaking Rules of Hooks).
   const renderVideoItem = (
     videoData: any,
     index: number,
-    isActive: boolean = false,
+    isActive = false,
     passedVideoKey?: string
   ) => {
-    // Validate video data first
-    if (!videoData || !videoData.title) {
-      console.warn("⚠️ Invalid video data:", videoData);
-      return (
-        <View
-          key={`error-${index}`}
-          style={{
-            height: screenHeight,
-            width: "100%",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "#fff", fontSize: 16 }}>
-            Invalid video data
-          </Text>
-        </View>
-      );
-    }
-
-    // ENRICHED: Enrich video data with user profile (avatar, name) from cache before rendering
-    // This ensures avatars are fetched even if backend didn't populate uploadedBy
-    const enrichedVideoData = UserProfileCache.enrichContentWithUserData(videoData);
-
-    // SAFE: Extract speaker name for video key (use enriched data)
-    const speakerName = getSpeakerName(enrichedVideoData, "Unknown");
+    const enriched = UserProfileCache.enrichContentWithUserData(videoData);
+    const speakerName = getSpeakerName(enriched, "Creator");
     const videoKey =
-      passedVideoKey || `reel-${enrichedVideoData.title}-${speakerName}`;
-    
-    // ✅ FIX: Clear any stale video refs when rendering a new video to prevent overlap
-    // Only clear if this is the active video and we're switching to it
-    if (isActive) {
-      // Ensure we're using the correct video ref for this specific video
-      const existingRef = videoRefs.current[videoKey];
-      if (existingRef && index !== currentIndex_state) {
-        // If there's a ref mismatch, clear it
-        try {
-          existingRef.pauseAsync().catch(() => {});
-        } catch (e) {
-          // Ignore errors
-        }
-      }
-    }
-
-    // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
-    // CRITICAL: NEVER use imageUrl or thumbnailUrl for video playback - they are images!
-    const rawVideoUrl = getVideoUrlFromMedia(enrichedVideoData);
-    
-    // Validate video URL exists
-    if (!rawVideoUrl) {
-      console.warn("⚠️ No valid video URL (fileUrl/playbackUrl/hlsUrl) for:", enrichedVideoData.title, "Data:", enrichedVideoData);
-      return (
-        <View
-          key={videoKey}
-          style={{
-            height: screenHeight,
-            width: "100%",
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#000",
-          }}
-        >
-          <Text style={{ color: "#fff", fontSize: 16, marginBottom: 10 }}>
-            Video not available
-          </Text>
-          <Text style={{ color: "#888", fontSize: 12 }}>
-            {enrichedVideoData.title || "No title"}
-          </Text>
-        </View>
-      );
-    }
-    
-    // ✅ Use getBestVideoUrl to handle signed URLs and URL conversion (same as VideoCard)
-    const videoUrl = getBestVideoUrl(rawVideoUrl);
-    
-    console.log(`🎬 Reels video URL for ${enrichedVideoData.title}:`, {
-      original: rawVideoUrl?.substring(0, 100),
-      processed: videoUrl?.substring(0, 100),
-    });
-
-    // 🚀 Check video cache status for optimization (no hooks, pure call)
-    mediaStore.getVideoCacheStatus(videoKey);
-
+      passedVideoKey ||
+      `reel-${enriched._id || enriched.id || index}-${enriched.title}-${speakerName}`;
     return (
-      <View
-        key={videoKey}
-        style={{
-          height: screenHeight,
-          width: "100%",
-          backgroundColor: "#000000", // Ensure black background for full screen
-        }}
-      >
-        <TouchableWithoutFeedback
-          onPress={() => {
-            if (isActive) {
-              triggerHapticFeedback(); // Add haptic feedback for video tap
-              toggleVideoPlay();
-            }
-          }}
-          onLongPress={() => {
-            if (isActive) {
-              triggerHapticFeedback(); // Add haptic feedback for long press
-            }
-          }}
-        >
-          <View
-            className="w-full h-full"
-            accessibilityLabel={`${
-              playingVideos[videoKey] ? "Pause" : "Play"
-            } video`}
-            accessibilityRole="button"
-            accessibilityHint="Double tap to like, long press for more options"
-          >
-            <Video
-              ref={(ref) => {
-                if (ref) {
-                  // ✅ FIX: Clear any existing ref for this videoKey to prevent overlap
-                  const existingRef = videoRefs.current[videoKey];
-                  if (existingRef && existingRef !== ref) {
-                    // Clean up old ref if it exists and is different
-                    try {
-                      existingRef.pauseAsync().catch(() => {});
-                      globalVideoStore.unregisterVideoPlayer(videoKey);
-                    } catch (e) {
-                      // Ignore cleanup errors
-                    }
-                  }
-                  
-                  // ✅ Always register ref (not just when active) for proper global control
-                  videoRefs.current[videoKey] = ref;
-                  
-                  // ✅ Register with global video store immediately (not just when active)
-                  // This ensures playVideoGlobally works even on initial navigation
-                  globalVideoStore.registerVideoPlayer(videoKey, {
-                    pause: async () => {
-                      try {
-                        await ref.pauseAsync();
-                        globalVideoStore.setOverlayVisible(videoKey, true);
-                      } catch (err) {
-                        console.warn(`Failed to pause ${videoKey}:`, err);
-                      }
-                    },
-                    showOverlay: () => {
-                      globalVideoStore.setOverlayVisible(videoKey, true);
-                    },
-                    key: videoKey,
-                  });
-                } else {
-                  // Unregister when ref is cleared
-                  delete videoRefs.current[videoKey];
-                  globalVideoStore.unregisterVideoPlayer(videoKey);
-                }
-              }}
-              source={{
-                uri: getBestVideoUrl(rawVideoUrl || ""),
-                headers: {
-                  "User-Agent": "JevahApp/1.0",
-                  Accept: "video/*",
-                },
-              }}
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                // ✅ FIX: Ensure video is properly positioned and doesn't overlap
-                zIndex: isActive ? 1 : 0,
-              }}
-              resizeMode={ResizeMode.COVER}
-              isMuted={mutedVideos[videoKey] ?? false}
-              volume={mutedVideos[videoKey] ? 0.0 : videoVolume}
-              // ✅ FIX: Only play if this is the active video to prevent wrong video playing
-              shouldPlay={isActive && (playingVideos[videoKey] ?? false)}
-              useNativeControls={false}
-              isLooping={true}
-              onError={async (error) => {
-                const errorDetails = error?.error || error;
-                const errorCode = errorDetails?.code;
-                const errorDomain = errorDetails?.domain;
-                
-                // ✅ Use enhanced error handler for better diagnostics
-                const errorAnalysis = handleVideoError(error, videoUrl, enrichedVideoData.title);
-                
-                console.error(
-                  `❌ Video loading error in reels for ${enrichedVideoData.title}:`,
-                  {
-                    errorCode,
-                    errorDomain,
-                    errorDescription: errorDetails?.localizedDescription,
-                    videoUrl: videoUrl?.substring(0, 100) + '...',
-                    errorAnalysis,
-                  }
-                );
-                
-                // ✅ Pause video on error to prevent infinite retry loops
-                const ref = videoRefs.current[videoKey];
-                if (ref) {
-                  try {
-                    await ref.pauseAsync();
-                    globalVideoStore.pauseVideo(videoKey);
-                  } catch (pauseError) {
-                    // Ignore pause errors
-                  }
-                }
-                
-                // ✅ Unregister failed video player to prevent further attempts
-                try {
-                  globalVideoStore.unregisterVideoPlayer(videoKey);
-                } catch (unregisterError) {
-                  // Ignore unregister errors
-                }
-                
-                // ✅ For timeout errors (-1001), log specific guidance
-                if (errorCode === -1001 || errorDomain === 'NSURLErrorDomain') {
-                  if (errorAnalysis.isRetryable && errorAnalysis.suggestedUrl) {
-                    console.warn(
-                      `⚠️ Timeout error detected. This might be due to:\n` +
-                      `  1. Expired signed URL (backend should provide fresh URLs)\n` +
-                      `  2. Network connectivity issues\n` +
-                      `  3. Server timeout\n` +
-                      `  Suggested URL: ${errorAnalysis.suggestedUrl.substring(0, 100)}...`
-                    );
-                  } else {
-                    console.warn(
-                      `⚠️ Network timeout error. Possible causes:\n` +
-                      `  1. Slow or unstable network connection\n` +
-                      `  2. Video server is down or slow to respond\n` +
-                      `  3. Video file is too large or corrupted`
-                    );
-                  }
-                }
-              }}
-              onLoad={() => {
-                // 🚀 Mark video as loaded in cache for optimization
-                mediaStore.setVideoLoaded(videoKey, true);
-                
-                // ✅ Auto-play video when it loads if it should be playing
-                // This ensures video plays immediately when navigating from AllContentTikTok
-                if (playingVideos[videoKey] && !userHasManuallyPaused) {
-                  const ref = videoRefs.current[videoKey];
-                  if (ref) {
-                    ref.playAsync().catch(() => {
-                      // Ignore - state will handle it
-                    });
-                  }
-                }
-              }}
-              onPlaybackStatusUpdate={(status) => {
-                if (!isActive || !status.isLoaded) return;
-
-                // Update duration when first loaded
-                if (status.durationMillis && videoDuration === 0) {
-                  setVideoDuration(status.durationMillis);
-
-                  // Ensure video starts playing when first loaded (only if user hasn't manually paused)
-                  if (
-                    !status.isPlaying &&
-                    !playingVideos[videoKey] &&
-                    !userHasManuallyPaused
-                  ) {
-                    setTimeout(() => {
-                      globalVideoStore.playVideoGlobally(videoKey);
-                    }, 100);
-                  }
-                }
-
-                // Update position only if not dragging - this ensures the circle stays where user dragged it
-                if (!isDragging && status.positionMillis !== undefined) {
-                  setVideoPosition(status.positionMillis);
-                }
-
-                const pct = status.durationMillis
-                  ? (status.positionMillis / status.durationMillis) * 100
-                  : 0;
-                globalVideoStore.setVideoProgress(videoKey, pct);
-                const ref = videoRefs.current[videoKey];
-                if (status.didJustFinish) {
-                  ref?.setPositionAsync(0);
-                  globalVideoStore.pauseVideo(videoKey);
-                  // Trigger haptic feedback on video completion
-                  triggerHapticFeedback();
-                }
-              }}
-              // Platform-specific video optimizations
-              shouldCorrectPitch={isIOS}
-              progressUpdateIntervalMillis={isIOS ? 100 : 250}
-              // Increased buffer size for smoother streaming
-              preferredForwardBufferDuration={45}
-            />
-
-            {/* Reload button removed - no per-item error state tracking without hooks */}
-
-            {/* Skeleton overlay while loading or when source is refreshing */}
-            {isActive &&
-              (!playingVideos[videoKey] || !videoDuration) && (
-                <View
-                  className="absolute inset-0"
-                  style={{
-                    justifyContent: "flex-end",
-                    padding: getResponsiveSpacing(12, 16, 20),
-                  }}
-                  pointerEvents="none"
-                >
-                  <View
-                    style={{ marginBottom: getResponsiveSpacing(8, 10, 12) }}
-                  >
-                    <Skeleton
-                      dark
-                      height={getResponsiveSize(20, 22, 24)}
-                      width={"65%"}
-                      borderRadius={0}
-                    />
-                  </View>
-                  <View
-                    style={{ marginBottom: getResponsiveSpacing(6, 8, 10) }}
-                  >
-                    <Skeleton
-                      dark
-                      height={getResponsiveSize(14, 16, 18)}
-                      width={"40%"}
-                      borderRadius={0}
-                    />
-                  </View>
-                  <Skeleton
-                    dark
-                    height={getResponsiveSize(6, 7, 8)}
-                    width={"90%"}
-                    borderRadius={0}
-                    style={{ opacity: 0.8 }}
-                  />
-                </View>
-              )}
-
-            {/* Play Overlay - Glass Effect */}
-            {isActive && !playingVideos[videoKey] && (
-              <View
-                className="absolute inset-0 justify-center items-center"
-                style={{
-                  backgroundColor: "rgba(0, 0, 0, 0.1)",
-                }}
-              >
-                {/* Show play button when video is paused */}
-                <TouchableOpacity
-                  onPress={toggleVideoPlay}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Play video"
-                  accessibilityRole="button"
-                  style={{
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 16,
-                    elevation: 8,
-                  }}
-                >
-                  <MaterialIcons
-                    name="play-arrow"
-                    size={getResponsiveSize(50, 60, 70)}
-                    color="rgba(255, 255, 255, 0.6)"
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Pause Overlay - Shows temporarily when user taps on playing video */}
-            {isActive && showPauseOverlay && playingVideos[videoKey] && (
-              <View
-                className="absolute inset-0 justify-center items-center"
-                style={{
-                  backgroundColor: "rgba(0, 0, 0, 0.1)",
-                  zIndex: 30,
-                }}
-                pointerEvents="none"
-              >
-                <View
-                  style={{
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 16,
-                    elevation: 8,
-                  }}
-                >
-                  <MaterialIcons
-                    name="pause"
-                    size={getResponsiveSize(50, 60, 70)}
-                    color="rgba(255, 255, 255, 0.6)"
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Show UI elements for active video */}
-            {isActive && (
-              <>
-                {/* Action Buttons - Vertical right side like TikTok */}
-                <ReelsActionButtons
-                  videoKey={videoKey}
-                  modalKey={modalKey}
-                  screenHeight={screenHeight}
-                  activeIsLiked={activeIsLiked}
-                  activeLikesCount={activeLikesCount}
-                  canUseBackendLikes={canUseBackendLikes}
-                  videoStats={videoStats}
-                  video={video}
-                  enrichedVideoData={enrichedVideoData}
-                  libraryStore={libraryStore}
-                  onLike={handleLike}
-                  onComment={handleComment}
-                  onSave={handleSave}
-                  onShare={handleShare}
-                  getResponsiveSpacing={getResponsiveSpacing}
-                  getResponsiveSize={getResponsiveSize}
-                  getResponsiveFontSize={getResponsiveFontSize}
-                  getTouchTargetSize={getTouchTargetSize}
-                  triggerHapticFeedback={triggerHapticFeedback}
-                />
-
-                {/* Speaker Info Section - Enhanced user experience */}
-                <ReelsSpeakerInfo
-                  enrichedVideoData={enrichedVideoData}
-                  source={source}
-                  menuVisible={menuVisible}
-                  onMenuToggle={() => setMenuVisible((v) => !v)}
-                  getSpeakerName={getSpeakerName}
-                  getResponsiveSpacing={getResponsiveSpacing}
-                  getResponsiveSize={getResponsiveSize}
-                  getResponsiveFontSize={getResponsiveFontSize}
-                  triggerHapticFeedback={triggerHapticFeedback}
-                />
-
-                {/* Action Menu - White background popup with ContentActionModal options */}
-                <ReelsMenu
-                  visible={menuVisible}
-                  modalKey={modalKey}
-                  currentVideo={currentVideo}
-                  isOwner={isOwner}
-                  libraryStore={libraryStore}
-                  checkIfDownloaded={checkIfDownloaded}
-                  onClose={() => setMenuVisible(false)}
-                  onViewDetails={handleViewDetails}
-                  onSave={handleSave}
-                  onDelete={openDeleteModal}
-                  onReport={() => setShowReportModal(true)}
-                  onDownload={handleDownloadAction}
-                />
-
-                {/* Draggable Progress Bar with Timer - Enhanced user experience */}
-                <ReelsProgressBar
-                  videoKey={videoKey}
-                  videoDuration={videoDuration}
-                  videoPosition={videoPosition}
-                  isDragging={isDragging}
-                  mutedVideos={mutedVideos}
-                  progressBarWidth={reelsProgressBarWidth}
-                  onLayout={setReelsProgressBarWidth}
-                  onSeek={seekToPosition}
-                  onToggleMute={toggleMute}
-                  onDragStart={() => {
-                    setIsDragging(true);
-                    globalVideoStore.pauseVideo(videoKey);
-                  }}
-                  onDragEnd={() => {
-                    setIsDragging(false);
-                    setTimeout(() => {
-                      globalVideoStore.playVideoGlobally(videoKey);
-                    }, 100);
-                  }}
-                  getResponsiveSpacing={getResponsiveSpacing}
-                  formatTime={formatTime}
-                />
-              </>
-            )}
-          </View>
-        </TouchableWithoutFeedback>
-      </View>
+      <ReelsVideoItem
+        videoData={videoData}
+        index={index}
+        isActive={isActive}
+        passedVideoKey={passedVideoKey}
+        videoRefs={videoRefs}
+        screenHeight={screenHeight}
+        screenWidth={screenWidth}
+        isIOS={isIOS}
+        currentIndex_state={currentIndex_state}
+        playingVideos={playingVideos}
+        mutedVideos={mutedVideos}
+        videoDuration={videoDuration}
+        videoPosition={videoPosition}
+        isDragging={isDragging}
+        reelsProgressBarWidth={reelsProgressBarWidth}
+        showPauseOverlay={showPauseOverlay}
+        userHasManuallyPaused={userHasManuallyPaused}
+        modalKey={modalKey}
+        currentVideo={currentVideo}
+        video={video}
+        enrichedVideoData={enriched}
+        activeIsLiked={activeIsLiked}
+        activeLikesCount={activeLikesCount}
+        canUseBackendLikes={canUseBackendLikes}
+        videoStats={videoStats}
+        libraryStore={libraryStore}
+        getSpeakerName={getSpeakerName}
+        getResponsiveSize={getResponsiveSize}
+        getResponsiveSpacing={getResponsiveSpacing}
+        getResponsiveFontSize={getResponsiveFontSize}
+        getTouchTargetSize={getTouchTargetSize}
+        onToggleVideoPlay={toggleVideoPlay}
+        onSeek={seekToPosition}
+        onToggleMute={toggleMute}
+        onLike={handlers.handleLike}
+        onComment={handlers.handleComment}
+        onSave={handlers.handleSave}
+        onShare={handlers.handleShare}
+        onViewDetails={handlers.handleViewDetails}
+        onDownload={handlers.handleDownloadAction}
+        onDelete={handlers.openDeleteModal}
+        onReport={handlers.handleReport}
+        onMenuToggle={() => setMenuVisible((v) => !v)}
+        onMenuClose={() => setMenuVisible(false)}
+        setIsDragging={setIsDragging}
+        setReelsProgressBarWidth={setReelsProgressBarWidth}
+        setVideoDuration={setVideoDuration}
+        setVideoPosition={setVideoPosition}
+        triggerHapticFeedback={triggerHapticFeedback}
+        formatTime={formatTime}
+        globalVideoStore={globalVideoStore}
+        mediaStore={mediaStore}
+        source={source}
+        menuVisible={menuVisible}
+        isOwner={isOwner}
+        checkIfDownloaded={checkIfDownloaded}
+        currentUser={currentUser}
+        getAvatarUrl={getAvatarUrl}
+      />
     );
   };
 
-  // Create array of all videos for smooth scrolling
-  const allVideos =
-    parsedVideoList.length > 0 ? parsedVideoList : [currentVideo];
-  const scrollViewRef = useRef<ScrollView>(null);
+  const allVideos = parsedVideoList.length > 0 ? parsedVideoList : [currentVideo];
 
-  // Handle scroll-based navigation (update active index immediately while scrolling)
-  const handleScroll = (event: any) => {
-    try {
-      // Safety check for event structure
-      if (!event?.nativeEvent?.contentOffset) {
-        return;
-      }
+  const {
+    handleScroll,
+    handleScrollEnd,
+    handleScrollBeginDrag,
+    setScrollStartIndex,
+  } = useReelsScroll({
+    screenHeight,
+    scrollViewRef,
+    getSpeakerName,
+    setCurrentIndex: setCurrentIndex_state,
+    currentIndex: currentIndex_state,
+    allVideos,
+    userHasManuallyPaused,
+    mediaStore,
+    globalVideoStore,
+  });
 
-      const { contentOffset } = event.nativeEvent;
-      const scrollY = contentOffset.y;
-      
-      // Validate scrollY is a number
-      if (typeof scrollY !== 'number' || isNaN(scrollY)) {
-        return;
-      }
-
-      // Validate allVideos array
-      if (!Array.isArray(allVideos) || allVideos.length === 0) {
-        return;
-      }
-
-      const index = Math.round(scrollY / screenHeight);
-
-      // Ensure index is within bounds
-      const clampedIndex = Math.max(0, Math.min(index, allVideos.length - 1));
-
-      if (
-        clampedIndex !== lastIndexRef.current &&
-        clampedIndex >= 0 &&
-        clampedIndex < allVideos.length
-      ) {
-        lastIndexRef.current = clampedIndex;
-        setCurrentIndex_state(clampedIndex);
-
-        // Compute the reel key for the new active index
-        try {
-          const activeVideo = allVideos[clampedIndex];
-          const activeKey = activeVideo
-            ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
-            : `reel-index-${clampedIndex}`;
-
-          // 🚀 Update last accessed time for active video
-          try {
-            mediaStore.updateLastAccessed(activeKey);
-          } catch (error) {
-            console.warn("⚠️ Error updating last accessed:", error);
-          }
-
-          // Pause all other videos and play the active one using the global play (only if user hasn't manually paused)
-          if (!userHasManuallyPaused) {
-            try {
-              globalVideoStore.playVideoGlobally(activeKey);
-            } catch (error) {
-              console.warn("⚠️ Error playing video globally:", error);
-            }
-          }
-        } catch (error) {
-          console.warn("⚠️ Error processing active video in handleScroll:", error);
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error in handleScroll:", error);
-      // Don't throw - allow scrolling to continue
-    }
-  };
-
-  // Initialize scroll position when component mounts and ensure video plays
   useEffect(() => {
     if (scrollViewRef.current && parsedVideoList.length > 0) {
       const initialOffset = currentIndex_state * screenHeight;
-      
-      // Initialize scroll start index
-      scrollStartIndexRef.current = currentIndex_state;
-      
-      // ✅ FIX: Pause all videos first to prevent overlap/confusion
+      setScrollStartIndex(currentIndex_state);
       globalVideoStore.pauseAllVideos();
-      
-      // ✅ Scroll immediately
       setTimeout(() => {
-        scrollViewRef.current?.scrollTo({
-          y: initialOffset,
-          animated: false,
-        });
+        scrollViewRef.current?.scrollTo({ y: initialOffset, animated: false });
       }, 50);
-
-      // ✅ Play video after scroll is complete and refs are registered
       setTimeout(() => {
         const initialVideo = allVideos[currentIndex_state];
-        if (!initialVideo) {
-          console.warn("⚠️ No initial video found at index:", currentIndex_state);
-          return;
-        }
-        
-        const initialKey = initialVideo
-          ? `reel-${initialVideo.title}-${getSpeakerName(initialVideo, "unknown")}`
-          : `reel-index-${currentIndex_state}`;
-        
-        // ✅ FIX: Clear any stale refs before registering new one
+        if (!initialVideo) return;
+        const speakerName = getSpeakerName(initialVideo, "Creator");
+        const initialKey = `reel-${initialVideo._id || initialVideo.id || currentIndex_state}-${initialVideo.title}-${speakerName}`;
         Object.keys(videoRefs.current).forEach((key) => {
           if (key !== initialKey && videoRefs.current[key]) {
             try {
               videoRefs.current[key].pauseAsync().catch(() => {});
               globalVideoStore.unregisterVideoPlayer(key);
-            } catch (e) {
-              // Ignore cleanup errors
-            }
+            } catch {}
           }
         });
-        
-        // Register video ref if available
         const videoRef = videoRefs.current[initialKey];
         if (videoRef) {
           globalVideoStore.registerVideoPlayer(initialKey, {
@@ -1608,154 +437,51 @@ export default function Reelsviewscroll() {
                 console.warn(`Failed to pause ${initialKey}:`, err);
               }
             },
-            showOverlay: () => {
-              globalVideoStore.setOverlayVisible(initialKey, true);
-            },
+            showOverlay: () => globalVideoStore.setOverlayVisible(initialKey, true),
             key: initialKey,
           });
         }
-        
-        // ✅ Ensure video plays immediately when navigating from AllContentTikTok
         globalVideoStore.playVideoGlobally(initialKey);
-        
-        // ✅ Also play directly via ref for immediate playback
-        if (videoRef) {
-          videoRef.playAsync().catch(() => {
-            // Ignore - state will handle it
-          });
-        }
-      }, 200); // Slightly longer delay to ensure everything is ready
-      } else {
+        videoRef?.playAsync().catch(() => {});
+      }, 200);
+    } else {
       console.warn("⚠️ Cannot initialize scroll - no videos or scrollViewRef");
     }
-  }, [parsedVideoList.length, currentIndex_state]);
-
-  // Handle scroll end to ensure proper video playback and limit to one video per scroll
-  const handleScrollEnd = (event?: any) => {
-    try {
-      if (!scrollViewRef.current) return;
-      
-      // Get the final scroll position
-      let finalScrollY = currentIndex_state * screenHeight;
-      if (event?.nativeEvent?.contentOffset?.y !== undefined) {
-        const scrollY = event.nativeEvent.contentOffset.y;
-        if (typeof scrollY === 'number' && !isNaN(scrollY)) {
-          finalScrollY = scrollY;
-        }
-      }
-      
-      // Calculate the index from scroll position
-      const finalIndex = Math.round(finalScrollY / screenHeight);
-      const startIndex = scrollStartIndexRef.current;
-      
-      // Validate array bounds
-      if (!Array.isArray(allVideos) || allVideos.length === 0) {
-        console.warn("⚠️ No videos available for scroll end handling");
-        return;
-      }
-      
-      // Constrain to only move one video at a time from the starting position
-      let targetIndex = finalIndex;
-      const maxAllowedIndex = Math.min(startIndex + 1, allVideos.length - 1);
-      const minAllowedIndex = Math.max(startIndex - 1, 0);
-      
-      // Clamp to only allow adjacent videos (one video away)
-      if (targetIndex > maxAllowedIndex) {
-        targetIndex = maxAllowedIndex;
-      } else if (targetIndex < minAllowedIndex) {
-        targetIndex = minAllowedIndex;
-      }
-      
-      // Ensure index is within bounds
-      targetIndex = Math.max(0, Math.min(targetIndex, allVideos.length - 1));
-      
-      // Only snap if we need to constrain the scroll (moved more than one video)
-      if (targetIndex !== finalIndex && scrollViewRef.current) {
-        try {
-          const targetY = targetIndex * screenHeight;
-          scrollViewRef.current.scrollTo({
-            y: targetY,
-            animated: true,
-          });
-        } catch (scrollError) {
-          console.warn("⚠️ Error scrolling to target position:", scrollError);
-        }
-      }
-      
-      // Update state if different
-      if (targetIndex !== currentIndex_state) {
-        setCurrentIndex_state(targetIndex);
-        lastIndexRef.current = targetIndex;
-      }
-      
-      // Update the scroll start index to the current position for next scroll
-      scrollStartIndexRef.current = targetIndex;
-      
-      // Only auto-play if user hasn't manually paused
-      if (!userHasManuallyPaused && allVideos[targetIndex]) {
-        try {
-          const activeVideo = allVideos[targetIndex];
-          const activeKey = activeVideo
-            ? `reel-${activeVideo.title}-${activeVideo.speaker || "unknown"}`
-            : `reel-index-${targetIndex}`;
-          globalVideoStore.playVideoGlobally(activeKey);
-        } catch (playError) {
-          console.warn("⚠️ Error playing video on scroll end:", playError);
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error in handleScrollEnd:", error);
-      // Don't throw - allow app to continue functioning
-    }
-  };
-  
-  // Handle scroll begin drag to track starting position
-  const handleScrollBeginDrag = () => {
-    scrollStartIndexRef.current = currentIndex_state;
-  };
+  }, [parsedVideoList.length, currentIndex_state, setScrollStartIndex]);
 
   return (
     <ErrorBoundary>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent={true}
-      />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScrollView
         ref={scrollViewRef}
         style={{ flex: 1 }}
-        pagingEnabled={true}
+        pagingEnabled
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         onScrollBeginDrag={handleScrollBeginDrag}
-        onScrollEndDrag={(event) => handleScrollEnd(event)}
-        onMomentumScrollEnd={(event) => handleScrollEnd(event)}
+        onScrollEndDrag={(e) => handleScrollEnd(e)}
+        onMomentumScrollEnd={(e) => handleScrollEnd(e)}
         scrollEventThrottle={16}
         snapToInterval={screenHeight}
         snapToAlignment="start"
         decelerationRate="normal"
         bounces={isIOS}
-        scrollEnabled={true}
+        scrollEnabled
         nestedScrollEnabled={false}
-        contentContainerStyle={{
-          height: screenHeight * allVideos.length,
-        }}
+        contentContainerStyle={{ height: screenHeight * allVideos.length }}
       >
         {allVideos.map((videoData: any, index: number) => {
           try {
             const isActive = index === currentIndex_state;
-            // ✅ FIX: Use consistent key generation with getSpeakerName helper
             const speakerName = getSpeakerName(videoData, "unknown");
-            const videoKey = `reel-${videoData.title}-${speakerName}`;
-
+            const videoKey = `reel-${videoData._id || videoData.id || index}-${videoData.title}-${speakerName}`;
             return (
               <View
                 key={videoKey}
                 style={{
                   height: screenHeight,
                   width: "100%",
-                  backgroundColor: "#000000", // Ensure black background
-                  // ✅ FIX: Ensure proper z-index ordering to prevent overlap
+                  backgroundColor: "#000000",
                   zIndex: isActive ? 10 : 0,
                 }}
               >
@@ -1774,70 +500,34 @@ export default function Reelsviewscroll() {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16 }}>
-                  Failed to load video
-                </Text>
+                <Text style={{ color: "#fff", fontSize: 16 }}>Failed to load video</Text>
               </View>
             );
           }
         })}
       </ScrollView>
 
-      {/* Clean Header - Back, Title, Close */}
-      <ReelsHeader
-        onBackPress={handleBackNavigation}
+      <ReelsModals
+        currentVideo={currentVideo}
+        title={title}
+        isIOS={isIOS}
+        activeTab={activeTab}
+        showDeleteModal={showDeleteModal}
+        showReportModal={showReportModal}
+        showDetailsModal={showDetailsModal}
+        onBackPress={handlers.handleBackNavigation}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          triggerHapticFeedback();
+          navigateMainTab(tab as any);
+        }}
+        onCloseDelete={closeDeleteModal}
+        onDeleteSuccess={handlers.handleDeleteConfirm}
+        onCloseReport={() => setShowReportModal(false)}
+        onCloseDetails={() => setShowDetailsModal(false)}
         getResponsiveSpacing={getResponsiveSpacing}
         getResponsiveSize={getResponsiveSize}
         getTouchTargetSize={getTouchTargetSize}
-      />
-
-      {/* Bottom Nav - Enhanced for better platform compatibility */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-          backgroundColor: "transparent",
-          pointerEvents: "box-none",
-          paddingBottom: isIOS ? 20 : 0,
-        }}
-      >
-        <BottomNavOverlay
-          selectedTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab);
-            triggerHapticFeedback();
-            navigateMainTab(tab as any);
-          }}
-        />
-      </View>
-
-      {/* Comment Modal removed; global instance in app/_layout handles it */}
-      
-      {/* Delete Confirmation Modal */}
-      <DeleteMediaConfirmation
-        visible={showDeleteModal}
-        mediaId={currentVideo._id || ""}
-        mediaTitle={currentVideo.title || "this video"}
-        onClose={closeDeleteModal}
-        onSuccess={handleDeleteConfirm}
-      />
-
-      {/* Report Modal */}
-      <ReportMediaModal
-        visible={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        mediaId={currentVideo._id || ""}
-        mediaTitle={currentVideo.title || title}
-      />
-
-      {/* Media Details Modal */}
-      <MediaDetailsModal
-        visible={showDetailsModal}
-        onClose={() => setShowDetailsModal(false)}
-        mediaItem={currentVideo}
       />
     </ErrorBoundary>
   );

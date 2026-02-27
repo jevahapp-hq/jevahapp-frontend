@@ -3,6 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { API_BASE_URL } from "./api";
 
+// Perf: avoid console overhead in production (73+ logs per session)
+const devLog = __DEV__ ? (...a: any[]) => console.log(...a) : () => {};
+const devWarn = __DEV__ ? (...a: any[]) => console.warn(...a) : () => {};
+
+const RECORD_VIEW_MIN_INTERVAL_MS = 2500;
+const recordViewThrottle: { lastTime?: number; backoffUntil?: number } = {};
+
 // Types for content interactions
 export interface ContentInteraction {
   contentId: string;
@@ -67,7 +74,7 @@ class ContentInteractionService {
           const { default: SecureStore } = await import("expo-secure-store");
           token = await SecureStore.getItemAsync("jwt"); // From OAuth flow
         } catch (secureStoreError) {
-          console.log("SecureStore not available or no JWT token");
+          devLog("SecureStore not available or no JWT token");
         }
       }
 
@@ -79,7 +86,7 @@ class ContentInteractionService {
         };
       }
 
-      console.warn("⚠️ No token found in AsyncStorage or SecureStore");
+      devWarn("⚠️ No token found in AsyncStorage or SecureStore");
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
@@ -109,22 +116,24 @@ class ContentInteractionService {
   }
 
   // Map frontend content types to backend expected types
+  // Per Like State Persistence Integration Guide (backend supports: media, devotional, artist, merch, ebook, podcast)
   private mapContentTypeToBackend(contentType: string): string {
-    // ⭐ SIMPLE RULE: Use "media" for EVERYTHING except artist and merch
-    // Backend only accepts: "media", "artist", "merch", "ebook", "podcast"
-    // But guide says: Use "media" for videos, audio, ebooks, podcasts - EVERYTHING
-    
-    const normalized = contentType.toLowerCase();
-    
-    // Only artist and merch have special endpoints
-    if (normalized === "artist") {
-      return "artist";
-    }
-    if (normalized === "merch") {
-      return "merch";
-    }
-    
-    // EVERYTHING ELSE uses "media" (videos, audio, ebooks, podcasts, devotionals, sermons, etc.)
+    const normalized = (contentType || "").toLowerCase();
+
+    if (normalized === "artist") return "artist";
+    if (normalized === "merch") return "merch";
+    if (normalized === "devotional" || normalized === "sermon" || normalized === "sermons")
+      return "devotional";
+    if (
+      normalized === "ebook" ||
+      normalized === "e-books" ||
+      normalized === "ebooks" ||
+      normalized === "books"
+    )
+      return "ebook";
+    if (normalized === "podcast" || normalized === "podcasts") return "podcast";
+
+    // video, videos, audio, music, live, image, teachings, etc. → media
     return "media";
   }
 
@@ -143,7 +152,7 @@ class ContentInteractionService {
       const headers = await this.getAuthHeaders();
 
       const requestUrl = `${this.baseURL}/api/content/${backendContentType}/${contentId}/like`;
-      console.log(
+      devLog(
         "📡 TOGGLE LIKE: Making request",
         JSON.stringify(
           {
@@ -168,7 +177,7 @@ class ContentInteractionService {
         },
       });
 
-      console.log(
+      devLog(
         "📡 TOGGLE LIKE: Response status:",
         response.status,
         response.statusText
@@ -204,7 +213,7 @@ class ContentInteractionService {
         
         if (response.status === 404) {
           // Content not found
-          console.warn(
+          devWarn(
             `⚠️ TOGGLE LIKE: Content not found (404) for ${backendContentType}/${contentId}`
           );
           throw new Error("Content not found");
@@ -227,7 +236,7 @@ class ContentInteractionService {
       }
 
       const result = await response.json();
-      console.log(`✅ Like toggled successfully for ${contentId}:`, result);
+      devLog(`✅ Like toggled successfully for ${contentId}:`, result);
 
       // FIXED: Parse response strictly per backend format
       const liked = result.data?.liked ?? false;
@@ -245,7 +254,7 @@ class ContentInteractionService {
         success: true,
         rawResponse: result, // Include full response for debugging
       };
-      console.log(
+      devLog(
         "📊 USER_INTERACTION:",
         JSON.stringify(analyticsData, null, 2)
       );
@@ -269,7 +278,7 @@ class ContentInteractionService {
         responseTime: Date.now(),
         success: false,
       };
-      console.log(
+      devLog(
         "📊 USER_INTERACTION_ERROR:",
         JSON.stringify(errorAnalyticsData, null, 2)
       );
@@ -284,29 +293,34 @@ class ContentInteractionService {
     contentId: string,
     contentType: string
   ): Promise<{ saved: boolean; totalSaves: number }> {
-    console.log("🔍 TOGGLE SAVE: Starting toggle save for:", {
+    devLog("🔍 TOGGLE SAVE: Starting toggle save for:", {
       contentId,
       contentType,
     });
 
     try {
       const headers = await this.getAuthHeaders();
+      const backendContentType = this.mapContentTypeToBackend(contentType);
 
-      console.log(`🔄 Attempting to toggle bookmark for ${contentId}`);
-      console.log(
+      devLog(`🔄 Attempting to toggle bookmark for ${contentId} (contentType: ${backendContentType})`);
+      devLog(
         `📡 TOGGLE SAVE: Making request to: ${this.baseURL}/api/bookmark/${contentId}/toggle`
       );
 
-      // Use the correct backend endpoint from integration guide
+      // Backend may require contentType in body to resolve content (e.g. sermons in media collection)
       const response = await fetch(
         `${this.baseURL}/api/bookmark/${contentId}/toggle`,
         {
           method: "POST",
-          headers,
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ contentType: backendContentType }),
         }
       );
 
-      console.log(
+      devLog(
         "📡 TOGGLE SAVE: Response status:",
         response.status,
         response.statusText
@@ -321,7 +335,7 @@ class ContentInteractionService {
       }
 
       const result = await response.json();
-      console.log(
+      devLog(
         `📡 TOGGLE SAVE: API Response:`,
         JSON.stringify(result, null, 2)
       );
@@ -330,7 +344,7 @@ class ContentInteractionService {
       const isSaved = result.data?.bookmarked ?? false;
       const bookmarkCount = result.data?.bookmarkCount ?? 0;
 
-      console.log(`✅ TOGGLE SAVE: Parsed result:`, { isSaved, bookmarkCount });
+      devLog(`✅ TOGGLE SAVE: Parsed result:`, { isSaved, bookmarkCount });
 
       // Track analytics for backend consolidation
       const analyticsData = {
@@ -343,7 +357,7 @@ class ContentInteractionService {
         responseTime: Date.now(),
         success: true,
       };
-      console.log(
+      devLog(
         "📊 USER_INTERACTION:",
         JSON.stringify(analyticsData, null, 2)
       );
@@ -370,7 +384,7 @@ class ContentInteractionService {
         responseTime: Date.now(),
         success: false,
       };
-      console.log(
+      devLog(
         "📊 USER_INTERACTION_ERROR:",
         JSON.stringify(errorAnalyticsData, null, 2)
       );
@@ -387,10 +401,10 @@ class ContentInteractionService {
       const headers = await this.getAuthHeaders();
 
       // DEBUG: Log the request details
-      console.log(
+      devLog(
         `🔍 GET SAVE STATE: Making request to ${this.baseURL}/api/bookmark/${contentId}/status`
       );
-      console.log(`🔍 GET SAVE STATE: Headers:`, headers);
+      devLog(`🔍 GET SAVE STATE: Headers:`, headers);
 
       const response = await fetch(
         `${this.baseURL}/api/bookmark/${contentId}/status`,
@@ -400,7 +414,7 @@ class ContentInteractionService {
       );
 
       // DEBUG: Log response details
-      console.log(`🔍 GET SAVE STATE: Response status: ${response.status}`);
+      devLog(`🔍 GET SAVE STATE: Response status: ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -417,7 +431,7 @@ class ContentInteractionService {
       }
 
       const data = await response.json();
-      console.log(`🔍 GET SAVE STATE: Success response:`, data);
+      devLog(`🔍 GET SAVE STATE: Success response:`, data);
       // FIXED: Use correct response structure
       return {
         saved: data.data?.isBookmarked ?? false,
@@ -442,7 +456,7 @@ class ContentInteractionService {
       const isSaved = saves[contentId] || false;
       const totalSaves = Object.values(saves).filter(Boolean).length;
 
-      console.log(
+      devLog(
         `🔍 FALLBACK SAVE STATE: User ${userId}, content ${contentId}, saved: ${isSaved}, totalSaves: ${totalSaves}`
       );
 
@@ -468,13 +482,13 @@ class ContentInteractionService {
       if (isSaved) {
         // Item was saved but library store management is handled in components
         // This ensures the API and library store stay in sync
-        console.log(
+        devLog(
           `✅ Content ${contentId} saved - library sync handled by component`
         );
       } else {
         // Item was unsaved, remove from library store
         await libraryStore.removeFromLibrary(contentId);
-        console.log(`🗑️ Content ${contentId} removed from library`);
+        devLog(`🗑️ Content ${contentId} removed from library`);
       }
     } catch (error) {
       console.error("Error syncing with library store:", error);
@@ -506,37 +520,47 @@ class ContentInteractionService {
       );
 
       if (!response.ok) {
-        console.warn(
+        devWarn(
           `⚠️ batch-metadata failed (${response.status}), falling back to per-item`
         );
         return {};
       }
 
       const payload = await response.json();
-      if (!payload?.success || !Array.isArray(payload?.data)) return {};
+      const data = payload?.data;
+      if (!payload?.success || !data) return {};
+
+      // Backend contract: object keyed by contentId { "id1": {...}, "id2": {...} }
+      // Fallback: array format from older/alternate backends
+      const entries = Array.isArray(data)
+        ? data
+            .map((i: any) => [i.contentId || i.id, i] as const)
+            .filter(([id]) => id)
+        : Object.entries(data);
 
       const result: Record<string, ContentStats> = {};
-      for (const item of payload.data) {
-        const id = String(item.id || item.contentId || "");
-        if (!id) continue;
-        result[id] = {
-          contentId: id,
-          likes: Number(item.likeCount || 0),
-          saves: Number(item.bookmarkCount || 0),
-          shares: Number(item.shareCount || 0),
-          views: Number(item.viewCount || 0),
-          comments: Number(item.commentCount || 0),
+      for (const [id, item] of entries) {
+        const contentId = String(id);
+        if (!contentId || contentId === "undefined") continue;
+        const stat = item as any;
+        result[contentId] = {
+          contentId,
+          likes: Number(stat?.likes ?? stat?.likeCount ?? 0),
+          saves: Number(stat?.saves ?? stat?.bookmarkCount ?? 0),
+          shares: Number(stat?.shares ?? stat?.shareCount ?? 0),
+          views: Number(stat?.views ?? stat?.viewCount ?? 0),
+          comments: Number(stat?.comments ?? stat?.commentCount ?? 0),
           userInteractions: {
-            liked: Boolean(item.hasLiked || false),
-            saved: Boolean(item.hasBookmarked || false),
-            shared: Boolean(item.hasShared || false),
-            viewed: Boolean(item.hasViewed || false),
+            liked: Boolean(stat?.userInteractions?.liked ?? stat?.hasLiked ?? false),
+            saved: Boolean(stat?.userInteractions?.saved ?? stat?.hasBookmarked ?? false),
+            shared: Boolean(stat?.userInteractions?.shared ?? stat?.hasShared ?? false),
+            viewed: Boolean(stat?.userInteractions?.viewed ?? stat?.hasViewed ?? false),
           },
         };
       }
       return result;
     } catch (error) {
-      console.warn("⚠️ Error in getBatchMetadata, falling back:", error);
+      devWarn("⚠️ Error in getBatchMetadata, falling back:", error);
       return {};
     }
   }
@@ -549,7 +573,7 @@ class ContentInteractionService {
       const headers = await this.getAuthHeaders();
       const backendContentType = this.mapContentTypeToBackend(contentType);
 
-      console.log(
+      devLog(
         `🔍 Getting metadata for ${contentId} (${backendContentType})`
       );
 
@@ -562,7 +586,7 @@ class ContentInteractionService {
       );
 
       if (!response.ok) {
-        console.warn(
+        devWarn(
           `⚠️ Metadata endpoint failed (${response.status}), using fallback`
         );
         return this.fallbackGetStats(contentId);
@@ -570,29 +594,29 @@ class ContentInteractionService {
 
       const result = await response.json();
 
-      // Support both response formats:
-      // 1. Direct format: { success: true, data: { hasLiked, likeCount, ... } }
-      // 2. Nested format: { success: true, data: { userInteraction: { hasLiked }, stats: { likes } } }
+      // Backend contract: { data: { likes, saves, userInteractions: { liked, saved, ... } } }
+      // Fallback: legacy formats (userInteraction.hasLiked, stats.likes, etc.)
       const data = result.data || {};
+      const ui = data.userInteractions || {};
       const userInteraction = data.userInteraction || {};
       const stats = data.stats || {};
 
       return {
         contentId,
-        likes: stats.likes ?? data.likeCount ?? 0,
-        saves: stats.saves ?? data.bookmarkCount ?? 0,
-        shares: stats.shares ?? data.shareCount ?? 0,
-        views: stats.views ?? data.viewCount ?? 0,
-        comments: stats.comments ?? data.commentCount ?? 0,
+        likes: data.likes ?? stats.likes ?? data.likeCount ?? 0,
+        saves: data.saves ?? stats.saves ?? data.bookmarkCount ?? 0,
+        shares: data.shares ?? stats.shares ?? data.shareCount ?? 0,
+        views: data.views ?? stats.views ?? data.viewCount ?? 0,
+        comments: data.comments ?? stats.comments ?? data.commentCount ?? 0,
         userInteractions: {
-          liked: userInteraction.hasLiked ?? data.hasLiked ?? false,
-          saved: userInteraction.hasBookmarked ?? data.hasBookmarked ?? false,
-          shared: userInteraction.hasShared ?? data.hasShared ?? false,
-          viewed: userInteraction.hasViewed ?? data.hasViewed ?? false,
+          liked: Boolean(ui.liked ?? userInteraction.hasLiked ?? data.hasLiked ?? false),
+          saved: Boolean(ui.saved ?? userInteraction.hasBookmarked ?? data.hasBookmarked ?? false),
+          shared: Boolean(ui.shared ?? userInteraction.hasShared ?? data.hasShared ?? false),
+          viewed: Boolean(ui.viewed ?? userInteraction.hasViewed ?? data.hasViewed ?? false),
         },
       };
     } catch (error) {
-      console.warn("⚠️ Error getting content metadata, using fallback:", error);
+      devWarn("⚠️ Error getting content metadata, using fallback:", error);
       return this.fallbackGetStats(contentId);
     }
   }
@@ -611,7 +635,7 @@ class ContentInteractionService {
       }
       const headers = await this.getAuthHeaders();
 
-      console.log(`🔄 Attempting to record share for ${contentId}`);
+      devLog(`🔄 Attempting to record share for ${contentId}`);
 
       // Use the correct backend endpoint from documentation
       const response = await fetch(`${this.baseURL}/api/interactions/share`, {
@@ -629,7 +653,7 @@ class ContentInteractionService {
       }
 
       const result = await response.json();
-      console.log(`✅ Share recorded successfully for ${contentId}:`, result);
+      devLog(`✅ Share recorded successfully for ${contentId}:`, result);
 
       return { totalShares: result.data?.shareCount || 0 };
     } catch (error) {
@@ -648,6 +672,15 @@ class ContentInteractionService {
       isComplete?: boolean;
     }
   ): Promise<{ totalViews: number; hasViewed?: boolean }> {
+    const now = Date.now();
+    if (now - (recordViewThrottle.lastTime || 0) < RECORD_VIEW_MIN_INTERVAL_MS) {
+      return { totalViews: 0 };
+    }
+    if (recordViewThrottle.backoffUntil && now < recordViewThrottle.backoffUntil) {
+      return { totalViews: 0 };
+    }
+    recordViewThrottle.lastTime = now;
+
     try {
       const headers = await this.getAuthHeaders();
       const backendContentType = this.mapContentTypeToBackend(contentType);
@@ -685,6 +718,10 @@ class ContentInteractionService {
       return { totalViews: Number(viewCount) || 0, hasViewed };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const is429 = errorMessage.includes("429");
+      if (is429) {
+        recordViewThrottle.backoffUntil = Date.now() + 60000;
+      }
       
       // Handle network errors gracefully - don't spam logs
       const isNetworkError = 
@@ -704,11 +741,11 @@ class ContentInteractionService {
             setTimeout(() => {
               (global as any).__loggedNetworkErrors?.delete(errorKey);
             }, 10000); // 10 second throttle
-            console.warn("⚠️ Network error recording view (offline or server unreachable)");
+            devWarn("⚠️ Network error recording view (offline or server unreachable)");
           }
         }
-      } else if (__DEV__) {
-        // Log non-network errors normally in dev
+      } else if (__DEV__ && !is429) {
+        // Log non-network, non-429 errors in dev (429 is rate limit, expected when scrolling fast)
         console.error("Error recording view:", error);
       }
       
@@ -970,7 +1007,7 @@ class ContentInteractionService {
 
       // Gracefully fallback on 404 or any non-OK
       if (response.status === 404) {
-        console.warn(
+        devWarn(
           `⚠️ content stats 404 for ${contentId}. Falling back to local stats.`
         );
       }
@@ -1007,11 +1044,11 @@ class ContentInteractionService {
 
       // If endpoint not found or other non-OK, gracefully fall back to per-id fetches
       if (response.status === 404) {
-        console.warn(
+        devWarn(
           "⚠️ batch-stats endpoint not found (404). Falling back to individual stats requests."
         );
       } else {
-        console.warn(
+        devWarn(
           `⚠️ batch-stats request failed with status ${response.status}. Falling back.`
         );
       }
@@ -1047,7 +1084,7 @@ class ContentInteractionService {
     totalCount: number;
     hasMore: boolean;
   }> {
-    console.log("🔍 Getting user saved content with params:", {
+    devLog("🔍 Getting user saved content with params:", {
       contentType,
       page,
       limit,
@@ -1061,9 +1098,9 @@ class ContentInteractionService {
         ...(contentType && { contentType }),
       });
 
-      console.log("📡 Using endpoint: /api/bookmark/user");
-      console.log("📡 Request headers:", headers);
-      console.log("📡 Query params:", queryParams.toString());
+      devLog("📡 Using endpoint: /api/bookmark/user");
+      devLog("📡 Request headers:", headers);
+      devLog("📡 Query params:", queryParams.toString());
 
       const response = await fetch(
         `${this.baseURL}/api/bookmark/user?${queryParams}`,
@@ -1072,7 +1109,7 @@ class ContentInteractionService {
         }
       );
 
-      console.log("📡 Response status:", response.status, response.statusText);
+      devLog("📡 Response status:", response.status, response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1080,13 +1117,13 @@ class ContentInteractionService {
 
         // Handle 500 errors gracefully - don't crash the app
         if (response.status === 500) {
-          console.warn(
+          devWarn(
             "⚠️ Backend server error (500) - returning empty saved content"
           );
-          console.warn("⚠️ This usually means:");
-          console.warn("   - Database connection issues");
-          console.warn("   - User authentication problems");
-          console.warn("   - Backend code errors in bookmark retrieval");
+          devWarn("⚠️ This usually means:");
+          devWarn("   - Database connection issues");
+          devWarn("   - User authentication problems");
+          devWarn("   - Backend code errors in bookmark retrieval");
           return { content: [], totalCount: 0, hasMore: false };
         }
 
@@ -1096,7 +1133,7 @@ class ContentInteractionService {
       }
 
       const payload = await response.json();
-      console.log("📡 API Response:", JSON.stringify(payload, null, 2));
+      devLog("📡 API Response:", JSON.stringify(payload, null, 2));
 
       const items: any[] =
         payload?.data?.media || payload?.data || payload?.media || [];
@@ -1106,7 +1143,7 @@ class ContentInteractionService {
         payload?.data?.pagination?.totalPages ||
         Math.ceil(total / Math.max(limit, 1));
 
-      console.log("✅ Parsed saved content:", {
+      devLog("✅ Parsed saved content:", {
         itemCount: items.length,
         total,
         totalPages,
@@ -1121,7 +1158,7 @@ class ContentInteractionService {
       console.error("❌ Error getting user saved content:", error);
 
       // Don't crash the app - return empty result
-      console.warn("⚠️ Returning empty saved content to prevent app crash");
+      devWarn("⚠️ Returning empty saved content to prevent app crash");
       return { content: [], totalCount: 0, hasMore: false };
     }
   }

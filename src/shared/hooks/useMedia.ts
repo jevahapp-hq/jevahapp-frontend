@@ -14,81 +14,89 @@ import {
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
 import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 
+/** Shared fetcher for prefetch and useMedia - show content as fast as possible */
+export async function fetchAllContentPublic(contentType: string = "ALL") {
+  const response = await mediaApi.getAllContentPublic({
+    page: 1,
+    limit: 50,
+    contentType: contentType !== "ALL" ? contentType : undefined,
+  });
+
+  if (!response.success) throw new Error(response.error || "Failed to fetch content");
+  if (!response.media || response.media.length === 0) throw new Error("API returned empty media array");
+
+  const enrichedMedia = UserProfileCache.enrichContentArray(response.media);
+  const transformedMedia = enrichedMedia
+    .map(transformApiResponseToMediaItem)
+    .filter((item): item is MediaItem => item !== null);
+
+  const result = {
+    media: transformedMedia,
+    total: response.total || response.pagination?.total || 0,
+  };
+
+  if (contentType === "ALL") {
+    useContentCacheStore.getState().set("ALL:first", {
+      items: result.media,
+      page: 1,
+      limit: 50,
+      total: result.total,
+      fetchedAt: Date.now(),
+    });
+  }
+
+  return result;
+}
+
+/** Fetcher for authenticated all-content (includes user's uploads) */
+async function fetchAllContentWithAuth(contentType: string = "ALL") {
+  const response = await mediaApi.getAllContentWithAuth({
+    page: 1,
+    limit: 50,
+    contentType: contentType !== "ALL" ? contentType : undefined,
+  });
+
+  if (!response.success) throw new Error(response.error || "Failed to fetch content");
+  const mediaArr = response.media || [];
+  const enrichedMedia = mediaArr.length > 0
+    ? await UserProfileCache.enrichContentArrayBatch(mediaArr)
+    : mediaArr;
+  const transformedMedia = enrichedMedia
+    .map(transformApiResponseToMediaItem)
+    .filter((item): item is MediaItem => item !== null);
+
+  return {
+    media: transformedMedia,
+    total: response.total || response.pagination?.total || 0,
+  };
+}
+
 export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const {
     immediate = true,
     contentType = "ALL",
     page = 1,
     limit = 10,
+    useAuth = false,
   } = options;
 
-  // Use React Query for all content (provides 0ms cache hits)
   const queryClient = useQueryClient();
+  const cacheEntry = useContentCacheStore((s) => s.get("ALL:first"));
+  const cachedForInitial = !useAuth && contentType === "ALL" && cacheEntry?.items?.length
+    ? { media: cacheEntry.items, total: cacheEntry.total ?? 0 }
+    : undefined;
+
   const allContentQuery = useQuery({
-    queryKey: ["all-content", contentType, 1, 50, false],
-    queryFn: async () => {
-      const response = await mediaApi.getAllContentPublic({
-        page: 1,
-        limit: 50,
-        contentType: contentType !== "ALL" ? contentType : undefined,
-      });
-
-      if (response.success) {
-        // Don't cache empty results - this indicates a parsing issue
-        if (!response.media || response.media.length === 0) {
-          console.warn("⚠️ useMedia: Received empty media array - not caching this result");
-          queryClient.invalidateQueries({ queryKey: ["all-content"] });
-          throw new Error("API returned empty media array - possible parsing issue");
-        }
-
-        // Add timeout to prevent hanging (10 second timeout)
-        const enrichmentPromise = UserProfileCache.enrichContentArrayBatch(
-          response.media || []
-        );
-        
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Enrichment timeout after 10 seconds")), 10000);
-        });
-        
-        let enrichedMedia;
-        try {
-          enrichedMedia = await Promise.race([enrichmentPromise, timeoutPromise]);
-        } catch (enrichError) {
-          console.error("❌ useMedia: Enrichment failed, using original data", {
-            error: enrichError instanceof Error ? enrichError.message : String(enrichError),
-          });
-          // Fallback to original data if enrichment fails or times out
-          enrichedMedia = response.media || [];
-        }
-        
-        const transformedMedia = enrichedMedia
-          .map(transformApiResponseToMediaItem)
-          .filter((item): item is MediaItem => item !== null);
-
-        // Also update Zustand cache for backward compatibility
-        useContentCacheStore.getState().set("ALL:first", {
-          items: transformedMedia,
-          page: 1,
-          limit: 50,
-          total: response.total || response.pagination?.total || 0,
-          fetchedAt: Date.now(),
-        });
-
-        return {
-          media: transformedMedia,
-          total: response.total || response.pagination?.total || 0,
-        };
-      }
-
-      throw new Error(response.error || "Failed to fetch content");
-    },
+    queryKey: ["all-content", contentType, 1, 50, useAuth],
+    queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
     enabled: immediate,
-    staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
-    gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
+    initialData: cachedForInitial,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     retry: 1,
-    refetchOnMount: false, // ✅ Use cache if available - instant load when switching tabs
-    refetchOnWindowFocus: false, // ✅ Don't refetch on focus - preserve user's current view
-    refetchOnReconnect: false, // ✅ Don't refetch on reconnect - use cached data
+    refetchOnMount: !cachedForInitial,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Use React Query for default content
@@ -102,9 +110,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       });
 
       if (response.success) {
-        const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
-          response.media || []
-        );
+        const enrichedMedia = UserProfileCache.enrichContentArray(response.media || []);
         const transformedMedia = enrichedMedia
           .map(transformApiResponseToMediaItem)
           .filter((item): item is MediaItem => item !== null);
@@ -193,9 +199,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           }
 
           if (response.success) {
-            const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
-              response.media || []
-            );
+            const enrichedMedia = UserProfileCache.enrichContentArray(response.media || []);
             const transformedMedia = enrichedMedia
               .map(transformApiResponseToMediaItem)
               .filter((item): item is MediaItem => item !== null);
@@ -231,9 +235,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           const response = await mediaApi.getDefaultContent(filter);
 
           if (response.success) {
-            const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
-              response.media || []
-            );
+            const enrichedMedia = UserProfileCache.enrichContentArray(response.media || []);
             const transformedMedia = enrichedMedia
               .map(transformApiResponseToMediaItem)
               .filter((item): item is MediaItem => item !== null);

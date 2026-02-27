@@ -1,11 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
-    Image,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
@@ -35,6 +34,7 @@ import {
     getUserDisplayNameFromContent,
     isValidUri,
 } from "../../../shared/utils";
+import { SafeImage } from "../../../../app/components/SafeImage";
 
 const ORANGE = "#FF8A00";
 
@@ -63,10 +63,11 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     const [errored, setErrored] = useState(false);
     const initial = (name || "?").trim().charAt(0).toUpperCase();
     return !errored ? (
-      <Image
-        source={imageSource}
+      <SafeImage
+        uri={(imageSource as any)?.uri}
         style={{ width: 30, height: 30, borderRadius: 999 }}
-        resizeMode="cover"
+        size="small"
+        showFallback={false}
         onError={() => setErrored(true)}
       />
     ) : (
@@ -441,16 +442,13 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     >
       <TouchableWithoutFeedback onPress={handleOverlayToggle}>
         <View className="w-full h-[400px] overflow-hidden relative">
-          <Image
-            source={
-              thumbnailUri
-                ? { uri: thumbnailUri }
-                : {
-                    uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Music",
-                  }
+          <SafeImage
+            uri={
+              thumbnailUri ||
+              "https://via.placeholder.com/400x400/cccccc/ffffff?text=Music"
             }
             style={{ width: "100%", height: "100%", position: "absolute" }}
-            resizeMode="cover"
+            size="large"
           />
 
           {/* Skeleton overlay during initial audio load after play */}
@@ -613,7 +611,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         mediaTitle={audio.title || "this media"}
         onClose={() => setShowDeleteModal(false)}
         onSuccess={handleDeleteConfirm}
-        isAdmin={userIsAdmin}
+        isAdmin={false}
       />
 
       {/* Report Modal */}

@@ -1,12 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  Image,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { UI_CONFIG } from "../../constants";
 import { MediaCardProps } from "../../types";
 import {
@@ -15,6 +9,7 @@ import {
   getUserDisplayNameFromContent,
 } from "../../utils";
 import { InteractionButtons } from "../InteractionButtons";
+import { SafeImage } from "../../../app/components/SafeImage";
 
 export const MediaCard: React.FC<MediaCardProps> = ({
   item,
@@ -124,20 +119,17 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         <TouchableWithoutFeedback onPress={handlePress}>
           <View className="relative" style={{ height: cardHeight }}>
             {/* Background Image/Thumbnail */}
-            <Image
-              source={
-                thumbnailUri
-                  ? { uri: thumbnailUri }
-                  : {
-                      uri: "https://via.placeholder.com/300x200/cccccc/ffffff?text=Media",
-                    }
+            <SafeImage
+              uri={
+                thumbnailUri ||
+                "https://via.placeholder.com/300x200/cccccc/ffffff?text=Media"
               }
               style={{
                 width: "100%",
                 height: "100%",
                 position: "absolute",
               }}
-              resizeMode="cover"
+              size={isLargeSize ? "large" : "medium"}
             />
 
             {/* Content Type Icon - Top Left */}
@@ -191,11 +183,12 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         <View className="p-3">
           {/* User Info */}
           <View className="flex-row items-center mb-2">
-            <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center">
-              <Image
-                source={getUserAvatarFromContent(item)}
+            <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center overflow-hidden">
+              <SafeImage
+                uri={(getUserAvatarFromContent(item) as any)?.uri}
                 style={{ width: 24, height: 24, borderRadius: 12 }}
-                resizeMode="cover"
+                size="small"
+                showFallback={false}
               />
             </View>
             <View className="ml-2 flex-1">
@@ -240,19 +233,16 @@ export const MediaCard: React.FC<MediaCardProps> = ({
     >
       {/* Thumbnail */}
       <View className="w-16 h-16 rounded-lg overflow-hidden bg-gray-200">
-        <Image
-          source={
-            thumbnailUri
-              ? { uri: thumbnailUri }
-              : {
-                  uri: "https://via.placeholder.com/64x64/cccccc/ffffff?text=Media",
-                }
+        <SafeImage
+          uri={
+            thumbnailUri ||
+            "https://via.placeholder.com/64x64/cccccc/ffffff?text=Media"
           }
           style={{
             width: "100%",
             height: "100%",
           }}
-          resizeMode="cover"
+          size="small"
         />
 
         {/* Content Type Icon */}
@@ -280,11 +270,12 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         </Text>
 
         <View className="flex-row items-center">
-          <View className="w-6 h-6 rounded-full bg-gray-200 items-center justify-center">
-            <Image
-              source={getUserAvatarFromContent(item)}
+          <View className="w-6 h-6 rounded-full bg-gray-200 items-center justify-center overflow-hidden">
+            <SafeImage
+              uri={(getUserAvatarFromContent(item) as any)?.uri}
               style={{ width: 16, height: 16, borderRadius: 8 }}
-              resizeMode="cover"
+              size="small"
+              showFallback={false}
             />
           </View>
           <Text className="text-xs text-gray-600 ml-2">
@@ -328,4 +319,4 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   );
 };
 
-export default MediaCard;
+export default React.memo(MediaCard);

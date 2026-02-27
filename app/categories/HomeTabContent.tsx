@@ -9,6 +9,7 @@ import {
   getResponsiveTextStyle,
 } from "../../utils/responsive";
 import Header from "../components/Header";
+import { useAuth } from "../hooks/useAuth";
 import { useCurrentPlayingAudioStore } from "../store/useCurrentPlayingAudioStore";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
@@ -92,6 +93,7 @@ const mapContentTypeToCategory = (contentType: string): string => {
 export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
   
   // Handle defaultCategory as string or array (expo-router can return arrays)
   const defaultCategoryValue = Array.isArray(defaultCategory)
@@ -254,7 +256,10 @@ export default function HomeTabContent() {
     }
 
     return (
-      <AllContentTikTok contentType={mapCategoryToContentType(selectedCategory)} />
+      <AllContentTikTok
+        contentType={mapCategoryToContentType(selectedCategory)}
+        useAuthFeed={!!user}
+      />
     );
 
    
