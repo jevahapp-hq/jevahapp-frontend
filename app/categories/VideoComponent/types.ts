@@ -6,6 +6,7 @@
 import { ImageSourcePropType } from "react-native";
 
 export interface VideoCardData {
+  _id?: string;
   fileUrl: string;
   title: string;
   speaker: string;
@@ -18,6 +19,10 @@ export interface VideoCardData {
   sheared: number;
   comment: number;
   imageUrl?: any;
+  thumbnailUrl?: string;
+  contentType?: string;
+  moderationStatus?: string;
+  duration?: number; // Duration in seconds from backend
   onPress?: () => void;
   createdAt?: string;
 }

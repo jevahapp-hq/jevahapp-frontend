@@ -1054,6 +1054,8 @@ export default function UploadScreen() {
         // Visual cover fields
         thumbnailUrl: uploaded.thumbnailUrl || uploaded.imageUrl || undefined,
         imageUrl: uploaded.thumbnailUrl || uploaded.imageUrl || "",
+        // Duration from backend (seconds) - required for progress bar / time display
+        duration: uploaded.duration,
         viewCount: 0,
         listenCount: 0,
         readCount: 0,

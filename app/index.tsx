@@ -3,19 +3,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    Image,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import "../global.css";
-import { mediaApi } from "../src/core/api/MediaApi";
 import AnimatedLogoIntro from "./components/AnimatedLogoIntro";
 import { useFastLogin } from "./hooks/useFastLogin";
-import { useContentCacheStore } from "./store/useContentCacheStore";
 import { useFastPerformance } from "./utils/fastPerformance";
 
 const { width } = Dimensions.get("window");
@@ -155,11 +153,10 @@ export default function Welcome() {
       {slides.map((_, i) => (
         <View
           key={i}
-          className={`mx-1.5 ${
-            i === currentIndex
+          className={`mx-1.5 ${i === currentIndex
               ? "w-[20px] h-[6px] rounded-full bg-[#FEA74E]"
               : "w-[6px] h-[6px] rounded-full bg-[#EAECF0]"
-          }`}
+            }`}
         />
       ))}
     </View>
@@ -172,47 +169,10 @@ export default function Welcome() {
   const { isLoading: loginLoading, error: loginError, login } = useFastLogin();
   const { fastPress } = useFastPerformance();
 
-  // Warm-cache the first page of feeds while intro/landing shows
+  // Pre-fetching removed to prevent API rate limiting (429).
+  // Initial data is fetched when the main screen mounts.
   useEffect(() => {
-    let cancelled = false;
-    const warm = async () => {
-      try {
-        // Prefetch ALL content (public) and default first page
-        const [allResp, defResp] = await Promise.all([
-          mediaApi.getAllContentPublic(),
-          mediaApi.getDefaultContent({
-            page: 1,
-            limit: 10,
-            contentType: "ALL" as any,
-          }),
-        ]);
-
-        const store = useContentCacheStore.getState();
-        if (allResp.success && Array.isArray(allResp.media) && !cancelled) {
-          store.set("ALL:first", {
-            items: allResp.media as any,
-            page: 1,
-            limit: allResp.limit || 10,
-            total: allResp.total || 0,
-            fetchedAt: Date.now(),
-          });
-        }
-        if (defResp.success && Array.isArray(defResp.media) && !cancelled) {
-          const key = "ALL:page:1";
-          store.set(key, {
-            items: defResp.media as any,
-            page: 1,
-            limit: defResp.limit || 10,
-            total: defResp.total || 0,
-            fetchedAt: Date.now(),
-          });
-        }
-      } catch {}
-    };
-    warm();
-    return () => {
-      cancelled = true;
-    };
+    // Warmup backend silently if needed, but avoid large data fetches here
   }, [showIntro]);
 
   const handleSignIn = useCallback(

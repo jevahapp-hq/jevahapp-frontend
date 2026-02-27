@@ -87,12 +87,12 @@ class AllMediaAPI {
   async getAllMedia(
     params: {
       sort?:
-        | "views"
-        | "comments"
-        | "likes"
-        | "reads"
-        | "createdAt"
-        | "updatedAt";
+      | "views"
+      | "comments"
+      | "likes"
+      | "reads"
+      | "createdAt"
+      | "updatedAt";
       contentType?: "videos" | "music" | "books" | "live";
       category?: string;
       page?: number;
@@ -200,9 +200,8 @@ class AllMediaAPI {
         queryParams.append("contentType", params.contentType);
 
       const queryString = queryParams.toString();
-      const endpoint = `/api/media/default${
-        queryString ? `?${queryString}` : ""
-      }`;
+      const endpoint = `/api/media/default${queryString ? `?${queryString}` : ""
+        }`;
 
       const fullUrl = `${this.baseURL}${endpoint}`;
       if (__DEV__) {
@@ -255,13 +254,13 @@ class AllMediaAPI {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      
+
       // Handle network errors gracefully - don't spam logs
-      const isNetworkError = 
+      const isNetworkError =
         errorMessage.includes("Network request failed") ||
         errorMessage.includes("Failed to fetch") ||
         errorMessage.includes("NetworkError");
-      
+
       if (isNetworkError) {
         // Only log network errors in development, and throttle them
         if (__DEV__) {
@@ -277,7 +276,7 @@ class AllMediaAPI {
             console.warn("⚠️ Network error fetching default content (offline or server unreachable)");
           }
         }
-        
+
         // Return empty result gracefully - frontend will show cached data if available
         return {
           success: false,
@@ -288,12 +287,12 @@ class AllMediaAPI {
           },
         };
       }
-      
+
       // Log other errors normally
       if (__DEV__) {
         console.error("❌ Error fetching default content:", error);
       }
-      
+
       return {
         success: false,
         error: errorMessage,
@@ -403,29 +402,29 @@ class AllMediaAPI {
     error?: string;
   }> {
     const startTime = Date.now();
-    
+
     try {
       // Try a simple health check endpoint first
       const healthResponse = await fetch(`${this.baseURL}/health`, {
         method: "GET",
       });
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       if (healthResponse.ok) {
         return {
           isHealthy: true,
           responseTime,
         };
       }
-      
+
       // If health endpoint doesn't exist, try the main API
       const apiResponse = await fetch(`${this.baseURL}/api`, {
         method: "GET",
       });
-      
+
       const responseTime2 = Date.now() - startTime;
-      
+
       return {
         isHealthy: apiResponse.ok,
         responseTime: responseTime2,
@@ -433,7 +432,7 @@ class AllMediaAPI {
     } catch (error) {
       const responseTime = Date.now() - startTime;
       console.warn("Server health check failed:", error);
-      
+
       return {
         isHealthy: false,
         responseTime,
@@ -488,13 +487,13 @@ class AllMediaAPI {
   }> {
     try {
       console.log("🌐 Fetching public all content...");
-      
+
       // First check if server is reachable
       const healthCheck = await this.checkServerHealth();
       if (!healthCheck.isHealthy) {
         console.warn("⚠️ Server health check failed, proceeding with request anyway...");
       }
-      
+
       const response = await fetch(
         `${this.baseURL}/api/media/public/all-content`,
         {
@@ -516,14 +515,53 @@ class AllMediaAPI {
       const data = await response.json();
       console.log("✅ Public all content response:", data);
 
+      let mediaArr: any[] = [];
+      let pagination: any = null;
+
+      if (data?.media && Array.isArray(data.media)) {
+        mediaArr = data.media;
+        pagination = data.pagination;
+      } else if (data?.data?.media && Array.isArray(data.data.media)) {
+        mediaArr = data.data.media;
+        pagination = data.data?.pagination || data.pagination;
+      } else if (Array.isArray(data)) {
+        mediaArr = data;
+      } else if (Array.isArray(data?.data)) {
+        mediaArr = data.data;
+      }
+
+      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed
+      const recommendations = data?.recommendations?.sections || data?.data?.recommendations?.sections || [];
+      if (recommendations.length > 0) {
+        const seenIds = new Set(mediaArr.map((m: any) => m._id || m.id));
+        const supplemental: any[] = [];
+
+        recommendations.forEach((section: any) => {
+          const sectionItems = section.media || section.items || [];
+          if (Array.isArray(sectionItems)) {
+            sectionItems.forEach((item: any) => {
+              const id = item._id || item.id;
+              if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                supplemental.push(item);
+              }
+            });
+          }
+        });
+
+        if (supplemental.length > 0) {
+          mediaArr = [...mediaArr, ...supplemental];
+        }
+      }
+
       return {
         success: true,
-        media: data.media || [],
-        total: data.total || 0,
+        media: mediaArr,
+        total: pagination?.total || data?.data?.total || data?.total || mediaArr.length,
       };
     } catch (error) {
       console.error("❌ Error fetching public all content:", error);
-      
+
       // Enhanced error handling
       let errorMessage = "Unknown error";
       if (error instanceof Error) {
@@ -537,7 +575,7 @@ class AllMediaAPI {
           errorMessage = error.message;
         }
       }
-      
+
       return {
         success: false,
         error: errorMessage,
@@ -573,10 +611,49 @@ class AllMediaAPI {
       const data = await response.json();
       console.log("✅ Authenticated all content response:", data);
 
+      let mediaArr: any[] = [];
+      let pagination: any = null;
+
+      if (data?.media && Array.isArray(data.media)) {
+        mediaArr = data.media;
+        pagination = data.pagination;
+      } else if (data?.data?.media && Array.isArray(data.data.media)) {
+        mediaArr = data.data.media;
+        pagination = data.data?.pagination || data.pagination;
+      } else if (Array.isArray(data)) {
+        mediaArr = data;
+      } else if (Array.isArray(data?.data)) {
+        mediaArr = data.data;
+      }
+
+      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed
+      const recommendations = data?.recommendations?.sections || data?.data?.recommendations?.sections || [];
+      if (recommendations.length > 0) {
+        const seenIds = new Set(mediaArr.map((m: any) => m._id || m.id));
+        const supplemental: any[] = [];
+
+        recommendations.forEach((section: any) => {
+          const sectionItems = section.media || section.items || [];
+          if (Array.isArray(sectionItems)) {
+            sectionItems.forEach((item: any) => {
+              const id = item._id || item.id;
+              if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                supplemental.push(item);
+              }
+            });
+          }
+        });
+
+        if (supplemental.length > 0) {
+          mediaArr = [...mediaArr, ...supplemental];
+        }
+      }
+
       return {
         success: true,
-        media: data.media || [],
-        total: data.total || 0,
+        media: mediaArr,
+        total: pagination?.total || data?.data?.total || data?.total || mediaArr.length,
       };
     } catch (error) {
       console.error("❌ Error fetching authenticated all content:", error);

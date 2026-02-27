@@ -70,6 +70,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureResponderEvent } from "react-native";
 import { create } from "zustand";
+import { transformApiResponseToMediaItem } from "../../src/shared/utils/contentHelpers";
 import allMediaAPI from "../utils/allMediaAPI";
 import {
   getPersistedMediaList,
@@ -81,7 +82,7 @@ export interface MediaItem {
   comments: number;
   shared: number;
   onPress: ((event: GestureResponderEvent) => void) | undefined;
-  imageUrl: { uri: string };
+  imageUrl: { uri: string } | string;
   _id?: string;
   title: string;
   description: string;
@@ -116,6 +117,8 @@ export interface MediaItem {
   saved?: number;
   sheared: number;
   comment: number;
+  duration?: number; // Duration in seconds from backend — used for progress bar
+  moderationStatus?: "approved" | "under_review" | "rejected";
   playbackUrl?: string;
   hlsUrl?: string;
 }
@@ -501,8 +504,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       });
 
       if (response.success) {
+        const transformedMedia = (response.data.content || [])
+          .map(transformApiResponseToMediaItem)
+          .filter((item: any) => item !== null);
+
         set((state) => ({
-          defaultContent: [...state.defaultContent, ...response.data.content],
+          defaultContent: [...state.defaultContent, ...transformedMedia],
           defaultContentPagination: response.data.pagination,
           defaultContentLoading: false,
         }));
@@ -530,8 +537,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       }
 
       if (response.success) {
+        const transformedMedia = (response.media || [])
+          .map(transformApiResponseToMediaItem)
+          .filter((item: any) => item !== null);
+
         set({
-          allContent: response.media || [],
+          allContent: transformedMedia,
           allContentTotal: response.total || 0,
           allContentLoading: false,
           allContentError: null,

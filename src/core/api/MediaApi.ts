@@ -12,7 +12,7 @@ class MediaApi {
     order?: "asc" | "desc";
   }): Promise<MediaApiResponse> {
     const params: Record<string, any> = {};
-    
+
     // Add pagination parameters if provided
     if (options?.page !== undefined) params.page = options.page;
     if (options?.limit !== undefined) params.limit = Math.min(100, Math.max(1, options.limit)); // Max 100
@@ -24,43 +24,54 @@ class MediaApi {
 
     if (response.success) {
       const data = (response as any).data || {};
-      
-      // Handle both old format (backward compatibility) and new paginated format
+
       let mediaArr: any[] = [];
       let total = 0;
       let page = 1;
       let limit = 50;
       let pagination: any = null;
 
-      // New format: data.media with pagination object
+      // Extract media array based on possible response structures
       if (data?.media && Array.isArray(data.media)) {
         mediaArr = data.media;
         pagination = data.pagination;
-        total = pagination?.total || data.total || 0;
-        page = pagination?.page || data.page || 1;
-        limit = pagination?.limit || data.limit || 50;
-      }
-      // Old format: direct array or data.data.media
-      else if (Array.isArray(data?.data?.media)) {
+      } else if (data?.data?.media && Array.isArray(data.data.media)) {
         mediaArr = data.data.media;
-        total = data.data.total || data.total || 0;
-        page = data.data.page || data.page || 1;
-        limit = data.data.limit || data.limit || 10;
-      }
-      // Fallback: direct array
-      else if (Array.isArray(data)) {
+        pagination = data.data?.pagination || data.pagination;
+      } else if (Array.isArray(data)) {
         mediaArr = data;
-        total = data.length;
-        page = 1;
-        limit = data.length;
-      }
-      // Fallback: response.data is array
-      else if (Array.isArray((response as any).data)) {
+      } else if (Array.isArray((response as any).data)) {
         mediaArr = (response as any).data;
-        total = mediaArr.length;
-        page = 1;
-        limit = mediaArr.length;
       }
+
+      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed 
+      // to show sermons/music until backend fixes the data.media filter.
+      const recommendations = data?.recommendations?.sections || (response as any).recommendations?.sections || data?.data?.recommendations?.sections || [];
+      if (recommendations.length > 0) {
+        const seenIds = new Set(mediaArr.map(m => m._id || m.id));
+        const supplemental: any[] = [];
+
+        recommendations.forEach((section: any) => {
+          const sectionItems = section.media || section.items || [];
+          if (Array.isArray(sectionItems)) {
+            sectionItems.forEach((item: any) => {
+              const id = item._id || item.id;
+              if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                supplemental.push(item);
+              }
+            });
+          }
+        });
+
+        if (supplemental.length > 0) {
+          mediaArr = [...mediaArr, ...supplemental];
+        }
+      }
+
+      total = pagination?.total || data?.data?.total || data?.total || mediaArr.length;
+      page = pagination?.page || data?.data?.page || data?.page || 1;
+      limit = pagination?.limit || data?.data?.limit || data?.limit || 50;
 
       return {
         success: true,
@@ -87,7 +98,7 @@ class MediaApi {
     order?: "asc" | "desc";
   }): Promise<MediaApiResponse> {
     const params: Record<string, any> = {};
-    
+
     // Add pagination parameters if provided
     if (options?.page !== undefined) params.page = options.page;
     if (options?.limit !== undefined) params.limit = Math.min(100, Math.max(1, options.limit)); // Max 100
@@ -102,7 +113,7 @@ class MediaApi {
 
     if (response.success) {
       const data = (response as any).data || {};
-      
+
       // Handle both old format (backward compatibility) and new paginated format
       let mediaArr: any[] = [];
       let total = 0;
@@ -110,35 +121,46 @@ class MediaApi {
       let limit = 50;
       let pagination: any = null;
 
-      // New format: data.media with pagination object
+      // Extract media array based on possible response structures
       if (data?.media && Array.isArray(data.media)) {
         mediaArr = data.media;
         pagination = data.pagination;
-        total = pagination?.total || data.total || 0;
-        page = pagination?.page || data.page || 1;
-        limit = pagination?.limit || data.limit || 50;
-      }
-      // Old format: direct array or data.data.media
-      else if (Array.isArray(data?.data?.media)) {
+      } else if (data?.data?.media && Array.isArray(data.data.media)) {
         mediaArr = data.data.media;
-        total = data.data.total || data.total || 0;
-        page = data.data.page || data.page || 1;
-        limit = data.data.limit || data.limit || 10;
-      }
-      // Fallback: direct array
-      else if (Array.isArray(data)) {
+        pagination = data.data?.pagination || data.pagination;
+      } else if (Array.isArray(data)) {
         mediaArr = data;
-        total = data.length;
-        page = 1;
-        limit = data.length;
-      }
-      // Fallback: response.data is array
-      else if (Array.isArray((response as any).data)) {
+      } else if (Array.isArray((response as any).data)) {
         mediaArr = (response as any).data;
-        total = mediaArr.length;
-        page = 1;
-        limit = mediaArr.length;
       }
+
+      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed
+      const recommendations = data?.recommendations?.sections || (response as any).recommendations?.sections || data?.data?.recommendations?.sections || [];
+      if (recommendations.length > 0) {
+        const seenIds = new Set(mediaArr.map(m => m._id || m.id));
+        const supplemental: any[] = [];
+
+        recommendations.forEach((section: any) => {
+          const sectionItems = section.media || section.items || [];
+          if (Array.isArray(sectionItems)) {
+            sectionItems.forEach((item: any) => {
+              const id = item._id || item.id;
+              if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                supplemental.push(item);
+              }
+            });
+          }
+        });
+
+        if (supplemental.length > 0) {
+          mediaArr = [...mediaArr, ...supplemental];
+        }
+      }
+
+      total = pagination?.total || data?.data?.total || data?.total || mediaArr.length;
+      page = pagination?.page || data?.data?.page || data?.page || 1;
+      limit = pagination?.limit || data?.data?.limit || data?.limit || 50;
 
       return {
         success: true,
@@ -175,13 +197,48 @@ class MediaApi {
 
     if (response.success) {
       const data = (response as any).data || {};
-      const mediaArr = Array.isArray(data?.media)
-        ? data.media
-        : Array.isArray(data?.data?.media)
-        ? data.data.media
-        : Array.isArray(data)
-        ? data
-        : [];
+      let mediaArr: any[] = [];
+      let total = 0;
+      let page = 1;
+      let limit = 10;
+      let pagination: any = null;
+
+      // Extract media array based on possible response structures
+      if (data?.media && Array.isArray(data.media)) {
+        mediaArr = data.media;
+        pagination = data.pagination;
+      } else if (data?.data?.media && Array.isArray(data.data.media)) {
+        mediaArr = data.data.media;
+        pagination = data.data?.pagination || data.pagination;
+      } else if (Array.isArray(data)) {
+        mediaArr = data;
+      } else if (Array.isArray((response as any).data)) {
+        mediaArr = (response as any).data;
+      }
+
+      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed
+      const recommendations = data?.recommendations?.sections || (response as any).recommendations?.sections || data?.data?.recommendations?.sections || [];
+      if (recommendations.length > 0) {
+        const seenIds = new Set(mediaArr.map((m: any) => m._id || m.id));
+        const supplemental: any[] = [];
+
+        recommendations.forEach((section: any) => {
+          const sectionItems = section.media || section.items || [];
+          if (Array.isArray(sectionItems)) {
+            sectionItems.forEach((item: any) => {
+              const id = item._id || item.id;
+              if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                supplemental.push(item);
+              }
+            });
+          }
+        });
+
+        if (supplemental.length > 0) {
+          mediaArr = [...mediaArr, ...supplemental];
+        }
+      }
       return {
         success: true,
         media: mediaArr,
@@ -715,7 +772,7 @@ class MediaApi {
    */
   async getMediaById(id: string): Promise<{
     success: boolean;
-    data?: { fileUrl?: string; playbackUrl?: string; hlsUrl?: string; [key: string]: any };
+    data?: { fileUrl?: string; playbackUrl?: string; hlsUrl?: string;[key: string]: any };
     error?: string;
   }> {
     if (!id || typeof id !== "string" || id.trim() === "") {

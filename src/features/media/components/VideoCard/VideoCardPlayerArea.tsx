@@ -191,6 +191,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
 
   const {
     lastKnownDurationRef,
+    videoDurationMs,
     videoPositionMs,
     videoProgress,
   } = useVideoCardPlayback({
@@ -315,7 +316,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
           onSeekToPercent={seekToPercent}
           bottomOffset={24}
           currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
-          durationMs={isAudioSermonValue ? (audioState?.duration ?? 0) : (lastKnownDurationRef.current || (video as any).duration * 1000 || 0)}
+          durationMs={isAudioSermonValue ? (audioState?.duration ?? 0) : (videoDurationMs || lastKnownDurationRef.current || (video as any).duration * 1000 || 0)}
           showControls={true}
           showFloatingLabel={true}
           enlargeOnDrag={true}

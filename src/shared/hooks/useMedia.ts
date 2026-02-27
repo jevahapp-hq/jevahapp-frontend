@@ -1,18 +1,56 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    isFresh,
-    useContentCacheStore,
+  useContentCacheStore
 } from "../../../app/store/useContentCacheStore";
+import { useInteractionStore } from "../../../app/store/useInteractionStore";
+import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 import { mediaApi } from "../../core/api/MediaApi";
 import {
-    ContentFilter,
-    MediaItem,
-    UseMediaOptions,
-    UseMediaReturn,
+  ContentFilter,
+  MediaItem,
+  UseMediaOptions,
+  UseMediaReturn,
 } from "../types";
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
-import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
+
+/** Sync stats from media items to useInteractionStore to prevent redundant metadata fetches */
+const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
+  if (!items || items.length === 0) return;
+
+  try {
+    const store = useInteractionStore.getState();
+    const statsUpdate: Record<string, any> = {};
+
+    items.forEach(item => {
+      const id = item._id;
+      if (!id || store.contentStats[id]) return; // Skip if stats already exist (preserve user updates)
+
+      statsUpdate[id] = {
+        contentId: id,
+        likes: item.totalLikes ?? item.likeCount ?? item.likes ?? item.favorite ?? 0,
+        saves: item.saves ?? item.saved ?? 0,
+        shares: item.totalShares ?? item.shareCount ?? item.shares ?? 0,
+        views: item.totalViews ?? item.viewCount ?? item.views ?? 0,
+        comments: item.commentCount ?? item.comments ?? item.comment ?? 0,
+        userInteractions: {
+          liked: Boolean(item.hasLiked),
+          saved: Boolean(item.hasBookmarked),
+          shared: Boolean(item.hasShared),
+          viewed: Boolean(item.hasViewed),
+        },
+      } as any;
+    });
+
+    if (Object.keys(statsUpdate).length > 0) {
+      useInteractionStore.setState(state => ({
+        contentStats: { ...state.contentStats, ...statsUpdate }
+      }));
+    }
+  } catch (err) {
+    if (__DEV__) console.warn("Failed to sync media stats:", err);
+  }
+};
 
 /** Shared fetcher for prefetch and useMedia - show content as fast as possible */
 export async function fetchAllContentPublic(contentType: string = "ALL") {
@@ -34,6 +72,9 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
     media: transformedMedia,
     total: response.total || response.pagination?.total || 0,
   };
+
+  // Sync stats to store to prevent individual metadata fetches per card
+  syncMediaStatsToInteractionStore(result.media);
 
   if (contentType === "ALL") {
     useContentCacheStore.getState().set("ALL:first", {
@@ -65,10 +106,15 @@ async function fetchAllContentWithAuth(contentType: string = "ALL") {
     .map(transformApiResponseToMediaItem)
     .filter((item): item is MediaItem => item !== null);
 
-  return {
+  const result = {
     media: transformedMedia,
     total: response.total || response.pagination?.total || 0,
   };
+
+  // Sync stats to store
+  syncMediaStatsToInteractionStore(result.media);
+
+  return result;
 }
 
 export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
@@ -125,13 +171,18 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           fetchedAt: Date.now(),
         });
 
-        return {
+        const result = {
           media: transformedMedia,
           total: response.total || 0,
           page: response.page || page,
           limit: response.limit || limit,
           pages: Math.ceil((response.total || 0) / (response.limit || limit)),
         };
+
+        // Sync stats to store
+        syncMediaStatsToInteractionStore(result.media);
+
+        return result;
       }
 
       throw new Error(response.error || "Failed to fetch content");
@@ -160,7 +211,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
   const defaultContentLoading = defaultContentQuery.isLoading && defaultContent.length === 0;
   const loading = allContentLoading || defaultContentLoading;
-  
+
   // Error states
   const allContentError = allContentQuery.error
     ? (allContentQuery.error as Error).message
@@ -169,7 +220,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     ? (defaultContentQuery.error as Error).message
     : null;
   const error = allContentError || defaultContentError;
-  
+
   const hasContent = allContent.length > 0 || defaultContent.length > 0;
 
   // Legacy fetch function - now uses React Query internally
@@ -320,10 +371,8 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   // React Query handles initialization automatically via `enabled: immediate`
   // No need for manual useEffect - React Query will fetch on mount if enabled
   useEffect(() => {
-    if (immediate) {
-      // Test available endpoints first (non-blocking)
-      mediaApi.testAvailableEndpoints();
-    }
+    // Redundant endpoint testing removed to prevent 429 "Too many requests" errors.
+    // The app already has a startup warmup in _layout.tsx.
   }, [immediate]);
 
   // Calculate if there are more pages to load

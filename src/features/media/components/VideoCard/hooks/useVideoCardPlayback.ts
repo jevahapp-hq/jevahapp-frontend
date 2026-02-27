@@ -36,6 +36,7 @@ export function useVideoCardPlayback({
   isMountedRef,
 }: UseVideoCardPlaybackParams) {
   const lastKnownDurationRef = useRef(0);
+  const [videoDurationMs, setVideoDurationMs] = useState(0);
   const [videoPositionMs, setVideoPositionMs] = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
 
@@ -65,6 +66,7 @@ export function useVideoCardPlayback({
           );
           if (!isNaN(durationMs)) {
             lastKnownDurationRef.current = durationMs;
+            setVideoDurationMs(durationMs);
           }
         }
 
@@ -106,7 +108,10 @@ export function useVideoCardPlayback({
         durationMs > 0 &&
         !isNaN(durationMs)
       ) {
-        lastKnownDurationRef.current = durationMs;
+        if (lastKnownDurationRef.current !== durationMs) {
+          lastKnownDurationRef.current = durationMs;
+          setVideoDurationMs(durationMs);
+        }
       }
 
       const progress =
@@ -189,6 +194,7 @@ export function useVideoCardPlayback({
 
   return {
     lastKnownDurationRef,
+    videoDurationMs,
     videoPositionMs,
     videoProgress,
     setVideoPositionMs,

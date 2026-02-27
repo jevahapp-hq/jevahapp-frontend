@@ -6,6 +6,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { Slot, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
@@ -14,7 +15,7 @@ import { useEffect, useState } from "react";
 import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingAudioPlayer from "./components/FloatingAudioPlayer";
@@ -28,7 +29,6 @@ import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { warmupBackend } from "./utils/apiWarmup";
 import { PerformanceOptimizer } from "./utils/performance";
-import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
 
 // ✅ Initialize Sentry
 Sentry.init({
@@ -213,9 +213,9 @@ export default function RootLayout() {
         try {
           await PerformanceOptimizer.getInstance().preloadCriticalData();
         } catch { }
-        // Stagger requests to avoid 429 - warmup first, then prefetch after delay
+        // Stagger requests to avoid 429 - warmup first, then prefetch after longer delay
         await warmupBackend().catch(() => { });
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 2500));
         queryClient.prefetchQuery({
           queryKey: ["all-content", "ALL", 1, 50, false],
           queryFn: () => fetchAllContentPublic("ALL"),

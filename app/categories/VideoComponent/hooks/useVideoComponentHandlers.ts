@@ -4,6 +4,7 @@
  */
 
 import { Share } from "react-native";
+import { MediaItem } from "../../../../src/shared/types";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
 import { convertToDownloadableItem } from "../../../utils/downloadUtils";
 import {
@@ -11,10 +12,8 @@ import {
   persistViewed,
   toggleFavorite,
 } from "../../../utils/persistentStorage";
-import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../../../utils/userValidation";
-import { MediaItem } from "../../../../src/shared/types";
-import { getVideoKey } from "../utils";
 import { RecommendedItem, VideoCardData } from "../types";
+import { getVideoKey } from "../utils";
 
 interface UseVideoComponentHandlersProps {
   videoStats: Record<string, Partial<VideoCardData>>;
@@ -277,8 +276,8 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
   };
 
   const convertToMediaItem = (video: VideoCardData): MediaItem => ({
-    _id: getVideoKey(video.fileUrl),
-    contentType: "videos",
+    _id: (video as any)._id || getVideoKey(video.fileUrl),
+    contentType: (video as any).contentType || "videos",
     fileUrl: video.fileUrl,
     title: video.title,
     speaker: video.speaker,
@@ -290,7 +289,10 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
     saved: video.saved,
     comment: video.comment,
     favorite: video.favorite,
-    imageUrl: video.fileUrl,
+    imageUrl: (video as any).imageUrl || (video as any).thumbnailUrl || video.fileUrl,
+    thumbnailUrl: (video as any).thumbnailUrl,
+    duration: (video as any).duration, // seconds – used by progress bar (durationMs = duration * 1000)
+    moderationStatus: (video as any).moderationStatus,
     createdAt: video.createdAt || new Date().toISOString(),
   });
 

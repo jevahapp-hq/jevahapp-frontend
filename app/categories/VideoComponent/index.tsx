@@ -4,11 +4,10 @@
  */
 
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import VideoCard from "../../../src/features/media/components/VideoCard";
 import { VideoCardSkeleton } from "../../../src/shared/components/Skeleton";
-import { MediaItem } from "../../../src/shared/types";
 import SuccessCard from "../../components/SuccessCard";
 import { useCommentModal } from "../../context/CommentModalContext";
 import { useDownloadStore } from "../../store/useDownloadStore";
@@ -30,8 +29,8 @@ import {
   useVideoComponentPersisted,
   useVideoComponentScroll,
 } from "./hooks";
-import { getVideoKey } from "./utils";
 import { VideoCardData } from "./types";
+import { getVideoKey } from "./utils";
 
 export default function VideoComponent() {
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
@@ -69,7 +68,7 @@ export default function VideoComponent() {
     () =>
       mediaStore.mediaList.filter((item: any) => {
         const t = (item?.type || item?.contentType || "").toString().toLowerCase();
-        return t === "videos";
+        return t === "videos" || t === "video" || t === "sermon" || t === "sermons";
       }),
     [mediaStore.mediaList]
   );
@@ -350,10 +349,9 @@ export default function VideoComponent() {
             <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">Most Recent</Text>
             {renderVideoCard(
               {
-                fileUrl: uploadedVideos[0].fileUrl,
-                title: uploadedVideos[0].title,
-                speaker: uploadedVideos[0].speaker || "Unknown",
+                ...(uploadedVideos[0] as any),
                 timeAgo: getTimeAgo(uploadedVideos[0].createdAt),
+                speaker: uploadedVideos[0].speaker || "Unknown",
                 speakerAvatar:
                   typeof uploadedVideos[0].speakerAvatar === "string"
                     ? uploadedVideos[0].speakerAvatar.trim()
@@ -363,7 +361,6 @@ export default function VideoComponent() {
                 saved: uploadedVideos[0].saved || 0,
                 sheared: uploadedVideos[0].sheared || 0,
                 comment: uploadedVideos[0].comment || 0,
-                createdAt: uploadedVideos[0].createdAt,
               },
               0,
               "uploaded",
@@ -412,10 +409,9 @@ export default function VideoComponent() {
               {firstExploreVideos.map((video, index) =>
                 renderVideoCard(
                   {
-                    fileUrl: video.fileUrl,
-                    title: video.title,
-                    speaker: video.speaker || "Unknown",
+                    ...(video as any),
                     timeAgo: getTimeAgo(video.createdAt),
+                    speaker: video.speaker || "Unknown",
                     speakerAvatar:
                       typeof video.speakerAvatar === "string"
                         ? video.speakerAvatar.trim()
@@ -425,7 +421,6 @@ export default function VideoComponent() {
                     saved: video.saved || 0,
                     sheared: video.sheared || 0,
                     comment: video.comment || 0,
-                    createdAt: video.createdAt,
                   },
                   index + 1,
                   "explore-early",
@@ -497,10 +492,9 @@ export default function VideoComponent() {
               {middleExploreVideos.map((video, index) =>
                 renderVideoCard(
                   {
-                    fileUrl: video.fileUrl,
-                    title: video.title,
-                    speaker: video.speaker || "Unknown",
+                    ...(video as any),
                     timeAgo: getTimeAgo(video.createdAt),
+                    speaker: video.speaker || "Unknown",
                     speakerAvatar:
                       typeof video.speakerAvatar === "string"
                         ? video.speakerAvatar.trim()
@@ -510,7 +504,6 @@ export default function VideoComponent() {
                     saved: video.saved || 0,
                     sheared: video.sheared || 0,
                     comment: video.comment || 0,
-                    createdAt: video.createdAt,
                   },
                   index + 50,
                   "explore-middle",
@@ -569,10 +562,9 @@ export default function VideoComponent() {
               {remainingExploreVideos.map((video, index) =>
                 renderVideoCard(
                   {
-                    fileUrl: video.fileUrl,
-                    title: video.title,
-                    speaker: video.speaker || "Unknown",
+                    ...(video as any),
                     timeAgo: getTimeAgo(video.createdAt),
+                    speaker: video.speaker || "Unknown",
                     speakerAvatar:
                       typeof video.speakerAvatar === "string"
                         ? video.speakerAvatar.trim()
@@ -582,7 +574,6 @@ export default function VideoComponent() {
                     saved: video.saved || 0,
                     sheared: video.sheared || 0,
                     comment: video.comment || 0,
-                    createdAt: video.createdAt,
                   },
                   index + 100,
                   "explore-remaining",
