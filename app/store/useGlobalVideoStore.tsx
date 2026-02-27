@@ -199,7 +199,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         player.pause().catch((err) => console.warn("Failed to pause video:", err));
         player.showOverlay();
       });
-      
+
       // Also update state
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
@@ -296,6 +296,9 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
                 })
                 .catch((err) => {
                   console.error(`❌ Play function rejected for ${videoKey}:`, err);
+                  if (err && err.message && !err.message.includes('interrupted')) {
+                    console.warn(`🛑 Critical rejection playing ${videoKey}, check if URL is reachable and supported`);
+                  }
                 });
             }
           } catch (err) {
@@ -320,6 +323,9 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
                     })
                     .catch((err) => {
                       console.error(`❌ Retry play function rejected for ${videoKey}:`, err);
+                      if (err && err.message && !err.message.includes('interrupted')) {
+                        console.warn(`🛑 Critical retry rejection playing ${videoKey}, check if URL is reachable and supported`);
+                      }
                     });
                 }
               } catch (err) {
@@ -368,7 +374,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           } catch (error) {
             console.warn("⚠️ Failed to access global audio player store:", error);
           }
-          
+
           // Use the same logic as playVideoGlobally
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};
@@ -467,7 +473,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
           } catch (error) {
             console.warn("⚠️ Failed to access global audio player store:", error);
           }
-          
+
           // Also pause all audio via global media store (for normal songs using useAdvancedAudioPlayer)
           try {
             const globalMediaModule = require("./useGlobalMediaStore");

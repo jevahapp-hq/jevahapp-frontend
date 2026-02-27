@@ -1,5 +1,6 @@
+import { Image, ImageProps } from 'expo-image';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, ImageProps, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
 import { useViewportAware } from '../hooks/useViewportAware';
 import { optimizeImageUrl } from '../utils/imageOptimizer';
 
@@ -8,39 +9,18 @@ interface OptimizedImageProps extends Omit<ImageProps, 'source'> {
   containerWidth?: number; // Width of container for optimization
   containerHeight?: number; // Height of container for optimization
   size?: 'small' | 'medium' | 'large'; // Size preset for optimization
-  placeholder?: React.ReactNode;
-  fallback?: React.ReactNode;
+  placeholder?: any; // expo-image uses blurhash or uri for placeholder
+  fallback?: any;
   lazy?: boolean; // Enable lazy loading
   cache?: 'memory' | 'disk' | 'both';
   quality?: 'low' | 'medium' | 'high' | number; // Quality preset or number (0-100)
   resizeMode?: 'cover' | 'contain' | 'stretch' | 'repeat' | 'center';
   showLoadingIndicator?: boolean; // Show loading spinner
-  onLoadStart?: () => void;
-  onLoadEnd?: () => void;
 }
 
 /**
  * Optimized Image Component with lazy loading and automatic optimization
- * 
- * Features:
- * - Automatic image URL optimization based on container size
- * - Lazy loading (only loads when visible)
- * - Placeholder support
- * - Error handling with fallback
- * - Zero breaking changes - works as drop-in replacement for Image
- * 
- * @example
- * // Basic usage (backward compatible)
- * <OptimizedImage source={{ uri: imageUrl }} style={{ width: 150, height: 150 }} />
- * 
- * // With optimization
- * <OptimizedImage 
- *   source={{ uri: thumbnailUrl }} 
- *   containerWidth={150}
- *   containerHeight={150}
- *   size="small"
- *   lazy={true}
- * />
+ * Now powered by expo-image for superior performance and memory management.
  */
 export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   source,
@@ -50,15 +30,13 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   placeholder,
   fallback,
   lazy = true,
-  cache = 'both',
   quality = 'medium',
-  resizeMode = 'cover',
+  contentFit = 'cover',
   style,
   showLoadingIndicator = true,
   onLoad,
   onError,
   onLoadStart,
-  onLoadEnd,
   ...props
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -74,7 +52,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     }
 
     // Try to extract from style
-    const flattenedStyle = StyleSheet.flatten(style);
+    const flattenedStyle = StyleSheet.flatten(style as any);
     const width = containerWidth || (flattenedStyle?.width as number) || 150;
     const height = containerHeight || (flattenedStyle?.height as number) || width;
 
@@ -92,10 +70,10 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   // Optimize image URL
   const optimizedSource = useMemo(() => {
     if (typeof source === 'number') return source;
-    
-    if (typeof source === 'object' && source.uri) {
+
+    if (typeof source === 'object' && source?.uri) {
       const uri = source.uri;
-      
+
       // Convert quality preset to number
       let qualityNumber: number | undefined;
       if (typeof quality === 'number') {
@@ -117,7 +95,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
       return { uri: optimizedUri || uri };
     }
-    
+
     return source;
   }, [source, extractedDimensions.width, extractedDimensions.height, quality]);
 
@@ -133,7 +111,6 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     setIsLoading(false);
     setHasError(false);
     onLoad?.(event);
-    onLoadEnd?.();
 
     // Fade in animation
     Animated.timing(fadeAnim, {
@@ -141,7 +118,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [onLoad, onLoadEnd, fadeAnim]);
+  }, [onLoad, fadeAnim]);
 
   const handleError = useCallback((event: any) => {
     setIsLoading(false);
@@ -153,56 +130,44 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   // Show placeholder while lazy loading
   if (lazy && !isVisible) {
     return (
-      <View ref={viewRef} style={[styles.container, style]}>
-        {placeholder || (
-          <View style={[styles.placeholder, { 
-            width: extractedDimensions.width, 
-            height: extractedDimensions.height 
-          }]}>
-            {showLoadingIndicator && (
-              <ActivityIndicator size="small" color="#999" />
-            )}
-          </View>
-        )}
+      <View ref={viewRef} style={[styles.container, style as any]}>
+        <View style={[styles.placeholder, {
+          width: extractedDimensions.width,
+          height: extractedDimensions.height
+        }]}>
+          {showLoadingIndicator && (
+            <ActivityIndicator size="small" color="#999" />
+          )}
+        </View>
       </View>
     );
   }
 
   // Show fallback on error
-  if (hasError) {
+  if (hasError && fallback) {
     return (
-      <View style={[styles.container, styles.errorContainer, style]}>
-        {fallback || (
-          <View style={[styles.placeholder, { 
-            width: extractedDimensions.width, 
-            height: extractedDimensions.height 
-          }]}>
-            {showLoadingIndicator && (
-              <ActivityIndicator size="small" color="#999" />
-            )}
-          </View>
-        )}
+      <View style={[styles.container, styles.errorContainer, style as any]}>
+        {fallback}
       </View>
     );
   }
 
   return (
-    <View ref={viewRef} style={[styles.container, style]}>
+    <View ref={viewRef} style={[styles.container, style as any]}>
       <Animated.View style={[styles.imageContainer, { opacity: fadeAnim }]}>
         <Image
           {...props}
-          source={optimizedSource}
-          style={[styles.image, style]}
-          resizeMode={resizeMode}
+          source={optimizedSource as any}
+          style={[styles.image, style as any]}
+          contentFit={contentFit}
           onLoadStart={handleLoadStart}
           onLoad={handleLoad}
           onError={handleError}
-          // Performance optimizations
-          fadeDuration={0} // Disable fade animation for better performance
-          loadingIndicatorSource={undefined} // Use custom loading
+          cachePolicy="disk"
+          transition={300}
         />
       </Animated.View>
-      
+
       {isLoading && showLoadingIndicator && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#999" />

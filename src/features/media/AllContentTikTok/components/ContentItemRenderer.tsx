@@ -47,6 +47,7 @@ export interface ContentItemRendererProps {
   getUserAvatarFromContent: (item: MediaItem) => string | undefined;
   isAutoPlayEnabled: boolean;
   currentUserId: string | null;
+  shouldRenderPlayer?: boolean;
 }
 
 function ContentItemRendererInner(props: ContentItemRendererProps) {
@@ -86,6 +87,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     getUserAvatarFromContent,
     isAutoPlayEnabled,
     currentUserId,
+    shouldRenderPlayer,
   } = props;
 
   const key = getKey(item);
@@ -128,6 +130,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onLayout,
     isAutoPlayEnabled,
     onDelete,
+    shouldRenderPlayer: props.shouldRenderPlayer,
   };
 
   const musicCardProps = {

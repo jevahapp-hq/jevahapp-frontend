@@ -1,20 +1,18 @@
 /**
  * ContentFeedHeader - Most Recent + All Content sections + Live Coming Soon
  */
-import React from "react";
-import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { Text, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
-import type { MediaItem } from "../../../../shared/types";
-import type { ContentType } from "../../../../shared/types";
+import type { ContentType, MediaItem } from "../../../../shared/types";
 
 interface ContentFeedHeaderProps {
   mostRecentItem: MediaItem | null;
   contentType: ContentType | "ALL";
   filteredMediaListLength: number;
   firstFour: MediaItem[];
-  nextFour: MediaItem[];
-  renderContentByType: (item: MediaItem, index: number) => React.ReactNode;
+  renderContentByType: (item: MediaItem, index: number, shouldRenderPlayer?: boolean) => React.ReactNode;
 }
 
 export function ContentFeedHeader({
@@ -22,7 +20,6 @@ export function ContentFeedHeader({
   contentType,
   filteredMediaListLength,
   firstFour,
-  nextFour,
   renderContentByType,
 }: ContentFeedHeaderProps) {
   return (
@@ -40,7 +37,7 @@ export function ContentFeedHeader({
           >
             Most Recent
           </Text>
-          {renderContentByType(mostRecentItem, 0)}
+          {renderContentByType(mostRecentItem, 0, true)}
         </View>
       )}
       <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
@@ -57,13 +54,7 @@ export function ContentFeedHeader({
         </Text>
         {firstFour.map((item, index) => (
           <React.Fragment key={item._id ?? `first-${index}`}>
-            {renderContentByType(item, index)}
-          </React.Fragment>
-        ))}
-        <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
-        {nextFour.map((item, index) => (
-          <React.Fragment key={item._id ?? `next-${index}`}>
-            {renderContentByType(item, index + firstFour.length)}
+            {renderContentByType(item, index, false)}
           </React.Fragment>
         ))}
         {(contentType === "ALL" || contentType === "live") && (

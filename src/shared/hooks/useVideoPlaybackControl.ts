@@ -133,7 +133,7 @@ export const useVideoPlaybackControl = ({
     // CRITICAL FIX: Only sync if this video is CURRENTLY the playing video
     // This prevents delayed playback when clicking on other videos
     const isCurrentlyThePlayingVideo = currentlyPlayingVideo === videoKey;
-    
+
     // Only sync if auto-play is explicitly enabled OR if this is the currently playing video
     if (!enableAutoPlay && !isCurrentlyThePlayingVideo && !shouldPlayThisVideo) {
       return;
@@ -150,7 +150,7 @@ export const useVideoPlaybackControl = ({
           setOverlayVisible(videoKey, true);
         }
       } else {
-        player.getStatusAsync().then((status) => {
+        player.getStatusAsync().then((status: any) => {
           if (status?.isLoaded && status.isPlaying) {
             player.pauseAsync().then(() => {
               setOverlayVisible(videoKey, true);
@@ -176,7 +176,12 @@ export const useVideoPlaybackControl = ({
             // expo-av Video
             const status = await player.getStatusAsync();
             if (status?.isLoaded && !status.isPlaying) {
-              await player.playAsync();
+              await player.playAsync().catch((err: any) => {
+                console.error(`❌ Sync playAsync rejected for ${videoKey}:`, err);
+                if (err?.message && !err.message.includes('interrupted')) {
+                  console.warn(`🛑 Sync critical rejection playing ${videoKey}, check URL support`);
+                }
+              });
             }
           }
         } else {

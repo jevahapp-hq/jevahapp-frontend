@@ -6,12 +6,12 @@ import { InteractionManager } from "react-native";
 import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
 import { getPersistedStats, getViewed } from "../../../../../app/utils/persistentStorage";
+import type { ContentType, MediaItem } from "../../../../shared/types";
 import {
   categorizeContent,
   filterContentByType,
   getMostRecentItem,
 } from "../../../../shared/utils/contentHelpers";
-import type { ContentType, MediaItem } from "../../../../shared/types";
 
 export interface UseAllContentTikTokFeedDataParams {
   mediaList: MediaItem[];
@@ -58,8 +58,8 @@ export function useAllContentTikTokFeedData(
     );
     return {
       firstFour: remaining.slice(0, 4),
-      nextFour: remaining.slice(4, 8),
-      rest: remaining.slice(8),
+      nextFour: [], // Removed to leave more items for the list
+      rest: remaining.slice(4),
     };
   }, [filteredMediaList, mostRecentItem]);
 

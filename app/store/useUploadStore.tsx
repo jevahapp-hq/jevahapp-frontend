@@ -72,8 +72,8 @@ import { GestureResponderEvent } from "react-native";
 import { create } from "zustand";
 import allMediaAPI from "../utils/allMediaAPI";
 import {
-    getPersistedMediaList,
-    persistMediaList,
+  getPersistedMediaList,
+  persistMediaList,
 } from "../utils/persistentStorage";
 import { logUserDataStatus, normalizeUserData } from "../utils/userValidation";
 
@@ -91,7 +91,14 @@ export interface MediaItem {
   contentType: string;
   fileUrl: string;
   fileMimeType: string;
-  uploadedBy: string;
+  uploadedBy: string | {
+    _id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    avatar?: string;
+    name?: string;
+  };
   viewCount: number;
   listenCount: number;
   readCount: number;
@@ -109,6 +116,8 @@ export interface MediaItem {
   saved?: number;
   sheared: number;
   comment: number;
+  playbackUrl?: string;
+  hlsUrl?: string;
 }
 
 interface MediaState {
@@ -310,12 +319,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       const firstItem = currentMediaList[0];
       if (firstItem && firstItem.uploadedBy) {
         // Handle both string and object cases for uploadedBy
-        const firstItemUploadedBy = typeof firstItem.uploadedBy === 'object' 
+        const firstItemUploadedBy = typeof firstItem.uploadedBy === 'object'
           ? firstItem.uploadedBy.firstName && firstItem.uploadedBy.lastName
             ? `${firstItem.uploadedBy.firstName} ${firstItem.uploadedBy.lastName}`.trim()
             : firstItem.uploadedBy.firstName || firstItem.uploadedBy.email?.split('@')[0] || ''
           : firstItem.uploadedBy;
-        
+
         if (firstItemUploadedBy && firstItemUploadedBy !== "Anonymous User") {
           // Check if the current user data matches what's already in media
           const currentUserFullName = normalizedUser.fullName;
@@ -336,8 +345,8 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         // Check if uploadedBy is "Anonymous User" (handle both string and object cases)
         const itemUploadedBy = typeof item.uploadedBy === 'object'
           ? (item.uploadedBy.firstName && item.uploadedBy.lastName
-              ? `${item.uploadedBy.firstName} ${item.uploadedBy.lastName}`.trim()
-              : item.uploadedBy.firstName || '')
+            ? `${item.uploadedBy.firstName} ${item.uploadedBy.lastName}`.trim()
+            : item.uploadedBy.firstName || '')
           : item.uploadedBy;
 
         if (
@@ -424,7 +433,7 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       } else {
         // Handle network errors gracefully - don't set error state for network failures
         const isNetworkError = response.error?.includes("Network unavailable");
-        
+
         if (isNetworkError) {
           // Network error - keep existing content, just stop loading
           set({
@@ -447,11 +456,11 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      const isNetworkError = 
+      const isNetworkError =
         errorMessage.includes("Network request failed") ||
         errorMessage.includes("Failed to fetch") ||
         errorMessage.includes("NetworkError");
-      
+
       if (isNetworkError) {
         // Network error - keep existing content, just stop loading
         set({
@@ -529,12 +538,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         });
       } else {
         console.error("❌ Store: Failed to fetch all content:", response.error);
-        
+
         // Check if it's a network/server error
         const isServerError = response.error?.includes("Unable to connect") ||
-                             response.error?.includes("Server is unreachable") ||
-                             response.error?.includes("Network request failed");
-        
+          response.error?.includes("Server is unreachable") ||
+          response.error?.includes("Network request failed");
+
         set({
           allContentError: response.error || "Failed to fetch all content",
           allContentLoading: false,
@@ -543,12 +552,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       }
     } catch (error) {
       console.error("❌ Store: Exception while fetching all content:", error);
-      
+
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const isServerError = errorMessage.includes("Network request failed") ||
-                           errorMessage.includes("Unable to connect") ||
-                           errorMessage.includes("Server is unreachable");
-      
+        errorMessage.includes("Unable to connect") ||
+        errorMessage.includes("Server is unreachable");
+
       set({
         allContentError: errorMessage,
         allContentLoading: false,

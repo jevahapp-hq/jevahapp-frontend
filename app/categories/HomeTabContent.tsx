@@ -10,15 +10,14 @@ import {
 } from "../../utils/responsive";
 import Header from "../components/Header";
 import { useAuth } from "../hooks/useAuth";
-import { useCurrentPlayingAudioStore } from "../store/useCurrentPlayingAudioStore";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 import AllContentTikTok from "./AllContentTikTok";
-import Music from "./music";
 import Hymns from "./hymns";
 import LiveComponent from "./LiveComponent";
+import Music from "./music";
 
 // NOTE: "HYMNS" requested as its own category, positioned between LIVE and SERMON.
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
@@ -94,12 +93,12 @@ export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
-  
+
   // Handle defaultCategory as string or array (expo-router can return arrays)
   const defaultCategoryValue = Array.isArray(defaultCategory)
     ? defaultCategory[0]
     : defaultCategory;
-  
+
   const [selectedCategory, setSelectedCategory] = useState(() => {
     if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
       const mapped = mapContentTypeToCategory(defaultCategoryValue);
@@ -141,7 +140,7 @@ export default function HomeTabContent() {
           const screenWidth = Dimensions.get('window').width;
           const parentPadding = getResponsiveSpacing(16, 20, 24, 32);
           const scrollViewWidth = screenWidth - parentPadding * 2;
-          
+
           // Try to use stored position if available
           if (buttonLayouts.current[selectedCategory]) {
             const buttonLayout = buttonLayouts.current[selectedCategory];
@@ -151,7 +150,7 @@ export default function HomeTabContent() {
             const buttonCenter = buttonLayout.x + (buttonLayout.width / 2);
             const viewportCenter = scrollViewWidth / 2;
             const scrollPosition = buttonCenter - viewportCenter;
-            
+
             scrollView.scrollTo({
               x: Math.max(0, scrollPosition),
               animated: true,
@@ -160,16 +159,16 @@ export default function HomeTabContent() {
             // Fallback: scroll based on approximate position
             const buttonWidth = 100; // Approximate button width including padding
             const buttonMargin = getResponsiveSpacing(4, 6, 8, 10) * 2; // Left + right margin
-            
+
             // Calculate approximate button position
             let accumulatedWidth = 0;
             for (let i = 0; i < selectedIndex; i++) {
               accumulatedWidth += buttonWidth + buttonMargin;
             }
-            
+
             // Center the button
             const scrollPosition = accumulatedWidth - (scrollViewWidth / 2) + (buttonWidth / 2) - parentPadding;
-            
+
             scrollView.scrollTo({
               x: Math.max(0, scrollPosition),
               animated: true,
@@ -216,12 +215,6 @@ export default function HomeTabContent() {
               // no-op
             }
             try {
-              // Clear the legacy mini player store
-              useCurrentPlayingAudioStore.getState().clearCurrentAudio?.();
-            } catch (e) {
-              // no-op
-            }
-            try {
               // Clear the global floating player store
               useGlobalAudioPlayerStore.getState().clear?.();
             } catch (e) {
@@ -262,10 +255,10 @@ export default function HomeTabContent() {
       />
     );
 
-   
+
   };
 
-  
+
 
   return (
     <View style={{ flex: 1, width: "100%" }}>

@@ -43,6 +43,9 @@ export function useVideoCardPlayback({
     if (!player || isAudioSermon) return;
 
     const statusSubscription = player.addListener("statusChange", (status: any) => {
+      if (__DEV__) {
+        console.log(`📡 [useVideoCardPlayback] statusChange (${videoTitle}):`, status);
+      }
       if (status.status === "readyToPlay") {
         setFailedVideoLoad(false);
         setVideoLoaded(true);
@@ -114,6 +117,14 @@ export function useVideoCardPlayback({
       setVideoPositionMs(positionMs);
       setVideoProgress(progress);
 
+      if (__DEV__ && currentTime > 0 && Math.floor(currentTime) % 5 === 0) { // Log every 5s
+        console.log(`⏱️ [useVideoCardPlayback] timeUpdate (${videoTitle}):`, {
+          currentTime,
+          duration: rawDuration,
+          progress
+        });
+      }
+
       const qualifies =
         player.playing && (positionMs >= 3000 || progress >= 0.25);
       const finished =
@@ -149,7 +160,7 @@ export function useVideoCardPlayback({
                 }));
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         } catch {
           // Swallow analytics errors
         }

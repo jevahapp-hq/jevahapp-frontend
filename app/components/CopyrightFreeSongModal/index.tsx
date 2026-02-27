@@ -49,6 +49,8 @@ export interface CopyrightFreeSongModalProps {
   onToggleMute?: () => void;
   onSeek?: (progress: number) => void;
   formatTime?: (ms: number) => string;
+  variant?: "player" | "options";
+  initialAction?: "options" | "playlist" | null;
 }
 
 const defaultFormatTime = (ms: number) => {
@@ -72,6 +74,8 @@ export default function CopyrightFreeSongModal({
   onToggleMute,
   onSeek,
   formatTime = defaultFormatTime,
+  variant,
+  initialAction,
 }: CopyrightFreeSongModalProps) {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
@@ -83,7 +87,7 @@ export default function CopyrightFreeSongModal({
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekProgress, setSeekProgress] = useState(0);
   const progressBarRef = useRef<View>(null);
-  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(variant === "options" || initialAction === "options");
   const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
   const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
   const [isLiked, setIsLiked] = useState(song?.isLiked || false);
@@ -214,7 +218,7 @@ export default function CopyrightFreeSongModal({
         if (response.success && response.data) {
           const transformedSong = transformBackendSong(response.data);
           setOptionsSongData(transformedSong);
-          setViewCount((prev) =>
+          setViewCount((prev: number) =>
             Math.max(transformedSong.views ?? transformedSong.viewCount ?? 0, likeCount ?? 0, prev)
           );
         }

@@ -1,5 +1,4 @@
 import BottomNav from "@/app/components/BottomNav";
-import MiniAudioPlayer from "@/app/components/MiniAudioPlayer";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -75,7 +74,6 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1 }} className="w-full">
       {renderTabContent()}
-      <MiniAudioPlayer />
       <View
         style={{
           position: "absolute",

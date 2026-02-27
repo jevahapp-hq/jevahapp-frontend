@@ -1,9 +1,9 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
 import {
-    Rubik_400Regular,
-    Rubik_600SemiBold,
-    Rubik_700Bold,
-    useFonts,
+  Rubik_400Regular,
+  Rubik_600SemiBold,
+  Rubik_700Bold,
+  useFonts,
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
@@ -18,7 +18,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingAudioPlayer from "./components/FloatingAudioPlayer";
-import MiniAudioPlayer from "./components/MiniAudioPlayer";
 import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -66,25 +65,25 @@ const publishableKey =
 
 // ✅ Clerk token cache
 const tokenCache = {
-    async getToken(key: string) {
-      try {
-        return await SecureStore.getItemAsync(key);
-      } catch (err) {
-        // console.error("Error getting token:", err);
-        return null;
-      }
-    },
-    async saveToken(key: string, value: string) {
-      try {
-        return await SecureStore.setItemAsync(key, value);
-      } catch (err) {
-        // console.error("Error saving token:", err);
-      }
-    },
+  async getToken(key: string) {
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (err) {
+      // console.error("Error getting token:", err);
+      return null;
+    }
+  },
+  async saveToken(key: string, value: string) {
+    try {
+      return await SecureStore.setItemAsync(key, value);
+    } catch (err) {
+      // console.error("Error saving token:", err);
+    }
+  },
 };
 
 // Keep native splash visible until we're ready (fonts + critical init)
-SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 // Create React Query client with cache settings matching backend (15 minutes)
 const queryClient = new QueryClient({
@@ -113,7 +112,7 @@ export default function RootLayout() {
     const originalError = console.error;
     console.error = (...args) => {
       const errorMessage = args[0]?.toString() || "";
-      
+
       // Suppress non-critical errors that don't affect functionality
       if (
         args[0]?.includes?.("clerk/telemetry") ||
@@ -207,20 +206,20 @@ export default function RootLayout() {
       (async () => {
         try {
           await loadDownloadedItems();
-        } catch {}
+        } catch { }
         try {
           await loadSavedItems();
-        } catch {}
+        } catch { }
         try {
           await PerformanceOptimizer.getInstance().preloadCriticalData();
-        } catch {}
+        } catch { }
         // Stagger requests to avoid 429 - warmup first, then prefetch after delay
-        await warmupBackend().catch(() => {});
+        await warmupBackend().catch(() => { });
         await new Promise((r) => setTimeout(r, 800));
         queryClient.prefetchQuery({
           queryKey: ["all-content", "ALL", 1, 50, false],
           queryFn: () => fetchAllContentPublic("ALL"),
-        }).catch(() => {});
+        }).catch(() => { });
       })();
     });
 
@@ -230,7 +229,7 @@ export default function RootLayout() {
   // Hide splash when app is ready to show (fonts + critical init done)
   useEffect(() => {
     if (fontsLoaded && isInitialized && !error) {
-      SplashScreen.hideAsync().catch(() => {});
+      SplashScreen.hideAsync().catch(() => { });
     }
   }, [fontsLoaded, isInitialized, error]);
 
@@ -314,7 +313,6 @@ export default function RootLayout() {
                     <Slot />
                     <CommentModalV2 />
                     <FloatingAudioPlayer />
-                    <MiniAudioPlayer />
                     <ServerUnavailableModalWrapper />
                   </CommentModalProvider>
                 </NotificationProvider>

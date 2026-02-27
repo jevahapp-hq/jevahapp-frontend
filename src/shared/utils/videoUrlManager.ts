@@ -133,14 +133,9 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
   return result;
 };
 
-/**
- * Gets video URL from media item with proper fallback priority:
- * fileUrl > playbackUrl > hlsUrl
- * NEVER use thumbnailUrl or imageUrl for video playback!
- */
 export const getVideoUrlFromMedia = (media: any): string | null => {
-  // Priority order: fileUrl > playbackUrl > hlsUrl
-  const videoUrl = media?.fileUrl || media?.playbackUrl || media?.hlsUrl;
+  // Priority order: playbackUrl > hlsUrl > fileUrl (favouring processed streaming URLs)
+  const videoUrl = media?.playbackUrl || media?.hlsUrl || media?.fileUrl;
 
   if (!videoUrl || typeof videoUrl !== 'string' || videoUrl.trim() === '') {
     return null;
@@ -173,8 +168,10 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
     if (urlInfo.isExpired) {
       console.warn(`⚠️ Signed URL appears expired: ${originalUrl.substring(0, 100)}...`);
       console.log(`🔧 Using converted URL: ${urlInfo.convertedUrl.substring(0, 100)}...`);
+      return urlInfo.convertedUrl;
     }
-    return urlInfo.convertedUrl;
+    // Signed URL is valid and NOT expired - use it as is!
+    return originalUrl;
   }
 
   // If it's already a public URL, use it

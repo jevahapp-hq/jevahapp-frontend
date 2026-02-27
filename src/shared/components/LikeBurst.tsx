@@ -1,163 +1,123 @@
-import { MaterialIcons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useRef } from "react";
-import { Animated, Easing, ViewStyle } from "react-native";
-
-type Bubble = {
-  translateY: Animated.Value;
-  translateX: Animated.Value;
-  opacity: Animated.Value;
-  scale: Animated.Value;
-};
+import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect } from "react";
+import { StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 
 export interface LikeBurstProps {
-  triggerKey: number; // change value to retrigger
+  triggerKey: number;
   color?: string;
   size?: number;
-  style?: ViewStyle;
   bubbles?: number;
-  distance?: number; // how far bubbles travel up
-  duration?: number; // base duration per bubble
-  enabled?: boolean; // if false, won't trigger even if triggerKey changes
+  distance?: number;
+  duration?: number;
+  enabled?: boolean;
 }
+
+const HeartParticle = ({ delay, distance, color, size }: { delay: number; distance: number; color: string; size: number }) => {
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const translateX = useSharedValue(0);
+  const rotate = useSharedValue(0);
+
+  useEffect(() => {
+    const upward = -distance * (0.8 + Math.random() * 0.7);
+    const horizontal = (Math.random() - 0.5) * 60;
+    const rotation = (Math.random() - 0.5) * 45;
+
+    opacity.value = withDelay(
+      delay,
+      withSequence(
+        withTiming(1, { duration: 150 }),
+        withTiming(0.8, { duration: 400 }),
+        withTiming(0, { duration: 300 })
+      )
+    );
+
+    scale.value = withDelay(
+      delay,
+      withSequence(
+        withSpring(1.4, { damping: 4, stiffness: 100 }),
+        withSpring(1, { damping: 8, stiffness: 80 }),
+        withTiming(0.5, { duration: 400 })
+      )
+    );
+
+    translateY.value = withDelay(
+      delay,
+      withTiming(upward, {
+        duration: 850,
+        easing: Easing.out(Easing.back(1)),
+      })
+    );
+
+    translateX.value = withDelay(
+      delay,
+      withSpring(horizontal, { damping: 12, stiffness: 60 })
+    );
+
+    rotate.value = withDelay(
+      delay,
+      withTiming(rotation, { duration: 800 })
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateY: translateY.value },
+      { translateX: translateX.value },
+      { scale: scale.value },
+      { rotate: `${rotate.value}deg` },
+    ],
+  }));
+
+  return (
+    <Animated.View style={[styles.particle, animatedStyle]}>
+      <Ionicons name="heart" size={size} color={color} />
+    </Animated.View>
+  );
+};
 
 export const LikeBurst: React.FC<LikeBurstProps> = ({
   triggerKey,
   color = "#FF1744",
-  size = 16,
-  style,
-  bubbles = 8, // Increased from 5 for more visual impact
-  distance = 80, // Increased from 60 for more dramatic effect
-  duration = 800, // Increased from 600 for smoother animation
-  enabled = true, // Only trigger if enabled
+  size = 20,
+  bubbles = 10,
+  distance = 100,
+  enabled = true,
 }) => {
-  const bubblesRef = useRef<Bubble[]>([]);
-
-  // initialize bubbles exactly once
-  if (bubblesRef.current.length === 0) {
-    bubblesRef.current = new Array(bubbles).fill(0).map(() => ({
-      translateY: new Animated.Value(0),
-      translateX: new Animated.Value(0),
-      opacity: new Animated.Value(0),
-      scale: new Animated.Value(0.3), // Start smaller for more dramatic pop
-    }));
-  }
-
-  const sequences = useMemo(() => {
-    return bubblesRef.current.map((b, i) => {
-      // More varied trajectories for natural feel
-      const upward = -distance * (0.7 + Math.random() * 0.8);
-      const horizontal = (Math.random() - 0.5) * 40; // Wider spread
-      const t = duration * (0.7 + Math.random() * 0.6); // More variation in timing
-      
-      return Animated.parallel([
-        // Smoother upward motion with better easing
-        Animated.timing(b.translateY, {
-          toValue: upward,
-          duration: t,
-          easing: Easing.out(Easing.cubic), // Smoother than quad
-          useNativeDriver: true,
-        }),
-        // Horizontal drift with smoother easing
-        Animated.timing(b.translateX, {
-          toValue: horizontal,
-          duration: t,
-          easing: Easing.inOut(Easing.sin), // Sinusoidal for natural drift
-          useNativeDriver: true,
-        }),
-        // Fade in faster, fade out slower for better visibility
-        Animated.sequence([
-          Animated.timing(b.opacity, {
-            toValue: 1,
-            duration: Math.min(150, t * 0.25), // Faster fade in
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-          Animated.timing(b.opacity, {
-            toValue: 0.8,
-            duration: t * 0.4, // Hold at high opacity
-            easing: Easing.linear,
-            useNativeDriver: true,
-          }),
-          Animated.timing(b.opacity, {
-            toValue: 0,
-            duration: t * 0.35, // Smooth fade out
-            easing: Easing.in(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ]),
-        // More dramatic scale animation with bounce
-        Animated.sequence([
-          Animated.timing(b.scale, {
-            toValue: 1.4, // Bigger initial pop
-            duration: Math.min(180, t * 0.3),
-            easing: Easing.out(Easing.back(1.5)), // More bounce
-            useNativeDriver: true,
-          }),
-          Animated.timing(b.scale, {
-            toValue: 1.1, // Slight shrink
-            duration: Math.min(120, t * 0.2),
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(b.scale, {
-            toValue: 0.8, // Fade out while shrinking
-            duration: t * 0.5,
-            easing: Easing.in(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ]),
-      ]);
-    });
-  }, [bubbles, distance, duration]);
-
-  useEffect(() => {
-    // ✅ Only trigger animation if enabled (prevents burst on unlikes)
-    if (!enabled || triggerKey === 0) return;
-    
-    // reset
-    bubblesRef.current.forEach((b) => {
-      b.translateY.setValue(0);
-      b.translateX.setValue(0);
-      b.opacity.setValue(0);
-      b.scale.setValue(0.3); // Start smaller for more dramatic pop
-    });
-
-    // Staggered launch for cascading effect (reduced delay for smoother flow)
-    const animations = sequences.map((anim, i) =>
-      Animated.sequence([
-        Animated.delay(i * 25), // Reduced from 40ms for tighter cascade
-        anim,
-      ])
-    );
-    Animated.parallel(animations).start();
-  }, [triggerKey, sequences, enabled]);
+  if (!enabled || triggerKey === 0) return null;
 
   return (
-    <>
-      {bubblesRef.current.map((b, i) => (
-        <Animated.View
-          key={`bubble-${i}`}
-          style={[
-            {
-              position: "absolute",
-              top: 0,
-              left: 0,
-              opacity: b.opacity,
-              transform: [
-                { translateY: b.translateY },
-                { translateX: b.translateX },
-                { scale: b.scale },
-              ],
-            },
-            style,
-          ]}
-          pointerEvents="none"
-        >
-          <MaterialIcons name="favorite" size={size} color={color} />
-        </Animated.View>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Array.from({ length: bubbles }).map((_, i) => (
+        <HeartParticle
+          key={`${triggerKey}-${i}`}
+          delay={i * 30}
+          distance={distance}
+          color={color}
+          size={size * (0.6 + Math.random() * 0.6)}
+        />
       ))}
-    </>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  particle: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+  },
+});
 
 export default LikeBurst;

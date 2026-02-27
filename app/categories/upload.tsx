@@ -1027,6 +1027,16 @@ export default function UploadScreen() {
       const uploaded = result.media;
       const now = new Date();
 
+      if (__DEV__) {
+        console.log(`🔍 [Upload] Inspecting backend media object:`, {
+          id: uploaded._id,
+          fileUrl: uploaded.fileUrl,
+          playbackUrl: uploaded.playbackUrl,
+          hlsUrl: uploaded.hlsUrl,
+          title: uploaded.title
+        });
+      }
+
       // 🛡️ Use the new validation method to ensure fresh user data
 
       await useMediaStore.getState().addMediaWithUserValidation({
@@ -1038,6 +1048,8 @@ export default function UploadScreen() {
         type: uploaded.contentType,
         contentType: isSermonContent ? "sermon" : uploaded.contentType, // Override content type for sermon
         fileUrl: uploaded.fileUrl,
+        playbackUrl: uploaded.playbackUrl,
+        hlsUrl: uploaded.hlsUrl,
         fileMimeType: uploaded.fileMimeType || file.mimeType,
         // Visual cover fields
         thumbnailUrl: uploaded.thumbnailUrl || uploaded.imageUrl || undefined,

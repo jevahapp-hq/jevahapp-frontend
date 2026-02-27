@@ -21,22 +21,27 @@ export const getOptimalImageSize = (
 ): ImageSize => {
   const pixelRatio = PixelRatio.get();
   const screenWidth = Dimensions.get('window').width;
-  
+
+  // DRACONIAN MEMORY LIMITS FOR ANDROID OOM PREVENTION
+  // On high-DPI Android devices (pixelRatio >= 3), 1080px images take 4.6MB of RAM. 
+  // We cap native resolution to save heap, especially for auto-playing feeds.
+  const capPixelRatio = pixelRatio > 2 ? 2 : pixelRatio;
+
   // Calculate optimal width (don't exceed screen width)
-  let optimalWidth = Math.min(containerWidth * pixelRatio, screenWidth * pixelRatio);
-  
+  let optimalWidth = Math.min(containerWidth * capPixelRatio, screenWidth * capPixelRatio);
+
   // For thumbnails in lists, use smaller sizes
   if (containerWidth <= 150) {
     optimalWidth = Math.min(optimalWidth, 300); // Max 300px for small thumbnails
   } else if (containerWidth <= 300) {
     optimalWidth = Math.min(optimalWidth, 600); // Max 600px for medium thumbnails
   }
-  
+
   // Calculate height if provided
-  const optimalHeight = containerHeight 
+  const optimalHeight = containerHeight
     ? Math.min(containerHeight * pixelRatio, optimalWidth * (containerHeight / containerWidth))
     : optimalWidth;
-  
+
   return {
     width: Math.round(optimalWidth),
     height: Math.round(optimalHeight),
@@ -69,19 +74,19 @@ export const optimizeImageUrl = (
   }
 ): string | undefined => {
   if (!originalUrl) return undefined;
-  
+
   // If URL is invalid, return as-is
   if (!originalUrl.startsWith('http') && !originalUrl.startsWith('file://') && !originalUrl.startsWith('content://')) {
     return originalUrl;
   }
-  
+
   const { width, height, quality } = getOptimalImageSize(containerWidth, containerHeight);
-  const finalQuality = options?.quality || quality;
+  const finalQuality = options?.quality || quality || 85;
   const format = options?.format || 'webp'; // WebP is 30% smaller than JPEG
-  
+
   try {
     const url = new URL(originalUrl);
-    
+
     // Strategy 1: Cloudflare Images (if using Cloudflare Images service)
     // Format: https://imagedelivery.net/{account_hash}/{image_id}/{variant_name}
     if (url.hostname.includes('imagedelivery.net')) {
@@ -89,17 +94,17 @@ export const optimizeImageUrl = (
       // Just return the URL - Cloudflare handles optimization automatically
       return originalUrl;
     }
-    
+
     // Strategy 2: Jevah CDN (cdn.jevahapp.com) or Cloudflare R2 with Transformations
     // Check if Cloudflare Transform is available or use query params
-    if (url.hostname.includes('cdn.jevahapp.com') || 
-        url.hostname.includes('r2.dev') || 
-        url.hostname.includes('pub-') ||
-        url.hostname.includes('cloudflare')) {
-      
+    if (url.hostname.includes('cdn.jevahapp.com') ||
+      url.hostname.includes('r2.dev') ||
+      url.hostname.includes('pub-') ||
+      url.hostname.includes('cloudflare')) {
+
       // Add Cloudflare Transform parameters or generic CDN params
       const transformParams = new URLSearchParams();
-      
+
       // Use Cloudflare Transform format if available
       if (url.hostname.includes('cdn.jevahapp.com')) {
         // For Jevah CDN, add width/height/quality params
@@ -117,17 +122,17 @@ export const optimizeImageUrl = (
         }
         transformParams.set('q', finalQuality.toString());
       }
-      
+
       // For placeholder blur effect
       if (options?.blur) {
         transformParams.set('blur', '20');
       }
-      
+
       // Append or create query string
       const separator = url.search ? '&' : '?';
       return `${originalUrl}${separator}${transformParams.toString()}`;
     }
-    
+
     // Strategy 3: Generic CDN optimization (works with most CDNs)
     // Many CDNs support width/height parameters
     const cdnParams = new URLSearchParams();
@@ -136,20 +141,20 @@ export const optimizeImageUrl = (
       cdnParams.set('h', height.toString());
     }
     cdnParams.set('q', finalQuality.toString());
-    
+
     // Check if URL already has query params
     const separator = url.search ? '&' : '?';
     const optimizedUrl = `${originalUrl}${separator}${cdnParams.toString()}`;
-    
+
     // For placeholder blur effect
     if (options?.blur) {
       const blurParams = new URLSearchParams(cdnParams);
       blurParams.set('blur', '20');
       return `${originalUrl}${separator}${blurParams.toString()}`;
     }
-    
+
     return optimizedUrl;
-    
+
   } catch (error) {
     // If URL parsing fails, return original (no breaking changes)
     if (__DEV__) {
@@ -168,13 +173,13 @@ export const getOptimizedThumbnail = (
   size: 'small' | 'medium' | 'large' = 'medium'
 ): string | undefined => {
   if (!thumbnailUrl) return undefined;
-  
+
   const sizes = {
     small: 150,   // For list items, avatars
     medium: 300, // For cards, previews
     large: 600,  // For detail views
   };
-  
+
   return optimizeImageUrl(thumbnailUrl, sizes[size], sizes[size], {
     quality: size === 'small' ? 75 : 85,
     format: 'webp',
@@ -188,7 +193,7 @@ export const getPlaceholderImage = (width: number, height?: number): string => {
   // Use a 1x1 transparent pixel or a blur placeholder
   // Option 1: Transparent pixel (minimal data)
   return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height || width}'%3E%3C/svg%3E`;
-  
+
   // Option 2: Blur placeholder (better UX, slightly more data)
   // return optimizeImageUrl(originalUrl, 20, 20, { blur: true, quality: 20 });
 };

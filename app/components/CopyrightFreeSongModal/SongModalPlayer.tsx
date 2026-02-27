@@ -1,9 +1,7 @@
-/**
- * SongModalPlayer - Main player UI: album art, song info, like/views, progress, controls
- */
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Dimensions,
   Image,
@@ -12,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  StyleSheet,
 } from "react-native";
 import { UI_CONFIG } from "../../../src/shared/constants";
 
@@ -85,42 +84,56 @@ export function SongModalPlayer({
     : audioPosition;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
       {imageSource && (
-        <>
-          <ImageBackground
+        <View style={{ ...StyleSheet.absoluteFillObject, overflow: "hidden" }}>
+          <Image
             source={imageSource}
             style={{
               position: "absolute",
-              top: -100,
+              top: -SCREEN_HEIGHT * 0.2,
               left: -100,
               right: -100,
               bottom: -100,
               width: "150%",
               height: "150%",
+              opacity: 0.6,
             }}
             resizeMode="cover"
-            blurRadius={Platform.OS === "ios" ? 80 : 50}
-          >
-            <View
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(0, 0, 0, 0.75)",
-              }}
-            />
-          </ImageBackground>
-          <LinearGradient
-            colors={["rgba(0,0,0,0.4)", "rgba(0,0,0,0.8)", "rgba(0,0,0,0.95)"]}
-            locations={[0, 0.5, 1]}
+            blurRadius={80}
+          />
+          {/* Animated Blob Effects (Conceptual static implementation for now) */}
+          <View
             style={{
               position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }}
+              top: 100,
+              right: -50,
+              width: 300,
+              height: 300,
+              borderRadius: 150,
+              backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+              opacity: 0.2,
+              filter: "blur(60px)",
+            } as any}
           />
-        </>
+          <View
+            style={{
+              position: "absolute",
+              bottom: 150,
+              left: -50,
+              width: 250,
+              height: 250,
+              borderRadius: 125,
+              backgroundColor: "#FEA74E",
+              opacity: 0.15,
+              filter: "blur(50px)",
+            } as any}
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.6)", "#000000"]}
+            style={StyleSheet.absoluteFillObject}
+          />
+        </View>
       )}
 
       <View
@@ -176,28 +189,42 @@ export function SongModalPlayer({
         <View
           style={{
             alignItems: "center",
-            marginBottom: UI_CONFIG.SPACING.MD,
-            marginTop: UI_CONFIG.SPACING.SM,
+            marginTop: 40,
           }}
         >
           {imageSource && (
             <View
               style={{
-                width: albumArtSize,
-                height: albumArtSize,
-                borderRadius: 24,
-                overflow: "hidden",
+                width: albumArtSize * 1.1,
+                height: albumArtSize * 1.1,
+                borderRadius: 32,
+                backgroundColor: "#1A1A1A",
                 shadowColor: "#000",
-                shadowOffset: { width: 0, height: 20 },
-                shadowOpacity: 0.5,
-                shadowRadius: 30,
-                elevation: 20,
+                shadowOffset: { width: 0, height: 25 },
+                shadowOpacity: 0.6,
+                shadowRadius: 35,
+                elevation: 25,
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
               }}
             >
               <Image
                 source={imageSource}
-                style={{ width: "100%", height: "100%" }}
+                style={{ width: "100%", height: "100%", borderRadius: 32 }}
                 resizeMode="cover"
+              />
+              {/* Premium Glow Projection */}
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: -20,
+                  alignSelf: "center",
+                  width: "80%",
+                  height: 20,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 10,
+                  filter: "blur(20px)",
+                } as any}
               />
             </View>
           )}
@@ -395,161 +422,86 @@ export function SongModalPlayer({
             </View>
           </View>
 
-          <View
+          <BlurView
+            intensity={20}
+            tint="dark"
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: UI_CONFIG.SPACING.XL,
-              marginBottom: UI_CONFIG.SPACING.MD,
+              padding: 24,
+              borderRadius: 32,
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.1)",
             }}
           >
-            <TouchableOpacity
-              onPress={() => onSkip(-15)}
-              activeOpacity={0.6}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            <View
               style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                justifyContent: "center",
+                flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.15)",
+                justifyContent: "space-between",
+                marginBottom: 32,
               }}
             >
-              <Ionicons name="play-skip-back" size={26} color="#FFFFFF" />
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onSkip(-15)}
+                activeOpacity={0.6}
+                style={styles.controlSecondary}
+              >
+                <Ionicons name="play-skip-back" size={28} color="#FFFFFF" />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={onTogglePlay}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.4,
-                shadowRadius: 16,
-                elevation: 12,
-              }}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={36}
-                color="#256E63"
-                style={{ marginLeft: isPlaying ? 0 : 3 }}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => onSkip(15)}
-              activeOpacity={0.6}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.15)",
-              }}
-            >
-              <Ionicons name="play-skip-forward" size={26} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: UI_CONFIG.SPACING.XXL,
-              marginBottom: UI_CONFIG.SPACING.MD,
-            }}
-          >
-            <TouchableOpacity
-              onPress={onToggleShuffle}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor: isShuffled
-                  ? "rgba(255, 255, 255, 0.25)"
-                  : "rgba(255, 255, 255, 0.15)",
-                borderWidth: isShuffled ? 1.5 : 1,
-                borderColor: isShuffled
-                  ? "#FFFFFF"
-                  : "rgba(255, 255, 255, 0.3)",
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="shuffle"
-                size={22}
-                color={isShuffled ? "#FFFFFF" : "rgba(255, 255, 255, 0.8)"}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onRepeatCycle}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor:
-                  repeatMode !== "none"
-                    ? "rgba(255, 255, 255, 0.25)"
-                    : "rgba(255, 255, 255, 0.15)",
-                borderWidth: repeatMode !== "none" ? 1.5 : 1,
-                borderColor:
-                  repeatMode !== "none"
-                    ? "#FFFFFF"
-                    : "rgba(255, 255, 255, 0.3)",
-                position: "relative",
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={
-                  repeatMode === "one"
-                    ? "repeat"
-                    : repeatMode === "all"
-                    ? "repeat"
-                    : "repeat-outline"
-                }
-                size={22}
-                color={
-                  repeatMode !== "none"
-                    ? "#FFFFFF"
-                    : "rgba(255, 255, 255, 0.8)"
-                }
-              />
-              {repeatMode === "one" && (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 4,
-                    right: 4,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: "#FEA74E",
-                    borderWidth: 2,
-                    borderColor: "#FFFFFF",
-                  }}
+              <TouchableOpacity
+                onPress={onTogglePlay}
+                activeOpacity={0.8}
+                style={styles.playButton}
+              >
+                <Ionicons
+                  name={isPlaying ? "pause" : "play"}
+                  size={42}
+                  color="#000"
+                  style={{ marginLeft: isPlaying ? 0 : 4 }}
                 />
-              )}
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => onSkip(15)}
+                activeOpacity={0.6}
+                style={styles.controlSecondary}
+              >
+                <Ionicons name="play-skip-forward" size={28} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 40,
+              }}
+            >
+              <TouchableOpacity
+                onPress={onToggleShuffle}
+                style={[styles.miniControl, isShuffled && styles.miniControlActive]}
+              >
+                <Ionicons
+                  name="shuffle"
+                  size={20}
+                  color={isShuffled ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)"}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onRepeatCycle}
+                style={[styles.miniControl, repeatMode !== "none" && styles.miniControlActive]}
+              >
+                <Ionicons
+                  name="repeat"
+                  size={20}
+                  color={repeatMode !== "none" ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)"}
+                />
+              </TouchableOpacity>
+            </View>
+          </BlurView>
         </View>
 
         <View
@@ -614,3 +566,40 @@ export function SongModalPlayer({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  controlSecondary: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  playButton: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#FFF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  miniControl: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  },
+  miniControlActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.4)",
+  },
+});

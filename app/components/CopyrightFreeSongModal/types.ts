@@ -16,4 +16,6 @@ export interface CopyrightFreeSongModalProps {
   onToggleMute?: () => void;
   onSeek?: (progress: number) => void;
   formatTime?: (ms: number) => string;
+  variant?: "player" | "options";
+  initialAction?: "options" | "playlist" | null;
 }

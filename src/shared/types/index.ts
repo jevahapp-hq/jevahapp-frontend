@@ -59,6 +59,8 @@ export interface MediaItem extends BaseEntity {
   hasViewed?: boolean;
   hasShared?: boolean;
   moderationStatus?: "approved" | "under_review" | "rejected";
+  playbackUrl?: string; // HLS or processed playback URL from backend
+  hlsUrl?: string; // Legacy HLS field
   isHidden?: boolean;
   category?: string[];
   userId?: string;
@@ -66,7 +68,7 @@ export interface MediaItem extends BaseEntity {
 
 // Content type definitions
 export type ContentType = "video" | "audio" | "ebook" | "sermon" | "music"
-  | "hymns";
+  | "hymns" | "live" | "videos" | "books" | "teachings" | "e-books" | "image";
 
 export interface UserInfo {
   _id: string;
@@ -127,6 +129,7 @@ export interface VideoCardProps {
   getUserAvatarFromContent: (item: MediaItem) => any;
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   isAutoPlayEnabled?: boolean;
+  shouldRenderPlayer?: boolean;
 }
 
 // Music/Audio-specific interfaces

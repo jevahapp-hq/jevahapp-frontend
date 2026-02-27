@@ -266,7 +266,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   });
 
   const renderContentByType = useCallback(
-    (item: MediaItem, index: number) => (
+    (item: MediaItem, index: number, shouldRenderPlayer?: boolean) => (
       <ContentItemRenderer
         item={item}
         index={index}
@@ -303,6 +303,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         getUserAvatarFromContent={getUserAvatarFromContent}
         isAutoPlayEnabled={isAutoPlayEnabled}
         currentUserId={currentUserId}
+        shouldRenderPlayer={shouldRenderPlayer}
       />
     ),
     [
@@ -380,17 +381,19 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         contentType={contentType}
         filteredMediaListLength={filteredMediaList.length}
         firstFour={firstFour}
-        nextFour={nextFour}
         renderContentByType={renderContentByType}
       />
     ),
-    [mostRecentItem, contentType, filteredMediaList.length, firstFour, nextFour, renderContentByType]
+    [mostRecentItem, contentType, filteredMediaList.length, firstFour, renderContentByType]
   );
 
   const renderListItem = useCallback(
-    ({ item, index }: { item: MediaItem; index: number }) =>
-      renderContentByType(item, index + firstFour.length + nextFour.length),
-    [renderContentByType, firstFour.length, nextFour.length]
+    ({ item, index }: { item: MediaItem; index: number }) => {
+      const key = getContentKey(item);
+      const isVisible = currentlyVisibleVideo === key;
+      return renderContentByType(item, index + firstFour.length + 1, isVisible); // +1 for mostRecentItem
+    },
+    [renderContentByType, firstFour.length, currentlyVisibleVideo, getContentKey]
   );
 
   const keyExtractor = useCallback(

@@ -2,9 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Asset } from "expo-asset";
 import { Audio } from "expo-av";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
-import { useCurrentPlayingAudioStore } from "./useCurrentPlayingAudioStore";
 
 /**
  * Professional Global Audio Player Store
@@ -38,22 +37,22 @@ interface GlobalAudioPlayerState {
   isPlaying: boolean;
   isLoading: boolean;
   isMuted: boolean;
-  
+
   // Playback state
   position: number; // in milliseconds
   duration: number; // in milliseconds
   progress: number; // 0-1
-  
+
   // Audio instance
   soundInstance: Audio.Sound | null;
-  
+
   // Queue (for future playlist support)
   queue: AudioTrack[];
   currentIndex: number;
   originalQueue: AudioTrack[]; // Original unshuffled queue
   repeatMode: "none" | "all" | "one"; // Repeat mode: none, all, or one
   isShuffled: boolean; // Whether queue is shuffled
-  
+
   // Actions
   setTrack: (track: AudioTrack, shouldPlayImmediately?: boolean) => Promise<void>;
   play: () => Promise<void>;
@@ -70,7 +69,7 @@ interface GlobalAudioPlayerState {
   clear: () => Promise<void>;
   setRepeatMode: (mode: "none" | "all" | "one") => void;
   toggleShuffle: () => void;
-  
+
   // Internal state setters
   setPlaying: (playing: boolean) => void;
   setLoading: (loading: boolean) => void;
@@ -83,7 +82,7 @@ interface GlobalAudioPlayerState {
   __completionTimeout?: boolean;
   __completionTimeoutId?: any;
   __lastStatusUpdateTs?: number;
-  
+
   // Callback for virtual tracks (played by external players)
   __virtualTrackControls?: {
     togglePlayPause: () => Promise<void>;
@@ -117,7 +116,6 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       __completionTimeout: false,
       __completionTimeoutId: null,
       __lastStatusUpdateTs: 0,
-      __isAdvancing: false,
 
       setTrack: async (track: AudioTrack, shouldPlayImmediately: boolean = false) => {
         const { stop, soundInstance, currentTrack } = get();
@@ -162,13 +160,6 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           console.warn("Error stopping legacy audio manager before global track:", error);
         }
 
-        // Clear MiniAudioPlayer's current audio state, if any
-        try {
-          useCurrentPlayingAudioStore.getState().clearCurrentAudio();
-        } catch (error) {
-          // no-op
-        }
-        
         // Pause any normal songs playing via useAdvancedAudioPlayer
         // by using the global media store to pause all audio
         try {
@@ -185,7 +176,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         } catch (error) {
           // no-op - global media store might not be available
         }
-        
+
         // Stop current track if playing
         if (soundInstance) {
           try {
@@ -265,7 +256,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
                 const durationChanged = prev.duration !== newDuration;
 
                 // Throttle position updates: only update if enough time passed OR significant change
-                const shouldUpdatePosition = 
+                const shouldUpdatePosition =
                   timeSinceLastUpdate > 300 || // Update every ~300ms max (~3 updates/sec)
                   positionChangedSignificantly; // Or if position jumped significantly
 
@@ -290,7 +281,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
                   if (playingChanged) {
                     updates.isPlaying = status.isPlaying;
                   }
-                  
+
                   if (durationChanged) {
                     updates.duration = newDuration;
                   }
@@ -365,7 +356,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             if (status.isLoaded && status.isPlaying) {
               return; // Already playing, no need to do anything
             }
-            
+
             // Play immediately
             await soundInstance.playAsync();
             set({ isPlaying: true });
@@ -488,7 +479,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
       next: async () => {
         const { queue, currentIndex, setTrack, repeatMode } = get();
-        
+
         // Handle repeat one: restart the same song
         if (repeatMode === "one") {
           const currentTrack = queue[currentIndex];
@@ -497,7 +488,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             return;
           }
         }
-        
+
         // Handle repeat all: loop back to first song
         if (queue.length > 0) {
           if (currentIndex < queue.length - 1) {
@@ -578,7 +569,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
       toggleShuffle: () => {
         const { queue, originalQueue, currentIndex, isShuffled, currentTrack } = get();
-        
+
         if (isShuffled) {
           // Unshuffle: restore original queue order
           if (originalQueue.length > 0 && currentTrack) {
@@ -601,23 +592,23 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           if (queue.length > 0 && currentTrack && currentIndex >= 0 && currentIndex < queue.length) {
             // Save original queue if not already saved
             const original = originalQueue.length > 0 ? originalQueue : [...queue];
-            
+
             // Create shuffled queue - separate current track from others
             const otherTracks = queue.filter((_, idx) => idx !== currentIndex);
-            
+
             // Fisher-Yates shuffle for other tracks
             for (let i = otherTracks.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
               [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
             }
-            
+
             // Reconstruct queue with current track in same position
             const shuffled = [
               ...otherTracks.slice(0, currentIndex),
               currentTrack,
               ...otherTracks.slice(currentIndex)
             ];
-            
+
             set({
               queue: shuffled,
               originalQueue: original,
@@ -628,13 +619,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             // No current track or invalid index - just shuffle everything
             const original = originalQueue.length > 0 ? originalQueue : [...queue];
             const shuffled = [...queue];
-            
+
             // Fisher-Yates shuffle
             for (let i = shuffled.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
               [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
-            
+
             set({
               queue: shuffled,
               originalQueue: original,
@@ -662,36 +653,8 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
     }),
     {
       name: "@jevahapp_global_audio_player",
-      storage: {
-        getItem: async (name: string): Promise<string | null> => {
-          try {
-            const value = await AsyncStorage.getItem(name);
-            return value;
-          } catch (error) {
-            console.warn("Error reading from storage:", error);
-            return null;
-          }
-        },
-        setItem: async (name: string, value: string): Promise<void> => {
-          try {
-            // Zustand persist typically passes a string, but be defensive without spamming warnings
-            const toStore =
-              typeof value === "string" ? value : JSON.stringify(value);
-            await AsyncStorage.setItem(name, toStore);
-          } catch (error) {
-            console.warn("Error writing to storage:", error);
-            // Don't throw - just log the error
-          }
-        },
-        removeItem: async (name: string): Promise<void> => {
-          try {
-            await AsyncStorage.removeItem(name);
-          } catch (error) {
-            console.warn("Error removing from storage:", error);
-          }
-        },
-      },
-      partialize: (state) => {
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state): any => {
         // Only persist minimal state - don't persist soundInstance
         // Convert audioUrl and thumbnailUrl to strings if they're require() objects
         const persistedTrack = state.currentTrack ? {
@@ -702,8 +665,8 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           category: state.currentTrack.category,
           description: state.currentTrack.description,
           // Convert require() objects to strings
-          audioUrl: typeof state.currentTrack.audioUrl === 'string' 
-            ? state.currentTrack.audioUrl 
+          audioUrl: typeof state.currentTrack.audioUrl === 'string'
+            ? state.currentTrack.audioUrl
             : (state.currentTrack.audioUrl?.uri || ''),
           thumbnailUrl: typeof state.currentTrack.thumbnailUrl === 'string'
             ? state.currentTrack.thumbnailUrl
@@ -720,8 +683,8 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             duration: track.duration,
             category: track.category,
             description: track.description,
-            audioUrl: typeof track.audioUrl === 'string' 
-              ? track.audioUrl 
+            audioUrl: typeof track.audioUrl === 'string'
+              ? track.audioUrl
               : (track.audioUrl?.uri || ''),
             thumbnailUrl: typeof track.thumbnailUrl === 'string'
               ? track.thumbnailUrl
@@ -734,8 +697,8 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             duration: track.duration,
             category: track.category,
             description: track.description,
-            audioUrl: typeof track.audioUrl === 'string' 
-              ? track.audioUrl 
+            audioUrl: typeof track.audioUrl === 'string'
+              ? track.audioUrl
               : (track.audioUrl?.uri || ''),
             thumbnailUrl: typeof track.thumbnailUrl === 'string'
               ? track.thumbnailUrl

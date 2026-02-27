@@ -1,6 +1,6 @@
-import React, { MutableRefObject } from "react";
-import { ResizeMode, Video } from "expo-av";
 import { MaterialIcons } from "@expo/vector-icons";
+import { ResizeMode, Video } from "expo-av";
+import { MutableRefObject } from "react";
 import {
   Text,
   TouchableOpacity,
@@ -11,9 +11,9 @@ import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { getBestVideoUrl, getVideoUrlFromMedia, handleVideoError } from "../../../src/shared/utils/videoUrlManager";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { ReelsActionButtons } from "./ReelsActionButtons";
+import { ReelsMenu } from "./ReelsMenu";
 import { ReelsProgressBar } from "./ReelsProgressBar";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
-import { ReelsMenu } from "./ReelsMenu";
 
 export interface ReelsVideoItemProps {
   videoData: any;
@@ -121,7 +121,7 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     onDelete,
     onReport,
     onMenuToggle,
-  onMenuClose,
+    onMenuClose,
     setIsDragging,
     setReelsProgressBarWidth,
     setVideoDuration,
@@ -184,6 +184,18 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
   }
 
   const videoUrl = getBestVideoUrl(rawVideoUrl);
+
+  if (__DEV__ && isActive) {
+    console.log(`🎬 [ReelsVideoItem] Initializing player for ${enriched.title}:`, {
+      id: enriched._id || enriched.id,
+      videoKey,
+      rawVideoUrl: rawVideoUrl?.substring(0, 100),
+      resolvedUrl: videoUrl?.substring(0, 100),
+      hasPlaybackUrl: !!enriched.playbackUrl,
+      hasHlsUrl: !!enriched.hlsUrl
+    });
+  }
+
   mediaStore.getVideoCacheStatus(videoKey);
 
   const handleComment = (key: string) => onComment(key);
@@ -221,9 +233,9 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 const existingRef = videoRefs.current[videoKey];
                 if (existingRef && existingRef !== ref) {
                   try {
-                    existingRef.pauseAsync().catch(() => {});
+                    existingRef.pauseAsync().catch(() => { });
                     globalVideoStore.unregisterVideoPlayer(videoKey);
-                  } catch (e) {}
+                  } catch (e) { }
                 }
                 videoRefs.current[videoKey] = ref;
                 globalVideoStore.registerVideoPlayer(videoKey, {
@@ -269,12 +281,20 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
             useNativeControls={false}
             isLooping={true}
             onError={async (error) => {
-              const errorDetails = error?.error || error;
+              const errorDetails = (error as any)?.error || error;
               const errorAnalysis = handleVideoError(
-                error,
+                error as any,
                 videoUrl,
                 enriched.title
               );
+
+              if (__DEV__) {
+                console.log(`🕵️ [Reels Probe] Probing URL for ${enriched.title}:`, videoUrl);
+                fetch(videoUrl, { method: 'HEAD' })
+                  .then(res => console.log(`📡 [Reels Probe] Result: ${res.status} ${res.statusText}`))
+                  .catch(err => console.error(`📡 [Reels Probe] Failed:`, err.message));
+              }
+
               console.error(
                 `❌ Video loading error in reels for ${enriched.title}:`,
                 { errorDetails, errorAnalysis }
@@ -284,17 +304,17 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 try {
                   await ref.pauseAsync();
                   globalVideoStore.pauseVideo(videoKey);
-                } catch {}
+                } catch { }
               }
               try {
                 globalVideoStore.unregisterVideoPlayer(videoKey);
-              } catch {}
+              } catch { }
             }}
             onLoad={() => {
               mediaStore.setVideoLoaded(videoKey, true);
               if (playingVideos[videoKey] && !userHasManuallyPaused) {
                 const ref = videoRefs.current[videoKey];
-                if (ref) ref.playAsync().catch(() => {});
+                if (ref) ref.playAsync().catch(() => { });
               }
             }}
             onPlaybackStatusUpdate={(status) => {
@@ -321,14 +341,13 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
               globalVideoStore.setVideoProgress(videoKey, pct);
               const ref = videoRefs.current[videoKey];
               if (status.didJustFinish) {
-                ref?.setPositionAsync(0);
+                ref?.setPositionAsync(0).catch(() => { });
                 globalVideoStore.pauseVideo(videoKey);
                 triggerHapticFeedback();
               }
             }}
             shouldCorrectPitch={isIOS}
             progressUpdateIntervalMillis={isIOS ? 100 : 250}
-            preferredForwardBufferDuration={45}
           />
 
           {isActive && (!playingVideos[videoKey] || !videoDuration) && (

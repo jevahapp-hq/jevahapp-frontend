@@ -1,24 +1,23 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { usePathname, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   Dimensions,
   Image,
-  Modal,
   PanResponder,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { UI_CONFIG } from "../../src/shared/constants";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import { UI_CONFIG } from "../../src/shared/constants";
 import { getBottomNavHeight } from "../utils/responsiveOptimized";
 import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
 
@@ -68,17 +67,17 @@ export default function FloatingAudioPlayer() {
     // Don't show on auth/onboarding screens - always hide there
     const authRouteSegments = ['auth', 'login', 'signup', 'sign-in', 'sign-up', 'onboarding', 'welcome'];
     const authRoutePaths = ['/auth', '/login', '/signup', '/sign-in', '/sign-up', '/onboarding', '/welcome'];
-    
+
     // Check if current path is an auth route
-    const isAuthRoute = 
+    const isAuthRoute =
       authRoutePaths.some(route => pathname?.startsWith(route)) ||
       segments.some(seg => authRouteSegments.includes(seg.toLowerCase()));
-    
+
     // Don't show on root/index screen (welcome/onboarding)
-    if (pathname === '/' || pathname === '/index' || segments.length === 0 || (segments.length === 1 && segments[0] === 'index')) {
+    if ((pathname as any) === '/' || (pathname as any) === '/index' || (segments as any).length === 0 || ((segments as any).length === 1 && (segments as any)[0] === 'index')) {
       return false;
     }
-    
+
     // If on auth route, never show
     if (isAuthRoute) {
       return false;
@@ -99,14 +98,14 @@ export default function FloatingAudioPlayer() {
     if (pathname?.startsWith("/categories/upload")) {
       return false;
     }
-    
+
     // If there's a current track, ALWAYS show the player (even if auth is still loading)
     // This allows the player to appear immediately when a song starts playing
     if (currentTrack) {
       // console.log("🎵 FloatingAudioPlayer: Showing because currentTrack exists:", currentTrack.title);
       return true;
     }
-    
+
     // If no track, only show if fully authenticated (but this shouldn't happen since we return null if no track)
     // This is just for safety - the component will return null anyway if no track
     return false;
@@ -244,7 +243,7 @@ export default function FloatingAudioPlayer() {
             bottom: getBottomNavHeight() + 56,
             opacity: fadeAnim,
             transform: [
-              { 
+              {
                 translateY: Animated.add(translateY, slideAnim) // Combine swipe gesture with slide-in animation
               },
             ],
@@ -258,13 +257,24 @@ export default function FloatingAudioPlayer() {
           tint="light"
           style={StyleSheet.absoluteFill}
         />
-        
+
         {/* Glassmorphism Overlay with app colors */}
         <View style={styles.glassOverlay} />
-        
+
+        {/* Dynamic Glow Effect */}
+        <Animated.View
+          style={[
+            styles.glowEffect,
+            {
+              opacity: isPlaying ? 0.2 : 0.05,
+              transform: [{ scale: isPlaying ? 1.8 : 1.2 }]
+            }
+          ]}
+        />
+
         {/* Subtle gradient accent using app colors */}
         <View style={styles.gradientAccent} />
-        
+
         {/* Content */}
         <View style={styles.content}>
           {/* Thumbnail */}
@@ -382,32 +392,41 @@ export default function FloatingAudioPlayer() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 20, // Centered with margins on left and right
-    right: 20,
-    height: MINI_PLAYER_HEIGHT,
-    // Below FAB/actions (zIndex 30/100 in BottomNav) so those sit on top,
-    // but above main content behind the bottom area.
-    zIndex: 20,
+    left: 16, // More breathing room
+    right: 16,
+    height: MINI_PLAYER_HEIGHT + 4, // Slightly taller
+    zIndex: 100, // Top priority
     overflow: "hidden",
-    borderRadius: 28, // Curvy edges - more rounded
+    borderRadius: 32, // More circular edges
     ...Platform.select({
       ios: {
-        shadowColor: UI_CONFIG.COLORS.PRIMARY,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
         shadowRadius: 20,
       },
       android: {
-        elevation: 16,
+        elevation: 12,
       },
     }),
   },
   glassOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.9)", // More opaque for better glass effect
+    backgroundColor: "rgba(255, 255, 255, 0.15)", // Very translucent
     borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.6)",
-    borderRadius: 28, // Match container border radius
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderRadius: 32,
+  },
+  glowEffect: {
+    position: "absolute",
+    top: -30,
+    left: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+    opacity: 0.25,
+    filter: "blur(20px)", // Native blur if supported
   },
   gradientAccent: {
     position: "absolute",
@@ -415,109 +434,98 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green accent line
-    opacity: 0.6,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+    opacity: 0.8,
   },
   content: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: UI_CONFIG.SPACING.MD,
-    paddingVertical: UI_CONFIG.SPACING.SM,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     height: "100%",
   },
   thumbnailContainer: {
-    marginRight: UI_CONFIG.SPACING.MD,
+    marginRight: 12,
     position: "relative",
   },
   thumbnail: {
-    width: 52,
-    height: 52,
-    borderRadius: 14, // More curvy to match container
+    width: 54,
+    height: 54,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: "rgba(255, 255, 255, 0.8)",
-    shadowColor: UI_CONFIG.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
   playIndicator: {
     position: "absolute",
-    top: -3,
-    right: -3,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: UI_CONFIG.COLORS.SECONDARY, // Orange accent
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: UI_CONFIG.COLORS.SECONDARY,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2.5,
-    borderColor: "rgba(255, 255, 255, 0.95)",
+    borderColor: "#FFFFFF",
     shadowColor: UI_CONFIG.COLORS.SECONDARY,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
   playIndicatorDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: "#FFFFFF",
   },
   trackInfo: {
     flex: 1,
-    marginRight: UI_CONFIG.SPACING.SM,
+    marginRight: 8,
   },
   trackTitle: {
-    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
+    fontSize: 15,
     fontFamily: "Rubik-SemiBold",
     color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-    textShadowColor: "rgba(37, 110, 99, 0.1)", // Subtle Jevah green shadow
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
   trackArtist: {
-    fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.XS,
+    fontSize: 12,
     fontFamily: "Rubik",
     color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-    marginTop: 2,
-    textShadowColor: "rgba(37, 110, 99, 0.08)",
-    textShadowOffset: { width: 0, height: 0.5 },
-    textShadowRadius: 1,
-    letterSpacing: 0.1,
+    marginTop: 1,
+    opacity: 0.8,
   },
   controls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: UI_CONFIG.SPACING.XS,
+    gap: 8,
   },
   closeButton: {
     padding: 6,
-    marginLeft: UI_CONFIG.SPACING.XS,
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    borderRadius: 16,
+    marginLeft: 4,
   },
   controlButton: {
     padding: 8,
-    borderRadius: 12, // More curvy
-    backgroundColor: "rgba(255, 255, 255, 0.4)", // More visible glass effect
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.6)",
+    borderColor: "rgba(255, 255, 255, 0.8)",
   },
   playButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20, // Perfect circle
-    backgroundColor: UI_CONFIG.COLORS.PRIMARY, // Jevah green
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: UI_CONFIG.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)", // Subtle white border for depth
+    shadowRadius: 8,
+    elevation: 8,
   },
 });
 

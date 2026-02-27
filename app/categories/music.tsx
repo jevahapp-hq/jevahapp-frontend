@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -7,6 +8,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -14,11 +16,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CopyrightFreeSongModal from "../components/CopyrightFreeSongModal";
 import copyrightFreeMusicAPI, {
   CopyrightFreeSongResponse,
 } from "../services/copyrightFreeMusicAPI";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import CopyrightFreeSongModal from "../components/CopyrightFreeSongModal";
 
 type DisplayMode = "list" | "grid" | "small" | "large";
 
@@ -46,9 +48,9 @@ export default function Music() {
   >(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
-  
+
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
-  
+
   // Global audio player state
   const {
     currentTrack,
@@ -129,14 +131,14 @@ export default function Music() {
       try {
         const response = search
           ? await copyrightFreeMusicAPI.searchSongs(search, {
-              category: category || undefined,
-              limit: 50,
-            })
+            category: category || undefined,
+            limit: 50,
+          })
           : await copyrightFreeMusicAPI.getAllSongs({
-              category: category || undefined,
-              limit: 50,
-              sort: "popular",
-            });
+            category: category || undefined,
+            limit: 50,
+            sort: "popular",
+          });
 
         if (response.success && response.data?.songs?.length) {
           const transformedSongs = response.data.songs
@@ -146,7 +148,7 @@ export default function Music() {
               (s) =>
                 !s?.contentType ||
                 String(s?.contentType || "").toLowerCase() ===
-                  "copyright-free-music"
+                "copyright-free-music"
             );
           setSongs(transformedSongs);
         } else {
@@ -195,7 +197,7 @@ export default function Music() {
         // Build queue from current songs
         const state = useGlobalAudioPlayerStore.getState();
         const songIndex = songs.findIndex((s) => s.id === song.id);
-        
+
         if (songIndex !== -1) {
           const mappedQueue = songs.map((s) => ({
             id: s.id,
@@ -261,67 +263,164 @@ export default function Music() {
       <TouchableOpacity
         activeOpacity={0.9}
         style={{
-          width: SCREEN_WIDTH - 64,
-          height: 180,
+          width: SCREEN_WIDTH - 48,
+          height: 220, // Taller for more cinematic presence
           marginRight: 16,
-          borderRadius: 16,
+          borderRadius: 32, // More rounded for modern premium feel
           overflow: "hidden",
+          ...Platform.select({
+            ios: {
+              shadowColor: item.color,
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+            },
+            android: {
+              elevation: 12,
+            },
+          }),
         }}
       >
         <LinearGradient
-          colors={[item.color, `${item.color}DD`]}
-          style={{ flex: 1, padding: 20, justifyContent: "space-between" }}
+          colors={[item.color, "#000000"]} // High-contrast cinematic gradient
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1 }}
         >
-          <View>
-            <Text
-              style={{
-                fontSize: 24,
-                fontWeight: "700",
-                color: "#FFFFFF",
-                fontFamily: "Rubik_700Bold",
-                marginBottom: 8,
-              }}
-            >
-              {item.title}
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#FFFFFFDD",
-                fontFamily: "Rubik_400Regular",
-              }}
-            >
-              {item.description}
-            </Text>
-          </View>
+          {/* Visual Flourish: Glass Orbs/Mesh Gradient Effect */}
           <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
+              position: "absolute",
+              top: -40,
+              right: -40,
+              width: 180,
+              height: 180,
+              borderRadius: 90,
+              backgroundColor: "rgba(255, 255, 255, 0.12)",
+              transform: [{ scale: 1.2 }],
             }}
-          >
-            <TouchableOpacity
+          />
+          <View
+            style={{
+              position: "absolute",
+              bottom: -20,
+              left: -20,
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+            }}
+          />
+
+          <View style={{ flex: 1, padding: 24, justifyContent: "space-between" }}>
+            {/* HUD / Glassmorphism Content Area */}
+            <View>
+              <BlurView
+                intensity={30}
+                tint="dark"
+                style={{
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 12,
+                  backgroundColor: "rgba(0, 0, 0, 0.2)",
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 255, 255, 0.1)",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 10,
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: 2,
+                    fontFamily: "Rubik_700Bold",
+                  }}
+                >
+                  Featured
+                </Text>
+              </BlurView>
+
+              <Text
+                style={{
+                  fontSize: 28,
+                  fontWeight: "800",
+                  color: "#FFFFFF",
+                  fontFamily: "Rubik_700Bold",
+                  marginBottom: 8,
+                  letterSpacing: -0.5,
+                  textShadowColor: "rgba(0, 0, 0, 0.4)",
+                  textShadowOffset: { width: 0, height: 2 },
+                  textShadowRadius: 6,
+                }}
+              >
+                {item.title}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: "rgba(255, 255, 255, 0.75)",
+                  fontFamily: "Rubik_400Regular",
+                  lineHeight: 20,
+                  maxWidth: "85%",
+                }}
+              >
+                {item.description}
+              </Text>
+            </View>
+
+            {/* Premium Interaction Bar */}
+            <View
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
+                flexDirection: "row",
                 alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              <Ionicons name="play" size={24} color={item.color} />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="download-outline" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: "#FFFFFF",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 6,
+                }}
+              >
+                <Ionicons name="play" size={28} color={item.color} style={{ marginLeft: 3 }} />
+              </TouchableOpacity>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "rgba(255, 255, 255, 0.15)",
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  gap: 16,
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 255, 255, 0.2)",
+                }}
+              >
+                <TouchableOpacity>
+                  <Ionicons name="heart-outline" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity>
+                  <Ionicons name="share-outline" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity>
+                  <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -816,10 +915,10 @@ export default function Music() {
                         mode === "list"
                           ? "list"
                           : mode === "grid"
-                          ? "grid"
-                          : mode === "small"
-                          ? "apps"
-                          : "square"
+                            ? "grid"
+                            : mode === "small"
+                              ? "apps"
+                              : "square"
                       }
                       size={18}
                       color={displayMode === mode ? "#FFFFFF" : "#98A2B3"}
