@@ -25,6 +25,7 @@ export type DownloadProgressCallback = (progress: DownloadProgress) => void;
 class FileDownloadManager {
   private downloadDir: string;
   private activeDownloads: Map<string, FileSystem.DownloadResumable> = new Map();
+  private lastProgressUpdate: Map<string, number> = new Map();
 
   constructor() {
     // Use app-specific directory (not accessible via Files app or Gallery)
@@ -131,8 +132,8 @@ class FileDownloadManager {
           const progress =
             downloadProgress.totalBytesExpectedToWrite > 0
               ? (downloadProgress.totalBytesWritten /
-                  downloadProgress.totalBytesExpectedToWrite) *
-                100
+                downloadProgress.totalBytesExpectedToWrite) *
+              100
               : 0;
 
           // Call progress callback
@@ -148,11 +149,11 @@ class FileDownloadManager {
           // Update backend progress (throttle to every 10% or at completion)
           const progressFloor = Math.floor(progress);
           const lastUpdate = this.lastProgressUpdate.get(mediaId) || -1;
-          
+
           // Update every 10% or at 100%
           if ((progressFloor % 10 === 0 && progressFloor !== lastUpdate) || progress === 100) {
             this.lastProgressUpdate.set(mediaId, progressFloor);
-            
+
             // Non-blocking status update (don't await)
             downloadAPI.updateDownloadStatus(mediaId, {
               downloadProgress: progressFloor,
