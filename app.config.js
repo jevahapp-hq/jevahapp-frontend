@@ -10,6 +10,8 @@ export default {
     scheme: "jevahapp",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+    // ✅ PERFORMANCE HACK #1: Enable Hermes JavaScript engine for faster startup
+    jsEngine: "hermes",
     extra: {
       API_URL:
         process.env.EXPO_PUBLIC_API_URL ||

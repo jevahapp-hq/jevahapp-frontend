@@ -1,9 +1,9 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
 import {
-    Rubik_400Regular,
-    Rubik_600SemiBold,
-    Rubik_700Bold,
-    useFonts,
+  Rubik_400Regular,
+  Rubik_600SemiBold,
+  Rubik_700Bold,
+  useFonts,
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
@@ -14,6 +14,9 @@ import { Alert, BackHandler, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { mediaApi } from "../src/core/api/MediaApi";
+import type { MediaItem as SharedMediaItem } from "../src/shared/types";
+import { transformApiResponseToMediaItem } from "../src/shared/utils/contentHelpers";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingAudioPlayer from "./components/FloatingAudioPlayer";
@@ -27,6 +30,7 @@ import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { warmupBackend } from "./utils/apiWarmup";
+import { UserProfileCache } from "./utils/cache/UserProfileCache";
 import { PerformanceOptimizer } from "./utils/performance";
 
 // ✅ Initialize Sentry
@@ -220,6 +224,55 @@ export default function RootLayout() {
           //   "⚠️ Critical data preloading failed (continuing anyway):",
           //   preloadErr
           // );
+        }
+
+        // ✅ PERFORMANCE HACK: Preload smaller initial batch (15 items) for faster startup
+        // Preload all-content feed so Home tab can render instantly from cache
+        try {
+          await queryClient.prefetchQuery({
+            queryKey: ["all-content", "ALL", 1, 15, false], // Reduced to 15 for faster response
+            queryFn: async () => {
+              const response = await mediaApi.getAllContentPublic({
+                page: 1,
+                limit: 15, // Load 15 items first, then lazy-load more as user scrolls
+              });
+
+              if (!response.success) {
+                throw new Error(response.error || "Failed to fetch content");
+              }
+
+              let enrichedMedia: any[] = [];
+              try {
+                enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
+                  response.media || []
+                );
+              } catch (enrichError) {
+                if (__DEV__) {
+                  console.warn(
+                    "⚠️ Prefetch enrichment failed, using raw media:",
+                    enrichError
+                  );
+                }
+                enrichedMedia = response.media || [];
+              }
+
+              const transformedMedia = (enrichedMedia || [])
+                .map((item) => transformApiResponseToMediaItem(item))
+                .filter(
+                  (item): item is SharedMediaItem => item !== null && item !== undefined
+                );
+
+              return {
+                media: transformedMedia,
+                total:
+                  response.total || response.pagination?.total || transformedMedia.length,
+              };
+            },
+          });
+        } catch (prefetchErr) {
+          if (__DEV__) {
+            console.warn("⚠️ Failed to prefetch all-content feed:", prefetchErr);
+          }
         }
 
         // Warm up backend to prevent Render cold starts

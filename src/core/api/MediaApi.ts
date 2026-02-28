@@ -20,7 +20,15 @@ class MediaApi {
     if (options?.sort) params.sort = options.sort;
     if (options?.order) params.order = options.order;
 
-    const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT, Object.keys(params).length > 0 ? params : undefined);
+    // Use ApiClient retry helper to gracefully handle transient errors and 429 rate limits
+    const response = await apiClient.retry(
+      () =>
+        apiClient.get<any>(
+          API_CONFIG.ENDPOINTS.ALL_CONTENT,
+          Object.keys(params).length > 0 ? params : undefined
+        ),
+      API_CONFIG.RETRY_ATTEMPTS
+    );
 
     if (response.success) {
       const data = (response as any).data || {};
@@ -168,9 +176,14 @@ class MediaApi {
       search: filter.search,
     };
 
-    const response = await apiClient.get<any>(
-      API_CONFIG.ENDPOINTS.DEFAULT_CONTENT,
-      params
+    // Use ApiClient retry helper to gracefully handle transient errors and 429 rate limits
+    const response = await apiClient.retry(
+      () =>
+        apiClient.get<any>(
+          API_CONFIG.ENDPOINTS.DEFAULT_CONTENT,
+          params
+        ),
+      API_CONFIG.RETRY_ATTEMPTS
     );
 
     if (response.success) {

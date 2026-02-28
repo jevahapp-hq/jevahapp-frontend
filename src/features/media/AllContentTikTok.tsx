@@ -101,6 +101,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const pauseAllVideos = useGlobalVideoStore((s) => s.pauseAllVideos);
   const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
   const enableAutoPlay = useGlobalVideoStore((s) => s.enableAutoPlay);
+  const disableAutoPlay = useGlobalVideoStore((s) => s.disableAutoPlay);
 
   // Create functions to match what components expect
   const playMedia = useCallback((key: string, type: "video" | "audio") => {
@@ -210,6 +211,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const isVideoMuted = (key: string) => mutedVideos[key] ?? false;
   const getVideoProgress = (key: string) => progresses[key] ?? 0;
   const getVideoOverlay = (key: string) => showOverlay[key] ?? false;
+
+  // Enable TikTok-style auto-play for the home feed while this component is mounted
+  useEffect(() => {
+    enableAutoPlay();
+    return () => {
+      disableAutoPlay();
+    };
+  }, [enableAutoPlay, disableAutoPlay]);
 
   // Transform and filter content
   const mediaList: MediaItem[] = useMemo(() => {
@@ -1456,8 +1465,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }, [pauseAllAudio])
   );
 
-  // Loading state
-  if (loading && !hasContent) {
+  // ✅ INSTAGRAM/TIKTOK STYLE: Only show loading skeleton if we have NO content at all (not even cached)
+  // This ensures cached content shows instantly (0ms) while fresh data loads in background
+  if (loading && !hasContent && filteredMediaList.length === 0) {
     return (
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>

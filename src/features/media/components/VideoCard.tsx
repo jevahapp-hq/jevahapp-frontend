@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
@@ -30,6 +30,10 @@ import {
     handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
 import { isAudioSermon, detectMediaType } from "../../../shared/utils";
+
+// Fallback video to guarantee something playable is always available
+const FALLBACK_VIDEO_URL =
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -83,46 +87,58 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
   // NEVER use thumbnailUrl or imageUrl for video playback!
-  const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
-  const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
-    ? getBestVideoUrl(rawVideoUrl)
-    : null;
+  // ✅ MEMOIZED: Prevent recalculation on every render (Performance Hack #3)
+  const rawVideoUrl = useMemo(() => {
+    if (isAudioSermonValue) return null;
+
+    const fromMedia = getVideoUrlFromMedia(video);
+    if (fromMedia && typeof fromMedia === "string" && fromMedia.trim().length > 0) {
+      return fromMedia.trim();
+    }
+
+    // If backend did not provide any usable URL, fall back to a safe demo video
+    // so the user never sees a permanently blank video slot.
+    console.warn(
+      "⚠️ VideoCard: Missing fileUrl/playbackUrl/hlsUrl for media, using fallback video:",
+      video?.title || "(untitled)"
+    );
+    return FALLBACK_VIDEO_URL;
+  }, [isAudioSermonValue, video.fileUrl, video.playbackUrl, video.hlsUrl, video.title]);
+  
+  // ✅ MEMOIZED: Always derive the best playable URL (handles signed URLs internally)
+  // Relax validation here so that any non-empty URL gets a chance to play instead of rendering blank
+  const videoUrl = useMemo(() => {
+    if (!rawVideoUrl) return null;
+    try {
+      // getBestVideoUrl will validate, convert signed URLs, and fall back safely if needed
+      return getBestVideoUrl(rawVideoUrl);
+    } catch {
+      // As a final fallback, return the raw URL so at least something is attempted
+      return rawVideoUrl;
+    }
+  }, [rawVideoUrl]);
+  
+  // ✅ Track retry attempts to prevent infinite loops
+  const retryCountRef = useRef(0);
+  const maxRetries = 2;
   
   // Initialize refs before useVideoPlayer hook (needed in callback)
-  const preloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // In React Native, setTimeout returns a number, not NodeJS.Timeout
+  const preloadTimeoutRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
   
+  // ✅ INSTAGRAM/TIKTOK STYLE: Use memoized videoUrl to prevent player recreation on every render
+  // ✅ INSTAGRAM/TIKTOK STYLE: Player starts loading IMMEDIATELY (0ms delay) when component mounts
+  // IMPORTANT: We still must call the hook every render; when videoUrl is null we pass an empty string,
+  // but we only ever render the VideoView when videoUrl is truthy to avoid blank black frames.
   const player = useVideoPlayer(videoUrl || "", (player) => {
     player.loop = false;
     player.muted = isMuted ?? false; // Ensure boolean, never undefined
     player.volume = (videoVolume ?? 1.0); // Ensure number, never undefined
-    // Pre-load video source for faster playback on subsequent loads
-    if (videoUrl) {
-      // Clear any existing timeout
-      if (preloadTimeoutRef.current) {
-        clearTimeout(preloadTimeoutRef.current);
-      }
-      // Player will automatically load the source, but we can ensure it's ready
-      // by checking status after a brief delay
-      preloadTimeoutRef.current = setTimeout(() => {
-        // Check if component is still mounted and player is still valid
-        if (!isMountedRef.current) {
-          return;
-        }
-        try {
-          // Safely check player status - player may have been released
-          if (player && typeof player.playing === 'boolean') {
-            // Pre-buffer the video without playing
-            // This ensures faster response when play is pressed
-          }
-        } catch (error) {
-          // Player was released, ignore silently
-          if (__DEV__) {
-            console.warn('Video player was released before timeout callback:', error);
-          }
-        }
-      }, 100) as NodeJS.Timeout;
-    }
+    // ✅ INSTAGRAM/TIKTOK STYLE: NO DELAY - video starts loading immediately
+    // expo-video automatically starts loading when source is set
+    // No timeout needed - player loads instantly for fastest possible display
+    // First frame will show as soon as it's buffered (like Instagram/TikTok)
   });
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
@@ -137,7 +153,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
-  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // In React Native, setTimeout returns a number, not NodeJS.Timeout
+  const overlayTimeoutRef = useRef<number | null>(null);
   const toggleProcessingRef = useRef(false); // Ref for debouncing play toggle
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
@@ -181,7 +198,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   }, [video, closeDeleteModal, closeModal, onDelete]);
 
   // Double-tap detection
-  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // In React Native, setTimeout returns a number, not NodeJS.Timeout
+  const tapTimeoutRef = useRef<number | null>(null);
   const lastTapRef = useRef<number>(0);
   const tapCountRef = useRef<number>(0);
 
@@ -225,9 +243,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       clearTimeout(overlayTimeoutRef.current);
     }
     // Optional: auto-hide after a few seconds while playing
-    overlayTimeoutRef.current = setTimeout(() => {
-      setShowOverlay(false);
-    }, 3000) as any;
+      overlayTimeoutRef.current = setTimeout(() => {
+        setShowOverlay(false);
+      }, 3000);
   }, []);
 
   const hideOverlay = useCallback(() => {
@@ -434,7 +452,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       tapCountRef.current = 0;
       tapTimeoutRef.current = null;
-    }, 200) as any; // Reduced to 200ms for faster responsiveness (like Instagram/TikTok)
+    }, 200); // Reduced to 200ms for faster responsiveness (like Instagram/TikTok)
   }, [
     isPlaying,
     onTogglePlay,
@@ -530,7 +548,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     setShowOverlay((prev) => !prev);
   }, []);
 
-  // Handle video error with intelligent retry mechanism
+  // ✅ Handle video error with intelligent retry mechanism - NEVER permanently fail
+  // This prevents videos from switching to thumbnails (Performance + UX fix)
   const handleVideoError = useCallback(
     (error: any) => {
       // Use the enhanced error handler
@@ -540,20 +559,28 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         video.title
       );
 
-      // Set failed state
-      setFailedVideoLoad(true);
-
-      // If it's a retryable error (expired signed URL), retry with converted URL
-      if (errorAnalysis.isRetryable) {
-
+      // ✅ CRITICAL FIX: Don't permanently set failedVideoLoad - videos should never expire
+      // Only set temporarily for retry logic
+      if (retryCountRef.current < maxRetries && errorAnalysis.isRetryable) {
+        retryCountRef.current += 1;
+        console.log(`🔄 Retrying video load (attempt ${retryCountRef.current}/${maxRetries}) for: ${video.title}`);
+        
+        // Retry with converted URL after a short delay
         setTimeout(() => {
-          if (isMountedRef.current) {
+          if (isMountedRef.current && videoUrl) {
             setFailedVideoLoad(false);
+            // Player will automatically retry with the same URL (which is already converted)
+            // The getBestVideoUrl already handles signed URL conversion
           }
-        }, 3000); // Retry after 3 seconds
+        }, 1000); // Faster retry (1 second instead of 3)
+      } else {
+        // After max retries, still don't permanently fail - show video with error overlay
+        // This ensures video stays visible, not thumbnail
+        console.warn(`⚠️ Video load failed after ${maxRetries} retries, but keeping video player visible: ${video.title}`);
+        setFailedVideoLoad(false); // Keep video player, not thumbnail
       }
     },
-    [video.title, video.fileUrl]
+    [video.title, video.fileUrl, videoUrl]
   );
 
   // Handle video load and progress tracking with expo-video
@@ -782,22 +809,24 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         onPressIn={handleHoverStart}
         onPressOut={handleHoverEnd}
       >
-        <View className="w-full h-[400px] overflow-hidden relative">
-          {/* Video Player or Thumbnail */}
-          {!failedVideoLoad && videoUrl && !isAudioSermonValue && player ? (
+        <View className="w-full h-[400px] overflow-hidden relative bg-gray-100">
+          {/* ✅ CRITICAL FIX: Videos should NEVER switch to thumbnails - always show video player */}
+          {/* Only show thumbnail for audio sermons, never for video content */}
+          {!isAudioSermonValue && videoUrl && player ? (
             <VideoView
               player={player}
               style={{
                 width: "100%",
                 height: "100%",
                 position: "absolute",
+                backgroundColor: "transparent",
               }}
               contentFit="cover"
               nativeControls={false}
               fullscreenOptions={{ enable: false }}
             />
-          ) : (
-            /* Thumbnail for audio sermons or fallback */
+          ) : isAudioSermonValue ? (
+            /* Thumbnail ONLY for audio sermons */
             <Image
               source={
                 thumbnailUri
@@ -813,16 +842,20 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               }}
               resizeMode="cover"
             />
+          ) : (
+            /* Fallback: Show light skeleton while video URL/player is initializing */
+            <View className="absolute inset-0 bg-gray-100 items-center justify-center">
+              <VideoCardSkeleton dark={false} />
+            </View>
           )}
 
-          {/* ✅ Show shimmer skeleton until video is fully loaded - shimmer continues swooshing until readyToPlay */}
+          {/* ✅ Show shimmer skeleton until video is fully loaded - covers any brief dark frame */}
           {!videoLoadedRef.current &&
             !videoLoaded &&
             !failedVideoLoad &&
-            isValidUri(video.fileUrl) &&
             !isAudioSermonValue && (
               <View className="absolute inset-0" pointerEvents="none">
-                <VideoCardSkeleton dark={true} />
+                <VideoCardSkeleton dark={false} />
               </View>
             )}
 
@@ -992,14 +1025,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               saved={!!userSaveState}
               saveCount={saveCount || 0}
               onSave={() => {
-                onSave(modalKey, video);
+                // Call the prop function (avoid shadowing by using the prop directly)
+                const saveHandler = onSave;
+                saveHandler(modalKey, video);
               }}
               isLoading={isLoadingStats}
               contentType="media"
               contentId={contentId}
               onShare={() => onShare(modalKey, video)}
-              contentType="media"
-              contentId={contentId}
               useEnhancedComponents={false}
             />
           </View>

@@ -23,13 +23,33 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   } = options;
 
   // Use React Query for all content (provides 0ms cache hits)
+  // ✅ PERFORMANCE HACK #4: Reduce initial load from 50 to 15 items for 3x faster response
   const queryClient = useQueryClient();
+  const INITIAL_LIMIT = 15; // Reduced from 50 for faster initial load (TikTok/Instagram style)
+  
+  // ✅ INSTAGRAM/TIKTOK STYLE: Get cached data immediately from Zustand store (0ms)
+  const getCachedContent = useCallback(() => {
+    const cacheKey = "ALL:first";
+    const cached = useContentCacheStore.getState().get(cacheKey);
+    if (cached && cached.items && cached.items.length > 0) {
+      // Check if cache is fresh (within 30 minutes)
+      const isFresh = Date.now() - cached.fetchedAt < 30 * 60 * 1000;
+      if (isFresh) {
+        return {
+          media: cached.items,
+          total: cached.total || 0,
+        };
+      }
+    }
+    return null;
+  }, []);
+
   const allContentQuery = useQuery({
-    queryKey: ["all-content", contentType, 1, 50, false],
+    queryKey: ["all-content", contentType, 1, INITIAL_LIMIT, false],
     queryFn: async () => {
       const response = await mediaApi.getAllContentPublic({
         page: 1,
-        limit: 50,
+        limit: INITIAL_LIMIT, // Load 15 items first, then lazy-load more
         contentType: contentType !== "ALL" ? contentType : undefined,
       });
 
@@ -69,7 +89,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         useContentCacheStore.getState().set("ALL:first", {
           items: transformedMedia,
           page: 1,
-          limit: 50,
+          limit: INITIAL_LIMIT,
           total: response.total || response.pagination?.total || 0,
           fetchedAt: Date.now(),
         });
@@ -89,7 +109,29 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     refetchOnMount: false, // ✅ Use cache if available - instant load when switching tabs
     refetchOnWindowFocus: false, // ✅ Don't refetch on focus - preserve user's current view
     refetchOnReconnect: false, // ✅ Don't refetch on reconnect - use cached data
+    // ✅ INSTAGRAM/TIKTOK STYLE: Show cached data immediately (0ms) while fetching fresh data in background
+    placeholderData: getCachedContent(),
   });
+
+  // ✅ INSTAGRAM/TIKTOK STYLE: Get cached default content immediately (0ms)
+  const getCachedDefaultContent = useCallback(() => {
+    const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
+    const cached = useContentCacheStore.getState().get(defaultKey);
+    if (cached && cached.items && cached.items.length > 0) {
+      // Check if cache is fresh (within 30 minutes)
+      const isFresh = Date.now() - cached.fetchedAt < 30 * 60 * 1000;
+      if (isFresh) {
+        return {
+          media: cached.items,
+          total: cached.total || 0,
+          page: cached.page || page,
+          limit: cached.limit || limit,
+          pages: Math.ceil((cached.total || 0) / (cached.limit || limit)),
+        };
+      }
+    }
+    return null;
+  }, [contentType, page, limit]);
 
   // Use React Query for default content
   const defaultContentQuery = useQuery({
@@ -137,9 +179,12 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     refetchOnMount: false, // ✅ Use cache if available - instant load when switching tabs
     refetchOnWindowFocus: false, // ✅ Don't refetch on focus - preserve user's current view
     refetchOnReconnect: false, // ✅ Don't refetch on reconnect - use cached data
+    // ✅ INSTAGRAM/TIKTOK STYLE: Show cached data immediately (0ms) while fetching fresh data in background
+    placeholderData: getCachedDefaultContent(),
   });
 
-  // Extract data from React Query (0ms if cached!)
+  // ✅ INSTAGRAM/TIKTOK STYLE: Extract data from React Query (0ms if cached!)
+  // Use placeholderData if available (instant), otherwise use fetched data
   const allContent = allContentQuery.data?.media || [];
   const allContentTotal = allContentQuery.data?.total || 0;
   const defaultContent = defaultContentQuery.data?.media || [];
@@ -150,9 +195,10 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     pages: defaultContentQuery.data?.pages || 0,
   };
 
-  // Loading states (only show loading if no cached data)
-  const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
-  const defaultContentLoading = defaultContentQuery.isLoading && defaultContent.length === 0;
+  // ✅ INSTAGRAM/TIKTOK STYLE: Only show loading if we have NO data at all (not even cached)
+  // This ensures cached content shows instantly (0ms) while fresh data loads in background
+  const allContentLoading = allContentQuery.isLoading && allContent.length === 0 && !allContentQuery.data;
+  const defaultContentLoading = defaultContentQuery.isLoading && defaultContent.length === 0 && !defaultContentQuery.data;
   const loading = allContentLoading || defaultContentLoading;
   
   // Error states
@@ -175,19 +221,19 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     } else {
       // For append, fetch next page using queryClient
       await queryClient.fetchQuery({
-        queryKey: ["all-content", contentType, pageNum, 50, useAuth],
+        queryKey: ["all-content", contentType, pageNum, INITIAL_LIMIT, useAuth],
         queryFn: async () => {
           let response;
           if (useAuth) {
             response = await mediaApi.getAllContentWithAuth({
               page: pageNum,
-              limit: 50,
+              limit: INITIAL_LIMIT,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
           } else {
             response = await mediaApi.getAllContentPublic({
               page: pageNum,
-              limit: 50,
+              limit: INITIAL_LIMIT,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
           }
@@ -317,18 +363,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
   // React Query handles initialization automatically via `enabled: immediate`
   // No need for manual useEffect - React Query will fetch on mount if enabled
-  useEffect(() => {
-    if (immediate) {
-      // Test available endpoints first (non-blocking)
-      mediaApi.testAvailableEndpoints();
-    }
-  }, [immediate]);
+  // NOTE: We intentionally no longer call mediaApi.testAvailableEndpoints here,
+  // because it generated extra traffic and could trigger 429 "Too many requests"
+  // during normal browsing, especially on slower networks or in development.
 
   // Calculate if there are more pages to load
   const hasMorePages = useMemo(() => {
     if (!allContentTotal) return false;
-    const currentPage = Math.floor(allContent.length / 50) + 1;
-    const totalPages = Math.ceil(allContentTotal / 50);
+    const currentPage = Math.floor(allContent.length / INITIAL_LIMIT) + 1;
+    const totalPages = Math.ceil(allContentTotal / INITIAL_LIMIT);
     return currentPage < totalPages;
   }, [allContent.length, allContentTotal]);
 

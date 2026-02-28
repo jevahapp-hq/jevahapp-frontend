@@ -1547,6 +1547,7 @@ export default function VideoComponent() {
                     onPress={handleMiniCardPress}
                     className="w-full h-[232px] rounded-2xl overflow-hidden relative"
                     activeOpacity={0.9}
+                    style={{ backgroundColor: 'black' }}
                   >
                     <Video
                       ref={(ref) => {
@@ -1571,6 +1572,7 @@ export default function VideoComponent() {
                         width: "100%",
                         height: "100%",
                         position: "absolute",
+                        backgroundColor: 'black',
                       }}
                       resizeMode={ResizeMode.COVER}
                       isMuted={globalVideoStore.mutedVideos[key] ?? false}

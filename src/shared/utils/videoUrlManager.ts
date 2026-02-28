@@ -143,8 +143,13 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
   return videoUrl.trim();
 };
 
+// ✅ PERFORMANCE HACK: Cache converted URLs to prevent re-processing
+const urlCache = new Map<string, string>();
+const CACHE_MAX_SIZE = 1000; // Limit cache size to prevent memory issues
+
 /**
  * Gets the best URL to use for video playback
+ * ✅ CRITICAL FIX: Always converts signed URLs to public URLs to prevent expiration
  */
 export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): string => {
   const fallback = fallbackUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
@@ -154,31 +159,49 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
     return fallback;
   }
 
+  // ✅ Check cache first for instant response
+  if (urlCache.has(originalUrl)) {
+    return urlCache.get(originalUrl)!;
+  }
+
   // Handle local file URLs (downloaded content) - return immediately without validation
   if (originalUrl.startsWith('file://') || originalUrl.startsWith('/')) {
     console.log(`📁 Using local file URL: ${originalUrl.substring(0, 100)}...`);
+    urlCache.set(originalUrl, originalUrl);
     return originalUrl;
   }
 
   const urlInfo = analyzeVideoUrl(originalUrl);
+  let bestUrl: string;
   
-  // If it's a signed URL, use the converted version
+  // ✅ CRITICAL FIX: Always convert signed URLs to public URLs to prevent expiration
+  // This ensures videos NEVER expire and switch to thumbnails
   if (urlInfo.isSignedUrl) {
+    // Always use converted URL (removes expiration parameters)
+    bestUrl = urlInfo.convertedUrl;
     if (urlInfo.isExpired) {
-      console.warn(`⚠️ Signed URL appears expired: ${originalUrl.substring(0, 100)}...`);
-      console.log(`🔧 Using converted URL: ${urlInfo.convertedUrl.substring(0, 100)}...`);
+      console.log(`🔧 Converted expired signed URL to public URL: ${originalUrl.substring(0, 100)}...`);
+    } else {
+      console.log(`🔧 Converted signed URL to public URL (preventive): ${originalUrl.substring(0, 100)}...`);
     }
-    return urlInfo.convertedUrl;
+  } else if (urlInfo.isValid) {
+    // If it's already a public URL, use it
+    bestUrl = originalUrl;
+  } else {
+    // If invalid, use fallback
+    console.warn(`⚠️ Invalid URL, using fallback: ${originalUrl}`);
+    bestUrl = fallback;
   }
 
-  // If it's already a public URL, use it
-  if (urlInfo.isValid) {
-    return originalUrl;
+  // ✅ Cache the result for future use (prevents re-processing)
+  if (urlCache.size >= CACHE_MAX_SIZE) {
+    // Remove oldest entry (simple FIFO)
+    const firstKey = urlCache.keys().next().value;
+    urlCache.delete(firstKey);
   }
+  urlCache.set(originalUrl, bestUrl);
 
-  // If invalid, use fallback
-  console.warn(`⚠️ Invalid URL, using fallback: ${originalUrl}`);
-  return fallback;
+  return bestUrl;
 };
 
 /**

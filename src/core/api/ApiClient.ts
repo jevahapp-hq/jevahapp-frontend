@@ -44,6 +44,27 @@ class ApiClient {
 
       const response = await fetch(url, config);
 
+      // Handle rate limiting (Too Many Requests) gracefully
+      if (response.status === 429) {
+        const errorText = await response.text();
+        let errorMessage = "Too many requests, please try again later.";
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error || errorData.message) {
+            errorMessage = errorData.error || errorData.message;
+          }
+        } catch {
+          // ignore JSON parse errors, use default message
+        }
+
+        console.warn(`⏳ API Rate Limit (429): ${url} – ${errorMessage}`);
+
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
       // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
       if ((response.status === 401 || response.status === 402) && authToken) {
         console.log(`🔄 Received ${response.status}, attempting token refresh...`);

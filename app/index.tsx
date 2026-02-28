@@ -172,42 +172,80 @@ export default function Welcome() {
   const { isLoading: loginLoading, error: loginError, login } = useFastLogin();
   const { fastPress } = useFastPerformance();
 
-  // Warm-cache the first page of feeds while intro/landing shows
+  // ✅ INSTAGRAM/TIKTOK STYLE: Warm-cache the first page of feeds while intro/landing shows
+  // This ensures content is ready instantly when user enters the app (0ms load time)
   useEffect(() => {
     let cancelled = false;
     const warm = async () => {
       try {
-        // Prefetch ALL content (public) and default first page
+        // ✅ Prefetch ALL content (public) and default first page in parallel for fastest load
         const [allResp, defResp] = await Promise.all([
-          mediaApi.getAllContentPublic(),
+          mediaApi.getAllContentPublic({
+            page: 1,
+            limit: 15, // Match INITIAL_LIMIT in useMedia hook
+          }),
           mediaApi.getDefaultContent({
             page: 1,
-            limit: 10,
+            limit: 15, // Match INITIAL_LIMIT for consistency
             contentType: "ALL" as any,
           }),
         ]);
 
+        if (cancelled) return;
+
         const store = useContentCacheStore.getState();
-        if (allResp.success && Array.isArray(allResp.media) && !cancelled) {
-          store.set("ALL:first", {
-            items: allResp.media as any,
-            page: 1,
-            limit: allResp.limit || 10,
-            total: allResp.total || 0,
-            fetchedAt: Date.now(),
-          });
+        
+        // ✅ Store in Zustand cache for instant access (0ms)
+        if (allResp.success && Array.isArray(allResp.media) && allResp.media.length > 0) {
+          // Enrich content with user profiles (batch for performance)
+          const { UserProfileCache } = await import("./utils/cache/UserProfileCache");
+          const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(allResp.media);
+          
+          // Transform to MediaItem format
+          const { transformApiResponseToMediaItem } = await import("../src/shared/utils");
+          const transformedMedia = enrichedMedia
+            .map(transformApiResponseToMediaItem)
+            .filter((item: any) => item !== null);
+          
+          if (!cancelled && transformedMedia.length > 0) {
+            store.set("ALL:first", {
+              items: transformedMedia as any,
+              page: 1,
+              limit: allResp.limit || 15,
+              total: allResp.total || 0,
+              fetchedAt: Date.now(),
+            });
+          }
         }
-        if (defResp.success && Array.isArray(defResp.media) && !cancelled) {
-          const key = "ALL:page:1";
-          store.set(key, {
-            items: defResp.media as any,
-            page: 1,
-            limit: defResp.limit || 10,
-            total: defResp.total || 0,
-            fetchedAt: Date.now(),
-          });
+        
+        if (defResp.success && Array.isArray(defResp.media) && defResp.media.length > 0) {
+          // Enrich content with user profiles
+          const { UserProfileCache } = await import("./utils/cache/UserProfileCache");
+          const enrichedMedia = await UserProfileCache.enrichContentArrayBatch(defResp.media);
+          
+          // Transform to MediaItem format
+          const { transformApiResponseToMediaItem } = await import("../src/shared/utils");
+          const transformedMedia = enrichedMedia
+            .map(transformApiResponseToMediaItem)
+            .filter((item: any) => item !== null);
+          
+          if (!cancelled && transformedMedia.length > 0) {
+            const key = "ALL:page:1";
+            store.set(key, {
+              items: transformedMedia as any,
+              page: 1,
+              limit: defResp.limit || 15,
+              total: defResp.total || 0,
+              fetchedAt: Date.now(),
+            });
+          }
         }
-      } catch {}
+      } catch (error) {
+        // Silently handle errors - don't block app startup
+        if (__DEV__) {
+          console.warn("⚠️ Warm cache failed (non-critical):", error);
+        }
+      }
     };
     warm();
     return () => {
