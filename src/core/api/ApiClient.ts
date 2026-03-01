@@ -44,25 +44,38 @@ class ApiClient {
 
       const response = await fetch(url, config);
 
-      // Handle rate limiting (Too Many Requests) gracefully
+      // Handle rate limiting (Too Many Requests) with automatic retry
       if (response.status === 429) {
         const errorText = await response.text();
         let errorMessage = "Too many requests, please try again later.";
+        let retryAfter = 2; // Default 2 seconds
+        
         try {
           const errorData = JSON.parse(errorText);
           if (errorData.error || errorData.message) {
             errorMessage = errorData.error || errorData.message;
           }
+          // Check for Retry-After header or retry_after in body
+          if (errorData.retry_after) {
+            retryAfter = errorData.retry_after;
+          }
         } catch {
           // ignore JSON parse errors, use default message
         }
 
-        console.warn(`⏳ API Rate Limit (429): ${url} – ${errorMessage}`);
+        // Check Retry-After header
+        const retryAfterHeader = response.headers.get('Retry-After');
+        if (retryAfterHeader) {
+          retryAfter = parseInt(retryAfterHeader, 10) || retryAfter;
+        }
 
-        return {
-          success: false,
-          error: errorMessage,
-        };
+        console.warn(`⏳ API Rate Limit (429): ${url} – Retrying after ${retryAfter}s`);
+
+        // Wait and then throw to trigger retry logic
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        
+        // Throw error to trigger the retry mechanism
+        throw new Error(`RATE_LIMIT_RETRY:${retryAfter}`);
       }
 
       // Handle 401 and 402 errors with token refresh (402 is used for auth failures)

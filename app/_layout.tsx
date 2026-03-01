@@ -1,11 +1,12 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
 import {
-  Rubik_400Regular,
-  Rubik_600SemiBold,
-  Rubik_700Bold,
-  useFonts,
+    Rubik_400Regular,
+    Rubik_600SemiBold,
+    Rubik_700Bold,
+    useFonts,
 } from "@expo-google-fonts/rubik";
 import * as Sentry from "@sentry/react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { Slot, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
@@ -13,7 +14,6 @@ import { useEffect, useState } from "react";
 import { Alert, BackHandler, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mediaApi } from "../src/core/api/MediaApi";
 import type { MediaItem as SharedMediaItem } from "../src/shared/types";
 import { transformApiResponseToMediaItem } from "../src/shared/utils/contentHelpers";
@@ -226,46 +226,49 @@ export default function RootLayout() {
           // );
         }
 
-        // ✅ PERFORMANCE HACK: Preload smaller initial batch (15 items) for faster startup
-        // Preload all-content feed so Home tab can render instantly from cache
+        // 🚀 CRITICAL FIX: Preload content WITHOUT waiting for enrichment (instant display)
+        // This ensures videos appear immediately while profile data loads in background
         try {
           await queryClient.prefetchQuery({
-            queryKey: ["all-content", "ALL", 1, 15, false], // Reduced to 15 for faster response
+            queryKey: ["all-content", "ALL", 1, 15, false],
             queryFn: async () => {
               const response = await mediaApi.getAllContentPublic({
                 page: 1,
-                limit: 15, // Load 15 items first, then lazy-load more as user scrolls
+                limit: 15,
               });
 
               if (!response.success) {
                 throw new Error(response.error || "Failed to fetch content");
               }
 
-              let enrichedMedia: any[] = [];
-              try {
-                enrichedMedia = await UserProfileCache.enrichContentArrayBatch(
-                  response.media || []
-                );
-              } catch (enrichError) {
-                if (__DEV__) {
-                  console.warn(
-                    "⚠️ Prefetch enrichment failed, using raw media:",
-                    enrichError
-                  );
-                }
-                enrichedMedia = response.media || [];
-              }
-
-              const transformedMedia = (enrichedMedia || [])
+              // 🚀 Transform immediately without waiting for enrichment
+              const transformedMedia = (response.media || [])
                 .map((item) => transformApiResponseToMediaItem(item))
                 .filter(
                   (item): item is SharedMediaItem => item !== null && item !== undefined
                 );
 
+              // 🚀 NON-BLOCKING: Enrich in background after content is already showing
+              if (transformedMedia.length > 0) {
+                UserProfileCache.enrichContentArrayBatch(response.media || [])
+                  .then((enrichedMedia) => {
+                    const enrichedTransformed = (enrichedMedia || [])
+                      .map((item) => transformApiResponseToMediaItem(item))
+                      .filter(
+                        (item): item is SharedMediaItem => item !== null && item !== undefined
+                      );
+                    // Update cache with enriched data
+                    queryClient.setQueryData(["all-content", "ALL", 1, 15, false], {
+                      media: enrichedTransformed,
+                      total: response.total || response.pagination?.total || enrichedTransformed.length,
+                    });
+                  })
+                  .catch(() => { /* Non-critical */ });
+              }
+
               return {
                 media: transformedMedia,
-                total:
-                  response.total || response.pagination?.total || transformedMedia.length,
+                total: response.total || response.pagination?.total || transformedMedia.length,
               };
             },
           });

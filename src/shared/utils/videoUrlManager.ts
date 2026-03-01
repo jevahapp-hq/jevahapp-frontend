@@ -14,6 +14,8 @@ export interface VideoUrlInfo {
 
 /**
  * Converts signed AWS URLs to public URLs
+ * ⚠️ WARNING: Only use this if your S3 bucket is public. 
+ * For private buckets, the signed URL must be used as-is.
  */
 export const convertSignedToPublicUrl = (signedUrl: string): string => {
   if (!signedUrl || typeof signedUrl !== 'string') {
@@ -149,7 +151,8 @@ const CACHE_MAX_SIZE = 1000; // Limit cache size to prevent memory issues
 
 /**
  * Gets the best URL to use for video playback
- * ✅ CRITICAL FIX: Always converts signed URLs to public URLs to prevent expiration
+ * ✅ CRITICAL FIX: Preserves signed URLs for private S3 buckets
+ * Only converts to public URL if explicitly needed (public bucket)
  */
 export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): string => {
   const fallback = fallbackUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
@@ -174,16 +177,17 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
   const urlInfo = analyzeVideoUrl(originalUrl);
   let bestUrl: string;
   
-  // ✅ CRITICAL FIX: Always convert signed URLs to public URLs to prevent expiration
-  // This ensures videos NEVER expire and switch to thumbnails
+  // ✅ CRITICAL FIX: For private S3 buckets, use signed URLs as-is
+  // Converting signed URLs to public URLs causes "403 Forbidden" or "Too Many Requests"
+  // because the bucket requires authentication
   if (urlInfo.isSignedUrl) {
-    // Always use converted URL (removes expiration parameters)
-    bestUrl = urlInfo.convertedUrl;
+    // Check if URL is expired - if so, we'll still try it but log a warning
     if (urlInfo.isExpired) {
-      console.log(`🔧 Converted expired signed URL to public URL: ${originalUrl.substring(0, 100)}...`);
-    } else {
-      console.log(`🔧 Converted signed URL to public URL (preventive): ${originalUrl.substring(0, 100)}...`);
+      console.warn(`⚠️ Signed URL may be expired: ${originalUrl.substring(0, 100)}...`);
+      console.warn(`💡 Backend should provide fresh signed URLs`);
     }
+    // Use the signed URL as-is - don't strip parameters for private buckets
+    bestUrl = originalUrl;
   } else if (urlInfo.isValid) {
     // If it's already a public URL, use it
     bestUrl = originalUrl;
@@ -197,7 +201,9 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
   if (urlCache.size >= CACHE_MAX_SIZE) {
     // Remove oldest entry (simple FIFO)
     const firstKey = urlCache.keys().next().value;
-    urlCache.delete(firstKey);
+    if (firstKey) {
+      urlCache.delete(firstKey);
+    }
   }
   urlCache.set(originalUrl, bestUrl);
 

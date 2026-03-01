@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { Image } from "expo-image";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { DeleteMediaConfirmation } from "../../../../app/components/DeleteMediaConfirmation";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../app/hooks/useAdvancedAudioPlayer";
 import contentInteractionAPI from "../../../../app/utils/contentInteractionAPI";
-import { VideoCardSkeleton } from "../../../shared/components";
+import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { AvatarWithInitialFallback } from "../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../shared/components/CardFooterActions";
 import ContentActionModal from "../../../shared/components/ContentActionModal";
@@ -18,18 +19,81 @@ import ThreeDotsMenuButton from "../../../shared/components/ThreeDotsMenuButton/
 import { VideoProgressBar } from "../../../shared/components/VideoProgressBar";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
-import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { useHydrateContentStats } from "../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../shared/hooks/useLoadingStats";
 import { useVideoPlaybackControl } from "../../../shared/hooks/useVideoPlaybackControl";
 import { VideoCardProps } from "../../../shared/types";
-import { getUploadedBy, isValidUri } from "../../../shared/utils";
+import { detectMediaType, getUploadedBy, isAudioSermon, isValidUri } from "../../../shared/utils";
 import {
-    getBestVideoUrl,
-    getVideoUrlFromMedia,
-    handleVideoError as handleVideoErrorUtil,
+  getBestVideoUrl,
+  handleVideoError as handleVideoErrorUtil,
 } from "../../../shared/utils/videoUrlManager";
-import { isAudioSermon, detectMediaType } from "../../../shared/utils";
+
+export const LazyVideoPlayerWrapper = memo(({
+  activeVideoUrl,
+  isMuted,
+  videoVolume,
+  onPlayerReady,
+  onPlayerUnmount,
+  thumbnailUri,
+  onVideoReady,
+}: any) => {
+  // Create player immediately with the URL
+  const player = useVideoPlayer(activeVideoUrl, (p) => {
+    p.loop = false;
+    p.muted = isMuted ?? false;
+    p.volume = videoVolume ?? 1.0;
+  });
+  
+  // Track video ready state
+  const [isVideoReady, setIsVideoReady] = useState(false);
+
+  useEffect(() => {
+    if (player) {
+      player.muted = isMuted;
+      player.volume = videoVolume;
+    }
+  }, [player, isMuted, videoVolume]);
+
+  useEffect(() => {
+    if (!player) return;
+    
+    // Listen for player status changes
+    const subscription = player.addListener('statusChange', (status: any) => {
+      if (status.status === 'readyToPlay') {
+        setIsVideoReady(true);
+        onVideoReady?.(true);
+      } else if (status.status === 'error') {
+        onVideoReady?.(false);
+      }
+    });
+    
+    onPlayerReady(player);
+    
+    return () => {
+      subscription.remove();
+      onPlayerUnmount();
+    };
+  }, [player, onPlayerReady, onPlayerUnmount, onVideoReady]);
+
+  return (
+    <>
+      {/* 🌟 Video - Always visible immediately */}
+      <VideoView
+        player={player}
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "absolute",
+          backgroundColor: "transparent", // Transparent - thumbnail shows through
+        }}
+        contentFit="cover"
+        nativeControls={false}
+        fullscreenOptions={{ enable: false }}
+      />
+    </>
+  );
+});
 
 // Fallback video to guarantee something playable is always available
 const FALLBACK_VIDEO_URL =
@@ -71,10 +135,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const key = getContentKey(video);
   const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
   const progress = progresses[key] || 0;
-  
+
   // View tracking state (thresholds: 3s or 25%, or completion) - declared early for use in useEffect
   const [hasTrackedView, setHasTrackedView] = useState(false);
-  
+
   // Get duration from backend metadata (in seconds) as fallback
   const backendDurationSeconds = (video as any)?.duration;
   const backendDurationMs = backendDurationSeconds && Number.isFinite(backendDurationSeconds) && backendDurationSeconds > 0
@@ -85,61 +149,63 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const mediaType = detectMediaType(video);
   const isAudioSermonValue = isAudioSermon(video);
 
-  // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
-  // NEVER use thumbnailUrl or imageUrl for video playback!
-  // ✅ MEMOIZED: Prevent recalculation on every render (Performance Hack #3)
-  const rawVideoUrl = useMemo(() => {
+  // 🚀 CRITICAL FIX: Ultra-fast video URL resolution with inline caching
+  // Using direct property access instead of function calls for maximum speed
+  const videoUrl = useMemo(() => {
     if (isAudioSermonValue) return null;
 
-    const fromMedia = getVideoUrlFromMedia(video);
-    if (fromMedia && typeof fromMedia === "string" && fromMedia.trim().length > 0) {
-      return fromMedia.trim();
+    // Direct property access - faster than function calls
+    const rawUrl = video?.fileUrl || (video as any)?.playbackUrl || (video as any)?.hlsUrl;
+    
+    if (!rawUrl || typeof rawUrl !== "string" || rawUrl.trim() === '') {
+      return FALLBACK_VIDEO_URL;
     }
 
-    // If backend did not provide any usable URL, fall back to a safe demo video
-    // so the user never sees a permanently blank video slot.
-    console.warn(
-      "⚠️ VideoCard: Missing fileUrl/playbackUrl/hlsUrl for media, using fallback video:",
-      video?.title || "(untitled)"
-    );
-    return FALLBACK_VIDEO_URL;
-  }, [isAudioSermonValue, video.fileUrl, video.playbackUrl, video.hlsUrl, video.title]);
-  
-  // ✅ MEMOIZED: Always derive the best playable URL (handles signed URLs internally)
-  // Relax validation here so that any non-empty URL gets a chance to play instead of rendering blank
-  const videoUrl = useMemo(() => {
-    if (!rawVideoUrl) return null;
-    try {
-      // getBestVideoUrl will validate, convert signed URLs, and fall back safely if needed
-      return getBestVideoUrl(rawVideoUrl);
-    } catch {
-      // As a final fallback, return the raw URL so at least something is attempted
-      return rawVideoUrl;
+    const trimmedUrl = rawUrl.trim();
+    
+    // Fast path: local files don't need processing
+    if (trimmedUrl.startsWith('file://') || trimmedUrl.startsWith('/')) {
+      return trimmedUrl;
     }
-  }, [rawVideoUrl]);
-  
+
+    // Fast path: check if already a public URL (no AWS signature params)
+    if (!trimmedUrl.includes('X-Amz-Algorithm')) {
+      return trimmedUrl;
+    }
+
+    // Slow path: convert signed URL (only for AWS signed URLs)
+    try {
+      return getBestVideoUrl(trimmedUrl);
+    } catch {
+      return trimmedUrl;
+    }
+  }, [isAudioSermonValue, video?.fileUrl, (video as any)?.playbackUrl, (video as any)?.hlsUrl]);
+
   // ✅ Track retry attempts to prevent infinite loops
   const retryCountRef = useRef(0);
   const maxRetries = 2;
-  
+
   // Initialize refs before useVideoPlayer hook (needed in callback)
   // In React Native, setTimeout returns a number, not NodeJS.Timeout
   const preloadTimeoutRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
+
+  // ✅ Load videos immediately for faster display, but only play when visible
+  const isCurrentlyVisible = currentlyVisibleVideo === key;
   
-  // ✅ INSTAGRAM/TIKTOK STYLE: Use memoized videoUrl to prevent player recreation on every render
-  // ✅ INSTAGRAM/TIKTOK STYLE: Player starts loading IMMEDIATELY (0ms delay) when component mounts
-  // IMPORTANT: We still must call the hook every render; when videoUrl is null we pass an empty string,
-  // but we only ever render the VideoView when videoUrl is truthy to avoid blank black frames.
-  const player = useVideoPlayer(videoUrl || "", (player) => {
-    player.loop = false;
-    player.muted = isMuted ?? false; // Ensure boolean, never undefined
-    player.volume = (videoVolume ?? 1.0); // Ensure number, never undefined
-    // ✅ INSTAGRAM/TIKTOK STYLE: NO DELAY - video starts loading immediately
-    // expo-video automatically starts loading when source is set
-    // No timeout needed - player loads instantly for fastest possible display
-    // First frame will show as soon as it's buffered (like Instagram/TikTok)
-  });
+  // Provide URL immediately so video can start loading/pre-buffering
+  const activeVideoUrl = videoUrl || "";
+
+  // The player is now fully managed by the LazyVideoPlayerWrapper so we cleanly unmount decoders
+  const [player, setPlayer] = useState<any>(null);
+
+  const handlePlayerReady = useCallback((p: any) => {
+    setPlayer(p);
+  }, []);
+
+  const handlePlayerUnmount = useCallback(() => {
+    setPlayer(null);
+  }, []);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
@@ -159,12 +225,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
   const [userIsAdmin, setUserIsAdmin] = useState(false);
-  
+
   // Check if user is admin
   useEffect(() => {
     isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
   }, []);
-  
+
   // Delete media functionality - using reusable hook
   const {
     isOwner,
@@ -226,11 +292,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   // Sync player playback with global state
   useEffect(() => {
     if (!player) return;
-    
-    if (shouldPlayThisVideo && !player.playing) {
-      player.play();
-    } else if (!shouldPlayThisVideo && player.playing) {
-      player.pause();
+
+    try {
+      if (shouldPlayThisVideo && !player.playing) {
+        player.play();
+      } else if (!shouldPlayThisVideo && player.playing) {
+        player.pause();
+      }
+    } catch (error) {
+      // Ignored: player might be unmounting or destroyed
     }
   }, [player, shouldPlayThisVideo]);
 
@@ -243,9 +313,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       clearTimeout(overlayTimeoutRef.current);
     }
     // Optional: auto-hide after a few seconds while playing
-      overlayTimeoutRef.current = setTimeout(() => {
-        setShowOverlay(false);
-      }, 3000);
+    overlayTimeoutRef.current = setTimeout(() => {
+      setShowOverlay(false);
+    }, 3000);
   }, []);
 
   const hideOverlay = useCallback(() => {
@@ -345,9 +415,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           Math.min(currentMs + deltaSec * 1000, durationMs)
         );
         try {
-          player.currentTime = nextMs / 1000; // expo-video uses seconds
+          // Verify player exists before getting/setting properties
+          if (player && typeof player.currentTime !== 'undefined') {
+            player.currentTime = nextMs / 1000; // expo-video uses seconds
+          }
         } catch (e) {
-          console.warn("Video seekBySeconds failed", e);
+          console.warn("Video seekBySeconds failed (player likely unmounted)", e);
         }
       }
     },
@@ -381,9 +454,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         if (!player || durationMs <= 0) return;
         const clamped = Math.max(0, Math.min(percent, 1));
         try {
-          player.currentTime = (clamped * durationMs) / 1000; // expo-video uses seconds
+          // Verify player exists before getting/setting properties
+          if (player && typeof player.currentTime !== 'undefined') {
+            player.currentTime = (clamped * durationMs) / 1000; // expo-video uses seconds
+          }
         } catch (e) {
-          console.warn("Video seekToPercent failed", e);
+          console.warn("Video seekToPercent failed (player likely unmounted)", e);
         }
       }
     },
@@ -429,9 +505,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           togglePlayback();
           if (player) {
             try {
-              player.pause();
+              // Verify player exists before calling methods
+              if (typeof player.pause === 'function') {
+                player.pause();
+              }
             } catch (error) {
-              console.error("❌ Pause failed:", error);
+              console.warn("❌ Pause failed (player likely unmounted):", error);
             }
           }
         }
@@ -477,7 +556,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const handleTogglePlay = useCallback(async () => {
     // ✅ Immediate visual feedback - update state first for instant response
     setIsPlayTogglePending(true);
-    
+
     // Use ref-based debounce for immediate response while preventing double-taps
     if (toggleProcessingRef.current) {
       setIsPlayTogglePending(false);
@@ -498,7 +577,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       // ✅ Use onTogglePlay for ALL media types (video and audio) to ensure proper global media management
       // This ensures audio sermons pause videos and vice versa
       onTogglePlay(key);
-      
+
       // Update overlay state immediately for instant visual feedback
       if (isAudioSermonValue) {
         if (audioState.isPlaying) {
@@ -548,10 +627,31 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     setShowOverlay((prev) => !prev);
   }, []);
 
-  // ✅ Handle video error with intelligent retry mechanism - NEVER permanently fail
-  // This prevents videos from switching to thumbnails (Performance + UX fix)
+  // ✅ Handle video error with intelligent retry mechanism
   const handleVideoError = useCallback(
     (error: any) => {
+      console.error(`❌ Video error for "${video.title}":`, error);
+      
+      // Extract error details
+      const errorCode = error?.error?.code || error?.code;
+      const errorMessage = error?.error?.localizedDescription || error?.message || 'Unknown error';
+      
+      // Check for specific error types
+      const isRateLimitError = 
+        errorMessage?.toLowerCase().includes('too many requests') ||
+        errorMessage?.toLowerCase().includes('rate limit') ||
+        errorCode === 429;
+      
+      const isNetworkError = 
+        errorMessage?.toLowerCase().includes('network') ||
+        errorCode === -1001 || // NSURLErrorTimedOut
+        errorCode === -1009;   // NSURLErrorNotConnectedToInternet
+      
+      const isAuthError = 
+        errorCode === 403 ||
+        errorMessage?.toLowerCase().includes('forbidden') ||
+        errorMessage?.toLowerCase().includes('unauthorized');
+
       // Use the enhanced error handler
       const errorAnalysis = handleVideoErrorUtil(
         error,
@@ -559,25 +659,44 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         video.title
       );
 
-      // ✅ CRITICAL FIX: Don't permanently set failedVideoLoad - videos should never expire
-      // Only set temporarily for retry logic
-      if (retryCountRef.current < maxRetries && errorAnalysis.isRetryable) {
+      // Log specific error type
+      if (isRateLimitError) {
+        console.warn(`⏳ Rate limit hit for video: ${video.title}. Will retry with backoff.`);
+      } else if (isAuthError) {
+        console.warn(`🔒 Auth error for video: ${video.title}. URL may be expired.`);
+      } else if (isNetworkError) {
+        console.warn(`📡 Network error for video: ${video.title}.`);
+      }
+
+      // Retry logic with exponential backoff - but NOT for rate limit errors
+      // Rate limit errors should wait longer before retrying
+      if (retryCountRef.current < maxRetries && !isRateLimitError) {
         retryCountRef.current += 1;
-        console.log(`🔄 Retrying video load (attempt ${retryCountRef.current}/${maxRetries}) for: ${video.title}`);
+        const backoffDelay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 5000);
         
-        // Retry with converted URL after a short delay
+        console.log(`🔄 Retrying video load (attempt ${retryCountRef.current}/${maxRetries}) for: ${video.title} in ${backoffDelay}ms`);
+
         setTimeout(() => {
-          if (isMountedRef.current && videoUrl) {
+          if (isMountedRef.current) {
             setFailedVideoLoad(false);
-            // Player will automatically retry with the same URL (which is already converted)
-            // The getBestVideoUrl already handles signed URL conversion
+            setVideoLoaded(false);
           }
-        }, 1000); // Faster retry (1 second instead of 3)
+        }, backoffDelay);
+      } else if (isRateLimitError) {
+        // For rate limits, wait longer (10-30 seconds) and don't count as a retry
+        const rateLimitDelay = 10000 + Math.random() * 20000; // 10-30s random delay
+        console.log(`⏳ Rate limit for ${video.title}, waiting ${Math.round(rateLimitDelay/1000)}s before retry...`);
+        
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            setFailedVideoLoad(false);
+            setVideoLoaded(false);
+          }
+        }, rateLimitDelay);
       } else {
-        // After max retries, still don't permanently fail - show video with error overlay
-        // This ensures video stays visible, not thumbnail
-        console.warn(`⚠️ Video load failed after ${maxRetries} retries, but keeping video player visible: ${video.title}`);
-        setFailedVideoLoad(false); // Keep video player, not thumbnail
+        // After max retries, show error state with thumbnail fallback
+        console.warn(`⚠️ Video load failed after ${maxRetries} retries: ${video.title}`);
+        setFailedVideoLoad(true);
       }
     },
     [video.title, video.fileUrl, videoUrl]
@@ -588,7 +707,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     if (!player || isAudioSermonValue) return;
 
     // Track duration when ready
-    const statusSubscription = player.addListener('statusChange', (status) => {
+    const statusSubscription = player.addListener('statusChange', (status: any) => {
       if (status.status === 'readyToPlay') {
         setFailedVideoLoad(false);
         setVideoLoaded(true);
@@ -599,9 +718,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             lastKnownDurationRef.current = durationMs;
           }
         }
-        
+
         if (isPlaying) {
-          player.play();
+          try {
+            player.play();
+          } catch (e) {
+            // Ignored if destroyed
+          }
         }
       } else if (status.status === 'error') {
         console.error(`❌ Video load error for ${video.title}:`, status);
@@ -613,33 +736,45 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     // Track progress and view completion
     const progressInterval = setInterval(() => {
       if (!player || !isMountedRef.current) return;
-      
-      const currentTime = player.currentTime || 0;
-      const duration = player.duration || 0;
-      
+
+      // Ensure safe access to NativeSharedObject properties
+      let isPlayingNative = false;
+      let pCurrentTime = 0;
+      let pDuration = 0;
+      try {
+        isPlayingNative = player.playing;
+        pCurrentTime = player.currentTime || 0;
+        pDuration = player.duration || 0;
+      } catch (e) {
+        return; // Player destroyed, abort interval
+      }
+
+      const currentTime = pCurrentTime;
+      const duration = pDuration;
+
       // Validate and clamp duration (prevent invalid values)
       const durationMs = Math.max(0, Math.min(duration * 1000, 24 * 60 * 60 * 1000)); // Max 24 hours
       const positionMs = Math.max(0, Math.min(currentTime * 1000, durationMs));
-      
+
       // Only update duration ref if it's valid and finite
       if (Number.isFinite(durationMs) && durationMs > 0 && !isNaN(durationMs)) {
         lastKnownDurationRef.current = durationMs;
       }
-      
+
       const progress = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
       // Keep local video progress/position in sync with the player so
       // the UI progress bar always moves smoothly with playback.
       setVideoPositionMs(positionMs);
       setVideoProgress(progress);
 
-      const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
-      const finished = player.currentTime >= player.duration && player.duration > 0;
+      const qualifies = isPlayingNative && (positionMs >= 3000 || progress >= 0.25);
+      const finished = pCurrentTime >= pDuration && pDuration > 0;
 
       // Auto-restart video when finished
       if (finished && isMountedRef.current) {
         try {
           player.currentTime = 0;
-          if (player.playing) {
+          if (isPlayingNative) {
             player.play();
           }
         } catch (error) {
@@ -668,8 +803,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 views: Number(result.totalViews) || 0,
               }));
             }
-          }).catch(() => {});
-        } catch {}
+          }).catch(() => { });
+        } catch { }
       }
     }, 1000);
 
@@ -772,7 +907,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         useInteractionStore,
       } = require("../../../../app/store/useInteractionStore");
       storeRef.current = useInteractionStore.getState();
-    } catch {}
+    } catch { }
   }, []);
 
   // Build formatted comments for the CommentIcon
@@ -809,55 +944,77 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         onPressIn={handleHoverStart}
         onPressOut={handleHoverEnd}
       >
-        <View className="w-full h-[400px] overflow-hidden relative bg-gray-100">
-          {/* ✅ CRITICAL FIX: Videos should NEVER switch to thumbnails - always show video player */}
-          {/* Only show thumbnail for audio sermons, never for video content */}
-          {!isAudioSermonValue && videoUrl && player ? (
-            <VideoView
-              player={player}
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-                backgroundColor: "transparent",
-              }}
-              contentFit="cover"
-              nativeControls={false}
-              fullscreenOptions={{ enable: false }}
-            />
-          ) : isAudioSermonValue ? (
-            /* Thumbnail ONLY for audio sermons */
-            <Image
-              source={
-                thumbnailUri
-                  ? { uri: thumbnailUri }
-                  : {
-                      uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Audio",
+        <View className="w-full h-[400px] overflow-hidden relative" style={{ backgroundColor: '#1a1a1a' }}>
+          {/* 🎬 VIDEO ONLY - No thumbnails ever */}
+          {!isAudioSermonValue ? (
+            <>
+              {/* VIDEO LAYER - Only thing visible */}
+              <View 
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 2,
+                }}
+              >
+                <LazyVideoPlayerWrapper
+                  activeVideoUrl={activeVideoUrl}
+                  isMuted={isMuted}
+                  videoVolume={videoVolume}
+                  onPlayerReady={handlePlayerReady}
+                  onPlayerUnmount={handlePlayerUnmount}
+                  thumbnailUri={thumbnailUri}
+                  onVideoReady={(ready: boolean) => {
+                    if (ready) {
+                      setVideoLoaded(true);
+                      videoLoadedRef.current = true;
                     }
-              }
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-              }}
-              resizeMode="cover"
-            />
-          ) : (
-            /* Fallback: Show light skeleton while video URL/player is initializing */
-            <View className="absolute inset-0 bg-gray-100 items-center justify-center">
-              <VideoCardSkeleton dark={false} />
-            </View>
-          )}
-
-          {/* ✅ Show shimmer skeleton until video is fully loaded - covers any brief dark frame */}
-          {!videoLoadedRef.current &&
-            !videoLoaded &&
-            !failedVideoLoad &&
-            !isAudioSermonValue && (
-              <View className="absolute inset-0" pointerEvents="none">
-                <VideoCardSkeleton dark={false} />
+                  }}
+                />
               </View>
-            )}
+              
+              {/* ERROR STATE - Simple retry button, no thumbnail */}
+              {failedVideoLoad && (
+                <View 
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 3,
+                    backgroundColor: '#1a1a1a',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      retryCountRef.current = 0;
+                      setFailedVideoLoad(false);
+                      setVideoLoaded(false);
+                    }}
+                    style={{
+                      backgroundColor: '#FEA74E',
+                      paddingHorizontal: 24,
+                      paddingVertical: 12,
+                      borderRadius: 24,
+                    }}
+                  >
+                    <Text style={{
+                      color: '#FFFFFF',
+                      fontSize: 14,
+                      fontFamily: 'Rubik_600SemiBold',
+                    }}>
+                      Retry
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          ) : null}
 
           {/* Content Type Badge */}
           <ContentTypeBadge
@@ -944,19 +1101,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             bottomOffset={24}
             currentMs={
               isAudioSermonValue
-                ? (Number.isFinite(audioState.position) && audioState.position >= 0 
-                    ? audioState.position 
-                    : 0)
+                ? (Number.isFinite(audioState.position) && audioState.position >= 0
+                  ? audioState.position
+                  : 0)
                 : videoPositionMs
             }
             durationMs={
-              isAudioSermonValue 
+              isAudioSermonValue
                 ? (Number.isFinite(audioState.duration) && audioState.duration > 0
-                    ? audioState.duration
-                    : 0)
+                  ? audioState.duration
+                  : 0)
                 : (Number.isFinite(lastKnownDurationRef.current) && lastKnownDurationRef.current > 0
-                    ? lastKnownDurationRef.current
-                    : (backendDurationMs > 0 ? backendDurationMs : 0))
+                  ? lastKnownDurationRef.current
+                  : (backendDurationMs > 0 ? backendDurationMs : 0))
             }
             showControls={true}
             // Pro config to avoid jumpbacks and ensure usability
@@ -973,7 +1130,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       </TouchableWithoutFeedback>
 
       {/* Footer with User Info and compact left-aligned stats/actions - matching MusicCard */}
-      <View 
+      <View
         className="flex-row items-center justify-between mt-2 px-2"
         style={{ zIndex: 100 }}
         pointerEvents="box-none"
@@ -1019,7 +1176,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               onComment={() => {
                 try {
                   showCommentModal([], String(contentId));
-                } catch {}
+                } catch { }
                 onComment(key, video);
               }}
               saved={!!userSaveState}

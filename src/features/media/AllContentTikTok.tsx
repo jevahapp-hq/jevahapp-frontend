@@ -1,38 +1,36 @@
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    RefreshControl,
-    ScrollView,
-    Share,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+  Share,
+  Text,
+  View,
 } from "react-native";
 
 // Shared imports
 import { UI_CONFIG } from "../../shared/constants";
 import { ContentType, MediaItem } from "../../shared/types";
 import {
-    categorizeContent,
-    filterContentByType,
-    getContentKey,
-    getMostRecentItem,
-    getTimeAgo,
-    getUserAvatarFromContent,
-    getUserDisplayNameFromContent,
-    transformApiResponseToMediaItem,
+  categorizeContent,
+  detectMediaType,
+  filterContentByType,
+  getContentKey,
+  getMostRecentItem,
+  getTimeAgo,
+  getUserAvatarFromContent,
+  getUserDisplayNameFromContent,
+  isAudioSermon,
+  transformApiResponseToMediaItem,
 } from "../../shared/utils";
-import { isAudioSermon, detectMediaType } from "../../shared/utils";
 
 // Feature-specific imports
 import Skeleton from "../../shared/components/Skeleton/Skeleton";
@@ -56,12 +54,12 @@ import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../app/store/useLibraryStore";
 import {
-    convertToDownloadableItem,
-    useDownloadHandler,
+  convertToDownloadableItem,
+  useDownloadHandler,
 } from "../../../app/utils/downloadUtils";
 import {
-    getPersistedStats,
-    getViewed,
+  getPersistedStats,
+  getViewed,
 } from "../../../app/utils/persistentStorage";
 import TokenUtils from "../../../app/utils/tokenUtils";
 
@@ -145,6 +143,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, []);
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  
+
 
   // Audio playback state
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -235,6 +235,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const filteredMediaList = useMemo(() => {
     return filterContentByType(mediaList, contentType);
   }, [mediaList, contentType]);
+
+  // Set first video as visible on initial load
+  useEffect(() => {
+    if (filteredMediaList.length > 0 && !currentlyVisibleVideo) {
+      const firstVideo = filteredMediaList.find(item => item.contentType === 'video');
+      if (firstVideo && (firstVideo as any)._id) {
+        setCurrentlyVisibleVideo(`video-${(firstVideo as any)._id}`);
+      }
+    }
+  }, [filteredMediaList, currentlyVisibleVideo]);
 
   // Categorize content
   const categorizedContent = useMemo(() => {
@@ -411,8 +421,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
         setPreviouslyViewed(viewed || []);
         console.log(
-          `✅ AllContent: Loaded ${
-            mediaList.length
+          `✅ AllContent: Loaded ${mediaList.length
           } media items and stats for ${Object.keys(stats || {}).length} items`
         );
       } catch (error) {
@@ -560,7 +569,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         if (status.didJustFinish) {
           try {
             await sound.unloadAsync();
-          } catch {}
+          } catch { }
           setSoundMap((prev) => {
             const u = { ...prev };
             delete u[id];
@@ -645,24 +654,24 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         // Handle both string and object formats for uploadedBy
         let speakerName = speaker;
         let uploadedByName = uploadedBy;
-        
+
         // If uploadedBy is an object, extract the name
         if (uploadedBy && typeof uploadedBy === "object") {
           uploadedByName = (uploadedBy as any).firstName || (uploadedBy as any).fullName || (uploadedBy as any).name || "";
         } else if (uploadedBy && typeof uploadedBy === "string") {
           uploadedByName = uploadedBy;
         }
-        
+
         if (speakerName && typeof speakerName === "string" && speakerName.trim().length > 0)
           return speakerName;
         if (uploadedByName && typeof uploadedByName === "string" && uploadedByName.trim().length > 0)
           return uploadedByName;
         return "Unknown";
       };
-      
+
       if (video && index !== undefined) {
         console.log(`📱 Video tapped to navigate to reels: ${video.title}`);
-        
+
         // ✅ Include both videos and sermon videos in the list for navigation
         const allVideoContent = [
           ...categorizedContent.videos,
@@ -671,11 +680,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             return detectMediaType(s) === "video";
           })
         ];
-        
+
         // Find the actual index in the combined list
         const actualIndex = allVideoContent.findIndex(v => getContentKey(v) === key);
         const finalIndex = actualIndex >= 0 ? actualIndex : index;
-        
+
         navigateToReels({
           video: video as any,
           index: finalIndex,
@@ -713,7 +722,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         // Even if it fails, HTTP API will handle the like properly
         socketManager.sendLike(contentId, "media");
       }
-      
+
       try {
         // Store handles optimistic update immediately, then API call, then rollback on error
         await toggleLike(contentId, contentType);
@@ -827,19 +836,19 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const togglePlay = useCallback((key: string) => {
     console.log("🎮 togglePlay called in AllContentTikTok with key:", key);
-    
+
     // Find the media item to determine if it's audio or video
     const mediaItem = filteredMediaList.find((item) => getContentKey(item) === key);
-    
+
     // ✅ Use centralized utility for media type detection
     const mediaType = detectMediaType(mediaItem || null);
     const isAudio = mediaType === "audio";
-    
+
     // Check if currently playing to toggle pause
-    const isCurrentlyPlaying = isAudio 
+    const isCurrentlyPlaying = isAudio
       ? (playingAudioId === key)
       : (playingVideos[key] ?? false);
-    
+
     if (isCurrentlyPlaying) {
       // ✅ Pause if currently playing - make it as smooth as play
       console.log(`⏸️ Pausing ${isAudio ? "audio" : "video"} for key:`, key);
@@ -850,7 +859,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
       return;
     }
-    
+
     // Clear any autoplay state and play the media immediately
     setCurrentlyVisibleVideo(key);
 
@@ -1029,7 +1038,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       const allPlayingVideoKeys = Object.keys(playingVideos).filter(
         (key) => playingVideos[key] === true
       );
-      
+
       // Also check the global currentlyPlayingVideo
       if (currentlyPlayingVideo && !allPlayingVideoKeys.includes(currentlyPlayingVideo)) {
         allPlayingVideoKeys.push(currentlyPlayingVideo);
@@ -1041,7 +1050,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       // Check each playing video
       allPlayingVideoKeys.forEach((key) => {
         const layout = contentLayoutsRef.current[key];
-        
+
         // If layout exists, check visibility
         if (layout && layout.type === "video") {
           const videoTop = layout.y;
@@ -1083,7 +1092,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           // ✅ If video is playing but layout not tracked yet, check if we've scrolled significantly
           // This catches most recent videos that haven't had their layout measured yet
           const screenHeight = Dimensions.get("window").height;
-          
+
           // If we've scrolled down more than 1.5 screen heights, we've likely scrolled past the video
           // This is especially important for most recent videos at the top of the feed
           if (scrollY > screenHeight * 1.5) {
@@ -1264,38 +1273,40 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           };
 
           return (
-            <VideoCard
-              key={key}
-              video={item}
-              index={index}
-              modalKey={modalKey}
-              contentStats={contentStats}
-              userFavorites={backendUserFavorites}
-              globalFavoriteCounts={backendGlobalFavoriteCounts}
-              playingVideos={playingVideos}
-              mutedVideos={mutedVideos}
-              progresses={progresses}
-              videoVolume={videoVolume}
-              currentlyVisibleVideo={currentlyVisibleVideo}
-              onVideoTap={handleVideoTap}
-              onTogglePlay={togglePlay}
-              onToggleMute={toggleVideoMute}
-              onFavorite={handleFavorite}
-              onComment={handleComment}
-              onSave={handleSave}
-              onDownload={handleDownloadPress}
-              onShare={handleShare}
-              onModalToggle={toggleModal}
-              modalVisible={modalVisible}
-              comments={comments}
-              checkIfDownloaded={checkIfDownloaded}
-              getContentKey={getContentKey}
-              getTimeAgo={getTimeAgo}
-              getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-              getUserAvatarFromContent={getUserAvatarFromContent}
-              onLayout={handleContentLayout}
-              isAutoPlayEnabled={isAutoPlayEnabled}
-            />
+            <ContentErrorBoundary key={`error-boundary-${key}`}>
+              <VideoCard
+                key={key}
+                video={item}
+                index={index}
+                modalKey={modalKey}
+                contentStats={contentStats}
+                userFavorites={backendUserFavorites}
+                globalFavoriteCounts={backendGlobalFavoriteCounts}
+                playingVideos={playingVideos}
+                mutedVideos={mutedVideos}
+                progresses={progresses}
+                videoVolume={videoVolume}
+                currentlyVisibleVideo={currentlyVisibleVideo}
+                onVideoTap={handleVideoTap}
+                onTogglePlay={togglePlay}
+                onToggleMute={toggleVideoMute}
+                onFavorite={handleFavorite}
+                onComment={handleComment}
+                onSave={handleSave}
+                onDownload={handleDownloadPress}
+                onShare={handleShare}
+                onModalToggle={toggleModal}
+                modalVisible={modalVisible}
+                comments={comments}
+                checkIfDownloaded={checkIfDownloaded}
+                getContentKey={getContentKey}
+                getTimeAgo={getTimeAgo}
+                getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+                getUserAvatarFromContent={getUserAvatarFromContent}
+                onLayout={handleContentLayout}
+                isAutoPlayEnabled={isAutoPlayEnabled}
+              />
+            </ContentErrorBoundary>
           );
 
         case "sermon":
@@ -1447,7 +1458,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       isMountedRef.current = false;
       try {
         pauseAllMedia();
-      } catch {}
+      } catch { }
     };
   }, []);
 
@@ -1458,7 +1469,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         console.log("📱 Pausing all media on focus loss");
         try {
           pauseAllMedia();
-        } catch {}
+        } catch { }
         setCurrentlyVisibleVideo(null);
         pauseAllAudio();
       };
@@ -1790,24 +1801,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             })()}
           </View>
 
-          {/* Loading indicator for refresh */}
+          {/* No loading spinner - content shows immediately from cache */}
           {loading && hasContent && (
-            <View
-              style={{ padding: UI_CONFIG.SPACING.LG, alignItems: "center" }}
-            >
-              <ActivityIndicator
-                size="small"
-                color={UI_CONFIG.COLORS.PRIMARY}
-              />
-              <Text
-                style={{
-                  marginTop: UI_CONFIG.SPACING.SM,
-                  color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                }}
-              >
-                Loading content...
-              </Text>
-            </View>
+            <View style={{ height: 60 }} />
           )}
         </ScrollView>
       </View>

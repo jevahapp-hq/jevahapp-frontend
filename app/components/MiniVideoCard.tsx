@@ -108,12 +108,17 @@ export default function MiniVideoCard({
         className="w-full h-[232px]"
         activeOpacity={0.9}
       >
-        <MediaCard className="w-full h-full rounded-2xl">
-          {/* Optimized Video with buffering support */}
+        <MediaCard className="w-full h-full rounded-2xl bg-gray-900">
+          {/* 🌟 Video - Show IMMEDIATELY (TikTok/Instagram style) */}
           <Video
             ref={videoRef}
             source={{ uri: safeVideoUri }}
-            style={{ width: "100%", height: "100%", position: "absolute" }}
+            style={{ 
+              width: "100%", 
+              height: "100%",
+              position: "absolute",
+              backgroundColor: "#000",
+            }}
             resizeMode={ResizeMode.COVER}
             useNativeControls={false}
             {...videoProps}
@@ -122,6 +127,41 @@ export default function MiniVideoCard({
               videoProps?.onPlaybackStatusUpdate?.(status);
             }}
           />
+          
+          {/* 🌟 Subtle buffering indicator - only shows when actually buffering */}
+          {(isLoading || isBuffering) && (
+            <View 
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.2)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+              pointerEvents="none"
+            >
+              <View style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}>
+                <View style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  borderWidth: 2,
+                  borderColor: "#FEA74E",
+                  borderTopColor: "transparent",
+                }} />
+              </View>
+            </View>
+          )}
 
           {/* Loading/Buffering Overlay */}
           {(isLoading || isBuffering) && (

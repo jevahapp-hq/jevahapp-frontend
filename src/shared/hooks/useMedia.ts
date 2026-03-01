@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    isFresh,
-    useContentCacheStore,
+    useContentCacheStore
 } from "../../../app/store/useContentCacheStore";
+import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 import { mediaApi } from "../../core/api/MediaApi";
 import {
     ContentFilter,
@@ -12,7 +12,6 @@ import {
     UseMediaReturn,
 } from "../types";
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
-import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 
 export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const {
@@ -28,7 +27,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const INITIAL_LIMIT = 15; // Reduced from 50 for faster initial load (TikTok/Instagram style)
   
   // ✅ INSTAGRAM/TIKTOK STYLE: Get cached data immediately from Zustand store (0ms)
-  const getCachedContent = useCallback(() => {
+  const getCachedContent = useCallback((): { media: MediaItem[]; total: number } | undefined => {
     const cacheKey = "ALL:first";
     const cached = useContentCacheStore.getState().get(cacheKey);
     if (cached && cached.items && cached.items.length > 0) {
@@ -36,12 +35,12 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       const isFresh = Date.now() - cached.fetchedAt < 30 * 60 * 1000;
       if (isFresh) {
         return {
-          media: cached.items,
+          media: cached.items as MediaItem[],
           total: cached.total || 0,
         };
       }
     }
-    return null;
+    return undefined;
   }, []);
 
   const allContentQuery = useQuery({
@@ -61,27 +60,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           throw new Error("API returned empty media array - possible parsing issue");
         }
 
-        // Add timeout to prevent hanging (10 second timeout)
-        const enrichmentPromise = UserProfileCache.enrichContentArrayBatch(
-          response.media || []
-        );
-        
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Enrichment timeout after 10 seconds")), 10000);
-        });
-        
-        let enrichedMedia;
-        try {
-          enrichedMedia = await Promise.race([enrichmentPromise, timeoutPromise]);
-        } catch (enrichError) {
-          console.error("❌ useMedia: Enrichment failed, using original data", {
-            error: enrichError instanceof Error ? enrichError.message : String(enrichError),
-          });
-          // Fallback to original data if enrichment fails or times out
-          enrichedMedia = response.media || [];
-        }
-        
-        const transformedMedia = enrichedMedia
+        // 🚀 CRITICAL FIX: Transform media IMMEDIATELY without blocking enrichment
+        // This ensures videos appear instantly while profile data loads in background
+        const transformedMedia = (response.media || [])
           .map(transformApiResponseToMediaItem)
           .filter((item): item is MediaItem => item !== null);
 
@@ -93,6 +74,32 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           total: response.total || response.pagination?.total || 0,
           fetchedAt: Date.now(),
         });
+
+        // 🚀 NON-BLOCKING: Enrich with user profiles in background (don't wait)
+        // This prevents the 4-10 second delay caused by UserProfileCache
+        if (transformedMedia.length > 0) {
+          UserProfileCache.enrichContentArrayBatch(response.media || [])
+            .then((enrichedMedia) => {
+              const enrichedTransformed = enrichedMedia
+                .map(transformApiResponseToMediaItem)
+                .filter((item): item is MediaItem => item !== null);
+              
+              // Update cache with enriched data for next time
+              useContentCacheStore.getState().set("ALL:first", {
+                items: enrichedTransformed,
+                page: 1,
+                limit: INITIAL_LIMIT,
+                total: response.total || response.pagination?.total || 0,
+                fetchedAt: Date.now(),
+              });
+              
+              // Invalidate query to trigger re-render with enriched data
+              queryClient.invalidateQueries({ queryKey: ["all-content", contentType, 1, INITIAL_LIMIT, false] });
+            })
+            .catch((err) => {
+              console.warn("⚠️ Background enrichment failed (non-critical):", err);
+            });
+        }
 
         return {
           media: transformedMedia,
@@ -114,7 +121,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   });
 
   // ✅ INSTAGRAM/TIKTOK STYLE: Get cached default content immediately (0ms)
-  const getCachedDefaultContent = useCallback(() => {
+  const getCachedDefaultContent = useCallback((): { media: MediaItem[]; total: number; page: number; limit: number; pages: number } | undefined => {
     const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
     const cached = useContentCacheStore.getState().get(defaultKey);
     if (cached && cached.items && cached.items.length > 0) {
@@ -122,7 +129,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       const isFresh = Date.now() - cached.fetchedAt < 30 * 60 * 1000;
       if (isFresh) {
         return {
-          media: cached.items,
+          media: cached.items as MediaItem[],
           total: cached.total || 0,
           page: cached.page || page,
           limit: cached.limit || limit,
@@ -130,7 +137,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         };
       }
     }
-    return null;
+    return undefined;
   }, [contentType, page, limit]);
 
   // Use React Query for default content

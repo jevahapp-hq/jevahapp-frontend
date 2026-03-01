@@ -1,9 +1,10 @@
 import { API_CONFIG } from "../../shared/constants";
 import { ContentFilter, MediaApiResponse, MediaItem } from "../../shared/types";
 import { apiClient } from "./ApiClient";
+import { requestDeduplicator } from "./RequestDeduplicator";
 
 class MediaApi {
-  // Get all content (public) - with pagination support
+  // Get all content (public) - with pagination support and request deduplication
   async getAllContentPublic(options?: {
     page?: number;
     limit?: number;
@@ -20,14 +21,21 @@ class MediaApi {
     if (options?.sort) params.sort = options.sort;
     if (options?.order) params.order = options.order;
 
-    // Use ApiClient retry helper to gracefully handle transient errors and 429 rate limits
-    const response = await apiClient.retry(
-      () =>
-        apiClient.get<any>(
-          API_CONFIG.ENDPOINTS.ALL_CONTENT,
-          Object.keys(params).length > 0 ? params : undefined
-        ),
-      API_CONFIG.RETRY_ATTEMPTS
+    // Create deduplication key based on params
+    const dedupKey = `getAllContentPublic:${JSON.stringify(params)}`;
+
+    // Use request deduplicator to prevent duplicate requests and handle rate limits
+    const response = await requestDeduplicator.execute(
+      dedupKey,
+      () => apiClient.get<any>(
+        API_CONFIG.ENDPOINTS.ALL_CONTENT,
+        Object.keys(params).length > 0 ? params : undefined
+      ),
+      {
+        dedupWindow: 5000, // 5 seconds
+        retryCount: 3,
+        retryDelay: 1000,
+      }
     );
 
     if (response.success) {

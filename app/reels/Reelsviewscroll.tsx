@@ -1,4 +1,4 @@
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,7 +21,6 @@ import ReportMediaModal from "../../src/shared/components/ReportMediaModal";
 import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
 import { getBestVideoUrl, getVideoUrlFromMedia, handleVideoError } from "../../src/shared/utils/videoUrlManager";
-import { getBottomNavHeight } from "../../utils/responsive";
 import { DeleteMediaConfirmation } from "../components/DeleteMediaConfirmation";
 import ErrorBoundary from "../components/ErrorBoundary";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
@@ -38,19 +37,19 @@ import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
 import { useReelsStore } from "../store/useReelsStore";
 import allMediaAPI from "../utils/allMediaAPI";
 import { audioConfig } from "../utils/audioConfig";
+import { UserProfileCache } from "../utils/cache/UserProfileCache";
 import { useDownloadHandler } from "../utils/downloadUtils";
 import { navigateMainTab } from "../utils/navigation";
 import {
   getPersistedStats,
   persistStats,
 } from "../utils/persistentStorage";
-import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
-import { UserProfileCache } from "../utils/cache/UserProfileCache";
-import { ReelsProgressBar } from "./components/ReelsProgressBar";
-import { ReelsHeader } from "./components/ReelsHeader";
+import { getUserDisplayNameFromContent } from "../utils/userValidation";
 import { ReelsActionButtons } from "./components/ReelsActionButtons";
-import { ReelsSpeakerInfo } from "./components/ReelsSpeakerInfo";
+import { ReelsHeader } from "./components/ReelsHeader";
 import { ReelsMenu } from "./components/ReelsMenu";
+import { ReelsProgressBar } from "./components/ReelsProgressBar";
+import { ReelsSpeakerInfo } from "./components/ReelsSpeakerInfo";
 
 // ✅ Route Params Type
 type Params = {
@@ -72,7 +71,7 @@ type Params = {
 
 export default function Reelsviewscroll() {
   // ✅ ALL HOOKS MUST BE CALLED AT THE TOP LEVEL, BEFORE ANY CONDITIONAL LOGIC OR useEffect
-  
+
   // Router and params hooks - MUST be called first
   const {
     title,
@@ -135,7 +134,7 @@ export default function Reelsviewscroll() {
   // CRITICAL FIX: Use useMemo for computation, useEffect for setState (prevents render-time setState error)
   const parsedVideoList = useMemo(() => {
     let rawList: any[] = [];
-    
+
     if (reelsStore.videoList.length > 0) {
       rawList = reelsStore.videoList;
     } else if (videoList) {
@@ -150,13 +149,13 @@ export default function Reelsviewscroll() {
       console.warn("⚠️ No video list found in store or params");
       return [];
     }
-    
+
     // Enrich all videos with user profile data (avatars, names) from cache
     if (rawList.length > 0) {
       const enrichedList = UserProfileCache.enrichContentArray(rawList);
       return enrichedList;
     }
-    
+
     return rawList;
   }, [reelsStore.videoList, videoList]);
 
@@ -164,13 +163,13 @@ export default function Reelsviewscroll() {
   // Use refs to track if we've already processed the video list
   const videoListProcessedRef = useRef(false);
   const lastVideoListRef = useRef<string | undefined>(undefined);
-  
+
   useEffect(() => {
     // Skip if we've already processed this videoList
     if (videoList === lastVideoListRef.current && reelsStore.videoList.length > 0) {
       return;
     }
-    
+
     // Parse videoList from params if store is empty
     if (reelsStore.videoList.length === 0 && videoList) {
       try {
@@ -184,15 +183,15 @@ export default function Reelsviewscroll() {
         console.error("❌ Failed to parse video list:", error);
       }
     }
-    
+
     // Only update if parsedVideoList is different and we haven't processed it
     if (parsedVideoList.length > 0 && !videoListProcessedRef.current) {
       const currentList = reelsStore.videoList;
       // Quick comparison - check length and first item ID
       const listsAreDifferent = currentList.length !== parsedVideoList.length ||
-        (currentList.length > 0 && parsedVideoList.length > 0 && 
-         currentList[0]?._id !== parsedVideoList[0]?._id);
-      
+        (currentList.length > 0 && parsedVideoList.length > 0 &&
+          currentList[0]?._id !== parsedVideoList[0]?._id);
+
       if (listsAreDifferent) {
         reelsStore.setVideoList(parsedVideoList);
         videoListProcessedRef.current = true;
@@ -255,18 +254,18 @@ export default function Reelsviewscroll() {
     const speaker = video?.speaker;
     if (typeof speaker === 'string') return speaker;
     if (speaker && typeof speaker === 'object') {
-      return speaker.fullName || 
-             (speaker.firstName && speaker.lastName 
-               ? `${speaker.firstName} ${speaker.lastName}`.trim()
-               : speaker.firstName || speaker.lastName || 'Unknown');
+      return speaker.fullName ||
+        (speaker.firstName && speaker.lastName
+          ? `${speaker.firstName} ${speaker.lastName}`.trim()
+          : speaker.firstName || speaker.lastName || 'Unknown');
     }
     return getUserDisplayNameFromContent(video, "Unknown");
   };
-  
+
   // Create a unique key for this reel content (for video playback tracking, stats, etc.)
   const reelKey = `reel-${currentVideo.title}-${getSpeakerNameForReel(currentVideo)}`;
   const modalKey = reelKey;
-  
+
   // Extract real contentId for API calls (comments, interactions, etc.)
   // Prefer _id or id from the video object, fallback to synthetic key only if needed
   // ✅ CRITICAL: Use the same contentId format as AllContentTikTok for state persistence
@@ -318,7 +317,7 @@ export default function Reelsviewscroll() {
 
   // Ensure we always have data to render even if network fails
   const hasList = Array.isArray(reelsStore.videoList) && reelsStore.videoList.length > 0;
-  
+
   useEffect(() => {
     if (!hasList) {
       // Provide a minimal fallback so UI doesn't go black
@@ -620,11 +619,11 @@ export default function Reelsviewscroll() {
     // Use real contentId for comments API (required for backend to work)
     // Fallback to synthetic key only if no real ID exists (shouldn't happen in production)
     const commentContentId = contentId || key;
-    
+
     // Open modal with empty array - backend will load comments immediately
     // Pass contentType explicitly to ensure correct backend routing
     showCommentModal([], commentContentId, "media", currentVideo.speaker);
-    
+
     // Note: Comment count is updated by CommentModalContext after successful submission
     // No need to pre-increment here - that would be an incorrect optimistic update
   }, [contentId, showCommentModal, currentVideo?.speaker]);
@@ -709,7 +708,7 @@ export default function Reelsviewscroll() {
         fileUrl: currentVideo.fileUrl || imageUrl,
         thumbnailUrl: currentVideo.imageUrl || imageUrl,
       };
-      
+
       await handleDownload(downloadableItem);
       setMenuVisible(false);
     } catch (error) {
@@ -797,14 +796,14 @@ export default function Reelsviewscroll() {
     if (!Number.isFinite(ms) || ms < 0 || isNaN(ms)) {
       return "0:00";
     }
-    
+
     // Clamp to reasonable maximum (24 hours)
     const clampedMs = Math.min(ms, 24 * 60 * 60 * 1000);
-    
+
     const totalSeconds = Math.floor(clampedMs / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const remainingSeconds = totalSeconds % 60;
-    
+
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
@@ -898,7 +897,7 @@ export default function Reelsviewscroll() {
     setVideoPosition(0);
     setShowPauseOverlay(false); // Reset pause overlay state
     setUserHasManuallyPaused(false); // Reset manual pause flag for new video
-    
+
     // 🚀 Update last accessed time for cache optimization
     mediaStore.updateLastAccessed(modalKey);
 
@@ -979,10 +978,10 @@ export default function Reelsviewscroll() {
       return speaker || fallback;
     }
     if (speaker && typeof speaker === 'object') {
-      return speaker.fullName || 
-             (speaker.firstName && speaker.lastName 
-               ? `${speaker.firstName} ${speaker.lastName}`.trim()
-               : speaker.firstName || speaker.lastName || fallback);
+      return speaker.fullName ||
+        (speaker.firstName && speaker.lastName
+          ? `${speaker.firstName} ${speaker.lastName}`.trim()
+          : speaker.firstName || speaker.lastName || fallback);
     }
     // Fallback: try getUserDisplayNameFromContent if available
     try {
@@ -1028,7 +1027,7 @@ export default function Reelsviewscroll() {
     const speakerName = getSpeakerName(enrichedVideoData, "Unknown");
     const videoKey =
       passedVideoKey || `reel-${enrichedVideoData.title}-${speakerName}`;
-    
+
     // ✅ FIX: Clear any stale video refs when rendering a new video to prevent overlap
     // Only clear if this is the active video and we're switching to it
     if (isActive) {
@@ -1037,7 +1036,7 @@ export default function Reelsviewscroll() {
       if (existingRef && index !== currentIndex_state) {
         // If there's a ref mismatch, clear it
         try {
-          existingRef.pauseAsync().catch(() => {});
+          existingRef.pauseAsync().catch(() => { });
         } catch (e) {
           // Ignore errors
         }
@@ -1047,7 +1046,7 @@ export default function Reelsviewscroll() {
     // Get video URL with proper fallbacks: fileUrl > playbackUrl > hlsUrl
     // CRITICAL: NEVER use imageUrl or thumbnailUrl for video playback - they are images!
     const rawVideoUrl = getVideoUrlFromMedia(enrichedVideoData);
-    
+
     // Validate video URL exists
     if (!rawVideoUrl) {
       console.warn("⚠️ No valid video URL (fileUrl/playbackUrl/hlsUrl) for:", enrichedVideoData.title, "Data:", enrichedVideoData);
@@ -1071,10 +1070,10 @@ export default function Reelsviewscroll() {
         </View>
       );
     }
-    
+
     // ✅ Use getBestVideoUrl to handle signed URLs and URL conversion (same as VideoCard)
     const videoUrl = getBestVideoUrl(rawVideoUrl);
-    
+
     console.log(`🎬 Reels video URL for ${enrichedVideoData.title}:`, {
       original: rawVideoUrl?.substring(0, 100),
       processed: videoUrl?.substring(0, 100),
@@ -1082,6 +1081,9 @@ export default function Reelsviewscroll() {
 
     // 🚀 Check video cache status for optimization (no hooks, pure call)
     mediaStore.getVideoCacheStatus(videoKey);
+
+    // ✅ Fix decoder exhaustion: only render Video for the active item and its immediate neighbors
+    const isAdjacent = Math.abs(currentIndex_state - index) <= 1;
 
     return (
       <View
@@ -1107,12 +1109,30 @@ export default function Reelsviewscroll() {
         >
           <View
             className="w-full h-full"
-            accessibilityLabel={`${
-              playingVideos[videoKey] ? "Pause" : "Play"
-            } video`}
+            accessibilityLabel={`${playingVideos[videoKey] ? "Pause" : "Play"
+              } video`}
             accessibilityRole="button"
             accessibilityHint="Double tap to like, long press for more options"
           >
+            {/* Show Thumbnail instantly underneath to fix blur/skeleton issue and prevent blank ticks on load */}
+            <Image
+              source={{
+                uri: enrichedVideoData?.imageUrl || enrichedVideoData?.thumbnailUrl || "https://via.placeholder.com/400x800/000000/ffffff?text=Loading",
+              }}
+              style={{
+                width: "100%",
+                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: isActive ? 1 : 0,
+              }}
+              resizeMode="cover"
+            />
+
+            {/* 🌟 UPDATE: Unconditionally mount `Video` so the native layer pre-loads its first frame. Let React/Expo manage the underlying decoding limits. */}
             <Video
               ref={(ref) => {
                 if (ref) {
@@ -1121,16 +1141,16 @@ export default function Reelsviewscroll() {
                   if (existingRef && existingRef !== ref) {
                     // Clean up old ref if it exists and is different
                     try {
-                      existingRef.pauseAsync().catch(() => {});
+                      existingRef.pauseAsync().catch(() => { });
                       globalVideoStore.unregisterVideoPlayer(videoKey);
                     } catch (e) {
                       // Ignore cleanup errors
                     }
                   }
-                  
+
                   // ✅ Always register ref (not just when active) for proper global control
                   videoRefs.current[videoKey] = ref;
-                  
+
                   // ✅ Register with global video store immediately (not just when active)
                   // This ensures playVideoGlobally works even on initial navigation
                   globalVideoStore.registerVideoPlayer(videoKey, {
@@ -1182,10 +1202,10 @@ export default function Reelsviewscroll() {
                 const errorDetails = error?.error || error;
                 const errorCode = errorDetails?.code;
                 const errorDomain = errorDetails?.domain;
-                
+
                 // ✅ Use enhanced error handler for better diagnostics
                 const errorAnalysis = handleVideoError(error, videoUrl, enrichedVideoData.title);
-                
+
                 console.error(
                   `❌ Video loading error in reels for ${enrichedVideoData.title}:`,
                   {
@@ -1196,7 +1216,7 @@ export default function Reelsviewscroll() {
                     errorAnalysis,
                   }
                 );
-                
+
                 // ✅ Pause video on error to prevent infinite retry loops
                 const ref = videoRefs.current[videoKey];
                 if (ref) {
@@ -1207,14 +1227,14 @@ export default function Reelsviewscroll() {
                     // Ignore pause errors
                   }
                 }
-                
+
                 // ✅ Unregister failed video player to prevent further attempts
                 try {
                   globalVideoStore.unregisterVideoPlayer(videoKey);
                 } catch (unregisterError) {
                   // Ignore unregister errors
                 }
-                
+
                 // ✅ For timeout errors (-1001), log specific guidance
                 if (errorCode === -1001 || errorDomain === 'NSURLErrorDomain') {
                   if (errorAnalysis.isRetryable && errorAnalysis.suggestedUrl) {
@@ -1238,7 +1258,7 @@ export default function Reelsviewscroll() {
               onLoad={() => {
                 // 🚀 Mark video as loaded in cache for optimization
                 mediaStore.setVideoLoaded(videoKey, true);
-                
+
                 // ✅ Auto-play video when it loads if it should be playing
                 // This ensures video plays immediately when navigating from AllContentTikTok
                 if (playingVideos[videoKey] && !userHasManuallyPaused) {
@@ -1289,8 +1309,6 @@ export default function Reelsviewscroll() {
               // Platform-specific video optimizations
               shouldCorrectPitch={isIOS}
               progressUpdateIntervalMillis={isIOS ? 100 : 250}
-              // Increased buffer size for smoother streaming
-              preferredForwardBufferDuration={45}
             />
 
             {/* Reload button removed - no per-item error state tracking without hooks */}
@@ -1497,7 +1515,7 @@ export default function Reelsviewscroll() {
 
       const { contentOffset } = event.nativeEvent;
       const scrollY = contentOffset.y;
-      
+
       // Validate scrollY is a number
       if (typeof scrollY !== 'number' || isNaN(scrollY)) {
         return;
@@ -1557,13 +1575,13 @@ export default function Reelsviewscroll() {
   useEffect(() => {
     if (scrollViewRef.current && parsedVideoList.length > 0) {
       const initialOffset = currentIndex_state * screenHeight;
-      
+
       // Initialize scroll start index
       scrollStartIndexRef.current = currentIndex_state;
-      
+
       // ✅ FIX: Pause all videos first to prevent overlap/confusion
       globalVideoStore.pauseAllVideos();
-      
+
       // ✅ Scroll immediately
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({
@@ -1579,23 +1597,23 @@ export default function Reelsviewscroll() {
           console.warn("⚠️ No initial video found at index:", currentIndex_state);
           return;
         }
-        
+
         const initialKey = initialVideo
           ? `reel-${initialVideo.title}-${getSpeakerName(initialVideo, "unknown")}`
           : `reel-index-${currentIndex_state}`;
-        
+
         // ✅ FIX: Clear any stale refs before registering new one
         Object.keys(videoRefs.current).forEach((key) => {
           if (key !== initialKey && videoRefs.current[key]) {
             try {
-              videoRefs.current[key].pauseAsync().catch(() => {});
+              videoRefs.current[key].pauseAsync().catch(() => { });
               globalVideoStore.unregisterVideoPlayer(key);
             } catch (e) {
               // Ignore cleanup errors
             }
           }
         });
-        
+
         // Register video ref if available
         const videoRef = videoRefs.current[initialKey];
         if (videoRef) {
@@ -1614,10 +1632,10 @@ export default function Reelsviewscroll() {
             key: initialKey,
           });
         }
-        
+
         // ✅ Ensure video plays immediately when navigating from AllContentTikTok
         globalVideoStore.playVideoGlobally(initialKey);
-        
+
         // ✅ Also play directly via ref for immediate playback
         if (videoRef) {
           videoRef.playAsync().catch(() => {
@@ -1625,7 +1643,7 @@ export default function Reelsviewscroll() {
           });
         }
       }, 200); // Slightly longer delay to ensure everything is ready
-      } else {
+    } else {
       console.warn("⚠️ Cannot initialize scroll - no videos or scrollViewRef");
     }
   }, [parsedVideoList.length, currentIndex_state]);
@@ -1634,7 +1652,7 @@ export default function Reelsviewscroll() {
   const handleScrollEnd = (event?: any) => {
     try {
       if (!scrollViewRef.current) return;
-      
+
       // Get the final scroll position
       let finalScrollY = currentIndex_state * screenHeight;
       if (event?.nativeEvent?.contentOffset?.y !== undefined) {
@@ -1643,32 +1661,32 @@ export default function Reelsviewscroll() {
           finalScrollY = scrollY;
         }
       }
-      
+
       // Calculate the index from scroll position
       const finalIndex = Math.round(finalScrollY / screenHeight);
       const startIndex = scrollStartIndexRef.current;
-      
+
       // Validate array bounds
       if (!Array.isArray(allVideos) || allVideos.length === 0) {
         console.warn("⚠️ No videos available for scroll end handling");
         return;
       }
-      
+
       // Constrain to only move one video at a time from the starting position
       let targetIndex = finalIndex;
       const maxAllowedIndex = Math.min(startIndex + 1, allVideos.length - 1);
       const minAllowedIndex = Math.max(startIndex - 1, 0);
-      
+
       // Clamp to only allow adjacent videos (one video away)
       if (targetIndex > maxAllowedIndex) {
         targetIndex = maxAllowedIndex;
       } else if (targetIndex < minAllowedIndex) {
         targetIndex = minAllowedIndex;
       }
-      
+
       // Ensure index is within bounds
       targetIndex = Math.max(0, Math.min(targetIndex, allVideos.length - 1));
-      
+
       // Only snap if we need to constrain the scroll (moved more than one video)
       if (targetIndex !== finalIndex && scrollViewRef.current) {
         try {
@@ -1681,16 +1699,16 @@ export default function Reelsviewscroll() {
           console.warn("⚠️ Error scrolling to target position:", scrollError);
         }
       }
-      
+
       // Update state if different
       if (targetIndex !== currentIndex_state) {
         setCurrentIndex_state(targetIndex);
         lastIndexRef.current = targetIndex;
       }
-      
+
       // Update the scroll start index to the current position for next scroll
       scrollStartIndexRef.current = targetIndex;
-      
+
       // Only auto-play if user hasn't manually paused
       if (!userHasManuallyPaused && allVideos[targetIndex]) {
         try {
@@ -1708,7 +1726,7 @@ export default function Reelsviewscroll() {
       // Don't throw - allow app to continue functioning
     }
   };
-  
+
   // Handle scroll begin drag to track starting position
   const handleScrollBeginDrag = () => {
     scrollStartIndexRef.current = currentIndex_state;
@@ -1815,7 +1833,7 @@ export default function Reelsviewscroll() {
       </View>
 
       {/* Comment Modal removed; global instance in app/_layout handles it */}
-      
+
       {/* Delete Confirmation Modal */}
       <DeleteMediaConfirmation
         visible={showDeleteModal}
