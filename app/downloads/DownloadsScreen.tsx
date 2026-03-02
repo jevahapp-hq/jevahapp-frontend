@@ -1,0 +1,850 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Audio, ResizeMode, Video } from "expo-av";
+import { Pause, Play, Search, Volume2, X } from "lucide-react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+    Dimensions,
+    Image,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
+} from "react-native";
+import {
+    GestureHandlerRootView,
+    HandlerStateChangeEvent,
+    PanGestureHandler,
+    PanGestureHandlerGestureEvent,
+} from "react-native-gesture-handler";
+import Animated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import { useRouter } from "expo-router";
+import AuthHeader from "../components/AuthHeader";
+import { useVideoNavigation } from "../hooks/useVideoNavigation";
+import { DownloadItem, useDownloadStore } from "../store/useDownloadStore";
+import { API_BASE_URL } from "../utils/api";
+import { authUtils } from "../utils/authUtils";
+import type { MediaItem } from "../types/media";
+
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+
+const profileImage = require("../../assets/images/user.png");
+const defaultAvatar = require("../../assets/images/image (5).png");
+
+type User = {
+  firstName: string;
+  lastName: string;
+  avatar: string;
+  section: string;
+};
+
+interface DownloadCardProps {
+  item: DownloadItem;
+  onOpen: (item: DownloadItem) => void;
+  onPreview?: (item: DownloadItem) => void;
+}
+
+const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen, onPreview }) => {
+  const isVideo = item.contentType === 'video' || item.contentType === 'videos';
+  const isAudio = item.contentType === 'audio' || item.contentType === 'music';
+  const isEbook = item.contentType === 'ebook';
+
+  const handleThumbnailPress = () => {
+    // Preview on thumbnail tap
+    if (onPreview) {
+      onPreview(item);
+    }
+  };
+
+  const handleCardPress = () => {
+    // Full open on card tap
+    onOpen(item);
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.75}
+      onPress={handleCardPress}
+      className="mb-5 flex-row w-[362px] gap-6 justify-between"
+    >
+      {/* Thumbnail/Video/Audio Display - Tappable for preview */}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handleThumbnailPress}
+        className="w-[60px] h-[72px] rounded-xl overflow-hidden relative"
+      >
+        <Image
+          source={
+            item.thumbnailUrl
+              ? { uri: item.thumbnailUrl }
+              : require("../../assets/images/1.png")
+          }
+          className="w-full h-full"
+          resizeMode="cover"
+        />
+        {/* Play overlay for videos/audio */}
+        {(isVideo || isAudio) && (
+          <View className="absolute inset-0 bg-black/20 items-center justify-center">
+            <View className="bg-white/90 rounded-full p-2">
+              <Play size={16} color="#256E63" fill="#256E63" />
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <View className="flex-col w-[268px]">
+        <Text className="mt-2 font-rubik-semibold text-[16px] text-[#1D2939]">
+          {item.title}
+        </Text>
+        <Text
+          className="text-[#667085] text-sm mt-2 font-rubik"
+          numberOfLines={2}
+        >
+          {item.description}
+        </Text>
+
+        {/* Tap to open in the proper viewer (Reels / Music / Reader) */}
+        {!isEbook && (
+          <View className="flex-row items-center mt-3">
+            <View className="mr-2">
+              <Play size={18} color="black" />
+            </View>
+            <Text className="text-[#667085] text-sm font-rubik">
+              {isVideo ? "Open in Reels" : isAudio ? "Open player" : "Open"}
+            </Text>
+          </View>
+        )}
+
+        {/* Author & Metadata */}
+        <View className="flex-row items-center justify-between mt-3">
+          <Image source={profileImage} className="w-6 h-6 rounded-full" />
+          <View className="flex-row items-center flex-wrap">
+            <Text className="ml-2 text-[14px] font-rubik-semibold text-[#344054]">
+              {typeof item.author === 'string' 
+                ? item.author 
+                : item.author?.fullName || item.author?.firstName || 'Unknown'}
+            </Text>
+            <View className="flex-row items-center mt-2">
+              <View className="flex-row items-center">
+                <Ionicons name="time-outline" size={12} color="#667085" />
+                <Text className="ml-1 text-xs text-[#667085] font-rubik">
+                  {new Date(item.downloadedAt).toLocaleDateString()}
+                </Text>
+              </View>
+              <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
+              <View className="flex-row items-center">
+                <Ionicons name="document-outline" size={12} color="#667085" />
+                <Text className="ml-1 text-xs text-[#667085] font-rubik">
+                  {item.size || "Unknown"}
+                </Text>
+              </View>
+              <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
+              <View className="flex-row items-center">
+                <Ionicons name="checkmark-circle-outline" size={12} color="#256E63" />
+                <Text className="ml-1 text-xs text-[#256E63] font-rubik-semibold">
+                  {item.status}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const DownloadScreen: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isAutomaticDownloadsModalVisible, setIsAutomaticDownloadsModalVisible] = useState(false);
+  const [previewItem, setPreviewItem] = useState<DownloadItem | null>(null);
+  const router = useRouter();
+  const { navigateToReels } = useVideoNavigation();
+  
+  // Use the download store
+  const { 
+    downloadedItems, 
+    isLoaded, 
+    loadDownloadedItems, 
+    removeFromDownloads 
+  } = useDownloadStore();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const token = await authUtils.getStoredToken();
+        if (!token) {
+          console.error("❌ No authentication token found");
+          return;
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("👤 User API response:", data);
+
+        if (data.data && data.data.firstName && data.data.lastName) {
+          setUser(data.data);
+          await AsyncStorage.setItem("user", JSON.stringify(data.data));
+          console.log("✅ Updated AsyncStorage with complete API user data:", {
+            firstName: data.data.firstName,
+            lastName: data.data.lastName,
+            hasAvatar: !!data.data.avatar,
+          });
+        } else {
+          console.warn("⚠️ API returned incomplete user data:", data.data);
+          setUser(data.data);
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch user:", error);
+      }
+    };
+
+    fetchUser();
+    loadDownloadedItems();
+  }, []);
+
+  // Filter downloads based on search query
+  const filterDownloads = (downloads: DownloadItem[]) => {
+    if (!searchQuery.trim()) return downloads;
+
+    const query = searchQuery.toLowerCase();
+    return downloads.filter((item) => {
+      const authorStr = typeof item.author === 'string' 
+        ? item.author 
+        : item.author?.fullName || item.author?.firstName || '';
+      
+      return (
+        item.title.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query) ||
+        authorStr.toLowerCase().includes(query)
+      );
+    });
+  };
+
+  const filteredDownloads = filterDownloads(downloadedItems);
+
+  const toVideoMediaItem = (d: DownloadItem): MediaItem => ({
+    _id: d.id,
+    contentType: "videos",
+    fileUrl: d.localPath || d.fileUrl || "",
+    title: d.title,
+    speaker: d.author,
+    uploadedBy: d.author,
+    description: d.description,
+    createdAt: d.downloadedAt,
+    imageUrl: d.thumbnailUrl,
+  });
+
+  const openDownloadedItem = (d: DownloadItem) => {
+    const normalized = (d.contentType || "").toLowerCase();
+    if (normalized === "video" || normalized === "videos") {
+      const allVideos = downloadedItems
+        .filter((x) => ["video", "videos"].includes((x.contentType || "").toLowerCase()))
+        .map(toVideoMediaItem);
+      const currentIndex = Math.max(
+        0,
+        allVideos.findIndex((v) => v._id === d.id)
+      );
+
+      navigateToReels({
+        video: toVideoMediaItem(d),
+        index: currentIndex,
+        allVideos,
+        contentStats: {},
+        globalFavoriteCounts: {},
+        getContentKey: (item) => String(item._id || item.title),
+        getTimeAgo: (createdAt) => {
+          try {
+            return new Date(createdAt).toLocaleDateString();
+          } catch {
+            return "Recently";
+          }
+        },
+        getDisplayName: (speaker, uploadedBy) =>
+          speaker || uploadedBy || d.author || "Unknown",
+        source: "Downloads",
+        category: "videos",
+      });
+      return;
+    }
+
+    // Audio / Ebook / others: open viewer that uses the same UI components as their category
+    router.push({
+      pathname: "/downloads/DownloadContentViewer",
+      params: { id: d.id },
+    });
+  };
+
+  return (
+    <SafeAreaView className="flex-1 w-full bg-white">
+      <View className="px-4 mt-6">
+        <AuthHeader title="Downloads" />
+      </View>
+
+
+      <View className="flex-1 bg-[#F3F3F4] w-full ">
+        <View className="flex-1 w-full items-center">
+
+      {/* Search Bar */}
+        <View className="flex-row items-center bg-[#E5E5EA] w-[362px] rounded-xl mx-4 mt-4 px-2 py-3 border border-[rgb(229,229,234)]">
+                        <Search size={22} color="#8E8E93" />
+          <TextInput
+            className="ml-2 flex-1 font-rubik-regular text-[#090E24]"
+            placeholder="Search for downloads..."
+            placeholderTextColor="#98A2B3"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Text className="text-blue-500 font-semibold">Clear</Text>
+            </TouchableOpacity>
+          )}
+      </View>
+
+      {/* Smart download */}
+        <View className="bg-[#E5E5EA] rounded-xl w-[362px] h-[104px] mx-4 mt-4 px-4 py-4 flex-row justify-between">
+          <View className="flex-row items-start flex-1">
+            <View className="mr-3 mt-1">
+              <Ionicons name="download-outline" size={24} color="#6B7280" />
+            </View>
+            <View className="flex-1">
+              <Text className="font-rubik-semibold text-[14px] text-[#1D2939]">
+                Smart download
+              </Text>
+              <Text className="text-[#667085] text-sm mt-1 font-rubik">
+                Automatically downloads content for you based on what you watch
+                when connected to a wifi
+              </Text>
+              <TouchableOpacity className="mt-2">
+                <Text className="text-[#256E63]  font-rubik-semibold text-[10px]">
+                  SETUP
+        </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View className="justify-center">
+            <TouchableOpacity onPress={() => setIsAutomaticDownloadsModalVisible(true)}>
+              <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+      </View>
+
+      {/* Downloads */}
+        <ScrollView 
+          className="flex-1 mt-9 px-4" 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
+        >
+        {/* All downloads */}
+          <Text className="text-[14px] font-rubik-semibold text-[#1D2939] mb-3">
+            All Downloads ({downloadedItems.length})
+          </Text>
+          
+          {!isLoaded ? (
+            <View className="flex-1 justify-center items-center mt-20 mb-20">
+              <Text className="text-[#667085] text-lg font-rubik">
+                Loading downloads...
+              </Text>
+            </View>
+          ) : downloadedItems.length === 0 ? (
+            <View className="flex-1 justify-center items-center mt-20 mb-20">
+              <Text className="text-[#667085] text-lg font-rubik">
+                No downloads yet
+              </Text>
+              <Text className="text-[#667085] text-sm mt-2 font-rubik">
+                Download content from any category to see it here
+              </Text>
+            </View>
+          ) : (
+            filteredDownloads.map((item, index) => (
+              <DownloadCard
+                key={item.id || String(index)}
+                item={item}
+                onOpen={openDownloadedItem}
+                onPreview={setPreviewItem}
+              />
+            ))
+          )}
+
+          {/* Show message when no results found */}
+          {searchQuery && filteredDownloads.length === 0 && downloadedItems.length > 0 && (
+            <View className="flex-1 justify-center items-center mt-20 mb-20">
+              <Text className="text-[#667085] text-lg font-rubik">
+                No downloads found
+              </Text>
+              <Text className="text-[#667085] text-sm mt-2 font-rubik">
+                Try searching with different keywords
+              </Text>
+            </View>
+          )}
+      </ScrollView>
+
+        </View>
+      </View>
+
+      {/* Automatic Downloads Modal */}
+      <AutomaticDownloadsModal
+        isVisible={isAutomaticDownloadsModalVisible}
+        onClose={() => setIsAutomaticDownloadsModalVisible(false)}
+      />
+
+      {/* Media Preview Modal */}
+      {previewItem && (
+        <MediaPreviewModal
+          item={previewItem}
+          onClose={() => {
+            console.log("Closing preview modal");
+            setPreviewItem(null);
+          }}
+          onOpenFull={() => {
+            console.log("Opening full viewer for:", previewItem.title);
+            // Store item reference before closing
+            const itemToOpen = { ...previewItem };
+            setPreviewItem(null);
+            // Navigate after modal closes (small delay ensures state updates)
+            setTimeout(() => {
+              console.log("Navigating to full viewer with item:", itemToOpen.title);
+              openDownloadedItem(itemToOpen);
+            }, 300);
+          }}
+        />
+      )}
+    </SafeAreaView>
+  );
+};
+
+// Automatic Downloads Modal Component
+const AutomaticDownloadsModal: React.FC<{
+  isVisible: boolean;
+  onClose: () => void;
+}> = ({ isVisible, onClose }) => {
+  const [isSmartDownloadEnabled, setIsSmartDownloadEnabled] = useState(false);
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const lastTranslateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (isVisible) {
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+    } else {
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+    }
+  }, [isVisible]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
+    const { translationY } = event.nativeEvent;
+    if (translationY > 0) {
+      translateY.value = translationY;
+      lastTranslateY.value = translationY;
+    }
+  };
+
+  const onGestureEnd = (
+    _event: HandlerStateChangeEvent<Record<string, unknown>>
+  ) => {
+    if (lastTranslateY.value > 150) {
+      translateY.value = withSpring(SCREEN_HEIGHT, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+      runOnJS(onClose)();
+    } else {
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 100,
+        mass: 1,
+        overshootClamping: true
+      });
+    }
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <GestureHandlerRootView className="absolute inset-0  z-50 items-center justify-end">
+      {/* Background overlay */}
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="absolute inset-0 bg-black/30" />
+      </TouchableWithoutFeedback>
+
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onGestureEnd}
+      >
+        <Animated.View
+          style={[
+            animatedStyle,
+            {
+              position: "absolute",
+              bottom: 0,
+              width: SCREEN_WIDTH,
+            },
+          ]}
+          className="bg-white rounded-t-3xl p-6"
+        >
+          {/* Handle */}
+          <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
+          
+          {/* Header */}
+          <View className="flex-row justify-between items-center mb-9">
+            <Text className="text-[20px] font-rubik-semibold text-[#1D2939]">
+              Automatic downloads
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                translateY.value = withSpring(SCREEN_HEIGHT, { 
+                  damping: 20, 
+                  stiffness: 100,
+                  mass: 1,
+                  overshootClamping: true
+                });
+                runOnJS(onClose)();
+              }}
+              className="w-8 h-8 bg-gray-200 rounded-full justify-center items-center"
+            >
+              <Ionicons name="close" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Separator */}
+          
+          {/* <View className="h-[1px] bg-gray-200 mb-2" /> */}
+
+          {/* Smart Download Section */}
+          <View className="flex-col  w-full items-start mb-14 justify-between h-[133px] ">
+            <View className="flex-row items-start flex-1">
+              <View className="mr-3 mt-1">
+                <Ionicons name="download-outline" size={24} color="#6B7280" />
+              </View>
+              <View className="flex-1">
+                <Text className="font-rubik-semibold text-[14px] text-[#1D2939]">
+                  Smart download
+                </Text>
+                <Text className="text-[#667085] text-sm mt-1 font-rubik">
+                  Automatically downloads content for you based on what you watch when connected to a wifi
+                </Text>
+              </View>
+            </View>
+            
+            <View className="flex-row justify-between items-center ml-4 w-[340px] h-[24px]">
+              <Text className="text-[#1D2939] font-rubik-semibold text-sm mr-3">
+                Turn on
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsSmartDownloadEnabled(!isSmartDownloadEnabled)}
+                className={`w-14 h-7 rounded-full ${
+                  isSmartDownloadEnabled ? 'bg-[#256E63]' : 'bg-gray-300'
+                } justify-center`}
+              >
+                <View
+                  className={`w-5 h-5 bg-white rounded-full transition-all duration-200 ${
+                    isSmartDownloadEnabled ? 'ml-7' : 'ml-1'
+                  }`}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      </PanGestureHandler>
+    </GestureHandlerRootView>
+  );
+};
+
+// Media Preview Modal Component
+interface MediaPreviewModalProps {
+  item: DownloadItem;
+  onClose: () => void;
+  onOpenFull: () => void;
+}
+
+const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, onOpenFull }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef<Video>(null);
+  const audioRef = useRef<Audio.Sound | null>(null);
+  const isVideo = item.contentType === 'video' || item.contentType === 'videos';
+  const isAudio = item.contentType === 'audio' || item.contentType === 'music';
+  const isEbook = item.contentType === 'ebook';
+  const mediaUrl = item.localPath || item.fileUrl || "";
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.unloadAsync().catch(() => {});
+      }
+      if (audioRef.current) {
+        audioRef.current.unloadAsync().catch(() => {});
+      }
+    };
+  }, []);
+
+  const handlePlayPause = async () => {
+    try {
+      if (isVideo && videoRef.current) {
+        if (isPlaying) {
+          await videoRef.current.pauseAsync();
+        } else {
+          await videoRef.current.playAsync();
+        }
+        setIsPlaying(!isPlaying);
+      } else if (isAudio && audioRef.current) {
+        if (isPlaying) {
+          await audioRef.current.pauseAsync();
+        } else {
+          await audioRef.current.playAsync();
+        }
+        setIsPlaying(!isPlaying);
+      }
+    } catch (error) {
+      console.error("Error toggling playback:", error);
+    }
+  };
+
+  const handleToggleMute = async () => {
+    try {
+      if (isVideo && videoRef.current) {
+        await videoRef.current.setIsMutedAsync(!isMuted);
+        setIsMuted(!isMuted);
+      } else if (isAudio && audioRef.current) {
+        await audioRef.current.setVolumeAsync(isMuted ? 1 : 0);
+        setIsMuted(!isMuted);
+      }
+    } catch (error) {
+      console.error("Error toggling mute:", error);
+    }
+  };
+
+  // Initialize audio player for audio files
+  useEffect(() => {
+    if (isAudio && mediaUrl) {
+      const loadAudio = async () => {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: mediaUrl },
+            { shouldPlay: false }
+          );
+          audioRef.current = sound;
+        } catch (error) {
+          console.error("Error loading audio:", error);
+        }
+      };
+      loadAudio();
+    }
+  }, [isAudio, mediaUrl]);
+
+  return (
+    <View 
+      className="absolute inset-0 bg-black/90 z-50 items-center justify-center"
+      style={{ zIndex: 9999 }}
+    >
+      {/* Backdrop - tappable to close */}
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="absolute inset-0" style={{ zIndex: 1 }} />
+      </TouchableWithoutFeedback>
+
+      {/* Close button */}
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          console.log("Close button pressed");
+          onClose();
+        }}
+        className="absolute top-12 right-4 bg-white/20 rounded-full p-3"
+        style={{ zIndex: 10000 }}
+        activeOpacity={0.7}
+      >
+        <X size={24} color="white" />
+      </TouchableOpacity>
+
+      {/* Preview content */}
+      <View 
+        className="w-full h-full items-center justify-center px-4"
+        style={{ zIndex: 10001 }}
+        pointerEvents="box-none"
+      >
+        {isVideo && mediaUrl ? (
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View className="w-full max-w-md aspect-video rounded-xl overflow-hidden bg-black" style={{ zIndex: 10001 }}>
+            <Video
+              ref={videoRef}
+              source={{ uri: mediaUrl }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode={ResizeMode.CONTAIN}
+              useNativeControls={false}
+              isMuted={isMuted}
+              shouldPlay={isPlaying}
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded) {
+                  setIsPlaying(status.isPlaying);
+                }
+              }}
+            />
+            {/* Video controls overlay */}
+            <View className="absolute inset-0 items-center justify-center" pointerEvents="box-none">
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handlePlayPause();
+                }}
+                className="bg-white/20 rounded-full p-4"
+                activeOpacity={0.7}
+              >
+                {isPlaying ? (
+                  <Pause size={32} color="white" fill="white" />
+                ) : (
+                  <Play size={32} color="white" fill="white" />
+                )}
+              </TouchableOpacity>
+            </View>
+            {/* Mute button */}
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                handleToggleMute();
+              }}
+              className="absolute bottom-4 right-4 bg-white/20 rounded-full p-2"
+              activeOpacity={0.7}
+            >
+              <Volume2 size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+          </TouchableWithoutFeedback>
+        ) : isAudio ? (
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View className="w-full max-w-md items-center" style={{ zIndex: 10001 }}>
+              {/* Audio thumbnail */}
+              <View className="w-64 h-64 rounded-xl overflow-hidden mb-6">
+                <Image
+                  source={
+                    item.thumbnailUrl
+                      ? { uri: item.thumbnailUrl }
+                      : require("../../assets/images/1.png")
+                  }
+                  className="w-full h-full"
+                  resizeMode="cover"
+                />
+              </View>
+              {/* Audio controls */}
+              <View className="flex-row items-center gap-4">
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handlePlayPause();
+                  }}
+                  className="bg-[#256E63] rounded-full p-4"
+                  activeOpacity={0.7}
+                >
+                  {isPlaying ? (
+                    <Pause size={32} color="white" fill="white" />
+                  ) : (
+                    <Play size={32} color="white" fill="white" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleToggleMute();
+                  }}
+                  className="bg-white/20 rounded-full p-3"
+                  activeOpacity={0.7}
+                >
+                  <Volume2 size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+              <Text className="text-white text-lg font-rubik-semibold mt-4 text-center">
+                {item.title}
+              </Text>
+            </View>
+          </TouchableWithoutFeedback>
+        ) : isEbook ? (
+          <View className="w-full max-w-md items-center">
+            <View className="w-64 h-80 rounded-xl overflow-hidden mb-6 bg-white">
+              <Image
+                source={
+                  item.thumbnailUrl
+                    ? { uri: item.thumbnailUrl }
+                    : require("../../assets/images/1.png")
+                }
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            </View>
+            <Text className="text-white text-lg font-rubik-semibold mb-4 text-center">
+              {item.title}
+            </Text>
+          </View>
+        ) : (
+          <View className="w-full max-w-md items-center">
+            <Image
+              source={
+                item.thumbnailUrl
+                  ? { uri: item.thumbnailUrl }
+                  : require("../../assets/images/1.png")
+              }
+              className="w-64 h-64 rounded-xl"
+              resizeMode="cover"
+            />
+            <Text className="text-white text-lg font-rubik-semibold mt-4 text-center">
+              {item.title}
+            </Text>
+          </View>
+        )}
+
+        {/* Open full viewer button */}
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            console.log("Open full viewer pressed for:", item.title);
+            // onOpenFull already handles closing and navigation
+            onOpenFull();
+          }}
+          className="mt-8 bg-[#256E63] px-6 py-3 rounded-xl"
+          style={{ zIndex: 10002 }}
+          activeOpacity={0.8}
+        >
+          <Text className="text-white font-rubik-semibold">
+            {isVideo ? "Open in Reels" : isAudio ? "Open Player" : isEbook ? "Open Reader" : "Open Full Viewer"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+export default DownloadScreen;

@@ -1,0 +1,597 @@
+// import { ImageSourcePropType } from "react-native";
+// import { create } from "zustand";
+
+// export interface MediaItem {
+//   imageUrl: { uri: string; };
+//   id: string;
+//   title: string;
+//   description: string;
+//   uri: string;
+//   category: string[];
+//   type: string;
+//   contentType: string;
+//   fileUrl: string;
+//   fileMimeType: string;
+//   uploadedBy: string;
+//   viewCount: number;
+//   listenCount: number;
+//   readCount: number;
+//   downloadCount: number;
+//   isLive: boolean;
+//   concurrentViewers: number;
+//   createdAt: string;
+//   updatedAt: string;
+//   topics: string[];
+//   thumbnailUrl?: string;
+
+//   // ✅ Add these for UI purposes:
+//   timeAgo?: string;
+//   speaker?: string;
+//   speakerAvatar?: string | number;
+//   favorite?: number;
+//   saved?: number;
+//   sheared?: number;
+// }
+
+// interface MediaState {
+//   mediaList: MediaItem[];
+
+//   addMedia: (item: MediaItem) => void;
+//   setMediaList: (items: MediaItem[]) => void;
+//   removeMedia: (id: string) => void;
+//   clearMediaList: () => void;
+// }
+
+// export const useMediaStore = create<MediaState>((set) => ({
+//   mediaList: [],
+
+//   addMedia: (item: MediaItem) =>
+//     set((state) => ({
+//       mediaList: [item, ...state.mediaList].sort(
+//         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+//       ),
+//     })),
+
+//   setMediaList: (items: MediaItem[]) =>
+//     set({
+//       mediaList: items.sort(
+//         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+//       ),
+//     }),
+
+//   removeMedia: (id: string) =>
+//     set((state) => ({
+//       mediaList: state.mediaList.filter((item) => item.id !== id),
+//     })),
+
+//   clearMediaList: () => set({ mediaList: [] }),
+// }));
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { GestureResponderEvent } from "react-native";
+import { create } from "zustand";
+import { transformApiResponseToMediaItem } from "../../src/shared/utils/contentHelpers";
+import allMediaAPI from "../utils/allMediaAPI";
+import {
+  getPersistedMediaList,
+  persistMediaList,
+} from "../utils/persistentStorage";
+import { logUserDataStatus, normalizeUserData } from "../utils/userValidation";
+
+export interface MediaItem {
+  comments: number;
+  shared: number;
+  onPress: ((event: GestureResponderEvent) => void) | undefined;
+  imageUrl: { uri: string } | string;
+  _id?: string;
+  title: string;
+  description: string;
+  uri: string;
+  category: string[];
+  type: string;
+  contentType: string;
+  fileUrl: string;
+  fileMimeType: string;
+  uploadedBy: string | {
+    _id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    avatar?: string;
+    name?: string;
+  };
+  viewCount: number;
+  listenCount: number;
+  readCount: number;
+  downloadCount: number;
+  isLive: boolean;
+  concurrentViewers: number;
+  createdAt: string;
+  updatedAt: string;
+  topics: string[];
+  thumbnailUrl?: string;
+  timeAgo?: string;
+  speaker?: string;
+  speakerAvatar?: string | number;
+  favorite?: number;
+  saved?: number;
+  sheared: number;
+  comment: number;
+  duration?: number; // Duration in seconds from backend — used for progress bar
+  moderationStatus?: "approved" | "under_review" | "rejected";
+  playbackUrl?: string;
+  hlsUrl?: string;
+}
+
+interface MediaState {
+  forceRefreshWithCompleteUserData(): unknown;
+  mediaList: MediaItem[];
+  isLoaded: boolean;
+  addMedia: (item: MediaItem) => void;
+  addMediaWithUserValidation: (
+    item: Omit<MediaItem, "speaker" | "speakerAvatar" | "uploadedBy">
+  ) => Promise<void>;
+  setMediaList: (items: MediaItem[]) => void;
+  removeMedia: (id: string) => void;
+  clearMediaList: () => void;
+  loadPersistedMedia: () => Promise<void>;
+  refreshUserDataForExistingMedia: () => Promise<void>;
+
+  // 🔊 Add this for global audio control
+  stopAudioFn: (() => Promise<void>) | null;
+  setStopAudioFn: (fn: (() => Promise<void>) | null) => void;
+  clearStopAudioFn: () => void;
+
+  // Default content state and methods
+  defaultContent: any[];
+  defaultContentLoading: boolean;
+  defaultContentError: string | null;
+  defaultContentPagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+  fetchDefaultContent: (params?: {
+    page?: number;
+    limit?: number;
+    contentType?: string;
+  }) => Promise<void>;
+  loadMoreDefaultContent: () => Promise<void>;
+  refreshDefaultContent: () => Promise<void>;
+
+  // TikTok-style all content state and methods
+  allContent: any[];
+  allContentLoading: boolean;
+  allContentError: string | null;
+  allContentTotal: number;
+  showServerUnavailableModal: boolean;
+  fetchAllContent: (useAuth?: boolean) => Promise<void>;
+  refreshAllContent: () => Promise<void>;
+  dismissServerUnavailableModal: () => void;
+}
+
+export const useMediaStore = create<MediaState>((set, get) => ({
+  mediaList: [],
+  isLoaded: false,
+
+  // Default content state
+  defaultContent: [],
+
+  // Server unavailable modal state
+  showServerUnavailableModal: false,
+  defaultContentLoading: false,
+  defaultContentError: null,
+  defaultContentPagination: {
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0,
+  },
+
+  // TikTok-style all content state
+  allContent: [],
+  allContentLoading: false,
+  allContentError: null,
+  allContentTotal: 0,
+
+  // 🎬 Load persisted media on app startup and refresh user data
+  loadPersistedMedia: async () => {
+    try {
+      const persistedMedia = await getPersistedMediaList();
+
+      set({
+        mediaList: persistedMedia.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+        isLoaded: true,
+      });
+
+      // 🔄 Automatically refresh user data for existing media items
+      if (persistedMedia.length > 0) {
+        await get().refreshUserDataForExistingMedia();
+      }
+    } catch (error) {
+      console.error("❌ Failed to load persisted media:", error);
+      set({ isLoaded: true }); // Mark as loaded even if failed
+    }
+  },
+
+  addMedia: (item: MediaItem) => {
+    try {
+      if (!item || !item.title) {
+        console.warn("⚠️ Attempted to add invalid media item:", item);
+        return;
+      }
+
+      const updatedList = [item, ...get().mediaList].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      set({ mediaList: updatedList });
+
+      // 🚀 Persist immediately when media is added
+      persistMediaList(updatedList);
+    } catch (error) {
+      console.error("❌ Error adding media:", error);
+    }
+  },
+
+  // 🛡️ Enhanced function that validates user data before adding media
+  addMediaWithUserValidation: async (
+    item: Omit<MediaItem, "speaker" | "speakerAvatar" | "uploadedBy">
+  ) => {
+    try {
+      // Get fresh user data from AsyncStorage
+      const userRaw = await AsyncStorage.getItem("user");
+      const user = userRaw ? JSON.parse(userRaw) : null;
+
+      // Normalize and validate user data
+      const normalizedUser = normalizeUserData(user);
+      logUserDataStatus(user, "Media Upload");
+
+      // Create complete media item with validated user data
+      const completeMediaItem: MediaItem = {
+        ...item,
+        uploadedBy: normalizedUser.fullName,
+        speaker: normalizedUser.fullName,
+        speakerAvatar:
+          normalizedUser.avatar || require("../../assets/images/Avatar-1.png"),
+      };
+
+      // Use the regular addMedia function with complete data
+      get().addMedia(completeMediaItem);
+    } catch (error) {
+      console.error("❌ Failed to validate user data for media upload:", error);
+
+      // Fallback: add media with anonymous user data
+      const fallbackMediaItem: MediaItem = {
+        ...item,
+        uploadedBy: "Anonymous User",
+        speaker: "Anonymous User",
+        speakerAvatar: require("../../assets/images/Avatar-1.png"),
+      };
+
+      get().addMedia(fallbackMediaItem);
+    }
+  },
+
+  // 🔄 Function to refresh user data for all existing media items
+  refreshUserDataForExistingMedia: async () => {
+    try {
+      // Get fresh user data from AsyncStorage
+      const userRaw = await AsyncStorage.getItem("user");
+      const user = userRaw ? JSON.parse(userRaw) : null;
+
+      if (!user) {
+        return;
+      }
+
+      // 🛡️ CRITICAL FIX: Only refresh if user data is complete
+      // Don't overwrite good data with incomplete data!
+      const hasCompleteUserData = user.firstName && user.lastName;
+      if (!hasCompleteUserData) {
+        console.warn(
+          "🚨 BLOCKED: User data is incomplete, skipping media refresh to prevent 'Anonymous User'"
+        );
+        console.warn("   Incomplete user data:", user);
+        console.warn(
+          "   This refresh would have caused all videos to show 'Anonymous User'"
+        );
+        console.warn("   Keeping existing media data unchanged.");
+        console.warn(
+          "   💡 Waiting for Header component to fetch complete data from API..."
+        );
+        return; // Don't refresh with incomplete data
+      }
+
+      // Normalize and validate user data
+      const normalizedUser = normalizeUserData(user);
+      logUserDataStatus(user, "Media Refresh");
+
+      const currentMediaList = get().mediaList;
+
+      if (currentMediaList.length === 0) {
+        return;
+      }
+
+      // Only update if we're actually improving the data or if it's a different user
+      // Check if current media already has the SAME user's data
+      const firstItem = currentMediaList[0];
+      if (firstItem && firstItem.uploadedBy) {
+        // Handle both string and object cases for uploadedBy
+        const firstItemUploadedBy = typeof firstItem.uploadedBy === 'object'
+          ? firstItem.uploadedBy.firstName && firstItem.uploadedBy.lastName
+            ? `${firstItem.uploadedBy.firstName} ${firstItem.uploadedBy.lastName}`.trim()
+            : firstItem.uploadedBy.firstName || firstItem.uploadedBy.email?.split('@')[0] || ''
+          : firstItem.uploadedBy;
+
+        if (firstItemUploadedBy && firstItemUploadedBy !== "Anonymous User") {
+          // Check if the current user data matches what's already in media
+          const currentUserFullName = normalizedUser.fullName;
+          if (firstItemUploadedBy === currentUserFullName) {
+            return;
+          }
+          // Continue with refresh for new user
+        }
+      }
+
+      // 🔄 Only update media items that need fixing or belong to current user
+      const updatedMediaList = currentMediaList.map((item) => {
+        // Only update if:
+        // 1. The item shows "Anonymous User" (needs fixing), OR
+        // 2. The item was uploaded by the current user (based on some identifier)
+        // DON'T update items that belong to other users
+
+        // Check if uploadedBy is "Anonymous User" (handle both string and object cases)
+        const itemUploadedBy = typeof item.uploadedBy === 'object'
+          ? (item.uploadedBy.firstName && item.uploadedBy.lastName
+            ? `${item.uploadedBy.firstName} ${item.uploadedBy.lastName}`.trim()
+            : item.uploadedBy.firstName || '')
+          : item.uploadedBy;
+
+        if (
+          itemUploadedBy === "Anonymous User" ||
+          item.speaker === "Anonymous User"
+        ) {
+          return {
+            ...item,
+            uploadedBy: normalizedUser.fullName,
+            speaker: normalizedUser.fullName,
+            speakerAvatar:
+              normalizedUser.avatar ||
+              require("../../assets/images/Avatar-1.png"),
+          };
+        }
+
+        // Keep other users' content unchanged
+        return item;
+      });
+
+      // Update store and persist
+      set({ mediaList: updatedMediaList });
+      await persistMediaList(updatedMediaList);
+    } catch (error) {
+      console.error(
+        "❌ Failed to refresh user data for existing media:",
+        error
+      );
+    }
+  },
+
+  // 🔄 Force refresh when complete user data becomes available
+  forceRefreshWithCompleteUserData: async () => {
+    await get().refreshUserDataForExistingMedia();
+  },
+
+  setMediaList: (items: MediaItem[]) => {
+    const sortedItems = items.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    set({ mediaList: sortedItems });
+
+    // 🚀 Persist immediately when media list is set
+    persistMediaList(sortedItems);
+  },
+
+  removeMedia: (id: string) => {
+    const updatedList = get().mediaList.filter((item) => item._id !== id);
+
+    set({ mediaList: updatedList });
+
+    // 🚀 Persist immediately when media is removed
+    persistMediaList(updatedList);
+  },
+
+  clearMediaList: () => {
+    set({ mediaList: [] });
+
+    // 🚀 Persist immediately when cleared
+    persistMediaList([]);
+  },
+
+  // 🔊 Audio control functions
+  stopAudioFn: null,
+  setStopAudioFn: (fn: (() => Promise<void>) | null) =>
+    set({ stopAudioFn: fn }),
+  clearStopAudioFn: () => set({ stopAudioFn: null }),
+
+  // Default content methods
+  fetchDefaultContent: async (params = {}) => {
+    set({ defaultContentLoading: true, defaultContentError: null });
+
+    try {
+      const response = await allMediaAPI.getDefaultContent(params);
+
+      if (response.success) {
+        set({
+          defaultContent: response.data.content,
+          defaultContentPagination: response.data.pagination,
+          defaultContentLoading: false,
+        });
+      } else {
+        // Handle network errors gracefully - don't set error state for network failures
+        const isNetworkError = response.error?.includes("Network unavailable");
+
+        if (isNetworkError) {
+          // Network error - keep existing content, just stop loading
+          set({
+            defaultContentLoading: false,
+            // Don't set error state for network failures - user can still use cached content
+          });
+        } else {
+          if (__DEV__) {
+            console.error(
+              "❌ Store: Failed to fetch default content:",
+              response.error
+            );
+          }
+          set({
+            defaultContentError:
+              response.error || "Failed to fetch default content",
+            defaultContentLoading: false,
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const isNetworkError =
+        errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+
+      if (isNetworkError) {
+        // Network error - keep existing content, just stop loading
+        set({
+          defaultContentLoading: false,
+          // Don't set error state for network failures
+        });
+      } else {
+        if (__DEV__) {
+          console.error(
+            "❌ Store: Exception while fetching default content:",
+            error
+          );
+        }
+        set({
+          defaultContentError: errorMessage,
+          defaultContentLoading: false,
+        });
+      }
+    }
+  },
+
+  loadMoreDefaultContent: async () => {
+    const { defaultContentPagination, defaultContentLoading } = get();
+
+    if (
+      defaultContentLoading ||
+      defaultContentPagination.page >= defaultContentPagination.pages
+    ) {
+      return;
+    }
+
+    set({ defaultContentLoading: true });
+
+    try {
+      const response = await allMediaAPI.getDefaultContent({
+        page: defaultContentPagination.page + 1,
+        limit: defaultContentPagination.limit,
+      });
+
+      if (response.success) {
+        const transformedMedia = (response.data.content || [])
+          .map(transformApiResponseToMediaItem)
+          .filter((item: any) => item !== null);
+
+        set((state) => ({
+          defaultContent: [...state.defaultContent, ...transformedMedia],
+          defaultContentPagination: response.data.pagination,
+          defaultContentLoading: false,
+        }));
+      }
+    } catch (error) {
+      console.error("Error loading more default content:", error);
+      set({ defaultContentLoading: false });
+    }
+  },
+
+  refreshDefaultContent: async () => {
+    await get().fetchDefaultContent({ page: 1, limit: 10 });
+  },
+
+  // TikTok-style all content methods
+  fetchAllContent: async (useAuth = false) => {
+    set({ allContentLoading: true, allContentError: null });
+
+    try {
+      let response;
+      if (useAuth) {
+        response = await allMediaAPI.getAllContentWithAuth();
+      } else {
+        response = await allMediaAPI.getAllContentPublic();
+      }
+
+      if (response.success) {
+        const transformedMedia = (response.media || [])
+          .map(transformApiResponseToMediaItem)
+          .filter((item: any) => item !== null);
+
+        set({
+          allContent: transformedMedia,
+          allContentTotal: response.total || 0,
+          allContentLoading: false,
+          allContentError: null,
+        });
+      } else {
+        console.error("❌ Store: Failed to fetch all content:", response.error);
+
+        // Check if it's a network/server error
+        const isServerError = response.error?.includes("Unable to connect") ||
+          response.error?.includes("Server is unreachable") ||
+          response.error?.includes("Network request failed");
+
+        set({
+          allContentError: response.error || "Failed to fetch all content",
+          allContentLoading: false,
+          showServerUnavailableModal: isServerError,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Store: Exception while fetching all content:", error);
+
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const isServerError = errorMessage.includes("Network request failed") ||
+        errorMessage.includes("Unable to connect") ||
+        errorMessage.includes("Server is unreachable");
+
+      set({
+        allContentError: errorMessage,
+        allContentLoading: false,
+        showServerUnavailableModal: isServerError,
+      });
+    }
+  },
+
+  refreshAllContent: async () => {
+    // Try authenticated first, fallback to public
+    try {
+      await get().fetchAllContent(true);
+    } catch (error) {
+      await get().fetchAllContent(false);
+    }
+  },
+
+  dismissServerUnavailableModal: () => {
+    set({ showServerUnavailableModal: false });
+  },
+}));
+
+// Default export for route compatibility
+export default function UseUploadStore() {
+  return null;
+}

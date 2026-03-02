@@ -1,0 +1,145 @@
+import { StyleSheet, Platform, Dimensions } from "react-native";
+import { UI_CONFIG } from "../../../src/shared/constants";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+export const MINI_PLAYER_HEIGHT = 72;
+export const MINI_PLAYER_WIDTH = SCREEN_WIDTH - 32;
+
+export const styles = StyleSheet.create({
+  container: {
+    position: "absolute",
+    width: MINI_PLAYER_WIDTH,
+    height: MINI_PLAYER_HEIGHT + 4,
+    zIndex: 100,
+    overflow: "hidden",
+    borderRadius: 32,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
+  },
+  glassOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderRadius: 32,
+  },
+  glowEffect: {
+    position: "absolute",
+    top: -30,
+    left: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+    opacity: 0.25,
+    filter: "blur(20px)",
+  },
+  gradientAccent: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+    opacity: 0.8,
+  },
+  content: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    height: "100%",
+  },
+  thumbnailContainer: {
+    marginRight: 12,
+    position: "relative",
+  },
+  thumbnail: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.8)",
+  },
+  playIndicator: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: UI_CONFIG.COLORS.SECONDARY,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    shadowColor: UI_CONFIG.COLORS.SECONDARY,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  playIndicatorDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#FFFFFF",
+  },
+  trackInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  trackTitle: {
+    fontSize: 15,
+    fontFamily: "Rubik-SemiBold",
+    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+    letterSpacing: -0.2,
+  },
+  trackArtist: {
+    fontSize: 12,
+    fontFamily: "Rubik",
+    color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+    marginTop: 1,
+    opacity: 0.8,
+  },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  closeButton: {
+    padding: 6,
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    borderRadius: 16,
+    marginLeft: 4,
+  },
+  controlButton: {
+    padding: 8,
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.8)",
+  },
+  playButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: UI_CONFIG.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});
