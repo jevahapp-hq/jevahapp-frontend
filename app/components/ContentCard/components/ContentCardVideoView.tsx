@@ -71,7 +71,10 @@ export function ContentCardVideoView({
   setShowVideoOverlay,
   setVideoLoadError,
 }: ContentCardVideoViewProps) {
-  const globalVideoStore = useGlobalVideoStore();
+  // ✅ Optimized: Use selectors to prevent unnecessary re-renders
+  const isPlaying = useGlobalVideoStore((state) => state.playingVideos[modalKey]);
+  const progress = useGlobalVideoStore((state) => state.progresses[modalKey]);
+  const isMuted = useGlobalVideoStore((state) => state.mutedVideos[modalKey]);
 
   return (
     <View className="w-full h-[400px] overflow-hidden relative">
@@ -190,7 +193,7 @@ export function ContentCardVideoView({
         </View>
       </View>
 
-      {!globalVideoStore.playingVideos[modalKey] && (
+      {!isPlaying && (
         <View className="absolute bottom-16 left-3 right-3 px-4 py-2 rounded-md">
           <Text className="text-white font-semibold text-[14px]" numberOfLines={2}>
             {content.title}
@@ -203,12 +206,12 @@ export function ContentCardVideoView({
           <View className="flex-1 h-1 bg-white/30 rounded-full relative">
             <View
               className="h-full bg-[#FEA74E] rounded-full"
-              style={{ width: `${globalVideoStore.progresses[modalKey] || 0}%` }}
+              style={{ width: `${progress || 0}%` }}
             />
             <View
               style={{
                 position: "absolute",
-                left: `${globalVideoStore.progresses[modalKey] || 0}%`,
+                left: `${progress || 0}%`,
                 transform: [{ translateX: -6 }],
                 top: -5,
                 width: 12,
@@ -222,7 +225,7 @@ export function ContentCardVideoView({
           </View>
           <TouchableOpacity onPress={onToggleMute}>
             <Ionicons
-              name={globalVideoStore.mutedVideos[modalKey] ? "volume-mute" : "volume-high"}
+              name={isMuted ? "volume-mute" : "volume-high"}
               size={20}
               color="#FEA74E"
             />

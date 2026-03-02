@@ -8,7 +8,7 @@
  */
 import { Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, StatusBar, Text, View } from "react-native";
 
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
@@ -58,7 +58,7 @@ type Params = {
   source?: string;
 };
 
-export default function Reelsviewscroll() {
+function ReelsviewscrollComponent() {
   const params = useLocalSearchParams() as Params;
   const {
     title,
@@ -103,8 +103,9 @@ export default function Reelsviewscroll() {
   const toggleLike = useInteractionStore((s) => s.toggleLike);
   const loadContentStats = useInteractionStore((s) => s.loadContentStats);
 
-  const playingVideos = globalVideoStore.playingVideos;
-  const mutedVideos = globalVideoStore.mutedVideos;
+  // ✅ Optimized: Use selectors instead of subscribing to entire store
+  const playingVideos = useGlobalVideoStore((state) => state.playingVideos);
+  const mutedVideos = useGlobalVideoStore((state) => state.mutedVideos);
 
   useEffect(() => {
     if (currentUser) {
@@ -532,3 +533,7 @@ export default function Reelsviewscroll() {
     </ErrorBoundary>
   );
 }
+
+// ✅ Memoized export to prevent unnecessary re-renders
+const Reelsviewscroll = React.memo(ReelsviewscrollComponent);
+export default Reelsviewscroll;

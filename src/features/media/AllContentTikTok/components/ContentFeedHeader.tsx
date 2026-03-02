@@ -255,35 +255,7 @@ export function ContentFeedHeader({
                   ))}
                 </View>
 
-                {/* Notify Me Button */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor: THEME.primary,
-                    paddingHorizontal: 24,
-                    paddingVertical: 12,
-                    borderRadius: 24,
-                    shadowColor: THEME.primary,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    elevation: 4,
-                  }}
-                >
-                  <Ionicons name="notifications-outline" size={18} color="#FFF" />
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontFamily: "Rubik-SemiBold",
-                      color: "#FFFFFF",
-                      marginLeft: 8,
-                    }}
-                  >
-                    Notify Me When Live
-                  </Text>
-                </TouchableOpacity>
+
               </View>
 
               {/* Bottom Progress Bar */}

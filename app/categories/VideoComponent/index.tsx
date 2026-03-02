@@ -38,11 +38,14 @@ export default function VideoComponent() {
   const { loadDownloadedItems } = useDownloadStore();
   const mediaStore = useMediaStore();
   const globalVideoStore = useGlobalVideoStore();
+  // ✅ Optimized: Use selectors for specific state slices
+  const playingVideos = useGlobalVideoStore((state) => state.playingVideos);
+  const mutedVideos = useGlobalVideoStore((state) => state.mutedVideos);
   const globalMediaStore = useGlobalMediaStore();
   const libraryStore = useLibraryStore();
   const contentStats = useInteractionStore((s) => s.contentStats);
   const loadBatchContentStats = useInteractionStore((s) => s.loadBatchContentStats);
-  const { comments } = useInteractionStore();
+  const comments = useInteractionStore((s) => s.comments);
   const { showCommentModal } = useCommentModal();
 
   const scrollViewRef = useRef<ScrollView>(null);

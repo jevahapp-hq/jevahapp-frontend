@@ -30,6 +30,14 @@ import { useMediaStore } from "./store/useUploadStore";
 import { warmupBackend } from "./utils/apiWarmup";
 import { PerformanceOptimizer } from "./utils/performance";
 
+// ✅ Suppress console logs in production for better performance
+if (!__DEV__) {
+  console.log = () => {};
+  console.warn = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+}
+
 // ✅ Initialize Sentry
 Sentry.init({
   dsn: "https://70c2253e1290544381fe6dae9bfdd172@o4509865295020032.ingest.us.sentry.io/4509865711763457",

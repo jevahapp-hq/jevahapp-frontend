@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio, ResizeMode, Video } from "expo-av";
-import { Pause, Play, Search, Volume2, X } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
     Dimensions,
@@ -25,7 +24,7 @@ import Animated, {
     withSpring,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Ionicons from "react-native-vector-icons/Ionicons";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AuthHeader from "../components/AuthHeader";
 import { useVideoNavigation } from "../hooks/useVideoNavigation";

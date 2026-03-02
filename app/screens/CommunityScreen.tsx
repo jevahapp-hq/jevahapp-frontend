@@ -210,36 +210,7 @@ export default function CommunityScreen() {
             ))}
           </View>
 
-          {/* Notify Button */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={{
-              marginTop: 28,
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: THEME.primary,
-              paddingHorizontal: 24,
-              paddingVertical: 14,
-              borderRadius: 28,
-              shadowColor: THEME.primary,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 4,
-            }}
-          >
-            <Ionicons name="notifications-outline" size={20} color="#FFF" />
-            <Text
-              style={{
-                fontSize: 15,
-                fontFamily: "Rubik-SemiBold",
-                color: "#FFF",
-                marginLeft: 10,
-              }}
-            >
-              Notify Me When Ready
-            </Text>
-          </TouchableOpacity>
+
         </View>
       </ScrollView>
 

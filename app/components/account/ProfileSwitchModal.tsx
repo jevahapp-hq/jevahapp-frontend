@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Lock, Pencil } from "lucide-react-native";
 import { useState } from "react";
 import {
   Image,
@@ -72,10 +71,10 @@ export default function ProfileSwitchModal({
                   </Text>
                   <View className="flex-row space-x-2 mt-2">
                     <View className="bg-gray-100 p-2 rounded-full">
-                      <Lock size={14} />
+                      <Ionicons name="lock-closed" size={14} color="#666" />
                     </View>
                     <View className="bg-gray-100 p-2 rounded-full">
-                      <Pencil size={14} />
+                      <Ionicons name="pencil" size={14} color="#666" />
                     </View>
                   </View>
                 </Pressable>
@@ -100,10 +99,10 @@ export default function ProfileSwitchModal({
                   </Text>
                   <View className="flex-row space-x-2 mt-2">
                     <View className="bg-gray-100 p-2 rounded-full">
-                      <Lock size={14} />
+                      <Ionicons name="lock-closed" size={14} color="#666" />
                     </View>
                     <View className="bg-gray-100 p-2 rounded-full">
-                      <Pencil size={14} />
+                      <Ionicons name="pencil" size={14} color="#666" />
                     </View>
                   </View>
                 </Pressable>
