@@ -35,11 +35,6 @@ export default function VerifyReset() {
   const dropdownAnim = useRef(new RNAnimated.Value(-200)).current;
   const emailAddress = params.emailAddress as string;
 
-  // Debug logging
-  console.log("🔍 VerifyReset component loaded");
-  console.log("🔍 Params received:", params);
-  console.log("🔍 Email address from params:", emailAddress);
-
   // Refs to control focus across code inputs
   const inputsRef = useRef<Array<TextInput | null>>([]);
 

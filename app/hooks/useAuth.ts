@@ -81,11 +81,11 @@ export function useAuth() {
     }
   }, []);
 
-  const verifyEmail = useCallback(async (verificationToken: string) => {
+  const verifyEmail = useCallback(async (email: string, code: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await authService.verifyEmail(verificationToken);
+      const res = await authService.verifyEmailCode(email, code);
       if (!res.success) throw new Error(res?.data?.message || "Verify failed");
       return res.data;
     } catch (e: any) {

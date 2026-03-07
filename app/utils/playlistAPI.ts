@@ -58,7 +58,7 @@ class PlaylistAPI {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = API_BASE_URL || "http://localhost:3000";
+    this.baseURL = API_BASE_URL || "https://api.jevahapp.com";
   }
 
   private async getAuthHeaders(): Promise<HeadersInit> {

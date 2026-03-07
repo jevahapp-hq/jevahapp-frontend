@@ -1,33 +1,21 @@
-// import { useAuth } from '@clerk/clerk-expo'
-// import { Redirect, Stack } from 'expo-router'
-
-// export default function AuthLayout() {
-//   const { isSignedIn } = useAuth()
-
-//   if (isSignedIn) {
-//     return <Redirect href="/categories/HomeScreen" />
-//   }
-
-//   return <Stack />
-// }
-
-
-
-
-
-import { useAuth } from '@clerk/clerk-expo'
-import { Redirect, Stack } from 'expo-router'
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Redirect, Stack } from "expo-router";
+import { useEffect, useState } from "react";
 
 export default function AuthLayout() {
-  const { isSignedIn, isLoaded } = useAuth()
+  const [hasToken, setHasToken] = useState<boolean | null>(null);
 
-  if (!isLoaded) {
-    return null // or a loading component
+  useEffect(() => {
+    AsyncStorage.getItem("token").then((t) => setHasToken(!!t));
+  }, []);
+
+  // Still checking storage
+  if (hasToken === null) return null;
+
+  // Already logged in — send to app
+  if (hasToken) {
+    return <Redirect href="/categories/HomeScreen" />;
   }
 
-  if (isSignedIn) {
-    return <Redirect href="/categories/HomeScreen" />
-  }
-
-  return <Stack />
+  return <Stack />;
 }

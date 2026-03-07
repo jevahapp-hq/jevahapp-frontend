@@ -25,7 +25,7 @@ export class BaseApiClient {
   private refreshPromise: Promise<string | null> | null = null;
 
   constructor(baseURL?: string) {
-    this.baseURL = baseURL || API_BASE_URL || "http://localhost:3000";
+    this.baseURL = baseURL || API_BASE_URL || "https://api.jevahapp.com";
   }
 
   /**

@@ -31,34 +31,9 @@ class EnvironmentManager {
   }
 
   private detectEnvironment(): void {
-    // Always prioritize the environment variable if it's set
-    if (process.env.EXPO_PUBLIC_API_URL) {
-      this.currentEnvironment = "local";
-      console.log(
-        "🌐 Using EXPO_PUBLIC_API_URL from environment:",
-        process.env.EXPO_PUBLIC_API_URL
-      );
-    } else {
-      // Use production by default (even in dev mode)
-      // This ensures emails work properly since local backend may not have email configured
-      this.currentEnvironment = "production";
-      console.log(
-        "🌐 No environment variable set, using production environment"
-      );
-    }
-
-    console.log("🌐 Final environment:", this.currentEnvironment);
-  }
-
-  private async loadSavedEnvironment() {
-    try {
-      const saved = await AsyncStorage.getItem("selectedEnvironment");
-      if (saved && (saved === "local" || saved === "production")) {
-        this.currentEnvironment = saved;
-      }
-    } catch (error) {
-      console.warn("Failed to load saved environment:", error);
-    }
+    // Always use production environment — EXPO_PUBLIC_API_URL in .env already points
+    // to the production server, so we never want to fall back to a local IP.
+    this.currentEnvironment = "production";
   }
 
   getCurrentEnvironment(): Environment {

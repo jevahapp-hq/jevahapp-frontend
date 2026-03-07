@@ -35,9 +35,6 @@ export default function SignUpScreen() {
   const [firstNameError, setFirstNameError] = useState("");
   const [lastNameError, setLastNameError] = useState("");
 
-  // Debug password visibility
-  console.log('Password visibility state:', showPassword);
-
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);

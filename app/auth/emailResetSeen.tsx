@@ -27,7 +27,6 @@ interface EmailResetSeenModalProps {
 }
 
 export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }: EmailResetSeenModalProps) {
-  console.log("EmailResetSeenModal rendered with props:", { isVisible, emailAddress });
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const lastTranslateY = useSharedValue(0);
   const [isSendingCode, setIsSendingCode] = useState(false);
@@ -146,9 +145,7 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
     }
   };
 
-  console.log("Modal visibility check:", isVisible);
   if (!isVisible) {
-    console.log("Modal not visible, returning null");
     return null;
   }
 

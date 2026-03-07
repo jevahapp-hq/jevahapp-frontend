@@ -10,13 +10,14 @@ export default {
     scheme: "jevahapp",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+    owner: "contact.bldlne@gmail.com",
     extra: {
       API_URL:
         process.env.EXPO_PUBLIC_API_URL ||
         "https://api.jevahapp.com",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
-        projectId: "9ccc6cfe-5736-477b-b6d6-801debb2a124",
+        projectId: "116ef04a-4393-4203-9a25-b14cfb1a5a",
       },
     },
     ios: {
@@ -47,6 +48,8 @@ export default {
         "INTERNET",
         "ACCESS_NETWORK_STATE",
       ],
+      // Network security config for API connectivity
+      networkSecurityConfig: "./android/network_security_config.xml",
       // Play Store specific configurations
       allowBackup: true,
       softwareKeyboardLayoutMode: "pan",

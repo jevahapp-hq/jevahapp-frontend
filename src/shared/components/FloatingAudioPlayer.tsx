@@ -15,11 +15,11 @@ import {
   View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { UI_CONFIG } from "../../src/shared/constants";
-import { useUserProfile } from "../hooks/useUserProfile";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import { getBottomNavHeight } from "../utils/responsiveOptimized";
-import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
+import { UI_CONFIG } from "../constants";
+import { useUserProfile } from "../../../app/hooks/useUserProfile";
+import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
+import { getBottomNavHeight } from "../../../app/utils/responsiveOptimized";
+import CopyrightFreeSongModal from "../../../app/components/CopyrightFreeSongModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const MINI_PLAYER_HEIGHT = 72; // Slightly taller for better glassmorphism effect

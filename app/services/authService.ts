@@ -322,11 +322,25 @@ class AuthService {
         data,
         status: response.status,
       };
-    } catch (error) {
-      // console.error("❌ Error in login:", error);
+    } catch (error: any) {
+      console.error("❌ Network error in login:", error);
+      console.error("   Error name:", error.name);
+      console.error("   Error message:", error.message);
+      console.error("   Error stack:", error.stack);
+      
+      // Provide more specific error message
+      let errorMessage = "Network error occurred";
+      if (error.message?.includes("Network request failed")) {
+        errorMessage = "Cannot connect to server. Please check your internet connection.";
+      } else if (error.message?.includes("SSL")) {
+        errorMessage = "Security certificate error. Please check your device date/time.";
+      } else if (error.message?.includes("timeout")) {
+        errorMessage = "Connection timed out. Server may be busy.";
+      }
+      
       return {
         success: false,
-        error: "Network error occurred",
+        error: errorMessage,
         status: 0,
       };
     }

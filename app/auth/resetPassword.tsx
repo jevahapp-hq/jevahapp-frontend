@@ -18,12 +18,6 @@ export default function ResetPassword() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Debug password visibility
-  console.log("Password visibility states:", {
-    showPassword,
-    showConfirmPassword,
-  });
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,10 +115,10 @@ export default function ResetPassword() {
               }
 
               // Additional password validation
-              if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+              if (!/^(?=.*[A-Za-z])(?=.*\d)/.test(password)) {
                 Alert.alert(
                   "Error",
-                  "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+                  "Password must contain at least one letter and one number"
                 );
                 return;
               }

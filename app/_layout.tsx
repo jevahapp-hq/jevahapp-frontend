@@ -18,7 +18,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
-import FloatingAudioPlayer from "./components/FloatingAudioPlayer";
+import FloatingAudioPlayer from "../src/shared/components/FloatingAudioPlayer";
 import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
