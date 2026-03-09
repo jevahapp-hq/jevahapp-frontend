@@ -204,12 +204,14 @@ export default function MiniVideoCard({
 
       {/* Video Stats */}
       <View className="mt-2 w-full px-1">
-        <Text
-          className="text-[10px] text-gray-500 font-rubik"
-          numberOfLines={1}
-        >
-          {video.views || 0} views
-        </Text>
+        {(video.views ?? 0) > 0 && (
+          <Text
+            className="text-[10px] text-gray-500 font-rubik"
+            numberOfLines={1}
+          >
+            {video.views} views
+          </Text>
+        )}
       </View>
     </View>
   );

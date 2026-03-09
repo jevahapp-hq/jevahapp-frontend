@@ -161,7 +161,7 @@ export default function VideoComponent() {
     toggleMuteVideo,
     handleShare,
     handleSave,
-    handleFavorite,
+    handleLike,
     handleComment,
     handleVideoTapWrapper,
     handleMiniCardPlay,
@@ -296,7 +296,7 @@ export default function VideoComponent() {
         onVideoTap={handleVideoTapWrapper}
         onTogglePlay={(key) => togglePlay(key, video)}
         onToggleMute={toggleMuteVideo}
-        onFavorite={(key) => handleFavorite(key, video)}
+        onLike={(key) => handleLike(key, video)}
         onComment={(key) => handleComment(key, video)}
         onSave={(key) => handleSave(key, video)}
         onDownload={() => handleDownload(convertToDownloadableItem(video, "video"))}

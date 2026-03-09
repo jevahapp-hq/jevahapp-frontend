@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import "../global.css";
+import OptimizedImage from "../src/shared/components/OptimizedImage";
 import AnimatedLogoIntro from "./components/AnimatedLogoIntro";
 import { useFastLogin } from "./hooks/useFastLogin";
 import { useFastPerformance } from "./utils/fastPerformance";
@@ -154,8 +155,8 @@ export default function Welcome() {
         <View
           key={i}
           className={`mx-1.5 ${i === currentIndex
-              ? "w-[20px] h-[6px] rounded-full bg-[#FEA74E]"
-              : "w-[6px] h-[6px] rounded-full bg-[#EAECF0]"
+            ? "w-[20px] h-[6px] rounded-full bg-[#FEA74E]"
+            : "w-[6px] h-[6px] rounded-full bg-[#EAECF0]"
             }`}
         />
       ))}
@@ -207,10 +208,11 @@ export default function Welcome() {
     <View className="w-full h-full bg-white">
       <View className="items-center justify-start" style={{ width }}>
         <View style={{ width: "100%", height: 340 }}>
-          <Image
+          <OptimizedImage
             source={currentSlide.image}
             style={{ width: "100%", height: "100%" }}
-            resizeMode="cover"
+            contentFit="cover"
+            lazy={false}
           />
         </View>
         <View className="bg-white rounded-t-3xl mt-[-19px] items-center w-full px-6 py-6">
@@ -249,10 +251,10 @@ export default function Welcome() {
                 alignItems: "center",
               }}
             >
-              <Image
+              <OptimizedImage
                 source={require("../assets/images/Faceboook.png")}
-                className="w-12 h-12"
-                resizeMode="contain"
+                style={{ width: 48, height: 48 }}
+                contentFit="contain"
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -268,10 +270,10 @@ export default function Welcome() {
                 alignItems: "center",
               }}
             >
-              <Image
+              <OptimizedImage
                 source={require("../assets/images/Gooogle.png")}
-                className="w-12 h-12"
-                resizeMode="contain"
+                style={{ width: 48, height: 48 }}
+                contentFit="contain"
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -287,10 +289,10 @@ export default function Welcome() {
                 alignItems: "center",
               }}
             >
-              <Image
+              <OptimizedImage
                 source={require("../assets/images/Apple.png")}
-                className="w-12 h-12"
-                resizeMode="contain"
+                style={{ width: 48, height: 48 }}
+                contentFit="contain"
               />
             </TouchableOpacity>
           </View>

@@ -15,11 +15,11 @@ import {
   View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { UI_CONFIG } from "../constants";
+import CopyrightFreeSongModal from "../../../app/components/CopyrightFreeSongModal";
 import { useUserProfile } from "../../../app/hooks/useUserProfile";
 import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
 import { getBottomNavHeight } from "../../../app/utils/responsiveOptimized";
-import CopyrightFreeSongModal from "../../../app/components/CopyrightFreeSongModal";
+import { UI_CONFIG } from "../constants";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const MINI_PLAYER_HEIGHT = 72; // Slightly taller for better glassmorphism effect
@@ -31,8 +31,6 @@ export default function FloatingAudioPlayer() {
   const insets = useSafeAreaInsets();
   const { user, loading: userLoading } = useUserProfile();
   const [showFullPlayer, setShowFullPlayer] = React.useState(false);
-  const translateY = useRef(new Animated.Value(0)).current;
-  const panY = useRef(0);
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
   const slideAnim = useRef(new Animated.Value(100)).current; // For slide-up animation
 
@@ -178,7 +176,11 @@ export default function FloatingAudioPlayer() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  // Pan responder for swipe down to dismiss (player sits above bottom nav)
+  // Persistent vertical offset from the baseline position
+  const baselineOffset = useRef(0);
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  // Pan responder for dragging (to avoid obstruction) and swipe down to dismiss
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -186,34 +188,49 @@ export default function FloatingAudioPlayer() {
         return Math.abs(gestureState.dy) > 5;
       },
       onPanResponderGrant: () => {
-        panY.current = 0;
+        dragY.setOffset(baselineOffset.current);
+        dragY.setValue(0);
       },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          // Only allow downward swipe (to dismiss)
-          panY.current = gestureState.dy;
-          translateY.setValue(gestureState.dy);
-        }
+        dragY.setValue(gestureState.dy);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 80) {
-          // Dismiss if swiped down more than 80px
-          Animated.timing(translateY, {
-            toValue: MINI_PLAYER_HEIGHT + 20,
-            duration: 200,
+        dragY.flattenOffset();
+
+        // Calculate the absolute position from the baseline
+        // baseline position is getBottomNavHeight() + 56
+        const currentY = (dragY as any)._value;
+
+        // Dismissal logic: Swipe down fast or far enough
+        if (gestureState.dy > 100 || gestureState.vy > 0.8) {
+          Animated.timing(dragY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 250,
             useNativeDriver: true,
           }).start(() => {
-            // Clear global audio so mini player is fully dismissed
             clear();
           });
-        } else {
-          // Snap back
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
+          return;
         }
-        panY.current = 0;
+
+        // Bound checking: Don't let it go too high or too low
+        // Max up: ~SCREEN_HEIGHT / 2
+        // Max down: 0 (which is the baseline)
+        const maxUp = -SCREEN_HEIGHT * 0.6;
+        const maxDown = 40; // Allow a little bit of downward drag without dismissing
+
+        let finalValue = currentY;
+        if (currentY < maxUp) finalValue = maxUp;
+        if (currentY > maxDown) finalValue = 0;
+
+        baselineOffset.current = finalValue;
+
+        Animated.spring(dragY, {
+          toValue: finalValue,
+          tension: 60,
+          friction: 10,
+          useNativeDriver: true,
+        }).start();
       },
     })
   ).current;
@@ -244,7 +261,7 @@ export default function FloatingAudioPlayer() {
             opacity: fadeAnim,
             transform: [
               {
-                translateY: Animated.add(translateY, slideAnim) // Combine swipe gesture with slide-in animation
+                translateY: Animated.add(dragY, slideAnim) // Combine drag gesture with slide-in animation
               },
             ],
           },

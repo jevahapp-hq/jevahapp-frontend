@@ -3,7 +3,7 @@
  */
 import { useHydrateContentStats } from "../../../../../shared/hooks/useHydrateContentStats";
 import { useLoadingStats } from "../../../../../shared/hooks/useLoadingStats";
-import type { MediaItem } from "../../../../shared/types";
+import type { MediaItem } from "../../../../../shared/types";
 
 export interface UseVideoCardInteractionStatsParams {
   video: MediaItem;
@@ -58,16 +58,12 @@ export function useVideoCardInteractionStats({
 
   const userLikeState = Boolean(backendUserLiked);
   const userSaveState = Boolean(backendUserSaved);
-  const likeCount =
-    stats?.likes != null ? Math.max(stats.likes, fallbackLikeCount) : fallbackLikeCount;
-  const saveCount =
-    stats?.saves != null ? Math.max(stats.saves, fallbackSaveCount) : fallbackSaveCount;
-  const commentCount =
-    stats?.comments != null
-      ? Math.max(stats.comments, fallbackCommentCount)
-      : fallbackCommentCount;
-  const viewCount =
-    stats?.views != null ? Math.max(stats.views, fallbackViewCount) : fallbackViewCount;
+
+  // ✅ Fix: Prioritize globalFavoriteCounts as it's the live local source from VideoComponent
+  const likeCount = globalFavoriteCounts[contentKey] ?? stats?.likes ?? fallbackLikeCount;
+  const saveCount = stats?.saves ?? fallbackSaveCount;
+  const commentCount = stats?.comments ?? fallbackCommentCount;
+  const viewCount = stats?.views ?? fallbackViewCount;
 
   useHydrateContentStats(contentId, "media");
   const isLoadingStats = useLoadingStats(contentId);

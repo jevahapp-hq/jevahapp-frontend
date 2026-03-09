@@ -59,90 +59,199 @@ export function ContentFeedHeader({
         ))}
         {(contentType === "ALL" || contentType === "live") && (
           <>
-            <View style={{ marginTop: UI_CONFIG.SPACING.XXL }} />
+            <View style={{ marginTop: 32 }} />
+            {/* Premium Live Coming Soon card */}
             <View
               style={{
                 marginHorizontal: UI_CONFIG.SPACING.MD,
-                paddingHorizontal: 16,
-                paddingVertical: 32,
-                backgroundColor: "#F9FAFB",
-                borderRadius: 12,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: "#E5E7EB",
-                borderStyle: "dashed",
-                minHeight: 200,
+                borderRadius: 24,
+                overflow: "hidden",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.14,
+                shadowRadius: 20,
+                elevation: 8,
               }}
             >
+              {/* Dark gradient background */}
               <View
                 style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 40,
-                  backgroundColor: "#256E63",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: 16,
+                  backgroundColor: "#0F1C1A",
+                  paddingHorizontal: 24,
+                  paddingVertical: 32,
                   position: "relative",
+                  overflow: "hidden",
                 }}
               >
-                <Ionicons name="radio" size={40} color="#FFFFFF" />
+                {/* Decorative glow ring */}
                 <View
                   style={{
                     position: "absolute",
-                    top: 8,
-                    right: 8,
-                    width: 16,
-                    height: 16,
-                    borderRadius: 8,
-                    backgroundColor: "#FFFFFF",
-                    borderWidth: 2,
-                    borderColor: "#256E63",
+                    width: 260,
+                    height: 260,
+                    borderRadius: 130,
+                    backgroundColor: "rgba(37,110,99,0.18)",
+                    top: -80,
+                    right: -90,
                   }}
                 />
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, justifyContent: "center" }}>
                 <View
                   style={{
-                    backgroundColor: "#256E63",
-                    paddingHorizontal: 12,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                    marginRight: 8,
+                    position: "absolute",
+                    width: 160,
+                    height: 160,
+                    borderRadius: 80,
+                    backgroundColor: "rgba(254,167,78,0.08)",
+                    bottom: -50,
+                    left: -50,
+                  }}
+                />
+
+                {/* LIVE badge */}
+                <View
+                  style={{
                     flexDirection: "row",
                     alignItems: "center",
+                    marginBottom: 20,
                   }}
                 >
                   <View
                     style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: "#FFFFFF",
-                      marginRight: 6,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "rgba(254,167,78,0.15)",
+                      borderRadius: 20,
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderWidth: 1,
+                      borderColor: "rgba(254,167,78,0.35)",
                     }}
-                  />
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF", fontFamily: "Rubik-Bold", letterSpacing: 0.5 }}>
-                    LIVE
-                  </Text>
+                  >
+                    {/* Pulse dot */}
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: "#FEA74E",
+                        marginRight: 6,
+                      }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: "#FEA74E",
+                        letterSpacing: 1.2,
+                        fontFamily: "Rubik-Bold",
+                      }}
+                    >
+                      LIVE
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      marginLeft: 8,
+                      backgroundColor: "rgba(255,255,255,0.08)",
+                      borderRadius: 20,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(255,255,255,0.6)",
+                        fontFamily: "Rubik-Medium",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      COMING SOON
+                    </Text>
+                  </View>
                 </View>
-                <Text style={{ fontSize: 18, fontWeight: "600", color: "#1D2939", textAlign: "center", fontFamily: "Rubik-SemiBold" }}>
-                  Coming Soon
+
+                {/* Icon */}
+                <View
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    backgroundColor: "rgba(37,110,99,0.3)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: 18,
+                    borderWidth: 1,
+                    borderColor: "rgba(37,110,99,0.5)",
+                  }}
+                >
+                  <Ionicons name="radio" size={34} color="#256E63" />
+                </View>
+
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "700",
+                    color: "#FFFFFF",
+                    fontFamily: "Rubik-Bold",
+                    marginBottom: 8,
+                    lineHeight: 30,
+                  }}
+                >
+                  Live Streaming
                 </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "rgba(255,255,255,0.6)",
+                    lineHeight: 22,
+                    fontFamily: "Rubik",
+                    marginBottom: 24,
+                    maxWidth: 280,
+                  }}
+                >
+                  Real-time sermons, worship sessions, and live events — streamed directly to your screen.
+                </Text>
+
+                {/* Feature bullets */}
+                {[
+                  { icon: "videocam-outline", text: "HD live video streaming" },
+                  { icon: "chatbubble-ellipses-outline", text: "Live chat & prayer requests" },
+                  { icon: "notifications-outline", text: "Event reminders & alerts" },
+                ].map((item) => (
+                  <View
+                    key={item.text}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        backgroundColor: "rgba(37,110,99,0.25)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginRight: 12,
+                      }}
+                    >
+                      <Ionicons name={item.icon as any} size={16} color="#256E63" />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: "rgba(255,255,255,0.75)",
+                        fontFamily: "Rubik",
+                      }}
+                    >
+                      {item.text}
+                    </Text>
+                  </View>
+                ))}
               </View>
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: "#6B7280",
-                  textAlign: "center",
-                  lineHeight: 20,
-                  paddingHorizontal: 16,
-                  fontFamily: "Rubik",
-                }}
-              >
-                We're working on bringing you live streaming content. Stay tuned for updates!
-              </Text>
             </View>
           </>
         )}

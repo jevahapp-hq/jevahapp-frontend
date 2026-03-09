@@ -11,26 +11,30 @@ import {
   StatusBar,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
+
+import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
 import { useGlobalAudioPlayerStore } from "../../store/useGlobalAudioPlayerStore";
 import { usePlaylistStore, type Playlist } from "../../store/usePlaylistStore";
-import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
 import { playlistAPI } from "../../utils/playlistAPI";
-import {
-  useCopyrightFreeSongRealtime,
-  useCopyrightFreeSongViewTracking,
-  useSeekPanResponder,
-} from "./useCopyrightFreeSongModalLogic";
 import { SongModalCreatePlaylist } from "./SongModalCreatePlaylist";
 import { SongModalOptions } from "./SongModalOptions";
 import { SongModalPlayer } from "./SongModalPlayer";
 import { SongModalPlaylistDetail } from "./SongModalPlaylistDetail";
 import { SongModalPlaylistSelection } from "./SongModalPlaylistSelection";
 import { SongModalPlaylistView } from "./SongModalPlaylistView";
+import {
+  useCopyrightFreeSongRealtime,
+  useCopyrightFreeSongViewTracking,
+  useSeekPanResponder,
+} from "./useCopyrightFreeSongModalLogic";
 import { transformBackendSong } from "./utils/transformBackendSong";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -112,6 +116,25 @@ export default function CopyrightFreeSongModal({
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const playlistViewTranslateY = useSharedValue(SCREEN_HEIGHT);
   const playlistDetailTranslateY = useSharedValue(SCREEN_HEIGHT);
+  const dragY = useSharedValue(0);
+
+  const gesture = Gesture.Pan()
+    .activeOffsetY([0, 10]) // Start recognizing pan only when moving down at least 10px
+    .failOffsetX([-20, 20]) // Fail if moving horizontally too much
+    .onUpdate((event) => {
+      if (event.translationY > 0) {
+        dragY.value = event.translationY;
+      }
+    })
+    .onEnd((event) => {
+      if (event.translationY > 120 || event.velocityY > 600) {
+        dragY.value = withTiming(SCREEN_HEIGHT, { duration: 250 }, () => {
+          runOnJS(onClose)();
+        });
+      } else {
+        dragY.value = withSpring(0, { damping: 20, stiffness: 200 });
+      }
+    });
 
   useEffect(() => {
     if (song) {
@@ -183,17 +206,19 @@ export default function CopyrightFreeSongModal({
     transform: [{ translateY: playlistDetailTranslateY.value }],
   }));
 
+  const modalAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value + dragY.value }],
+  }));
+
   useEffect(() => {
     if (visible) {
+      dragY.value = 0;
       translateY.value = withSpring(0, { damping: 30, stiffness: 300, mass: 0.8, overshootClamping: true });
     } else {
       translateY.value = withSpring(SCREEN_HEIGHT, { damping: 30, stiffness: 300, mass: 0.8 });
     }
-  }, [visible, translateY]);
+  }, [visible, translateY, dragY]);
 
-  const modalAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
 
   const handleAddToPlaylist = useCallback(() => {
     if (!song) return;
@@ -421,6 +446,7 @@ export default function CopyrightFreeSongModal({
         <StatusBar barStyle="light-content" />
         <View style={{ flex: 1 }}>
           <Animated.View
+            collapsable={false}
             style={[
               {
                 flex: 1,
@@ -430,40 +456,51 @@ export default function CopyrightFreeSongModal({
               modalAnimatedStyle,
             ]}
           >
-            <SongModalPlayer
-              song={song}
-              albumArtSize={albumArtSize}
-              imageSource={imageSource}
-              isLiked={isLiked}
-              likeCount={likeCount}
-              viewCount={viewCount}
-              isTogglingLike={isTogglingLike}
-              isPlaying={!!isPlaying}
-              isSeeking={isSeeking}
-              seekProgress={seekProgress}
-              audioProgress={audioProgress}
-              audioDuration={audioDuration}
-              audioPosition={audioPosition}
-              repeatMode={repeatMode}
-              isShuffled={isShuffled}
-              isMuted={!!isMuted}
-              progressBarRef={progressBarRef}
-              panHandlers={panResponder.panHandlers}
-              formatTime={formatTime}
-              onClose={onClose}
-              onOptionsPress={handleOptionsPress}
-              onToggleLike={handleToggleLike}
-              onTogglePlay={() => (onTogglePlay ? onTogglePlay() : onPlay?.(song))}
-              onToggleMute={() => onToggleMute?.()}
-              onSkip={handleSkip}
-              onRepeatCycle={() => {
-                if (repeatMode === "none") setRepeatMode("all");
-                else if (repeatMode === "all") setRepeatMode("one");
-                else setRepeatMode("none");
-              }}
-              onToggleShuffle={toggleShuffle}
-              onOpenPlaylistView={() => setShowPlaylistView(true)}
-            />
+
+            <View collapsable={false} style={{ flex: 1 }}>
+              <GestureDetector gesture={gesture}>
+                <View collapsable={false} style={{ flex: 1 }}>
+                  <SongModalPlayer
+
+                    song={song}
+                    albumArtSize={albumArtSize}
+                    imageSource={imageSource}
+                    isLiked={isLiked}
+                    likeCount={likeCount}
+                    viewCount={viewCount}
+                    isTogglingLike={isTogglingLike}
+                    isPlaying={!!isPlaying}
+                    isSeeking={isSeeking}
+                    seekProgress={seekProgress}
+                    audioProgress={audioProgress}
+                    audioDuration={audioDuration}
+                    audioPosition={audioPosition}
+                    repeatMode={repeatMode}
+                    isShuffled={isShuffled}
+                    isMuted={!!isMuted}
+                    progressBarRef={progressBarRef}
+                    panHandlers={panResponder.panHandlers}
+                    formatTime={formatTime}
+                    onClose={onClose}
+                    onOptionsPress={handleOptionsPress}
+                    onToggleLike={handleToggleLike}
+                    onTogglePlay={() => (onTogglePlay ? onTogglePlay() : onPlay?.(song))}
+                    onToggleMute={() => onToggleMute?.()}
+                    onSkip={handleSkip}
+                    onRepeatCycle={() => {
+                      if (repeatMode === "none") setRepeatMode("all");
+                      else if (repeatMode === "all") setRepeatMode("one");
+                      else setRepeatMode("none");
+                    }}
+                    onToggleShuffle={toggleShuffle}
+                    onOpenPlaylistView={() => setShowPlaylistView(true)}
+                  />
+                </View>
+              </GestureDetector>
+            </View>
+
+
+
           </Animated.View>
         </View>
       </Modal>

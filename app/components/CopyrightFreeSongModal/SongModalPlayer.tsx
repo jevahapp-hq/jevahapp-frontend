@@ -1,16 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useMemo } from "react";
+import React from "react";
 import {
   Dimensions,
   Image,
-  ImageBackground,
-  Platform,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  StyleSheet,
+  View
 } from "react-native";
 import { UI_CONFIG } from "../../../src/shared/constants";
 
@@ -33,7 +31,7 @@ export interface SongModalPlayerProps {
   repeatMode: "none" | "all" | "one";
   isShuffled: boolean;
   isMuted: boolean;
-  progressBarRef: React.RefObject<View>;
+  progressBarRef: React.RefObject<View | null>;
   panHandlers: any;
   formatTime: (ms: number) => string;
   onClose: () => void;

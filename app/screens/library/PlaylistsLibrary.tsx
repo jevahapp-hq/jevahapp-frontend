@@ -3,15 +3,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    Modal,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Modal,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { UI_CONFIG } from "../../../src/shared/constants";
 import { usePlaylistStore, type Playlist, type PlaylistSong } from "../../store/usePlaylistStore";
@@ -500,135 +500,165 @@ export default function PlaylistsLibrary() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
-      {/* Header */}
+    <View style={{ flex: 1, backgroundColor: "#F8FAFB" }}>
+      {/* ── Premium Header ── */}
       <View
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
+          backgroundColor: "#0F1C1A",
           paddingHorizontal: 20,
           paddingTop: 20,
-          paddingBottom: 20,
-          backgroundColor: "#FFFFFF",
-          borderBottomWidth: 1,
-          borderBottomColor: "#F3F4F6",
+          paddingBottom: 24,
+          overflow: "hidden",
+          position: "relative",
         }}
       >
-        <View>
-          <Text
-            style={{
-              fontSize: 28,
-              fontFamily: "Rubik-Bold",
-              color: "#111827",
-              letterSpacing: -0.5,
-            }}
-          >
-            My Playlists
-          </Text>
-          <Text
-            style={{
-              fontSize: 15,
-              fontFamily: "Rubik",
-              color: "#6B7280",
-              marginTop: 4,
-            }}
-          >
-            {playlists.length} playlist{playlists.length !== 1 ? "s" : ""}
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => setShowCreateModal(true)}
-          activeOpacity={0.8}
+        {/* Decorative rings */}
+        <View
+          style={{
+            position: "absolute",
+            width: 200,
+            height: 200,
+            borderRadius: 100,
+            backgroundColor: "rgba(37,110,99,0.2)",
+            top: -70,
+            right: -60,
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            width: 120,
+            height: 120,
+            borderRadius: 60,
+            backgroundColor: "rgba(254,167,78,0.08)",
+            bottom: -40,
+            left: -30,
+          }}
+        />
+
+        <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-            borderRadius: 14,
-            shadowColor: UI_CONFIG.COLORS.SECONDARY,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 3,
+            justifyContent: "space-between",
           }}
         >
-          <Ionicons name="add" size={22} color="#FFFFFF" />
-          <Text
+          <View>
+            <Text
+              style={{
+                fontSize: 26,
+                fontFamily: "Rubik-Bold",
+                color: "#FFFFFF",
+                letterSpacing: -0.5,
+              }}
+            >
+              My Playlists
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                fontFamily: "Rubik",
+                color: "rgba(255,255,255,0.55)",
+                marginTop: 3,
+              }}
+            >
+              {playlists.length} playlist{playlists.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setShowCreateModal(true)}
+            activeOpacity={0.8}
             style={{
-              fontSize: 16,
-              fontFamily: "Rubik-SemiBold",
-              color: "#FFFFFF",
-              marginLeft: 6,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#256E63",
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 12,
+              shadowColor: "#256E63",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.4,
+              shadowRadius: 8,
+              elevation: 5,
             }}
           >
-            New
-          </Text>
-        </TouchableOpacity>
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text
+              style={{
+                fontSize: 15,
+                fontFamily: "Rubik-SemiBold",
+                color: "#FFFFFF",
+                marginLeft: 5,
+              }}
+            >
+              New
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Playlists List */}
+      {/* ── Content ── */}
       {playlists.length === 0 ? (
         <View
           style={{
             flex: 1,
             justifyContent: "center",
             alignItems: "center",
-            paddingHorizontal: 40,
+            paddingHorizontal: 32,
           }}
         >
-          <Ionicons name="musical-notes-outline" size={64} color="#D1D5DB" />
-          <Text
+          {/* Icon bubble */}
+          <View
             style={{
-              fontSize: 18,
-              fontFamily: "Rubik-SemiBold",
-              color: "#6B7280",
-              marginTop: 16,
-              textAlign: "center",
+              width: 100,
+              height: 100,
+              borderRadius: 50,
+              backgroundColor: "#256E63",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 20,
+              shadowColor: "#256E63",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 8,
             }}
           >
-            No playlists yet
+            <Ionicons name="musical-notes" size={46} color="#FFFFFF" />
+          </View>
+
+          <Text
+            style={{
+              fontSize: 20,
+              fontFamily: "Rubik-Bold",
+              color: "#111827",
+              textAlign: "center",
+              marginBottom: 8,
+            }}
+          >
+            Your playlists live here
           </Text>
           <Text
             style={{
               fontSize: 14,
               fontFamily: "Rubik",
-              color: "#9CA3AF",
-              marginTop: 8,
+              color: "#6B7280",
               textAlign: "center",
+              lineHeight: 22,
+              maxWidth: 240,
             }}
           >
-            Create your first playlist to organize your favorite songs
+            Curate your favourite sermons, worship songs, and messages in one place.
           </Text>
-          <TouchableOpacity
-            onPress={() => setShowCreateModal(true)}
-            style={{
-              marginTop: 24,
-              backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-              paddingHorizontal: 24,
-              paddingVertical: 12,
-              borderRadius: 12,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 16,
-                fontFamily: "Rubik-SemiBold",
-                color: "#FFFFFF",
-              }}
-            >
-              Create Playlist
-            </Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={playlists}
           renderItem={renderPlaylistCard}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ 
-            padding: 20,
+          contentContainerStyle={{
+            padding: 16,
+            paddingTop: 20,
             paddingBottom: 40,
           }}
           refreshing={isLoading}

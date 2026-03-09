@@ -17,7 +17,6 @@ export interface UseReelsVideoPlaybackParams {
   setUserHasManuallyPaused: (v: boolean) => void;
   setMenuVisible: (v: boolean | ((p: boolean) => boolean)) => void;
   screenWidth: number;
-  reelsProgressBarWidth: number;
   setIsDragging: (v: boolean) => void;
   globalVideoStore: any;
   mediaStore: any;
@@ -35,7 +34,6 @@ export function useReelsVideoPlayback({
   setUserHasManuallyPaused,
   setMenuVisible,
   screenWidth,
-  reelsProgressBarWidth,
   setIsDragging,
   globalVideoStore,
   mediaStore,
@@ -59,7 +57,7 @@ export function useReelsVideoPlayback({
           const status = await ref.getStatusAsync();
           if (status.isLoaded && status.positionMillis !== undefined)
             setVideoPosition(status.positionMillis);
-        } catch {}
+        } catch { }
       }
     },
     [videoRefs, videoDuration, setVideoPosition]
@@ -88,7 +86,7 @@ export function useReelsVideoPlayback({
         if (ref) {
           try {
             ref.pauseAsync();
-          } catch {}
+          } catch { }
         }
       });
     };
@@ -136,7 +134,7 @@ export function useReelsVideoPlayback({
     const play = () => {
       try {
         globalVideoStore.playVideoGlobally(modalKey);
-        videoRef?.playAsync().catch(() => {});
+        videoRef?.playAsync().catch(() => { });
       } catch (e) {
         console.error("Error playing video:", e);
       }

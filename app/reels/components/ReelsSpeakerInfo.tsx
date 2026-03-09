@@ -1,6 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { getUserAvatarFromContent } from "../../utils/userValidation";
 
 interface ReelsSpeakerInfoProps {
@@ -43,7 +43,7 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
     <View
       style={{
         position: "absolute",
-        bottom: getResponsiveSpacing(100, 120, 140),
+        bottom: getResponsiveSpacing(130, 150, 170),
         left: getResponsiveSpacing(12, 16, 20),
         right: getResponsiveSpacing(12, 16, 20),
         flexDirection: "row",
@@ -112,7 +112,7 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
               accessibilityLabel={
                 source === "AccountScreen"
                   ? `Video: ${enrichedVideoData.title || "Untitled"}`
-                  : `Posted by ${getSpeakerName(enrichedVideoData, "Creator")}` 
+                  : `Posted by ${getSpeakerName(enrichedVideoData, "Creator")}`
               }
             >
               {source === "AccountScreen"

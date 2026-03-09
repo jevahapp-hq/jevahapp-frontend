@@ -31,6 +31,7 @@ import { useMedia } from "../../../shared/hooks/useMedia";
 import { ContentFeedHeader } from "./components/ContentFeedHeader";
 import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
+
 import {
   useAllContentTikTokAudio,
   useAllContentTikTokFeedData,
@@ -58,7 +59,7 @@ export interface AllContentTikTokProps {
 }
 
 export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
-  contentType = "ALL",
+  contentType: activeTab = "ALL",
   useAuthFeed = false,
 }) => {
   const { user } = useUserProfile();
@@ -73,7 +74,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     refreshAllContent,
     getFilteredContent,
     hasContent,
-  } = useMedia({ immediate: true, contentType, useAuth: useAuthFeed });
+  } = useMedia({ immediate: true, contentType: activeTab, useAuth: useAuthFeed });
 
   const queryClient = useQueryClient();
   const handleDeleteSuccess = useCallback(() => {
@@ -189,7 +190,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     rest,
   } = useAllContentTikTokFeedData({
     mediaList,
-    contentType,
+    contentType: activeTab,
     setPreviouslyViewed,
     setIsLoadingContent,
   });
@@ -233,13 +234,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     handleComment,
     handleSave,
     handleShare,
-    handleFavorite,
     handleDownloadPress,
     handleRefresh,
     togglePlay,
     checkIfDownloaded,
   } = useAllContentTikTokHandlers({
-    contentType,
+    contentType: activeTab,
     filteredMediaList,
     categorizedContent,
     contentStats,
@@ -286,7 +286,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         onVideoTap={handleVideoTap}
         onTogglePlay={togglePlay}
         onToggleMute={toggleVideoMute}
-        onFavorite={handleFavorite}
+        onLike={handleLike}
         onComment={handleComment}
         onSave={handleSave}
         onShare={handleShare}
@@ -321,7 +321,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       modalVisible,
       comments,
       handleVideoTap,
-      handleFavorite,
+      handleLike,
       handleComment,
       handleSave,
       handleShare,
@@ -378,13 +378,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     () => (
       <ContentFeedHeader
         mostRecentItem={mostRecentItem}
-        contentType={contentType}
+        contentType={activeTab}
         filteredMediaListLength={filteredMediaList.length}
         firstFour={firstFour}
         renderContentByType={renderContentByType}
       />
     ),
-    [mostRecentItem, contentType, filteredMediaList.length, firstFour, renderContentByType]
+    [mostRecentItem, activeTab, filteredMediaList.length, firstFour, renderContentByType]
   );
 
   const renderListItem = useCallback(
@@ -426,7 +426,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   if (loading && !hasContent) return <LoadingState />;
   if (error && !hasContent) return <ErrorState message={error} />;
-  if (filteredMediaList.length === 0) return <EmptyState contentType={contentType} />;
+  if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
   return (
     <ContentErrorBoundary>

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Image, StatusBar, Text, TouchableOpacity, View } from "react-native";
@@ -89,11 +90,11 @@ export default function MobileHeader({
 
   const safeRightActions = Array.isArray(rightActions)
     ? rightActions.filter(
-        (action) =>
-          action &&
-          typeof action === "object" &&
-          typeof action.onPress === "function"
-      )
+      (action) =>
+        action &&
+        typeof action === "object" &&
+        typeof action.onPress === "function"
+    )
     : [];
 
   const handleBackPress = () => {
@@ -131,9 +132,9 @@ export default function MobileHeader({
       >
         <View className="relative">
           {user?.avatar &&
-          user.avatar.trim() &&
-          user.avatar.startsWith("http") &&
-          !avatarError ? (
+            user.avatar.trim() &&
+            user.avatar.startsWith("http") &&
+            !avatarError ? (
             <Image
               source={{ uri: user.avatar.trim() }}
               className="w-10 h-10 rounded-lg"
@@ -203,16 +204,71 @@ export default function MobileHeader({
               color={textColor}
             />
             {Boolean(action.badge) && (
-              <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
+              <View
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  borderWidth: 1.5,
+                  borderColor: "#FFFFFF",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 1.5,
+                  elevation: 2,
+                  overflow: "hidden"
+                }}
+              >
+                <LinearGradient
+                  colors={["#FF4B4B", "#D22A2A"]}
+                  style={{ flex: 1 }}
+                />
+              </View>
             )}
             {(Number.isFinite(action.badgeCount) ? (action.badgeCount as number) : 0) >
               0 && (
-              <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full items-center justify-center">
-                <Text className="text-white text-[10px] font-rubik font-bold">
-                  {action.badgeCount > 99 ? "99+" : String(action.badgeCount)}
-                </Text>
-              </View>
-            )}
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    borderWidth: 1.5,
+                    borderColor: "#FFFFFF",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 1.5,
+                    elevation: 3,
+                    overflow: "hidden"
+                  }}
+                >
+                  <LinearGradient
+                    colors={["#FF4B4B", "#D22A2A"]}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: (action.badgeCount ?? 0) > 9 ? 4 : 0,
+                    }}
+                  >
+                    <Text style={{
+                      color: "#FFFFFF",
+                      fontSize: 9,
+                      fontFamily: "Rubik-Bold",
+                      includeFontPadding: false,
+                      textAlign: "center"
+                    }}>
+                      {action.badgeCount! > 99 ? "99+" : String(action.badgeCount)}
+                    </Text>
+                  </LinearGradient>
+                </View>
+              )}
           </TouchableOpacity>
         ))}
       </View>
@@ -281,7 +337,29 @@ export default function MobileHeader({
               color={textColor}
             />
             {leftAction.badge && (
-              <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
+              <View
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  borderWidth: 1.5,
+                  borderColor: "#FFFFFF",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 1.5,
+                  elevation: 2,
+                  overflow: "hidden"
+                }}
+              >
+                <LinearGradient
+                  colors={["#FF4B4B", "#D22A2A"]}
+                  style={{ flex: 1 }}
+                />
+              </View>
             )}
           </TouchableOpacity>
         ) : null}
@@ -324,17 +402,68 @@ export default function MobileHeader({
                   color={textColor}
                 />
                 {Boolean(action.badge) && (
-                  <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -2,
+                      right: -2,
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      borderWidth: 1.5,
+                      borderColor: "#FFFFFF",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 1.5,
+                      elevation: 2,
+                      overflow: "hidden"
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#FF4B4B", "#D22A2A"]}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
                 )}
-                {(Number.isFinite(action.badgeCount)
-                  ? (action.badgeCount as number)
-                  : 0) > 0 && (
-                  <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full items-center justify-center">
-                    <Text className="text-white text-[10px] font-rubik font-bold">
-                      {action.badgeCount > 99
-                        ? "99+"
-                        : String(action.badgeCount)}
-                    </Text>
+                {(Number.isFinite(action.badgeCount) ? (action.badgeCount as number) : 0) > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -4,
+                      right: -4,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      borderWidth: 1.5,
+                      borderColor: "#FFFFFF",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 1.5,
+                      elevation: 3,
+                      overflow: "hidden"
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#FF4B4B", "#D22A2A"]}
+                      style={{
+                        flex: 1,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        paddingHorizontal: (action.badgeCount ?? 0) > 9 ? 4 : 0,
+                      }}
+                    >
+                      <Text style={{
+                        color: "#FFFFFF",
+                        fontSize: 9,
+                        fontFamily: "Rubik-Bold",
+                        includeFontPadding: false,
+                        textAlign: "center"
+                      }}>
+                        {action.badgeCount! > 99 ? "99+" : String(action.badgeCount)}
+                      </Text>
+                    </LinearGradient>
                   </View>
                 )}
               </TouchableOpacity>

@@ -5,7 +5,6 @@ import { useCallback } from "react";
 import { Share } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { useVideoNavigation } from "../../../../../app/hooks/useVideoNavigation";
-import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
 import {
   convertToDownloadableItem,
@@ -131,7 +130,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           getTimeAgo,
           getDisplayName: buildDisplayName,
           source: "AllContentTikTok",
-          category: contentType,
+          category: contentType as any,
         });
       }
     },
@@ -147,17 +146,21 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
   );
 
   const handleLike = useCallback(
-    async (contentId: string, contentType: string) => {
-      if (socketManager?.isConnected()) {
-        socketManager.sendLike(contentId, "media");
-      }
+    async (key: string, item: MediaItem) => {
       try {
+        const contentId = item._id || key;
+        const contentType = item.contentType || "media";
+
+        if (socketManager?.isConnected()) {
+          socketManager.sendLike(contentId, "media");
+        }
+
         await toggleLike(contentId, contentType);
       } catch (error) {
-        console.error("❌ Like error:", error);
+        console.error(`❌ Failed to toggle like for ${item.title}:`, error);
       }
     },
-    [socketManager, toggleLike]
+    [toggleLike, socketManager]
   );
 
   const handleComment = useCallback(
@@ -183,7 +186,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
             fileUrl: item.fileUrl,
             title: item.title,
             speaker: item.speaker,
-            uploadedBy: item.uploadedBy,
+            uploadedBy: typeof item.uploadedBy === "string" ? item.uploadedBy : undefined,
             description: item.description,
             createdAt: item.createdAt || new Date().toISOString(),
             speakerAvatar: item.speakerAvatar,
@@ -247,18 +250,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     [setModalVisible]
   );
 
-  const handleFavorite = useCallback(
-    async (key: string, item: MediaItem) => {
-      try {
-        const contentId = item._id || key;
-        const contentType = item.contentType || "media";
-        await handleLike(contentId, contentType);
-      } catch (error) {
-        console.error(`❌ Failed to toggle like for ${item.title}:`, error);
-      }
-    },
-    [handleLike]
-  );
 
   const handleDownloadPress = useCallback(
     async (item: MediaItem) => {
@@ -321,7 +312,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     handleComment,
     handleSave,
     handleShare,
-    handleFavorite,
     handleDownloadPress,
     handleRefresh,
     togglePlay,

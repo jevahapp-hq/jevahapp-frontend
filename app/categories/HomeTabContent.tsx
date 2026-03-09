@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import OptimizedScrollView from "../../src/shared/components/OptimizedScrollView";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -271,7 +272,7 @@ export default function HomeTabContent() {
           backgroundColor: "#FCFCFD",
         }}
       >
-        <ScrollView
+        <OptimizedScrollView
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -351,7 +352,7 @@ export default function HomeTabContent() {
               </View>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </OptimizedScrollView>
       </View>
 
       {/* Content without Padding - Let FlatList handle scrolling */}

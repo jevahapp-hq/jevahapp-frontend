@@ -4,10 +4,12 @@ import Skeleton from "./Skeleton";
 
 interface VideoCardSkeletonProps {
   dark?: boolean;
+  hideProgressBar?: boolean;
 }
 
 export const VideoCardSkeleton: React.FC<VideoCardSkeletonProps> = ({
   dark = false,
+  hideProgressBar = false,
 }) => {
   return (
     <View className="flex flex-col mb-16" style={{ marginBottom: 64 }}>
@@ -43,11 +45,13 @@ export const VideoCardSkeleton: React.FC<VideoCardSkeletonProps> = ({
         </View>
 
         {/* Progress Bar at Bottom */}
-        <View className="absolute left-0 right-0 bottom-0 px-3 pb-3">
-          <View className="w-full h-1 bg-white/30 rounded-full relative">
-            <Skeleton dark={dark} width="30%" height={4} borderRadius={2} />
+        {!hideProgressBar && (
+          <View className="absolute left-0 right-0 bottom-0 px-3 pb-3">
+            <View className="w-full h-1 bg-white/30 rounded-full relative">
+              <Skeleton dark={dark} width="30%" height={4} borderRadius={2} />
+            </View>
           </View>
-        </View>
+        )}
       </View>
 
       {/* Footer Section */}

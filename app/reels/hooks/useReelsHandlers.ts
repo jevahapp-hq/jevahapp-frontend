@@ -3,9 +3,9 @@
  * Centralizes all user interaction handlers (like, comment, save, share, etc.).
  * Easier to debug and test - errors point to this file.
  */
-import { Share } from "react-native";
-import { useCallback } from "react";
 import { useRouter } from "expo-router";
+import { useCallback } from "react";
+import { Share } from "react-native";
 import allMediaAPI from "../../utils/allMediaAPI";
 import { getPersistedStats, persistStats } from "../../utils/persistentStorage";
 
@@ -143,12 +143,12 @@ export function useReelsHandlers({
         } else {
           libraryStore.addToLibrary({
             id: key,
-            title,
-            speaker,
-            timeAgo,
+            title: currentVideo.title || title,
+            speaker: currentVideo.speaker || speaker,
+            timeAgo: currentVideo.timeAgo || timeAgo,
             contentType: "Reel",
-            fileUrl: imageUrl,
-            thumbnailUrl: imageUrl,
+            fileUrl: currentVideo.fileUrl || imageUrl,
+            thumbnailUrl: currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
             originalKey: key,
             createdAt: new Date().toISOString(),
           });
@@ -157,7 +157,7 @@ export function useReelsHandlers({
         console.error("❌ Error handling save:", e);
       }
     },
-    [libraryStore, title, speaker, timeAgo, imageUrl]
+    [libraryStore, currentVideo, title, speaker, timeAgo, imageUrl]
   );
 
   const handleShare = useCallback(
@@ -226,8 +226,9 @@ export function useReelsHandlers({
   }, [handleDeleteConfirmInternal, setMenuVisible]);
 
   const handleReport = useCallback(() => {
+    setMenuVisible(false);
     setShowReportModal(true);
-  }, [setShowReportModal]);
+  }, [setMenuVisible, setShowReportModal]);
 
   return {
     handleBackNavigation,

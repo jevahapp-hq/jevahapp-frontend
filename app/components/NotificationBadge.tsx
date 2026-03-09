@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { useNotificationBadge } from "../hooks/useNotifications";
@@ -8,6 +9,53 @@ interface NotificationBadgeProps {
   showZero?: boolean;
 }
 
+const PremiumBadge = ({ count, size = "medium" }: { count: number; size: "small" | "medium" | "large" }) => {
+  const sizeMap = {
+    small: { w: 16, h: 16, font: 10, border: 1 },
+    medium: { w: 20, h: 20, font: 11, border: 1.5 },
+    large: { w: 24, h: 24, font: 12, border: 2 },
+  };
+
+  const { w, h, font, border } = sizeMap[size];
+  const displayCount = count > 99 ? "99+" : String(count);
+
+  return (
+    <View style={{
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3,
+      elevation: 4,
+    }}>
+      <LinearGradient
+        colors={["#FF4B4B", "#D22A2A"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          minWidth: w,
+          height: h,
+          borderRadius: h / 2,
+          borderWidth: border,
+          borderColor: "#FFFFFF",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: count > 9 ? 4 : 0,
+        }}
+      >
+        <Text style={{
+          color: "#FFFFFF",
+          fontSize: font,
+          fontFamily: "Rubik-Bold",
+          textAlign: "center",
+          includeFontPadding: false,
+        }}>
+          {displayCount}
+        </Text>
+      </LinearGradient>
+    </View>
+  );
+};
+
 export const NotificationBadge: React.FC<NotificationBadgeProps> = ({
   onPress,
   size = "medium",
@@ -15,94 +63,27 @@ export const NotificationBadge: React.FC<NotificationBadgeProps> = ({
 }) => {
   const { unreadCount, loading } = useNotificationBadge();
 
-  const sizeClasses = {
-    small: "w-4 h-4",
-    medium: "w-6 h-6",
-    large: "w-8 h-8",
-  };
-
-  const textSizeClasses = {
-    small: "text-xs",
-    medium: "text-sm",
-    large: "text-base",
-  };
-
-  const minWidthClasses = {
-    small: "min-w-4",
-    medium: "min-w-6",
-    large: "min-w-8",
-  };
-
-  if (loading) {
-    return null;
-  }
-
-  if (unreadCount === 0 && !showZero) {
+  if (loading || (unreadCount === 0 && !showZero)) {
     return null;
   }
 
   return (
-    <TouchableOpacity onPress={onPress} className="relative">
-      <View
-        className={`${sizeClasses[size]} ${
-          minWidthClasses[size]
-        } bg-red-500 rounded-full justify-center items-center ${
-          unreadCount > 9 ? "px-1" : ""
-        }`}
-      >
-        <Text className={`${textSizeClasses[size]} text-white font-bold`}>
-          {unreadCount > 99 ? "99+" : unreadCount}
-        </Text>
-      </View>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={{ position: "relative" }}>
+      <PremiumBadge count={unreadCount} size={size} />
     </TouchableOpacity>
   );
 };
 
-// Simple badge without touch functionality
 export const SimpleNotificationBadge: React.FC<{
   size?: "small" | "medium" | "large";
   showZero?: boolean;
 }> = ({ size = "medium", showZero = false }) => {
   const { unreadCount, loading } = useNotificationBadge();
 
-  const sizeClasses = {
-    small: "w-4 h-4",
-    medium: "w-6 h-6",
-    large: "w-8 h-8",
-  };
-
-  const textSizeClasses = {
-    small: "text-xs",
-    medium: "text-sm",
-    large: "text-base",
-  };
-
-  const minWidthClasses = {
-    small: "min-w-4",
-    medium: "min-w-6",
-    large: "min-w-8",
-  };
-
-  if (loading) {
+  if (loading || (unreadCount === 0 && !showZero)) {
     return null;
   }
 
-  if (unreadCount === 0 && !showZero) {
-    return null;
-  }
-
-  return (
-    <View
-      className={`${sizeClasses[size]} ${
-        minWidthClasses[size]
-      } bg-red-500 rounded-full justify-center items-center ${
-        unreadCount > 9 ? "px-1" : ""
-      }`}
-    >
-      <Text className={`${textSizeClasses[size]} text-white font-bold`}>
-        {unreadCount > 99 ? "99+" : unreadCount}
-      </Text>
-    </View>
-  );
+  return <PremiumBadge count={unreadCount} size={size} />;
 };
 

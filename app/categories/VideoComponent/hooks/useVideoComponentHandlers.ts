@@ -226,13 +226,25 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
     setModalVisible(null);
   };
 
-  const handleFavorite = async (key: string, video: VideoCardData) => {
+  const handleLike = async (key: string, video: VideoCardData) => {
     try {
+      // 1. Local persistence update (legacy/local state)
       const { isUserFavorite, globalCount } = await toggleFavorite(key);
       setUserFavorites((prev) => ({ ...prev, [key]: isUserFavorite }));
       setGlobalFavoriteCounts((prev) => ({ ...prev, [key]: globalCount }));
+
+      // 2. Backend sync via InteractionStore
+      const contentId = (video as any)._id || key;
+      const contentType = (video as any).contentType || "media";
+
+      try {
+        const { useInteractionStore } = require("../../../store/useInteractionStore");
+        await useInteractionStore.getState().toggleLike(contentId, contentType);
+      } catch (storeError) {
+        console.warn("Backend like sync failed:", storeError);
+      }
     } catch (error) {
-      console.error("Failed to toggle favorite:", error);
+      console.error("Failed to toggle like:", error);
     }
   };
 
@@ -411,7 +423,7 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
     incrementView,
     handleShare,
     handleSave,
-    handleFavorite,
+    handleLike,
     handleComment,
     togglePlay,
     handleVideoReload,

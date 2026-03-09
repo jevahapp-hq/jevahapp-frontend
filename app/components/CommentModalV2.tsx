@@ -1,42 +1,42 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Keyboard,
-    Modal,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Keyboard,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { GestureHandlerRootView, PanGestureHandler } from "react-native-gesture-handler";
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCommentModal } from "../context/CommentModalContext";
-import { formatTimeAgo } from "../../src/shared/utils";
 import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
 import { CommentSkeleton } from "../../src/shared/components/CommentSkeleton";
+import { formatTimeAgo } from "../../src/shared/utils";
+import { useCommentModal } from "../context/CommentModalContext";
+import { useUserProfile } from "../hooks/useUserProfile";
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function CommentModalV2() {
   const { isVisible, comments, isLoadingComments, hideCommentModal, submitComment, likeComment, replyToComment, contentOwnerName } =
     useCommentModal();
-
+  const { user } = useUserProfile();
+  const isAuthenticated = !!user;
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [text, setText] = useState("");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -71,7 +71,7 @@ export default function CommentModalV2() {
       translateY.value = 0;
       opacity.value = 1;
       backdropOpacity.value = 0.5;
-      
+
       // INSTANT FOCUS - Use microtask for fastest possible focus
       // Promise.resolve() is the fastest way to schedule focus
       Promise.resolve().then(() => {
@@ -102,18 +102,18 @@ export default function CommentModalV2() {
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if (!trimmed || !isAuthenticated || isSubmitting) return;
-    
+
     setIsSubmitting(true);
     const commentText = trimmed;
     const wasReplying = !!replyingTo;
     const replyId = replyingTo?.id;
-    
+
     // Clear input immediately for better UX (optimistic)
     setText("");
     if (replyingTo) {
       setReplyingTo(null);
     }
-    
+
     try {
       if (wasReplying && replyId) {
         await replyToComment(replyId, commentText);
@@ -123,21 +123,21 @@ export default function CommentModalV2() {
       // Success - comment was added optimistically, context handles the rest
     } catch (error) {
       const err = error as Error & { status?: number };
-      
+
       // Restore text on error so user can retry
       setText(commentText);
       if (wasReplying && replyId) {
         setReplyingTo({ id: replyId, name: "" });
       }
-      
+
       // Show user-friendly error message
-      const errorMessage = 
-        err.status === 500 
+      const errorMessage =
+        err.status === 500
           ? "Server error. Please try again later."
           : err.status === 404
-          ? "Content not found. Please refresh and try again."
-          : err.message || "Failed to post comment. Please try again.";
-      
+            ? "Content not found. Please refresh and try again."
+            : err.message || "Failed to post comment. Please try again.";
+
       Alert.alert(
         "Error",
         errorMessage,
@@ -147,17 +147,6 @@ export default function CommentModalV2() {
       setIsSubmitting(false);
     }
   };
-
-  // Pre-check authentication status - don't wait for modal to open
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = await AsyncStorage.getItem("userToken") || 
-                   await AsyncStorage.getItem("token");
-      setIsAuthenticated(!!token);
-    };
-    // Check immediately, not waiting for modal visibility
-    checkAuth();
-  }, []); // Run once on mount, not when modal opens
 
   const bottomOffset =
     Platform.OS === "android"
@@ -245,158 +234,158 @@ export default function CommentModalV2() {
               modalAnimatedStyle,
             ]}
           >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 16,
-              paddingBottom: 8,
-              borderBottomWidth: 1,
-              borderBottomColor: "#F3F4F6",
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#374151" }}>
-              Comments
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                translateY.value = withTiming(1000, { duration: 250 });
-                opacity.value = withTiming(0, { duration: 200 });
-                backdropOpacity.value = withTiming(0, { duration: 200 });
-                setTimeout(() => hideCommentModal(), 250);
-              }}
+            {/* Header */}
+            <View
               style={{
-                width: 40,
-                height: 40,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#F3F4F6",
-                borderRadius: 20,
+                justifyContent: "space-between",
+                paddingHorizontal: 16,
+                paddingBottom: 8,
+                borderBottomWidth: 1,
+                borderBottomColor: "#F3F4F6",
               }}
-              activeOpacity={0.7}
             >
-              <Ionicons name="close" size={20} color="#374151" />
-            </TouchableOpacity>
-          </View>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#374151" }}>
+                Comments
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  translateY.value = withTiming(1000, { duration: 250 });
+                  opacity.value = withTiming(0, { duration: 200 });
+                  backdropOpacity.value = withTiming(0, { duration: 200 });
+                  setTimeout(() => hideCommentModal(), 250);
+                }}
+                style={{
+                  width: 40,
+                  height: 40,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 20,
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color="#374151" />
+              </TouchableOpacity>
+            </View>
 
-          {/* Comments list */}
-          <ScrollView
-            ref={scrollRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingTop: 8,
-              paddingBottom: 80, // Space for input bar
-            }}
-            showsVerticalScrollIndicator={false}
-          >
-            {isLoadingComments ? (
-              <CommentSkeleton count={5} />
-            ) : comments.length > 0 ? (
-              comments.map((c: any) => (
-                <View
-                  key={c.id}
-                  style={{
-                    paddingVertical: 12,
-                    borderBottomWidth: 1,
-                    borderBottomColor: "#F3F4F6",
-                  }}
-                >
-                  {/* Header row: avatar, name, time, like */}
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      {c.avatar ? (
-                        <Image
-                          source={{ uri: c.avatar }}
-                          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E5E7EB" }}
-                        />
-                      ) : (
-                        <View
-                          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E5E7EB" }}
-                        />
-                      )}
-                      <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: "#374151" }}>
-                        {contentOwnerName || c.userName}
-                      </Text>
-                      <Text style={{ marginLeft: 6, fontSize: 10, color: "#9CA3AF", fontWeight: "600" }}>
-                        {formatTimeAgo(c.timestamp)}
-                      </Text>
-                    </View>
-                    <AnimatedCommentLikeButton
-                      isLiked={c.isLiked}
-                      likes={c.likes}
-                      onPress={() => likeComment(c.id)}
-                    />
-                  </View>
-
-                  {/* Comment body */}
-                  <Text style={{ fontSize: 14, color: "#374151", marginTop: 8, marginLeft: 36 }}>
-                    {c.comment}
-                  </Text>
-
-                  {/* Reply action */}
-                  <TouchableOpacity
-                    activeOpacity={0.6}
-                    style={{ marginTop: 8, marginLeft: 36 }}
-                    onPress={() => {
-                      setReplyingTo({ id: c.id, name: c.userName });
-                      const mention = `@${c.userName} `;
-                      if (!text.startsWith(mention)) {
-                        setText(mention);
-                      }
-                      setTimeout(() => inputRef.current?.focus(), 10);
+            {/* Comments list */}
+            <ScrollView
+              ref={scrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 8,
+                paddingBottom: 80, // Space for input bar
+              }}
+              showsVerticalScrollIndicator={false}
+            >
+              {isLoadingComments ? (
+                <CommentSkeleton count={5} />
+              ) : comments.length > 0 ? (
+                comments.map((c: any) => (
+                  <View
+                    key={c.id}
+                    style={{
+                      paddingVertical: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#F3F4F6",
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: "#10B981", fontWeight: "700" }}>REPLY</Text>
-                  </TouchableOpacity>
-
-                  {/* Replies */}
-                  {Array.isArray(c.replies) && c.replies.length > 0 && (
-                    <View style={{ marginTop: 8, marginLeft: 36 }}>
-                      {c.replies.map((r: any) => (
-                        <View key={r.id} style={{ paddingVertical: 8 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                            <View style={{ flexDirection: "row", alignItems: "center" }}>
-                              {r.avatar ? (
-                                <Image
-                                  source={{ uri: r.avatar }}
-                                  style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#E5E7EB" }}
-                                />
-                              ) : (
-                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#E5E7EB" }} />
-                              )}
-                              <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: "700", color: "#374151" }}>
-                                {r.userName}
-                              </Text>
-                              <Text style={{ marginLeft: 6, fontSize: 10, color: "#9CA3AF", fontWeight: "600" }}>
-                                {formatTimeAgo(r.timestamp)}
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={{ fontSize: 13, color: "#374151", marginTop: 6, marginLeft: 32 }}>
-                            {r.comment}
-                          </Text>
-                        </View>
-                      ))}
+                    {/* Header row: avatar, name, time, like */}
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        {c.avatar ? (
+                          <Image
+                            source={{ uri: c.avatar }}
+                            style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E5E7EB" }}
+                          />
+                        ) : (
+                          <View
+                            style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E5E7EB" }}
+                          />
+                        )}
+                        <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: "#374151" }}>
+                          {contentOwnerName || c.userName}
+                        </Text>
+                        <Text style={{ marginLeft: 6, fontSize: 10, color: "#9CA3AF", fontWeight: "600" }}>
+                          {formatTimeAgo(c.timestamp)}
+                        </Text>
+                      </View>
+                      <AnimatedCommentLikeButton
+                        isLiked={c.isLiked}
+                        likes={c.likes}
+                        onPress={() => likeComment(c.id)}
+                      />
                     </View>
-                  )}
+
+                    {/* Comment body */}
+                    <Text style={{ fontSize: 14, color: "#374151", marginTop: 8, marginLeft: 36 }}>
+                      {c.comment}
+                    </Text>
+
+                    {/* Reply action */}
+                    <TouchableOpacity
+                      activeOpacity={0.6}
+                      style={{ marginTop: 8, marginLeft: 36 }}
+                      onPress={() => {
+                        setReplyingTo({ id: c.id, name: c.userName });
+                        const mention = `@${c.userName} `;
+                        if (!text.startsWith(mention)) {
+                          setText(mention);
+                        }
+                        setTimeout(() => inputRef.current?.focus(), 10);
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: "#10B981", fontWeight: "700" }}>REPLY</Text>
+                    </TouchableOpacity>
+
+                    {/* Replies */}
+                    {Array.isArray(c.replies) && c.replies.length > 0 && (
+                      <View style={{ marginTop: 8, marginLeft: 36 }}>
+                        {c.replies.map((r: any) => (
+                          <View key={r.id} style={{ paddingVertical: 8 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                                {r.avatar ? (
+                                  <Image
+                                    source={{ uri: r.avatar }}
+                                    style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#E5E7EB" }}
+                                  />
+                                ) : (
+                                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#E5E7EB" }} />
+                                )}
+                                <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: "700", color: "#374151" }}>
+                                  {r.userName}
+                                </Text>
+                                <Text style={{ marginLeft: 6, fontSize: 10, color: "#9CA3AF", fontWeight: "600" }}>
+                                  {formatTimeAgo(r.timestamp)}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 13, color: "#374151", marginTop: 6, marginLeft: 32 }}>
+                              {r.comment}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))
+              ) : (
+                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                  <Ionicons name="chatbubble-outline" size={48} color="#D1D5DB" />
+                  <Text style={{ fontSize: 16, color: "#6B7280", marginTop: 12, textAlign: 'center' }}>
+                    {"No comments yet"}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: "#9CA3AF", marginTop: 4, textAlign: 'center' }}>
+                    {"Be the first to share your thoughts!"}
+                  </Text>
                 </View>
-              ))
-            ) : (
-              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                <Ionicons name="chatbubble-outline" size={48} color="#D1D5DB" />
-                <Text style={{ fontSize: 16, color: "#6B7280", marginTop: 12, textAlign: 'center' }}>
-                  {"No comments yet"}
-                </Text>
-                <Text style={{ fontSize: 14, color: "#9CA3AF", marginTop: 4, textAlign: 'center' }}>
-                  {"Be the first to share your thoughts!"}
-                </Text>
-              </View>
-            )}
-          </ScrollView>
-        </Animated.View>
+              )}
+            </ScrollView>
+          </Animated.View>
         </PanGestureHandler>
 
         {/* Input bar anchored to bottom */}

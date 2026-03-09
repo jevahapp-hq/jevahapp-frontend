@@ -10,14 +10,14 @@ export default {
     scheme: "jevahapp",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
-    owner: "contact.bldlne@gmail.com",
+    owner: "bldlne",
     extra: {
       API_URL:
         process.env.EXPO_PUBLIC_API_URL ||
         "https://api.jevahapp.com",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
-        projectId: "116ef04a-4393-4203-9a25-b14cfb1a5a",
+        projectId: "214e1ad5-a38e-4f00-89e9-d034797bc9c8",
       },
     },
     ios: {

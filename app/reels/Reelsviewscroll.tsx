@@ -8,27 +8,26 @@
  */
 import { Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { ScrollView, StatusBar, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, StatusBar, View, ViewToken } from "react-native";
 
 import { useMediaDeletion } from "../../src/shared/hooks/useMediaDeletion";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { useCommentModal } from "../context/CommentModalContext";
+import { useUserProfile } from "../hooks/useUserProfile";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import {
   useContentCount,
-  useContentStats,
   useInteractionStore,
-  useUserInteraction,
+  useUserInteraction
 } from "../store/useInteractionStore";
 import { useLibraryStore } from "../store/useLibraryStore";
 import { useMediaPlaybackStore } from "../store/useMediaPlaybackStore";
 import { useReelsStore } from "../store/useReelsStore";
+import { UserProfileCache } from "../utils/cache/UserProfileCache";
 import { useDownloadHandler } from "../utils/downloadUtils";
 import { navigateMainTab } from "../utils/navigation";
 import { getPersistedStats } from "../utils/persistentStorage";
-import { useUserProfile } from "../hooks/useUserProfile";
-import { UserProfileCache } from "../utils/cache/UserProfileCache";
 import { ReelsErrorView } from "./components/ReelsErrorView";
 import { ReelsModals } from "./components/ReelsModals";
 import { ReelsVideoItem } from "./components/ReelsVideoItem";
@@ -36,7 +35,6 @@ import {
   useReelsCurrentVideo,
   useReelsHandlers,
   useReelsResponsive,
-  useReelsScroll,
   useReelsVideoList,
   useReelsVideoPlayback,
 } from "./hooks";
@@ -77,7 +75,7 @@ export default function Reelsviewscroll() {
   const router = useRouter();
 
   const videoRefs = useRef<Record<string, Video>>({});
-  const scrollViewRef = useRef<ScrollView>(null);
+  const flatListRef = useRef<FlatList>(null);
 
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -85,7 +83,6 @@ export default function Reelsviewscroll() {
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoPosition, setVideoPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [reelsProgressBarWidth, setReelsProgressBarWidth] = useState(0);
   const [showPauseOverlay, setShowPauseOverlay] = useState(false);
   const [userHasManuallyPaused, setUserHasManuallyPaused] = useState(false);
   const [activeTab, setActiveTab] = useState("Home");
@@ -241,10 +238,16 @@ export default function Reelsviewscroll() {
     timeAgo,
     imageUrl,
     sheared,
-    toggleLike,
-    showCommentModal,
+    toggleLike: async (cid, ct) => {
+      await toggleLike(cid, ct);
+    },
+    showCommentModal: (comments, cid, type, speaker) => {
+      showCommentModal(comments, cid, type as any, speaker);
+    },
     libraryStore,
-    handleDownload,
+    handleDownload: async (item) => {
+      await handleDownload(item);
+    },
     openDeleteModal,
     handleDeleteConfirmInternal,
     triggerHapticFeedback,
@@ -260,7 +263,6 @@ export default function Reelsviewscroll() {
     setUserHasManuallyPaused,
     setMenuVisible,
     screenWidth,
-    reelsProgressBarWidth,
     setIsDragging,
     globalVideoStore,
     mediaStore,
@@ -338,7 +340,6 @@ export default function Reelsviewscroll() {
         videoDuration={videoDuration}
         videoPosition={videoPosition}
         isDragging={isDragging}
-        reelsProgressBarWidth={reelsProgressBarWidth}
         showPauseOverlay={showPauseOverlay}
         userHasManuallyPaused={userHasManuallyPaused}
         modalKey={modalKey}
@@ -369,7 +370,6 @@ export default function Reelsviewscroll() {
         onMenuToggle={() => setMenuVisible((v) => !v)}
         onMenuClose={() => setMenuVisible(false)}
         setIsDragging={setIsDragging}
-        setReelsProgressBarWidth={setReelsProgressBarWidth}
         setVideoDuration={setVideoDuration}
         setVideoPosition={setVideoPosition}
         triggerHapticFeedback={triggerHapticFeedback}
@@ -388,124 +388,94 @@ export default function Reelsviewscroll() {
 
   const allVideos = parsedVideoList.length > 0 ? parsedVideoList : [currentVideo];
 
-  const {
-    handleScroll,
-    handleScrollEnd,
-    handleScrollBeginDrag,
-    setScrollStartIndex,
-  } = useReelsScroll({
-    screenHeight,
-    scrollViewRef,
-    getSpeakerName,
-    setCurrentIndex: setCurrentIndex_state,
-    currentIndex: currentIndex_state,
-    allVideos,
-    userHasManuallyPaused,
-    mediaStore,
-    globalVideoStore,
-  });
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 80,
+    minimumViewTime: 100,
+  }).current;
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0) {
+        const item = viewableItems[0];
+        const newIndex = item.index ?? 0;
+        if (newIndex !== currentIndex_state) {
+          setCurrentIndex_state(newIndex);
+
+          const videoData = allVideos[newIndex];
+          if (videoData) {
+            const speakerName = getSpeakerName(videoData, "Creator");
+            const videoKey = `reel-${videoData._id || videoData.id || newIndex}-${videoData.title}-${speakerName}`;
+
+            mediaStore.updateLastAccessed(videoKey);
+            if (!userHasManuallyPaused) {
+              globalVideoStore.playVideoGlobally(videoKey);
+            }
+          }
+        }
+      }
+    },
+    [currentIndex_state, allVideos, getSpeakerName, userHasManuallyPaused, mediaStore, globalVideoStore]
+  );
 
   useEffect(() => {
-    if (scrollViewRef.current && parsedVideoList.length > 0) {
-      const initialOffset = currentIndex_state * screenHeight;
-      setScrollStartIndex(currentIndex_state);
-      globalVideoStore.pauseAllVideos();
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ y: initialOffset, animated: false });
-      }, 50);
-      setTimeout(() => {
-        const initialVideo = allVideos[currentIndex_state];
-        if (!initialVideo) return;
-        const speakerName = getSpeakerName(initialVideo, "Creator");
-        const initialKey = `reel-${initialVideo._id || initialVideo.id || currentIndex_state}-${initialVideo.title}-${speakerName}`;
-        Object.keys(videoRefs.current).forEach((key) => {
-          if (key !== initialKey && videoRefs.current[key]) {
-            try {
-              videoRefs.current[key].pauseAsync().catch(() => {});
-              globalVideoStore.unregisterVideoPlayer(key);
-            } catch {}
-          }
+    if (flatListRef.current && parsedVideoList.length > 0) {
+      // Small delay to ensure FlatList is ready
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: currentVideoIndex,
+          animated: false,
         });
-        const videoRef = videoRefs.current[initialKey];
-        if (videoRef) {
-          globalVideoStore.registerVideoPlayer(initialKey, {
-            pause: async () => {
-              try {
-                await videoRef.pauseAsync();
-                globalVideoStore.setOverlayVisible(initialKey, true);
-              } catch (err) {
-                console.warn(`Failed to pause ${initialKey}:`, err);
-              }
-            },
-            showOverlay: () => globalVideoStore.setOverlayVisible(initialKey, true),
-            key: initialKey,
-          });
-        }
-        globalVideoStore.playVideoGlobally(initialKey);
-        videoRef?.playAsync().catch(() => {});
-      }, 200);
-    } else {
-      console.warn("⚠️ Cannot initialize scroll - no videos or scrollViewRef");
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [parsedVideoList.length, currentIndex_state, setScrollStartIndex]);
+  }, [parsedVideoList.length]);
+
+  const renderItem = ({ item, index }: { item: any, index: number }) => {
+    const isActive = index === currentIndex_state;
+    const speakerName = getSpeakerName(item, "unknown");
+    const videoKey = `reel-${item._id || item.id || index}-${item.title}-${speakerName}`;
+
+    return (
+      <View
+        style={{
+          height: screenHeight,
+          width: "100%",
+          backgroundColor: "#000000",
+        }}
+      >
+        {renderVideoItem(item, index, isActive, videoKey)}
+      </View>
+    );
+  };
 
   return (
     <ErrorBoundary>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <ScrollView
-        ref={scrollViewRef}
-        style={{ flex: 1 }}
+      <FlatList
+        ref={flatListRef}
+        data={allVideos}
+        renderItem={renderItem}
+        keyExtractor={(item, index) => {
+          const speakerName = getSpeakerName(item, "unknown");
+          return `reel-${item._id || item.id || index}-${item.title}-${speakerName}`;
+        }}
         pagingEnabled
         showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        onScrollBeginDrag={handleScrollBeginDrag}
-        onScrollEndDrag={(e) => handleScrollEnd(e)}
-        onMomentumScrollEnd={(e) => handleScrollEnd(e)}
-        scrollEventThrottle={16}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        getItemLayout={(_, index) => ({
+          length: screenHeight,
+          offset: screenHeight * index,
+          index,
+        })}
+        removeClippedSubviews={true}
+        initialNumToRender={1}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        decelerationRate="fast"
         snapToInterval={screenHeight}
         snapToAlignment="start"
-        decelerationRate="normal"
-        bounces={isIOS}
-        scrollEnabled
-        nestedScrollEnabled={false}
-        contentContainerStyle={{ height: screenHeight * allVideos.length }}
-      >
-        {allVideos.map((videoData: any, index: number) => {
-          try {
-            const isActive = index === currentIndex_state;
-            const speakerName = getSpeakerName(videoData, "unknown");
-            const videoKey = `reel-${videoData._id || videoData.id || index}-${videoData.title}-${speakerName}`;
-            return (
-              <View
-                key={videoKey}
-                style={{
-                  height: screenHeight,
-                  width: "100%",
-                  backgroundColor: "#000000",
-                  zIndex: isActive ? 10 : 0,
-                }}
-              >
-                {renderVideoItem(videoData, index, isActive, videoKey)}
-              </View>
-            );
-          } catch (error) {
-            console.error("❌ Error rendering video in map:", error);
-            return (
-              <View
-                key={`error-${index}`}
-                style={{
-                  height: screenHeight,
-                  width: "100%",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: "#fff", fontSize: 16 }}>Failed to load video</Text>
-              </View>
-            );
-          }
-        })}
-      </ScrollView>
+      />
 
       <ReelsModals
         currentVideo={currentVideo}

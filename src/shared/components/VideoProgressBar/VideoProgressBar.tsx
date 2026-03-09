@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    PanResponder,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  PanResponder,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 interface VideoProgressBarProps {
@@ -16,30 +16,23 @@ interface VideoProgressBarProps {
   onToggleMute: () => void;
   onSeekToPercent: (percent: number) => void;
   showControls?: boolean;
-  /**
-   * Vertical offset from the bottom of the parent container (in pixels).
-   * - Useful when you want the bar/timer/mute row to sit a bit above the bottom edge
-   *   to be visually closer to other overlays (e.g. title text).
-   * - Defaults to 0 (flush with bottom).
-   */
   bottomOffset?: number;
-  // UI config (optional)
   showFloatingLabel?: boolean; // default true
   enlargeOnDrag?: boolean; // default true
   knobSize?: number; // default 20
   knobSizeDragging?: number; // default 24
   trackHeights?: { normal: number; dragging: number }; // default {4,8}
-  // Stability config (optional)
   seekSyncTicks?: number; // number of consecutive updates near target to finish seeking (default 2)
   seekMsTolerance?: number; // milliseconds tolerance used to derive epsilon (default 300)
   minProgressEpsilon?: number; // minimum epsilon as a fraction (default 0.01)
-  // Interaction enhancements
   enableHaptics?: boolean; // default false
   verticalScrub?: {
     enabled?: boolean;
     sensitivityBase?: number;
     maxSlowdown?: number;
   }; // default enabled
+  style?: any;
+  mutePosition?: 'left' | 'right';
 }
 
 export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
@@ -61,13 +54,15 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   minProgressEpsilon = 0.01,
   enableHaptics = false,
   verticalScrub = { enabled: true, sensitivityBase: 60, maxSlowdown: 5 },
+  style,
+  mutePosition = 'right',
 }) => {
   // Optional runtime import for haptics (no crash if not installed)
   let Haptics: any;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     Haptics = require("expo-haptics");
-  } catch {}
+  } catch { }
   const [isDragging, setIsDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState(0);
   const progressBarRef = useRef<View>(null);
@@ -87,14 +82,14 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
     if (!Number.isFinite(ms) || ms < 0 || isNaN(ms)) {
       return "0:00";
     }
-    
+
     // Clamp to reasonable maximum (24 hours)
     const clampedMs = Math.min(ms, 24 * 60 * 60 * 1000);
-    
+
     const totalSeconds = Math.floor(clampedMs / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const remainingSeconds = totalSeconds % 60;
-    
+
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
@@ -154,12 +149,12 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       targetProgressRef.current = null;
       stableTicksRef.current = 0;
       if (enableHaptics && Haptics?.impactAsync) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
       }
     },
     onPanResponderMove: (evt, gestureState) => {
       if (!isDraggingRef.current) return;
-      
+
       const currentBarWidth = barWidthRef.current;
       if (currentBarWidth <= 0) {
         // Try to get width from measure if not available
@@ -177,16 +172,16 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
         });
         return;
       }
-      
+
       // Always use absolute touch position - circle follows finger exactly
       // Clamp locationX to ensure it's within the progress bar bounds
       const touchX = Math.max(0, Math.min(currentBarWidth, evt.nativeEvent.locationX));
       const percent = touchX / currentBarWidth;
-      
+
       // Always update to exact finger position - no delays, no filtering
       setDragProgress(percent);
       animatedValue.setValue(percent);
-      
+
       // Seek video in real-time while dragging - video continues playing
       // Throttle seek calls to avoid too many rapid updates (every 50ms)
       const now = Date.now();
@@ -204,7 +199,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       // Seek to final position - video continues playing
       onSeekToPercent(dragProgress);
       if (enableHaptics && Haptics?.impactAsync) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
       }
     },
     onPanResponderTerminate: () => {
@@ -266,8 +261,8 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   const currentProgress = isDragging
     ? dragProgress
     : isSeeking && targetProgressRef.current != null
-    ? targetProgressRef.current
-    : externalProgress;
+      ? targetProgressRef.current
+      : externalProgress;
   const progressBarHeight = enlargeOnDrag
     ? isDragging
       ? trackHeights.dragging
@@ -280,7 +275,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
     if (isDraggingRef.current) {
       return; // Dragging is handled directly in pan responder
     }
-    
+
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
 
@@ -313,9 +308,24 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
 
   return (
     <View
-      className="absolute left-0 right-0 flex-row items-center justify-center px-4 pb-4 pt-2"
-      style={{ bottom: bottomOffset }}
+      className="absolute left-0 right-0 flex-row items-center justify-center px-4 pb-1 pt-1"
+      style={[{ bottom: bottomOffset }, style]}
     >
+      {/* Mute Button - Conditional Left Placement */}
+      {mutePosition === 'left' && (
+        <TouchableOpacity
+          onPress={onToggleMute}
+          className="bg-black/60 p-2.5 rounded-full mr-3"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isMuted ? "volume-mute" : "volume-high"}
+            size={18}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+      )}
+
       {/* Progress Bar - Full width container */}
       <View className="flex-1 flex-row items-center max-w-full">
         <Text className="text-white text-xs font-rubik mr-3 min-w-[40px] text-right">
@@ -364,9 +374,9 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
                 left:
                   barWidth > 0
                     ? Animated.subtract(
-                        Animated.multiply(animatedValue, barWidth),
-                        20
-                      )
+                      Animated.multiply(animatedValue, barWidth),
+                      20
+                    )
                     : 0,
               }}
             >
@@ -386,9 +396,9 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
               left:
                 barWidth > 0
                   ? Animated.subtract(
-                      Animated.multiply(animatedValue, barWidth),
-                      circleRadius
-                    )
+                    Animated.multiply(animatedValue, barWidth),
+                    circleRadius
+                  )
                   : 0,
               transform: [
                 {
@@ -413,18 +423,20 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
         </Text>
       </View>
 
-      {/* Mute Button - positioned on the right with proper spacing */}
-      <TouchableOpacity
-        onPress={onToggleMute}
-        className="bg-black/60 p-2.5 rounded-full ml-3"
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <Ionicons
-          name={isMuted ? "volume-mute" : "volume-high"}
-          size={18}
-          color="#FFFFFF"
-        />
-      </TouchableOpacity>
+      {/* Mute Button - Conditional Right Placement */}
+      {mutePosition === 'right' && (
+        <TouchableOpacity
+          onPress={onToggleMute}
+          className="bg-black/60 p-2.5 rounded-full ml-3"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isMuted ? "volume-mute" : "volume-high"}
+            size={18}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };

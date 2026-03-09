@@ -5,12 +5,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudioPlayer";
 import { VideoCardSkeleton } from "../../../../shared/components";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
+import OptimizedImage from "../../../../shared/components/OptimizedImage";
 import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
@@ -43,7 +44,7 @@ export interface VideoCardPlayerAreaProps {
 }
 
 export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
-  const { video, isActive, onForceActive } = props;
+  const { video } = props;
 
   const thumbnailSource = video?.imageUrl || video?.thumbnailUrl;
   const thumbnailUri =
@@ -51,32 +52,7 @@ export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
       ? thumbnailSource
       : (thumbnailSource as any)?.uri;
 
-  if (!isActive) {
-    return (
-      <TouchableWithoutFeedback onPress={onForceActive}>
-        <View className="w-full h-[400px] overflow-hidden relative bg-gray-900">
-          <Image
-            source={
-              thumbnailUri
-                ? { uri: thumbnailUri }
-                : { uri: "https://via.placeholder.com/400x400/cccccc/ffffff?text=Video" }
-            }
-            style={{ width: "100%", height: "100%", position: "absolute" }}
-            resizeMode="cover"
-          />
-          <ContentTypeBadge contentType={video.contentType || "video"} position="top-left" size="medium" />
-          <MediaPlayButton isPlaying={false} onPress={onForceActive} showOverlay={true} size="medium" />
-
-          <View style={{ position: "absolute", bottom: 52, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
-            <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
-              {video.title}
-            </Text>
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
-    );
-  }
-
+  // All cards always render the active player immediately (no thumbnail gate)
   return <ActiveVideoPlayerContent {...props} thumbnailUri={thumbnailUri} />;
 }
 
@@ -266,16 +242,17 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
             fullscreenOptions={{ enable: false }}
           />
         ) : (
-          <Image
+          <OptimizedImage
             source={thumbnailUri ? { uri: thumbnailUri } : { uri: "https://via.placeholder.com/400x400/000000/ffffff?text=Preparing+Media..." }}
             style={{ width: "100%", height: "100%", position: "absolute" }}
-            resizeMode="cover"
+            contentFit="cover"
+            lazy={true}
           />
         )}
 
         {!videoLoadedRef.current && !videoLoaded && !failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermonValue && (
           <View className="absolute inset-0" pointerEvents="none">
-            <VideoCardSkeleton dark={true} />
+            <VideoCardSkeleton dark={true} hideProgressBar={true} />
           </View>
         )}
 
@@ -303,7 +280,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
           disabled={isPlayTogglePending}
         />
 
-        <View style={{ position: "absolute", bottom: 52, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
+        <View style={{ position: "absolute", bottom: 64, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
           <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", lineHeight: 16, textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
             {video.title}
           </Text>
@@ -314,6 +291,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
           isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
           onToggleMute={handleToggleMuteInternal}
           onSeekToPercent={seekToPercent}
+          mutePosition="right"
           bottomOffset={24}
           currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
           durationMs={isAudioSermonValue ? (audioState?.duration ?? 0) : (videoDurationMs || lastKnownDurationRef.current || (video as any).duration * 1000 || 0)}

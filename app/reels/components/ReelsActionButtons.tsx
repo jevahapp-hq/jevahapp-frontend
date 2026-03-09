@@ -1,6 +1,6 @@
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 
 interface ReelsActionButtonsProps {
   videoKey: string;
@@ -79,25 +79,33 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color={activeIsLiked ? "#D22A2A" : "#FFFFFF"}
         />
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(9, 10, 11),
-            color: "#FFFFFF",
-            marginTop: getResponsiveSpacing(2, 4, 5),
-            fontFamily: "Rubik-SemiBold",
-            textShadowColor: "rgba(0, 0, 0, 0.5)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 2,
-          }}
-        >
-          {canUseBackendLikes
-            ? activeLikesCount
-            : enrichedVideoData?.likeCount ??
-              enrichedVideoData?.likes ??
-              enrichedVideoData?.favorite ??
-              video.favorite ??
-              0}
-        </Text>
+        {((canUseBackendLikes
+          ? activeLikesCount
+          : enrichedVideoData?.likeCount ??
+          enrichedVideoData?.likes ??
+          enrichedVideoData?.favorite ??
+          video.favorite ??
+          0) > 0) && (
+            <Text
+              style={{
+                fontSize: getResponsiveFontSize(9, 10, 11),
+                color: "#FFFFFF",
+                marginTop: getResponsiveSpacing(2, 4, 5),
+                fontFamily: "Rubik-SemiBold",
+                textShadowColor: "rgba(0, 0, 0, 0.5)",
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 2,
+              }}
+            >
+              {canUseBackendLikes
+                ? activeLikesCount
+                : enrichedVideoData?.likeCount ??
+                enrichedVideoData?.likes ??
+                enrichedVideoData?.favorite ??
+                video.favorite ??
+                0}
+            </Text>
+          )}
       </TouchableOpacity>
 
       {/* Comment Button */}
@@ -122,21 +130,25 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color="white"
         />
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(9, 10, 11),
-            color: "#FFFFFF",
-            marginTop: getResponsiveSpacing(2, 4, 5),
-            fontFamily: "Rubik-SemiBold",
-            textShadowColor: "rgba(0, 0, 0, 0.5)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 2,
-          }}
-        >
-          {videoStats[videoKey]?.comment === 1
-            ? (video.comment ?? 0) + 1
-            : video.comment ?? 0}
-        </Text>
+        {(videoStats[videoKey]?.comment === 1
+          ? (video.comment ?? 0) + 1
+          : video.comment ?? 0) > 0 && (
+            <Text
+              style={{
+                fontSize: getResponsiveFontSize(9, 10, 11),
+                color: "#FFFFFF",
+                marginTop: getResponsiveSpacing(2, 4, 5),
+                fontFamily: "Rubik-SemiBold",
+                textShadowColor: "rgba(0, 0, 0, 0.5)",
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 2,
+              }}
+            >
+              {videoStats[videoKey]?.comment === 1
+                ? (video.comment ?? 0) + 1
+                : video.comment ?? 0}
+            </Text>
+          )}
       </TouchableOpacity>
 
       {/* Save Button */}
@@ -153,9 +165,8 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           minHeight: getTouchTargetSize(),
         }}
         activeOpacity={0.7}
-        accessibilityLabel={`${
-          libraryStore.isItemSaved(modalKey) ? "Remove from" : "Save to"
-        } library`}
+        accessibilityLabel={`${libraryStore.isItemSaved(modalKey) ? "Remove from" : "Save to"
+          } library`}
         accessibilityRole="button"
       >
         <MaterialIcons
@@ -165,19 +176,21 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color={libraryStore.isItemSaved(videoKey) ? "#FEA74E" : "#FFFFFF"}
         />
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(9, 10, 11),
-            color: "#FFFFFF",
-            marginTop: getResponsiveSpacing(2, 4, 5),
-            fontFamily: "Rubik-SemiBold",
-            textShadowColor: "rgba(0, 0, 0, 0.5)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 2,
-          }}
-        >
-          {videoStats[videoKey]?.totalSaves || video.saved || 0}
-        </Text>
+        {(videoStats[videoKey]?.totalSaves || video.saved || 0) > 0 && (
+          <Text
+            style={{
+              fontSize: getResponsiveFontSize(9, 10, 11),
+              color: "#FFFFFF",
+              marginTop: getResponsiveSpacing(2, 4, 5),
+              fontFamily: "Rubik-SemiBold",
+              textShadowColor: "rgba(0, 0, 0, 0.5)",
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }}
+          >
+            {videoStats[videoKey]?.totalSaves || video.saved || 0}
+          </Text>
+        )}
       </TouchableOpacity>
 
       {/* Share Button */}
@@ -198,19 +211,21 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
         accessibilityRole="button"
       >
         <Feather name="send" size={getResponsiveSize(28, 32, 36)} color="white" />
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(9, 10, 11),
-            color: "#FFFFFF",
-            marginTop: getResponsiveSpacing(2, 4, 5),
-            fontFamily: "Rubik-SemiBold",
-            textShadowColor: "rgba(0, 0, 0, 0.5)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 2,
-          }}
-        >
-          {videoStats[videoKey]?.sheared || video.sheared || 0}
-        </Text>
+        {(videoStats[videoKey]?.sheared || video.sheared || 0) > 0 && (
+          <Text
+            style={{
+              fontSize: getResponsiveFontSize(9, 10, 11),
+              color: "#FFFFFF",
+              marginTop: getResponsiveSpacing(2, 4, 5),
+              fontFamily: "Rubik-SemiBold",
+              textShadowColor: "rgba(0, 0, 0, 0.5)",
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }}
+          >
+            {videoStats[videoKey]?.sheared || video.sheared || 0}
+          </Text>
+        )}
       </TouchableOpacity>
     </View>
   );

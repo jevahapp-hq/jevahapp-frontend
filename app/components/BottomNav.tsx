@@ -16,8 +16,8 @@ import {
   getResponsiveSpacing,
   getResponsiveTextStyle,
 } from "../../utils/responsive";
-import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
 
@@ -138,7 +138,7 @@ export default function BottomNav({
             flexDirection: "row",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 30,
+            zIndex: 1000,
           }}
         >
           <View
@@ -160,24 +160,24 @@ export default function BottomNav({
                   alignItems: "center",
                   justifyContent: "center",
                   gap: getResponsiveSpacing(12, 16, 20, 24),
-                // Glassmorphism orange background – soft, translucent
-                backgroundColor: "rgba(255, 140, 0, 0.16)",
-                overflow: "hidden",
-              }}
-            >
-              {/* Subtle shimmering highlight to draw attention */}
-              <View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  left: -80,
-                  top: 0,
-                  bottom: 0,
-                  width: 80,
-                  backgroundColor: "rgba(255, 255, 255, 0.22)",
-                  transform: [{ rotate: "-20deg" }],
+                  // Glassmorphism orange background – soft, translucent
+                  backgroundColor: "rgba(255, 140, 0, 0.16)",
+                  overflow: "hidden",
                 }}
-              />
+              >
+                {/* Subtle shimmering highlight to draw attention */}
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    left: -80,
+                    top: 0,
+                    bottom: 0,
+                    width: 80,
+                    backgroundColor: "rgba(255, 255, 255, 0.22)",
+                    transform: [{ rotate: "-20deg" }],
+                  }}
+                />
                 <TouchableOpacity
                   style={{
                     backgroundColor: "#256E63",
@@ -393,7 +393,7 @@ export default function BottomNav({
           padding: getResponsiveSpacing(2, 3, 4, 5),
           borderRadius: getResponsiveBorderRadius("round"),
           ...getResponsiveShadow(),
-          zIndex: 100,
+          zIndex: 1000,
         }}
       >
         <TouchableOpacity

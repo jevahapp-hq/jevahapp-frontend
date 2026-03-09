@@ -74,7 +74,7 @@ export default function Music() {
     },
     {
       id: "2",
-      title: "Featured Playlist",
+      title: "Featured Playlists",
       description: "Most popular copyright-free songs everyone's listening to.",
       thumbnailUrl: "",
       color: "#FEA74E", // Jevah Secondary (Orange)
@@ -263,8 +263,8 @@ export default function Music() {
       <TouchableOpacity
         activeOpacity={0.9}
         style={{
-          width: SCREEN_WIDTH - 48,
-          height: 220, // Taller for more cinematic presence
+          width: SCREEN_WIDTH - 64, // Slightly narrower for more sneak-peek of next card
+          height: 170, // Compacter for better list visibility
           marginRight: 16,
           borderRadius: 32, // More rounded for modern premium feel
           overflow: "hidden",
@@ -320,11 +320,11 @@ export default function Music() {
                 tint="dark"
                 style={{
                   alignSelf: "flex-start",
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 12,
-                  backgroundColor: "rgba(0, 0, 0, 0.2)",
-                  marginBottom: 12,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 8,
+                  backgroundColor: "rgba(0, 0, 0, 0.25)",
+                  marginBottom: 8,
                   borderWidth: 1,
                   borderColor: "rgba(255, 255, 255, 0.1)",
                 }}
@@ -345,11 +345,11 @@ export default function Music() {
 
               <Text
                 style={{
-                  fontSize: 28,
+                  fontSize: 22,
                   fontWeight: "800",
                   color: "#FFFFFF",
                   fontFamily: "Rubik_700Bold",
-                  marginBottom: 8,
+                  marginBottom: 6,
                   letterSpacing: -0.5,
                   textShadowColor: "rgba(0, 0, 0, 0.4)",
                   textShadowOffset: { width: 0, height: 2 },
@@ -360,11 +360,11 @@ export default function Music() {
               </Text>
               <Text
                 style={{
-                  fontSize: 14,
-                  color: "rgba(255, 255, 255, 0.75)",
+                  fontSize: 13,
+                  color: "rgba(255, 255, 255, 0.85)",
                   fontFamily: "Rubik_400Regular",
-                  lineHeight: 20,
-                  maxWidth: "85%",
+                  lineHeight: 18,
+                  maxWidth: "90%",
                 }}
               >
                 {item.description}
@@ -381,9 +381,9 @@ export default function Music() {
             >
               <TouchableOpacity
                 style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: "#FFFFFF",
                   justifyContent: "center",
                   alignItems: "center",
@@ -394,7 +394,7 @@ export default function Music() {
                   elevation: 6,
                 }}
               >
-                <Ionicons name="play" size={28} color={item.color} style={{ marginLeft: 3 }} />
+                <Ionicons name="play" size={22} color={item.color} style={{ marginLeft: 3 }} />
               </TouchableOpacity>
 
               <View
@@ -402,22 +402,22 @@ export default function Music() {
                   flexDirection: "row",
                   alignItems: "center",
                   backgroundColor: "rgba(255, 255, 255, 0.15)",
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  gap: 16,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 16,
+                  gap: 12,
                   borderWidth: 1,
                   borderColor: "rgba(255, 255, 255, 0.2)",
                 }}
               >
                 <TouchableOpacity>
-                  <Ionicons name="heart-outline" size={22} color="#FFFFFF" />
+                  <Ionicons name="heart-outline" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity>
-                  <Ionicons name="share-outline" size={22} color="#FFFFFF" />
+                  <Ionicons name="share-outline" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity>
-                  <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
+                  <Ionicons name="ellipsis-horizontal" size={16} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -837,16 +837,21 @@ export default function Music() {
               onChangeText={setSearchQuery}
               autoFocus
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery("");
-                  setShowSearchInput(false);
-                }}
-              >
-                <Ionicons name="close-circle" size={20} color="#98A2B3" />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery("");
+                setShowSearchInput(false);
+              }}
+              style={{ marginLeft: 8 }}
+            >
+              <Text style={{
+                color: "#256E63",
+                fontFamily: "Rubik_600SemiBold",
+                fontSize: 14
+              }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View
@@ -932,7 +937,7 @@ export default function Music() {
       </View>
 
       {/* Discover Weekly Cards (Scrollable Horizontal) */}
-      <View style={{ marginBottom: 24 }}>
+      <View style={{ marginBottom: 16 }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

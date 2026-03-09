@@ -30,7 +30,7 @@ export interface ContentItemRendererProps {
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
   onTogglePlay: (key: string) => void;
   onToggleMute: (key: string) => void;
-  onFavorite: (key: string, item: MediaItem) => void;
+  onLike: (key: string, item: MediaItem) => void;
   onComment: (key: string, item: MediaItem) => void;
   onSave: (key: string, item: MediaItem) => void;
   onShare: (key: string, item: MediaItem) => void;
@@ -70,7 +70,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onVideoTap,
     onTogglePlay,
     onToggleMute,
-    onFavorite,
+    onLike,
     onComment,
     onSave,
     onShare,
@@ -114,7 +114,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onVideoTap,
     onTogglePlay,
     onToggleMute: onToggleMute,
-    onFavorite: () => onFavorite(key, item),
+    onLike: () => onLike(key, item),
     onComment: () => onComment(key, item),
     onSave: () => onSave(key, item),
     onDownload: () => onDownload(item),
@@ -136,7 +136,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
   const musicCardProps = {
     audio: item,
     index,
-    onLike: () => onFavorite(key, item),
+    onLike: () => onLike(key, item),
     onComment: () => onComment(key, item),
     onSave: () => onSave(key, item),
     onShare: () => onShare(key, item),
@@ -152,7 +152,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
   const ebookCardProps = {
     ebook: item,
     index,
-    onLike: () => onFavorite(key, item),
+    onLike: () => onLike(key, item),
     onComment: () => onComment(key, item),
     onSave: () => onSave(key, item),
     onShare: () => onShare(key, item),

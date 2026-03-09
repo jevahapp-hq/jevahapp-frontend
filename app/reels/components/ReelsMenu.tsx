@@ -1,6 +1,10 @@
-import React from "react";
-import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import React from "react";
+import { Dimensions, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { UI_CONFIG } from "../../../src/shared/constants";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface ReelsMenuProps {
   visible: boolean;
@@ -15,6 +19,7 @@ interface ReelsMenuProps {
   onDelete: () => void;
   onReport: () => void;
   onDownload: () => void;
+  onShare: (key: string) => void;
 }
 
 export const ReelsMenu: React.FC<ReelsMenuProps> = ({
@@ -30,195 +35,172 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
   onDelete,
   onReport,
   onDownload,
+  onShare,
 }) => {
   if (!visible) return null;
 
+  const isSaved = libraryStore.isItemSaved(modalKey);
+  const isDownloaded = checkIfDownloaded(currentVideo?._id || modalKey);
+
+  const MenuItem = ({
+    label,
+    icon,
+    onPress,
+    isDestructive = false,
+    isSuccess = false,
+    IconComponent = Ionicons
+  }: {
+    label: string,
+    icon: string,
+    onPress: () => void,
+    isDestructive?: boolean,
+    isSuccess?: boolean,
+    IconComponent?: any
+  }) => (
+    <TouchableOpacity
+      onPress={() => {
+        onPress();
+        onClose();
+      }}
+      activeOpacity={0.7}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        backgroundColor: "rgba(255, 255, 255, 0.05)",
+        marginBottom: 6,
+      }}
+    >
+      <Text
+        style={{
+          color: isDestructive ? UI_CONFIG.COLORS.ERROR : "#FFFFFF",
+          fontSize: 14,
+          fontFamily: "Rubik-SemiBold",
+        }}
+      >
+        {label}
+      </Text>
+      <IconComponent
+        name={icon as any}
+        size={20}
+        color={isDestructive ? UI_CONFIG.COLORS.ERROR : isSuccess ? UI_CONFIG.COLORS.SUCCESS : "#FFFFFF"}
+      />
+    </TouchableOpacity>
+  );
+
   return (
-    <>
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}>
       <TouchableWithoutFeedback onPress={onClose}>
-        <View className="absolute inset-0 z-10" />
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)" }} />
       </TouchableWithoutFeedback>
 
       <View
         style={{
           position: "absolute",
-          bottom: 200,
-          right: 100,
-          backgroundColor: "#FFFFFF",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.25,
-          shadowRadius: 8,
-          elevation: 5,
-          borderRadius: 16,
-          padding: 16,
-          width: 180,
-          zIndex: 20,
+          bottom: 110,
+          left: 0,
+          right: 0,
+          alignItems: "center",
         }}
+        pointerEvents="box-none"
       >
-        {/* View Details */}
-        <TouchableOpacity
-          onPress={() => {
-            onViewDetails();
-            onClose();
-          }}
+        <BlurView
+          intensity={95}
+          tint="dark"
           style={{
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: "#f3f4f6",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
+            width: "100%",
+            maxWidth: 280, // Narrower for mobile
+            borderRadius: 20,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: "rgba(255, 255, 255, 0.15)",
+            padding: 12,
+            backgroundColor: "rgba(0, 0, 0, 0.5)", // Added backdrop color for more opacity
           }}
         >
-          <Text
-            style={{
-              color: "#1D2939",
-              fontSize: 14,
-              fontFamily: "Rubik",
-            }}
-          >
-            View Details
-          </Text>
-          <Ionicons name="eye-outline" size={22} color="#1D2939" />
-        </TouchableOpacity>
-
-        {/* Save to Library / Remove from Library */}
-        <TouchableOpacity
-          onPress={() => {
-            onSave(modalKey);
-            onClose();
-          }}
-          style={{
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: "#f3f4f6",
+          {/* Header */}
+          <View style={{
             flexDirection: "row",
-            alignItems: "center",
             justifyContent: "space-between",
-          }}
-        >
-          <Text
-            style={{
-              color: "#1D2939",
-              fontSize: 14,
+            alignItems: "center",
+            marginBottom: 12,
+            paddingHorizontal: 4
+          }}>
+            <Text style={{
+              color: "rgba(255, 255, 255, 0.5)",
+              fontSize: 11,
               fontFamily: "Rubik",
-            }}
-          >
-            {libraryStore.isItemSaved(modalKey)
-              ? "Remove from Library"
-              : "Save to Library"}
-          </Text>
-          <MaterialIcons
-            name={
-              libraryStore.isItemSaved(modalKey) ? "bookmark" : "bookmark-border"
-            }
-            size={22}
-            color="#1D2939"
-          />
-        </TouchableOpacity>
-
-        {/* Delete - Only show if owner */}
-        {isOwner && (
-          <TouchableOpacity
-            onPress={() => {
-              onDelete();
-              onClose();
-            }}
-            style={{
-              paddingVertical: 10,
-              borderBottomWidth: 1,
-              borderBottomColor: "#f3f4f6",
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text
-              style={{
-                color: "#FF6B6B",
-                fontSize: 14,
-                fontFamily: "Rubik",
-              }}
-            >
-              Delete
+              textTransform: "uppercase",
+              letterSpacing: 0.8
+            }}>
+              Options
             </Text>
-            <Ionicons name="trash-outline" size={22} color="#FF6B6B" />
-          </TouchableOpacity>
-        )}
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={18} color="rgba(255, 255, 255, 0.5)" />
+            </TouchableOpacity>
+          </View>
 
-        {/* Report - Only show if not owner */}
-        {!isOwner && (
-          <TouchableOpacity
-            onPress={() => {
-              onReport();
-              onClose();
-            }}
-            style={{
-              paddingVertical: 10,
-              borderBottomWidth: 1,
-              borderBottomColor: "#f3f4f6",
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text
-              style={{
-                color: "#FF6B6B",
-                fontSize: 14,
-                fontFamily: "Rubik",
-              }}
-            >
-              Report
-            </Text>
-            <Ionicons name="flag-outline" size={22} color="#FF6B6B" />
-          </TouchableOpacity>
-        )}
-
-        {/* Download / Remove Download */}
-        <TouchableOpacity
-          onPress={() => {
-            onDownload();
-            onClose();
-          }}
-          style={{
-            paddingVertical: 10,
-            borderTopWidth: 1,
-            borderTopColor: "#f3f4f6",
-            marginTop: 6,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Text
-            style={{
-              color: "#1D2939",
-              fontSize: 14,
-              fontFamily: "Rubik",
-            }}
-          >
-            {checkIfDownloaded(currentVideo._id || modalKey)
-              ? "Remove Download"
-              : "Download"}
-          </Text>
-          <Ionicons
-            name={
-              checkIfDownloaded(currentVideo._id || modalKey)
-                ? "checkmark-circle"
-                : "download-outline"
-            }
-            size={24}
-            color={
-              checkIfDownloaded(currentVideo._id || modalKey)
-                ? "#256E63"
-                : "#090E24"
-            }
+          {/* Menu Items */}
+          <MenuItem
+            label="View Details"
+            icon="information-circle-outline"
+            onPress={onViewDetails}
           />
-        </TouchableOpacity>
+
+          <MenuItem
+            label={isSaved ? "Remove from Library" : "Save to Library"}
+            icon={isSaved ? "bookmark" : "bookmark-border"}
+            onPress={() => onSave(modalKey)}
+            isSuccess={isSaved}
+            IconComponent={MaterialIcons}
+          />
+
+          <MenuItem
+            label={isDownloaded ? "Remove Download" : "Download"}
+            icon={isDownloaded ? "checkmark-circle" : "download-outline"}
+            onPress={onDownload}
+            isSuccess={isDownloaded}
+          />
+
+          <MenuItem
+            label="Share"
+            icon="share-social-outline"
+            onPress={() => onShare(modalKey)}
+          />
+
+          <View style={{ height: 1, backgroundColor: "rgba(255, 255, 255, 0.08)", marginVertical: 6 }} />
+
+          {isOwner ? (
+            <MenuItem
+              label="Delete"
+              icon="trash-outline"
+              onPress={onDelete}
+              isDestructive
+            />
+          ) : (
+            <MenuItem
+              label="Report"
+              icon="flag-outline"
+              onPress={onReport}
+              isDestructive
+            />
+          )}
+
+          {/* Handle */}
+          <View style={{
+            width: 24,
+            height: 3,
+            backgroundColor: "rgba(255, 255, 255, 0.15)",
+            borderRadius: 1.5,
+            alignSelf: "center",
+            marginTop: 4
+          }} />
+        </BlurView>
       </View>
-    </>
+    </View>
   );
 };
 

@@ -92,7 +92,7 @@ export default function UploadScreen() {
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
     getOrientation()
   );
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<any>(null);
   const socketManagerRef = useRef<SocketManager | null>(null);
   const currentUploadIdRef = useRef<string | null>(null);
   const isUsingRealTimeProgressRef = useRef<boolean>(false);
@@ -1286,7 +1286,7 @@ export default function UploadScreen() {
                 player={previewVideoPlayer}
                 contentFit="cover"
                 nativeControls={true}
-                fullscreenOptions={{ enterFullscreenButton: false }}
+                allowsFullscreen={false}
                 style={{ width: "100%", height: "100%", borderRadius: 12 }}
               />
             ) : (
@@ -1370,7 +1370,7 @@ export default function UploadScreen() {
               player={previewVideoPlayer}
               contentFit="cover"
               nativeControls={true}
-              fullscreenOptions={{ enterFullscreenButton: false }}
+              allowsFullscreen={false}
               style={{ width: "100%", height: "100%", borderRadius: 12 }}
             />
           ) : (
@@ -1707,44 +1707,67 @@ export default function UploadScreen() {
               {/* Media and Thumbnail Pickers */}
               <View className="mt-2 mb-6">{renderMediaPickers()}</View>
 
-              {/* Upload Limits Disclaimer */}
+              {/* Premium Upload Limits Plate */}
               <View
-                className="flex-row items-center px-4 py-3 mb-4 rounded-lg border"
+                className="flex-row items-center px-5 py-4 mb-6 rounded-2xl"
                 style={{
-                  backgroundColor: "rgba(255, 193, 7, 0.12)",
-                  borderColor: "#FFC107",
-                  borderStyle: "dashed",
-                  maxWidth: Math.min(
-                    getScreenDimensions().width -
-                    getResponsiveSpacing(16, 20, 24, 32) * 2,
-                    320
-                  ),
-                  alignSelf: "center",
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 15,
+                  elevation: 2,
                 }}
               >
-                <Ionicons
-                  name="warning-outline"
-                  size={18}
-                  color="#856404"
-                  style={{ marginRight: 8 }}
-                />
-                <Text
-                  className="flex-1 text-xs"
+                <View
                   style={{
-                    color: "#856404",
-                    fontFamily: "Rubik-Regular",
-                    lineHeight: 16,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: "rgba(59, 130, 246, 0.1)",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 12
                   }}
                 >
-                  {selectedType === "music"
-                    ? "Upload Limits: Max 50 MB per file, 50 songs total per user. Max 10 uploads per hour."
-                    : selectedType === "sermon" || selectedType === "videos"
-                      ? "Upload Limits: Max 300 MB per file, 30 videos total per user. Max 10 uploads per hour."
-                      : selectedType === "books" || selectedType === "ebook"
-                        ? "Upload Limits: Max 100 MB per file. Max 10 uploads per hour."
-                        : "Upload Limits: Max 300 MB per file (videos/sermons), 50 MB (music), 100 MB (books). Max 10 uploads per hour."}
-                </Text>
+                  <Ionicons
+                    name="information-circle"
+                    size={22}
+                    color="#3B82F6"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: "#1E293B",
+                      fontFamily: "Rubik-SemiBold",
+                      fontSize: getResponsiveFontSize(13, 14, 15),
+                      marginBottom: 2
+                    }}
+                  >
+                    Upload Guidelines
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#64748B",
+                      fontFamily: "Rubik-Regular",
+                      fontSize: getResponsiveFontSize(11, 12, 13),
+                      lineHeight: 18,
+                    }}
+                  >
+                    {selectedType === "music"
+                      ? "Max 50 MB per file • 50 songs total limit • Max 10 uploads/hr"
+                      : selectedType === "sermon" || selectedType === "videos"
+                        ? "Max 300 MB per file • 30 videos total limit • Max 10 uploads/hr"
+                        : selectedType === "books" || selectedType === "ebook"
+                          ? "Max 100 MB per file • Max 10 uploads/hr"
+                          : "Max 300 MB (videos) • 50 MB (music) • 100 MB (books)"}
+                  </Text>
+                </View>
               </View>
+
 
               {/* Form Fields */}
               <View className="flex-1">
@@ -2006,112 +2029,96 @@ export default function UploadScreen() {
                       selectedType,
                       setSelectedType
                     )
-                  )}
+                  ) || null}
                 </View>
 
-                {/* Eligibility Status Indicator */}
+                {/* Redesigned Eligibility Status Indicator */}
                 {eligibilityStatus && (
                   <View
-                    className="mb-4 p-3 rounded-lg border"
+                    className="mb-6 p-4 rounded-xl border-l-[4px]"
                     style={{
                       backgroundColor: eligibilityStatus.isValid
-                        ? "rgba(34, 197, 94, 0.1)"
-                        : "rgba(239, 68, 68, 0.1)",
-                      borderColor: eligibilityStatus.isValid ? "#22c55e" : "#ef4444",
+                        ? "rgba(34, 197, 94, 0.03)"
+                        : "rgba(239, 68, 68, 0.03)",
+                      borderLeftColor: eligibilityStatus.isValid ? "#22c55e" : "#ef4444",
+                      borderTopColor: "rgba(0,0,0,0.05)",
+                      borderRightColor: "rgba(0,0,0,0.05)",
+                      borderBottomColor: "rgba(0,0,0,0.05)",
+                      borderWidth: 1,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.03,
+                      shadowRadius: 4,
+                      elevation: 1,
                     }}
                   >
                     {eligibilityStatus.isValid ? (
                       <View className="flex-row items-center">
-                        <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-                        <Text
-                          className="ml-2 font-medium"
+                        <View
                           style={{
-                            fontSize: getResponsiveFontSize(12, 14, 16),
-                            color: "#166534",
+                            width: 24, height: 24, borderRadius: 12,
+                            backgroundColor: "rgba(34, 197, 94, 0.15)",
+                            justifyContent: 'center', alignItems: 'center'
                           }}
                         >
-                          ✓ Ready to upload - Content will be verified automatically
+                          <Ionicons name="checkmark" size={16} color="#166534" />
+                        </View>
+                        <Text
+                          className="ml-3 font-medium"
+                          style={{
+                            fontSize: getResponsiveFontSize(12, 14, 15),
+                            color: "#166534",
+                            fontFamily: "Rubik-Medium"
+                          }}
+                        >
+                          Ready to post - AI verification active
                         </Text>
                       </View>
                     ) : (
                       <View>
-                        <View className="flex-row items-center mb-2">
-                          <Ionicons name="close-circle" size={20} color="#ef4444" />
-                          <Text
-                            className="ml-2 font-semibold"
+                        <View className="flex-row items-center mb-3">
+                          <View
                             style={{
-                              fontSize: getResponsiveFontSize(14, 16, 18),
-                              color: "#991b1b",
+                              width: 24, height: 24, borderRadius: 12,
+                              backgroundColor: "rgba(239, 68, 68, 0.1)",
+                              justifyContent: 'center', alignItems: 'center'
                             }}
                           >
-                            Please fix the following issues:
+                            <Ionicons name="alert-circle" size={18} color="#991b1b" />
+                          </View>
+                          <Text
+                            className="ml-3 font-semibold"
+                            style={{
+                              fontSize: getResponsiveFontSize(13, 15, 17),
+                              color: "#991b1b",
+                              fontFamily: "Rubik-SemiBold"
+                            }}
+                          >
+                            Upload Requirements:
                           </Text>
                         </View>
-                        {eligibilityStatus.errors.map((error, index) => (
-                          <Text
-                            key={index}
-                            className="ml-7 mb-1"
-                            style={{
-                              fontSize: getResponsiveFontSize(12, 14, 16),
-                              color: "#991b1b",
-                            }}
-                          >
-                            • {error}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                    {eligibilityStatus.warnings.length > 0 && (
-                      <View className="mt-2">
-                        {eligibilityStatus.warnings.map((warning, index) => (
-                          <View key={index} className="flex-row items-center mt-1">
-                            <Ionicons
-                              name="information-circle"
-                              size={16}
-                              color="#f59e0b"
-                            />
-                            <Text
-                              className="ml-2"
-                              style={{
-                                fontSize: getResponsiveFontSize(11, 13, 15),
-                                color: "#92400e",
-                              }}
-                            >
-                              {warning}
-                            </Text>
-                          </View>
-                        ))}
+                        <View className="ml-9">
+                          {eligibilityStatus.errors.map((error, index) => (
+                            <View key={index} className="flex-row items-start mb-1.5">
+                              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#ef4444", marginTop: 7, marginRight: 8 }} />
+                              <Text
+                                style={{
+                                  fontSize: getResponsiveFontSize(11, 13, 14),
+                                  color: "#7f1d1d",
+                                  lineHeight: 18,
+                                  fontFamily: "Rubik-Regular"
+                                }}
+                              >
+                                {error}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
                       </View>
                     )}
                   </View>
                 )}
 
-                {/* Multilingual Support Hint */}
-                {eligibilityStatus?.isValid && (
-                  <View
-                    className="mb-4 p-3 rounded-lg"
-                    style={{
-                      backgroundColor: "rgba(59, 130, 246, 0.1)",
-                      borderWidth: 1,
-                      borderColor: "#3b82f6",
-                    }}
-                  >
-                    <View className="flex-row items-center">
-                      <Ionicons name="language" size={18} color="#3b82f6" />
-                      <Text
-                        className="ml-2 flex-1"
-                        style={{
-                          fontSize: getResponsiveFontSize(11, 13, 15),
-                          color: "#1e40af",
-                        }}
-                      >
-                        <Text className="font-semibold">Multilingual Support: </Text>
-                        Your content will be automatically detected and verified in any
-                        language (English, Yoruba, Hausa, Igbo, and more).
-                      </Text>
-                    </View>
-                  </View>
-                )}
               </View>
 
               {/* Moderation Error Display */}
@@ -2222,39 +2229,68 @@ export default function UploadScreen() {
                 );
               })()}
 
-              {/* Upload Button */}
-              <View className="items-center mt-4">
-                {/* AI Verification Disclaimer */}
+              {/* Upload Button Section */}
+              <View className="items-center mt-6">
+                {/* Redesigned AI Verification Plate (Premium Glass-styled) */}
                 <View
-                  className="flex-row items-center px-4 py-3 mb-3 rounded-lg border"
+                  className="flex-row items-center px-5 py-4 mb-8 rounded-2xl"
                   style={{
-                    backgroundColor: "rgba(223, 147, 14, 0.12)",
-                    borderColor: "#DF930E",
-                    borderStyle: "dashed",
-                    maxWidth: Math.min(
-                      getScreenDimensions().width -
-                      getResponsiveSpacing(16, 20, 24, 32) * 2,
-                      320
-                    ),
+                    backgroundColor: "rgba(0, 0, 0, 0.015)",
+                    borderWidth: 1,
+                    borderColor: "rgba(0, 0, 0, 0.04)",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.02,
+                    shadowRadius: 10,
+                    width: "100%",
                   }}
                 >
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={18}
-                    color="#8C5A00"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    className="flex-1 text-xs"
+                  <View
                     style={{
-                      color: "#4B2C00",
-                      fontFamily: "Rubik-Regular",
-                      lineHeight: 16,
+                      width: 42,
+                      height: 42,
+                      borderRadius: 14,
+                      backgroundColor: "#FFFFFF",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginRight: 16,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 4,
+                      elevation: 2
                     }}
                   >
-                    Your content will be verified by AI. By uploading, you confirm you own or have the right to distribute this content.
-                  </Text>
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={24}
+                      color="#10b981"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: "#1f2937",
+                        fontFamily: "Rubik-SemiBold",
+                        fontSize: getResponsiveFontSize(13, 14, 15),
+                        marginBottom: 1
+                      }}
+                    >
+                      Jevah AI Protected
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#6b7280",
+                        fontFamily: "Rubik-Regular",
+                        fontSize: getResponsiveFontSize(11, 12, 13),
+                        lineHeight: 16,
+                      }}
+                    >
+                      Safe community verification active. Ensure you own the rights to this media.
+                    </Text>
+                  </View>
                 </View>
+
                 <TouchableOpacity
                   onPress={async () => {
                     const stopAudio = useMediaStore.getState().stopAudioFn;

@@ -4,6 +4,7 @@
 import { useCommentModal } from "@/app/context/CommentModalContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
+import { useFastPerformance } from "../../../../../app/utils/fastPerformance";
 import { AvatarWithInitialFallback } from "../../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../../shared/components/CardFooterActions";
 import ThreeDotsMenuButton from "../../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
@@ -22,7 +23,7 @@ export interface VideoCardFooterProps {
   likeCount: number;
   likeBurstKey: number;
   setLikeBurstKey: (fn: (k: number) => number) => void;
-  onFavorite: (key: string, item: MediaItem) => void;
+  onLike: (key: string, item: MediaItem) => void;
   onComment: (key: string, item: MediaItem) => void;
   commentCount: number;
   userSaveState: boolean;
@@ -47,7 +48,7 @@ export function VideoCardFooter({
   likeCount,
   likeBurstKey,
   setLikeBurstKey,
-  onFavorite,
+  onLike,
   onComment,
   commentCount,
   userSaveState,
@@ -59,6 +60,7 @@ export function VideoCardFooter({
   onModalToggle,
 }: VideoCardFooterProps) {
   const { showCommentModal } = useCommentModal();
+  const { fastPress } = useFastPerformance();
 
   return (
     <View
@@ -67,7 +69,7 @@ export function VideoCardFooter({
       pointerEvents="box-none"
     >
       <View className="flex flex-row items-center" pointerEvents="box-none">
-        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1">
+        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 overflow-hidden">
           <AvatarWithInitialFallback
             imageSource={getUserAvatarFromContent(video) as any}
             name={getUserDisplayNameFromContent(video)}
@@ -102,24 +104,24 @@ export function VideoCardFooter({
             likeCount={likeCount}
             likeBurstKey={likeBurstKey}
             likeColor="#D22A2A"
-            onLike={() => {
+            onLike={fastPress(() => {
               if (!userLikeState) setLikeBurstKey((k) => k + 1);
-              onFavorite(contentKey, video);
-            }}
+              onLike(contentKey, video);
+            }, { key: `like_${contentId}`, priority: 'high' })}
             commentCount={commentCount || video.comment || 0}
-            onComment={() => {
+            onComment={fastPress(() => {
               try {
                 showCommentModal([], String(contentId));
               } catch { }
               onComment(contentKey, video);
-            }}
+            })}
             saved={!!userSaveState}
             saveCount={saveCount || 0}
-            onSave={() => onSave(modalKey, video)}
+            onSave={fastPress(() => onSave(modalKey, video))}
             isLoading={isLoadingStats}
             contentType="media"
             contentId={contentId}
-            onShare={() => onShare(modalKey, video)}
+            onShare={fastPress(() => onShare(modalKey, video))}
             useEnhancedComponents={false}
           />
         </View>

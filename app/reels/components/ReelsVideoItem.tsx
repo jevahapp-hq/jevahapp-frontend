@@ -1,6 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
-import { MutableRefObject } from "react";
+import { MutableRefObject, useEffect, useState } from "react";
 import {
   Text,
   TouchableOpacity,
@@ -8,11 +8,11 @@ import {
   View,
 } from "react-native";
 import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
+import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia, handleVideoError } from "../../../src/shared/utils/videoUrlManager";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { ReelsActionButtons } from "./ReelsActionButtons";
 import { ReelsMenu } from "./ReelsMenu";
-import { ReelsProgressBar } from "./ReelsProgressBar";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
 
 export interface ReelsVideoItemProps {
@@ -30,7 +30,6 @@ export interface ReelsVideoItemProps {
   videoDuration: number;
   videoPosition: number;
   isDragging: boolean;
-  reelsProgressBarWidth: number;
   showPauseOverlay: boolean;
   userHasManuallyPaused: boolean;
   modalKey: string;
@@ -61,7 +60,6 @@ export interface ReelsVideoItemProps {
   onMenuToggle: () => void;
   onMenuClose: () => void;
   setIsDragging: (v: boolean) => void;
-  setReelsProgressBarWidth: (w: number) => void;
   setVideoDuration: (d: number) => void;
   setVideoPosition: (p: number) => void;
   triggerHapticFeedback: () => void;
@@ -92,7 +90,6 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     videoDuration,
     videoPosition,
     isDragging,
-    reelsProgressBarWidth,
     showPauseOverlay,
     userHasManuallyPaused,
     modalKey,
@@ -123,7 +120,6 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     onMenuToggle,
     onMenuClose,
     setIsDragging,
-    setReelsProgressBarWidth,
     setVideoDuration,
     setVideoPosition,
     triggerHapticFeedback,
@@ -201,6 +197,17 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
   const handleComment = (key: string) => onComment(key);
   const handleSave = (key: string) => onSave(key);
   const handleShare = (key: string) => onShare(key);
+
+  const [localPosition, setLocalPosition] = useState(videoPosition);
+  const [localDuration, setLocalDuration] = useState(videoDuration);
+
+  // Sync with global props occasionally or when active changes
+  useEffect(() => {
+    if (isActive) {
+      setLocalPosition(videoPosition);
+      setLocalDuration(videoDuration);
+    }
+  }, [isActive, videoPosition, videoDuration]);
 
   return (
     <View
@@ -310,8 +317,12 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 globalVideoStore.unregisterVideoPlayer(videoKey);
               } catch { }
             }}
-            onLoad={() => {
+            onLoad={(status: any) => {
               mediaStore.setVideoLoaded(videoKey, true);
+              if (status.durationMillis) {
+                setLocalDuration(status.durationMillis);
+                setVideoDuration(status.durationMillis);
+              }
               if (playingVideos[videoKey] && !userHasManuallyPaused) {
                 const ref = videoRefs.current[videoKey];
                 if (ref) ref.playAsync().catch(() => { });
@@ -319,8 +330,19 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
             }}
             onPlaybackStatusUpdate={(status) => {
               if (!isActive || !status.isLoaded) return;
-              if (status.durationMillis && videoDuration === 0) {
+
+              // High frequency local update for UI responsiveness
+              if (status.positionMillis !== undefined && !isDragging) {
+                setLocalPosition(status.positionMillis);
+              }
+
+              // Update duration if found
+              if (status.durationMillis && (localDuration === 0 || localDuration !== status.durationMillis)) {
+                setLocalDuration(status.durationMillis);
                 setVideoDuration(status.durationMillis);
+              }
+
+              if (status.durationMillis && videoDuration === 0) {
                 if (
                   !status.isPlaying &&
                   !playingVideos[videoKey] &&
@@ -332,9 +354,16 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                   );
                 }
               }
+
+              // Only bubble up position to parent if significant or when dragging ends to avoid lag
               if (!isDragging && status.positionMillis !== undefined) {
-                setVideoPosition(status.positionMillis);
+                // Bubbling to parent less frequently helps responsiveness
+                // but local position ensures bar is smooth
+                if (Math.abs(status.positionMillis - videoPosition) > 1000) {
+                  setVideoPosition(status.positionMillis);
+                }
               }
+
               const pct = status.durationMillis
                 ? (status.positionMillis / status.durationMillis) * 100
                 : 0;
@@ -488,30 +517,24 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 onDelete={onDelete}
                 onReport={onReport}
                 onDownload={onDownload}
+                onShare={handleShare}
               />
-              <ReelsProgressBar
-                videoKey={videoKey}
-                videoDuration={videoDuration}
-                videoPosition={videoPosition}
-                isDragging={isDragging}
-                mutedVideos={mutedVideos}
-                progressBarWidth={reelsProgressBarWidth}
-                onLayout={setReelsProgressBarWidth}
-                onSeek={onSeek}
-                onToggleMute={onToggleMute}
-                onDragStart={() => {
-                  setIsDragging(true);
-                  globalVideoStore.pauseVideo(videoKey);
-                }}
-                onDragEnd={() => {
-                  setIsDragging(false);
-                  setTimeout(
-                    () => globalVideoStore.playVideoGlobally(videoKey),
-                    100
-                  );
-                }}
-                getResponsiveSpacing={getResponsiveSpacing}
-                formatTime={formatTime}
+              <VideoProgressBar
+                progress={localDuration > 0 ? localPosition / localDuration : 0}
+                currentMs={localPosition}
+                durationMs={localDuration}
+                isMuted={mutedVideos[videoKey] ?? false}
+                onToggleMute={() => onToggleMute(videoKey)}
+                onSeekToPercent={(pct: number) => onSeek(videoKey, pct * 100)}
+                showControls={true}
+                bottomOffset={getResponsiveSpacing(80, 95, 115)} // Neatly below ReelsSpeakerInfo
+                enlargeOnDrag={true}
+                knobSize={8}
+                knobSizeDragging={12}
+                trackHeights={{ normal: 2, dragging: 6 }}
+                enableHaptics={true}
+                mutePosition="left"
+                style={{ zIndex: 100 }} // Ensure it's on top of video and overlays in Reels
               />
             </>
           )}

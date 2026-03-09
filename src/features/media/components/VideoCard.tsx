@@ -29,7 +29,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onVideoTap,
   onTogglePlay,
   onToggleMute,
-  onFavorite,
+  onLike,
   onComment,
   onSave,
   onDownload,
@@ -47,8 +47,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   isAutoPlayEnabled = false,
   shouldRenderPlayer = false,
 }) => {
-  const [userRequestedPlay, setUserRequestedPlay] = useState(false);
-  const isActive = shouldRenderPlayer || userRequestedPlay;
+  // All cards always render with active player (no thumbnail gate)
+  const isActive = true;
 
   const contentId = video._id || getContentKey(video);
   const key = getContentKey(video);
@@ -178,7 +178,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         getUserDisplayNameFromContent={getUserDisplayNameFromContent}
         getUserAvatarFromContent={getUserAvatarFromContent}
         onLayout={onLayout}
-        onForceActive={() => setUserRequestedPlay(true)}
+        onForceActive={() => { }}
       />
 
       <VideoCardFooter
@@ -194,7 +194,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         likeCount={likeCount}
         likeBurstKey={likeBurstKey}
         setLikeBurstKey={setLikeBurstKey}
-        onFavorite={onFavorite}
+        onLike={onLike}
         onComment={onComment}
         commentCount={commentCount}
         userSaveState={userSaveState}

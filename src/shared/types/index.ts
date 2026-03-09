@@ -113,7 +113,7 @@ export interface VideoCardProps {
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
   onTogglePlay: (key: string) => void;
   onToggleMute: (key: string) => void;
-  onFavorite: (key: string, item: MediaItem) => void;
+  onLike: (key: string, item: MediaItem) => void;
   onComment: (key: string, item: MediaItem) => void;
   onSave: (key: string, item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;

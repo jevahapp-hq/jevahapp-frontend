@@ -1,11 +1,12 @@
 import {
-    AntDesign,
-    Fontisto,
-    Ionicons,
-    MaterialIcons,
+  AntDesign,
+  Fontisto,
+  Ionicons,
+  MaterialIcons,
 } from "@expo/vector-icons";
 import { useCallback, useState } from "react";
-import { Image, ImageSourcePropType, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { Image, ImageSourcePropType, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+
 
 import { router, useFocusEffect, useRouter } from "expo-router";
 import SuccessCard from "../components/SuccessCard";
@@ -19,24 +20,27 @@ interface VideoCard {
   speaker: string;
   timeAgo: string;
   speakerAvatar: ImageSourcePropType | string;
-  favorite: number;
+  likes: number;
   views: number;
   saved: number;
-  sheared: number;
+  shares: number;
   isLive?: string;
+  _id?: string;
+  fileUrl?: string;
 }
+
 
 const videos: VideoCard[] = [
   {
-    imageUrl: require("../../assets/images/bg (1).png"),
+    imageUrl: require("../../assets/images/Background #22.jpeg"),
     title: "2 Hours time with God with Dunsin Oyekan & Pastor Godman Akinlabi",
     speaker: "Minister Pius Tagbas",
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 550,
-    favorite: 600,
+    likes: 600,
     saved: 480,
-    sheared: 900,
+    shares: 900,
   },
 ];
 
@@ -48,9 +52,9 @@ const videosA: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (9).png"),
@@ -59,9 +63,9 @@ const videosA: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -70,9 +74,9 @@ const videosA: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -81,9 +85,9 @@ const videosA: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -92,9 +96,9 @@ const videosA: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
 ];
 
@@ -106,9 +110,9 @@ const videosB: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -117,9 +121,9 @@ const videosB: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -128,9 +132,9 @@ const videosB: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -139,9 +143,9 @@ const videosB: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
   {
     imageUrl: require("../../assets/images/image (10).png"),
@@ -150,9 +154,9 @@ const videosB: VideoCard[] = [
     timeAgo: "3HRS AGO",
     speakerAvatar: require("../../assets/images/Avatar-1.png"),
     views: 500,
-    favorite: 600,
+    likes: 600,
     saved: 400,
-    sheared: 540,
+    shares: 540,
   },
 ];
 
@@ -343,7 +347,7 @@ export default function LiveComponent() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [rsModalIndex, setRsModalIndex] = useState<number | null>(null);
-  
+
   // Success card state
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -351,7 +355,7 @@ export default function LiveComponent() {
   let globalIndex = 0;
 
   const mediaStore = useMediaStore();
-  
+
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
   useFocusEffect(
@@ -361,7 +365,7 @@ export default function LiveComponent() {
   );
   const liveVideos = mediaStore.mediaList.filter(item => item.contentType === "live");
 
-const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
+  const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
     const modalKey = `video-${index}`;
 
     const getImageSource = (src: string | ImageSourcePropType) => {
@@ -385,18 +389,22 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
               speaker: video.speaker,
               timeAgo: video.timeAgo,
               views: video.views.toString(),
-              favorite: video.favorite.toString(),
+              likes: video.likes.toString(),
               saved: video.saved.toString(),
-              sheared: video.sheared.toString(),
+              shares: video.shares.toString(),
               isLive: "true",
               imageUrl:
                 typeof video.imageUrl === "number"
                   ? Image.resolveAssetSource(video.imageUrl).uri
-                  : video.imageUrl,
+                  : (typeof video.imageUrl === "object" && video.imageUrl && "uri" in video.imageUrl)
+                    ? (video.imageUrl as any).uri
+                    : (video.imageUrl as string),
               speakerAvatar:
                 typeof video.speakerAvatar === "number"
                   ? Image.resolveAssetSource(video.speakerAvatar).uri
-                  : video.speakerAvatar,
+                  : (typeof video.speakerAvatar === "object" && video.speakerAvatar && "uri" in video.speakerAvatar)
+                    ? (video.speakerAvatar as any).uri
+                    : (video.speakerAvatar as string),
               category: "LIVE",
               source: "LiveComponent",
             },
@@ -405,8 +413,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
         className="mb-5"
         activeOpacity={0.9}
       >
-      
-      
+
+
         <View className="w-full h-[393px] relative">
           <Image source={getImageSource(video.imageUrl)} className="w-full h-full" resizeMode="cover" />
           <View className="absolute top-3 left-4 bg-red-600 px-2 py-0.5 rounded-md flex-row items-center">
@@ -462,7 +470,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                 <View className="flex-row items-center ml-4">
                   <AntDesign name="share-alt" size={16} color="#98A2B3" />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {video.sheared}
+                    {video.shares}
                   </Text>
                 </View>
                 <View className="flex-row items-center ml-6">
@@ -478,14 +486,14 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                     color="#98A2B3"
                   />
                   <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
-                    {video.favorite}
+                    {video.likes}
                   </Text>
                 </View>
               </View>
             </View>
           </View>
 
-          
+
           <TouchableOpacity
             onPress={() =>
               setModalVisible(modalVisible === modalKey ? null : modalKey)
@@ -496,46 +504,48 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
           </TouchableOpacity>
         </View>
 
-       
+
         {modalVisible === modalKey && (
           <>
             <TouchableWithoutFeedback onPress={() => setModalVisible(null)}>
               <View className="absolute inset-0 z-40" />
             </TouchableWithoutFeedback>
             <View className="absolute top-[300px] right-6 bg-white shadow-md rounded-lg p-3 z-50 w-56">
-            <TouchableOpacity className="py-2 border-b border-gray-200 flex-row justify-between">
-              <Text className="text-[#1D2939] ml-2">View Details</Text>
-              <MaterialIcons name="visibility" size={16} color="#3A3E50" />
-            </TouchableOpacity>
-            <TouchableOpacity className="py-2 border-b border-gray-200 flex-row justify-between">
-              <Text className="text-sm text-[#1D2939] ml-2">Share</Text>
-              <AntDesign name="sharealt" size={16} color="#3A3E50" />
-            </TouchableOpacity>
-            <TouchableOpacity className="py-2 flex-row justify-between">
-              <Text className="text-[#1D2939] ml-2">Save to Library</Text>
-              <MaterialIcons name="library-add" size={18} color="#3A3E50" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              className="py-2 flex-row justify-between"
-              onPress={async () => {
-                const downloadableItem = convertToDownloadableItem(video, 'live');
-                const result = await handleDownload(downloadableItem);
-                if (result.success) {
-                  setModalVisible(null);
-                  setSuccessMessage("Downloaded successfully!");
-                  setShowSuccessCard(true);
-                }
-              }}
-            >
-              <Text className="text-[#1D2939] ml-2">
-                {checkIfDownloaded(video._id || video.fileUrl) ? "Downloaded" : "Download"}
-              </Text>
-              <Ionicons 
-                name={checkIfDownloaded(video._id || video.fileUrl) ? "checkmark-circle" : "download-outline"} 
-                size={24} 
-                color={checkIfDownloaded(video._id || video.fileUrl) ? "#256E63" : "#090E24"} 
-              />
-            </TouchableOpacity>
+              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row justify-between">
+                <Text className="text-[#1D2939] ml-2">View Details</Text>
+                <MaterialIcons name="visibility" size={16} color="#3A3E50" />
+              </TouchableOpacity>
+              <TouchableOpacity className="py-2 border-b border-gray-200 flex-row justify-between">
+                <Text className="text-[#1D2939] ml-2">Share</Text>
+                <AntDesign name="share-alt" size={16} color="#3A3E50" />
+              </TouchableOpacity>
+
+              <TouchableOpacity className="py-2 flex-row justify-between">
+                <Text className="text-[#1D2939] ml-2">Save to Library</Text>
+                <MaterialIcons name="library-add" size={18} color="#3A3E50" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="py-2 flex-row justify-between"
+                onPress={async () => {
+                  const downloadableItem = convertToDownloadableItem(video, 'live');
+                  const result = await handleDownload(downloadableItem);
+                  if (result.success) {
+                    setModalVisible(null);
+                    setSuccessMessage("Downloaded successfully!");
+                    setShowSuccessCard(true);
+                  }
+                }}
+              >
+                <Text className="text-[#1D2939] ml-2">
+                  {checkIfDownloaded((video._id || video.fileUrl) as string) ? "Downloaded" : "Download"}
+                </Text>
+                <Ionicons
+                  name={checkIfDownloaded((video._id || video.fileUrl) as string) ? "checkmark-circle" : "download-outline"}
+                  size={24}
+                  color={checkIfDownloaded((video._id || video.fileUrl) as string) ? "#256E63" : "#090E24"}
+                />
+
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -546,8 +556,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
 
 
 
- 
- 
+
+
   const renderLiveRecommendation = () => (
     <View className="mt-5">
       <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
@@ -564,12 +574,12 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
             typeof item.imageUrl === "number"
               ? Image.resolveAssetSource(item.imageUrl).uri
               : item.imageUrl;
-  
+
           const speakerAvatar =
             typeof item.speakerAvatar === "number"
               ? Image.resolveAssetSource(item.speakerAvatar).uri
               : item.speakerAvatar;
-  
+
           return (
             <View
               key={modalKey}
@@ -623,7 +633,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                   </Text>
                 </View>
               </TouchableOpacity>
-  
+
               {favModalIndex === index && (
                 <View className="absolute mt-[30px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-36">
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
@@ -644,7 +654,7 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
                   </TouchableOpacity>
                 </View>
               )}
-  
+
               <View className="mt-2 flex flex-col">
                 <View className="flex flex-row w-[150px] justify-between">
                   <Text className="text-[11px] text-[#1D2939] font-rubik-semibold">
@@ -683,123 +693,164 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
       </ScrollView>
     </View>
   );
-  
-  // Render Recommended Live component (same as AllContentTikTok)
-  const renderRecommendedLiveCards = () => {
-    return (
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 32,
-          backgroundColor: "#F9FAFB",
-          borderRadius: 12,
-          marginHorizontal: 16,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
-          borderStyle: "dashed",
-          minHeight: 200,
-        }}
+
+  // Enhanced Render for Live Stage Anticipation
+  const renderLiveStage = () => (
+    <View className="flex-1 w-full" style={{ backgroundColor: "#090E24" }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: "#256E63",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 16,
-            position: "relative",
-          }}
-        >
-          <Ionicons name="radio" size={40} color="#FFFFFF" />
-          {/* Live indicator dot */}
+        {/* Immersive Header Section */}
+        <View className="pt-12 pb-8 px-6 relative overflow-hidden">
+          {/* Subtle Ambient Background elements */}
           <View
             style={{
               position: "absolute",
-              top: 8,
-              right: 8,
-              width: 16,
-              height: 16,
-              borderRadius: 8,
-              backgroundColor: "#FFFFFF",
-              borderWidth: 2,
-              borderColor: "#256E63",
+              top: -100,
+              right: -50,
+              width: 300,
+              height: 300,
+              borderRadius: 150,
+              backgroundColor: "rgba(254, 167, 78, 0.05)",
             }}
           />
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 8,
-            justifyContent: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#256E63",
-              paddingHorizontal: 12,
-              paddingVertical: 4,
-              borderRadius: 12,
-              marginRight: 8,
-              flexDirection: "row",
-              alignItems: "center",
-            }}
-          >
+
+          <View className="flex-row items-center mb-2">
             <View
               style={{
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: "#FFFFFF",
-                marginRight: 6,
+                backgroundColor: "#EF4444",
+                marginRight: 8,
+                shadowColor: "#EF4444",
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.8,
+                shadowRadius: 4,
               }}
             />
             <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: "#FFFFFF",
-                fontFamily: "Rubik-Bold",
-                letterSpacing: 0.5,
-              }}
+              className="text-[#9CA3AF] font-rubik-semibold tracking-widest text-[12px]"
+              style={{ letterSpacing: 2 }}
             >
-              LIVE
+              LIVE STAGE
             </Text>
           </View>
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "600",
-              color: "#1D2939",
-              textAlign: "center",
-              fontFamily: "Rubik-SemiBold",
-            }}
-          >
-            Coming Soon
+
+          <Text className="text-white text-4xl font-rubik-bold leading-tight">
+            Immersive{"\n"}Worship Experience
+          </Text>
+          <Text className="text-[#9CA3AF] font-rubik mt-4 text-[16px] leading-6">
+            Connecting you to global sounds of revival. Stay tuned for live encounters.
           </Text>
         </View>
-        <Text
-          style={{
-            fontSize: 14,
-            color: "#6B7280",
-            textAlign: "center",
-            lineHeight: 20,
-            paddingHorizontal: 16,
-            fontFamily: "Rubik",
-          }}
-        >
-          We're working on bringing you live streaming content. Stay tuned for updates!
-        </Text>
-      </View>
-    );
-  };
+
+        {/* Anticipation Cards */}
+        <View className="px-6 mb-10">
+          <View
+            className="rounded-3xl overflow-hidden relative"
+            style={{
+              height: 480,
+              backgroundColor: "#111827",
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            <Image
+              source={require("../../assets/images/Background #22.jpeg")}
+              className="w-full h-full absolute opacity-40"
+              resizeMode="cover"
+            />
+            <View
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                backgroundColor: "rgba(9, 14, 36, 0.4)",
+              }}
+            />
+
+
+            <View className="flex-1 justify-end p-8">
+              <View
+                className="self-start px-3 py-1 rounded-full mb-4"
+                style={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+              >
+                <Text className="text-white font-rubik-semibold text-[10px]">COMING SOON</Text>
+              </View>
+
+              <Text className="text-white text-3xl font-rubik-bold mb-3">
+                Global Revival Night
+              </Text>
+
+              <View className="flex-row items-center">
+                <Ionicons name="calendar-outline" size={16} color="#FEA74E" />
+                <Text className="text-[#D1D5DB] font-rubik ml-2 text-sm">Stay Tuned for Announcements</Text>
+              </View>
+            </View>
+
+          </View>
+        </View>
+
+        {/* Feature Teasers */}
+        <View className="px-6">
+          <Text className="text-white font-rubik-semibold text-lg mb-6">What to expect</Text>
+
+          <View className="flex-row justify-between mb-8">
+            <View className="items-center w-[28%]">
+              <View
+                className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.1)" }}
+              >
+                <Ionicons name="videocam" size={28} color="#FEA74E" />
+              </View>
+              <Text className="text-white font-rubik text-center text-[12px]">4K HDR Streaming</Text>
+            </View>
+
+            <View className="items-center w-[28%]">
+              <View
+                className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.1)" }}
+              >
+                <Ionicons name="headset" size={28} color="#FEA74E" />
+              </View>
+              <Text className="text-white font-rubik text-center text-[12px]">Spatial Audio Experience</Text>
+            </View>
+
+            <View className="items-center w-[28%]">
+              <View
+                className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
+                style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.1)" }}
+              >
+                <Ionicons name="chatbubbles" size={28} color="#FEA74E" />
+              </View>
+              <Text className="text-white font-rubik text-center text-[12px]">Interactive Fellowships</Text>
+            </View>
+          </View>
+
+          {/* Premium Footer Plate */}
+          <View
+            className="p-6 rounded-3xl"
+            style={{
+              backgroundColor: "rgba(254, 167, 78, 0.1)",
+              borderWidth: 1,
+              borderColor: "rgba(254, 167, 78, 0.2)"
+            }}
+          >
+            <View className="flex-row items-center mb-2">
+              <Ionicons name="sparkles" size={20} color="#FEA74E" />
+              <Text className="text-[#FEA74E] font-rubik-semibold ml-2">Premium Experience</Text>
+            </View>
+            <Text className="text-[#9CA3AF] font-rubik text-[13px] leading-5">
+              Live Stage is being crafted to bring you the highest quality spiritual encounters. We are building something extraordinary.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
+    <View style={{ flex: 1, backgroundColor: "#090E24" }}>
       {showSuccessCard && (
         <SuccessCard
           message={successMessage}
@@ -807,19 +858,8 @@ const renderVideoCard = (video: VideoCard, index: number, p0: string) => {
           duration={3000}
         />
       )}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          paddingVertical: 40,
-          paddingHorizontal: 0,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        {renderRecommendedLiveCards()}
-      </ScrollView>
+      {renderLiveStage()}
     </View>
   );
 }
+

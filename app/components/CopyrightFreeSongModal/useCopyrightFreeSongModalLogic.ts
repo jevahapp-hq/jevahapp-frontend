@@ -182,7 +182,7 @@ export function useCopyrightFreeSongRealtime({
       if (manager) {
         try {
           if (songId) manager.leaveContentRoom(songId, "audio");
-        } catch {}
+        } catch { }
         manager.disconnect();
         socketManagerRef.current = null;
       }
@@ -199,35 +199,42 @@ export function useSeekPanResponder({
 }: {
   audioProgress: number;
   onSeek?: (progress: number) => void;
-  progressBarRef: React.RefObject<View>;
+  progressBarRef: React.RefObject<View | null>;
   setIsSeeking: (v: boolean) => void;
   setSeekProgress: (v: number) => void;
 }) {
+  const layoutRef = useRef({ x: 0, width: 0 });
+
   return useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (evt) => {
         setIsSeeking(true);
-        setSeekProgress(audioProgress);
-      },
-      onPanResponderMove: (evt) => {
         if (progressBarRef.current) {
-          progressBarRef.current.measure((x, y, width) => {
-            const touchX = evt.nativeEvent.locationX;
-            const progress = Math.max(0, Math.min(1, touchX / width));
+          progressBarRef.current.measure((x, y, width, height, pageX) => {
+            layoutRef.current = { x: pageX, width };
+            const touchX = evt.nativeEvent.pageX;
+            const progress = Math.max(0, Math.min(1, (touchX - pageX) / width));
             setSeekProgress(progress);
           });
         }
       },
+      onPanResponderMove: (evt) => {
+        const { x, width } = layoutRef.current;
+        if (width > 0) {
+          const touchX = evt.nativeEvent.pageX;
+          const progress = Math.max(0, Math.min(1, (touchX - x) / width));
+          setSeekProgress(progress);
+        }
+      },
       onPanResponderRelease: (evt) => {
         setIsSeeking(false);
-        if (progressBarRef.current && onSeek) {
-          progressBarRef.current.measure((x, y, width) => {
-            const touchX = evt.nativeEvent.locationX;
-            const progress = Math.max(0, Math.min(1, touchX / width));
-            onSeek(progress);
-          });
+        const { x, width } = layoutRef.current;
+        if (width > 0 && onSeek) {
+          const touchX = evt.nativeEvent.pageX;
+          const progress = Math.max(0, Math.min(1, (touchX - x) / width));
+          onSeek(progress);
         }
       },
     })

@@ -10,10 +10,10 @@ import React, { useEffect } from "react";
 import { Text, View } from "react-native";
 import { UnifiedInteractionButtons } from "../../src/shared/components/InteractionButtons/UnifiedInteractionButtons";
 import {
-    useContentCount,
-    useContentStats,
-    useInteractionStore,
-    useUserInteraction,
+  useContentCount,
+  useContentStats,
+  useInteractionStore,
+  useUserInteraction,
 } from "../store/useInteractionStore";
 
 interface InteractionButtonsProps {
@@ -103,9 +103,11 @@ export function HorizontalInteractionStats({
       {/* Views */}
       <View className="flex-row items-center">
         <MaterialIcons name="visibility" size={iconSize} color={baseIconColor} />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {viewsCount}
-        </Text>
+        {viewsCount > 0 && (
+          <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+            {viewsCount}
+          </Text>
+        )}
       </View>
 
       {/* Likes */}
@@ -115,17 +117,21 @@ export function HorizontalInteractionStats({
           size={iconSize}
           color={isLiked ? likedColor : baseIconColor}
         />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {likesCount}
-        </Text>
+        {likesCount > 0 && (
+          <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+            {likesCount}
+          </Text>
+        )}
       </View>
 
       {/* Comments */}
       <View className="flex-row items-center ml-4">
         <Ionicons name="chatbubble-outline" size={iconSize} color={commentColor} />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {commentsCount}
-        </Text>
+        {commentsCount > 0 && (
+          <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+            {commentsCount}
+          </Text>
+        )}
       </View>
 
       {/* Saves */}
@@ -135,17 +141,21 @@ export function HorizontalInteractionStats({
           size={iconSize}
           color={isSaved ? savedColor : baseIconColor}
         />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {savesCount}
-        </Text>
+        {savesCount > 0 && (
+          <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+            {savesCount}
+          </Text>
+        )}
       </View>
 
       {/* Shares */}
       <View className="flex-row items-center ml-4">
         <Ionicons name="share-outline" size={iconSize} color={baseIconColor} />
-        <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
-          {sharesCount}
-        </Text>
+        {sharesCount > 0 && (
+          <Text className={`${textSize} ${textColor} ml-1 font-rubik`}>
+            {sharesCount}
+          </Text>
+        )}
       </View>
     </View>
   );
