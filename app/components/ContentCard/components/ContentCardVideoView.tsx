@@ -1,6 +1,7 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
-import React, { RefObject } from "react";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import { RefObject, useEffect } from "react";
 import {
   Animated,
   StyleSheet,
@@ -72,6 +73,18 @@ export function ContentCardVideoView({
   setVideoLoadError,
 }: ContentCardVideoViewProps) {
   const globalVideoStore = useGlobalVideoStore();
+
+  useEffect(() => {
+    const keepAwakeTag = `content-card-video-${content._id}`;
+    if (isVideoPlaying) {
+      activateKeepAwakeAsync(keepAwakeTag);
+    } else {
+      deactivateKeepAwake(keepAwakeTag);
+    }
+    return () => {
+      deactivateKeepAwake(keepAwakeTag);
+    };
+  }, [isVideoPlaying, content._id]);
 
   return (
     <View className="w-full h-[400px] overflow-hidden relative">
