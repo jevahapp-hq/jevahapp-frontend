@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useVideoNavigation } from "../../hooks/useVideoNavigation";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
 import {
@@ -78,10 +79,10 @@ export default function VideoLibrary() {
   // Download functionality
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
 
-  // Video playback state
-  const [playingVideos, setPlayingVideos] = useState<Record<string, boolean>>(
-    {}
-  );
+  // Navigation for Reels
+  const { navigateToReels } = useVideoNavigation();
+
+  // Overlay state
   const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({});
   const videoRefs = useRef<Record<string, any>>({});
 
@@ -126,27 +127,27 @@ export default function VideoLibrary() {
     }
   };
 
-  const togglePlay = (videoId: string) => {
-    // Pause all other videos first
-    Object.keys(playingVideos).forEach((id) => {
-      if (id !== videoId) {
-        setPlayingVideos((prev) => ({ ...prev, [id]: false }));
-        setShowOverlay((prev) => ({ ...prev, [id]: true }));
-      }
-    });
-
-    // Also pause videos in global store
+  const handleVideoPress = (item: any, index: number) => {
+    // Pause videos in global store just in case
     globalVideoStore.pauseAllVideos();
 
-    // Toggle current video
-    const isPlaying = playingVideos[videoId] ?? false;
-    setPlayingVideos((prev) => ({ ...prev, [videoId]: !isPlaying }));
-    setShowOverlay((prev) => ({ ...prev, [videoId]: isPlaying }));
+    navigateToReels({
+      video: item,
+      index,
+      allVideos: savedVideos,
+      contentStats: {},
+      globalFavoriteCounts: {},
+      getContentKey: (v) => String(v._id || v.id),
+      getTimeAgo: (createdAt) => "Recent",
+      getDisplayName: (speaker, uploadedBy) => speaker || "Creator",
+      source: "Library",
+      category: "videos",
+    });
   };
 
-  const renderMediaCard = ({ item }: any) => {
+  const renderMediaCard = ({ item, index }: any) => {
     const itemId = item._id || item.id;
-    const isPlaying = playingVideos[itemId] ?? false;
+    const isPlaying = false;
     const showVideoOverlay = showOverlay[itemId] ?? true;
     const isValidUri = (u: any) =>
       typeof u === "string" &&
@@ -159,7 +160,7 @@ export default function VideoLibrary() {
     return (
       <View className="w-[48%] mb-6 h-[232px] rounded-xl overflow-hidden bg-[#E5E5EA]">
         <TouchableOpacity
-          onPress={() => togglePlay(itemId)}
+          onPress={() => handleVideoPress(item, index)}
           className="w-full h-full"
           activeOpacity={0.9}
         >
@@ -182,13 +183,11 @@ export default function VideoLibrary() {
                 item?.title,
                 e
               );
-              setPlayingVideos((prev) => ({ ...prev, [itemId]: false }));
               setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
             }}
             onPlaybackStatusUpdate={(status) => {
               if (!status.isLoaded) return;
               if (status.didJustFinish) {
-                setPlayingVideos((prev) => ({ ...prev, [itemId]: false }));
                 setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
                 console.log(`🎬 Library video completed: ${item.title}`);
               }
@@ -196,7 +195,7 @@ export default function VideoLibrary() {
           />
 
           {/* Play/Pause Overlay */}
-          {!isPlaying && showVideoOverlay && (
+          {showVideoOverlay && (
             <>
               <View className="absolute inset-0 justify-center items-center">
                 <View className="bg-white/70 p-2 rounded-full">

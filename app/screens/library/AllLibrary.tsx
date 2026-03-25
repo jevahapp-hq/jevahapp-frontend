@@ -9,14 +9,16 @@ import { FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
 import SuccessCard from "../../components/SuccessCard";
+import { useVideoNavigation } from "../../hooks/useVideoNavigation";
 import { convertToDownloadableItem } from "../../utils/downloadUtils";
+import { AllLibraryBookModal } from "./AllLibrary/components/AllLibraryBookModal";
+import { AllLibraryMediaCard } from "./AllLibrary/components/AllLibraryMediaCard";
 import {
   useAllLibraryData,
   useAllLibraryHandlers,
   useAllLibraryPlayback,
 } from "./AllLibrary/hooks";
-import { AllLibraryBookModal } from "./AllLibrary/components/AllLibraryBookModal";
-import { AllLibraryMediaCard } from "./AllLibrary/components/AllLibraryMediaCard";
+import { isVideoContent } from "./AllLibrary/utils/libraryHelpers";
 
 export default function AllLibrary({ contentType }: { contentType?: string }) {
   const router = useRouter();
@@ -41,6 +43,8 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     setSavedItems,
   } = data;
 
+  const { navigateToReels } = useVideoNavigation();
+
   const dotsRefs = useRef<Record<string, any>>({});
   const playback = useAllLibraryPlayback();
   const {
@@ -56,12 +60,12 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
 
   const handlers = useAllLibraryHandlers({
     savedItems: data.savedItems,
-      setSavedItems,
+    setSavedItems,
     savedItemIds,
-      setSavedItemIds,
+    setSavedItemIds,
     setShowOverlay,
     isItemSaved,
-      refreshSavedState,
+    refreshSavedState,
     setSuccessMessage,
     setShowSuccessCard,
     setMenuOpenId,
@@ -83,7 +87,27 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           menuOpenId={menuOpenId}
           setMenuOpenId={setMenuOpenId}
           setMenuPos={setMenuPos}
-          onTogglePlay={(id) => togglePlay(id, setShowOverlay)}
+          onTogglePlay={(id) => {
+            if (isVideoContent(item)) {
+              const allVideos = filteredItems.filter((v: any) => isVideoContent(v));
+              const videoIndex = allVideos.findIndex((v: any) => (v._id || v.id) === id);
+
+              navigateToReels({
+                video: item,
+                index: videoIndex >= 0 ? videoIndex : 0,
+                allVideos: allVideos,
+                contentStats: {},
+                globalFavoriteCounts: {},
+                getContentKey: (v: any) => String(v._id || v.id),
+                getTimeAgo: () => "Recent",
+                getDisplayName: (speaker, uploadedBy) => speaker || "Creator",
+                source: "AllLibrary",
+                category: "videos"
+              });
+            } else {
+              togglePlay(id, setShowOverlay);
+            }
+          }}
           onToggleAudioPlay={toggleAudioPlay}
           onOpenBook={handlers.openBook}
           onOpenBookInPdfViewer={handlers.openBookInPdfViewer}
@@ -116,6 +140,8 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       router,
       videoRefs,
       dotsRefs,
+      filteredItems,
+      navigateToReels,
     ]
   );
 

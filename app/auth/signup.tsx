@@ -4,15 +4,15 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
@@ -29,8 +29,10 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [emailError, setEmailError] = useState("");
+  const [termsError, setTermsError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [firstNameError, setFirstNameError] = useState("");
   const [lastNameError, setLastNameError] = useState("");
@@ -51,6 +53,7 @@ export default function SignUpScreen() {
     setPasswordError("");
     setFirstNameError("");
     setLastNameError("");
+    setTermsError("");
   }, []);
 
   const validateForm = useCallback(() => {
@@ -86,8 +89,13 @@ export default function SignUpScreen() {
       isValid = false;
     }
 
+    if (!acceptedTerms) {
+      setTermsError("You must accept the terms and conditions to sign up.");
+      isValid = false;
+    }
+
     return isValid;
-  }, [firstName, lastName, emailAddress, password, clearErrors]);
+  }, [firstName, lastName, emailAddress, password, acceptedTerms, clearErrors]);
 
   const handleSignUpValidation = useCallback(async () => {
     if (!validateForm()) {
@@ -98,7 +106,7 @@ export default function SignUpScreen() {
 
     try {
       console.log("🔍 Starting registration for:", emailAddress);
-      
+
       const result = await authService.register({
         email: emailAddress,
         password,
@@ -118,14 +126,14 @@ export default function SignUpScreen() {
       }
     } catch (err: any) {
       console.error("❌ Registration error:", err);
-      
+
       let errorMessage = "Registration failed. Please try again.";
       if (err.name === 'AbortError') {
         errorMessage = "Request timeout. Please check your connection and try again.";
       } else if (err.message?.includes('Network request failed')) {
         errorMessage = "Network error. Please check your internet connection.";
       }
-      
+
       alert(errorMessage);
     } finally {
       setIsLoading(false);
@@ -269,7 +277,7 @@ export default function SignUpScreen() {
                   secureTextEntry={!showPassword}
                   className="ml-6 flex-1 text-[#090E24]"
                   placeholderTextColor="#090E24"
-                  style={{ 
+                  style={{
                     color: '#090E24',
                     fontSize: 16,
                     fontWeight: '400'
@@ -297,14 +305,40 @@ export default function SignUpScreen() {
             </View>
           </View>
 
+          {/* Terms and Conditions Checkbox */}
+          <View className="flex flex-col w-[333px] mt-4">
+            <View className="flex flex-row items-start">
+              <TouchableOpacity
+                onPress={() => setAcceptedTerms(!acceptedTerms)}
+                className="mr-3"
+                disabled={isLoading}
+              >
+                <FontAwesome6
+                  name={acceptedTerms ? "square-check" : "square"}
+                  size={20}
+                  color={acceptedTerms ? "#090E24" : "#9D9FA7"}
+                  solid={acceptedTerms}
+                />
+              </TouchableOpacity>
+              <Text className="flex-1 text-[#344054] text-[13px] font-rubik leading-5 text-left pt-[2px]">
+                I agree to the{" "}
+                <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/terms")}>Terms of Service</Text>,{" "}
+                <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/privacy")}>Privacy Policy</Text>, and{" "}
+                <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/copyright")}>Copyright Policy</Text>.
+              </Text>
+            </View>
+            {termsError ? (
+              <Text className="text-red-500 text-sm mt-2">{termsError}</Text>
+            ) : null}
+          </View>
+
           {/* Sign Up Button */}
           <View className="flex flex-col mt-8 justify-center items-center w-full">
             <TouchableOpacity
               onPress={handleSignUpValidation}
               disabled={isLoading}
-              className={`p-2 rounded-full mt-3 w-[333px] h-[45px] flex-row items-center justify-center ${
-                isLoading ? 'bg-gray-400' : 'bg-[#090E24]'
-              }`}
+              className={`p-2 rounded-full mt-3 w-[333px] h-[45px] flex-row items-center justify-center ${isLoading ? 'bg-gray-400' : 'bg-[#090E24]'
+                }`}
             >
               {isLoading ? (
                 <>

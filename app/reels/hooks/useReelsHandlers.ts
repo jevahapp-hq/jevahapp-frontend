@@ -82,6 +82,10 @@ export function useReelsHandlers({
       });
       return;
     }
+    if (source === "Library" || source === "AllLibrary") {
+      router.replace("/screens/library/LibraryScreen");
+      return;
+    }
     if (router.canGoBack?.()) {
       router.back();
       return;

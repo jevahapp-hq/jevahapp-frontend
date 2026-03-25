@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import OptimizedScrollView from "../../src/shared/components/OptimizedScrollView";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { AllContentTikTok } from "../../src/features/media/AllContentTikTok";
 import {
   getResponsiveBorderRadius,
   getResponsiveShadow,
@@ -15,7 +15,6 @@ import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
-import AllContentTikTok from "./AllContentTikTok";
 import Hymns from "./hymns";
 import LiveComponent from "./LiveComponent";
 import Music from "./music";
@@ -272,12 +271,13 @@ export default function HomeTabContent() {
           backgroundColor: "#FCFCFD",
         }}
       >
-        <OptimizedScrollView
+        <ScrollView
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           scrollEnabled={true}
           scrollEventThrottle={16}
+          removeClippedSubviews={false}
           decelerationRate="fast"
           snapToInterval={undefined}
           disableIntervalMomentum={true}
@@ -352,7 +352,7 @@ export default function HomeTabContent() {
               </View>
             </TouchableOpacity>
           ))}
-        </OptimizedScrollView>
+        </ScrollView>
       </View>
 
       {/* Content without Padding - Let FlatList handle scrolling */}

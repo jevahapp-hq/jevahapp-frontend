@@ -1,3 +1,4 @@
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect } from "react";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
@@ -35,6 +36,20 @@ export const useVideoPlaybackControl = ({
   const isPlaying = playingVideos[videoKey] || false;
   const isCurrentlyPlaying = currentlyPlayingVideo === videoKey;
   const shouldPlayThisVideo = isPlaying && isCurrentlyPlaying;
+
+  // Manage keep-awake when this video is playing
+  useEffect(() => {
+    const keepAwakeTag = `video-playback-${videoKey}`;
+    if (shouldPlayThisVideo) {
+      activateKeepAwakeAsync(keepAwakeTag);
+    } else {
+      deactivateKeepAwake(keepAwakeTag);
+    }
+
+    return () => {
+      deactivateKeepAwake(keepAwakeTag);
+    };
+  }, [shouldPlayThisVideo, videoKey]);
 
   // Register/unregister video player for imperative control
   // CRITICAL: Register immediately when player is available, not in useEffect

@@ -73,7 +73,17 @@ export default function HymnDetail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      <AuthHeader title="Hymn" showCancel={false} showBack={true} />
+      <AuthHeader
+        title="Hymn"
+        showCancel={false}
+        showBack={true}
+        onBackPress={() => {
+          router.navigate({
+            pathname: "/categories/HomeScreen",
+            params: { defaultCategory: "hymns" }
+          });
+        }}
+      />
 
       {!hymn ? (
         <FlatList

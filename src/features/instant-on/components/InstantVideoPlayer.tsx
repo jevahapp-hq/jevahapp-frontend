@@ -6,6 +6,7 @@
  * - onReadyForDisplay callback for first video to trigger splash hide
  * - Optimized for instant visibility without loading states
  */
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, View } from 'react-native';
@@ -80,6 +81,15 @@ export const InstantVideoPlayer: React.FC<InstantVideoPlayerProps> = ({
 
   // Handle play/pause based on visibility and active state
   useEffect(() => {
+    const keepAwakeTag = `instant-video-${videoKey}`;
+
+    // Manage keep awake state based on visibility and active status
+    if (isVisible && isActive) {
+      activateKeepAwakeAsync(keepAwakeTag);
+    } else {
+      deactivateKeepAwake(keepAwakeTag);
+    }
+
     if (!player) return;
 
     if (isVisible && isActive) {
@@ -87,7 +97,12 @@ export const InstantVideoPlayer: React.FC<InstantVideoPlayerProps> = ({
     } else {
       player.pause();
     }
-  }, [player, isVisible, isActive]);
+
+    // Cleanup keep awake on unmount
+    return () => {
+      deactivateKeepAwake(keepAwakeTag);
+    };
+  }, [player, isVisible, isActive, videoKey]);
 
   // Monitor player state for ready detection
   useEffect(() => {
@@ -97,7 +112,7 @@ export const InstantVideoPlayer: React.FC<InstantVideoPlayerProps> = ({
       // Player is ready when it has duration and is loaded
       if (player.duration > 0 && !Number.isNaN(player.duration)) {
         setIsReady(true);
-        
+
         // If this is the first video, trigger splash hide
         if (isFirstVideo(videoKey) && !hasTriggeredReady) {
           setHasTriggeredReady(true);
@@ -132,9 +147,9 @@ export const InstantVideoPlayer: React.FC<InstantVideoPlayerProps> = ({
   if (!videoUrl) return null;
 
   return (
-    <View 
-      style={{ 
-        width: SCREEN_WIDTH, 
+    <View
+      style={{
+        width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
         backgroundColor: 'black',
       }}
