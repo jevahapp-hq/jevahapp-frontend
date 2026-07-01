@@ -67,12 +67,15 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
 
-  const player = useVideoPlayer(videoUrl || "", (p) => {
-    p.loop = false;
-    p.muted = isMuted;
-    p.volume = videoVolume;
-    p.timeUpdateEventInterval = 0.5;
-  });
+  const player = useVideoPlayer(
+    videoUrl ? { uri: videoUrl, useCaching: true } : "",
+    (p) => {
+      p.loop = false;
+      p.muted = isMuted;
+      p.volume = videoVolume;
+      p.timeUpdateEventInterval = 0.5;
+    }
+  );
 
   // Sync player settings (minimal re-renders)
   useEffect(() => {
@@ -213,6 +216,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
             contentFit="cover"
             nativeControls={false}
             fullscreenOptions={{ enable: false }}
+            useExoShutter={false}
           />
         )}
 
