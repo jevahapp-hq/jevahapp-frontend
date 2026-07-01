@@ -56,7 +56,7 @@ const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
 export async function fetchAllContentPublic(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentPublic({
     page: 1,
-    limit: 50,
+    limit: 20,
     contentType: contentType !== "ALL" ? contentType : undefined,
   });
 
@@ -83,7 +83,7 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
     useContentCacheStore.getState().set("ALL:first", {
       items: result.media,
       page: 1,
-      limit: 50,
+      limit: 20,
       total: result.total,
       fetchedAt: Date.now(),
     });
@@ -96,7 +96,7 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
 async function fetchAllContentWithAuth(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentWithAuth({
     page: 1,
-    limit: 50,
+    limit: 20,
     contentType: contentType !== "ALL" ? contentType : undefined,
   });
 
@@ -136,7 +136,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     : undefined;
 
   const allContentQuery = useQuery({
-    queryKey: ["all-content", contentType, 1, 50, useAuth],
+    queryKey: ["all-content", contentType, 1, 20, useAuth],
     queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
     enabled: immediate,
     initialData: cachedForInitial,
@@ -235,19 +235,19 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     } else {
       // For append, fetch next page using queryClient
       await queryClient.fetchQuery({
-        queryKey: ["all-content", contentType, pageNum, 50, useAuth],
+        queryKey: ["all-content", contentType, pageNum, 20, useAuth],
         queryFn: async () => {
           let response;
           if (useAuth) {
             response = await mediaApi.getAllContentWithAuth({
               page: pageNum,
-              limit: 50,
+              limit: 20,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
           } else {
             response = await mediaApi.getAllContentPublic({
               page: pageNum,
-              limit: 50,
+              limit: 20,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
           }
