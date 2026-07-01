@@ -418,7 +418,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [loading, hasContent]
   );
 
-  // No LoadingState — let feed render with empty data (header still shows)
+  if (loading && !hasContent) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
+        <ActivityIndicator size="large" color={UI_CONFIG.COLORS.PRIMARY} />
+      </View>
+    );
+  }
   if (error && !hasContent) return <ErrorState message={error} />;
   if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
