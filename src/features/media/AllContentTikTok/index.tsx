@@ -7,10 +7,8 @@ import React, {
   useState,
 } from "react";
 import {
-  ActivityIndicator,
   InteractionManager,
   RefreshControl,
-  Text,
   View,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
@@ -72,7 +70,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const {
     allContent,
     defaultContent,
-    loading,
     error,
     refreshAllContent,
     getFilteredContent,
@@ -395,36 +392,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     []
   );
 
-  const listFooterComponent = useMemo(
-    () =>
-      loading && hasContent ? (
-        <View
-          style={{ padding: UI_CONFIG.SPACING.LG, alignItems: "center" }}
-        >
-          <ActivityIndicator
-            size="small"
-            color={UI_CONFIG.COLORS.PRIMARY}
-          />
-          <Text
-            style={{
-              marginTop: UI_CONFIG.SPACING.SM,
-              color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-            }}
-          >
-            Loading content...
-          </Text>
-        </View>
-      ) : null,
-    [loading, hasContent]
-  );
-
-  if (loading && !hasContent) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
-        <ActivityIndicator size="large" color={UI_CONFIG.COLORS.PRIMARY} />
-      </View>
-    );
-  }
+  const listFooterComponent = useMemo(() => null, []);
   if (error && !hasContent) return <ErrorState message={error} />;
   if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
