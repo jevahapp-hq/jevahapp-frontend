@@ -32,7 +32,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useMedia } from "../../../shared/hooks/useMedia";
 import { ContentFeedHeader } from "./components/ContentFeedHeader";
-import { EmptyState, ErrorState } from "./components/ContentFeedStates";
+
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 
 import {
@@ -73,7 +73,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     allContent,
     defaultContent,
     loading,
-    error,
     refreshAllContent,
     getFilteredContent,
     hasContent,
@@ -417,10 +416,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       ) : null,
     [loading, hasContent]
   );
-
-  // No LoadingState — let feed render with empty data (header still shows)
-  if (error && !hasContent) return <ErrorState message={error} />;
-  if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
   return (
     <ContentErrorBoundary>
