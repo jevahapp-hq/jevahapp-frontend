@@ -2,9 +2,9 @@ import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import HomeTabContent from "./HomeTabContent";
 import {
   CommunityScreenWithSuspense,
-  HomeTabContentWithSuspense,
   LibraryScreenWithSuspense,
   BibleScreenWithSuspense,
 } from "../utils/lazyImports";
@@ -36,14 +36,9 @@ export default function HomeScreen() {
   }, [defaultTabParam]);
 
   const renderTabContent = () => {
-    // Lazy load all tab content for smaller initial bundle and faster first paint
     switch (selectedTab) {
       case "Home":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <HomeTabContentWithSuspense />
-          </Suspense>
-        );
+        return <HomeTabContent />;
       case "Community":
         return (
           <Suspense fallback={<TabLoadingFallback />}>
@@ -63,11 +58,7 @@ export default function HomeScreen() {
           </Suspense>
         );
       default:
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <HomeTabContentWithSuspense />
-          </Suspense>
-        );
+        return <HomeTabContent />;
     }
   };
 

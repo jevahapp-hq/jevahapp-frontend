@@ -8,14 +8,17 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   InteractionManager,
   RefreshControl,
   Text,
   View,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 
-// Shared imports (from src/shared - 3 levels up from AllContentTikTok)
+// FlashList v2 type workaround
+const FeedList = FlashList as any;
+
+// Shared imports
 import { UI_CONFIG } from "../../../shared/constants";
 import { ContentType, MediaItem } from "../../../shared/types";
 import {
@@ -29,7 +32,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useMedia } from "../../../shared/hooks/useMedia";
 import { ContentFeedHeader } from "./components/ContentFeedHeader";
-import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
+import { EmptyState, ErrorState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 
 import {
@@ -157,7 +160,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const videoRefs = useRef<Record<string, any>>({});
   const isMountedRef = useRef(true);
   const [videoVolume, setVideoVolume] = useState<number>(1.0);
-  const listRef = useRef<FlatList<MediaItem>>(null);
   const [currentlyVisibleVideo, setCurrentlyVisibleVideo] = useState<string | null>(null);
 
   useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
@@ -349,15 +351,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
   }, []);
 
-  // Handle batch stats loading separately from focus effect to avoid loop
-  useEffect(() => {
-    const ids = (filteredMediaList || []).slice(0, 32).map((i) => i._id).filter(Boolean) as string[];
-    if (ids.length > 0) {
-      InteractionManager.runAfterInteractions(() => {
-        useInteractionStore.getState().loadBatchContentStats(ids, "media", { forceRefresh: true }).catch(() => { });
-      });
-    }
-  }, [filteredMediaList]);
+  // Stats are loaded via useAllContentTikTokFeedData — no duplicate needed
 
   // Pause all media when component loses focus
   useFocusEffect(
@@ -373,7 +367,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }, [pauseAllMedia, pauseAllAudio])
   );
 
-  // FlatList hooks must run unconditionally (before any early return) to satisfy Rules of Hooks
+  // Hooks must run unconditionally (before any early return) to satisfy Rules of Hooks
   const listHeaderComponent = useMemo(
     () => (
       <ContentFeedHeader
@@ -424,7 +418,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [loading, hasContent]
   );
 
-  if (loading && !hasContent) return <LoadingState />;
+  // No LoadingState — let feed render with empty data (header still shows)
   if (error && !hasContent) return <ErrorState message={error} />;
   if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
@@ -438,8 +432,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             duration={3000}
           />
         )}
-        <FlatList
-          ref={listRef}
+        <FeedList
           data={rest}
           renderItem={renderListItem}
           keyExtractor={keyExtractor}
@@ -457,12 +450,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           onScroll={handleScroll}
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={8}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={6}
-          windowSize={5}
-          initialNumToRender={4}
-          updateCellsBatchingPeriod={100}
+          scrollEventThrottle={16}
+          estimatedItemSize={500}
+          keyboardShouldPersistTaps="handled"
+          overscan={500}
         />
       </View>
     </ContentErrorBoundary>

@@ -64,16 +64,16 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     progresses: {},
     hasCompleted: {},
 
-    // Auto-play initial state (DISABLED by default - manual play only, Instagram/TikTok style)
-    isAutoPlayEnabled: false,
+    // Auto-play initial state (ENABLED - TikTok/Reels style instant playback)
+    isAutoPlayEnabled: true,
     currentlyVisibleVideo: null,
 
     // Individual video actions
     playVideo: (videoKey: string) => {
       // Stop all audio when video starts
       const audioManager = GlobalAudioInstanceManager.getInstance();
-      audioManager.stopAllAudio().catch((err) => {
-        console.warn("⚠️ Failed to stop all audio when video started:", err);
+      audioManager.stopAllAudio().catch((_err: any) => {
+        console.warn("⚠️ Failed to stop all audio when video started:", _err);
       });
 
       // Stop global audio player store (like CopyrightFreeSongs does)
@@ -81,8 +81,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         const globalAudioModule = require("./useGlobalAudioPlayerStore");
         const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
         if (globalAudioStore && globalAudioStore.clear) {
-          globalAudioStore.clear().catch((err) => {
-            console.warn("⚠️ Failed to stop global audio player when video started:", err);
+          globalAudioStore.clear().catch((_err: any) => {
+            console.warn("⚠️ Failed to stop global audio player when video started:", _err);
           });
         }
       } catch (error) {
@@ -102,7 +102,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       if (player) {
         player
           .pause()
-          .catch((err) => console.warn(`Failed to pause ${videoKey}:`, err));
+          .catch((err: any) => console.warn(`Failed to pause ${videoKey}:`, err));
         player.showOverlay();
       }
 
@@ -118,30 +118,17 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     },
 
     pauseAllVideos: () => {
-      // Imperatively pause all video players directly (no state waiting)
-      videoPlayerRegistry.forEach((player, key) => {
-        player
-          .pause()
-          .catch((err) => console.warn(`Failed to pause ${key}:`, err));
+      // Imperatively pause all video players (fire-and-forget, no await)
+      videoPlayerRegistry.forEach((player) => {
+        player.pause().catch(() => {});
         player.showOverlay();
       });
 
-      // Update state to reflect the change
-      set((state) => {
-        const newPlayingVideos: Record<string, boolean> = {};
-        const newShowOverlay: Record<string, boolean> = {};
-
-        Object.keys(state.playingVideos).forEach((key) => {
-          newPlayingVideos[key] = false;
-          newShowOverlay[key] = true;
-        });
-
-        return {
-          currentlyPlayingVideo: null,
-          playingVideos: newPlayingVideos,
-          showOverlay: newShowOverlay,
-        };
-      });
+      set(() => ({
+        currentlyPlayingVideo: null,
+        playingVideos: {},
+        showOverlay: {},
+      }));
     },
 
     // Thread-safe cleanup function
@@ -196,7 +183,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
     // Imperatively pause all videos (for use by audio manager)
     pauseAllVideosImperatively: () => {
       videoPlayerRegistry.forEach((player) => {
-        player.pause().catch((err) => console.warn("Failed to pause video:", err));
+        player.pause().catch((err: any) => console.warn("Failed to pause video:", err));
         player.showOverlay();
       });
 
@@ -218,43 +205,31 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       });
     },
 
-    // ✅ Global play function - PROFESSIONAL IMPERATIVE CONTROL (like Instagram/TikTok)
+    // ✅ Global play function - INSTANT IMPERATIVE CONTROL (like TikTok)
     playVideoGlobally: (videoKey: string) => {
-      // STEP 1: Stop ALL audio when video starts playing
+      // Stop ALL audio
       const audioManager = GlobalAudioInstanceManager.getInstance();
-      audioManager.stopAllAudio().catch((err) => {
-        console.warn("⚠️ Failed to stop all audio when video started:", err);
-      });
-
-      // STEP 1b: Stop global audio player store (like CopyrightFreeSongs does)
+      audioManager.stopAllAudio().catch(() => {});
       try {
         const globalAudioModule = require("./useGlobalAudioPlayerStore");
         const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
         if (globalAudioStore && globalAudioStore.clear) {
-          globalAudioStore.clear().catch((err) => {
-            console.warn("⚠️ Failed to stop global audio player when video started:", err);
-          });
-          console.log("🛑 Stopped global audio player for video playback");
+          globalAudioStore.clear().catch(() => {});
         }
       } catch (error) {
-        console.warn("⚠️ Failed to access global audio player store:", error);
+        // no-op
       }
 
-      // STEP 2: Update state FIRST for immediate UI feedback
+      // Update state immediately (UI reacts instantly)
       set((state) => {
         const newPlayingVideos: Record<string, boolean> = {};
         const newShowOverlay: Record<string, boolean> = {};
-
-        // Pause all other videos in state
         Object.keys(state.playingVideos).forEach((key) => {
           newPlayingVideos[key] = false;
           newShowOverlay[key] = true;
         });
-
-        // Set target video to playing
         newPlayingVideos[videoKey] = true;
         newShowOverlay[videoKey] = false;
-
         return {
           currentlyPlayingVideo: videoKey,
           playingVideos: newPlayingVideos,
@@ -262,84 +237,26 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
         };
       });
 
-      // STEP 3: Imperatively pause ALL other videos FIRST (await to ensure they're paused)
-      // This prevents race conditions where new video starts before old one stops
-      const pausePromises: Promise<void>[] = [];
+      // Fire-and-forget pause all other videos (no await - instant)
       videoPlayerRegistry.forEach((player, key) => {
         if (key !== videoKey) {
-          pausePromises.push(
-            player.pause().catch((err) => {
-              console.warn(`Failed to pause ${key}:`, err);
-            })
-          );
+          player.pause().catch(() => {});
           player.showOverlay();
         }
       });
 
-      // STEP 4: Wait for all pauses to complete, then play target video
-      // This ensures only one video plays at a time
-      Promise.all(pausePromises).then(() => {
-        console.log(`🎬 playVideoGlobally: Attempting to play video key: ${videoKey}`);
-        console.log(`📋 Video player registry keys:`, Array.from(videoPlayerRegistry.keys()));
-        const targetPlayer = videoPlayerRegistry.get(videoKey);
-        console.log(`🔍 Target player found: ${!!targetPlayer}, has play function: ${!!targetPlayer?.play}`);
-        if (targetPlayer && targetPlayer.play) {
-          try {
-            console.log(`▶️ Calling registered play() function for video: ${videoKey}`);
-            // Play immediately after all pauses complete
-            const playResult = targetPlayer.play();
-            console.log(`📤 Play function returned:`, playResult);
-            if (playResult instanceof Promise) {
-              playResult
-                .then(() => {
-                  console.log(`✅ Play function resolved successfully for: ${videoKey}`);
-                })
-                .catch((err) => {
-                  console.error(`❌ Play function rejected for ${videoKey}:`, err);
-                  if (err && err.message && !err.message.includes('interrupted')) {
-                    console.warn(`🛑 Critical rejection playing ${videoKey}, check if URL is reachable and supported`);
-                  }
-                });
-            }
-          } catch (err) {
-            console.error(`❌ Exception calling play function for ${videoKey}:`, err);
+      // Play target video IMMEDIATELY (no waiting for pauses)
+      const targetPlayer = videoPlayerRegistry.get(videoKey);
+      if (targetPlayer?.play) {
+        try {
+          const playResult = targetPlayer.play();
+          if (playResult instanceof Promise) {
+            playResult.catch(() => {});
           }
-        } else if (!targetPlayer) {
-          console.warn(`⚠️ Video player not registered for key: ${videoKey}, will retry...`);
-          // Player not registered yet - retry after a short delay
-          // This handles cases where component just mounted and player is still initializing
-          setTimeout(() => {
-            console.log(`🔄 Retry: Looking for player with key: ${videoKey}`);
-            const retryPlayer = videoPlayerRegistry.get(videoKey);
-            console.log(`🔍 Retry player found: ${!!retryPlayer}, has play function: ${!!retryPlayer?.play}`);
-            if (retryPlayer && retryPlayer.play) {
-              try {
-                console.log(`▶️ Retry: Calling play() function for video: ${videoKey}`);
-                const playResult = retryPlayer.play();
-                if (playResult instanceof Promise) {
-                  playResult
-                    .then(() => {
-                      console.log(`✅ Retry play function resolved for: ${videoKey}`);
-                    })
-                    .catch((err) => {
-                      console.error(`❌ Retry play function rejected for ${videoKey}:`, err);
-                      if (err && err.message && !err.message.includes('interrupted')) {
-                        console.warn(`🛑 Critical retry rejection playing ${videoKey}, check if URL is reachable and supported`);
-                      }
-                    });
-                }
-              } catch (err) {
-                console.error(`❌ Retry exception calling play for ${videoKey}:`, err);
-              }
-            } else {
-              // State already updated, useEffect will sync when player registers
-              console.warn(`⚠️ Video player not registered for key: ${videoKey} after retry. State updated, player will sync when ready.`);
-            }
-          }, 100); // Retry after 100ms
-        } else {
-          console.warn(`⚠️ Target player exists but has no play function for key: ${videoKey}`);
+        } catch {
+          // no-op
         }
-      });
+      }
     },
 
     // ✅ Toggle function - for cases where toggle behavior is needed
@@ -367,8 +284,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             const globalAudioModule = require("./useGlobalAudioPlayerStore");
             const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
             if (globalAudioStore && globalAudioStore.clear) {
-              globalAudioStore.clear().catch((err) => {
-                console.warn("⚠️ Failed to stop global audio player when video started:", err);
+              globalAudioStore.clear().catch((_err2: any) => {
+                console.warn("⚠️ Failed to stop global audio player when video started:", _err2);
               });
             }
           } catch (error) {
@@ -466,8 +383,8 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             const globalAudioModule = require("./useGlobalAudioPlayerStore");
             const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
             if (globalAudioStore && globalAudioStore.clear) {
-              globalAudioStore.clear().catch((err) => {
-                console.warn("⚠️ Failed to stop global audio player when video auto-played:", err);
+              globalAudioStore.clear().catch((err2: any) => {
+                console.warn("⚠️ Failed to stop global audio player when video started:", err2);
               });
             }
           } catch (error) {

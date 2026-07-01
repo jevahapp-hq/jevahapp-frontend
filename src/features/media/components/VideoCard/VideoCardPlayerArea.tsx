@@ -1,7 +1,3 @@
-/**
- * VideoCardPlayerArea - Video/thumbnail, overlay, progress bar
- * Handles lazy allocation of video player resources.
- */
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,7 +7,6 @@ import { VideoCardSkeleton } from "../../../../shared/components";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
-import OptimizedImage from "../../../../shared/components/OptimizedImage";
 import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
@@ -44,19 +39,10 @@ export interface VideoCardPlayerAreaProps {
 }
 
 export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
-  const { video } = props;
-
-  const thumbnailSource = video?.imageUrl || video?.thumbnailUrl;
-  const thumbnailUri =
-    typeof thumbnailSource === "string"
-      ? thumbnailSource
-      : (thumbnailSource as any)?.uri;
-
-  // All cards always render the active player immediately (no thumbnail gate)
-  return <ActiveVideoPlayerContent {...props} thumbnailUri={thumbnailUri} />;
+  return <ActiveVideoPlayerContent {...props} />;
 }
 
-function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailUri: string | undefined }) {
+function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const {
     video,
     contentKey: key,
@@ -68,7 +54,6 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     onTogglePlay,
     onToggleMute,
     getContentKey,
-    thumbnailUri,
   } = props;
 
   const contentId = video._id || getContentKey(video);
@@ -78,31 +63,19 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
   const videoLoadedRef = useRef(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
-  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
-
-  useEffect(() => {
-    if (__DEV__) {
-      console.log(`🎬 [ActiveVideoPlayerContent] Initializing player:`, {
-        contentId: video?._id,
-        videoTitle: video?.title,
-        videoUrl: videoUrl,
-        isActive: props.isActive,
-        isAudioSermonValue
-      });
-    }
-  }, [video?._id, videoUrl]);
 
   const player = useVideoPlayer(videoUrl || "", (p) => {
     p.loop = false;
     p.muted = isMuted;
     p.volume = videoVolume;
-    p.timeUpdateEventInterval = 0.25;
+    p.timeUpdateEventInterval = 0.5;
   });
 
-  // Sync player settings
+  // Sync player settings (minimal re-renders)
   useEffect(() => {
     if (player) {
       player.muted = isMuted;
@@ -120,6 +93,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     enableAutoPlay: false,
   });
 
+  // Direct imperative play/pause - no dependency on the sync effect chain
   useEffect(() => {
     if (!player) return;
     if (shouldPlayThisVideo && !player.playing) {
@@ -132,7 +106,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
   const showOverlayTemporarily = useCallback(() => {
     setShowOverlay(true);
     if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
-    overlayTimeoutRef.current = setTimeout(() => setShowOverlay(false), 3000) as any;
+    overlayTimeoutRef.current = setTimeout(() => setShowOverlay(false), 3000);
   }, []);
 
   const showOverlayPermanently = useCallback(() => {
@@ -161,7 +135,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
 
   const audioState = audioStateRaw ?? { isPlaying: false, progress: 0, isMuted: false, position: 0, duration: 0 };
 
-  const handleVideoError = useCallback((error: any) => {
+  const handleVideoError = useCallback(() => {
     setFailedVideoLoad(true);
   }, []);
 
@@ -209,7 +183,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     audioIsPlaying: audioState?.isPlaying ?? false,
     onTogglePlay,
     onVideoTap,
-    audioControlsPause: audioControls?.pause ?? (() => { }),
+    audioControlsPause: audioControls?.pause ?? (() => {}),
     togglePlayback,
     player,
     showOverlayPermanently,
@@ -229,35 +203,30 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     else onToggleMute(key);
   }, [onToggleMute, key, isAudioSermonValue, audioControls]);
 
+  const showSkeleton = !videoLoaded && !failedVideoLoad && !!videoUrl && !isAudioSermonValue;
+
   return (
     <TouchableWithoutFeedback onPress={handleVideoTap}>
       <View className="w-full h-[400px] overflow-hidden relative bg-black">
-        {!failedVideoLoad && videoUrl && !isAudioSermonValue && player ? (
+        {videoUrl && !isAudioSermonValue && player && (
           <VideoView
             key={videoUrl || key}
             player={player}
-            style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: 'black' }}
+            style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "black" }}
             contentFit="cover"
             nativeControls={false}
             fullscreenOptions={{ enable: false }}
           />
-        ) : (
-          <OptimizedImage
-            source={thumbnailUri ? { uri: thumbnailUri } : { uri: "https://via.placeholder.com/400x400/000000/ffffff?text=Preparing+Media..." }}
-            style={{ width: "100%", height: "100%", position: "absolute" }}
-            contentFit="cover"
-            lazy={true}
-          />
         )}
 
-        {!videoLoadedRef.current && !videoLoaded && !failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermonValue && (
-          <View className="absolute inset-0" pointerEvents="none">
+        {showSkeleton && (
+          <View className="absolute inset-0" pointerEvents="none" style={{ backgroundColor: "black" }}>
             <VideoCardSkeleton dark={true} hideProgressBar={true} />
           </View>
         )}
 
-        {video.moderationStatus && video.moderationStatus !== 'approved' && (
-          <View style={{ position: 'absolute', top: 50, left: 12, zIndex: 11 }}>
+        {video.moderationStatus && video.moderationStatus !== "approved" && (
+          <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
             <ModerationBadge status={video.moderationStatus} />
           </View>
         )}

@@ -66,8 +66,8 @@ function CardFooterActions({
   const darkShade = savedActiveColor; // For save button active state
 
   return (
-    <View className="flex-row items-center pl-1">
-      <View className="flex-row items-center mr-4" pointerEvents="box-none">
+    <View className="flex-row items-center pl-4">
+      <View className="flex-row items-center mr-6" pointerEvents="box-none">
         <MaterialIcons name="visibility" size={24} color={mediumShade} />
         {viewCount > 0 && (
           <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{viewCount}</Text>
@@ -75,7 +75,7 @@ function CardFooterActions({
       </View>
 
       {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-4" pointerEvents="box-none">
+        <View className="flex-row items-center mr-6" pointerEvents="box-none">
           <LikeButton
             contentType={contentType}
             contentId={contentId}
@@ -120,11 +120,11 @@ function CardFooterActions({
         count={commentCount}
         layout="horizontal"
         onPress={onComment}
-        style={{ marginRight: 16 }}
+        style={{ marginRight: 24 }}
       />
 
       {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-4" pointerEvents="box-none">
+        <View className="flex-row items-center mr-6" pointerEvents="box-none">
           <SaveButton
             contentId={contentId}
             contentType={contentType}
@@ -142,7 +142,7 @@ function CardFooterActions({
       ) : (
         <TouchableOpacity
           onPress={onSave}
-          className="flex-row items-center mr-4"
+          className="flex-row items-center mr-6"
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
@@ -190,7 +190,7 @@ function AnimatedLikeButton({
   
   return (
     <AnimatedButton
-      className="flex-row items-center mr-4"
+      className="flex-row items-center mr-6"
       onPress={onLike}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
     >
@@ -221,6 +221,7 @@ function AnimatedShareButton({ onShare }: { onShare: () => void }) {
     <AnimatedButton
       onPress={onShare}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      className="mr-2"
     >
       <Feather name="send" size={26} color={mediumShade} />
     </AnimatedButton>

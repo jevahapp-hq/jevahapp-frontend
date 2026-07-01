@@ -216,13 +216,16 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
 
 /** Compare only item identity and item-specific state to avoid unnecessary re-renders */
 function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRendererProps): boolean {
+  if (prev.item._id !== next.item._id || prev.index !== next.index) return false;
+
   const prevKey = prev.getContentKey(prev.item);
   const nextKey = next.getContentKey(next.item);
-  if (prev.item._id !== next.item._id || prev.index !== next.index) return false;
+  if (prevKey !== nextKey) return false;
 
   const prevContentId = prev.item._id || prevKey;
   const nextContentId = next.item._id || nextKey;
-  const musicId = `music-${next.item._id || next.index}`;
+  const prevMusicId = `music-${prev.item._id || prev.index}`;
+  const nextMusicId = `music-${next.item._id || next.index}`;
 
   return (
     prev.getUserLikeState(prevContentId) === next.getUserLikeState(nextContentId) &&
@@ -231,10 +234,8 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
     prev.progresses[prevKey] === next.progresses[nextKey] &&
     (prev.currentlyVisibleVideo === prevKey) === (next.currentlyVisibleVideo === nextKey) &&
-    (prev.playingAudioId === `music-${prev.item._id || prev.index}`) ===
-    (next.playingAudioId === musicId) &&
-    (prev.audioProgressMap[`music-${prev.item._id || prev.index}`] ?? 0) ===
-    (next.audioProgressMap[musicId] ?? 0) &&
+    (prev.playingAudioId === prevMusicId) === (next.playingAudioId === nextMusicId) &&
+    (prev.audioProgressMap[prevMusicId] ?? 0) === (next.audioProgressMap[nextMusicId] ?? 0) &&
     (prev.modalVisible === prevKey) === (next.modalVisible === nextKey) &&
     prev.currentUserId === next.currentUserId
   );

@@ -81,13 +81,12 @@ export function useAllContentTikTokFeedData(
     }
   }, [filteredMediaList]);
 
-  // Load content stats
+  // Load content stats (runs async, doesn't block rendering)
   useEffect(() => {
     const items = (filteredMediaList || []).slice(0, 16);
     if (items.length === 0) return;
     const ids = items.map((i) => i._id).filter(Boolean) as string[];
-    const run = async () => {
-      await new Promise((r) => setTimeout(r, 400));
+    InteractionManager.runAfterInteractions(async () => {
       try {
         await useInteractionStore
           .getState()
@@ -99,8 +98,7 @@ export function useAllContentTikTokFeedData(
             e instanceof Error ? e.message : e
           );
       }
-    };
-    InteractionManager.runAfterInteractions(() => run());
+    });
   }, [filteredMediaList]);
 
   // Load persisted data

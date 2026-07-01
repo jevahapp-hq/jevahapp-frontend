@@ -61,7 +61,10 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
   });
 
   if (!response.success) throw new Error(response.error || "Failed to fetch content");
-  if (!response.media || response.media.length === 0) throw new Error("API returned empty media array");
+
+  if (!response.media || response.media.length === 0) {
+    return { media: [], total: 0 };
+  }
 
   const enrichedMedia = UserProfileCache.enrichContentArray(response.media);
   const transformedMedia = enrichedMedia
@@ -122,7 +125,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     immediate = true,
     contentType = "ALL",
     page = 1,
-    limit = 10,
+    limit = 20,
     useAuth = false,
   } = options;
 

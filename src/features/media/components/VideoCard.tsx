@@ -47,9 +47,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   isAutoPlayEnabled = false,
   shouldRenderPlayer = false,
 }) => {
-  // All cards always render with active player (no thumbnail gate)
-  const isActive = true;
-
   const contentId = video._id || getContentKey(video);
   const key = getContentKey(video);
   const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
@@ -72,10 +69,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       console.log(`   - rawVideoUrl: ${rawVideoUrl}`);
       console.log(`   - initialVideoUrl: ${initialVideoUrl}`);
       console.log(`   - videoUrl: ${videoUrl}`);
-      console.log(`   - isActive: ${isActive}`);
       console.log(`   - shouldRenderPlayer: ${shouldRenderPlayer}`);
     }
-  }, [video, videoUrl, isActive, shouldRenderPlayer]);
+  }, [video, videoUrl, shouldRenderPlayer]);
 
   const [showReportModal, setShowReportModal] = useState(false);
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
@@ -162,7 +158,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         video={video}
         contentKey={key}
         index={index}
-        isActive={isActive}
+        isActive={true}
         videoUrl={videoUrl}
         videoVolume={videoVolume}
         isMuted={isMuted}
