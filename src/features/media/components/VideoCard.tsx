@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
-import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
+
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { VideoCardProps } from "../../../shared/types";
@@ -55,19 +55,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const isAudioSermonValue = isAudioSermon(video);
 
   const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
-  const initialVideoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
+  const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
     ? getBestVideoUrl(rawVideoUrl)
     : null;
-
-  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
-  const videoUrl = resolvedVideoUrl ?? initialVideoUrl;
 
   // Debug newly uploaded videos
   useEffect(() => {
     if (__DEV__ && video.title.includes('61 (HD)')) {
       console.log(`🔍 [VideoCard] Tracking problematic upload: "${video.title}"`);
       console.log(`   - rawVideoUrl: ${rawVideoUrl}`);
-      console.log(`   - initialVideoUrl: ${initialVideoUrl}`);
       console.log(`   - videoUrl: ${videoUrl}`);
       console.log(`   - shouldRenderPlayer: ${shouldRenderPlayer}`);
     }
@@ -75,14 +71,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   const [showReportModal, setShowReportModal] = useState(false);
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
-  const [userIsAdmin, setUserIsAdmin] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const storeRef = useRef<any>(null);
-
-  // Check if user is admin
-  useEffect(() => {
-    isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
-  }, []);
 
   // Delete media functionality - using reusable hook
   const {
@@ -215,7 +205,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         contentId={contentId}
         checkIfDownloaded={checkIfDownloaded as any}
         handleDeletePress={handleDeletePress}
-        userIsAdmin={userIsAdmin}
+        userIsAdmin={false}
         isOwner={isOwner}
         showDeleteModal={showDeleteModal}
         closeDeleteModal={closeDeleteModal}

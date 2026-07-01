@@ -3,7 +3,6 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudioPlayer";
-import { VideoCardSkeleton } from "../../../../shared/components";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
@@ -203,8 +202,6 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     else onToggleMute(key);
   }, [onToggleMute, key, isAudioSermonValue, audioControls]);
 
-  const showSkeleton = !videoLoaded && !failedVideoLoad && !!videoUrl && !isAudioSermonValue;
-
   return (
     <TouchableWithoutFeedback onPress={handleVideoTap}>
       <View className="w-full h-[400px] overflow-hidden relative bg-black">
@@ -217,12 +214,6 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
             nativeControls={false}
             fullscreenOptions={{ enable: false }}
           />
-        )}
-
-        {showSkeleton && (
-          <View className="absolute inset-0" pointerEvents="none" style={{ backgroundColor: "black" }}>
-            <VideoCardSkeleton dark={true} hideProgressBar={true} />
-          </View>
         )}
 
         {video.moderationStatus && video.moderationStatus !== "approved" && (
