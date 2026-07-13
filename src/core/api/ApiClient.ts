@@ -6,6 +6,14 @@ class ApiClient {
   private timeout: number;
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<string | null> | null = null;
+  // Circuit breaker: once the backend rate-limits us (429), stop sending
+  // further requests until this timestamp passes. Without this, retries
+  // and re-mounted components keep hammering the API and extend the
+  // rate-limit window indefinitely instead of letting it recover.
+  private rateLimitedUntil: number = 0;
+  private static readonly RATE_LIMIT_COOLDOWN_MS = 30_000;
+  private static readonly RATE_LIMIT_COOLDOWN_MAX_MS = 120_000;
+  private rateLimitCooldownMs: number = ApiClient.RATE_LIMIT_COOLDOWN_MS;
 
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
@@ -18,6 +26,17 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`;
+
+    if (Date.now() < this.rateLimitedUntil) {
+      const secondsLeft = Math.ceil((this.rateLimitedUntil - Date.now()) / 1000);
+      console.warn(
+        `⏸️ Skipping request (rate limited for ${secondsLeft}s more): ${options.method || "GET"} ${url}`
+      );
+      return {
+        success: false,
+        error: "Too many requests. Please wait a moment and try again.",
+      };
+    }
 
     const defaultHeaders = {
       "Content-Type": "application/json",
@@ -43,6 +62,16 @@ class ApiClient {
       console.log(`🌐 API Request: ${options.method || "GET"} ${url}`);
 
       const response = await fetch(url, config);
+
+      if (response.status === 429) {
+        this.activateRateLimitCooldown(response);
+        const errorText = await response.text().catch(() => "");
+        console.error(`❌ API Error: 429 (rate limited, backing off)`, errorText);
+        return {
+          success: false,
+          error: "Too many requests. Please wait a moment and try again.",
+        };
+      }
 
       // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
       if ((response.status === 401 || response.status === 402) && authToken) {
@@ -136,6 +165,9 @@ class ApiClient {
 
       const data = await response.json();
 
+      // Successful request - reset the backoff multiplier
+      this.rateLimitCooldownMs = ApiClient.RATE_LIMIT_COOLDOWN_MS;
+
       return {
         success: true,
         data,
@@ -167,6 +199,27 @@ class ApiClient {
         error: errorMessage,
       };
     }
+  }
+
+  // Activate (or extend) the rate-limit cooldown after a 429 response.
+  // Respects a Retry-After header if the backend sends one; otherwise
+  // backs off with a growing cooldown so repeated 429s don't just keep
+  // retrying at the same pace.
+  private activateRateLimitCooldown(response: Response): void {
+    let cooldownMs = this.rateLimitCooldownMs;
+
+    const retryAfterHeader = response.headers?.get?.("Retry-After");
+    const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+    if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+      cooldownMs = retryAfterSeconds * 1000;
+    }
+
+    this.rateLimitedUntil = Date.now() + cooldownMs;
+    // Grow the next cooldown (capped) in case the server keeps rejecting us
+    this.rateLimitCooldownMs = Math.min(
+      this.rateLimitCooldownMs * 2,
+      ApiClient.RATE_LIMIT_COOLDOWN_MAX_MS
+    );
   }
 
   // Get authentication token

@@ -64,6 +64,7 @@ export interface MediaItem extends BaseEntity {
   isHidden?: boolean;
   category?: string[];
   userId?: string;
+  mimeType?: string;
 }
 
 // Content type definitions

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { ResizeMode, Video } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudioPlayer";
@@ -67,23 +67,12 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
 
-  const player = useVideoPlayer(
-    videoUrl ? { uri: videoUrl, useCaching: true } : "",
-    (p) => {
-      p.loop = false;
-      p.muted = isMuted;
-      p.volume = videoVolume;
-      p.timeUpdateEventInterval = 0.5;
-    }
-  );
-
-  // Sync player settings (minimal re-renders)
-  useEffect(() => {
-    if (player) {
-      player.muted = isMuted;
-      player.volume = videoVolume;
-    }
-  }, [player, isMuted, videoVolume]);
+  // Using expo-av here (not expo-video) - expo-video has a known Android bug
+  // where the native video surface fails to repaint when a player/view is
+  // reused across items in a virtualized list, producing a black screen with
+  // audio still playing. expo-av doesn't have this issue (Reels already
+  // relies on it successfully), and it also works inside Expo Go.
+  const videoRef = useRef<Video>(null);
 
   const {
     isPlaying,
@@ -91,19 +80,9 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     shouldPlayThisVideo,
   } = useVideoPlaybackControl({
     videoKey: key,
-    videoRef: { current: player } as any,
+    videoRef,
     enableAutoPlay: false,
   });
-
-  // Direct imperative play/pause - no dependency on the sync effect chain
-  useEffect(() => {
-    if (!player) return;
-    if (shouldPlayThisVideo && !player.playing) {
-      player.play();
-    } else if (!shouldPlayThisVideo && player.playing) {
-      player.pause();
-    }
-  }, [player, shouldPlayThisVideo]);
 
   const showOverlayTemporarily = useCallback(() => {
     setShowOverlay(true);
@@ -146,12 +125,12 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     videoDurationMs,
     videoPositionMs,
     videoProgress,
+    handleLoad,
+    handleStatusUpdate,
   } = useVideoCardPlayback({
-    player,
     isAudioSermon: isAudioSermonValue,
-    videoTitle: video.title,
     contentId,
-    isPlaying,
+    videoRef,
     handleVideoError,
     setFailedVideoLoad,
     setVideoLoaded,
@@ -166,7 +145,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     isAudioSermon: isAudioSermonValue,
     audioState,
     audioControls,
-    player,
+    videoRef,
     videoPositionMs,
     lastKnownDurationRef,
     backendDurationMs: (video as any).duration ? (video as any).duration * 1000 : 0,
@@ -187,7 +166,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     onVideoTap,
     audioControlsPause: audioControls?.pause ?? (() => {}),
     togglePlayback,
-    player,
+    videoRef,
     showOverlayPermanently,
     hideOverlay,
   });
@@ -208,15 +187,21 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   return (
     <TouchableWithoutFeedback onPress={handleVideoTap}>
       <View className="w-full h-[400px] overflow-hidden relative bg-black">
-        {videoUrl && !isAudioSermonValue && player && (
-          <VideoView
-            key={videoUrl || key}
-            player={player}
+        {videoUrl && !isAudioSermonValue && (
+          <Video
+            ref={videoRef}
+            source={{ uri: videoUrl }}
             style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "black" }}
-            contentFit="cover"
-            nativeControls={false}
-            fullscreenOptions={{ enable: false }}
-            useExoShutter={false}
+            resizeMode={ResizeMode.COVER}
+            isMuted={isMuted}
+            volume={videoVolume}
+            shouldPlay={shouldPlayThisVideo}
+            useNativeControls={false}
+            isLooping={false}
+            onLoad={handleLoad}
+            onPlaybackStatusUpdate={handleStatusUpdate}
+            onError={handleVideoError}
+            progressUpdateIntervalMillis={500}
           />
         )}
 

@@ -14,12 +14,15 @@ import {
     BibleVerse,
 } from "../../services/bibleApiService";
 import BibleBookSelector from "./BibleBookSelector";
-import BibleChapterSelector from "./BibleChapterSelector";
 import BibleFloatingNav, { BibleFloatingNavRef } from "./BibleFloatingNav";
 import BibleReader from "./BibleReader";
 import BibleSearch from "./BibleSearch";
+import BibleVerseSelector from "./BibleVerseSelector";
 
-type ViewMode = "books" | "chapters" | "reader" | "search";
+// "books" shows the book list with chapters expanding inline (accordion) -
+// there is no separate chapter screen. Tapping a chapter goes to "verses"
+// (a list of verses to pick from), then "reader" shows the actual text.
+type ViewMode = "books" | "verses" | "reader" | "search";
 
 interface BibleReaderScreenProps {
   onBack?: () => void;
@@ -31,10 +34,15 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   const [selectedChapter, setSelectedChapter] = useState<BibleChapter | null>(
     null
   );
+  const [selectedVerseNumber, setSelectedVerseNumber] = useState<
+    number | null
+  >(null);
+  const [preloadedVerses, setPreloadedVerses] = useState<BibleVerse[]>([]);
   const [chapters, setChapters] = useState<BibleChapter[]>([]);
   const floatingNavRef = useRef<BibleFloatingNavRef>(null);
 
-  // Load chapters when book is selected
+  // Load the full chapter list for the current book so the floating
+  // prev/next/jump nav (shown while reading) knows the chapter bounds.
   useEffect(() => {
     if (selectedBook) {
       loadChapters();
@@ -68,16 +76,38 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   const handleBookSelect = (book: BibleBook) => {
     setSelectedBook(book);
     setSelectedChapter(null);
-    setViewMode("chapters");
   };
 
-  const handleChapterSelect = (chapter: BibleChapter) => {
+  // Tapping a chapter number inside the book accordion goes straight to
+  // the verse picker for that chapter.
+  const handleBookChapterSelect = (book: BibleBook, chapter: BibleChapter) => {
+    setSelectedBook(book);
     setSelectedChapter(chapter);
+    setSelectedVerseNumber(null);
+    setPreloadedVerses([]);
+    setViewMode("verses");
+  };
+
+  const handleVerseNumberSelect = (verseNumber: number, verses: BibleVerse[]) => {
+    setSelectedVerseNumber(verseNumber);
+    // Reuse the verses we already fetched for the picker so the reader
+    // doesn't have to make a second, redundant network request.
+    setPreloadedVerses(verses);
+    setViewMode("reader");
+  };
+
+  // Used when jumping between chapters while already reading (floating nav
+  // picker) - goes straight to the reader rather than the verse picker,
+  // matching prev/next chapter navigation behavior.
+  const handleChapterJump = (chapter: BibleChapter) => {
+    setSelectedChapter(chapter);
+    setSelectedVerseNumber(null);
+    setPreloadedVerses([]);
     setViewMode("reader");
   };
 
   const handleVerseSelect = (verse: BibleVerse) => {
-    // Navigate to the verse in the reader
+    // Navigate directly to the verse in the reader (from search results)
     const book = {
       _id: verse._id,
       name: verse.bookName,
@@ -94,6 +124,8 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
 
     setSelectedBook(book);
     setSelectedChapter(chapter);
+    setSelectedVerseNumber(verse.verseNumber);
+    setPreloadedVerses([]);
     setViewMode("reader");
   };
 
@@ -155,6 +187,8 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     console.log(
       `✅ Navigating to ${selectedBook.name} ${newChapterNumber} (${verseCount} verses)`
     );
+    setSelectedVerseNumber(null);
+    setPreloadedVerses([]);
     setSelectedChapter(newChapter);
   };
 
@@ -163,29 +197,29 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     ? selectedChapter.chapterNumber < (selectedBook.chapterCount || chapters.length || Number.MAX_SAFE_INTEGER)
     : false;
 
+  const goBack = () => {
+    if (viewMode === "reader") {
+      setViewMode("verses");
+    } else if (viewMode === "verses") {
+      setViewMode("books");
+    } else if (viewMode === "search") {
+      setViewMode("books");
+    } else if (onBack) {
+      onBack();
+    }
+  };
+
   const renderHeader = () => (
     <View style={styles.header}>
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => {
-          if (viewMode === "reader") {
-            setViewMode("chapters");
-          } else if (viewMode === "chapters") {
-            setViewMode("books");
-          } else if (viewMode === "search") {
-            setViewMode("books");
-          } else if (onBack) {
-            onBack();
-          }
-        }}
-      >
+      <TouchableOpacity style={styles.backButton} onPress={goBack}>
         <Ionicons name="arrow-back" size={24} color="#256E63" />
       </TouchableOpacity>
 
       <View style={styles.headerTitleContainer}>
         <Text style={styles.headerTitle}>
           {viewMode === "books" && "Select Book"}
-          {viewMode === "chapters" && `Chapters in ${selectedBook?.name}`}
+          {viewMode === "verses" &&
+            `${selectedBook?.name} ${selectedChapter?.chapterNumber}`}
           {viewMode === "reader" &&
             `${selectedBook?.name} ${selectedChapter?.chapterNumber}`}
           {viewMode === "search" && "Search Bible"}
@@ -193,9 +227,6 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         {viewMode === "reader" && selectedChapter && (
           <Text style={styles.headerSubtitle}>
             Chapter {selectedChapter.chapterNumber}
-            {selectedChapter.verseCount > 0
-              ? ` • ${selectedChapter.verseCount} verses`
-              : ""}
           </Text>
         )}
       </View>
@@ -215,16 +246,19 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         return (
           <BibleBookSelector
             onBookSelect={handleBookSelect}
+            onChapterSelect={handleBookChapterSelect}
             selectedBook={selectedBook}
           />
         );
 
-      case "chapters":
-        return selectedBook ? (
-          <BibleChapterSelector
+      case "verses":
+        return selectedBook && selectedChapter ? (
+          <BibleVerseSelector
             bookName={selectedBook.name}
-            onChapterSelect={handleChapterSelect}
-            selectedChapter={selectedChapter}
+            chapterNumber={selectedChapter.chapterNumber}
+            onVerseSelect={handleVerseNumberSelect}
+            onBack={goBack}
+            selectedVerseNumber={selectedVerseNumber}
           />
         ) : null;
 
@@ -234,6 +268,8 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
             <BibleReader
               bookName={selectedBook.name}
               chapterNumber={selectedChapter.chapterNumber}
+              initialVerses={preloadedVerses}
+              initialVerseNumber={selectedVerseNumber}
               onNavigateChapter={handleNavigateChapter}
               canNavigatePrev={canNavigatePrev}
               canNavigateNext={canNavigateNext}
@@ -247,7 +283,7 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
               book={selectedBook}
               currentChapter={selectedChapter.chapterNumber}
               chapters={chapters}
-              onChapterSelect={handleChapterSelect}
+              onChapterSelect={handleChapterJump}
               onNavigatePrev={() => handleNavigateChapter("prev")}
               onNavigateNext={() => handleNavigateChapter("next")}
               canNavigatePrev={canNavigatePrev}
@@ -264,102 +300,11 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     }
   };
 
-  const renderBottomNavigation = () => (
-    <View style={styles.bottomNav}>
-      <TouchableOpacity
-        style={[styles.navItem, viewMode === "books" && styles.activeNavItem]}
-        onPress={() => setViewMode("books")}
-      >
-        <Ionicons
-          name="library-outline"
-          size={20}
-          color={viewMode === "books" ? "#256E63" : "#9CA3AF"}
-        />
-        <Text
-          style={[
-            styles.navItemText,
-            viewMode === "books" && styles.activeNavItemText,
-          ]}
-        >
-          Books
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.navItem, viewMode === "search" && styles.activeNavItem]}
-        onPress={() => setViewMode("search")}
-      >
-        <Ionicons
-          name="search-outline"
-          size={20}
-          color={viewMode === "search" ? "#256E63" : "#9CA3AF"}
-        />
-        <Text
-          style={[
-            styles.navItemText,
-            viewMode === "search" && styles.activeNavItemText,
-          ]}
-        >
-          Search
-        </Text>
-      </TouchableOpacity>
-
-      {selectedBook && (
-        <TouchableOpacity
-          style={[
-            styles.navItem,
-            viewMode === "chapters" && styles.activeNavItem,
-          ]}
-          onPress={() => setViewMode("chapters")}
-        >
-          <Ionicons
-            name="list-outline"
-            size={20}
-            color={viewMode === "chapters" ? "#256E63" : "#9CA3AF"}
-          />
-          <Text
-            style={[
-              styles.navItemText,
-              viewMode === "chapters" && styles.activeNavItemText,
-            ]}
-          >
-            Chapters
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {selectedChapter && (
-        <TouchableOpacity
-          style={[
-            styles.navItem,
-            viewMode === "reader" && styles.activeNavItem,
-          ]}
-          onPress={() => setViewMode("reader")}
-        >
-          <Ionicons
-            name="book-outline"
-            size={20}
-            color={viewMode === "reader" ? "#256E63" : "#9CA3AF"}
-          />
-          <Text
-            style={[
-              styles.navItemText,
-              viewMode === "reader" && styles.activeNavItemText,
-            ]}
-          >
-            Read
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         {renderHeader()}
         <View style={styles.content}>{renderContent()}</View>
-        {renderBottomNavigation()}
       </SafeAreaView>
     </View>
   );
@@ -414,40 +359,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  bottomNav: {
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  activeNavItem: {
-    backgroundColor: "#F0FDF4",
-    borderRadius: 8,
-  },
-  navItemText: {
-    fontSize: 12,
-    fontFamily: "Rubik_500Medium",
-    color: "#9CA3AF",
-    marginTop: 4,
-  },
-  activeNavItemText: {
-    color: "#256E63",
   },
 });

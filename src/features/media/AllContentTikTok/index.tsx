@@ -30,7 +30,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useMedia } from "../../../shared/hooks/useMedia";
 import { ContentFeedHeader } from "./components/ContentFeedHeader";
-import { EmptyState, ErrorState } from "./components/ContentFeedStates";
+import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 
 import {
@@ -70,6 +70,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const {
     allContent,
     defaultContent,
+    loading,
     error,
     refreshAllContent,
     getFilteredContent,
@@ -393,7 +394,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   );
 
   const listFooterComponent = useMemo(() => null, []);
+
   if (error && !hasContent) return <ErrorState message={error} />;
+
+  // Show a skeleton while a fetch is in flight instead of flashing
+  // "No content available" - this also covers the case where useAuthFeed
+  // flips (once auth resolves) and starts a fresh, uncached query under a
+  // different cache key, which would otherwise briefly report zero items.
+  if (filteredMediaList.length === 0 && loading) {
+    return <LoadingState />;
+  }
+
   if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
   return (
@@ -427,7 +438,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           scrollEventThrottle={16}
           estimatedItemSize={500}
           keyboardShouldPersistTaps="handled"
-          overscan={500}
+          // Mount videos ~2-3 cards before they're visible so their network
+          // fetch/buffering happens ahead of time - by the time the user
+          // scrolls to one, it's already had a head start loading instead of
+          // starting cold the moment it becomes the active video.
+          overscan={1400}
         />
       </View>
     </ContentErrorBoundary>

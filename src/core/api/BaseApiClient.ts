@@ -19,6 +19,29 @@ export interface RequestOptions {
   cacheDuration?: number;
 }
 
+// Shared (module-level) rate-limit circuit breaker. Every service extending
+// BaseApiClient hits the same backend, so a 429 from one service (e.g. the
+// Bible API) means the others (e.g. media) will likely be limited too.
+// Sharing this state stops all of them from continuing to hammer the API
+// and extending the rate-limit window instead of letting it recover.
+const RATE_LIMIT_COOLDOWN_MS = 30_000;
+const RATE_LIMIT_COOLDOWN_MAX_MS = 120_000;
+let rateLimitedUntil = 0;
+let rateLimitCooldownMs = RATE_LIMIT_COOLDOWN_MS;
+
+function activateRateLimitCooldown(response: Response): void {
+  let cooldownMs = rateLimitCooldownMs;
+
+  const retryAfterHeader = response.headers?.get?.("Retry-After");
+  const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+  if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+    cooldownMs = retryAfterSeconds * 1000;
+  }
+
+  rateLimitedUntil = Date.now() + cooldownMs;
+  rateLimitCooldownMs = Math.min(rateLimitCooldownMs * 2, RATE_LIMIT_COOLDOWN_MAX_MS);
+}
+
 export class BaseApiClient {
   protected baseURL: string;
   private isRefreshing: boolean = false;
@@ -148,6 +171,17 @@ export class BaseApiClient {
       retryOnAbort = false,
     } = options;
 
+    if (Date.now() < rateLimitedUntil) {
+      const secondsLeft = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
+      console.warn(
+        `⏸️ Skipping request (rate limited for ${secondsLeft}s more): ${method} ${endpoint}`
+      );
+      return {
+        success: false,
+        error: "Too many requests. Please wait a moment and try again.",
+      };
+    }
+
     try {
       const authHeaders = requireAuth
         ? await this.getAuthHeaders()
@@ -182,6 +216,16 @@ export class BaseApiClient {
         } else {
           throw fetchError;
         }
+      }
+
+      if (response.status === 429) {
+        activateRateLimitCooldown(response);
+        const errorText = await response.text().catch(() => "");
+        console.error(`❌ API Error: 429 (rate limited, backing off)`, errorText);
+        return {
+          success: false,
+          error: "Too many requests. Please wait a moment and try again.",
+        };
       }
 
       // Handle 401/402 with token refresh
@@ -248,6 +292,10 @@ export class BaseApiClient {
       }
 
       const data = await response.json();
+
+      // Successful request - reset the backoff multiplier
+      rateLimitCooldownMs = RATE_LIMIT_COOLDOWN_MS;
+
       return {
         success: true,
         data,

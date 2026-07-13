@@ -7,7 +7,7 @@ export interface UseVideoCardSeekParams {
   isAudioSermon: boolean;
   audioState?: { position: number; duration: number };
   audioControls?: { seekTo: (ms: number) => Promise<void> };
-  player: any;
+  videoRef: React.MutableRefObject<any>;
   videoPositionMs: number;
   lastKnownDurationRef: React.MutableRefObject<number>;
   backendDurationMs: number;
@@ -17,7 +17,7 @@ export function useVideoCardSeek({
   isAudioSermon,
   audioState,
   audioControls,
-  player,
+  videoRef,
   videoPositionMs,
   lastKnownDurationRef,
   backendDurationMs,
@@ -38,11 +38,11 @@ export function useVideoCardSeek({
         }
       } else {
         const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
-        if (!player || durationMs <= 0) return;
+        if (!videoRef.current || durationMs <= 0) return;
         const currentMs = Math.max(0, Math.min(videoPositionMs, durationMs));
         const nextMs = Math.max(0, Math.min(currentMs + deltaSec * 1000, durationMs));
         try {
-          player.currentTime = nextMs / 1000;
+          await videoRef.current.setPositionAsync(nextMs);
         } catch (e) {
           console.warn("Video seekBySeconds failed", e);
         }
@@ -53,7 +53,7 @@ export function useVideoCardSeek({
       audioState?.position,
       audioState?.duration,
       audioControls,
-      player,
+      videoRef,
       videoPositionMs,
       backendDurationMs,
       lastKnownDurationRef,
@@ -73,16 +73,16 @@ export function useVideoCardSeek({
         }
       } else {
         const durationMs = lastKnownDurationRef.current || 0;
-        if (!player || durationMs <= 0) return;
+        if (!videoRef.current || durationMs <= 0) return;
         const clamped = Math.max(0, Math.min(percent, 1));
         try {
-          player.currentTime = (clamped * durationMs) / 1000;
+          await videoRef.current.setPositionAsync(clamped * durationMs);
         } catch (e) {
           console.warn("Video seekToPercent failed", e);
         }
       }
     },
-    [isAudioSermon, audioState?.duration, audioControls, player, lastKnownDurationRef]
+    [isAudioSermon, audioState?.duration, audioControls, videoRef, lastKnownDurationRef]
   );
 
   return { seekBySeconds, seekToPercent };

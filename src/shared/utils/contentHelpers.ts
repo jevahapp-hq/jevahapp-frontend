@@ -26,6 +26,12 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       _id: enrichedItem._id || enrichedItem.id,
       contentType: enrichedItem.contentType || "media",
       fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
+      // Preserve backend streaming hints so the player can pick the fastest
+      // startable source (e.g. HLS) instead of always falling back to the
+      // raw fileUrl, and so media-type detection has mimeType to work with.
+      playbackUrl: enrichedItem.playbackUrl,
+      hlsUrl: enrichedItem.hlsUrl,
+      mimeType: enrichedItem.mimeType || enrichedItem.mimetype,
       title: enrichedItem.title || "Untitled",
       speaker: enrichedItem.speaker || enrichedItem.author?.firstName || enrichedItem.uploadedBy?.firstName,
       // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string

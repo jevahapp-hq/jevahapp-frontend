@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import contentInteractionAPI from "../../../../../../app/utils/contentInteractionAPI";
 
 export interface UseVideoCardPlaybackParams {
-  player: any;
   isAudioSermon: boolean;
-  videoTitle: string;
   contentId: string;
-  isPlaying: boolean;
+  videoRef: React.MutableRefObject<any>;
   handleVideoError: (error: any) => void;
   setFailedVideoLoad: (v: boolean) => void;
   setVideoLoaded: (v: boolean) => void;
@@ -17,12 +15,17 @@ export interface UseVideoCardPlaybackParams {
   isMountedRef: React.MutableRefObject<boolean>;
 }
 
+/**
+ * Drives progress/duration state and view tracking from expo-av's
+ * onLoad/onPlaybackStatusUpdate callbacks (used instead of expo-video's
+ * useVideoPlayer, which has a known Android bug where the native surface
+ * doesn't repaint when a player/view is recycled inside a virtualized list -
+ * https://github.com/expo/expo/issues/35012, #38426).
+ */
 export function useVideoCardPlayback({
-  player,
   isAudioSermon,
-  videoTitle,
   contentId,
-  isPlaying,
+  videoRef,
   handleVideoError,
   setFailedVideoLoad,
   setVideoLoaded,
@@ -37,79 +40,57 @@ export function useVideoCardPlayback({
   const [videoPositionMs, setVideoPositionMs] = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
 
-  useEffect(() => {
-    if (!player || isAudioSermon) return;
+  const handleLoad = useCallback(
+    (status: any) => {
+      if (isAudioSermon || !status?.isLoaded) return;
 
-    const statusSubscription = player.addListener("statusChange", (status: any) => {
-      if (status.status === "readyToPlay") {
-        setFailedVideoLoad(false);
-        setVideoLoaded(true);
-        videoLoadedRef.current = true;
+      setFailedVideoLoad(false);
+      setVideoLoaded(true);
+      videoLoadedRef.current = true;
 
-        const rawDuration =
-          typeof status.duration === "number"
-            ? status.duration
-            : typeof player.duration === "number"
-              ? player.duration
-              : 0;
-
-        if (rawDuration && Number.isFinite(rawDuration) && rawDuration > 0) {
-          const durationMs = Math.min(rawDuration * 1000, 24 * 60 * 60 * 1000);
-          if (!isNaN(durationMs)) {
-            lastKnownDurationRef.current = durationMs;
-            setVideoDurationMs(durationMs);
-          }
-        }
-
-        if (isPlaying) {
-          player.play();
-        }
-      } else if (status.status === "error") {
-        setFailedVideoLoad(true);
-        handleVideoError(status);
+      const rawDuration = status.durationMillis;
+      if (typeof rawDuration === "number" && Number.isFinite(rawDuration) && rawDuration > 0) {
+        const durationMs = Math.min(rawDuration, 24 * 60 * 60 * 1000);
+        lastKnownDurationRef.current = durationMs;
+        setVideoDurationMs(durationMs);
       }
-    });
+    },
+    [isAudioSermon, setFailedVideoLoad, setVideoLoaded, videoLoadedRef]
+  );
 
-    const timeUpdateSubscription = player.addListener("timeUpdate", (event: any) => {
-      if (!isMountedRef.current) return;
+  const handleStatusUpdate = useCallback(
+    (status: any) => {
+      if (isAudioSermon || !isMountedRef.current) return;
 
-      const currentTime =
-        typeof event?.currentTime === "number"
-          ? event.currentTime
-          : typeof player.currentTime === "number"
-            ? player.currentTime
-            : 0;
-
-      const rawDuration =
-        typeof event?.duration === "number"
-          ? event.duration
-          : typeof player.duration === "number"
-            ? player.duration
-            : lastKnownDurationRef.current / 1000 || 0;
-
-      const durationMs = Math.max(0, Math.min(rawDuration * 1000, 24 * 60 * 60 * 1000));
-      const positionMs = Math.max(0, Math.min(currentTime * 1000, durationMs));
-
-      if (Number.isFinite(durationMs) && durationMs > 0 && !isNaN(durationMs)) {
-        if (lastKnownDurationRef.current !== durationMs) {
-          lastKnownDurationRef.current = durationMs;
-          setVideoDurationMs(durationMs);
+      if (!status?.isLoaded) {
+        if (status?.error) {
+          setFailedVideoLoad(true);
+          handleVideoError(status.error);
         }
+        return;
+      }
+
+      const positionMs = Math.max(0, status.positionMillis ?? 0);
+      const rawDuration = status.durationMillis ?? lastKnownDurationRef.current;
+      const durationMs = Math.max(0, Math.min(rawDuration || 0, 24 * 60 * 60 * 1000));
+
+      if (durationMs > 0 && lastKnownDurationRef.current !== durationMs) {
+        lastKnownDurationRef.current = durationMs;
+        setVideoDurationMs(durationMs);
       }
 
       const progress = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
-
-      setVideoPositionMs(positionMs);
+      setVideoPositionMs(Math.min(positionMs, durationMs || positionMs));
       setVideoProgress(progress);
 
-      const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
-      const finished = rawDuration > 0 && currentTime >= rawDuration - 0.25;
+      const qualifies = status.isPlaying && (positionMs >= 3000 || progress >= 0.25);
+      const finished = !!status.didJustFinish;
 
       if (finished && isMountedRef.current) {
         try {
-          player.currentTime = 0;
-          if (player.playing) {
-            player.play();
+          videoRef.current?.setPositionAsync(0);
+          if (status.isPlaying) {
+            videoRef.current?.playAsync();
           }
         } catch {
           // no-op
@@ -137,20 +118,26 @@ export function useVideoCardPlayback({
           // no-op
         }
       }
-    });
-
-    return () => {
-      statusSubscription.remove();
-      timeUpdateSubscription.remove();
-    };
-  }, [player, videoTitle, isPlaying, isAudioSermon, contentId, hasTrackedView, handleVideoError, setFailedVideoLoad, setVideoLoaded, videoLoadedRef, setHasTrackedView, storeRef, isMountedRef]);
+    },
+    [
+      isAudioSermon,
+      isMountedRef,
+      contentId,
+      hasTrackedView,
+      handleVideoError,
+      setFailedVideoLoad,
+      setHasTrackedView,
+      storeRef,
+      videoRef,
+    ]
+  );
 
   return {
     lastKnownDurationRef,
     videoDurationMs,
     videoPositionMs,
     videoProgress,
-    setVideoPositionMs,
-    setVideoProgress,
+    handleLoad,
+    handleStatusUpdate,
   };
 }

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useContentCacheStore
@@ -140,6 +140,12 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
     enabled: immediate,
     initialData: cachedForInitial,
+    // Keep showing the previous query's data (e.g. the public feed) while a
+    // new query key's data is fetched - this happens when `useAuth` flips
+    // from false to true once auth resolves. Without this, the feed briefly
+    // renders empty because the new (useAuth: true) query starts with no
+    // data at all, even though we already had content to show.
+    placeholderData: keepPreviousData,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     retry: 1,
@@ -191,6 +197,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       throw new Error(response.error || "Failed to fetch content");
     },
     enabled: immediate,
+    // Keep showing the previous page/tab's data while a new contentType or
+    // page fetches, instead of flashing empty in between.
+    placeholderData: keepPreviousData,
     staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
     gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
     retry: 1,

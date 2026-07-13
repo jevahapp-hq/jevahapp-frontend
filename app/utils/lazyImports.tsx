@@ -4,17 +4,28 @@
  */
 
 import React, { Suspense, ComponentType } from "react";
-import { View, ActivityIndicator, Text } from "react-native";
+import { ActivityIndicator, Image, View } from "react-native";
 
 /**
- * Loading fallback component for lazy-loaded screens
+ * Branded loading fallback for lazy-loaded screens.
+ * Uses the app's white background + brand green spinner instead of an
+ * unstyled (effectively black) screen, so tab switches never flash dark.
  */
 const LoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-    <ActivityIndicator size="large" color="#000" />
-    <Text style={{ marginTop: 10, fontSize: 14, color: "#666" }}>
-      Loading...
-    </Text>
+  <View
+    style={{
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "#FFFFFF",
+    }}
+  >
+    <Image
+      source={require("../../assets/images/Jevah.png")}
+      style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 16 }}
+      resizeMode="contain"
+    />
+    <ActivityIndicator size="small" color="#256E63" />
   </View>
 );
 
@@ -72,4 +83,17 @@ export const UploadScreenWithSuspense = withSuspense(LazyUploadScreen);
 export const ReelsviewscrollWithSuspense = withSuspense(LazyReelsviewscroll);
 export const CommunityScreenWithSuspense = withSuspense(LazyCommunityScreen);
 export const BibleScreenWithSuspense = withSuspense(LazyBibleScreen);
+
+/**
+ * Warm the JS module cache for the main bottom-tab screens (Community,
+ * Library, Bible) so that by the time the user taps a tab, its
+ * React.lazy() import has already resolved and Suspense never needs to
+ * show the loading fallback. Safe to call multiple times - each dynamic
+ * import promise is cached by the module loader after the first call.
+ */
+export function preloadTabScreens() {
+  import("../screens/CommunityScreen").catch(() => {});
+  import("../screens/library/LibraryScreen").catch(() => {});
+  import("../screens/BibleScreen").catch(() => {});
+}
 

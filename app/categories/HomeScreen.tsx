@@ -1,25 +1,24 @@
 import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
-import { Suspense, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
+import BibleScreen from "../screens/BibleScreen";
+import CommunityScreen from "../screens/CommunityScreen";
+import LibraryScreen from "../screens/library/LibraryScreen";
 import HomeTabContent from "./HomeTabContent";
-import {
-  CommunityScreenWithSuspense,
-  LibraryScreenWithSuspense,
-  BibleScreenWithSuspense,
-} from "../utils/lazyImports";
-
-// Loading fallback for lazy-loaded tabs
-const TabLoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-    <ActivityIndicator size="large" color="#000" />
-  </View>
-);
 
 const tabList = ["Home", "Community", "Library", "Bible"];
 
 export default function HomeScreen() {
   const [selectedTab, setSelectedTab] = useState("Home");
+  // Track every tab the user has visited so far. Once a tab has been
+  // visited, we keep it mounted (just hidden via `display: none`) instead
+  // of unmounting it - this matches how social apps keep tab screens alive
+  // in the background so switching between them is instant, with no
+  // reload/refetch and no loading screen on every visit.
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(
+    () => new Set(["Home"])
+  );
   const { default: defaultTabParamRaw } = useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
@@ -27,6 +26,7 @@ export default function HomeScreen() {
 
   function handleTabChange(tab: string) {
     setSelectedTab(tab);
+    setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
   }
 
   useEffect(() => {
@@ -35,36 +35,26 @@ export default function HomeScreen() {
     }
   }, [defaultTabParam]);
 
-  const renderTabContent = () => {
-    switch (selectedTab) {
-      case "Home":
-        return <HomeTabContent />;
-      case "Community":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <CommunityScreenWithSuspense />
-          </Suspense>
-        );
-      case "Library":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <LibraryScreenWithSuspense />
-          </Suspense>
-        );
-      case "Bible":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <BibleScreenWithSuspense />
-          </Suspense>
-        );
-      default:
-        return <HomeTabContent />;
-    }
-  };
-
   return (
     <View style={{ flex: 1 }} className="w-full">
-      {renderTabContent()}
+      <View style={{ flex: 1, display: selectedTab === "Home" ? "flex" : "none" }}>
+        <HomeTabContent />
+      </View>
+      {visitedTabs.has("Community") && (
+        <View style={{ flex: 1, display: selectedTab === "Community" ? "flex" : "none" }}>
+          <CommunityScreen />
+        </View>
+      )}
+      {visitedTabs.has("Library") && (
+        <View style={{ flex: 1, display: selectedTab === "Library" ? "flex" : "none" }}>
+          <LibraryScreen />
+        </View>
+      )}
+      {visitedTabs.has("Bible") && (
+        <View style={{ flex: 1, display: selectedTab === "Bible" ? "flex" : "none" }}>
+          <BibleScreen />
+        </View>
+      )}
       <View
         style={{
           position: "absolute",

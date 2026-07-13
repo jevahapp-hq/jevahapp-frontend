@@ -10,8 +10,8 @@ export const useDailyVerse = () => {
   const loadTodaysVerse = async () => {
     try {
       setLoading(true);
-      // Simulate a small delay for better UX
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // getTodaysVerse() is a synchronous local lookup - no need to
+      // artificially delay it, that only made the Bible tab feel slow.
       const verse = dailyVerseService.getTodaysVerse();
       setCurrentVerse(verse);
     } catch (error) {
