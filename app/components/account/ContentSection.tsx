@@ -1,19 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import React, { useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { getTimeAgo } from "../ContentCard/utils";
 import { useAccountContent } from "../../hooks/useAccountContent";
 import { useUserProfile } from "../../hooks/useUserProfile";
-import { useReelsStore } from "../../store/useReelsStore";
+import { useVideoNavigation } from "../../hooks/useVideoNavigation";
 import type { MediaItem, Post, Video } from "../../types/account.types";
+import { mapAccountVideosToMediaItems } from "../../utils/mapAccountVideoToMediaItem";
 
 type ContentSectionProps = {
   selectedIndex: number;
 };
 
 function ContentSection({ selectedIndex }: ContentSectionProps) {
-  const router = useRouter();
-  const reelsStore = useReelsStore();
+  const { navigateToReels } = useVideoNavigation();
   const { user, getAvatarUrl } = useUserProfile();
   const {
     posts,
@@ -45,56 +45,38 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   }, []);
 
-  // Handle video press - memoized
-  const handleVideoPress = useCallback((video: Video, index: number) => {
-    // Get user's actual avatar URL, fallback to placeholder if not available
-    const userAvatarUrl = user && getAvatarUrl(user) 
-      ? getAvatarUrl(user) 
-      : "https://via.placeholder.com/40x40/cccccc/ffffff?text=U";
-    
-    // Prepare video list for navigation
-    const videoListForNavigation = videos.map((v, idx) => ({
-      title: v.title || "Untitled Video",
-      speaker: v.userId || "Unknown",
-      timeAgo: new Date(v.createdAt).toLocaleDateString(),
-      views: v.viewsCount || 0,
-      sheared: 0,
-      saved: 0,
-      favorite: v.likesCount || 0,
-      fileUrl: v.url || "",
-      imageUrl: v.thumbnail || v.url || "",
-      speakerAvatar: userAvatarUrl,
-      _id: v._id,
-      contentType: "videos",
-      description: v.description || "",
-      createdAt: v.createdAt,
-      uploadedBy: v.userId,
-    }));
+  const reelsMediaList = useMemo(() => {
+    const avatarUrl =
+      user && getAvatarUrl(user) ? getAvatarUrl(user) : null;
+    return mapAccountVideosToMediaItems(videos, user, avatarUrl);
+  }, [videos, user, getAvatarUrl]);
 
-    // Set video list in reels store BEFORE navigation for immediate access
-    reelsStore.setVideoList(videoListForNavigation);
-    reelsStore.setCurrentIndex(index);
+  // Same path as AllContentTikTok → /reels/Reelsviewscroll via useVideoNavigation
+  const handleVideoPress = useCallback(
+    (video: Video, index: number) => {
+      const mapped = reelsMediaList[index];
+      if (!mapped) return;
 
-    // Navigate to reels screen
-    router.push({
-      pathname: "/reels/Reelsviewscroll",
-      params: {
-        title: video.title || "Untitled Video",
-        speaker: video.userId || "Unknown",
-        timeAgo: new Date(video.createdAt).toLocaleDateString(),
-        views: String(video.viewsCount || 0),
-        sheared: "0",
-        saved: "0",
-        favorite: String(video.likesCount || 0),
-        imageUrl: video.url || "",
-        speakerAvatar: userAvatarUrl,
-        category: "videos",
-        currentIndex: String(index),
+      const displayName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+        "Creator";
+
+      void navigateToReels({
+        video: mapped,
+        index,
+        allVideos: reelsMediaList,
+        contentStats: {},
+        globalFavoriteCounts: {},
+        getContentKey: (item) => String(item._id || item.id || ""),
+        getTimeAgo,
+        getDisplayName: () => displayName,
         source: "AccountScreen",
-        videoList: JSON.stringify(videoListForNavigation),
-      },
-    });
-  }, [router, reelsStore, user, getAvatarUrl, videos]);
+        category: "videos",
+      });
+    },
+    [navigateToReels, reelsMediaList, user]
+  );
 
   // Render post item - memoized
   const renderPostItem = useCallback(({ item }: { item: Post }) => {

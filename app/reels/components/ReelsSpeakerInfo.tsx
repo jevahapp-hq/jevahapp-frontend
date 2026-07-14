@@ -109,15 +109,9 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
                 marginRight: getResponsiveSpacing(6, 8, 10),
               }}
               numberOfLines={1}
-              accessibilityLabel={
-                source === "AccountScreen"
-                  ? `Video: ${enrichedVideoData.title || "Untitled"}`
-                  : `Posted by ${getSpeakerName(enrichedVideoData, "Creator")}`
-              }
+              accessibilityLabel={`Posted by ${getSpeakerName(enrichedVideoData, "Creator")}`}
             >
-              {source === "AccountScreen"
-                ? enrichedVideoData.title || "Untitled Video"
-                : getSpeakerName(enrichedVideoData, "Creator")}
+              {getSpeakerName(enrichedVideoData, "Creator")}
             </Text>
             <Text
               style={{
