@@ -7,6 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const KEY = "feed_impressions_v1";
 const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const SESSION_SEED_KEY = "feed_session_seed_v1";
+const LAST_SESSION_TOPS_KEY = "feed_last_session_tops_v1";
 
 type ImpressionMap = Record<string, number>;
 
@@ -81,4 +82,28 @@ export function idsSeenToday(map: ImpressionMap, now = Date.now()): Set<string> 
     if (ts >= dayAgo) set.add(id);
   }
   return set;
+}
+
+/** Top-of-feed IDs from the previous session — demoted on next cold start. */
+export async function getLastSessionTopIds(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_SESSION_TOPS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.map(String).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Persist first N ranked IDs when leaving feed so next login rotates away. */
+export async function rememberLastSessionTopIds(ids: string[]): Promise<void> {
+  const clean = ids.map(String).filter((id) => /^[a-f\d]{24}$/i.test(id)).slice(0, 5);
+  if (clean.length === 0) return;
+  try {
+    await AsyncStorage.setItem(LAST_SESSION_TOPS_KEY, JSON.stringify(clean));
+  } catch {
+    // no-op
+  }
 }

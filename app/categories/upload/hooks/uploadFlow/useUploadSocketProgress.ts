@@ -1,0 +1,110 @@
+import { useCallback, useRef } from "react";
+import SocketManager from "../../../../services/SocketManager";
+import TokenUtils from "../../../../utils/tokenUtils";
+import { API_BASE_URL } from "../../constants";
+import type { UploadState } from "../../types";
+
+type ProgressStage = {
+  uploadId: string;
+  progress: number;
+  stage: string;
+  message: string;
+  timestamp: string;
+};
+
+export function useUploadSocketProgress(
+  setUploadState: (
+    v: UploadState | ((prev: UploadState) => UploadState)
+  ) => void,
+  stopSimulated: () => void
+) {
+  const socketManagerRef = useRef<SocketManager | null>(null);
+  const currentUploadIdRef = useRef<string | null>(null);
+  const isUsingRealTimeProgressRef = useRef(false);
+
+  const cleanupSocket = useCallback(() => {
+    if (socketManagerRef.current) {
+      const socket = (socketManagerRef.current as { socket?: { off: Function } })
+        .socket;
+      socket?.off("upload-progress");
+      socketManagerRef.current.disconnect();
+      socketManagerRef.current = null;
+    }
+    currentUploadIdRef.current = null;
+    isUsingRealTimeProgressRef.current = false;
+  }, []);
+
+  const connectSocket = useCallback(
+    async (uploadId: string) => {
+      currentUploadIdRef.current = uploadId;
+      isUsingRealTimeProgressRef.current = false;
+
+      try {
+        const token = await TokenUtils.getAuthToken();
+        if (!token || !TokenUtils.isValidJWTFormat(token)) return;
+
+        const socketManager = new SocketManager({
+          serverUrl: API_BASE_URL,
+          authToken: token,
+        });
+        await socketManager.connect();
+
+        const socket = (socketManager as { socket?: any }).socket;
+        if (!socket) return;
+
+        socketManagerRef.current = socketManager;
+
+        const handleUploadProgress = (progressData: ProgressStage) => {
+          if (progressData.uploadId !== uploadId) return;
+
+          if (!isUsingRealTimeProgressRef.current) {
+            isUsingRealTimeProgressRef.current = true;
+            stopSimulated();
+          }
+
+          let status: UploadState["status"] = "verifying";
+          if (progressData.stage === "complete") status = "success";
+          else if (
+            progressData.stage === "error" ||
+            progressData.stage === "rejected"
+          )
+            status = "error";
+          else if (progressData.stage === "finalizing") status = "uploading";
+
+          setUploadState({
+            status,
+            progress: Math.min(progressData.progress, 100),
+            message: progressData.message || progressData.stage,
+          });
+        };
+
+        socket.on("upload-progress", handleUploadProgress);
+
+        if (!socket.connected) {
+          const connectionTimeout = setTimeout(() => {
+            if (!socket.connected) {
+              console.warn("⚠️ Socket.IO connection timeout, using simulated progress");
+            }
+          }, 3000);
+          socket.once("connect", () => {
+            clearTimeout(connectionTimeout);
+            isUsingRealTimeProgressRef.current = true;
+            stopSimulated();
+          });
+        } else {
+          isUsingRealTimeProgressRef.current = true;
+        }
+      } catch (socketError) {
+        console.warn("⚠️ Failed to initialize Socket.IO:", socketError);
+      }
+    },
+    [setUploadState, stopSimulated]
+  );
+
+  return {
+    connectSocket,
+    cleanupSocket,
+    isUsingRealTimeProgressRef,
+    socketManagerRef,
+  };
+}

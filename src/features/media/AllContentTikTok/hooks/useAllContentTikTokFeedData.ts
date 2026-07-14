@@ -14,9 +14,11 @@ import {
 } from "../../../../shared/utils/contentHelpers";
 import {
   getFeedImpressions,
+  getLastSessionTopIds,
   getOrCreateSessionSeed,
   idsSeenToday,
   markFeedImpressions,
+  rememberLastSessionTopIds,
 } from "../utils/feedImpressionStore";
 import {
   pickMostRecentItem,
@@ -44,6 +46,9 @@ export function useAllContentTikTokFeedData(
 
   const libraryStore = useLibraryStore();
   const [seenTodayIds, setSeenTodayIds] = useState<Set<string>>(new Set());
+  const [lastSessionTopIds, setLastSessionTopIds] = useState<Set<string>>(
+    new Set()
+  );
   const [sessionSeed, setSessionSeed] = useState<number>(1);
   const [impressionsReady, setImpressionsReady] = useState(false);
   const [affinity, setAffinity] = useState<
@@ -56,15 +61,17 @@ export function useAllContentTikTokFeedData(
     (async () => {
       try {
         const { getFeedAffinity } = await import("../utils/feedAffinityStore");
-        const [map, seed, aff] = await Promise.all([
+        const [map, seed, aff, lastTops] = await Promise.all([
           getFeedImpressions(),
           getOrCreateSessionSeed(),
           getFeedAffinity(),
+          getLastSessionTopIds(),
         ]);
         if (cancelled) return;
         setSeenTodayIds(idsSeenToday(map));
         setSessionSeed(seed);
         setAffinity(aff);
+        setLastSessionTopIds(lastTops);
       } catch {
         // no-op
       } finally {
@@ -98,12 +105,14 @@ export function useAllContentTikTokFeedData(
       return rankFeedForYou(filteredByType, {
         previouslyViewedIds,
         sessionSeed,
+        lastSessionTopIds,
         affinity,
       });
     }
     return rankFeedForYou(filteredByType, {
       previouslyViewedIds,
       seenTodayIds,
+      lastSessionTopIds,
       sessionSeed,
       affinity,
     });
@@ -111,6 +120,7 @@ export function useAllContentTikTokFeedData(
     filteredByType,
     previouslyViewedIds,
     seenTodayIds,
+    lastSessionTopIds,
     sessionSeed,
     impressionsReady,
     affinity,
@@ -157,6 +167,23 @@ export function useAllContentTikTokFeedData(
 
     return () => clearTimeout(timer);
   }, [mostRecentItem?._id, firstFour, rest]);
+
+  // Remember this session's top cards for next cold start rotation
+  useEffect(() => {
+    const topIds = [
+      mostRecentItem?._id,
+      ...firstFour.map((i) => i._id),
+    ]
+      .filter(Boolean)
+      .map(String)
+      .slice(0, 5);
+
+    return () => {
+      if (topIds.length > 0) {
+        void rememberLastSessionTopIds(topIds);
+      }
+    };
+  }, [mostRecentItem?._id, firstFour]);
 
   // Hydrate liked/saved + counts from feed immediately (no InteractionManager delay)
   useEffect(() => {

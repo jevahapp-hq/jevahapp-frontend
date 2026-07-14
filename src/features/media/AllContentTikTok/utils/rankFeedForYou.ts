@@ -17,7 +17,9 @@ export type FeedRankOptions = {
   sessionSeed?: number;
   /** On-device preference profile (likes / watches) */
   affinity?: FeedAffinityProfile;
-  /** Prefer slightly more freshness (0–1). Default 0.4 */
+  /** IDs that were top-of-feed last session — heavy demotion on relaunch */
+  lastSessionTopIds?: Set<string> | string[];
+  /** Prefer slightly more freshness (0–1). Default 0.32 */
   recencyWeight?: number;
   /** Prefer engagement (likes/views/comments). Default 0.45 */
   engagementWeight?: number;
@@ -118,11 +120,32 @@ function diversify(scored: Scored[], diversifyEvery: number): Scored[] {
   return ordered;
 }
 
+function exploreTopFeed(scored: Scored[], seed: number): Scored[] {
+  if (scored.length < 3) return scored;
+
+  const poolSize = Math.min(8, scored.length);
+  const pool = scored.slice(0, poolSize);
+  const tail = scored.slice(poolSize);
+  const picked: Scored[] = [];
+
+  for (let slot = 0; slot < Math.min(3, pool.length); slot++) {
+    const remaining = pool.filter((x) => !picked.includes(x));
+    if (remaining.length === 0) break;
+    const window = Math.min(5 - slot, remaining.length);
+    const idx = Math.floor(seededJitter(`slot${slot}`, seed + slot * 17) * window);
+    picked.push(remaining[idx]);
+  }
+
+  const rest = pool.filter((x) => !picked.includes(x));
+  return [...picked, ...rest, ...tail];
+}
+
 function scoreBucket(
   items: MediaItem[],
   options: {
     now: number;
     viewed: Set<string>;
+    lastSessionTops: Set<string>;
     sessionSeed: number;
     recencyWeight: number;
     engagementWeight: number;
@@ -134,6 +157,7 @@ function scoreBucket(
   const {
     now,
     viewed,
+    lastSessionTops,
     sessionSeed,
     recencyWeight,
     engagementWeight,
@@ -152,17 +176,22 @@ function scoreBucket(
       rec * recencyWeight * 8 +
       aff * affinityWeight * 10;
 
-    // Session rotation among near-ties — different top item each cold start
-    score += seededJitter(id || String(index), sessionSeed) * 2.4;
+    score += seededJitter(id || String(index), sessionSeed) * 3.2;
     score += (items.length - index) * 0.0001;
 
     if (id && viewed.has(id)) {
       score *= 1 - viewedPenalty;
     }
 
+    // Previous session #1–#3: don't open with the same cards (IG/TikTok relaunch)
+    if (id && lastSessionTops.has(id)) {
+      score *= 0.12;
+    }
+
     const ageMs = now - Date.parse(item.createdAt || "");
-    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 12 * HOUR_MS && eng < 1) {
-      score += 2.5;
+    // Tiny boost for brand-new uploads only when they already have some signal
+    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 12 * HOUR_MS && eng >= 0.5) {
+      score += 1.2;
     }
 
     return { item, score, family: contentFamily(item) };
@@ -182,12 +211,13 @@ export function rankFeedForYou(
   const now = Date.now();
   const viewed = normalizeIds(options.previouslyViewedIds);
   const seenToday = normalizeIds(options.seenTodayIds);
+  const lastSessionTops = normalizeIds(options.lastSessionTopIds);
   const sessionSeed = options.sessionSeed ?? 1;
-  const recencyWeight = options.recencyWeight ?? 0.4;
-  const engagementWeight = options.engagementWeight ?? 0.45;
-  const affinityWeight = options.affinityWeight ?? 0.35;
-  const viewedPenalty = options.viewedPenalty ?? 0.55;
-  const diversifyEvery = Math.max(2, options.diversifyEvery ?? 4);
+  const recencyWeight = options.recencyWeight ?? 0.32;
+  const engagementWeight = options.engagementWeight ?? 0.48;
+  const affinityWeight = options.affinityWeight ?? 0.38;
+  const viewedPenalty = options.viewedPenalty ?? 0.62;
+  const diversifyEvery = Math.max(2, options.diversifyEvery ?? 3);
 
   const fresh: MediaItem[] = [];
   const recycled: MediaItem[] = [];
@@ -200,6 +230,7 @@ export function rankFeedForYou(
   const scoreOpts = {
     now,
     viewed,
+    lastSessionTops,
     sessionSeed,
     recencyWeight,
     engagementWeight,
@@ -208,14 +239,14 @@ export function rankFeedForYou(
     affinity: options.affinity,
   };
 
-  const freshScored = scoreBucket(fresh, scoreOpts).sort(
-    (a, b) => b.score - a.score
+  const freshScored = exploreTopFeed(
+    scoreBucket(fresh, scoreOpts).sort((a, b) => b.score - a.score),
+    sessionSeed
   );
   const recycledScored = scoreBucket(recycled, {
     ...scoreOpts,
-    // Seen in last 24h: heavy demotion so next login isn't the same top cards
-    viewedPenalty: Math.min(0.92, viewedPenalty + 0.35),
-    affinityWeight: affinityWeight * 0.5,
+    viewedPenalty: Math.min(0.95, viewedPenalty + 0.38),
+    affinityWeight: affinityWeight * 0.45,
   }).sort((a, b) => b.score - a.score);
 
   const ordered = [
