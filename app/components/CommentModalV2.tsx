@@ -107,11 +107,12 @@ export default function CommentModalV2() {
       endCoordinates: { height: number; screenY: number };
     }) => {
       const { height, screenY } = e.endCoordinates;
-      // screenY is the most reliable top-of-keyboard for edge-to-edge Modals
-      // (captures the Samsung/Gboard suggestion strip too). Dock flush to it.
+      // screenY-based inset can overshoot in Modal coords because SCREEN_H >
+      // window height (system nav). That left a video strip above the keyboard.
       const fromScreen = Math.max(0, SCREEN_H - screenY);
-      const measured = Math.max(height, fromScreen);
-      setKeyboardHeight(measured);
+      const windowOvershoot = Math.max(0, SCREEN_H - SCREEN_HEIGHT);
+      const measured = Math.max(height, fromScreen) - windowOvershoot;
+      setKeyboardHeight(Math.max(0, measured));
     };
     const onHide = () => setKeyboardHeight(0);
     const show = Keyboard.addListener(
@@ -495,8 +496,9 @@ export default function CommentModalV2() {
 
   // Safe inset lives INSIDE the composer so the white panel covers nav keys
   // while the input still clears the system navigation.
+  // When keyboard is up, no extra pad — sheet bottom should meet the keys.
   const composerBottomPad =
-    keyboardHeight > 0 ? 10 : Math.max(insets.bottom, 8);
+    keyboardHeight > 0 ? 0 : Math.max(insets.bottom, 8);
 
   return (
     <Modal
@@ -530,6 +532,22 @@ export default function CommentModalV2() {
             ]}
           />
         </TouchableOpacity>
+
+        {/* White bridge under the sheet: if keyboard inset is 1–N px high,
+            this fills the strip so video never peeks between input and keys. */}
+        {keyboardHeight > 0 ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: keyboardHeight,
+              backgroundColor: "#FFFFFF",
+            }}
+          />
+        ) : null}
 
         {/* Sheet docks above keyboard (bottom = measured keyboard inset). */}
         <Animated.View
