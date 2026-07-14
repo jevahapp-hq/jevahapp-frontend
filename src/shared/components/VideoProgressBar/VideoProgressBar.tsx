@@ -1,10 +1,10 @@
 /**
  * VideoProgressBar — thin compatibility shim.
- * Canonical implementation: TikTokProgressBar + hooks/utils/types.
+ * Canonical: TikTokProgressBar + modular seek hooks.
  *
- * Progress pipeline:
- *   timeUpdate → useVideoProgressTracker → TikTokProgressBar + useSeekSync
- *   seek → useVideoCardSeek → expoVideoAdapter.seekPlayerToMs
+ * Seek pipeline:
+ *   gestures (useProgressBarGestures — refs) → onSeekToPercent
+ *   → useVideoCardSeek / Reels seek → expoVideoAdapter / setPositionAsync
  */
 import React from "react";
 import { TikTokProgressBar } from "./TikTokProgressBar";
@@ -17,6 +17,8 @@ export interface VideoProgressBarProps {
   isMuted: boolean;
   onToggleMute: () => void;
   onSeekToPercent: (percent: number) => void;
+  onScrubStart?: () => void;
+  onScrubEnd?: () => void;
   showControls?: boolean;
   bottomOffset?: number;
   showFloatingLabel?: boolean;
@@ -27,6 +29,8 @@ export interface VideoProgressBarProps {
   seekSyncTicks?: number;
   seekMsTolerance?: number;
   minProgressEpsilon?: number;
+  seekDuringDrag?: boolean;
+  liveSeekThrottleMs?: number;
   enableHaptics?: boolean;
   verticalScrub?: {
     enabled?: boolean;
@@ -38,9 +42,6 @@ export interface VideoProgressBarProps {
   debug?: boolean;
 }
 
-/**
- * Legacy prop-compatible wrapper around the modular TikTokProgressBar.
- */
 export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   progress,
   currentMs,
@@ -48,19 +49,22 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   isMuted,
   onToggleMute,
   onSeekToPercent,
+  onScrubStart,
+  onScrubEnd,
   showControls = true,
   showFloatingLabel = true,
   enlargeOnDrag = true,
   knobSize = 8,
-  knobSizeDragging = 10,
-  trackHeights = { normal: 4, dragging: 8 },
+  knobSizeDragging = 12,
+  trackHeights = { normal: 3, dragging: 8 },
   seekSyncTicks = 2,
   seekMsTolerance = 300,
   minProgressEpsilon = 0.01,
+  seekDuringDrag = true,
+  liveSeekThrottleMs = 48,
   enableHaptics = false,
   verticalScrub = { enabled: true, sensitivityBase: 60, maxSlowdown: 5 },
   debug = false,
-  // bottomOffset / mutePosition / style kept for API compat; TikTok bar owns layout
   bottomOffset: _bottomOffset,
   mutePosition: _mutePosition,
   style: _style,
@@ -75,6 +79,8 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
     seekSyncTicks,
     seekMsTolerance,
     minProgressEpsilon,
+    seekDuringDrag,
+    liveSeekThrottleMs,
     enableHaptics,
     verticalScrub: {
       enabled: verticalScrub.enabled ?? true,
@@ -91,6 +97,8 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       isMuted={isMuted}
       onToggleMute={onToggleMute}
       onSeekToPercent={onSeekToPercent}
+      onScrubStart={onScrubStart}
+      onScrubEnd={onScrubEnd}
       showControls={showControls}
       config={config}
       debug={debug}

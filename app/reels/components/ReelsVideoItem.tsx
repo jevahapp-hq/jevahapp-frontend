@@ -266,27 +266,34 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
                 onDownload={onDownload}
                 onShare={() => onShare(videoKey)}
               />
-              <VideoProgressBar
-                progress={localDuration > 0 ? localPosition / localDuration : 0}
-                currentMs={localPosition}
-                durationMs={localDuration}
-                isMuted={isMuted}
-                onToggleMute={() => onToggleMute(videoKey)}
-                onSeekToPercent={(pct: number) => onSeek(videoKey, pct * 100)}
-                showControls={true}
-                bottomOffset={getResponsiveSpacing(120, 135, 155)}
-                enlargeOnDrag={true}
-                knobSize={8}
-                knobSizeDragging={12}
-                trackHeights={{ normal: 2, dragging: 6 }}
-                enableHaptics={true}
-                mutePosition="left"
-                style={{ zIndex: 100 }}
-              />
             </>
           )}
         </View>
       </TouchableWithoutFeedback>
+
+      {isActive ? (
+        <VideoProgressBar
+          progress={localDuration > 0 ? localPosition / localDuration : 0}
+          currentMs={localPosition}
+          durationMs={localDuration}
+          isMuted={isMuted}
+          onToggleMute={() => onToggleMute(videoKey)}
+          onSeekToPercent={(pct: number) => onSeek(videoKey, pct * 100)}
+          onScrubStart={() => setIsDragging(true)}
+          onScrubEnd={() => setIsDragging(false)}
+          showControls={true}
+          bottomOffset={getResponsiveSpacing(120, 135, 155)}
+          enlargeOnDrag={true}
+          knobSize={8}
+          knobSizeDragging={12}
+          trackHeights={{ normal: 2, dragging: 6 }}
+          seekDuringDrag={true}
+          liveSeekThrottleMs={48}
+          enableHaptics={true}
+          mutePosition="left"
+          style={{ zIndex: 100 }}
+        />
+      ) : null}
     </View>
   );
 });

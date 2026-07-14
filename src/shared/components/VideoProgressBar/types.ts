@@ -1,10 +1,8 @@
 /**
- * Types and interfaces for the modular TikTok-style video progress bar
- * This file centralizes all type definitions for easy debugging and maintenance
+ * Types for the modular TikTok-style video progress bar.
  */
 
 export interface ProgressBarConfig {
-  // Visual configuration
   trackHeight: number;
   trackHeightDragging: number;
   knobSize: number;
@@ -12,42 +10,42 @@ export interface ProgressBarConfig {
   trackColor: string;
   progressColor: string;
   knobColor: string;
-  
-  // Behavior configuration
+
   enableHaptics: boolean;
   enlargeOnDrag: boolean;
   showFloatingLabel: boolean;
   showTimeLabels: boolean;
-  
-  // Seek configuration
-  seekSyncTicks: number; // Number of consecutive stable updates to finish seeking
-  seekMsTolerance: number; // Milliseconds tolerance for seek completion
-  minProgressEpsilon: number; // Minimum progress difference to consider stable
-  
-  // Vertical scrub configuration (TikTok-style)
+
+  seekSyncTicks: number;
+  seekMsTolerance: number;
+  minProgressEpsilon: number;
+
+  /** Seek while dragging (throttled). false = seek only on release. */
+  seekDuringDrag: boolean;
+  liveSeekThrottleMs: number;
+
   verticalScrub: {
     enabled: boolean;
-    sensitivityBase: number; // Pixels for base sensitivity
-    maxSlowdown: number; // Maximum slowdown factor (1-5x)
+    sensitivityBase: number;
+    maxSlowdown: number;
   };
 }
 
 export interface ProgressBarProps {
-  // Core data
-  progress: number; // 0-1
+  progress: number;
   currentMs: number;
   durationMs: number;
-  
-  // Controls
+
   isMuted: boolean;
   onToggleMute: () => void;
   onSeekToPercent: (percent: number) => void;
-  
-  // Optional overrides
+
+  /** Parent can pause position polling / loop while scrubbing (Reels, feed). */
+  onScrubStart?: () => void;
+  onScrubEnd?: () => void;
+
   showControls?: boolean;
   config?: Partial<ProgressBarConfig>;
-  
-  // Debug mode
   debug?: boolean;
 }
 
@@ -59,13 +57,3 @@ export interface ProgressBarState {
   stableTicks: number;
   barWidth: number;
 }
-
-export interface GestureHandlers {
-  onPress: (event: any) => void;
-  onDragStart: (event: any) => void;
-  onDragMove: (event: any) => void;
-  onDragEnd: () => void;
-  onDragCancel: () => void;
-}
-
-

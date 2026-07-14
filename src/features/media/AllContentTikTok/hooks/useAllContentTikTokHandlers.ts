@@ -8,6 +8,7 @@ import { mapContentTypeForBackend } from "../../../../../app/utils/engagementHel
 import {
   getCachedContentInteraction,
   isContentInteractionFresh,
+  resolveLikedFlag,
 } from "../../../../../app/utils/contentInteractionPersist";
 import { useVideoNavigation } from "../../../../../app/hooks/useVideoNavigation";
 import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
@@ -18,6 +19,7 @@ import {
 } from "../../../../../app/utils/downloadUtils";
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import { detectMediaType } from "../../../../shared/utils";
+import { recordFeedAffinity } from "../utils/feedAffinityStore";
 
 export interface UseAllContentTikTokHandlersParams {
   contentType: ContentType | "ALL";
@@ -160,16 +162,16 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        // Seed from what's on screen (store/cache), not stale feed `hasLiked`.
-        // Wrong seeds make a "like" tap actually unlike on the server.
         const storeStats = useInteractionStore.getState().contentStats[contentId];
         const cached = getCachedContentInteraction(contentId);
         const cacheFresh = isContentInteractionFresh(contentId);
         const initialLiked = Boolean(
-          storeStats?.userInteractions?.liked ??
-            (cacheFresh ? cached?.liked : undefined) ??
-            (item as any).hasLiked ??
-            (item as any).userHasLiked
+          resolveLikedFlag(
+            contentId,
+            storeStats?.userInteractions?.liked ??
+              (item as any).hasLiked ??
+              (item as any).userHasLiked
+          )
         );
         const initialLikes =
           storeStats?.likes ??
@@ -180,12 +182,14 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           item.favorite ??
           0;
 
-        // One mutation path only. The HTTP toggle is authoritative; emitting
-        // `content-reaction` here can make the backend toggle the same like twice.
-        await toggleLike(contentId, contentType, {
+        const result = await toggleLike(contentId, contentType, {
           initialLikes: Number(initialLikes) || 0,
           initialLiked,
         });
+        // Train on-device affinity when the heart ends liked
+        if (result?.liked) {
+          void recordFeedAffinity(item, 1.5);
+        }
       } catch (error) {
         console.error(`❌ Failed to toggle like for ${item.title}:`, error);
       }
@@ -276,13 +280,28 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           message: `Check this out: ${item.title}\n${item.fileUrl}`,
           url: item.fileUrl,
         });
+
+        // User closed the sheet — do not ping analytics
+        if (result.action === Share.dismissedAction) {
+          return;
+        }
+
         if (result.action === Share.sharedAction) {
-          await recordShare(contentId, contentType, result.activityType || "generic");
+          // Soft-fails on 404; never surfaces an error for dismiss/analytics miss
+          await recordShare(
+            contentId,
+            contentType,
+            result.activityType || "generic"
+          );
         }
       } catch (err) {
-        console.warn("❌ Share error:", err);
+        // User cancelled share sheet (some Android OEMs throw) — ignore
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/cancel|dismiss|abort/i.test(msg)) return;
+        if (__DEV__) console.warn("Share sheet error:", msg);
+      } finally {
+        setModalVisible(null);
       }
-      setModalVisible(null);
     },
     [recordShare, setModalVisible]
   );

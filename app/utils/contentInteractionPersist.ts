@@ -1,11 +1,21 @@
 /**
- * Persist liked/saved counts so cold start doesn't flash gray then red,
- * and doesn't keep a red heart with a zero count.
+ * Persist liked/saved counts so cold start doesn't flash gray then red.
+ *
+ * Counts use a short freshness window (avoid stale totals).
+ * Liked/saved *booleans* stay sticky until the user toggles again — otherwise
+ * a broken backend hasLiked:false wipes the red heart after ~10 minutes.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const KEY = "jevah_content_interaction_stats_v2";
+/** Counts / totals — short window so feed numbers can catch up */
 export const INTERACTION_CACHE_TTL_MS = 10 * 60 * 1000;
+/**
+ * Affirmative like/save flags — keep until user unlikes/unsaves.
+ * Backend currently returns inconsistent hasLiked; without this the heart
+ * disappears after the short TTL even though the user liked.
+ */
+export const INTERACTION_FLAG_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type PersistedContentInteraction = {
   likes?: number;
@@ -77,6 +87,50 @@ export function isContentInteractionFresh(
   );
 }
 
+/** True while we still trust a local liked/saved boolean over feed metadata. */
+export function isInteractionFlagFresh(
+  contentId: string,
+  maxAgeMs = INTERACTION_FLAG_TTL_MS
+): boolean {
+  return isContentInteractionFresh(contentId, maxAgeMs);
+}
+
+/**
+ * Prefer local liked/saved when present and within flag TTL.
+ * Never let a stale feed `hasLiked: false` clear a known like.
+ */
+export function resolveLikedFlag(
+  contentId: string,
+  fallback?: boolean | null
+): boolean | undefined {
+  const cached = memoryCache[contentId];
+  if (
+    cached &&
+    typeof cached.liked === "boolean" &&
+    isInteractionFlagFresh(contentId)
+  ) {
+    return cached.liked;
+  }
+  if (typeof fallback === "boolean") return fallback;
+  return undefined;
+}
+
+export function resolveSavedFlag(
+  contentId: string,
+  fallback?: boolean | null
+): boolean | undefined {
+  const cached = memoryCache[contentId];
+  if (
+    cached &&
+    typeof cached.saved === "boolean" &&
+    isInteractionFlagFresh(contentId)
+  ) {
+    return cached.saved;
+  }
+  if (typeof fallback === "boolean") return fallback;
+  return undefined;
+}
+
 export async function persistContentInteraction(
   contentId: string,
   patch: PersistedContentInteraction
@@ -90,7 +144,6 @@ export async function persistContentInteraction(
   };
   const disk = await readMap();
   const map = { ...disk, ...memoryCache };
-  // Cap map size to avoid unbounded growth
   const entries = Object.entries(map).sort(
     (a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0)
   );

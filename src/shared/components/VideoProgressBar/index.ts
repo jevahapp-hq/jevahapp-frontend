@@ -8,3 +8,10 @@ export { TikTokProgressBar } from "./TikTokProgressBar";
 // Export types and utilities for advanced usage
 export type { ProgressBarProps, ProgressBarConfig, ProgressBarState } from "./types";
 export { formatTime, calculateProgress } from "./utils";
+export { DEFAULT_CONFIG } from "./defaultConfig";
+export {
+  useProgressBarGestures,
+  useProgressBarState,
+  useSeekSync,
+  useHaptics,
+} from "./hooks";

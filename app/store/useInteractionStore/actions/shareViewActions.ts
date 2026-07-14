@@ -9,14 +9,21 @@ export function createShareViewActions(set: StoreSet, api: any) {
     recordShare: async (contentId: string, contentType: string, shareMethod: string = "generic") => {
       try {
         const result = await api.recordShare(contentId, contentType, shareMethod);
+        // Soft-fail from API (404 etc.) — don't mark shared or bump counts
+        if (result?.ok === false) return;
+
         set((state: any) => {
           const currentStats = state.contentStats[contentId];
+          const nextShares =
+            typeof result?.totalShares === "number" && result.totalShares > 0
+              ? result.totalShares
+              : (currentStats?.shares || 0) + 1;
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
             likes: currentStats?.likes || 0,
             saves: currentStats?.saves || 0,
-            shares: result.totalShares,
+            shares: nextShares,
             views: currentStats?.views || 0,
             comments: currentStats?.comments || 0,
             userInteractions: {
@@ -29,8 +36,8 @@ export function createShareViewActions(set: StoreSet, api: any) {
           };
           return { contentStats: { ...state.contentStats, [contentId]: updatedStats } };
         });
-      } catch (error) {
-        console.error("Error recording share:", error);
+      } catch {
+        // Quiet — share analytics must never interrupt the user
       }
     },
 

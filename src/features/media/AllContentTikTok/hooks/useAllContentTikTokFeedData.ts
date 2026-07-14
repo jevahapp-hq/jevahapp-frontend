@@ -46,19 +46,25 @@ export function useAllContentTikTokFeedData(
   const [seenTodayIds, setSeenTodayIds] = useState<Set<string>>(new Set());
   const [sessionSeed, setSessionSeed] = useState<number>(1);
   const [impressionsReady, setImpressionsReady] = useState(false);
+  const [affinity, setAffinity] = useState<
+    import("../utils/feedAffinityStore").FeedAffinityProfile | undefined
+  >(undefined);
 
   // Load cross-session impressions + rotate seed once per cold start
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [map, seed] = await Promise.all([
+        const { getFeedAffinity } = await import("../utils/feedAffinityStore");
+        const [map, seed, aff] = await Promise.all([
           getFeedImpressions(),
           getOrCreateSessionSeed(),
+          getFeedAffinity(),
         ]);
         if (cancelled) return;
         setSeenTodayIds(idsSeenToday(map));
         setSessionSeed(seed);
+        setAffinity(aff);
       } catch {
         // no-op
       } finally {
@@ -89,16 +95,17 @@ export function useAllContentTikTokFeedData(
   // For You ranking — wait for impression state so relaunch rotation is correct
   const filteredMediaList = useMemo(() => {
     if (!impressionsReady && filteredByType.length > 0) {
-      // Still rank, but without today's demotion until loaded (avoids flash)
       return rankFeedForYou(filteredByType, {
         previouslyViewedIds,
         sessionSeed,
+        affinity,
       });
     }
     return rankFeedForYou(filteredByType, {
       previouslyViewedIds,
       seenTodayIds,
       sessionSeed,
+      affinity,
     });
   }, [
     filteredByType,
@@ -106,6 +113,7 @@ export function useAllContentTikTokFeedData(
     seenTodayIds,
     sessionSeed,
     impressionsReady,
+    affinity,
   ]);
 
   const categorizedContent = useMemo(

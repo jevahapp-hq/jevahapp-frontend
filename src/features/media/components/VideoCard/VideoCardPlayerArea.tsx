@@ -65,6 +65,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
+  const suppressAutoLoopRef = useRef(false);
   const [hasTrackedView, setHasTrackedView] = useState(false);
 
   const player = useVideoPlayer(
@@ -147,6 +148,8 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     videoDurationMs,
     videoPositionMs,
     videoProgress,
+    setVideoPositionMs,
+    setVideoProgress,
   } = useVideoCardPlayback({
     player,
     isAudioSermon: isAudioSermonValue,
@@ -161,6 +164,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     setHasTrackedView,
     storeRef,
     isMountedRef,
+    suppressAutoLoopRef,
   });
 
   const { seekToPercent } = useVideoCardSeek({
@@ -171,7 +175,21 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     videoPositionMs,
     lastKnownDurationRef,
     backendDurationMs: (video as any).duration ? (video as any).duration * 1000 : 0,
+    setVideoPositionMs,
+    setVideoProgress,
+    suppressAutoLoopRef,
   });
+
+  const handleScrubStart = useCallback(() => {
+    suppressAutoLoopRef.current = true;
+  }, []);
+
+  const handleScrubEnd = useCallback(() => {
+    // Brief hold so timeUpdate doesn't fight the settle
+    setTimeout(() => {
+      suppressAutoLoopRef.current = false;
+    }, 350);
+  }, []);
 
   const {
     handleVideoTap,
@@ -207,79 +225,86 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   }, [onToggleMute, key, isAudioSermonValue, audioControls]);
 
   return (
-    <TouchableWithoutFeedback onPress={handleVideoTap}>
-      <View className="w-full h-[400px] overflow-hidden relative bg-black">
-        {videoUrl && !isAudioSermonValue && player && (
-          <VideoView
-            key={videoUrl || key}
-            player={player}
-            style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "black" }}
-            contentFit="cover"
-            nativeControls={false}
-            fullscreenOptions={{ enable: false }}
-            useExoShutter={false}
+    <View className="w-full h-[400px] overflow-hidden relative bg-black">
+      <TouchableWithoutFeedback onPress={handleVideoTap}>
+        <View className="absolute inset-0">
+          {videoUrl && !isAudioSermonValue && player && (
+            <VideoView
+              key={videoUrl || key}
+              player={player}
+              style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "black" }}
+              contentFit="cover"
+              nativeControls={false}
+              fullscreenOptions={{ enable: false }}
+              useExoShutter={false}
+            />
+          )}
+
+          {video.moderationStatus && video.moderationStatus !== "approved" && (
+            <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
+              <ModerationBadge status={video.moderationStatus} />
+            </View>
+          )}
+
+          <ContentTypeBadge contentType={video.contentType || "video"} position="top-left" size="medium" />
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => onVideoTap(key, video, index)}
+            style={{ position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", zIndex: 10 }}
+          >
+            <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <MediaPlayButton
+            isPlaying={isAudioSermonValue ? (audioState?.isPlaying ?? false) : isPlaying}
+            onPress={() => handleTogglePlay(setIsPlayTogglePending)}
+            showOverlay={showOverlay}
+            size="medium"
+            disabled={isPlayTogglePending}
           />
-        )}
 
-        {video.moderationStatus && video.moderationStatus !== "approved" && (
-          <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
-            <ModerationBadge status={video.moderationStatus} />
+          <View style={{ position: "absolute", bottom: 64, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
+            <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", lineHeight: 16, textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
+              {video.title}
+            </Text>
           </View>
-        )}
-
-        <ContentTypeBadge contentType={video.contentType || "video"} position="top-left" size="medium" />
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => onVideoTap(key, video, index)}
-          style={{ position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", zIndex: 10 }}
-        >
-          <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <MediaPlayButton
-          isPlaying={isAudioSermonValue ? (audioState?.isPlaying ?? false) : isPlaying}
-          onPress={() => handleTogglePlay(setIsPlayTogglePending)}
-          showOverlay={showOverlay}
-          size="medium"
-          disabled={isPlayTogglePending}
-        />
-
-        <View style={{ position: "absolute", bottom: 64, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
-          <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", lineHeight: 16, textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
-            {video.title}
-          </Text>
         </View>
+      </TouchableWithoutFeedback>
 
-        <TikTokProgressBar
-          progress={isAudioSermonValue ? (audioState?.progress ?? 0) : Math.max(0, Math.min(1, videoProgress || 0))}
-          isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
-          onToggleMute={handleToggleMuteInternal}
-          onSeekToPercent={seekToPercent}
-          currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
-          durationMs={
-            isAudioSermonValue
-              ? (audioState?.duration ?? 0)
-              : videoDurationMs ||
-                lastKnownDurationRef.current ||
-                ((video as any).duration ? (video as any).duration * 1000 : 0) ||
-                0
-          }
-          showControls={true}
-          debug={__DEV__ && false}
-          config={{
-            showFloatingLabel: true,
-            enlargeOnDrag: true,
-            knobSize: 8,
-            knobSizeDragging: 10,
-            trackHeight: 4,
-            trackHeightDragging: 8,
-            seekSyncTicks: 3,
-            seekMsTolerance: 200,
-            minProgressEpsilon: 0.005,
-          }}
-        />
-      </View>
-    </TouchableWithoutFeedback>
+      {/* Outside play-tap layer so pan wins — scrub owns this player */}
+      <TikTokProgressBar
+        progress={isAudioSermonValue ? (audioState?.progress ?? 0) : Math.max(0, Math.min(1, videoProgress || 0))}
+        isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
+        onToggleMute={handleToggleMuteInternal}
+        onSeekToPercent={seekToPercent}
+        onScrubStart={handleScrubStart}
+        onScrubEnd={handleScrubEnd}
+        currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
+        durationMs={
+          isAudioSermonValue
+            ? (audioState?.duration ?? 0)
+            : videoDurationMs ||
+              lastKnownDurationRef.current ||
+              ((video as any).duration ? (video as any).duration * 1000 : 0) ||
+              0
+        }
+        showControls={true}
+        debug={__DEV__ && false}
+        config={{
+          showFloatingLabel: true,
+          enlargeOnDrag: true,
+          knobSize: 8,
+          knobSizeDragging: 12,
+          trackHeight: 3,
+          trackHeightDragging: 8,
+          seekDuringDrag: true,
+          liveSeekThrottleMs: 48,
+          seekSyncTicks: 2,
+          seekMsTolerance: 250,
+          minProgressEpsilon: 0.005,
+        }}
+      />
+    </View>
   );
 }

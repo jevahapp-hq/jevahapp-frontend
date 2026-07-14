@@ -7,6 +7,8 @@ import type { MediaItem } from "../../../../../shared/types";
 import {
   getCachedContentInteraction,
   isContentInteractionFresh,
+  resolveLikedFlag,
+  resolveSavedFlag,
 } from "../../../../../../app/utils/contentInteractionPersist";
 
 export interface UseVideoCardInteractionStatsParams {
@@ -57,21 +59,20 @@ export function useVideoCardInteractionStats({
   const cached = getCachedContentInteraction(contentId);
   const cacheIsFresh = isContentInteractionFresh(contentId);
 
-  const backendUserLiked =
-    (cacheIsFresh && cached?.liked !== undefined
-      ? cached.liked
-      : undefined) ??
+  // Liked/saved flags are sticky (30d) so a bad API hasLiked:false can't gray the heart.
+  const backendUserLiked = resolveLikedFlag(
+    contentId,
     stats?.userInteractions?.liked ??
-    (video as any)?.hasLiked ??
-    (video as any)?.userHasLiked ??
-    userFavorites[contentKey];
-  const backendUserSaved =
-    (cacheIsFresh && cached?.saved !== undefined
-      ? cached.saved
-      : undefined) ??
+      (video as any)?.hasLiked ??
+      (video as any)?.userHasLiked ??
+      userFavorites[contentKey]
+  );
+  const backendUserSaved = resolveSavedFlag(
+    contentId,
     stats?.userInteractions?.saved ??
-    (video as any)?.hasBookmarked ??
-    (video as any)?.isBookmarked;
+      (video as any)?.hasBookmarked ??
+      (video as any)?.isBookmarked
+  );
 
   const userLikeState = Boolean(backendUserLiked);
   const userSaveState = Boolean(backendUserSaved);

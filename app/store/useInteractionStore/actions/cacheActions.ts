@@ -2,6 +2,8 @@ import type { ContentStats } from "../../../utils/contentInteractionAPI";
 import {
   getCachedContentInteraction,
   isContentInteractionFresh,
+  resolveLikedFlag,
+  resolveSavedFlag,
 } from "../../../utils/contentInteractionPersist";
 import type { StoreGet, StoreSet } from "../types";
 
@@ -125,22 +127,13 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
             ),
             userInteractions: {
               ...base.userInteractions,
+              // Sticky local liked/saved beat stale feed hasLiked:false (backend bug).
               liked:
-                cacheIsFresh && cached?.liked !== undefined
-                  ? cached.liked
-                  : hasLiked === true
-                  ? true
-                  : hasLiked === false
-                    ? false
-                    : base.userInteractions.liked,
+                resolveLikedFlag(contentId, hasLiked) ??
+                base.userInteractions.liked,
               saved:
-                cacheIsFresh && cached?.saved !== undefined
-                  ? cached.saved
-                  : hasBookmarked === true
-                  ? true
-                  : hasBookmarked === false
-                    ? false
-                    : base.userInteractions.saved,
+                resolveSavedFlag(contentId, hasBookmarked) ??
+                base.userInteractions.saved,
             },
           };
         }

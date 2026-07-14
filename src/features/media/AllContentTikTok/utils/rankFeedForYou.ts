@@ -1,21 +1,29 @@
 /**
  * Client-side For You ranking until /api/feed/for-you ships.
- * Scores: engagement + recency + diversity + cross-session rotation.
+ * Scores: engagement + recency + affinity + diversity + cross-session rotation.
  */
-import type { MediaItem } from "../../../shared/types";
+import type { MediaItem } from "../../../../shared/types";
+import {
+  affinityScore,
+  type FeedAffinityProfile,
+} from "./feedAffinityStore";
 
 export type FeedRankOptions = {
   /** Content IDs the user has already viewed locally */
   previouslyViewedIds?: Set<string> | string[];
-  /** IDs impressed in the last 24h — demoted to the bottom on relaunch */
+  /** IDs impressed in the last 24h — demoted hard so relaunch feels different */
   seenTodayIds?: Set<string> | string[];
   /** Cold-start seed so top-of-feed order rotates each launch */
   sessionSeed?: number;
-  /** Prefer slightly more freshness (0–1). Default 0.45 */
+  /** On-device preference profile (likes / watches) */
+  affinity?: FeedAffinityProfile;
+  /** Prefer slightly more freshness (0–1). Default 0.4 */
   recencyWeight?: number;
-  /** Prefer engagement (likes/views/comments). Default 0.55 */
+  /** Prefer engagement (likes/views/comments). Default 0.45 */
   engagementWeight?: number;
-  /** Soft-penalize already viewed items. Default 0.35 */
+  /** Prefer user affinity. Default 0.35 */
+  affinityWeight?: number;
+  /** Soft-penalize already viewed items. Default 0.55 */
   viewedPenalty?: number;
   /** Soft diversity stride. Default 4 */
   diversifyEvery?: number;
@@ -37,7 +45,6 @@ function getEngagement(item: MediaItem) {
   return { likes, views, comments, shares, saves };
 }
 
-/** Log-scaled engagement so mega-hits don't dominate forever. */
 function engagementScore(item: MediaItem): number {
   const { likes, views, comments, shares, saves } = getEngagement(item);
   return (
@@ -49,7 +56,6 @@ function engagementScore(item: MediaItem): number {
   );
 }
 
-/** Exponential-ish decay: hot for ~48h, still relevant for ~2 weeks. */
 function recencyScore(item: MediaItem, now: number): number {
   const created = Date.parse(item.createdAt || "");
   if (!Number.isFinite(created)) return 0.15;
@@ -77,7 +83,6 @@ function normalizeIds(ids?: Set<string> | string[]): Set<string> {
   return new Set(ids.filter(Boolean));
 }
 
-/** Deterministic 0–1 float from id + seed (stable within a session). */
 function seededJitter(id: string, seed: number): number {
   let h = seed >>> 0;
   for (let i = 0; i < id.length; i++) {
@@ -121,7 +126,9 @@ function scoreBucket(
     sessionSeed: number;
     recencyWeight: number;
     engagementWeight: number;
+    affinityWeight: number;
     viewedPenalty: number;
+    affinity?: FeedAffinityProfile;
   }
 ): Scored[] {
   const {
@@ -130,17 +137,23 @@ function scoreBucket(
     sessionSeed,
     recencyWeight,
     engagementWeight,
+    affinityWeight,
     viewedPenalty,
+    affinity,
   } = options;
 
   return items.map((item, index) => {
     const id = String(item._id || "");
     const eng = engagementScore(item);
     const rec = recencyScore(item, now);
-    let score = eng * engagementWeight + rec * recencyWeight * 8;
+    const aff = affinityScore(item, affinity);
+    let score =
+      eng * engagementWeight +
+      rec * recencyWeight * 8 +
+      aff * affinityWeight * 10;
 
-    // Session rotation among near-ties
-    score += seededJitter(id || String(index), sessionSeed) * 1.2;
+    // Session rotation among near-ties — different top item each cold start
+    score += seededJitter(id || String(index), sessionSeed) * 2.4;
     score += (items.length - index) * 0.0001;
 
     if (id && viewed.has(id)) {
@@ -170,9 +183,10 @@ export function rankFeedForYou(
   const viewed = normalizeIds(options.previouslyViewedIds);
   const seenToday = normalizeIds(options.seenTodayIds);
   const sessionSeed = options.sessionSeed ?? 1;
-  const recencyWeight = options.recencyWeight ?? 0.45;
-  const engagementWeight = options.engagementWeight ?? 0.55;
-  const viewedPenalty = options.viewedPenalty ?? 0.35;
+  const recencyWeight = options.recencyWeight ?? 0.4;
+  const engagementWeight = options.engagementWeight ?? 0.45;
+  const affinityWeight = options.affinityWeight ?? 0.35;
+  const viewedPenalty = options.viewedPenalty ?? 0.55;
   const diversifyEvery = Math.max(2, options.diversifyEvery ?? 4);
 
   const fresh: MediaItem[] = [];
@@ -189,14 +203,19 @@ export function rankFeedForYou(
     sessionSeed,
     recencyWeight,
     engagementWeight,
+    affinityWeight,
     viewedPenalty,
+    affinity: options.affinity,
   };
 
-  const freshScored = scoreBucket(fresh, scoreOpts).sort((a, b) => b.score - a.score);
+  const freshScored = scoreBucket(fresh, scoreOpts).sort(
+    (a, b) => b.score - a.score
+  );
   const recycledScored = scoreBucket(recycled, {
     ...scoreOpts,
-    // Extra demotion within today's bucket
-    viewedPenalty: Math.min(0.8, viewedPenalty + 0.25),
+    // Seen in last 24h: heavy demotion so next login isn't the same top cards
+    viewedPenalty: Math.min(0.92, viewedPenalty + 0.35),
+    affinityWeight: affinityWeight * 0.5,
   }).sort((a, b) => b.score - a.score);
 
   const ordered = [
@@ -207,7 +226,6 @@ export function rankFeedForYou(
   return ordered.map((x) => x.item);
 }
 
-/** Chronologically newest item (for the Most Recent shelf). */
 export function pickMostRecentItem(items: MediaItem[]): MediaItem | null {
   if (!items?.length) return null;
   let best: MediaItem | null = null;

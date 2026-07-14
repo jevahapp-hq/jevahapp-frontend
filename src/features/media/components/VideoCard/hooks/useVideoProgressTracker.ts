@@ -1,6 +1,6 @@
 /**
  * Owns expo-video timeUpdate → ms progress for the scrubber.
- * Separated so freeze bugs can be traced to listener interval / seek adapter.
+ * Auto-loop is suppressed while scrubbing so seek isn't snapped back to 0.
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -11,9 +11,10 @@ import {
 export interface UseVideoProgressTrackerParams {
   player: any;
   enabled: boolean;
-  /** Seconds between timeUpdate events. Lower = smoother bar. */
   updateIntervalSec?: number;
   isMountedRef: React.MutableRefObject<boolean>;
+  /** While true, skip near-end auto-loop (set during drag/seek). */
+  suppressAutoLoopRef?: React.MutableRefObject<boolean>;
   onTick?: (positionMs: number, durationMs: number, progress: number) => void;
   onReady?: (durationMs: number) => void;
   onError?: (error: any) => void;
@@ -24,6 +25,7 @@ export function useVideoProgressTracker({
   enabled,
   updateIntervalSec = 0.1,
   isMountedRef,
+  suppressAutoLoopRef,
   onTick,
   onReady,
   onError,
@@ -84,9 +86,14 @@ export function useVideoProgressTracker({
           0,
           Math.min(rawDuration * 1000, 24 * 60 * 60 * 1000)
         );
-        const positionMs = Math.max(0, Math.min(currentTime * 1000, durationMs || Infinity));
+        const positionMs = Math.max(
+          0,
+          Math.min(currentTime * 1000, durationMs || Infinity)
+        );
         const progress =
-          durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
+          durationMs > 0
+            ? Math.max(0, Math.min(1, positionMs / durationMs))
+            : 0;
 
         if (Number.isFinite(durationMs) && durationMs > 0) {
           if (lastKnownDurationRef.current !== durationMs) {
@@ -99,8 +106,12 @@ export function useVideoProgressTracker({
         setVideoProgress(progress);
         onTick?.(positionMs, durationMs, progress);
 
-        // Loop near end for feed cards
-        if (rawDuration > 0 && currentTime >= rawDuration - 0.25) {
+        // Near-end loop — never during scrub/seek or the bar jumps to 0
+        if (
+          !suppressAutoLoopRef?.current &&
+          rawDuration > 0 &&
+          currentTime >= rawDuration - 0.25
+        ) {
           try {
             player.currentTime = 0;
             if (player.playing) player.play();
@@ -120,6 +131,7 @@ export function useVideoProgressTracker({
     enabled,
     updateIntervalSec,
     isMountedRef,
+    suppressAutoLoopRef,
     onTick,
     onReady,
     onError,

@@ -20,6 +20,8 @@ export interface UseVideoCardPlaybackParams {
   setHasTrackedView: (v: boolean) => void;
   storeRef: React.MutableRefObject<any>;
   isMountedRef: React.MutableRefObject<boolean>;
+  /** Blocks near-end auto-loop while scrubbing */
+  suppressAutoLoopRef?: React.MutableRefObject<boolean>;
 }
 
 export function useVideoCardPlayback({
@@ -35,6 +37,7 @@ export function useVideoCardPlayback({
   setHasTrackedView,
   storeRef,
   isMountedRef,
+  suppressAutoLoopRef,
 }: UseVideoCardPlaybackParams) {
   const { maybeRecordView } = useVideoViewTracking({
     contentId,
@@ -87,6 +90,7 @@ export function useVideoCardPlayback({
     enabled: !isAudioSermon,
     updateIntervalSec: 0.1,
     isMountedRef,
+    suppressAutoLoopRef,
     onTick,
     onReady,
     onError,

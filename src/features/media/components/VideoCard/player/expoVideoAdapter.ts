@@ -4,7 +4,10 @@
  */
 export function getPlayerPositionMs(player: any): number {
   if (!player) return 0;
-  if (typeof player.currentTime === "number" && Number.isFinite(player.currentTime)) {
+  if (
+    typeof player.currentTime === "number" &&
+    Number.isFinite(player.currentTime)
+  ) {
     return Math.max(0, player.currentTime * 1000);
   }
   return 0;
@@ -18,21 +21,24 @@ export function getPlayerDurationMs(player: any, fallbackMs = 0): number {
   return fallbackMs;
 }
 
-export async function seekPlayerToMs(player: any, targetMs: number): Promise<boolean> {
+export async function seekPlayerToMs(
+  player: any,
+  targetMs: number
+): Promise<boolean> {
   if (!player) return false;
   const durationMs = getPlayerDurationMs(player);
+  // Leave a tiny headroom so near-end seek doesn't immediately trip auto-loop
   const clamped = Math.max(
     0,
-    durationMs > 0 ? Math.min(targetMs, durationMs) : targetMs
+    durationMs > 0 ? Math.min(targetMs, Math.max(0, durationMs - 40)) : targetMs
   );
+  const seconds = clamped / 1000;
 
   try {
-    // expo-video
-    if (typeof player.currentTime === "number" || "currentTime" in player) {
-      player.currentTime = clamped / 1000;
+    if ("currentTime" in player) {
+      player.currentTime = seconds;
       return true;
     }
-    // expo-av fallback
     if (typeof player.setPositionAsync === "function") {
       await player.setPositionAsync(clamped);
       return true;

@@ -1,8 +1,13 @@
 /**
- * useVideoCardSeek - Seek for expo-video (primary) with expo-av fallback
+ * Seek for expo-video (primary) with expo-av / audio fallbacks.
+ * Optimistically updates scrubber position so the bar follows the finger.
  */
 import React, { useCallback } from "react";
-import { seekPlayerBySeconds, seekPlayerToMs } from "../player/expoVideoAdapter";
+import {
+  getPlayerDurationMs,
+  seekPlayerBySeconds,
+  seekPlayerToMs,
+} from "../player/expoVideoAdapter";
 
 export interface UseVideoCardSeekParams {
   isAudioSermon: boolean;
@@ -12,6 +17,10 @@ export interface UseVideoCardSeekParams {
   videoPositionMs: number;
   lastKnownDurationRef: React.MutableRefObject<number>;
   backendDurationMs: number;
+  setVideoPositionMs?: (ms: number) => void;
+  setVideoProgress?: (progress: number) => void;
+  /** Blocks near-end auto-loop while scrubbing */
+  suppressAutoLoopRef?: React.MutableRefObject<boolean>;
 }
 
 export function useVideoCardSeek({
@@ -22,7 +31,17 @@ export function useVideoCardSeek({
   videoPositionMs,
   lastKnownDurationRef,
   backendDurationMs,
+  setVideoPositionMs,
+  setVideoProgress,
+  suppressAutoLoopRef,
 }: UseVideoCardSeekParams) {
+  const resolveDurationMs = useCallback(() => {
+    const fromPlayer = getPlayerDurationMs(player, 0);
+    const fromRef = lastKnownDurationRef.current || 0;
+    const fromBackend = backendDurationMs || 0;
+    return fromPlayer || fromRef || fromBackend || 0;
+  }, [player, lastKnownDurationRef, backendDurationMs]);
+
   const seekBySeconds = useCallback(
     async (deltaSec: number) => {
       if (isAudioSermon) {
@@ -40,7 +59,7 @@ export function useVideoCardSeek({
         return;
       }
 
-      const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
+      const durationMs = resolveDurationMs();
       await seekPlayerBySeconds(player, deltaSec, videoPositionMs, durationMs);
     },
     [
@@ -50,17 +69,17 @@ export function useVideoCardSeek({
       audioControls,
       player,
       videoPositionMs,
-      backendDurationMs,
-      lastKnownDurationRef,
+      resolveDurationMs,
     ]
   );
 
   const seekToPercent = useCallback(
     async (percent: number) => {
+      const clamped = Math.max(0, Math.min(percent, 1));
+
       if (isAudioSermon) {
         const duration = audioState?.duration ?? 0;
         if (duration <= 0 || !audioControls) return;
-        const clamped = Math.max(0, Math.min(percent, 1));
         try {
           await audioControls.seekTo(clamped * duration);
         } catch (e) {
@@ -69,12 +88,37 @@ export function useVideoCardSeek({
         return;
       }
 
-      const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
-      if (!player || durationMs <= 0) return;
-      const clamped = Math.max(0, Math.min(percent, 1));
-      const ok = await seekPlayerToMs(player, clamped * durationMs);
+      const durationMs = resolveDurationMs();
+      if (!player || durationMs <= 0) {
+        if (__DEV__) {
+          console.warn("Video seekToPercent skipped", {
+            hasPlayer: Boolean(player),
+            durationMs,
+          });
+        }
+        return;
+      }
+
+      if (suppressAutoLoopRef) suppressAutoLoopRef.current = true;
+
+      const targetMs = clamped * durationMs;
+      // Optimistic UI — bar/position follow immediately; player catches up
+      setVideoPositionMs?.(targetMs);
+      setVideoProgress?.(clamped);
+      if (durationMs > 0) lastKnownDurationRef.current = durationMs;
+
+      const ok = await seekPlayerToMs(player, targetMs);
       if (!ok && __DEV__) {
-        console.warn("Video seekToPercent: player did not seek (check expo-video adapter)");
+        console.warn(
+          "Video seekToPercent: player did not seek (check expo-video adapter)"
+        );
+      }
+
+      // Keep loop suppressed briefly so timeUpdate doesn't snap to 0 mid-seek
+      if (suppressAutoLoopRef) {
+        setTimeout(() => {
+          if (suppressAutoLoopRef) suppressAutoLoopRef.current = false;
+        }, 350);
       }
     },
     [
@@ -82,8 +126,11 @@ export function useVideoCardSeek({
       audioState?.duration,
       audioControls,
       player,
+      resolveDurationMs,
+      setVideoPositionMs,
+      setVideoProgress,
       lastKnownDurationRef,
-      backendDurationMs,
+      suppressAutoLoopRef,
     ]
   );
 

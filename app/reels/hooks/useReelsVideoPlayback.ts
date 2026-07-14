@@ -43,11 +43,19 @@ export function useReelsVideoPlayback({
   const seekToPosition = useCallback(
     async (videoKey: string, position: number) => {
       const ref = videoRefs.current[videoKey];
-      if (!ref || videoDuration <= 0) return;
+      if (!ref) return;
       try {
+        let duration = videoDuration;
+        if (!(duration > 0)) {
+          const status = await ref.getStatusAsync();
+          if (status.isLoaded && status.durationMillis)
+            duration = status.durationMillis;
+        }
+        if (!(duration > 0)) return;
+
         const seekTime = Math.max(
           0,
-          Math.min((position / 100) * videoDuration, videoDuration)
+          Math.min((position / 100) * duration, Math.max(0, duration - 40))
         );
         setVideoPosition(seekTime);
         await ref.setPositionAsync(seekTime);
@@ -57,7 +65,9 @@ export function useReelsVideoPlayback({
           const status = await ref.getStatusAsync();
           if (status.isLoaded && status.positionMillis !== undefined)
             setVideoPosition(status.positionMillis);
-        } catch { }
+        } catch {
+          // no-op
+        }
       }
     },
     [videoRefs, videoDuration, setVideoPosition]
