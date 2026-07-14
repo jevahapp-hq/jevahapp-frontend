@@ -62,27 +62,23 @@ export const useVideoPlaybackControl = ({
           // no-op
         }
       },
+      // expo-av (the branch Reels and this card both actually use) does NOT
+      // get an imperative play() here on purpose - only pause() above is
+      // imperative. Reels' own player registration (ReelsVideoItem.tsx)
+      // does the same thing and has no playback issues. Starting playback
+      // is left entirely to the declarative `shouldPlay` prop on <Video>.
+      // Previously this also fired `videoRef.current.playAsync()` here,
+      // which raced the same player's own internal `shouldPlay`-driven
+      // play() - both trying to start the same AVPlayer/ExoPlayer at once.
+      // That race was harmless when switches were rare, but got exposed as
+      // "video plays but no audio" once autoplay started switching videos
+      // more often (see the tightened viewability config in
+      // AllContentTikTok/index.tsx).
       play: async () => {
         if (!videoRef.current) return;
         try {
           if (isExpoVideo) {
             videoRef.current.play();
-          } else {
-            const status = await videoRef.current.getStatusAsync();
-            if (status?.isLoaded) {
-              return videoRef.current.playAsync();
-            }
-            return new Promise((resolve) => {
-              const check = async () => {
-                const s = await videoRef.current.getStatusAsync();
-                if (s?.isLoaded) {
-                  videoRef.current.playAsync().then(resolve).catch(resolve);
-                } else {
-                  setTimeout(check, 30);
-                }
-              };
-              check();
-            });
           }
         } catch {
           // no-op

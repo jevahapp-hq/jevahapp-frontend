@@ -35,6 +35,8 @@ import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedSt
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 import { FeedSectionTitle } from "./components/FeedSectionTitle";
 import { LiveComingSoonCard } from "./components/LiveComingSoonCard";
+import { warmVideoConnection } from "./utils/videoConnectionWarmer";
+import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../shared/utils/videoUrlManager";
 
 import {
   useAllContentTikTokAudio,
@@ -82,8 +84,16 @@ type FeedRow =
 // has a handful of hardware video-decoder slots; mounting more players than
 // that at the same time is a well-documented cause of some videos showing a
 // black frame while their audio still plays. Keeping this small (1) means
-// at most 3 real players exist app-wide (active, previous, next).
+// at most 3 real players exist app-wide (active, previous, next) - each
+// extra mounted player is also one more entry in the imperative video
+// registry that can race the active player's play()/pause() calls, which
+// contributed to audio randomly not coming through.
 const PRELOAD_NEIGHBOR_DISTANCE = 1;
+// How many extra items beyond the mounted-player window to start "warming"
+// (see utils/videoConnectionWarmer.ts). Warming is just a small ranged
+// network request, not a real player, so it's cheap enough to do further
+// ahead than we'd ever dare mount a real <Video>.
+const PRELOAD_WARM_DISTANCE = 4;
 // How long to keep a video's <Video> player mounted-but-paused after it
 // stops being the active/neighbor item, before actually unmounting it. This
 // gives the (already fast, prop-driven) `shouldPlay={false}` pause time to
@@ -477,18 +487,39 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // the latest values without needing to be re-created.
   const mediaSeqByKeyRef = useRef<Record<string, number>>({});
   const mediaKeyBySeqRef = useRef<Record<number, string>>({});
+  const mediaItemBySeqRef = useRef<Record<number, MediaItem>>({});
   useEffect(() => {
     const byKey: Record<string, number> = {};
     const bySeq: Record<number, string> = {};
+    const itemBySeq: Record<number, MediaItem> = {};
     for (const row of listData) {
       if (row.rowType === "media") {
         byKey[row.key] = row.mediaSeq;
         bySeq[row.mediaSeq] = row.key;
+        itemBySeq[row.mediaSeq] = row.item;
       }
     }
     mediaSeqByKeyRef.current = byKey;
     mediaKeyBySeqRef.current = bySeq;
+    mediaItemBySeqRef.current = itemBySeq;
   }, [listData]);
+
+  // Cheap, decoder-free "warm the connection" pass for videos a bit further
+  // out than we'd ever mount a real player for (see PRELOAD_WARM_DISTANCE).
+  // By the time one of these becomes the active/neighbor item and a real
+  // <Video> mounts, DNS/TLS/CDN routing for its URL has already been done,
+  // which is most of what actually causes the multi-second black gap before
+  // a video's first frame paints.
+  const warmSeqRange = useCallback((centerSeq: number, distance: number) => {
+    for (let d = -distance; d <= distance; d++) {
+      const item = mediaItemBySeqRef.current[centerSeq + d];
+      if (!item) continue;
+      if (isAudioSermon(item) || detectMediaType(item) !== "video") continue;
+      const rawUrl = getVideoUrlFromMedia(item);
+      if (!rawUrl) continue;
+      warmVideoConnection(getBestVideoUrl(rawUrl));
+    }
+  }, []);
 
   // ---------------------------------------------------------------------
   // Viewability tracking (replaces the old onScroll + onLayout math, which
@@ -519,21 +550,28 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const hasDeterminedVisibilityRef = useRef(false);
 
-  const handleViewableItemsChangedImpl = useCallback(
+  // Picking the "active" video from the *same* 60%-visible bucket used for
+  // general viewability was the bug behind "autoplay stops if I scroll past
+  // an ebook/sermon" and "only the first video below Coming Soon autoplays":
+  // an ebook or an audio-sermon card can easily fill most of the viewport by
+  // itself, so no video ever reached 60% visible while scrolling past one -
+  // the code saw "no video is visible" and paused, and never resumed once
+  // the *next* video also failed to clear 60% before the user stopped
+  // scrolling. Videos now get their own, much more lenient viewability
+  // bucket (see videoViewabilityConfig below) so the nearest video always
+  // wins regardless of what non-video content is sharing the screen.
+  const handleVideoViewabilityImpl = useCallback(
     (info: { viewableItems: Array<{ item: FeedRow; isViewable: boolean }> }) => {
       hasDeterminedVisibilityRef.current = true;
 
-      const viewableKeys = new Set<string>();
       let topVideoKey: string | null = null;
-
       for (const token of info.viewableItems) {
         const row = token.item;
         if (!row || row.rowType !== "media") continue;
-        viewableKeys.add(row.key);
-        if (topVideoKey) continue;
         const mediaType = isAudioSermon(row.item) ? "audio" : detectMediaType(row.item);
         if (mediaType === "video") {
           topVideoKey = row.key;
+          break;
         }
       }
 
@@ -548,33 +586,71 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           playMediaRef.current(topVideoKey, "video");
         }
       }
+    },
+    []
+  );
 
-      // Pause audio that has scrolled out of view (mirrors the old
-      // scroll-based "pause if scrolled away" safety net, but driven by the
-      // same reliable viewability signal instead of onLayout math).
+  const handleVideoViewabilityRef = useRef(handleVideoViewabilityImpl);
+  useEffect(() => {
+    handleVideoViewabilityRef.current = handleVideoViewabilityImpl;
+  }, [handleVideoViewabilityImpl]);
+
+  // Stable identity across renders - FlashList/FlatList warn (and can drop
+  // events) if this prop's identity changes, so we forward through a ref.
+  const onVideoViewableItemsChanged = useCallback((info: any) => {
+    handleVideoViewabilityRef.current(info);
+  }, []);
+
+  // Separate, stricter bucket used only to decide when to pause audio that
+  // has scrolled mostly out of view (mirrors the old scroll-based "pause if
+  // scrolled away" safety net, but driven by the reliable viewability
+  // signal instead of onLayout math).
+  const handleAudioViewabilityImpl = useCallback(
+    (info: { viewableItems: Array<{ item: FeedRow; isViewable: boolean }> }) => {
       const activeAudioKey = playingAudioIdRef.current;
-      if (activeAudioKey && !viewableKeys.has(activeAudioKey)) {
+      if (!activeAudioKey) return;
+      const stillVisible = info.viewableItems.some(
+        (token) => token.item?.rowType === "media" && token.item.key === activeAudioKey
+      );
+      if (!stillVisible) {
         pauseAllAudioRef.current();
       }
     },
     []
   );
 
-  const handleViewableItemsChangedRef = useRef(handleViewableItemsChangedImpl);
+  const handleAudioViewabilityRef = useRef(handleAudioViewabilityImpl);
   useEffect(() => {
-    handleViewableItemsChangedRef.current = handleViewableItemsChangedImpl;
-  }, [handleViewableItemsChangedImpl]);
+    handleAudioViewabilityRef.current = handleAudioViewabilityImpl;
+  }, [handleAudioViewabilityImpl]);
 
-  // Stable identity across renders - FlashList/FlatList warn (and can drop
-  // events) if this prop's identity changes, so we forward through a ref.
-  const onViewableItemsChanged = useCallback((info: any) => {
-    handleViewableItemsChangedRef.current(info);
+  const onAudioViewableItemsChanged = useCallback((info: any) => {
+    handleAudioViewabilityRef.current(info);
   }, []);
 
-  const viewabilityConfig = useRef({
+  // itemVisiblePercentThreshold is intentionally lower than the audio
+  // bucket's 60% - a video just needs to be *starting* to appear on screen
+  // to become the active one, so there's no dead zone while a taller
+  // ebook/sermon card is still mostly covering the viewport above/below it.
+  // minimumViewTime is kept at a normal debounce (not near-zero) on
+  // purpose: dropping it too low made the active video switch on every
+  // scroll frame, and each switch fires an imperative pause() on the
+  // previous player racing the new one's play() - expo-av doesn't always
+  // win that race cleanly, which was surfacing as "video plays but audio
+  // never starts" (silent picture) once switching got fast enough.
+  const videoViewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 20,
+    minimumViewTime: 200,
+  }).current;
+  const audioViewabilityConfig = useRef({
     itemVisiblePercentThreshold: 60,
     minimumViewTime: 200,
   }).current;
+
+  const viewabilityConfigCallbackPairs = useRef([
+    { viewabilityConfig: videoViewabilityConfig, onViewableItemsChanged: onVideoViewableItemsChanged },
+    { viewabilityConfig: audioViewabilityConfig, onViewableItemsChanged: onAudioViewableItemsChanged },
+  ]).current;
 
   // ---------------------------------------------------------------------
   // Windowed real-player mounting: only the active video + its immediate
@@ -603,12 +679,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         if (before) desired.add(before);
         if (after) desired.add(after);
       }
+      warmSeqRange(activeSeq, PRELOAD_WARM_DISTANCE);
     } else if (!hasDeterminedVisibilityRef.current) {
       // Before the very first viewability callback fires, eagerly mount
       // just the first media row so it's ready to autoplay instantly, same
-      // as the previous "mostRecentItem is always eager" behaviour.
+      // as the previous "mostRecentItem is always eager" behaviour. Also
+      // warm the next few beyond it immediately - this is what gives the
+      // very first video the app ever shows (which had zero chance to be a
+      // "neighbor" before becoming active) a head start too.
       const firstKey = keyBySeq[0];
       if (firstKey) desired.add(firstKey);
+      warmSeqRange(0, PRELOAD_WARM_DISTANCE);
     }
 
     setMountedVideoKeys((prev) => {
@@ -642,7 +723,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
       return changed ? next : prev;
     });
-  }, [currentlyVisibleVideo, listData]);
+  }, [currentlyVisibleVideo, listData, warmSeqRange]);
 
   useEffect(() => {
     return () => {
@@ -714,8 +795,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             />
           }
           showsVerticalScrollIndicator={true}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
+          viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
           scrollEventThrottle={16}
           estimatedItemSize={500}
           keyboardShouldPersistTaps="handled"
