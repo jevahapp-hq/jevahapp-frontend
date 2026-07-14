@@ -7,9 +7,8 @@ import { Alert } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useNotification } from "../../../context/NotificationContext";
-import { getUploadTimeoutMs, uploadMedia } from "../../api/uploadMedia";
-import { API_BASE_URL } from "../../constants";
-import { checkAuthenticationStatus } from "../../utils";
+import { getUploadTimeoutMs, uploadMedia } from "../api/uploadMedia";
+import { checkAuthenticationStatus } from "../utils";
 import type { UploadFlowDeps } from "./uploadFlow/types";
 import { ensureUploadAuthenticated, normalizeUploadUser } from "./uploadFlow/uploadAuthGate";
 import {
