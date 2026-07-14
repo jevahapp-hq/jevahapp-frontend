@@ -165,6 +165,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         getUserAvatarFromContent={getUserAvatarFromContent}
         onLayout={onLayout}
         onForceActive={() => { }}
+        shouldRenderPlayer={shouldRenderPlayer}
       />
 
       <VideoCardFooter

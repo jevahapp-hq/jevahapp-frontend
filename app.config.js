@@ -65,6 +65,23 @@ export default {
       "expo-font",
       "expo-asset",
       "expo-media-library",
+      // Without this, Android/Expo Go falls back to a plain black window
+      // background for the entire time between the native activity
+      // launching and the first JS frame painting (cold start, and every
+      // Fast Refresh full reload) - this is the "dark screen before my
+      // content shows" flash. Giving it an explicit white background + the
+      // app icon makes that window look intentional instead of a black
+      // flash, and matches the in-JS loading fallback so there's no visible
+      // seam when React takes over.
+      [
+        "expo-splash-screen",
+        {
+          image: "./assets/images/Jevah.png",
+          imageWidth: 160,
+          resizeMode: "contain",
+          backgroundColor: "#ffffff",
+        },
+      ],
 
       [
         "@sentry/react-native",

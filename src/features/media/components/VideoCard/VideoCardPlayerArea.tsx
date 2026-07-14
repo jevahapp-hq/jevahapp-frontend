@@ -35,6 +35,15 @@ export interface VideoCardPlayerAreaProps {
   getUserDisplayNameFromContent: (item: MediaItem) => string;
   getUserAvatarFromContent: (item: MediaItem) => any;
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
+  /**
+   * Whether this card is allowed to mount a real <Video> player at all.
+   * Only the active card and its immediate neighbor (the one the user is
+   * about to scroll to) should get one - every other off-screen card just
+   * shows a black placeholder. This keeps buffering focused on the video
+   * that's about to be watched instead of many players fighting for
+   * bandwidth at once, which was causing the wrong video to end up playing.
+   */
+  shouldRenderPlayer?: boolean;
 }
 
 export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
@@ -53,6 +62,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     onTogglePlay,
     onToggleMute,
     getContentKey,
+    shouldRenderPlayer = false,
   } = props;
 
   const contentId = video._id || getContentKey(video);
@@ -187,7 +197,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   return (
     <TouchableWithoutFeedback onPress={handleVideoTap}>
       <View className="w-full h-[400px] overflow-hidden relative bg-black">
-        {videoUrl && !isAudioSermonValue && (
+        {videoUrl && !isAudioSermonValue && shouldRenderPlayer && (
           <Video
             ref={videoRef}
             source={{ uri: videoUrl }}

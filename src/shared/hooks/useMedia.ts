@@ -371,10 +371,30 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   // Load more content (alias for compatibility)
   const loadMoreContent = loadMoreDefaultContent;
 
-  // Filter content by type
+  // Filter content by type - merge both sources rather than picking one, so
+  // this doesn't suffer from the same "smaller list wins" issue as `mediaList`
+  // in AllContentTikTok (see comment there for details).
   const getFilteredContent = useCallback(
     (filter: ContentFilter) => {
-      const sourceData = allContent.length > 0 ? allContent : defaultContent;
+      let sourceData: MediaItem[];
+      if (allContent.length === 0) {
+        sourceData = defaultContent;
+      } else if (defaultContent.length === 0) {
+        sourceData = allContent;
+      } else {
+        const seen = new Set<string>();
+        sourceData = [];
+        for (const item of allContent) {
+          const id = item._id || (item as any).id;
+          if (id) seen.add(id);
+          sourceData.push(item);
+        }
+        for (const item of defaultContent) {
+          const id = item._id || (item as any).id;
+          if (id && seen.has(id)) continue;
+          sourceData.push(item);
+        }
+      }
       return filterContentByType(sourceData, filter.contentType || "ALL");
     },
     [allContent, defaultContent]
