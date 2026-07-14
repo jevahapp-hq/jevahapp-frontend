@@ -62,27 +62,25 @@ export default function CommentModalV2() {
     };
   }, []);
 
-  // INSTANT modal animation - like Instagram (no delay on open)
+  // IG/FB-style sheet: snappy spring open, list first (no auto keyboard)
   useEffect(() => {
     if (isVisible) {
-      // INSTANT appearance - set values immediately with NO animation
-      // This makes the modal appear instantly like Instagram
-      // No withSpring or withTiming on open - just instant values
-      translateY.value = 0;
+      translateY.value = 48;
       opacity.value = 1;
-      backdropOpacity.value = 0.5;
-
-      // INSTANT FOCUS - Use microtask for fastest possible focus
-      // Promise.resolve() is the fastest way to schedule focus
-      Promise.resolve().then(() => {
-        inputRef.current?.focus();
+      backdropOpacity.value = 0;
+      translateY.value = withSpring(0, {
+        damping: 22,
+        stiffness: 320,
+        mass: 0.8,
       });
+      backdropOpacity.value = withTiming(0.45, { duration: 160 });
+      // Don't autofocus — keyboard animation was the biggest lag; tap composer to type
     } else {
-      // Smooth close animation (users don't notice close delay)
-      translateY.value = withTiming(1000, { duration: 200 });
-      opacity.value = withTiming(0, { duration: 150 });
-      backdropOpacity.value = withTiming(0, { duration: 150 });
+      translateY.value = withTiming(1000, { duration: 180 });
+      opacity.value = withTiming(0, { duration: 140 });
+      backdropOpacity.value = withTiming(0, { duration: 140 });
       setText("");
+      setReplyingTo(null);
     }
   }, [isVisible, translateY, opacity, backdropOpacity]);
 

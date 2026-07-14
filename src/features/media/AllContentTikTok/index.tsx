@@ -7,7 +7,6 @@ import React, {
   useState,
 } from "react";
 import {
-  InteractionManager,
   RefreshControl,
   View,
 } from "react-native";
@@ -30,7 +29,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useMedia } from "../../../shared/hooks/useMedia";
 import { ContentFeedHeader } from "./components/ContentFeedHeader";
-import { EmptyState, ErrorState } from "./components/ContentFeedStates";
+import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 
 import {
@@ -47,7 +46,6 @@ import SuccessCard from "../../../../app/components/SuccessCard";
 
 // Import original stores and hooks (these will be bridged)
 import { useUserProfile } from "../../../../app/hooks/useUserProfile";
-import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
 import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
@@ -71,6 +69,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     allContent,
     defaultContent,
     error,
+    loading: feedLoading,
     refreshAllContent,
     getFilteredContent,
     hasContent,
@@ -134,6 +133,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     contentStats,
     toggleLike,
     toggleSave,
+    recordShare,
     loadContentStats,
     loadingInteraction,
   } = useInteractionStore();
@@ -151,15 +151,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
-  const [socketManager, setSocketManager] = useState<SocketManager | null>(null);
-  const [realTimeCounts, setRealTimeCounts] = useState<Record<string, any>>({});
-
   const videoRefs = useRef<Record<string, any>>({});
   const isMountedRef = useRef(true);
   const [videoVolume, setVideoVolume] = useState<number>(1.0);
   const [currentlyVisibleVideo, setCurrentlyVisibleVideo] = useState<string | null>(null);
 
-  useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
+  useAllContentTikTokSocket();
 
   // Helper functions to get state for specific keys
   const getVideoState = (key: string) => ({
@@ -192,6 +189,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     contentType: activeTab,
     setPreviouslyViewed,
     setIsLoadingContent,
+    previouslyViewed,
   });
 
   const {
@@ -258,9 +256,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     setCurrentlyVisibleVideo,
     refreshAllContent,
     setRefreshing,
-    socketManager,
     toggleLike: toggleLike as any,
     toggleSave: toggleSave as any,
+    recordShare: recordShare as any,
     loadDownloadedItems,
   });
 
@@ -394,6 +392,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const listFooterComponent = useMemo(() => null, []);
   if (error && !hasContent) return <ErrorState message={error} />;
+  if (feedLoading && filteredMediaList.length === 0) {
+    return <LoadingState count={2} />;
+  }
   if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
 
   return (

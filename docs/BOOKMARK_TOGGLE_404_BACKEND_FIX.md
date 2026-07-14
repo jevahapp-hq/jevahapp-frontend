@@ -1,35 +1,31 @@
-# Bookmark Toggle 404 for Sermons – Backend Fix
+# Bookmark Toggle 404 – Frontend + Backend
 
-**Problem:** `POST /api/bookmark/:contentId/toggle` returns 404 "Media not found" when saving sermons (and potentially other content types like audio, devotional).
+## Symptom
 
-**Root cause:** The bookmark endpoint likely looks up content by ID in a single collection (e.g. Media). Sermons may be stored in a different collection or require `contentType` to resolve correctly.
-
-**Frontend change (done):** The app now sends `contentType` in the request body:
-
-```json
-POST /api/bookmark/:contentId/toggle
-Content-Type: application/json
-
-{ "contentType": "media" }
+```
+POST /api/bookmark/:id/toggle → 404 {"success":false,"message":"Media not found"}
 ```
 
-- **Valid `contentType` values** (same as like endpoint): `media`, `devotional`, `ebook`, `podcast`, `merch`, `artist`
-- Sermons, videos, audio, live → frontend sends `"media"`
-- Ebooks → `"ebook"`
-- Podcasts → `"podcast"`
-- etc.
+Example from logs: contentId `694a46734f636937dbd71ce5` (`videos` / Christmas Celebration).
 
-**Backend fix required:** Parse `contentType` from the request body and use it to resolve the content model (e.g. `getContentModel(contentType)` as in the like endpoint). If no body is sent, fallback to `"media"` for backward compatibility.
+## Frontend behavior (this branch)
 
-```javascript
-// Example backend logic
+1. Retries bookmark toggle with contentType aliases: `media`, `videos`, `video`, raw type.
+2. Falls back to `POST /api/media/interactions/:id/save` if bookmark still 404s.
+3. **Does not** pretend the save succeeded (no ghost library items).
+4. Parses `/api/bookmark/user` as `data.bookmarks` (was looking for `data.media`).
+
+## Backend fix still required
+
+Bookmark lookup must resolve the same Media document the feed returns. If the ID exists in the feed API but not in the collection used by `/api/bookmark/:id/toggle`, bookmark will keep 404’ing after all frontend retries.
+
+Recommended: use the same `getContentModel(contentType)` path as likes:
+
+```js
 const contentType = req.body?.contentType || "media";
-const ContentModel = getContentModel(contentType); // Same helper as like endpoint
+const ContentModel = getContentModel(contentType);
 const content = await ContentModel.findById(contentId);
 if (!content) {
   return res.status(404).json({ success: false, message: "Media not found" });
 }
-// ... toggle bookmark logic
 ```
-
-This aligns bookmark behavior with the like endpoint (`POST /api/content/:contentType/:id/like`), which already uses contentType to resolve content and works for sermons.

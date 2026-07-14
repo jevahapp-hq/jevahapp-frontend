@@ -567,15 +567,8 @@ export const MusicCard: React.FC<MusicCardProps> = ({
               }}
               commentCount={commentsFromStore || audio.comments || 0}
               onComment={() => {
-                try {
-                  console.log("🗨️ Comment icon pressed (music)", {
-                    contentId: contentIdForViews,
-                    title: audio.title,
-                  });
-                  // Open modal with empty array - backend will load comments immediately
-                  showCommentModal([], String(contentId));
-                } catch { }
-                onComment && onComment(audio);
+                if (onComment) onComment(audio);
+                else showCommentModal([], String(contentId));
               }}
               saved={!!savedFromStore}
               saveCount={savesFromStore || audio.saves || 0}

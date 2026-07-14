@@ -43,6 +43,7 @@ export interface SongModalPlayerProps {
   onRepeatCycle: () => void;
   onToggleShuffle: () => void;
   onOpenPlaylistView: () => void;
+  onShare?: () => void;
 }
 
 export function SongModalPlayer({
@@ -74,6 +75,7 @@ export function SongModalPlayer({
   onRepeatCycle,
   onToggleShuffle,
   onOpenPlaylistView,
+  onShare,
 }: SongModalPlayerProps) {
   const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
   const displayProgress = isSeeking ? seekProgress : audioProgress;
@@ -559,6 +561,24 @@ export function SongModalPlayer({
               Playlist
             </Text>
           </TouchableOpacity>
+
+          {onShare ? (
+            <TouchableOpacity
+              onPress={onShare}
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "rgba(255, 255, 255, 0.15)",
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.2)",
+              }}
+            >
+              <Ionicons name="share-outline" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     </View>

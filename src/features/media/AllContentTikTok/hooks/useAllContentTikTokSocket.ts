@@ -4,12 +4,10 @@
  */
 import { useEffect, useRef } from "react";
 import SocketManager from "../../../../../app/services/SocketManager";
+import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import TokenUtils from "../../../../../app/utils/tokenUtils";
 
-export function useAllContentTikTokSocket(
-  setSocketManager: (m: SocketManager | null) => void,
-  setRealTimeCounts: React.Dispatch<React.SetStateAction<Record<string, any>>>
-) {
+export function useAllContentTikTokSocket() {
   const managerRef = useRef<SocketManager | null>(null);
 
   useEffect(() => {
@@ -24,24 +22,30 @@ export function useAllContentTikTokSocket(
         });
         managerRef.current = manager;
 
+        await manager.connect();
         const socket = (manager as any).socket;
         if (socket) {
           socket.on("content-reaction", (data: any) => {
-            setRealTimeCounts((prev) => ({
-              ...prev,
-              [data.contentId]: { ...prev[data.contentId], likes: data.totalLikes, liked: data.liked },
-            }));
+            const total = Number(data.totalLikes ?? data.likeCount);
+            if (data.contentId && Number.isFinite(total)) {
+              useInteractionStore
+                .getState()
+                .mutateStats(String(data.contentId), () => ({
+                  likes: Math.max(0, total),
+                }));
+            }
           });
           socket.on("content-comment", (data: any) => {
-            setRealTimeCounts((prev) => ({
-              ...prev,
-              [data.contentId]: { ...prev[data.contentId], comments: data.totalComments },
-            }));
+            const total = Number(data.totalComments ?? data.commentCount);
+            if (data.contentId && Number.isFinite(total)) {
+              useInteractionStore
+                .getState()
+                .mutateStats(String(data.contentId), () => ({
+                  comments: Math.max(0, total),
+                }));
+            }
           });
         }
-
-        await manager.connect();
-        setSocketManager(manager);
       } catch {
         managerRef.current = null;
       }
@@ -53,7 +57,6 @@ export function useAllContentTikTokSocket(
         managerRef.current.disconnect();
         managerRef.current = null;
       }
-      setSocketManager(null);
     };
   }, []);
 }

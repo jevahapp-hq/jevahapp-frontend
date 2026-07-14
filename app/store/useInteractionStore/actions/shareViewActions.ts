@@ -1,4 +1,4 @@
-import type { ContentStats } from "../../utils/contentInteractionAPI";
+import type { ContentStats } from "../../../utils/contentInteractionAPI";
 import type { StoreSet } from "../types";
 
 const VIEW_RECORD_MIN_INTERVAL_MS = 2500;
@@ -34,15 +34,25 @@ export function createShareViewActions(set: StoreSet, api: any) {
       }
     },
 
-    recordView: async (contentId: string, contentType: string, duration?: number) => {
+    recordView: async (
+      contentId: string,
+      contentType: string,
+      payload?: {
+        durationMs?: number;
+        progressPct?: number;
+        isComplete?: boolean;
+        source?: string;
+      }
+    ) => {
       const now = Date.now();
       if (now - (viewRecordThrottleRef.lastTime || 0) < VIEW_RECORD_MIN_INTERVAL_MS) return;
       if (viewRecordThrottleRef.backoffUntil && now < viewRecordThrottleRef.backoffUntil) return;
       viewRecordThrottleRef.lastTime = now;
 
       try {
-        const payload = typeof duration === "number" ? { durationMs: duration } : undefined;
         const result = await api.recordView(contentId, contentType, payload);
+        if (result.counted === false) return;
+
         set((state: any) => {
           const currentStats = state.contentStats[contentId];
           const updatedStats: ContentStats = {
@@ -58,7 +68,7 @@ export function createShareViewActions(set: StoreSet, api: any) {
               liked: currentStats?.userInteractions?.liked || false,
               saved: currentStats?.userInteractions?.saved || false,
               shared: currentStats?.userInteractions?.shared || false,
-              viewed: true,
+              viewed: result.hasViewed ?? true,
             },
           };
           return { contentStats: { ...state.contentStats, [contentId]: updatedStats } };

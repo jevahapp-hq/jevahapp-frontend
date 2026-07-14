@@ -4,14 +4,14 @@ import { Suspense, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import HomeTabContent from "./HomeTabContent";
 import {
+  BibleScreenWithSuspense,
   CommunityScreenWithSuspense,
   LibraryScreenWithSuspense,
-  BibleScreenWithSuspense,
 } from "../utils/lazyImports";
 
 // Loading fallback for lazy-loaded tabs
 const TabLoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }}>
     <ActivityIndicator size="large" color="#000" />
   </View>
 );
@@ -71,7 +71,6 @@ export default function HomeScreen() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: 80,
           backgroundColor: "#fff",
         }}
       >

@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    getAvatarSize,
-    getResponsiveBorderRadius,
-    getResponsiveFontSize,
-    getResponsiveSpacing
+  getAvatarSize,
+  getResponsiveBorderRadius,
+  getResponsiveFontSize,
+  getResponsiveSpacing
 } from '../../utils/responsive';
 
 interface ResponsiveAvatarProps {
@@ -58,7 +58,7 @@ export default function ResponsiveAvatar({
   // Generate fallback text from user name or initials
   const getFallbackText = () => {
     if (fallbackText) return fallbackText;
-    
+
     // If source is a string (URL), try to extract name from URL
     if (typeof source === 'string' && source.includes('/')) {
       const urlParts = source.split('/');
@@ -68,7 +68,7 @@ export default function ResponsiveAvatar({
         return namePart.charAt(0).toUpperCase();
       }
     }
-    
+
     // Default fallback
     return 'U';
   };
@@ -76,32 +76,32 @@ export default function ResponsiveAvatar({
   // Handle image source
   const getImageSource = () => {
     if (!source) return null;
-    
+
     if (typeof source === 'number') {
       return source;
     }
-    
+
     if (typeof source === 'string') {
       // Handle MongoDB avatar URLs
       if (source.startsWith('http')) {
         return { uri: source.trim() };
       }
-      
+
       // Handle local file paths
       if (source.startsWith('file://')) {
         return { uri: source };
       }
-      
+
       // Handle relative paths
       if (source.startsWith('/')) {
         return { uri: source };
       }
-      
+
       // For asset names, we'll use a fallback approach
       // since dynamic require is not allowed in React Native
       return null;
     }
-    
+
     return null;
   };
 
@@ -109,13 +109,17 @@ export default function ResponsiveAvatar({
   const shouldShowFallback = !imageSource || imageError || loading || !source;
 
   const handleImageLoad = () => {
-    setImageLoading(false);
-    setImageError(false);
+    setTimeout(() => {
+      setImageLoading(false);
+      setImageError(false);
+    }, 0);
   };
 
   const handleImageError = () => {
-    setImageLoading(false);
-    setImageError(true);
+    setTimeout(() => {
+      setImageLoading(false);
+      setImageError(true);
+    }, 0);
   };
 
   const renderContent = () => {

@@ -5,4 +5,6 @@
 
 export * from "./fileTypeDetection";
 export * from "./uploadValidation";
+export * from "./timeAgo";
+export * from "./authStatus";
 

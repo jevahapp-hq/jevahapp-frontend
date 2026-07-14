@@ -6,7 +6,6 @@ import React, {
     useRef,
     useState,
 } from "react";
-import { InteractionManager } from "react-native";
 import SocketManager from "../services/SocketManager";
 import { useInteractionStore } from "../store/useInteractionStore";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
@@ -124,7 +123,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         const storeComments = store.comments[contentId];
         if (storeComments && Array.isArray(storeComments) && storeComments.length > 0) {
           // Transform store comments to Comment format
-          cachedComments = storeComments.slice(0, 10).map((c: any) => ({
+          cachedComments = storeComments.slice(0, 12).map((c: any) => ({
             id: c.id || c._id,
             userName: c.userName || c.username || "User",
             avatar: c.avatar || c.userAvatar || "",
@@ -166,34 +165,26 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     
     // console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
-    // Load latest comments from backend and join realtime room ASYNC (non-blocking)
-    // Defer all async work using InteractionManager to ensure modal opens instantly
+    // Fetch NOW — InteractionManager deferral made open feel laggy on slow devices
     if (contentId) {
-      // Defer all async work until after modal animation completes
-      // This ensures the modal appears instantly without waiting for API calls
-      InteractionManager.runAfterInteractions(() => {
-        // Fetch user data and load comments in parallel for faster loading
-        Promise.all([
-          // Fetch user data (fast, non-blocking)
-          AsyncStorage.getItem("user").then((userStr) => {
-            if (userStr) {
-              try {
-                const u = JSON.parse(userStr);
-                currentUserIdRef.current = String(u?._id || u?.id || "");
-                currentUserFirstNameRef.current = String(u?.firstName || "");
-                currentUserLastNameRef.current = String(u?.lastName || "");
-              } catch {}
-            }
-          }).catch(() => {}),
-          
-          // Always load fresh comments from server to ensure persistence
-          // This ensures comments persist correctly after app refresh
-          loadCommentsFromServer(contentId, contentType, 1, sortBy, true).catch(() => {}),
-        ]);
-        
-        // Join realtime room (can happen in parallel)
-        joinRealtimeRoom(contentId, contentType).catch(() => {});
-      });
+      void AsyncStorage.getItem("user")
+        .then((userStr) => {
+          if (!userStr) return;
+          try {
+            const u = JSON.parse(userStr);
+            currentUserIdRef.current = String(u?._id || u?.id || "");
+            currentUserFirstNameRef.current = String(u?.firstName || "");
+            currentUserLastNameRef.current = String(u?.lastName || "");
+          } catch {
+            // no-op
+          }
+        })
+        .catch(() => {});
+
+      void loadCommentsFromServer(contentId, contentType, 1, sortBy, true).catch(
+        () => {}
+      );
+      void joinRealtimeRoom(contentId, contentType).catch(() => {});
     }
   };
 
@@ -433,15 +424,37 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
         await AsyncStorage.removeItem(cacheKey);
       } catch {}
-      
-      // Refresh from server and merge by id; this will not duplicate the new comment
-      await loadCommentsFromServer(
-        currentContentId,
-        currentContentType,
-        1,
-        sortBy,
-        false
-      );
+
+      // Keep store list warmed for next open — no full refetch (keeps UI snappy)
+      try {
+        useInteractionStore.setState((state: any) => {
+          const existing = state.comments[currentContentId] || [];
+          return {
+            comments: {
+              ...state.comments,
+              [currentContentId]: [
+                {
+                  id: created.id,
+                  userName: created.username,
+                  username: created.username,
+                  avatar: created.userAvatar || "",
+                  timestamp: created.timestamp,
+                  comment: created.comment,
+                  likes: created.likes || 0,
+                  isLiked: false,
+                  userId: created.userId,
+                },
+                ...existing.filter(
+                  (c: any) =>
+                    c.id !== created.id && !String(c.id).startsWith("temp-")
+                ),
+              ],
+            },
+          };
+        });
+      } catch {
+        // no-op
+      }
     } catch (e) {
       const error = e as Error & { status?: number; statusText?: string };
       
@@ -496,7 +509,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
           if (cached) {
             const parsedCache = JSON.parse(cached);
             const cacheAge = Date.now() - (parsedCache.timestamp || 0);
-            const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache
+            const CACHE_TTL = 5 * 60 * 1000; // fast reopen; fresh socket events still update totals
             
             if (cacheAge < CACHE_TTL && parsedCache.comments && parsedCache.comments.length > 0) {
               // console.log("⚡ Loading comments from cache (age:", Math.round(cacheAge / 1000), "s)");
@@ -542,8 +555,8 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       // Token is optional (only needed for isLiked status)
       // Don't block comment loading if no token - comments should be publicly viewable
 
-      // Use smaller limit for first page (10) for faster loading, larger for pagination (20)
-      const limit = pageNum === 1 ? 10 : 20;
+      // First page smaller for faster TTFB (IG-style explore feel)
+      const limit = pageNum === 1 ? 8 : 20;
       
       const res = await contentInteractionAPI.getComments(
         contentId,
@@ -619,6 +632,17 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       setHasMore(Boolean(res.hasMore));
       setPage(pageNum);
       setIsLoadingComments(false);
+
+      // Keep card comment badge in sync with real total
+      if (typeof res.totalComments === "number") {
+        try {
+          useInteractionStore.getState().mutateStats(contentId, () => ({
+            comments: Math.max(0, res.totalComments),
+          }));
+        } catch {
+          // no-op
+        }
+      }
       
       // Cache the results for faster subsequent loads (only cache first page)
       if (pageNum === 1) {

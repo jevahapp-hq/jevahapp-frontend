@@ -3,41 +3,61 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { ScrollView, Text, View } from "react-native";
-import Skeleton from "../../../../shared/components/Skeleton/Skeleton";
 import { UI_CONFIG } from "../../../../shared/constants";
+import { FeedMediaCardSkeleton } from "./FeedMediaCardSkeleton";
 
-export function LoadingState() {
+export function LoadingState({ count = 2 }: { count?: number }) {
+  const pageBg = UI_CONFIG.COLORS.BACKGROUND || "#FFFFFF";
   return (
-    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: pageBg }}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 48, backgroundColor: pageBg }}
+    >
+      {/* Most Recent */}
       <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-        <View style={{ paddingHorizontal: UI_CONFIG.SPACING.MD, marginBottom: UI_CONFIG.SPACING.MD }}>
-          <Skeleton height={22} width={160} borderRadius={6} />
-        </View>
-        <View style={{ marginHorizontal: UI_CONFIG.SPACING.MD }}>
-          <Skeleton variant="card" />
-        </View>
-      </View>
-      <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-        <View style={{ paddingHorizontal: UI_CONFIG.SPACING.MD, marginBottom: UI_CONFIG.SPACING.MD }}>
-          <Skeleton height={22} width={120} borderRadius={6} />
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+        <View
+          style={{
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
+            marginBottom: UI_CONFIG.SPACING.MD,
+          }}
         >
-          {Array.from({ length: 6 }).map((_, i) => (
-            <View key={`h-skel-${i}`} style={{ width: 154, marginRight: 16 }}>
-              <Skeleton variant="thumbnail" />
-            </View>
-          ))}
-        </ScrollView>
+          <View
+            style={{
+              height: 18,
+              width: 118,
+              borderRadius: 6,
+              backgroundColor: "#E8EAED",
+              opacity: 0.9,
+            }}
+          />
+        </View>
+        <FeedMediaCardSkeleton delay={40} />
       </View>
-      <View style={{ marginTop: UI_CONFIG.SPACING.LG, paddingHorizontal: UI_CONFIG.SPACING.MD }}>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <View key={`card-skel-${i}`} style={{ marginBottom: UI_CONFIG.SPACING.LG }}>
-            <Skeleton variant="card" />
-          </View>
+
+      {/* For You */}
+      <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
+        <View
+          style={{
+            paddingHorizontal: UI_CONFIG.SPACING.MD,
+            marginBottom: UI_CONFIG.SPACING.LG,
+          }}
+        >
+          <View
+            style={{
+              height: 18,
+              width: 86,
+              borderRadius: 6,
+              backgroundColor: "#E8EAED",
+              opacity: 0.9,
+            }}
+          />
+        </View>
+        {Array.from({ length: count }).map((_, i) => (
+          <FeedMediaCardSkeleton
+            key={`feed-skel-${i}`}
+            delay={120 + i * 90}
+          />
         ))}
       </View>
     </ScrollView>

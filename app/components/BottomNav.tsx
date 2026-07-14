@@ -7,6 +7,7 @@ import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { Platform, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getBottomNavHeight,
   getFabSize,
@@ -55,6 +56,11 @@ export default function BottomNav({
 }: BottomNavProps) {
   const [showActions, setShowActions] = useState(false);
   const { fastPress } = useFastPerformance();
+  const insets = useSafeAreaInsets();
+
+  // Dynamic bottom padding to raise above Android system nav keys
+  const safePadding = Platform.OS === "android" ? Math.max(insets.bottom, 16) : 0;
+  const navBarHeight = getBottomNavHeight() + safePadding;
 
   const handleFabToggle = useCallback(() => {
     setShowActions(!showActions);
@@ -128,7 +134,7 @@ export default function BottomNav({
           style={{
             position: "absolute",
             bottom:
-              getBottomNavHeight() -
+              navBarHeight -
               getResponsiveSpacing(40, 44, 48, 52) +
               getFabSize().size +
               getResponsiveSpacing(8, 10, 12, 16),
@@ -292,7 +298,8 @@ export default function BottomNav({
           bottom: 0,
           left: 0,
           right: 0,
-          height: getBottomNavHeight(),
+          height: navBarHeight,
+          paddingBottom: safePadding,
           backgroundColor: "white",
           flexDirection: "row",
           justifyContent: "space-around",
@@ -386,7 +393,7 @@ export default function BottomNav({
       <View
         style={{
           position: "absolute",
-          bottom: getBottomNavHeight() - getResponsiveSpacing(40, 44, 48, 52),
+          bottom: navBarHeight - getResponsiveSpacing(40, 44, 48, 52),
           left: "50%",
           transform: [{ translateX: -getFabSize().size / 2 }],
           backgroundColor: "white",

@@ -382,6 +382,36 @@ class CopyrightFreeMusicAPI {
     }
   }
 
+  async recordShare(
+    songId: string,
+    platform: string = "internal"
+  ): Promise<{
+    success: boolean;
+    data: { shareCount: number; likeCount?: number; viewCount?: number };
+  }> {
+    try {
+      const token = await TokenUtils.getAuthToken();
+      if (!token) throw new Error("Authentication required");
+
+      const response = await fetch(`${this.baseUrl}/${songId}/share`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ platform }),
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error recording share for song ${songId}:`, error);
+      throw error;
+    }
+  }
+
   async toggleSave(songId: string): Promise<{
     success: boolean;
     data: { bookmarked: boolean; bookmarkCount: number };

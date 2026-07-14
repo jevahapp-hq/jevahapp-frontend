@@ -19,7 +19,7 @@ import Hymns from "./hymns";
 import LiveComponent from "./LiveComponent";
 import Music from "./music";
 
-const categories = ["ALL", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "HYMNS", "LIVE"];
+const categories = ["ALL", "SERMON", "LIVE", "MUSIC", "E-BOOKS", "VIDEO", "HYMNS"];
 
 // Map category labels to the ContentType expected by AllContentTikTok
 const mapCategoryToContentType = (
@@ -143,7 +143,8 @@ export default function AllContentTikTokWrapper({
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{
-            paddingVertical: getResponsiveSpacing(8, 10, 12, 16),
+            paddingTop: 0,
+            paddingBottom: getResponsiveSpacing(8, 10, 12, 16),
             marginTop: 0,
           }}
         >

@@ -323,15 +323,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
               onLike={handleFavorite}
               commentCount={commentCount || (ebook as any).comment || 0}
               onComment={() => {
-                try {
-                  console.log("🗨️ Comment icon pressed (ebook)", {
-                    contentId,
-                    title: ebook.title,
-                  });
-                  // Open modal with empty array - backend will load comments immediately
-                  showCommentModal([], String(contentId));
-                } catch { }
-                handleComment();
+                // Prefer parent handler (opens once); fallback to local open
+                if (typeof handleComment === "function") handleComment();
+                else showCommentModal([], String(contentId));
               }}
               saved={!!savedFromStore}
               saveCount={saveCount}

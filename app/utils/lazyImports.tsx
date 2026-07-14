@@ -3,14 +3,14 @@
  * Provides lazy-loaded components with Suspense fallbacks
  */
 
-import React, { Suspense, ComponentType } from "react";
-import { View, ActivityIndicator, Text } from "react-native";
+import React, { ComponentType, Suspense } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
 
 /**
  * Loading fallback component for lazy-loaded screens
  */
 const LoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }}>
     <ActivityIndicator size="large" color="#000" />
     <Text style={{ marginTop: 10, fontSize: 14, color: "#666" }}>
       Loading...

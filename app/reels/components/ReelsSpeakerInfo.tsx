@@ -43,7 +43,7 @@ export const ReelsSpeakerInfo: React.FC<ReelsSpeakerInfoProps> = ({
     <View
       style={{
         position: "absolute",
-        bottom: getResponsiveSpacing(130, 150, 170),
+        bottom: getResponsiveSpacing(170, 190, 210),
         left: getResponsiveSpacing(12, 16, 20),
         right: getResponsiveSpacing(12, 16, 20),
         flexDirection: "row",

@@ -7,7 +7,8 @@ import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { Share } from "react-native";
 import allMediaAPI from "../../utils/allMediaAPI";
-import { getPersistedStats, persistStats } from "../../utils/persistentStorage";
+import { useInteractionStore } from "../../store/useInteractionStore";
+import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
 
 export interface UseReelsHandlersParams {
   router: ReturnType<typeof useRouter>;
@@ -174,15 +175,16 @@ export function useReelsHandlers({
         };
         const result = await Share.share(shareOptions);
         if (result.action === Share.sharedAction) {
-          const currentStats = videoStats[key] || {};
-          const newShared = (currentStats.sheared || parseInt(sheared) || 0) + 1;
-          setVideoStats((prev) => ({
-            ...prev,
-            [key]: { ...prev[key], sheared: newShared },
-          }));
-          const allStats = await getPersistedStats();
-          allStats[key] = { ...currentStats, sheared: newShared };
-          persistStats(allStats);
+          const contentId = currentVideo._id || contentIdForHooks;
+          if (contentId) {
+            await useInteractionStore
+              .getState()
+              .recordShare(
+                contentId,
+                mapContentTypeForBackend(activeContentType || "media"),
+                result.activityType || "generic"
+              );
+          }
         }
         setMenuVisible(false);
       } catch (e) {
@@ -190,7 +192,7 @@ export function useReelsHandlers({
         setMenuVisible(false);
       }
     },
-    [currentVideo, imageUrl, sheared, videoStats, setVideoStats, setMenuVisible]
+    [currentVideo, imageUrl, contentIdForHooks, activeContentType, setMenuVisible]
   );
 
   const handleDownloadAction = useCallback(async () => {

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,6 +26,8 @@ export default function BibleOnboarding({
   const [slideAnim] = useState(new Animated.Value(50));
 
   useEffect(() => {
+    // Reset fadeAnim to 0 so it can animate to 1
+    fadeAnim.setValue(0);
     startAnimations();
   }, []);
 
@@ -56,7 +59,12 @@ export default function BibleOnboarding({
   return (
     <View style={styles.container}>
       {/* Background Gradient Effect */}
-      <View style={styles.backgroundGradient} />
+      <LinearGradient
+        colors={["#F0FDF4", "#ECFDF5"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.backgroundGradient}
+      />
 
       {/* Content */}
       <Animated.View
@@ -166,7 +174,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)",
   },
   content: {
     flex: 1,

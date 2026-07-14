@@ -4,7 +4,13 @@
 import { useCallback } from "react";
 import { Share } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
+import { mapContentTypeForBackend } from "../../../../../app/utils/engagementHelpers";
+import {
+  getCachedContentInteraction,
+  isContentInteractionFresh,
+} from "../../../../../app/utils/contentInteractionPersist";
 import { useVideoNavigation } from "../../../../../app/hooks/useVideoNavigation";
+import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
 import {
   convertToDownloadableItem,
@@ -39,9 +45,13 @@ export interface UseAllContentTikTokHandlersParams {
   setCurrentlyVisibleVideo: (v: string | null) => void;
   refreshAllContent: () => Promise<void>;
   setRefreshing: (v: boolean) => void;
-  socketManager: any;
-  toggleLike: (contentId: string, contentType: string) => Promise<void>;
+  toggleLike: (
+    contentId: string,
+    contentType: string,
+    options?: { initialLikes?: number; initialLiked?: boolean }
+  ) => Promise<any>;
   toggleSave: (contentId: string, contentType: string) => Promise<void>;
+  recordShare: (contentId: string, contentType: string, shareMethod?: string) => Promise<void>;
   loadDownloadedItems: () => Promise<void>;
 }
 
@@ -67,9 +77,9 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     setCurrentlyVisibleVideo,
     refreshAllContent,
     setRefreshing,
-    socketManager,
     toggleLike,
     toggleSave,
+    recordShare,
     loadDownloadedItems,
   } = params;
 
@@ -150,23 +160,44 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
+        // Seed from what's on screen (store/cache), not stale feed `hasLiked`.
+        // Wrong seeds make a "like" tap actually unlike on the server.
+        const storeStats = useInteractionStore.getState().contentStats[contentId];
+        const cached = getCachedContentInteraction(contentId);
+        const cacheFresh = isContentInteractionFresh(contentId);
+        const initialLiked = Boolean(
+          storeStats?.userInteractions?.liked ??
+            (cacheFresh ? cached?.liked : undefined) ??
+            (item as any).hasLiked ??
+            (item as any).userHasLiked
+        );
+        const initialLikes =
+          storeStats?.likes ??
+          (cacheFresh ? cached?.likes : undefined) ??
+          item.likeCount ??
+          item.totalLikes ??
+          item.likes ??
+          item.favorite ??
+          0;
 
-        if (socketManager?.isConnected()) {
-          socketManager.sendLike(contentId, "media");
-        }
-
-        await toggleLike(contentId, contentType);
+        // One mutation path only. The HTTP toggle is authoritative; emitting
+        // `content-reaction` here can make the backend toggle the same like twice.
+        await toggleLike(contentId, contentType, {
+          initialLikes: Number(initialLikes) || 0,
+          initialLiked,
+        });
       } catch (error) {
         console.error(`❌ Failed to toggle like for ${item.title}:`, error);
       }
     },
-    [toggleLike, socketManager]
+    [toggleLike]
   );
 
   const handleComment = useCallback(
     (key: string, item: MediaItem) => {
       const contentId = item._id || key;
-      showCommentModal([], contentId, "media");
+      // Open once — footer no longer also opens
+      showCommentModal([], contentId, "media", item.speaker || item.title);
     },
     [showCommentModal]
   );
@@ -176,10 +207,10 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        await toggleSave(contentId, contentType);
+        const result = await toggleSave(contentId, contentType);
 
-        const isSaved = getUserSaveState(contentId);
-        if (!isSaved) {
+        // Use API result — getUserSaveState can be stale until re-render
+        if (result.saved) {
           const libraryItem = {
             id: contentId,
             contentType: item.contentType || "content",
@@ -219,12 +250,13 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         setShowSuccessCard(true);
       } catch (error) {
         console.error("❌ Save error:", error);
+        setSuccessMessage("Couldn't save — media may be unavailable");
+        setShowSuccessCard(true);
       }
       setModalVisible(null);
     },
     [
       toggleSave,
-      getUserSaveState,
       getLikeCount,
       getCommentCount,
       libraryStore,
@@ -237,17 +269,22 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
   const handleShare = useCallback(
     async (key: string, item: MediaItem) => {
       try {
-        await Share.share({
+        const contentId = item._id || key;
+        const contentType = mapContentTypeForBackend(item.contentType || "media");
+        const result = await Share.share({
           title: item.title,
           message: `Check this out: ${item.title}\n${item.fileUrl}`,
           url: item.fileUrl,
         });
+        if (result.action === Share.sharedAction) {
+          await recordShare(contentId, contentType, result.activityType || "generic");
+        }
       } catch (err) {
         console.warn("❌ Share error:", err);
       }
       setModalVisible(null);
     },
-    [setModalVisible]
+    [recordShare, setModalVisible]
   );
 
 

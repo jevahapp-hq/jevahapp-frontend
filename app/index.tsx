@@ -110,8 +110,17 @@ export default function Welcome() {
 
     initOnboarding();
 
+    // Safety timeout: if storage hangs, still let user proceed after 5s
+    const timeout = setTimeout(() => {
+      if (!cancelled && !onboardingReady) {
+        console.warn("⚠️ Onboarding initialization timed out, proceeding anyway");
+        setOnboardingReady(true);
+      }
+    }, 5000);
+
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
   }, []);
 
@@ -186,9 +195,9 @@ export default function Welcome() {
   // Show loading while auth and onboarding state are initializing
   if (!authLoaded || !userLoaded || !onboardingReady) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#090E24" />
-        <Text style={{ marginTop: 10, fontSize: 16 }}>Loading...</Text>
+        <Text style={{ marginTop: 10, fontSize: 16, color: "#090E24" }}>Loading...</Text>
       </View>
     );
   }

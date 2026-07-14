@@ -6,7 +6,7 @@ import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudi
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
-import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
+import { TikTokProgressBar } from "../../../../shared/components/VideoProgressBar";
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon, isValidUri } from "../../../../shared/utils";
@@ -73,7 +73,8 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
       p.loop = false;
       p.muted = isMuted;
       p.volume = videoVolume;
-      p.timeUpdateEventInterval = 0.5;
+      // 100ms ticks keep the scrubber moving while the video plays
+      p.timeUpdateEventInterval = 0.1;
     }
   );
 
@@ -250,24 +251,33 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
           </Text>
         </View>
 
-        <VideoProgressBar
+        <TikTokProgressBar
           progress={isAudioSermonValue ? (audioState?.progress ?? 0) : Math.max(0, Math.min(1, videoProgress || 0))}
           isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
           onToggleMute={handleToggleMuteInternal}
           onSeekToPercent={seekToPercent}
-          mutePosition="right"
-          bottomOffset={24}
           currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
-          durationMs={isAudioSermonValue ? (audioState?.duration ?? 0) : (videoDurationMs || lastKnownDurationRef.current || (video as any).duration * 1000 || 0)}
+          durationMs={
+            isAudioSermonValue
+              ? (audioState?.duration ?? 0)
+              : videoDurationMs ||
+                lastKnownDurationRef.current ||
+                ((video as any).duration ? (video as any).duration * 1000 : 0) ||
+                0
+          }
           showControls={true}
-          showFloatingLabel={true}
-          enlargeOnDrag={true}
-          knobSize={8}
-          knobSizeDragging={10}
-          trackHeights={{ normal: 4, dragging: 8 }}
-          seekSyncTicks={4}
-          seekMsTolerance={200}
-          minProgressEpsilon={0.005}
+          debug={__DEV__ && false}
+          config={{
+            showFloatingLabel: true,
+            enlargeOnDrag: true,
+            knobSize: 8,
+            knobSizeDragging: 10,
+            trackHeight: 4,
+            trackHeightDragging: 8,
+            seekSyncTicks: 3,
+            seekMsTolerance: 200,
+            minProgressEpsilon: 0.005,
+          }}
         />
       </View>
     </TouchableWithoutFeedback>

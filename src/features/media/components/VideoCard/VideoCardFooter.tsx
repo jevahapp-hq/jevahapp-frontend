@@ -1,7 +1,6 @@
 /**
  * VideoCardFooter - Avatar, stats, actions, three-dots menu
  */
-import { useCommentModal } from "@/app/context/CommentModalContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 import { useFastPerformance } from "../../../../../app/utils/fastPerformance";
@@ -59,7 +58,6 @@ export function VideoCardFooter({
   openModal,
   onModalToggle,
 }: VideoCardFooterProps) {
-  const { showCommentModal } = useCommentModal();
   const { fastPress } = useFastPerformance();
 
   return (
@@ -110,11 +108,8 @@ export function VideoCardFooter({
             }, { key: `like_${contentId}`, priority: 'high' })}
             commentCount={commentCount || video.comment || 0}
             onComment={fastPress(() => {
-              try {
-                showCommentModal([], String(contentId));
-              } catch { }
               onComment(contentKey, video);
-            })}
+            }, { key: `comment_${contentId}`, priority: 'high' })}
             saved={!!userSaveState}
             saveCount={saveCount || 0}
             onSave={fastPress(() => onSave(modalKey, video))}

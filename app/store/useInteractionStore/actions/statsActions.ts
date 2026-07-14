@@ -1,4 +1,12 @@
-import type { ContentStats } from "../../utils/contentInteractionAPI";
+import type { ContentStats } from "../../../utils/contentInteractionAPI";
+import {
+  getCachedContentInteraction,
+  isContentInteractionFresh,
+} from "../../../utils/contentInteractionPersist";
+import {
+  toBatchMetadataItem,
+  type BatchMetadataItem,
+} from "../../../utils/engagementHelpers";
 import type { StoreGet, StoreSet } from "../types";
 
 export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
@@ -15,8 +23,9 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
         const stats = await api.getContentMetadata(contentId, contentType);
         set((state: any) => {
           const existing = state.contentStats[contentId];
-          const isFreshLoad = !existing;
-          const shouldTrustBackend = options?.forceRefresh || isFreshLoad;
+          const cached = getCachedContentInteraction(contentId);
+          const cacheIsFresh =
+            !options?.forceRefresh && isContentInteractionFresh(contentId);
           const likeKey = `${contentId}_like`;
           const saveKey = `${contentId}_save`;
           const hasActiveLike = state.loadingInteraction[likeKey] === true;
@@ -29,14 +38,28 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
 
           const merged: ContentStats = {
             contentId,
-            likes: shouldTrustBackend ? (stats.likes ?? 0) : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-            saves: shouldTrustBackend ? (stats.saves ?? 0) : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
-            shares: shouldTrustBackend ? (stats.shares ?? 0) : Math.max(existing?.shares ?? 0, stats.shares ?? 0),
-            views: shouldTrustBackend ? (stats.views ?? 0) : Math.max(existing?.views ?? 0, stats.views ?? 0),
-            comments: shouldTrustBackend ? (stats.comments ?? 0) : Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+            likes:
+              cacheIsFresh && cached?.likes !== undefined
+                ? Math.max(0, cached.likes)
+                : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
+            saves:
+              cacheIsFresh && cached?.saves !== undefined
+                ? Math.max(0, cached.saves)
+                : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+            shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
+            views: Math.max(existing?.views ?? 0, stats.views ?? 0),
+            comments: Math.max(existing?.comments ?? 0, stats.comments ?? 0),
             userInteractions: {
-              liked: hasActiveLike ? existingLiked : (stats.userInteractions?.liked ?? existingLiked ?? false),
-              saved: hasActiveSave ? existingSaved : (stats.userInteractions?.saved ?? existingSaved ?? false),
+              liked: hasActiveLike
+                ? existingLiked
+                : cacheIsFresh && cached?.liked !== undefined
+                  ? cached.liked
+                  : (stats.userInteractions?.liked ?? existingLiked ?? false),
+              saved: hasActiveSave
+                ? existingSaved
+                : cacheIsFresh && cached?.saved !== undefined
+                  ? cached.saved
+                  : (stats.userInteractions?.saved ?? existingSaved ?? false),
               shared: stats.userInteractions?.shared ?? existingShared ?? false,
               viewed: stats.userInteractions?.viewed ?? existingViewed ?? false,
             },
@@ -73,32 +96,72 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
     },
 
     loadBatchContentStats: async (
-      contentIds: string[],
+      idsOrItems: string[] | BatchMetadataItem[],
       contentType: string = "media",
       options?: { forceRefresh?: boolean }
     ) => {
+      const items: BatchMetadataItem[] =
+        Array.isArray(idsOrItems) &&
+        idsOrItems.length > 0 &&
+        typeof idsOrItems[0] === "object"
+          ? (idsOrItems as BatchMetadataItem[])
+          : (idsOrItems as string[]).map((id) =>
+              toBatchMetadataItem(id, contentType)
+            );
+
       try {
-        const fromBatch = await api.getBatchMetadata(contentIds, contentType);
+        const fromBatch = await api.getBatchMetadata(items);
         if (Object.keys(fromBatch).length > 0) {
           set((state: any) => {
             const merged = { ...state.contentStats } as Record<string, ContentStats>;
             for (const [id, stats] of Object.entries(fromBatch)) {
               const existing = state.contentStats[id];
-              const isFreshLoad = !existing;
-              const shouldTrustBackend = options?.forceRefresh || isFreshLoad;
+              const cached = getCachedContentInteraction(id);
+              const cacheIsFresh =
+                !options?.forceRefresh && isContentInteractionFresh(id);
 
               merged[id] = {
                 contentId: id,
-                likes: shouldTrustBackend ? (stats.likes ?? 0) : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-                saves: shouldTrustBackend ? (stats.saves ?? 0) : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
-                shares: shouldTrustBackend ? (stats.shares ?? 0) : Math.max(existing?.shares ?? 0, stats.shares ?? 0),
-                views: shouldTrustBackend ? (stats.views ?? 0) : Math.max(existing?.views ?? 0, stats.views ?? 0),
-                comments: shouldTrustBackend ? (stats.comments ?? 0) : Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+                likes:
+                  cacheIsFresh && cached?.likes !== undefined
+                    ? Math.max(0, cached.likes)
+                    : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
+                saves:
+                  cacheIsFresh && cached?.saves !== undefined
+                    ? Math.max(0, cached.saves)
+                    : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+                shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
+                views: Math.max(
+                  existing?.views ?? 0,
+                  stats.views ?? 0,
+                  Number(cached?.views) || 0
+                ),
+                comments: Math.max(
+                  existing?.comments ?? 0,
+                  stats.comments ?? 0,
+                  Number(cached?.comments) || 0
+                ),
                 userInteractions: {
-                  liked: stats.userInteractions?.liked ?? false,
-                  saved: stats.userInteractions?.saved ?? false,
-                  shared: stats.userInteractions?.shared ?? false,
-                  viewed: stats.userInteractions?.viewed ?? false,
+                  liked:
+                    cacheIsFresh && cached?.liked !== undefined
+                      ? cached.liked
+                      : (stats.userInteractions?.liked ??
+                        existing?.userInteractions?.liked ??
+                        false),
+                  saved:
+                    cacheIsFresh && cached?.saved !== undefined
+                      ? cached.saved
+                      : (stats.userInteractions?.saved ??
+                        existing?.userInteractions?.saved ??
+                        false),
+                  shared:
+                    stats.userInteractions?.shared ??
+                    existing?.userInteractions?.shared ??
+                    false,
+                  viewed:
+                    stats.userInteractions?.viewed ??
+                    existing?.userInteractions?.viewed ??
+                    false,
                 },
               } as ContentStats;
             }
@@ -106,20 +169,29 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
           });
           return;
         }
-        if (contentIds.length <= 6) {
-          for (const id of contentIds) {
+        const fallbackIds = items.map((item) => item.contentId);
+        if (fallbackIds.length <= 6) {
+          for (const item of items) {
             try {
-              await get().loadContentStats(id, contentType, options);
+              await get().loadContentStats(
+                item.contentId,
+                item.contentType,
+                options
+              );
             } catch {}
           }
         }
       } catch (e) {
         if (__DEV__) console.warn("Batch metadata failed:", e instanceof Error ? e.message : e);
         const is429 = e instanceof Error && (e.message.includes("429") || (e as any).status === 429);
-        if (!is429 && contentIds.length <= 8) {
-          for (const id of contentIds) {
+        if (!is429 && items.length <= 8) {
+          for (const item of items) {
             try {
-              await get().loadContentStats(id, contentType, options);
+              await get().loadContentStats(
+                item.contentId,
+                item.contentType,
+                options
+              );
             } catch {}
           }
         }
@@ -128,11 +200,28 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
 
     mutateStats: (contentId: string, fn: (s: ContentStats) => Partial<ContentStats | ContentStats["userInteractions"]>) => {
       set((state: any) => {
-        const s = state.contentStats[contentId];
-        if (!s) return state;
+        const s: ContentStats =
+          state.contentStats[contentId] ||
+          ({
+            contentId,
+            likes: 0,
+            saves: 0,
+            shares: 0,
+            views: 0,
+            comments: 0,
+            userInteractions: {
+              liked: false,
+              saved: false,
+              shared: false,
+              viewed: false,
+            },
+          } as ContentStats);
         const patch = fn(s) as any;
         return {
-          contentStats: { ...state.contentStats, [contentId]: { ...s, ...patch } },
+          contentStats: {
+            ...state.contentStats,
+            [contentId]: { ...s, ...patch },
+          },
         };
       });
     },

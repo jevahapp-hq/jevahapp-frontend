@@ -71,7 +71,9 @@ export const useSeekSync = (
   config: ProgressBarConfig,
   onSeekComplete: () => void,
   onStableTickUpdate: (ticks: number) => void,
-  debug: boolean = false
+  debug: boolean = false,
+  /** Abort seek-hold so a failed seek never freezes the bar forever */
+  seekAbortMs: number = 700
 ) => {
   useEffect(() => {
     if (!isSeeking || targetProgress === null) {
@@ -80,6 +82,11 @@ export const useSeekSync = (
       }
       return;
     }
+
+    const abortTimer = setTimeout(() => {
+      debugLog('Seek aborted (timeout)', { targetProgress, seekAbortMs }, debug);
+      onSeekComplete();
+    }, seekAbortMs);
 
     const externalProgress = calculateProgress(currentMs, durationMs);
     const epsilon = calculateSeekEpsilon(
@@ -101,6 +108,7 @@ export const useSeekSync = (
       const newStableTicks = stableTicks + 1;
       onStableTickUpdate(newStableTicks);
       if (newStableTicks >= config.seekSyncTicks) {
+        clearTimeout(abortTimer);
         debugLog('Seek completed', { targetProgress, externalProgress }, debug);
         onSeekComplete();
       }
@@ -113,7 +121,9 @@ export const useSeekSync = (
         onStableTickUpdate(0);
       }
     }
-  }, [currentMs, durationMs, isSeeking, targetProgress, stableTicks, config, onSeekComplete, onStableTickUpdate, debug]);
+
+    return () => clearTimeout(abortTimer);
+  }, [currentMs, durationMs, isSeeking, targetProgress, stableTicks, config, onSeekComplete, onStableTickUpdate, debug, seekAbortMs]);
 };
 
 /**

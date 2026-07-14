@@ -5,6 +5,10 @@ import {
 } from "../../../app/store/useContentCacheStore";
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
+import {
+  getCachedContentInteraction,
+  isContentInteractionFresh,
+} from "../../../app/utils/contentInteractionPersist";
 import { mediaApi } from "../../core/api/MediaApi";
 import {
   ContentFilter,
@@ -22,29 +26,111 @@ const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
     const store = useInteractionStore.getState();
     const statsUpdate: Record<string, any> = {};
 
-    items.forEach(item => {
+    items.forEach((item) => {
       const id = item._id;
-      if (!id || store.contentStats[id]) return; // Skip if stats already exist (preserve user updates)
+      if (!id) return;
 
-      statsUpdate[id] = {
-        contentId: id,
-        likes: item.totalLikes ?? item.likeCount ?? item.likes ?? item.favorite ?? 0,
-        saves: item.saves ?? item.saved ?? 0,
-        shares: item.totalShares ?? item.shareCount ?? item.shares ?? 0,
-        views: item.totalViews ?? item.viewCount ?? item.views ?? 0,
-        comments: item.commentCount ?? item.comments ?? item.comment ?? 0,
-        userInteractions: {
-          liked: Boolean(item.hasLiked),
-          saved: Boolean(item.hasBookmarked),
-          shared: Boolean(item.hasShared),
-          viewed: Boolean(item.hasViewed),
-        },
-      } as any;
+      const mediaLikes =
+        item.totalLikes ?? item.likeCount ?? item.likes ?? item.favorite ?? 0;
+      const mediaSaves = item.saves ?? item.saved ?? 0;
+      const mediaShares =
+        item.totalShares ?? item.shareCount ?? item.shares ?? 0;
+      const mediaViews =
+        item.totalViews ?? item.viewCount ?? item.views ?? 0;
+      const mediaComments =
+        item.commentCount ?? item.comments ?? item.comment ?? 0;
+      const mediaLiked = Boolean(item.hasLiked);
+      const mediaSaved = Boolean(item.hasBookmarked);
+
+      const existing = store.contentStats[id];
+      const cached = getCachedContentInteraction(id);
+      const cacheIsFresh = isContentInteractionFresh(id);
+      if (!existing) {
+        statsUpdate[id] = {
+          contentId: id,
+          likes:
+            cacheIsFresh && cached?.likes !== undefined
+              ? Math.max(0, cached.likes)
+              : mediaLikes,
+          saves:
+            cacheIsFresh && cached?.saves !== undefined
+              ? Math.max(0, cached.saves)
+              : mediaSaves,
+          shares: mediaShares,
+          views: mediaViews,
+          comments: mediaComments,
+          userInteractions: {
+            liked:
+              cacheIsFresh && cached?.liked !== undefined
+                ? cached.liked
+                : mediaLiked,
+            saved:
+              cacheIsFresh && cached?.saved !== undefined
+                ? cached.saved
+                : mediaSaved,
+            shared: Boolean(item.hasShared),
+            viewed: Boolean(item.hasViewed),
+          },
+        };
+        return;
+      }
+
+      // Backfill incomplete hydrate (e.g. liked:true with likes:0) from media totals
+      const nextLikes =
+        cacheIsFresh && cached?.likes !== undefined
+          ? Math.max(0, cached.likes)
+          : (existing.likes ?? 0) > 0
+            ? existing.likes
+            : Math.max(existing.likes ?? 0, mediaLikes);
+      const nextComments =
+        (existing.comments ?? 0) > 0
+          ? existing.comments
+          : Math.max(existing.comments ?? 0, mediaComments);
+      const nextSaves =
+        (existing.saves ?? 0) > 0
+          ? existing.saves
+          : Math.max(existing.saves ?? 0, mediaSaves);
+      const nextViews =
+        (existing.views ?? 0) > 0
+          ? existing.views
+          : Math.max(existing.views ?? 0, mediaViews);
+
+      const nextLiked =
+        cacheIsFresh && cached?.liked !== undefined
+          ? cached.liked
+          : existing.userInteractions?.liked || mediaLiked;
+      const nextSaved =
+        cacheIsFresh && cached?.saved !== undefined
+          ? cached.saved
+          : existing.userInteractions?.saved || mediaSaved;
+
+      if (
+        nextLikes !== existing.likes ||
+        nextComments !== existing.comments ||
+        nextSaves !== existing.saves ||
+        nextViews !== existing.views ||
+        nextLiked !== existing.userInteractions?.liked ||
+        nextSaved !== existing.userInteractions?.saved
+      ) {
+        statsUpdate[id] = {
+          ...existing,
+          likes: nextLikes,
+          saves: nextSaves,
+          shares: Math.max(existing.shares ?? 0, mediaShares),
+          views: nextViews,
+          comments: nextComments,
+          userInteractions: {
+            ...existing.userInteractions,
+            liked: nextLiked,
+            saved: nextSaved,
+          },
+        };
+      }
     });
 
     if (Object.keys(statsUpdate).length > 0) {
-      useInteractionStore.setState(state => ({
-        contentStats: { ...state.contentStats, ...statsUpdate }
+      useInteractionStore.setState((state) => ({
+        contentStats: { ...state.contentStats, ...statsUpdate },
       }));
     }
   } catch (err) {
@@ -56,7 +142,7 @@ const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
 export async function fetchAllContentPublic(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentPublic({
     page: 1,
-    limit: 20,
+    limit: 12,
     contentType: contentType !== "ALL" ? contentType : undefined,
   });
 
@@ -83,7 +169,7 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
     useContentCacheStore.getState().set("ALL:first", {
       items: result.media,
       page: 1,
-      limit: 20,
+      limit: 12,
       total: result.total,
       fetchedAt: Date.now(),
     });
@@ -96,7 +182,7 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
 async function fetchAllContentWithAuth(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentWithAuth({
     page: 1,
-    limit: 20,
+    limit: 12,
     contentType: contentType !== "ALL" ? contentType : undefined,
   });
 
@@ -125,7 +211,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     immediate = true,
     contentType = "ALL",
     page = 1,
-    limit = 20,
+    limit = 12,
     useAuth = false,
   } = options;
 
@@ -136,10 +222,11 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     : undefined;
 
   const allContentQuery = useQuery({
-    queryKey: ["all-content", contentType, 1, 20, useAuth],
+    queryKey: ["all-content", contentType, 1, 12, useAuth],
     queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
     enabled: immediate,
     initialData: cachedForInitial,
+    placeholderData: (prev) => prev,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     retry: 1,
@@ -147,6 +234,13 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+
+  const allContentEarly = allContentQuery.data?.media || [];
+  // Default feed is fallback — don't contend with the primary fetch on cold start
+  const shouldFetchDefault =
+    immediate &&
+    (allContentQuery.isError ||
+      (allContentQuery.isFetched && allContentEarly.length === 0));
 
   // Use React Query for default content
   const defaultContentQuery = useQuery({
@@ -190,13 +284,13 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
       throw new Error(response.error || "Failed to fetch content");
     },
-    enabled: immediate,
-    staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
-    gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
+    enabled: shouldFetchDefault,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     retry: 1,
-    refetchOnMount: false, // ✅ Use cache if available - instant load when switching tabs
-    refetchOnWindowFocus: false, // ✅ Don't refetch on focus - preserve user's current view
-    refetchOnReconnect: false, // ✅ Don't refetch on reconnect - use cached data
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Extract data from React Query (0ms if cached!)
@@ -210,10 +304,14 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     pages: defaultContentQuery.data?.pages || 0,
   };
 
-  // Loading states (only show loading if no cached data)
+  // Only skeleton when there is nothing renderable yet
+  const hasRenderable = allContent.length > 0 || defaultContent.length > 0;
   const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
-  const defaultContentLoading = defaultContentQuery.isLoading && defaultContent.length === 0;
-  const loading = allContentLoading || defaultContentLoading;
+  const defaultContentLoading =
+    shouldFetchDefault &&
+    defaultContentQuery.isLoading &&
+    defaultContent.length === 0;
+  const loading = !hasRenderable && (allContentLoading || defaultContentLoading);
 
   // Error states
   const allContentError = allContentQuery.error

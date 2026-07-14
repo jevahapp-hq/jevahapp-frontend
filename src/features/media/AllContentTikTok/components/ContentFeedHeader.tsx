@@ -50,7 +50,8 @@ export function ContentFeedHeader({
             marginBottom: UI_CONFIG.SPACING.LG,
           }}
         >
-          {contentType === "ALL" ? "All Content" : `${contentType} Content`} ({filteredMediaListLength} items)
+          {contentType === "ALL" ? "For You" : `${contentType} · For You`}{" "}
+          ({filteredMediaListLength})
         </Text>
         {firstFour.map((item, index) => (
           <React.Fragment key={item._id ?? `first-${index}`}>

@@ -94,8 +94,6 @@ export function useReelsCurrentVideo({
     return getUserDisplayNameFromContent(video, "Creator");
   };
 
-  const reelKey = `reel-${currentVideo.title}-${getSpeakerNameForReel(currentVideo)}`;
-  const modalKey = reelKey;
   const contentId = currentVideo._id || currentVideo.id || null;
   const contentIdForHooks = (contentId || "") as string;
   const canUseBackendLikes = Boolean(contentIdForHooks);
@@ -142,6 +140,9 @@ export function useReelsCurrentVideo({
       return fallback;
     }
   };
+
+  const reelKey = `reel-${currentVideo._id || currentVideo.id || currentIndex}-${currentVideo.title}-${getSpeakerName(currentVideo, "Creator")}`;
+  const modalKey = reelKey;
 
   const video = useMemo(
     () => ({

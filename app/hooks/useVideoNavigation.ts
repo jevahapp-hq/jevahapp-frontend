@@ -35,88 +35,89 @@ export const useVideoNavigation = () => {
     source,
     category,
   }: VideoNavigationOptions) => {
-    // console.log(`📱 Navigating to reels: ${video.title}`);
-    // console.log(`📱 Index: ${index}, Total videos: ${allVideos.length}`);
-    // console.log(`📱 Video ID: ${video._id}, File URL: ${video.fileUrl}`);
-
     // Pause all videos before navigation
-    globalVideoStore.pauseAllVideos();
+    try {
+      globalVideoStore.pauseAllVideos();
+    } catch (e) {
+      console.warn("Failed to pause videos before navigation", e);
+    }
 
     // Prepare the full video list for TikTok-style navigation
-    // Preserve authorInfo and uploadedBy so Reels can derive display name (authorInfo is primary source)
-    const videoListForNavigation = allVideos.map((v, idx) => ({
-      title: v.title,
-      speaker: v.speaker,
-      timeAgo: getTimeAgo(v.createdAt),
-      views: contentStats[getContentKey(v)]?.views || v.views || 0,
-      sheared: contentStats[getContentKey(v)]?.sheared || v.sheared || 0,
-      saved: contentStats[getContentKey(v)]?.saved || v.saved || 0,
-      favorite: globalFavoriteCounts[getContentKey(v)] || v.favorite || 0,
-      fileUrl: v.fileUrl || "",
-      imageUrl: v.fileUrl,
-      speakerAvatar:
-        typeof v.speakerAvatar === "string"
-          ? v.speakerAvatar
-          : v.speakerAvatar || require("../../assets/images/Avatar-1.png"),
-      _id: v._id,
-      id: v.id ?? v._id,
-      contentType: v.contentType,
-      description: v.description,
-      createdAt: v.createdAt,
-      uploadedBy: v.uploadedBy,
-      authorInfo: v.authorInfo,
-      author: v.author,
-    }));
+    const videoListForNavigation = allVideos.map((v, idx) => {
+      const key = getContentKey(v);
+      const stats = contentStats[key] || {};
 
-    // Fetch user profiles so Reels shows names/avatars (data exists in DB)
-    const enrichedList = await UserProfileCache.enrichContentArrayBatch(videoListForNavigation);
-    const listToUse = enrichedList.length > 0 ? enrichedList : videoListForNavigation;
+      return {
+        title: v.title || "Untitled",
+        speaker: v.speaker || "Unknown",
+        timeAgo: v.createdAt ? getTimeAgo(v.createdAt) : "Recently",
+        views: stats.views || v.views || 0,
+        sheared: stats.sheared || v.sheared || 0,
+        saved: stats.saved || v.saved || 0,
+        favorite: globalFavoriteCounts[key] || v.favorite || 0,
+        fileUrl: v.fileUrl || "",
+        imageUrl: v.imageUrl || v.thumbnailUrl || v.fileUrl || "",
+        speakerAvatar: v.speakerAvatar || null,
+        _id: v._id || `temp-${idx}`,
+        id: v.id ?? v._id ?? `temp-${idx}`,
+        contentType: v.contentType || "video",
+        description: v.description || "",
+        createdAt: v.createdAt || new Date().toISOString(),
+        uploadedBy: v.uploadedBy,
+        authorInfo: v.authorInfo,
+        author: v.author,
+      };
+    });
+
+    // Fetch user profiles so Reels shows names/avatars
+    let listToUse = videoListForNavigation;
+    try {
+      const enrichedList = await UserProfileCache.enrichContentArrayBatch(videoListForNavigation);
+      if (enrichedList && enrichedList.length > 0) {
+        listToUse = enrichedList;
+      }
+    } catch (err) {
+      console.warn("Failed to enrich content array in navigation:", err);
+    }
 
     reelsStore.setVideoList(listToUse);
     reelsStore.setCurrentIndex(index);
 
-    const currentItem = listToUse[index] || listToUse[0];
-    // Use same extraction logic as Reels (authorInfo primary, then uploadedBy, cache fallback)
+    const currentItem = listToUse[index] || listToUse[0] || videoListForNavigation[0];
+    if (!currentItem) return;
+
     const fallbackName = getDisplayName(video.speaker, video.uploadedBy);
     const speakerName = getUserDisplayNameFromContent(
       currentItem,
       /^(Unknown|Anonymous User)$/i.test(fallbackName || "") ? "Creator" : fallbackName || "Creator"
     );
+
+    const videoKey = getContentKey(video);
+    const vStats = contentStats[videoKey] || {};
+
     const navigationParams = {
-      title: video.title,
+      title: video.title || "Untitled",
       speaker: speakerName,
-      timeAgo: getTimeAgo(video.createdAt),
-      views: String(
-        contentStats[getContentKey(video)]?.views || video.views || 0
-      ),
-      sheared: String(
-        contentStats[getContentKey(video)]?.sheared || video.sheared || 0
-      ),
-      saved: String(
-        contentStats[getContentKey(video)]?.saved || video.saved || 0
-      ),
-      favorite: String(
-        globalFavoriteCounts[getContentKey(video)] || video.favorite || 0
-      ),
-      imageUrl: video.fileUrl || "",
-      speakerAvatar:
-        typeof video.speakerAvatar === "string"
-          ? video.speakerAvatar
-          : video.speakerAvatar ||
-            require("../../assets/images/Avatar-1.png").toString(),
+      timeAgo: video.createdAt ? getTimeAgo(video.createdAt) : "Recently",
+      views: String(vStats.views || video.views || 0),
+      sheared: String(vStats.sheared || video.sheared || 0),
+      saved: String(vStats.saved || video.saved || 0),
+      favorite: String(globalFavoriteCounts[videoKey] || video.favorite || 0),
+      imageUrl: video.imageUrl || video.thumbnailUrl || video.fileUrl || "",
+      speakerAvatar: typeof video.speakerAvatar === "string" ? video.speakerAvatar : "",
       category: category || video.contentType || "ALL",
       currentIndex: String(index),
       source: source || "useVideoNavigation",
     };
 
-    // console.log("🚀 About to navigate with params:", navigationParams);
-
-    router.push({
-      pathname: "/reels/Reelsviewscroll",
-      params: navigationParams,
-    });
-
-    // console.log("✅ Navigation call completed");
+    try {
+      router.push({
+        pathname: "/reels/Reelsviewscroll",
+        params: navigationParams,
+      });
+    } catch (e) {
+      console.error("Navigation failed:", e);
+    }
   };
 
   return {

@@ -21,7 +21,7 @@ import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlay
 import { getBottomNavHeight } from "../../../app/utils/responsiveOptimized";
 import { UI_CONFIG } from "../constants";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MINI_PLAYER_HEIGHT = 72; // Slightly taller for better glassmorphism effect
 
 export default function FloatingAudioPlayer() {

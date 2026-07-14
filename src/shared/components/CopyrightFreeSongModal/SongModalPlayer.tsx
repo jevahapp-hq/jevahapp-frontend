@@ -40,6 +40,7 @@ export interface SongModalPlayerProps {
   onRepeatCycle: () => void;
   onToggleShuffle: () => void;
   onOpenPlaylistView: () => void;
+  onShare?: () => void;
 }
 
 export function SongModalPlayer({
@@ -69,6 +70,7 @@ export function SongModalPlayer({
   onRepeatCycle,
   onToggleShuffle,
   onOpenPlaylistView,
+  onShare,
 }: SongModalPlayerProps) {
   const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
   const displayProgress = isSeeking ? seekProgress : audioProgress;
@@ -159,6 +161,7 @@ export function SongModalPlayer({
           isMuted={isMuted}
           onToggleMute={onToggleMute}
           onOpenPlaylistView={onOpenPlaylistView}
+          onShare={onShare}
         />
       </View>
     </View>

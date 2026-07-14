@@ -8,6 +8,7 @@ import {
   InteractionManager,
   Modal,
   Platform,
+  Share,
   StatusBar,
   View,
 } from "react-native";
@@ -232,6 +233,33 @@ export default function CopyrightFreeSongModal({
   }, [song]);
 
   useEffect(() => {
+    if (!visible || !song) return;
+    const songId = song.id || song._id;
+    if (!songId) return;
+
+    let cancelled = false;
+    copyrightFreeMusicAPI
+      .getSongById(songId)
+      .then((response) => {
+        if (cancelled || !response.success || !response.data) return;
+        const fresh = transformBackendSong(response.data);
+        setIsLiked(Boolean(fresh.isLiked));
+        setLikeCount(fresh.likeCount ?? fresh.likes ?? 0);
+        setViewCount(
+          Math.max(
+            fresh.viewCount ?? fresh.views ?? 0,
+            fresh.likeCount ?? fresh.likes ?? 0
+          )
+        );
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, song?._id, song?.id]);
+
+  useEffect(() => {
     if (!showOptionsModal || !song) return;
     const songId = song.id || song._id;
     if (!songId) return;
@@ -378,6 +406,33 @@ export default function CopyrightFreeSongModal({
     }
   }, [song, isLiked, likeCount, isTogglingLike]);
 
+  const handleShare = useCallback(async () => {
+    if (!song) return;
+    const songId = song._id || song.id;
+    if (!songId) return;
+
+    try {
+      const result = await Share.share({
+        title: song.title,
+        message: `Listen to ${song.title} on Jevah`,
+        url: song.audioUrl || song.fileUrl,
+      });
+      if (result.action === Share.sharedAction) {
+        const response = await copyrightFreeMusicAPI.recordShare(
+          songId,
+          result.activityType || "internal"
+        );
+        if (response.success && response.data) {
+          setViewCount((prev) =>
+            Math.max(response.data.viewCount ?? prev, response.data.likeCount ?? likeCount, prev)
+          );
+        }
+      }
+    } catch (error) {
+      if (__DEV__) console.warn("Failed to share copyright-free song:", error);
+    }
+  }, [song, likeCount]);
+
   const handleDeletePlaylist = useCallback(
     async (playlistId: string) => {
       Alert.alert("Delete Playlist", "Are you sure you want to delete this playlist?", [
@@ -494,6 +549,7 @@ export default function CopyrightFreeSongModal({
                     }}
                     onToggleShuffle={toggleShuffle}
                     onOpenPlaylistView={() => setShowPlaylistView(true)}
+                    onShare={handleShare}
                   />
                 </View>
               </GestureDetector>

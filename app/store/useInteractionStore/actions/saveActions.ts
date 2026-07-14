@@ -97,7 +97,10 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
-        return { saved: previousSaved, totalSaves: previousSaves };
+        // Re-throw so UI does not treat a failed bookmark as a local save
+        throw error instanceof Error
+          ? error
+          : new Error(typeof error === "string" ? error : "Save failed");
       }
     },
   };

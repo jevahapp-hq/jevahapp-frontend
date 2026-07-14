@@ -101,7 +101,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const router = useRouter();
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Rubik_400Regular,
     Rubik_600SemiBold,
     Rubik_700Bold,
@@ -175,27 +175,22 @@ export default function RootLayout() {
   const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
   const { signOut } = useAuth();
 
-  // Critical path: only persisted media (current playback). Show app shell ASAP.
+  // Never leave users trapped on the native splash if font/native startup stalls.
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 1800);
+    return () => clearTimeout(fallback);
+  }, []);
+
+  // Persisted media is useful, but must never block the app shell/splash.
   useEffect(() => {
     if (!fontsLoaded || isInitialized) return;
 
-    let cancelled = false;
-
-    const runCriticalInit = async () => {
-      try {
-        await loadPersistedMedia();
-      } catch {
-        // Non-blocking; app works without it
-      }
-      if (!cancelled) {
-        setIsInitialized(true);
-      }
-    };
-
-    runCriticalInit();
-    return () => {
-      cancelled = true;
-    };
+    setIsInitialized(true);
+    void Promise.resolve(loadPersistedMedia()).catch(() => {
+      // Non-blocking; app works without persisted playback state.
+    });
   }, [fontsLoaded, loadPersistedMedia, isInitialized]);
 
   // Deferred init: run after first paint so content appears faster
@@ -213,12 +208,13 @@ export default function RootLayout() {
         try {
           await PerformanceOptimizer.getInstance().preloadCriticalData();
         } catch { }
-        // Stagger requests to avoid 429 - warmup first, then prefetch after longer delay
+        // Warm API then prefetch first page (same key as useMedia for cache hit)
         await warmupBackend().catch(() => { });
-        await new Promise((r) => setTimeout(r, 2500));
+        await new Promise((r) => setTimeout(r, 800));
         queryClient.prefetchQuery({
-          queryKey: ["all-content", "ALL", 1, 50, false],
+          queryKey: ["all-content", "ALL", 1, 12, false],
           queryFn: () => fetchAllContentPublic("ALL"),
+          staleTime: 30 * 60 * 1000,
         }).catch(() => { });
       })();
     });
@@ -226,12 +222,12 @@ export default function RootLayout() {
     return () => task.cancel();
   }, [fontsLoaded, isInitialized, loadDownloadedItems, loadSavedItems]);
 
-  // Hide splash when app is ready to show (fonts + critical init done)
+  // Hide as soon as fonts resolve; background hydration is not a launch gate.
   useEffect(() => {
-    if (fontsLoaded && isInitialized && !error) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => { });
     }
-  }, [fontsLoaded, isInitialized, error]);
+  }, [fontsLoaded, fontError]);
 
   // Intercept Android hardware back to properly exit app instead of logging out
   useEffect(() => {
@@ -255,7 +251,7 @@ export default function RootLayout() {
   }, []);
 
   // ✅ Fonts not loaded
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontError) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <Text>Loading fonts...</Text>

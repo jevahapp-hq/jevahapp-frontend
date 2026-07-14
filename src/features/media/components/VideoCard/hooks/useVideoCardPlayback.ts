@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import contentInteractionAPI from "../../../../../../app/utils/contentInteractionAPI";
+/**
+ * useVideoCardPlayback - Orchestrates progress tracking + view analytics.
+ * Progress math lives in useVideoProgressTracker; views in useVideoViewTracking.
+ */
+import { useCallback } from "react";
+import { useVideoProgressTracker } from "./useVideoProgressTracker";
+import { useVideoViewTracking } from "./useVideoViewTracking";
 
 export interface UseVideoCardPlaybackParams {
   player: any;
@@ -20,7 +25,6 @@ export interface UseVideoCardPlaybackParams {
 export function useVideoCardPlayback({
   player,
   isAudioSermon,
-  videoTitle,
   contentId,
   isPlaying,
   handleVideoError,
@@ -32,118 +36,61 @@ export function useVideoCardPlayback({
   storeRef,
   isMountedRef,
 }: UseVideoCardPlaybackParams) {
-  const lastKnownDurationRef = useRef(0);
-  const [videoDurationMs, setVideoDurationMs] = useState(0);
-  const [videoPositionMs, setVideoPositionMs] = useState(0);
-  const [videoProgress, setVideoProgress] = useState(0);
+  const { maybeRecordView } = useVideoViewTracking({
+    contentId,
+    hasTrackedView,
+    setHasTrackedView,
+    storeRef,
+    isMountedRef,
+  });
 
-  useEffect(() => {
-    if (!player || isAudioSermon) return;
-
-    const statusSubscription = player.addListener("statusChange", (status: any) => {
-      if (status.status === "readyToPlay") {
-        setFailedVideoLoad(false);
-        setVideoLoaded(true);
-        videoLoadedRef.current = true;
-
-        const rawDuration =
-          typeof status.duration === "number"
-            ? status.duration
-            : typeof player.duration === "number"
-              ? player.duration
-              : 0;
-
-        if (rawDuration && Number.isFinite(rawDuration) && rawDuration > 0) {
-          const durationMs = Math.min(rawDuration * 1000, 24 * 60 * 60 * 1000);
-          if (!isNaN(durationMs)) {
-            lastKnownDurationRef.current = durationMs;
-            setVideoDurationMs(durationMs);
-          }
-        }
-
-        if (isPlaying) {
+  const onReady = useCallback(
+    (_durationMs: number) => {
+      setFailedVideoLoad(false);
+      setVideoLoaded(true);
+      videoLoadedRef.current = true;
+      if (isPlaying && player && !player.playing) {
+        try {
           player.play();
-        }
-      } else if (status.status === "error") {
-        setFailedVideoLoad(true);
-        handleVideoError(status);
-      }
-    });
-
-    const timeUpdateSubscription = player.addListener("timeUpdate", (event: any) => {
-      if (!isMountedRef.current) return;
-
-      const currentTime =
-        typeof event?.currentTime === "number"
-          ? event.currentTime
-          : typeof player.currentTime === "number"
-            ? player.currentTime
-            : 0;
-
-      const rawDuration =
-        typeof event?.duration === "number"
-          ? event.duration
-          : typeof player.duration === "number"
-            ? player.duration
-            : lastKnownDurationRef.current / 1000 || 0;
-
-      const durationMs = Math.max(0, Math.min(rawDuration * 1000, 24 * 60 * 60 * 1000));
-      const positionMs = Math.max(0, Math.min(currentTime * 1000, durationMs));
-
-      if (Number.isFinite(durationMs) && durationMs > 0 && !isNaN(durationMs)) {
-        if (lastKnownDurationRef.current !== durationMs) {
-          lastKnownDurationRef.current = durationMs;
-          setVideoDurationMs(durationMs);
-        }
-      }
-
-      const progress = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
-
-      setVideoPositionMs(positionMs);
-      setVideoProgress(progress);
-
-      const qualifies = player.playing && (positionMs >= 3000 || progress >= 0.25);
-      const finished = rawDuration > 0 && currentTime >= rawDuration - 0.25;
-
-      if (finished && isMountedRef.current) {
-        try {
-          player.currentTime = 0;
-          if (player.playing) {
-            player.play();
-          }
         } catch {
           // no-op
         }
       }
+    },
+    [setFailedVideoLoad, setVideoLoaded, videoLoadedRef, isPlaying, player]
+  );
 
-      if (!hasTrackedView && (qualifies || finished)) {
-        try {
-          contentInteractionAPI
-            .recordView(contentId, "media", {
-              durationMs: finished ? durationMs : positionMs,
-              progressPct: Math.round(progress * 100),
-              isComplete: finished,
-            })
-            .then((result) => {
-              setHasTrackedView(true);
-              if (result?.totalViews != null && storeRef.current?.mutateStats) {
-                storeRef.current.mutateStats(contentId, () => ({
-                  views: Number(result.totalViews) || 0,
-                }));
-              }
-            })
-            .catch(() => {});
-        } catch {
-          // no-op
-        }
-      }
-    });
+  const onError = useCallback(
+    (status: any) => {
+      setFailedVideoLoad(true);
+      handleVideoError(status);
+    },
+    [setFailedVideoLoad, handleVideoError]
+  );
 
-    return () => {
-      statusSubscription.remove();
-      timeUpdateSubscription.remove();
-    };
-  }, [player, videoTitle, isPlaying, isAudioSermon, contentId, hasTrackedView, handleVideoError, setFailedVideoLoad, setVideoLoaded, videoLoadedRef, setHasTrackedView, storeRef, isMountedRef]);
+  const onTick = useCallback(
+    (positionMs: number, durationMs: number, progress: number) => {
+      maybeRecordView(Boolean(player?.playing), positionMs, durationMs, progress);
+    },
+    [maybeRecordView, player]
+  );
+
+  const {
+    lastKnownDurationRef,
+    videoDurationMs,
+    videoPositionMs,
+    videoProgress,
+    setVideoPositionMs,
+    setVideoProgress,
+  } = useVideoProgressTracker({
+    player,
+    enabled: !isAudioSermon,
+    updateIntervalSec: 0.1,
+    isMountedRef,
+    onTick,
+    onReady,
+    onError,
+  });
 
   return {
     lastKnownDurationRef,

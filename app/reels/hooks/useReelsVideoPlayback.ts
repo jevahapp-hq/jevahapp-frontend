@@ -4,11 +4,11 @@
  * Isolates playback logic for easier debugging.
  */
 import { Video } from "expo-av";
-import { useCallback, useEffect } from "react";
+import { RefObject, useCallback, useEffect } from "react";
 import { audioConfig } from "../../utils/audioConfig";
 
 export interface UseReelsVideoPlaybackParams {
-  videoRefs: React.RefObject<Record<string, Video>>;
+  videoRefs: RefObject<Record<string, Video>>;
   videoDuration: number;
   modalKey: string;
   setVideoDuration: (d: number) => void;

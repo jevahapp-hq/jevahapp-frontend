@@ -9,6 +9,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -162,17 +163,24 @@ export default function SignUpScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      <View className="px-4 mt-6">
+      <View className="px-4 pt-2">
         <AuthHeader title="Sign Up" />
       </View>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        style={{ flex: 1 }}
       >
-        <View
-          className="flex-1 items-center justify-start"
-          style={{ paddingBottom: 50 }}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            alignItems: "center",
+            paddingTop: 8,
+            paddingBottom: 40,
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <View className="flex flex-col justify-center items-start h-[140px] w-[333px] mt-2 bg-[#FCFCFD]">
             <Text className="font-rubik-semibold text-[#1D2939] text-star text-[40px]">
@@ -350,21 +358,23 @@ export default function SignUpScreen() {
               )}
             </TouchableOpacity>
 
-            <Text className="text-1xl font-semibold mt-9">
+            <Text className="text-1xl font-semibold mt-8">
               ALREADY HAVE AN ACCOUNT?
             </Text>
 
             <TouchableOpacity
               onPress={() => router.push("/auth/login")}
-              className="mt-9"
+              className="mt-3 py-3 px-6"
               disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in"
             >
               <Text className="text-[#344054] text-sm font-medium">
                 Sign In
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       <VerifyEmail

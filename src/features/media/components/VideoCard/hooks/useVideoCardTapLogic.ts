@@ -3,6 +3,7 @@
  */
 import { useCallback, useRef } from "react";
 import type { MediaItem } from "../../../../shared/types";
+import { pausePlayer } from "../player/expoVideoAdapter";
 
 export interface UseVideoCardTapLogicParams {
   key: string;
@@ -60,13 +61,7 @@ export function useVideoCardTapLogic({
         if (isAudioSermon) audioControlsPause();
         else {
           togglePlayback();
-          if (player) {
-            try {
-              player.pause();
-            } catch (error) {
-              console.error("❌ Pause failed:", error);
-            }
-          }
+          pausePlayer(player);
         }
       }
       onVideoTap(key, video, index);

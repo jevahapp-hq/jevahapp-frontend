@@ -2,6 +2,18 @@
 
 A modular, easy-to-debug video progress bar component designed like TikTok's progress bar with clear separation of concerns.
 
+## Feed playback pipeline
+
+```
+timeUpdate (expo-video, ~100ms)
+  → useVideoProgressTracker (positionMs / durationMs / progress)
+  → TikTokProgressBar + useSeekSync (seek-hold + 700ms abort)
+  → useVideoCardSeek → expoVideoAdapter.seekPlayerToMs (seconds API)
+```
+
+- Bar frozen while playing → check `timeUpdateEventInterval` or seek-hold abort.
+- Scrub does not seek → ensure `expoVideoAdapter` (not expo-av `setPositionAsync`).
+
 ## Architecture
 
 The progress bar is split into modular pieces for easy debugging and maintenance:

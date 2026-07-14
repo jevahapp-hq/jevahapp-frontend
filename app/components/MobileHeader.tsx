@@ -144,7 +144,7 @@ export default function MobileHeader({
                   "❌ Failed to load avatar image:",
                   error.nativeEvent.error
                 );
-                setAvatarError(true);
+                setTimeout(() => setAvatarError(true), 0);
               }}
               onLoad={() => {
                 console.log(

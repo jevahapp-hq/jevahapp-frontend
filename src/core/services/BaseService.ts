@@ -17,12 +17,25 @@ export abstract class BaseService extends BaseApiClient {
       media: "media",
       videos: "media",
       video: "media",
-      devotional: "devotional",
+      audio: "media",
+      music: "media",
+      live: "media",
+      sermon: "media",
+      sermons: "media",
+      teachings: "media",
+      // Live API rejects `devotional` — sermons/devotionals live in Media
+      devotional: "media",
       ebook: "ebook",
-      sermon: "sermon",
+      "e-books": "ebook",
+      ebooks: "ebook",
+      books: "ebook",
+      podcast: "podcast",
+      podcasts: "podcast",
+      merch: "merch",
+      artist: "artist",
     };
 
-    return mapping[contentType.toLowerCase()] || contentType;
+    return mapping[contentType.toLowerCase()] || "media";
   }
 
   /**

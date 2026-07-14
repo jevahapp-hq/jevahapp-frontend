@@ -64,11 +64,9 @@ export function useCopyrightFreeSongViewTracking({
               Math.max(result.data.viewCount ?? 0, likeCount ?? 0, prev)
             );
             setHasTrackedView(true);
-          } else {
-            setHasTrackedView(true);
           }
         } catch (error) {
-          setHasTrackedView(true);
+          if (__DEV__) console.warn("Failed to record copyright-free view:", error);
         } finally {
           isRecordingViewRef.current = false;
         }

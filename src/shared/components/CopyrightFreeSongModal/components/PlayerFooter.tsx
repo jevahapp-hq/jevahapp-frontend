@@ -6,12 +6,14 @@ export interface PlayerFooterProps {
     isMuted: boolean;
     onToggleMute: () => void;
     onOpenPlaylistView: () => void;
+    onShare?: () => void;
 }
 
 export const PlayerFooter: React.FC<PlayerFooterProps> = ({
     isMuted,
     onToggleMute,
     onOpenPlaylistView,
+    onShare,
 }) => {
     return (
         <View
@@ -63,6 +65,8 @@ export const PlayerFooter: React.FC<PlayerFooterProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity
+                onPress={onShare}
+                disabled={!onShare}
                 style={{
                     padding: 12,
                     borderRadius: 20,

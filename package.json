@@ -18,7 +18,7 @@
     }
   },
   "scripts": {
-    "start": "expo start --dev-client --lan",
+    "start": "node ./scripts/expo-start.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",

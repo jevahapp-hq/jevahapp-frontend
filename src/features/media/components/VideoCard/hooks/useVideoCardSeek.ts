@@ -1,7 +1,8 @@
 /**
- * useVideoCardSeek - Seek handlers for video and audio
+ * useVideoCardSeek - Seek for expo-video (primary) with expo-av fallback
  */
 import React, { useCallback } from "react";
+import { seekPlayerBySeconds, seekPlayerToMs } from "../player/expoVideoAdapter";
 
 export interface UseVideoCardSeekParams {
   isAudioSermon: boolean;
@@ -36,17 +37,11 @@ export function useVideoCardSeek({
         } catch (e) {
           console.warn("Audio seekBySeconds failed", e);
         }
-      } else {
-        const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
-        if (!player || durationMs <= 0) return;
-        const currentMs = Math.max(0, Math.min(videoPositionMs, durationMs));
-        const nextMs = Math.max(0, Math.min(currentMs + deltaSec * 1000, durationMs));
-        try {
-          player.currentTime = nextMs / 1000;
-        } catch (e) {
-          console.warn("Video seekBySeconds failed", e);
-        }
+        return;
       }
+
+      const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
+      await seekPlayerBySeconds(player, deltaSec, videoPositionMs, durationMs);
     },
     [
       isAudioSermon,
@@ -71,18 +66,25 @@ export function useVideoCardSeek({
         } catch (e) {
           console.warn("Audio seekToPercent failed", e);
         }
-      } else {
-        const durationMs = lastKnownDurationRef.current || 0;
-        if (!player || durationMs <= 0) return;
-        const clamped = Math.max(0, Math.min(percent, 1));
-        try {
-          player.currentTime = (clamped * durationMs) / 1000;
-        } catch (e) {
-          console.warn("Video seekToPercent failed", e);
-        }
+        return;
+      }
+
+      const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
+      if (!player || durationMs <= 0) return;
+      const clamped = Math.max(0, Math.min(percent, 1));
+      const ok = await seekPlayerToMs(player, clamped * durationMs);
+      if (!ok && __DEV__) {
+        console.warn("Video seekToPercent: player did not seek (check expo-video adapter)");
       }
     },
-    [isAudioSermon, audioState?.duration, audioControls, player, lastKnownDurationRef]
+    [
+      isAudioSermon,
+      audioState?.duration,
+      audioControls,
+      player,
+      lastKnownDurationRef,
+      backendDurationMs,
+    ]
   );
 
   return { seekBySeconds, seekToPercent };

@@ -70,11 +70,13 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     setHasError(false);
   };
 
-  const handleLoadEnd = () => setIsLoading(false);
+  const handleLoadEnd = () => setTimeout(() => setIsLoading(false), 0);
 
   const handleError = () => {
-    setIsLoading(false);
-    setHasError(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      setHasError(true);
+    }, 0);
     if (__DEV__) console.warn('SafeImage: Failed to load', uri);
   };
 

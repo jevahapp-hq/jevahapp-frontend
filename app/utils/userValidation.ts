@@ -93,7 +93,7 @@ export function getDisplayName(speaker?: string, uploadedBy?: string, fallback =
  */
 export function logUserDataStatus(user: UserData | null, context: string): void {
   if (!__DEV__) return; // Skip in production
-  
+
   const normalizedUser = normalizeUserData(user);
   const validation = validateUserForUpload(user);
 
@@ -116,15 +116,17 @@ export function getUserAvatarFromContent(
   content: any,
   fallbackAvatar: any = require("../../assets/images/Avatar-1.png")
 ): any {
+  if (!content) return fallbackAvatar;
+
   // Priority 1: Check if content has uploadedBy object with user profile data
   if (content.uploadedBy && typeof content.uploadedBy === 'object') {
     // Check multiple possible avatar field names
-    const avatarUrl = content.uploadedBy.avatar || 
-                     content.uploadedBy.avatarUrl || 
-                     content.uploadedBy.imageUrl || 
-                     content.uploadedBy.profileImage ||
-                     content.uploadedBy.profilePicture;
-    
+    const avatarUrl = content.uploadedBy.avatar ||
+      content.uploadedBy.avatarUrl ||
+      content.uploadedBy.imageUrl ||
+      content.uploadedBy.profileImage ||
+      content.uploadedBy.profilePicture;
+
     if (avatarUrl) {
       if (typeof avatarUrl === 'string' && avatarUrl.trim().length > 0) {
         if (avatarUrl.startsWith('http')) {
@@ -200,6 +202,8 @@ export function getUserDisplayNameFromContent(
   content: any,
   fallback: string = "Anonymous User"
 ): string {
+  if (!content) return fallback;
+
   // Priority 1: authorInfo (primary source for media feeds - /api/media/all-content)
   if (content.authorInfo && typeof content.authorInfo === 'object') {
     const authorInfo = content.authorInfo;

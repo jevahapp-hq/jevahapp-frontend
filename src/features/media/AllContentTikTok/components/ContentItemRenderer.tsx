@@ -230,6 +230,15 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
   return (
     prev.getUserLikeState(prevContentId) === next.getUserLikeState(nextContentId) &&
     prev.getLikeCount(prevContentId) === next.getLikeCount(nextContentId) &&
+    // Comment/save/view live in contentStats — must invalidate when they change
+    (prev.contentStats[prevContentId]?.comments ?? 0) ===
+      (next.contentStats[nextContentId]?.comments ?? 0) &&
+    (prev.contentStats[prevContentId]?.likes ?? 0) ===
+      (next.contentStats[nextContentId]?.likes ?? 0) &&
+    (prev.contentStats[prevContentId]?.saves ?? 0) ===
+      (next.contentStats[nextContentId]?.saves ?? 0) &&
+    (prev.contentStats[prevContentId]?.userInteractions?.liked ?? false) ===
+      (next.contentStats[nextContentId]?.userInteractions?.liked ?? false) &&
     prev.playingVideos[prevKey] === next.playingVideos[nextKey] &&
     prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
     prev.progresses[prevKey] === next.progresses[nextKey] &&
