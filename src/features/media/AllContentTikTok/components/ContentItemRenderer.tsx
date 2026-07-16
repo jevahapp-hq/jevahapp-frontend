@@ -15,6 +15,7 @@ export interface ContentItemRendererProps {
   item: MediaItem;
   index: number;
   getContentKey: (item: MediaItem) => string;
+  getPlaybackKey: (item: MediaItem) => string;
   getUserLikeState: (contentId: string) => boolean;
   getLikeCount: (contentId: string) => number;
   contentStats: Record<string, any>;
@@ -48,6 +49,7 @@ export interface ContentItemRendererProps {
   isAutoPlayEnabled: boolean;
   currentUserId: string | null;
   shouldRenderPlayer?: boolean;
+  isFeedActive?: boolean;
 }
 
 function ContentItemRendererInner(props: ContentItemRendererProps) {
@@ -55,6 +57,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     item,
     index,
     getContentKey: getKey,
+    getPlaybackKey,
     getUserLikeState,
     getLikeCount,
     contentStats,
@@ -88,9 +91,11 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     isAutoPlayEnabled,
     currentUserId,
     shouldRenderPlayer,
+    isFeedActive,
   } = props;
 
   const key = getKey(item);
+  const playbackKey = getPlaybackKey(item);
   const contentId = item._id || key;
   const modalKey = key;
   const isAudioSermonValue = isAudioSermon(item);
@@ -131,6 +136,8 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     isAutoPlayEnabled,
     onDelete,
     shouldRenderPlayer: props.shouldRenderPlayer,
+    playbackKey,
+    isFeedActive,
   };
 
   const musicCardProps = {
@@ -216,27 +223,37 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
 
 /** Compare only item identity and item-specific state to avoid unnecessary re-renders */
 function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRendererProps): boolean {
+  if (prev.item._id !== next.item._id || prev.index !== next.index) return false;
+
   const prevKey = prev.getContentKey(prev.item);
   const nextKey = next.getContentKey(next.item);
-  if (prev.item._id !== next.item._id || prev.index !== next.index) return false;
+  if (prevKey !== nextKey) return false;
 
   const prevContentId = prev.item._id || prevKey;
   const nextContentId = next.item._id || nextKey;
-  const musicId = `music-${next.item._id || next.index}`;
+  const prevMusicId = `music-${prev.item._id || prev.index}`;
+  const nextMusicId = `music-${next.item._id || next.index}`;
+
+  const prevPlaybackKey = prev.getPlaybackKey(prev.item);
+  const nextPlaybackKey = next.getPlaybackKey(next.item);
 
   return (
     prev.getUserLikeState(prevContentId) === next.getUserLikeState(nextContentId) &&
     prev.getLikeCount(prevContentId) === next.getLikeCount(nextContentId) &&
-    prev.playingVideos[prevKey] === next.playingVideos[nextKey] &&
-    prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
-    prev.progresses[prevKey] === next.progresses[nextKey] &&
-    (prev.currentlyVisibleVideo === prevKey) === (next.currentlyVisibleVideo === nextKey) &&
-    (prev.playingAudioId === `music-${prev.item._id || prev.index}`) ===
-    (next.playingAudioId === musicId) &&
-    (prev.audioProgressMap[`music-${prev.item._id || prev.index}`] ?? 0) ===
-    (next.audioProgressMap[musicId] ?? 0) &&
+    prev.playingVideos[prevPlaybackKey] === next.playingVideos[nextPlaybackKey] &&
+    prev.mutedVideos[prevPlaybackKey] === next.mutedVideos[nextPlaybackKey] &&
+    prev.progresses[prevPlaybackKey] === next.progresses[nextPlaybackKey] &&
+    (prev.currentlyVisibleVideo === prevPlaybackKey) ===
+      (next.currentlyVisibleVideo === nextPlaybackKey) &&
+    (prev.playingAudioId === prevMusicId) === (next.playingAudioId === nextMusicId) &&
+    (prev.audioProgressMap[prevMusicId] ?? 0) === (next.audioProgressMap[nextMusicId] ?? 0) &&
     (prev.modalVisible === prevKey) === (next.modalVisible === nextKey) &&
-    prev.currentUserId === next.currentUserId
+    prev.currentUserId === next.currentUserId &&
+    // Without this, FlashList never remounts <Video> when the preload window
+    // adds this key — autoplay has nothing to drive shouldPlay on.
+    !!prev.shouldRenderPlayer === !!next.shouldRenderPlayer &&
+    prev.isFeedActive === next.isFeedActive &&
+    prev.isAutoPlayEnabled === next.isAutoPlayEnabled
   );
 }
 

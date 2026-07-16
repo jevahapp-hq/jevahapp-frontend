@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
-import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
+
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { VideoCardProps } from "../../../shared/types";
@@ -46,47 +46,35 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onLayout,
   isAutoPlayEnabled = false,
   shouldRenderPlayer = false,
+  isFeedActive = true,
+  playbackKey,
 }) => {
-  // All cards always render with active player (no thumbnail gate)
-  const isActive = true;
-
   const contentId = video._id || getContentKey(video);
-  const key = getContentKey(video);
+  const key = playbackKey ?? getContentKey(video);
   const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
 
   // ✅ Use centralized utility for media type detection
   const isAudioSermonValue = isAudioSermon(video);
 
   const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
-  const initialVideoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
+  const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
     ? getBestVideoUrl(rawVideoUrl)
     : null;
-
-  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
-  const videoUrl = resolvedVideoUrl ?? initialVideoUrl;
 
   // Debug newly uploaded videos
   useEffect(() => {
     if (__DEV__ && video.title.includes('61 (HD)')) {
       console.log(`🔍 [VideoCard] Tracking problematic upload: "${video.title}"`);
       console.log(`   - rawVideoUrl: ${rawVideoUrl}`);
-      console.log(`   - initialVideoUrl: ${initialVideoUrl}`);
       console.log(`   - videoUrl: ${videoUrl}`);
-      console.log(`   - isActive: ${isActive}`);
       console.log(`   - shouldRenderPlayer: ${shouldRenderPlayer}`);
     }
-  }, [video, videoUrl, isActive, shouldRenderPlayer]);
+  }, [video, videoUrl, shouldRenderPlayer]);
 
   const [showReportModal, setShowReportModal] = useState(false);
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
-  const [userIsAdmin, setUserIsAdmin] = useState(false);
   const [likeBurstKey, setLikeBurstKey] = useState(0);
   const storeRef = useRef<any>(null);
-
-  // Check if user is admin
-  useEffect(() => {
-    isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
-  }, []);
 
   // Delete media functionality - using reusable hook
   const {
@@ -138,6 +126,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   });
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [surfaceReady, setSurfaceReady] = useState(false);
+
   useEffect(() => {
     try {
       const {
@@ -147,11 +137,30 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     } catch { }
   }, []);
 
+  // Reset reveal when this cell switches video / leaves mount window.
+  useEffect(() => {
+    setSurfaceReady(false);
+  }, [key, videoUrl, shouldRenderPlayer]);
+
+  const handleSurfaceReadyChange = useCallback((ready: boolean) => {
+    setSurfaceReady(ready);
+  }, []);
+
+  // Always reserve footer layout for video posts — popping it in after the
+  // frame caused FlashList rows to stack/flash over each other.
+  const isVideoPost = !isAudioSermonValue && !!videoUrl;
+  const showFooterSlot = isAudioSermonValue || !videoUrl || isVideoPost;
+  const footerVisible = isAudioSermonValue || !videoUrl || surfaceReady;
+
   return (
     <View
       key={modalKey}
-      className="flex flex-col mb-16"
-      style={{ marginBottom: 64 }}
+      className="flex flex-col"
+      collapsable={false}
+      style={{
+        marginBottom: showFooterSlot ? 64 : 0,
+        overflow: "hidden",
+      }}
       onLayout={
         onLayout
           ? (event) => onLayout(event, key, "video", video.fileUrl)
@@ -162,7 +171,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         video={video}
         contentKey={key}
         index={index}
-        isActive={isActive}
+        isActive={true}
         videoUrl={videoUrl}
         videoVolume={videoVolume}
         isMuted={isMuted}
@@ -179,32 +188,43 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         getUserAvatarFromContent={getUserAvatarFromContent}
         onLayout={onLayout}
         onForceActive={() => { }}
+        shouldRenderPlayer={shouldRenderPlayer}
+        isFeedActive={isFeedActive}
+        onSurfaceReadyChange={handleSurfaceReadyChange}
       />
 
-      <VideoCardFooter
-        video={video}
-        contentKey={key}
-        modalKey={modalKey}
-        contentId={contentId}
-        getUserAvatarFromContent={getUserAvatarFromContent}
-        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-        getTimeAgo={getTimeAgo}
-        viewCount={viewCount}
-        userLikeState={userLikeState}
-        likeCount={likeCount}
-        likeBurstKey={likeBurstKey}
-        setLikeBurstKey={setLikeBurstKey}
-        onLike={onLike}
-        onComment={onComment}
-        commentCount={commentCount}
-        userSaveState={userSaveState}
-        saveCount={saveCount}
-        onSave={onSave}
-        onShare={onShare}
-        isLoadingStats={isLoadingStats}
-        openModal={openModal}
-        onModalToggle={onModalToggle}
-      />
+      {showFooterSlot && (
+        <View
+          style={{ opacity: footerVisible ? 1 : 0 }}
+          pointerEvents={footerVisible ? "auto" : "none"}
+          collapsable={false}
+        >
+          <VideoCardFooter
+            video={video}
+            contentKey={key}
+            modalKey={modalKey}
+            contentId={contentId}
+            getUserAvatarFromContent={getUserAvatarFromContent}
+            getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+            getTimeAgo={getTimeAgo}
+            viewCount={viewCount}
+            userLikeState={userLikeState}
+            likeCount={likeCount}
+            likeBurstKey={likeBurstKey}
+            setLikeBurstKey={setLikeBurstKey}
+            onLike={onLike}
+            onComment={onComment}
+            commentCount={commentCount}
+            userSaveState={userSaveState}
+            saveCount={saveCount}
+            onSave={onSave}
+            onShare={onShare}
+            isLoadingStats={isLoadingStats}
+            openModal={openModal}
+            onModalToggle={onModalToggle}
+          />
+        </View>
+      )}
 
       <VideoCardModals
         isModalVisible={isModalVisible}
@@ -219,7 +239,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         contentId={contentId}
         checkIfDownloaded={checkIfDownloaded as any}
         handleDeletePress={handleDeletePress}
-        userIsAdmin={userIsAdmin}
+        userIsAdmin={false}
         isOwner={isOwner}
         showDeleteModal={showDeleteModal}
         closeDeleteModal={closeDeleteModal}

@@ -269,12 +269,16 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
 
   const togglePlay = useCallback(
     (key: string) => {
-      const mediaItem = filteredMediaList.find((item) => getKey(item) === key);
+      // Playback keys may be scoped as `${tab}::${contentKey}`.
+      const contentKey = key.includes("::") ? key.split("::").slice(1).join("::") : key;
+      const mediaItem = filteredMediaList.find(
+        (item) => getKey(item) === contentKey || getKey(item) === key
+      );
       const mediaType = detectMediaType(mediaItem || null);
       const isAudio = mediaType === "audio";
       const isCurrentlyPlaying = isAudio
-        ? playingAudioId === key
-        : playingVideos[key] ?? false;
+        ? playingAudioId === key || playingAudioId === contentKey
+        : playingVideos[key] ?? playingVideos[contentKey] ?? false;
 
       if (isCurrentlyPlaying) {
         if (isAudio) pauseAllAudio();

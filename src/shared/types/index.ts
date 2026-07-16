@@ -61,6 +61,7 @@ export interface MediaItem extends BaseEntity {
   moderationStatus?: "approved" | "under_review" | "rejected";
   playbackUrl?: string; // HLS or processed playback URL from backend
   hlsUrl?: string; // Legacy HLS field
+  mimeType?: string;
   isHidden?: boolean;
   category?: string[];
   userId?: string;
@@ -130,6 +131,10 @@ export interface VideoCardProps {
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   isAutoPlayEnabled?: boolean;
   shouldRenderPlayer?: boolean;
+  /** Scoped key for global playback store (prevents echo across feed tabs). */
+  playbackKey?: string;
+  /** When false, player stays paused and muted (hidden category pane). */
+  isFeedActive?: boolean;
 }
 
 // Music/Audio-specific interfaces
@@ -419,6 +424,8 @@ export interface UseMediaReturn {
   allContent: MediaItem[];
   defaultContent: MediaItem[];
   loading: boolean;
+  /** True while page-1 default feed is still fetching with no cached rows */
+  defaultContentLoading: boolean;
   error: string | null;
   hasContent: boolean;
   total: number;
@@ -426,4 +433,8 @@ export interface UseMediaReturn {
   refreshDefaultContent: () => Promise<void>;
   loadMoreContent: () => Promise<void>;
   getFilteredContent: (filter: ContentFilter) => MediaItem[];
+  /** Whether a next page of `defaultContent` is currently being fetched */
+  isLoadingMore?: boolean;
+  /** Whether another page of `defaultContent` is available to load */
+  hasMoreDefaultPages?: boolean;
 }

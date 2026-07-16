@@ -5,7 +5,7 @@ import {
 } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Platform, Text, TouchableOpacity, View } from "react-native";
 import {
   getBottomNavHeight,
@@ -55,6 +55,9 @@ export default function BottomNav({
 }: BottomNavProps) {
   const [showActions, setShowActions] = useState(false);
   const { fastPress } = useFastPerformance();
+  // pauseAllVideos() clears currentlyPlayingVideo — remember the Home
+  // feed key so returning to Home can resume the same video in place.
+  const lastHomeVideoKeyRef = useRef<string | null>(null);
 
   const handleFabToggle = useCallback(() => {
     setShowActions(!showActions);
@@ -88,34 +91,59 @@ export default function BottomNav({
 
   const handleTabPress = useCallback(
     (tab: string) => {
-      // Immediate UI update
+      const previousTab = selectedTab;
       setSelectedTab(tab);
 
-      // Only stop media if actually switching to a different tab
-      if (tab !== selectedTab) {
-        // Defer heavy operations to prevent blocking UI
-        requestAnimationFrame(() => {
+      if (tab === previousTab) return;
+
+      requestAnimationFrame(() => {
+        try {
+          useMediaStore.getState().stopAudioFn?.();
+        } catch (e) {
+          // no-op
+        }
+
+        if (tab === "Bible") {
           try {
-            useMediaStore.getState().stopAudioFn?.();
+            void useGlobalAudioPlayerStore.getState().stop();
           } catch (e) {
             // no-op
           }
+        }
+
+        if (tab === "Home") {
+          // Resume the same Home video that was playing before the tab switch.
           try {
-            useGlobalVideoStore.getState().pauseAllVideos();
-          } catch (e) {
-            // no-op
-          }
-          // For Bible tab, also stop the global audio player so
-          // the floating mini player disappears and audio stops.
-          try {
-            if (tab === "Bible") {
-              void useGlobalAudioPlayerStore.getState().stop();
+            const videoStore = useGlobalVideoStore.getState();
+            const key =
+              lastHomeVideoKeyRef.current || videoStore.currentlyPlayingVideo;
+            if (key) {
+              videoStore.playVideoGlobally(key);
             }
           } catch (e) {
             // no-op
           }
-        });
-      }
+          return;
+        }
+
+        // Leaving Home — pause audio bleed, but keep scroll/list mounted.
+        if (previousTab === "Home") {
+          try {
+            const videoStore = useGlobalVideoStore.getState();
+            lastHomeVideoKeyRef.current = videoStore.currentlyPlayingVideo;
+            videoStore.pauseAllVideos();
+          } catch (e) {
+            // no-op
+          }
+          return;
+        }
+
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos();
+        } catch (e) {
+          // no-op
+        }
+      });
     },
     [selectedTab, setSelectedTab]
   );

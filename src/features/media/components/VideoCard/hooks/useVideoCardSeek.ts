@@ -1,13 +1,14 @@
 /**
- * useVideoCardSeek - Seek handlers for video and audio
+ * useVideoCardSeek - Seek handlers for video (expo-video) and audio
  */
 import React, { useCallback } from "react";
+import type { VideoPlayer } from "expo-video";
 
 export interface UseVideoCardSeekParams {
   isAudioSermon: boolean;
   audioState?: { position: number; duration: number };
   audioControls?: { seekTo: (ms: number) => Promise<void> };
-  player: any;
+  videoRef: React.MutableRefObject<VideoPlayer | null>;
   videoPositionMs: number;
   lastKnownDurationRef: React.MutableRefObject<number>;
   backendDurationMs: number;
@@ -17,7 +18,7 @@ export function useVideoCardSeek({
   isAudioSermon,
   audioState,
   audioControls,
-  player,
+  videoRef,
   videoPositionMs,
   lastKnownDurationRef,
   backendDurationMs,
@@ -38,6 +39,7 @@ export function useVideoCardSeek({
         }
       } else {
         const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
+        const player = videoRef.current;
         if (!player || durationMs <= 0) return;
         const currentMs = Math.max(0, Math.min(videoPositionMs, durationMs));
         const nextMs = Math.max(0, Math.min(currentMs + deltaSec * 1000, durationMs));
@@ -53,7 +55,7 @@ export function useVideoCardSeek({
       audioState?.position,
       audioState?.duration,
       audioControls,
-      player,
+      videoRef,
       videoPositionMs,
       backendDurationMs,
       lastKnownDurationRef,
@@ -73,6 +75,7 @@ export function useVideoCardSeek({
         }
       } else {
         const durationMs = lastKnownDurationRef.current || 0;
+        const player = videoRef.current;
         if (!player || durationMs <= 0) return;
         const clamped = Math.max(0, Math.min(percent, 1));
         try {
@@ -82,7 +85,7 @@ export function useVideoCardSeek({
         }
       }
     },
-    [isAudioSermon, audioState?.duration, audioControls, player, lastKnownDurationRef]
+    [isAudioSermon, audioState?.duration, audioControls, videoRef, lastKnownDurationRef]
   );
 
   return { seekBySeconds, seekToPercent };

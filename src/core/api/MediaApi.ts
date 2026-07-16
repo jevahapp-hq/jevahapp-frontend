@@ -184,7 +184,7 @@ class MediaApi {
   ): Promise<MediaApiResponse> {
     const params = {
       page: filter.page || 1,
-      limit: filter.limit || 10,
+      limit: filter.limit || 40,
       contentType:
         filter.contentType !== "ALL" ? filter.contentType : undefined,
       search: filter.search,
@@ -239,12 +239,35 @@ class MediaApi {
           mediaArr = [...mediaArr, ...supplemental];
         }
       }
+
+      // Prefer real pagination.total. Do NOT fall back to mediaArr.length —
+      // that makes pages===1 and blocks loadMore under Coming Soon.
+      total =
+        pagination?.total ??
+        data?.pagination?.total ??
+        data?.data?.total ??
+        data?.total ??
+        0;
+      page =
+        pagination?.page ||
+        data?.pagination?.page ||
+        data?.data?.page ||
+        data?.page ||
+        1;
+      limit =
+        pagination?.limit ||
+        data?.pagination?.limit ||
+        data?.data?.limit ||
+        data?.limit ||
+        40;
+
       return {
         success: true,
         media: mediaArr,
-        total: data?.total || data?.data?.total || 0,
-        page: data?.page || data?.data?.page || 1,
-        limit: data?.limit || data?.data?.limit || 10,
+        total,
+        page,
+        limit,
+        pagination,
       };
     }
 

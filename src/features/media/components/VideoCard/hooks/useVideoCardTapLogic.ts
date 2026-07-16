@@ -2,7 +2,8 @@
  * useVideoCardTapLogic - Single/double tap detection and play toggle
  */
 import { useCallback, useRef } from "react";
-import type { MediaItem } from "../../../../shared/types";
+import type { VideoPlayer } from "expo-video";
+import type { MediaItem } from "../../../../../shared/types";
 
 export interface UseVideoCardTapLogicParams {
   key: string;
@@ -15,7 +16,7 @@ export interface UseVideoCardTapLogicParams {
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
   audioControlsPause: () => void;
   togglePlayback: () => void;
-  player: any;
+  videoRef: React.MutableRefObject<VideoPlayer | null>;
   showOverlayPermanently: () => void;
   hideOverlay: () => void;
 }
@@ -31,7 +32,7 @@ export function useVideoCardTapLogic({
   onVideoTap,
   audioControlsPause,
   togglePlayback,
-  player,
+  videoRef,
   showOverlayPermanently,
   hideOverlay,
 }: UseVideoCardTapLogicParams) {
@@ -60,12 +61,10 @@ export function useVideoCardTapLogic({
         if (isAudioSermon) audioControlsPause();
         else {
           togglePlayback();
-          if (player) {
-            try {
-              player.pause();
-            } catch (error) {
-              console.error("❌ Pause failed:", error);
-            }
+          try {
+            videoRef.current?.pause();
+          } catch (error) {
+            console.error("❌ Pause failed:", error);
           }
         }
       }
@@ -89,7 +88,7 @@ export function useVideoCardTapLogic({
     audioControlsPause,
     audioIsPlaying,
     togglePlayback,
-    player,
+    videoRef,
   ]);
 
   const handleTogglePlay = useCallback(

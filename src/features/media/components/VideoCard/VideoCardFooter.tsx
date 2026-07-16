@@ -65,7 +65,6 @@ export function VideoCardFooter({
   return (
     <View
       className="flex-row items-center justify-between mt-2 px-2"
-      style={{ zIndex: 100 }}
       pointerEvents="box-none"
     >
       <View className="flex flex-row items-center" pointerEvents="box-none">
@@ -126,7 +125,7 @@ export function VideoCardFooter({
           />
         </View>
       </View>
-      <View style={{ zIndex: 1001 }}>
+      <View>
         <ThreeDotsMenuButton
           onPress={() => {
             openModal();

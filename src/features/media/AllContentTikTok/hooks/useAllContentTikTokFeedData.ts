@@ -1,7 +1,7 @@
 /**
  * useAllContentTikTokFeedData - Feed data, helpers, and hydration effects
  */
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { InteractionManager } from "react-native";
 import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
@@ -32,10 +32,20 @@ export function useAllContentTikTokFeedData(
 
   const libraryStore = useLibraryStore();
 
-  const filteredMediaList = useMemo(
-    () => filterContentByType(mediaList, contentType),
-    [mediaList, contentType]
-  );
+  const filteredMediaList = useMemo(() => {
+    const filtered = filterContentByType(mediaList, contentType);
+    // Dedupe by id — duplicate rows silently disappear in FlashList under
+    // Coming Soon (same key twice → later cells dropped).
+    const seen = new Set<string>();
+    const unique: MediaItem[] = [];
+    for (const item of filtered) {
+      const id = String(item._id || (item as any).id || item.fileUrl || "");
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      unique.push(item);
+    }
+    return unique;
+  }, [mediaList, contentType]);
 
   const categorizedContent = useMemo(
     () => categorizeContent(filteredMediaList),
@@ -52,16 +62,46 @@ export function useAllContentTikTokFeedData(
     return getMostRecentItem(allItems);
   }, [categorizedContent]);
 
-  const { firstFour, nextFour, rest } = useMemo(() => {
-    const remaining = (filteredMediaList || []).filter(
-      (item) => !mostRecentItem || item._id !== mostRecentItem._id
+  // Sticky most-recent for this contentType session so Coming Soon `rest`
+  // doesn't reshuffle when the feed order jitters on refetch.
+  const stickyMostRecentIdRef = useRef<string | null>(null);
+  const stickyContentTypeRef = useRef(contentType);
+  if (stickyContentTypeRef.current !== contentType) {
+    stickyContentTypeRef.current = contentType;
+    stickyMostRecentIdRef.current = null;
+  }
+  const incomingMostRecentId =
+    mostRecentItem?._id || (mostRecentItem as any)?.id || null;
+  if (!stickyMostRecentIdRef.current && incomingMostRecentId) {
+    stickyMostRecentIdRef.current = String(incomingMostRecentId);
+  }
+  const stickyMostRecentId = stickyMostRecentIdRef.current;
+
+  const stableMostRecentItem = useMemo(() => {
+    if (!stickyMostRecentId) return mostRecentItem;
+    const match = (filteredMediaList || []).find(
+      (item) => String(item._id || (item as any).id || "") === stickyMostRecentId
     );
+    return match || mostRecentItem;
+  }, [filteredMediaList, mostRecentItem, stickyMostRecentId]);
+
+  const { firstFour, nextFour, rest } = useMemo(() => {
+    const mostRecentId =
+      stableMostRecentItem?._id ||
+      (stableMostRecentItem as any)?.id ||
+      stickyMostRecentId ||
+      null;
+    const remaining = (filteredMediaList || []).filter((item) => {
+      if (!mostRecentId) return true;
+      const id = item._id || (item as any).id;
+      return String(id || "") !== String(mostRecentId);
+    });
     return {
       firstFour: remaining.slice(0, 4),
-      nextFour: [], // Removed to leave more items for the list
+      nextFour: [],
       rest: remaining.slice(4),
     };
-  }, [filteredMediaList, mostRecentItem]);
+  }, [filteredMediaList, stableMostRecentItem, stickyMostRecentId]);
 
   // Hydrate liked/saved from feed
   useEffect(() => {
@@ -81,13 +121,12 @@ export function useAllContentTikTokFeedData(
     }
   }, [filteredMediaList]);
 
-  // Load content stats
+  // Load content stats (runs async, doesn't block rendering)
   useEffect(() => {
     const items = (filteredMediaList || []).slice(0, 16);
     if (items.length === 0) return;
     const ids = items.map((i) => i._id).filter(Boolean) as string[];
-    const run = async () => {
-      await new Promise((r) => setTimeout(r, 400));
+    InteractionManager.runAfterInteractions(async () => {
       try {
         await useInteractionStore
           .getState()
@@ -99,8 +138,7 @@ export function useAllContentTikTokFeedData(
             e instanceof Error ? e.message : e
           );
       }
-    };
-    InteractionManager.runAfterInteractions(() => run());
+    });
   }, [filteredMediaList]);
 
   // Load persisted data
@@ -133,7 +171,7 @@ export function useAllContentTikTokFeedData(
   return {
     filteredMediaList,
     categorizedContent,
-    mostRecentItem,
+    mostRecentItem: stableMostRecentItem,
     firstFour,
     nextFour,
     rest,

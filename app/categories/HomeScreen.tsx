@@ -1,25 +1,24 @@
 import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
-import { Suspense, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
-import {
-  CommunityScreenWithSuspense,
-  HomeTabContentWithSuspense,
-  LibraryScreenWithSuspense,
-  BibleScreenWithSuspense,
-} from "../utils/lazyImports";
-
-// Loading fallback for lazy-loaded tabs
-const TabLoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-    <ActivityIndicator size="large" color="#000" />
-  </View>
-);
+import { useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import BibleScreen from "../screens/BibleScreen";
+import CommunityScreen from "../screens/CommunityScreen";
+import LibraryScreen from "../screens/library/LibraryScreen";
+import HomeTabContent from "./HomeTabContent";
 
 const tabList = ["Home", "Community", "Library", "Bible"];
 
+/**
+ * Keep visited tabs mounted. Home uses opacity (not display:none) so
+ * native video textures survive Bible/Library/Community round-trips —
+ * matching Instagram/TikTok tab behavior (same scroll position + video).
+ */
 export default function HomeScreen() {
   const [selectedTab, setSelectedTab] = useState("Home");
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(
+    () => new Set(["Home"])
+  );
   const { default: defaultTabParamRaw } = useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
@@ -27,6 +26,7 @@ export default function HomeScreen() {
 
   function handleTabChange(tab: string) {
     setSelectedTab(tab);
+    setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
   }
 
   useEffect(() => {
@@ -35,45 +35,72 @@ export default function HomeScreen() {
     }
   }, [defaultTabParam]);
 
-  const renderTabContent = () => {
-    // Lazy load all tab content for smaller initial bundle and faster first paint
-    switch (selectedTab) {
-      case "Home":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <HomeTabContentWithSuspense />
-          </Suspense>
-        );
-      case "Community":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <CommunityScreenWithSuspense />
-          </Suspense>
-        );
-      case "Library":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <LibraryScreenWithSuspense />
-          </Suspense>
-        );
-      case "Bible":
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <BibleScreenWithSuspense />
-          </Suspense>
-        );
-      default:
-        return (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <HomeTabContentWithSuspense />
-          </Suspense>
-        );
-    }
-  };
+  const isHome = selectedTab === "Home";
 
   return (
     <View style={{ flex: 1 }} className="w-full">
-      {renderTabContent()}
+      <View style={styles.tabHost}>
+        <View
+          style={[
+            styles.tabPane,
+            {
+              opacity: isHome ? 1 : 0,
+              pointerEvents: isHome ? "auto" : "none",
+              zIndex: isHome ? 2 : 0,
+            },
+          ]}
+          // Keep the native hierarchy alive while hidden (iOS AVPlayer).
+          collapsable={false}
+        >
+          <HomeTabContent />
+        </View>
+
+        {visitedTabs.has("Community") && (
+          <View
+            style={[
+              styles.tabPane,
+              {
+                opacity: selectedTab === "Community" ? 1 : 0,
+                pointerEvents: selectedTab === "Community" ? "auto" : "none",
+                zIndex: selectedTab === "Community" ? 2 : 0,
+              },
+            ]}
+          >
+            <CommunityScreen />
+          </View>
+        )}
+
+        {visitedTabs.has("Library") && (
+          <View
+            style={[
+              styles.tabPane,
+              {
+                opacity: selectedTab === "Library" ? 1 : 0,
+                pointerEvents: selectedTab === "Library" ? "auto" : "none",
+                zIndex: selectedTab === "Library" ? 2 : 0,
+              },
+            ]}
+          >
+            <LibraryScreen />
+          </View>
+        )}
+
+        {visitedTabs.has("Bible") && (
+          <View
+            style={[
+              styles.tabPane,
+              {
+                opacity: selectedTab === "Bible" ? 1 : 0,
+                pointerEvents: selectedTab === "Bible" ? "auto" : "none",
+                zIndex: selectedTab === "Bible" ? 2 : 0,
+              },
+            ]}
+          >
+            <BibleScreen />
+          </View>
+        )}
+      </View>
+
       <View
         style={{
           position: "absolute",
@@ -89,3 +116,12 @@ export default function HomeScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  tabHost: {
+    flex: 1,
+  },
+  tabPane: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

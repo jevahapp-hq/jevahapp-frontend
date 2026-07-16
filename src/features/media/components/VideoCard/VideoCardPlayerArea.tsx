@@ -1,21 +1,24 @@
-/**
- * VideoCardPlayerArea - Video/thumbnail, overlay, progress bar
- * Handles lazy allocation of video player resources.
- */
 import { Ionicons } from "@expo/vector-icons";
-import { useVideoPlayer, VideoView } from "expo-video";
+import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
-import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudioPlayer";
-import { VideoCardSkeleton } from "../../../../shared/components";
+import {
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
-import OptimizedImage from "../../../../shared/components/OptimizedImage";
 import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon, isValidUri } from "../../../../shared/utils";
+import { isAudioSermon } from "../../../../shared/utils";
+import {
+  FEED_VIDEO_PLAYER_HEIGHT,
+  FeedVideoSurface,
+  useInstantFeedVideoPlayer,
+} from "../../video-feed";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
@@ -40,23 +43,77 @@ export interface VideoCardPlayerAreaProps {
   getTimeAgo: (createdAt: string) => string;
   getUserDisplayNameFromContent: (item: MediaItem) => string;
   getUserAvatarFromContent: (item: MediaItem) => any;
-  onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
+  onLayout?: (
+    event: any,
+    key: string,
+    type: "video" | "music",
+    uri?: string
+  ) => void;
+  /**
+   * When true, allocate a decoder and pre-buffer frame 1 off-screen.
+   */
+  shouldRenderPlayer?: boolean;
+  /** Hidden category panes must never output audio. */
+  isFeedActive?: boolean;
+  /** Fires when the first decoded frame is ready (Instagram-style reveal). */
+  onSurfaceReadyChange?: (ready: boolean) => void;
 }
 
+/** Empty clipped slot — same size as a live player (stops FlashList overlap). */
+function VideoPlayerSlot() {
+  return (
+    <View
+      collapsable={false}
+      style={{
+        height: FEED_VIDEO_PLAYER_HEIGHT,
+        width: "100%",
+        overflow: "hidden",
+        backgroundColor: "transparent",
+      }}
+    />
+  );
+}
+
+/**
+ * Video rows ALWAYS keep a stable height (mounted or not). Height 0↔400
+ * was stacking FlashList cells on top of each other with a flash.
+ * Frames fade in via opacity — never by collapsing layout.
+ */
 export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
-  const { video } = props;
+  const {
+    video,
+    contentKey,
+    videoUrl,
+    shouldRenderPlayer = false,
+    onSurfaceReadyChange,
+  } = props;
 
-  const thumbnailSource = video?.imageUrl || video?.thumbnailUrl;
-  const thumbnailUri =
-    typeof thumbnailSource === "string"
-      ? thumbnailSource
-      : (thumbnailSource as any)?.uri;
+  useEffect(() => {
+    if (!shouldRenderPlayer || !videoUrl || isAudioSermon(video)) {
+      onSurfaceReadyChange?.(false);
+    }
+  }, [shouldRenderPlayer, videoUrl, video, onSurfaceReadyChange]);
 
-  // All cards always render the active player immediately (no thumbnail gate)
-  return <ActiveVideoPlayerContent {...props} thumbnailUri={thumbnailUri} />;
+  if (isAudioSermon(video) || !videoUrl) {
+    return <View style={{ height: 0 }} />;
+  }
+
+  if (!shouldRenderPlayer) {
+    return <VideoPlayerSlot />;
+  }
+
+  return (
+    <VideoCardPlayerInner
+      key={contentKey}
+      {...props}
+      videoUrl={videoUrl}
+    />
+  );
 }
 
-function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailUri: string | undefined }) {
+function VideoCardPlayerInner(
+  props: VideoCardPlayerAreaProps & { videoUrl: string }
+) {
   const {
     video,
     contentKey: key,
@@ -68,47 +125,38 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     onTogglePlay,
     onToggleMute,
     getContentKey,
-    thumbnailUri,
+    isFeedActive = true,
+    onSurfaceReadyChange,
   } = props;
 
   const contentId = video._id || getContentKey(video);
-  const isAudioSermonValue = isAudioSermon(video);
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
-  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [, setVideoLoaded] = useState(false);
   const videoLoadedRef = useRef(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
-  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
 
-  useEffect(() => {
-    if (__DEV__) {
-      console.log(`🎬 [ActiveVideoPlayerContent] Initializing player:`, {
-        contentId: video?._id,
-        videoTitle: video?.title,
-        videoUrl: videoUrl,
-        isActive: props.isActive,
-        isAudioSermonValue
-      });
-    }
-  }, [video?._id, videoUrl]);
+  const videoRef = useRef<VideoPlayer | null>(null);
 
-  const player = useVideoPlayer(videoUrl || "", (p) => {
-    p.loop = false;
-    p.muted = isMuted;
-    p.volume = videoVolume;
-    p.timeUpdateEventInterval = 0.25;
+  const {
+    player,
+    firstFrameReady,
+    handleFirstFrameRender,
+    freezeOnFirstFrame,
+  } = useInstantFeedVideoPlayer({
+    source: videoUrl,
   });
 
-  // Sync player settings
   useEffect(() => {
-    if (player) {
-      player.muted = isMuted;
-      player.volume = videoVolume;
-    }
-  }, [player, isMuted, videoVolume]);
+    onSurfaceReadyChange?.(firstFrameReady);
+    return () => onSurfaceReadyChange?.(false);
+  }, [firstFrameReady, onSurfaceReadyChange]);
+
+  videoRef.current = player;
 
   const {
     isPlaying,
@@ -116,23 +164,53 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     shouldPlayThisVideo,
   } = useVideoPlaybackControl({
     videoKey: key,
-    videoRef: { current: player } as any,
+    videoRef,
     enableAutoPlay: false,
+    playbackReady: firstFrameReady,
   });
 
   useEffect(() => {
-    if (!player) return;
-    if (shouldPlayThisVideo && !player.playing) {
-      player.play();
-    } else if (!shouldPlayThisVideo && player.playing) {
+    if (!player || isFeedActive) return;
+    try {
+      player.muted = true;
+      player.volume = 0;
       player.pause();
+    } catch {
+      // no-op
     }
-  }, [player, shouldPlayThisVideo]);
+  }, [player, isFeedActive]);
+
+  useEffect(() => {
+    if (!player || !firstFrameReady) return;
+
+    const audiblyActive = isFeedActive && shouldPlayThisVideo;
+
+    if (audiblyActive) {
+      player.muted = isMuted;
+      player.volume = isMuted ? 0 : videoVolume;
+      if (!player.playing) player.play();
+      setShowOverlay(false);
+    } else {
+      // Neighbors, hidden tabs, and primed cards stay silent — no echo.
+      player.muted = true;
+      player.volume = 0;
+      if (player.playing) player.pause();
+      freezeOnFirstFrame();
+    }
+  }, [
+    shouldPlayThisVideo,
+    isFeedActive,
+    firstFrameReady,
+    player,
+    isMuted,
+    videoVolume,
+    freezeOnFirstFrame,
+  ]);
 
   const showOverlayTemporarily = useCallback(() => {
     setShowOverlay(true);
     if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
-    overlayTimeoutRef.current = setTimeout(() => setShowOverlay(false), 3000) as any;
+    overlayTimeoutRef.current = setTimeout(() => setShowOverlay(false), 3000);
   }, []);
 
   const showOverlayPermanently = useCallback(() => {
@@ -146,23 +224,32 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
   }, []);
 
   useEffect(() => {
+    if (!firstFrameReady) return;
     if (!isPlaying) showOverlayPermanently();
     else showOverlayTemporarily();
-  }, [isPlaying]);
+  }, [isPlaying, firstFrameReady, showOverlayPermanently, showOverlayTemporarily]);
 
-  const audioUrl = isAudioSermonValue && isValidUri(video.fileUrl) ? video.fileUrl : null;
-  const [audioStateRaw, audioControls] = useAdvancedAudioPlayer(audioUrl, {
-    audioKey: key,
-    autoPlay: false,
-    loop: false,
-    volume: videoVolume,
-    onError: () => setFailedVideoLoad(true),
-  });
+  useEffect(() => {
+    if (shouldPlayThisVideo && firstFrameReady) {
+      setShowOverlay(false);
+    }
+  }, [shouldPlayThisVideo, firstFrameReady]);
 
-  const audioState = audioStateRaw ?? { isPlaying: false, progress: 0, isMuted: false, position: 0, duration: 0 };
+  useEffect(() => {
+    if (!player) return;
+    const sub = player.addListener("statusChange", ({ status, error }) => {
+      if (status === "error" || error) {
+        setFailedVideoLoad(true);
+      }
+    });
+    return () => sub.remove();
+  }, [player]);
 
-  const handleVideoError = useCallback((error: any) => {
+  const handleVideoError = useCallback((error: unknown) => {
     setFailedVideoLoad(true);
+    if (__DEV__) {
+      console.warn("[VideoCardPlayerArea] playback error", error);
+    }
   }, []);
 
   const {
@@ -171,11 +258,9 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
     videoPositionMs,
     videoProgress,
   } = useVideoCardPlayback({
-    player,
-    isAudioSermon: isAudioSermonValue,
-    videoTitle: video.title,
+    isAudioSermon: false,
     contentId,
-    isPlaying,
+    player,
     handleVideoError,
     setFailedVideoLoad,
     setVideoLoaded,
@@ -187,124 +272,172 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps & { thumbnailU
   });
 
   const { seekToPercent } = useVideoCardSeek({
-    isAudioSermon: isAudioSermonValue,
-    audioState,
-    audioControls,
-    player,
+    isAudioSermon: false,
+    videoRef,
     videoPositionMs,
     lastKnownDurationRef,
-    backendDurationMs: (video as any).duration ? (video as any).duration * 1000 : 0,
+    backendDurationMs: (video as any).duration
+      ? (video as any).duration * 1000
+      : 0,
   });
 
-  const {
-    handleVideoTap,
-    handleTogglePlay,
-    tapTimeoutRef,
-  } = useVideoCardTapLogic({
-    key,
-    video,
-    index,
-    isPlaying,
-    isAudioSermon: isAudioSermonValue,
-    audioIsPlaying: audioState?.isPlaying ?? false,
-    onTogglePlay,
-    onVideoTap,
-    audioControlsPause: audioControls?.pause ?? (() => { }),
-    togglePlayback,
-    player,
-    showOverlayPermanently,
-    hideOverlay,
-  });
+  const { handleVideoTap, handleTogglePlay, tapTimeoutRef } =
+    useVideoCardTapLogic({
+      key,
+      video,
+      index,
+      isPlaying,
+      isAudioSermon: false,
+      audioIsPlaying: false,
+      onTogglePlay,
+      onVideoTap,
+      audioControlsPause: () => {},
+      togglePlayback,
+      videoRef,
+      showOverlayPermanently,
+      hideOverlay,
+    });
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
       if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
     };
-  }, []);
+  }, [tapTimeoutRef]);
 
   const handleToggleMuteInternal = useCallback(() => {
-    if (isAudioSermonValue) audioControls.toggleMute();
-    else onToggleMute(key);
-  }, [onToggleMute, key, isAudioSermonValue, audioControls]);
+    onToggleMute(key);
+  }, [onToggleMute, key]);
+
+  if (failedVideoLoad || !player) {
+    return <VideoPlayerSlot />;
+  }
+
+  const showChrome = firstFrameReady;
 
   return (
     <TouchableWithoutFeedback onPress={handleVideoTap}>
-      <View className="w-full h-[400px] overflow-hidden relative bg-black">
-        {!failedVideoLoad && videoUrl && !isAudioSermonValue && player ? (
-          <VideoView
-            key={videoUrl || key}
-            player={player}
-            style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: 'black' }}
-            contentFit="cover"
-            nativeControls={false}
-            fullscreenOptions={{ enable: false }}
-          />
-        ) : (
-          <OptimizedImage
-            source={thumbnailUri ? { uri: thumbnailUri } : { uri: "https://via.placeholder.com/400x400/000000/ffffff?text=Preparing+Media..." }}
-            style={{ width: "100%", height: "100%", position: "absolute" }}
-            contentFit="cover"
-            lazy={true}
+      <View
+        className="w-full relative"
+        collapsable={false}
+        style={{
+          height: FEED_VIDEO_PLAYER_HEIGHT,
+          backgroundColor: "transparent",
+          overflow: "hidden",
+          opacity: firstFrameReady ? 1 : 0,
+        }}
+      >
+        <FeedVideoSurface
+          player={player}
+          visible={firstFrameReady}
+          onFirstFrameRender={handleFirstFrameRender}
+        />
+
+        {showChrome &&
+          video.moderationStatus &&
+          video.moderationStatus !== "approved" && (
+            <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
+              <ModerationBadge status={video.moderationStatus} />
+            </View>
+          )}
+
+        {showChrome && (
+          <ContentTypeBadge
+            contentType={video.contentType || "video"}
+            position="top-left"
+            size="medium"
           />
         )}
 
-        {!videoLoadedRef.current && !videoLoaded && !failedVideoLoad && isValidUri(video.fileUrl) && !isAudioSermonValue && (
-          <View className="absolute inset-0" pointerEvents="none">
-            <VideoCardSkeleton dark={true} hideProgressBar={true} />
+        {showChrome && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => onVideoTap(key, video, index)}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+              flexDirection: "row",
+              alignItems: "center",
+              zIndex: 10,
+            }}
+          >
+            <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+
+        {showChrome && (
+          <MediaPlayButton
+            isPlaying={isPlaying}
+            onPress={() => handleTogglePlay(setIsPlayTogglePending)}
+            showOverlay={showOverlay}
+            size="medium"
+            disabled={isPlayTogglePending}
+          />
+        )}
+
+        {showChrome && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: 64,
+              left: 12,
+              right: 12,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              pointerEvents: "none",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: "Rubik_600SemiBold",
+                color: "#FFFFFF",
+                lineHeight: 16,
+                textShadowColor: "rgba(0, 0, 0, 0.75)",
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 3,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {video.title}
+            </Text>
           </View>
         )}
 
-        {video.moderationStatus && video.moderationStatus !== 'approved' && (
-          <View style={{ position: 'absolute', top: 50, left: 12, zIndex: 11 }}>
-            <ModerationBadge status={video.moderationStatus} />
-          </View>
+        {showChrome && (
+          <VideoProgressBar
+            progress={Math.max(0, Math.min(1, videoProgress || 0))}
+            isMuted={isMuted}
+            onToggleMute={handleToggleMuteInternal}
+            onSeekToPercent={seekToPercent}
+            mutePosition="right"
+            bottomOffset={24}
+            currentMs={videoPositionMs}
+            durationMs={
+              videoDurationMs ||
+              lastKnownDurationRef.current ||
+              (video as any).duration * 1000 ||
+              0
+            }
+            showControls={true}
+            showFloatingLabel={true}
+            enlargeOnDrag={true}
+            knobSize={8}
+            knobSizeDragging={10}
+            trackHeights={{ normal: 4, dragging: 8 }}
+            seekSyncTicks={4}
+            seekMsTolerance={200}
+            minProgressEpsilon={0.005}
+          />
         )}
-
-        <ContentTypeBadge contentType={video.contentType || "video"} position="top-left" size="medium" />
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => onVideoTap(key, video, index)}
-          style={{ position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", zIndex: 10 }}
-        >
-          <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <MediaPlayButton
-          isPlaying={isAudioSermonValue ? (audioState?.isPlaying ?? false) : isPlaying}
-          onPress={() => handleTogglePlay(setIsPlayTogglePending)}
-          showOverlay={showOverlay}
-          size="medium"
-          disabled={isPlayTogglePending}
-        />
-
-        <View style={{ position: "absolute", bottom: 64, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
-          <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", lineHeight: 16, textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
-            {video.title}
-          </Text>
-        </View>
-
-        <VideoProgressBar
-          progress={isAudioSermonValue ? (audioState?.progress ?? 0) : Math.max(0, Math.min(1, videoProgress || 0))}
-          isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
-          onToggleMute={handleToggleMuteInternal}
-          onSeekToPercent={seekToPercent}
-          mutePosition="right"
-          bottomOffset={24}
-          currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
-          durationMs={isAudioSermonValue ? (audioState?.duration ?? 0) : (videoDurationMs || lastKnownDurationRef.current || (video as any).duration * 1000 || 0)}
-          showControls={true}
-          showFloatingLabel={true}
-          enlargeOnDrag={true}
-          knobSize={8}
-          knobSizeDragging={10}
-          trackHeights={{ normal: 4, dragging: 8 }}
-          seekSyncTicks={4}
-          seekMsTolerance={200}
-          minProgressEpsilon={0.005}
-        />
       </View>
     </TouchableWithoutFeedback>
   );

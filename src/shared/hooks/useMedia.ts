@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useContentCacheStore
 } from "../../../app/store/useContentCacheStore";
@@ -12,6 +12,7 @@ import {
   UseMediaOptions,
   UseMediaReturn,
 } from "../types";
+import { buildStableFeedMediaList } from "../utils/buildStableFeedMediaList";
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
 
 /** Sync stats from media items to useInteractionStore to prevent redundant metadata fetches */
@@ -56,12 +57,15 @@ const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
 export async function fetchAllContentPublic(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentPublic({
     page: 1,
-    limit: 50,
+    limit: 20,
     contentType: contentType !== "ALL" ? contentType : undefined,
   });
 
   if (!response.success) throw new Error(response.error || "Failed to fetch content");
-  if (!response.media || response.media.length === 0) throw new Error("API returned empty media array");
+
+  if (!response.media || response.media.length === 0) {
+    return { media: [], total: 0 };
+  }
 
   const enrichedMedia = UserProfileCache.enrichContentArray(response.media);
   const transformedMedia = enrichedMedia
@@ -80,7 +84,7 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
     useContentCacheStore.getState().set("ALL:first", {
       items: result.media,
       page: 1,
-      limit: 50,
+      limit: 20,
       total: result.total,
       fetchedAt: Date.now(),
     });
@@ -93,7 +97,7 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
 async function fetchAllContentWithAuth(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentWithAuth({
     page: 1,
-    limit: 50,
+    limit: 20,
     contentType: contentType !== "ALL" ? contentType : undefined,
   });
 
@@ -122,7 +126,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     immediate = true,
     contentType = "ALL",
     page = 1,
-    limit = 10,
+    limit = 40,
     useAuth = false,
   } = options;
 
@@ -133,14 +137,21 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     : undefined;
 
   const allContentQuery = useQuery({
-    queryKey: ["all-content", contentType, 1, 50, useAuth],
+    queryKey: ["all-content", contentType, 1, 20, useAuth],
     queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
     enabled: immediate,
     initialData: cachedForInitial,
+    // Keep showing the previous query's data (e.g. the public feed) while a
+    // new query key's data is fetched - this happens when `useAuth` flips
+    // from false to true once auth resolves. Without this, the feed briefly
+    // renders empty because the new (useAuth: true) query starts with no
+    // data at all, even though we already had content to show.
+    placeholderData: keepPreviousData,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     retry: 1,
-    refetchOnMount: !cachedForInitial,
+    // Keep category feeds warm — remount/refetch on tab switch felt like a refresh.
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -188,6 +199,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       throw new Error(response.error || "Failed to fetch content");
     },
     enabled: immediate,
+    // Keep showing the previous page/tab's data while a new contentType or
+    // page fetches, instead of flashing empty in between.
+    placeholderData: keepPreviousData,
     staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
     gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
     retry: 1,
@@ -199,13 +213,108 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   // Extract data from React Query (0ms if cached!)
   const allContent = allContentQuery.data?.media || [];
   const allContentTotal = allContentQuery.data?.total || 0;
-  const defaultContent = defaultContentQuery.data?.media || [];
+  const defaultContentPage1 = defaultContentQuery.data?.media || [];
   const defaultContentPagination = {
     page: defaultContentQuery.data?.page || page,
     limit: defaultContentQuery.data?.limit || limit,
     total: defaultContentQuery.data?.total || 0,
     pages: defaultContentQuery.data?.pages || 0,
   };
+
+  // `defaultContentQuery` only ever tracks page 1 - nothing previously
+  // accumulated further pages, even though the feed screen's "coming soon"
+  // card sits above a `rest` list that's supposed to keep growing as the
+  // user scrolls. Without real pagination, the feed was capped at whatever
+  // page 1 of these two endpoints currently returns; whenever either
+  // refetched (pull-to-refresh, a delete, cache expiry, auth resolving)
+  // and the backend's "latest" page 1 shifted (e.g. new uploads elsewhere
+  // bumped older items off), previously-visible content - especially
+  // anything below the first few items, i.e. under the coming-soon card -
+  // would vanish outright since it was never actually accumulated anywhere.
+  // This accumulates additional pages locally as `loadMoreContent` is
+  // called (wired to the feed's onEndReached), so content already shown
+  // keeps accumulating instead of being replaced.
+  const [extraPages, setExtraPages] = useState<MediaItem[]>([]);
+  const [highestLoadedPage, setHighestLoadedPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [lastFetchedPageWasFull, setLastFetchedPageWasFull] = useState(true);
+  const loadingMoreRef = useRef(false);
+  const extraPagesRef = useRef<MediaItem[]>([]);
+  const highestLoadedPageRef = useRef(1);
+  const lastFetchedPageWasFullRef = useRef(true);
+  // Persist pagination per contentType so ALL ↔ VIDEO ↔ SERMON doesn't wipe
+  // Coming Soon content or force a cold re-fetch of already-seen pages.
+  const extrasByContentTypeRef = useRef<
+    Record<
+      string,
+      { extras: MediaItem[]; page: number; lastFull: boolean }
+    >
+  >({});
+  const paginationKeyRef = useRef(contentType);
+
+  extraPagesRef.current = extraPages;
+  highestLoadedPageRef.current = highestLoadedPage;
+  lastFetchedPageWasFullRef.current = lastFetchedPageWasFull;
+
+  useEffect(() => {
+    if (paginationKeyRef.current === contentType) return;
+
+    extrasByContentTypeRef.current[paginationKeyRef.current] = {
+      extras: extraPagesRef.current,
+      page: highestLoadedPageRef.current,
+      lastFull: lastFetchedPageWasFullRef.current,
+    };
+
+    paginationKeyRef.current = contentType;
+    const saved = extrasByContentTypeRef.current[contentType];
+    if (saved) {
+      setExtraPages(saved.extras);
+      setHighestLoadedPage(saved.page);
+      setLastFetchedPageWasFull(saved.lastFull);
+    } else {
+      setExtraPages([]);
+      setHighestLoadedPage(1);
+      setLastFetchedPageWasFull(true);
+    }
+  }, [contentType]);
+
+  // Keep page-1 fullness in sync for the hasMore heuristic.
+  useEffect(() => {
+    if (highestLoadedPage !== 1) return;
+    const size = defaultContentPagination.limit || limit || 40;
+    setLastFetchedPageWasFull(defaultContentPage1.length >= size);
+  }, [defaultContentPage1.length, highestLoadedPage, defaultContentPagination.limit, limit]);
+
+  const defaultContent = useMemo(() => {
+    if (extraPages.length === 0) return defaultContentPage1;
+    const seen = new Set<string>();
+    const merged: MediaItem[] = [];
+    for (const item of defaultContentPage1) {
+      const id = item._id || (item as any).id;
+      if (id) seen.add(String(id));
+      merged.push(item);
+    }
+    for (const item of extraPages) {
+      const id = item._id || (item as any).id;
+      const key = id ? String(id) : "";
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      merged.push(item);
+    }
+    return merged;
+  }, [defaultContentPage1, extraPages]);
+
+  const pageSize = defaultContentPagination.limit || limit || 40;
+  const computedPages =
+    defaultContentPagination.total > 0
+      ? Math.ceil(defaultContentPagination.total / pageSize)
+      : defaultContentPagination.pages || 0;
+  const hasMoreDefaultPages =
+    defaultContentPagination.total > 0
+      ? defaultContent.length < defaultContentPagination.total
+      : computedPages > 1
+        ? highestLoadedPage < computedPages
+        : lastFetchedPageWasFull;
 
   // Loading states (only show loading if no cached data)
   const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
@@ -232,19 +341,19 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     } else {
       // For append, fetch next page using queryClient
       await queryClient.fetchQuery({
-        queryKey: ["all-content", contentType, pageNum, 50, useAuth],
+        queryKey: ["all-content", contentType, pageNum, 20, useAuth],
         queryFn: async () => {
           let response;
           if (useAuth) {
             response = await mediaApi.getAllContentWithAuth({
               page: pageNum,
-              limit: 50,
+              limit: 20,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
           } else {
             response = await mediaApi.getAllContentPublic({
               page: pageNum,
-              limit: 50,
+              limit: 20,
               contentType: contentType !== "ALL" ? contentType : undefined,
             });
           }
@@ -269,60 +378,21 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     }
   }, [allContentQuery, queryClient, contentType]);
 
-  // Legacy fetch function - now uses React Query internally
-  const fetchDefaultContent = useCallback(
-    async (params?: ContentFilter) => {
-      const filter: ContentFilter = {
-        page: params?.page || page,
-        limit: params?.limit || limit,
-        contentType: params?.contentType || contentType,
-        search: params?.search,
-      };
-
-      // Use React Query to fetch (will be cached automatically)
-      await queryClient.fetchQuery({
-        queryKey: ["default-content", filter.page, filter.limit, filter.contentType, filter.search],
-        queryFn: async () => {
-          const response = await mediaApi.getDefaultContent(filter);
-
-          if (response.success) {
-            const enrichedMedia = UserProfileCache.enrichContentArray(response.media || []);
-            const transformedMedia = enrichedMedia
-              .map(transformApiResponseToMediaItem)
-              .filter((item): item is MediaItem => item !== null);
-
-            // Also update Zustand cache for backward compatibility
-            const key = `${filter.contentType || "ALL"}:page:${filter.page || 1}`;
-            useContentCacheStore.getState().set(key, {
-              items: transformedMedia,
-              page: filter.page || 1,
-              limit: filter.limit || limit,
-              total: response.total || 0,
-              fetchedAt: Date.now(),
-            });
-
-            return {
-              media: transformedMedia,
-              total: response.total || 0,
-              page: response.page || 1,
-              limit: response.limit || limit,
-              pages: Math.ceil((response.total || 0) / (response.limit || limit)),
-            };
-          }
-
-          throw new Error(response.error || "Failed to fetch content");
-        },
-        staleTime: 15 * 60 * 1000,
-        gcTime: 30 * 60 * 1000,
-      });
-    },
-    [queryClient, page, limit, contentType]
-  );
-
-  // Refresh all content using React Query (maintains cache)
+  // Keep showing accumulated pages after refresh. Drop only extras that
+  // now duplicate the fresh page 1 — never wipe the Coming Soon tail.
   const refreshAllContent = useCallback(async () => {
-    await allContentQuery.refetch();
-  }, [allContentQuery]);
+    await Promise.all([allContentQuery.refetch(), defaultContentQuery.refetch()]);
+    setExtraPages((prev) => {
+      const page1 = defaultContentQuery.data?.media || [];
+      const page1Ids = new Set(
+        page1.map((i) => i._id || (i as any).id).filter(Boolean).map(String)
+      );
+      return prev.filter((item) => {
+        const id = item._id || (item as any).id;
+        return !id || !page1Ids.has(String(id));
+      });
+    });
+  }, [allContentQuery, defaultContentQuery]);
 
   // Load more content for infinite scroll (TODO: implement with infinite query)
   const loadMoreAllContent = useCallback(async () => {
@@ -331,38 +401,106 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     await allContentQuery.refetch();
   }, [allContentQuery, allContentLoading]);
 
-  // Refresh default content using React Query
+  // Soft refresh: keep extras until page 1 lands, then dedupe only.
   const refreshDefaultContent = useCallback(async () => {
     await defaultContentQuery.refetch();
+    setExtraPages((prev) => {
+      const page1 = defaultContentQuery.data?.media || [];
+      const page1Ids = new Set(
+        page1.map((i) => i._id || (i as any).id).filter(Boolean).map(String)
+      );
+      return prev.filter((item) => {
+        const id = item._id || (item as any).id;
+        return !id || !page1Ids.has(String(id));
+      });
+    });
   }, [defaultContentQuery]);
 
-  // Load more default content
+  // Load more default content - fetches the next page directly and
+  // appends it to `extraPages` (deduped against what's already shown in
+  // `defaultContent`) so scrolling further never removes what's already
+  // on screen, it only ever adds to it.
   const loadMoreDefaultContent = useCallback(async () => {
-    if (defaultContentPagination.page < defaultContentPagination.pages) {
-      await fetchDefaultContent({
-        page: defaultContentPagination.page + 1,
+    if (loadingMoreRef.current) return;
+
+    // Prefer the live hasMore signal. The old `pages` early-return blocked
+    // Coming Soon growth whenever total/pages metadata was missing or stale.
+    const total = defaultContentPagination.total || 0;
+    const pages = defaultContentPagination.pages || 0;
+    const loaded = defaultContentPage1.length + extraPagesRef.current.length;
+    if (total > 0 && loaded >= total) return;
+    if (pages > 1 && highestLoadedPage >= pages) return;
+    if (total === 0 && pages <= 1 && !lastFetchedPageWasFullRef.current) return;
+
+    const nextPage = highestLoadedPage + 1;
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    try {
+      const response = await mediaApi.getDefaultContent({
+        page: nextPage,
         limit,
         contentType: contentType !== "ALL" ? contentType : undefined,
       });
-      // Prefetch the next page in background if available
-      const next = defaultContentPagination.page + 2;
-      if (next <= defaultContentPagination.pages) {
-        fetchDefaultContent({
-          page: next,
-          limit,
-          contentType: contentType !== "ALL" ? contentType : undefined,
+      if (response.success) {
+        const enrichedMedia = UserProfileCache.enrichContentArray(
+          response.media || []
+        );
+        const transformedMedia = enrichedMedia
+          .map(transformApiResponseToMediaItem)
+          .filter((item): item is MediaItem => item !== null);
+        syncMediaStatsToInteractionStore(transformedMedia);
+        const full = transformedMedia.length >= limit;
+        setLastFetchedPageWasFull(full);
+        if (transformedMedia.length === 0) {
+          setLastFetchedPageWasFull(false);
+          return;
+        }
+        setExtraPages((prev) => {
+          const seen = new Set<string>();
+          for (const item of defaultContentPage1) {
+            const id = item._id || (item as any).id;
+            if (id) seen.add(String(id));
+          }
+          for (const item of prev) {
+            const id = item._id || (item as any).id;
+            if (id) seen.add(String(id));
+          }
+          const unique = transformedMedia.filter((item) => {
+            const id = item._id || (item as any).id;
+            const key = id ? String(id) : "";
+            if (!key) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          return unique.length ? [...prev, ...unique] : prev;
         });
+        setHighestLoadedPage(nextPage);
       }
+    } catch (e) {
+      if (__DEV__) console.warn("⚠️ Failed to load more content:", e);
+    } finally {
+      loadingMoreRef.current = false;
+      setIsLoadingMore(false);
     }
-  }, [fetchDefaultContent, defaultContentPagination, limit, contentType]);
+  }, [
+    highestLoadedPage,
+    defaultContentPagination.pages,
+    defaultContentPagination.total,
+    defaultContentPage1,
+    limit,
+    contentType,
+  ]);
 
   // Load more content (alias for compatibility)
   const loadMoreContent = loadMoreDefaultContent;
 
-  // Filter content by type
+  // Filter content by type - merge both sources rather than picking one, so
+  // this doesn't suffer from the same "smaller list wins" issue as `mediaList`
+  // in AllContentTikTok (see comment there for details).
   const getFilteredContent = useCallback(
     (filter: ContentFilter) => {
-      const sourceData = allContent.length > 0 ? allContent : defaultContent;
+      const sourceData = buildStableFeedMediaList(defaultContent, allContent);
       return filterContentByType(sourceData, filter.contentType || "ALL");
     },
     [allContent, defaultContent]
@@ -389,6 +527,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       allContent,
       defaultContent,
       loading,
+      defaultContentLoading,
       error,
       hasContent,
       total: allContentTotal || defaultContentPagination.total,
@@ -398,11 +537,14 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       loadMoreAllContent,
       hasMorePages,
       getFilteredContent,
+      isLoadingMore,
+      hasMoreDefaultPages,
     }),
     [
       allContent,
       defaultContent,
       loading,
+      defaultContentLoading,
       error,
       hasContent,
       allContentTotal,
@@ -413,6 +555,8 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       loadMoreAllContent,
       hasMorePages,
       getFilteredContent,
+      isLoadingMore,
+      hasMoreDefaultPages,
     ]
   );
 
