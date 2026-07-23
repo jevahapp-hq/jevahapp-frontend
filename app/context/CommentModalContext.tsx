@@ -9,6 +9,7 @@ import React, {
 import { InteractionManager } from "react-native";
 import SocketManager from "../services/SocketManager";
 import { useInteractionStore } from "../store/useInteractionStore";
+import { getApiBaseUrl } from "../utils/api";
 import contentInteractionAPI from "../utils/contentInteractionAPI";
 import TokenUtils from "../utils/tokenUtils";
 
@@ -673,7 +674,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         const token = await TokenUtils.getAuthToken();
         if (!token) return;
         const manager = new SocketManager({
-          serverUrl: "https://api.jevahapp.com",
+          serverUrl: getApiBaseUrl(),
           authToken: token,
         });
         await manager.connect();

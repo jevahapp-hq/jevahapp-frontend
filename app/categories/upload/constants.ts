@@ -3,7 +3,9 @@
  * Extracted from upload.tsx for better modularity
  */
 
-export const API_BASE_URL = "https://api.jevahapp.com";
+import { getApiBaseUrl } from "../../utils/api";
+
+export const API_BASE_URL = getApiBaseUrl();
 
 /** Max file sizes in bytes for client-side check (must be <= server/nginx limits) */
 export const MAX_FILE_SIZE_BYTES = {

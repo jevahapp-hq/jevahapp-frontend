@@ -56,6 +56,8 @@ Sentry.init({
 
 const API_BASE_URL =
   Constants.expoConfig?.extra?.API_URL ||
+  process.env.EXPO_PUBLIC_API_URL_PRODUCTION ||
+  process.env.EXPO_PUBLIC_API_URL ||
   "https://api.jevahapp.com";
 
 const publishableKey =

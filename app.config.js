@@ -13,8 +13,15 @@ export default {
     owner: "bldlne",
     extra: {
       API_URL:
-        process.env.EXPO_PUBLIC_API_URL ||
-        "https://api.jevahapp.com",
+        process.env.EXPO_PUBLIC_API_ENV === "local" ||
+        process.env.EXPO_PUBLIC_API_ENV === "dev" ||
+        process.env.EXPO_PUBLIC_API_ENV === "development"
+          ? process.env.EXPO_PUBLIC_API_URL_LOCAL ||
+            "http://localhost:4000"
+          : process.env.EXPO_PUBLIC_API_URL_PRODUCTION ||
+            process.env.EXPO_PUBLIC_API_URL ||
+            "https://api.jevahapp.com",
+      API_ENV: process.env.EXPO_PUBLIC_API_ENV || "production",
       CLERK_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       eas: {
         projectId: "214e1ad5-a38e-4f00-89e9-d034797bc9c8",

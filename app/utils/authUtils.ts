@@ -2,11 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { Alert, Platform } from "react-native";
+import { getApiBaseUrl } from "./api";
 
 const API_BASE_URL =
-  Constants.expoConfig?.extra?.API_URL ||
-  process.env.EXPO_PUBLIC_API_URL ||
-  "https://api.jevahapp.com";
+  Constants.expoConfig?.extra?.API_URL || getApiBaseUrl();
 
 export interface UserInfo {
   firstName: string;
