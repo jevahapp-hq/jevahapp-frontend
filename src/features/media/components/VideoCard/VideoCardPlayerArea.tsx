@@ -10,6 +10,7 @@ import { TikTokProgressBar } from "../../../../shared/components/VideoProgressBa
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon, isValidUri } from "../../../../shared/utils";
+import { PERF, perfMark, perfMeasure } from "../../../../shared/utils/perfMarks";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
@@ -67,6 +68,19 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const storeRef = useRef<any>(null);
   const suppressAutoLoopRef = useRef(false);
   const [hasTrackedView, setHasTrackedView] = useState(false);
+  const ttffMeasuredRef = useRef(false);
+
+  useEffect(() => {
+    if (!videoUrl) return;
+    ttffMeasuredRef.current = false;
+    perfMark(`video.ttff.start:${key}`);
+  }, [videoUrl, key]);
+
+  useEffect(() => {
+    if (!videoLoaded || ttffMeasuredRef.current) return;
+    ttffMeasuredRef.current = true;
+    perfMeasure(PERF.VIDEO_TTFF, `video.ttff.start:${key}`);
+  }, [videoLoaded, key]);
 
   const player = useVideoPlayer(
     videoUrl ? { uri: videoUrl, useCaching: true } : "",
@@ -203,11 +217,12 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     isAudioSermon: isAudioSermonValue,
     audioIsPlaying: audioState?.isPlaying ?? false,
     onTogglePlay,
-    onVideoTap,
     audioControlsPause: audioControls?.pause ?? (() => {}),
+    audioControlsPlay: audioControls?.play ?? undefined,
     togglePlayback,
     player,
     showOverlayPermanently,
+    showOverlayTemporarily,
     hideOverlay,
   });
 

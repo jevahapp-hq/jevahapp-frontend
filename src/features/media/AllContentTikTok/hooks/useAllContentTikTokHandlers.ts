@@ -2,7 +2,7 @@
  * useAllContentTikTokHandlers - All event handlers for the content feed
  */
 import { useCallback } from "react";
-import { Share } from "react-native";
+import { Alert, Share } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { mapContentTypeForBackend } from "../../../../../app/utils/engagementHelpers";
 import {
@@ -20,6 +20,18 @@ import {
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import { detectMediaType } from "../../../../shared/utils";
 import { recordFeedAffinity } from "../utils/feedAffinityStore";
+
+let lastLikeRateLimitAlertAt = 0;
+
+function notifyLikeRateLimited(message?: string) {
+  const now = Date.now();
+  if (now - lastLikeRateLimitAlertAt < 2500) return;
+  lastLikeRateLimitAlertAt = now;
+  Alert.alert(
+    "Slow down",
+    message || "Please wait a moment before liking again."
+  );
+}
 
 export interface UseAllContentTikTokHandlersParams {
   contentType: ContentType | "ALL";
@@ -186,6 +198,13 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           initialLikes: Number(initialLikes) || 0,
           initialLiked,
         });
+        if (result?.authRequired) {
+          return;
+        }
+        if (result?.rateLimited) {
+          notifyLikeRateLimited(result.message);
+          return;
+        }
         // Train on-device affinity when the heart ends liked
         if (result?.liked) {
           void recordFeedAffinity(item, 1.5);
@@ -212,6 +231,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
         const result = await toggleSave(contentId, contentType);
+        if (result?.authRequired) return;
 
         // Use API result — getUserSaveState can be stale until re-render
         if (result.saved) {

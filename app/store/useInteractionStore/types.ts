@@ -16,6 +16,8 @@ export interface InteractionState {
   contentStats: Record<string, ContentStats>;
   loadingStats: Record<string, boolean>;
   loadingInteraction: Record<string, boolean>;
+  /** Per-content timestamp (ms) until which like taps are soft-blocked after a 429 */
+  likeCooldownUntil: Record<string, number>;
   comments: Record<string, CommentData[]>;
   loadingComments: Record<string, boolean>;
   savedContent: any[];
@@ -25,8 +27,19 @@ export interface InteractionState {
     contentId: string,
     contentType: string,
     options?: { initialLikes?: number; initialLiked?: boolean }
-  ) => Promise<{ liked: boolean; totalLikes: number }>;
-  toggleSave: (contentId: string, contentType: string, options?: ToggleSaveOptions) => Promise<{ saved: boolean; totalSaves: number }>;
+  ) => Promise<{
+    liked: boolean;
+    totalLikes: number;
+    rateLimited?: boolean;
+    message?: string;
+    offlineQueued?: boolean;
+    authRequired?: boolean;
+  }>;
+  toggleSave: (
+    contentId: string,
+    contentType: string,
+    options?: ToggleSaveOptions
+  ) => Promise<{ saved: boolean; totalSaves: number; authRequired?: boolean }>;
   recordShare: (contentId: string, contentType: string, shareMethod?: string) => Promise<void>;
   recordView: (
     contentId: string,

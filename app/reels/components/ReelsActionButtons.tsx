@@ -1,6 +1,7 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { formatCount } from "../../../src/shared/utils/formatCount";
 
 interface ReelsActionButtonsProps {
   videoKey: string;
@@ -45,6 +46,36 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
   getTouchTargetSize,
   triggerHapticFeedback,
 }) => {
+  const likeDisplayCount = useMemo(() => {
+    const raw = canUseBackendLikes
+      ? activeLikesCount
+      : enrichedVideoData?.likeCount ??
+        enrichedVideoData?.likes ??
+        enrichedVideoData?.favorite ??
+        video.favorite ??
+        0;
+    return Number(raw) || 0;
+  }, [
+    canUseBackendLikes,
+    activeLikesCount,
+    enrichedVideoData,
+    video.favorite,
+  ]);
+
+  const commentDisplayCount = useMemo(() => {
+    return videoStats[videoKey]?.comment === 1
+      ? (video.comment ?? 0) + 1
+      : video.comment ?? 0;
+  }, [videoStats, videoKey, video.comment]);
+
+  const saveDisplayCount = useMemo(() => {
+    return videoStats[videoKey]?.totalSaves || video.saved || 0;
+  }, [videoStats, videoKey, video.saved]);
+
+  const shareDisplayCount = useMemo(() => {
+    return videoStats[videoKey]?.sheared || video.sheared || 0;
+  }, [videoStats, videoKey, video.sheared]);
+
   return (
     <View
       style={{
@@ -79,13 +110,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color={activeIsLiked ? "#D22A2A" : "#FFFFFF"}
         />
-        {((canUseBackendLikes
-          ? activeLikesCount
-          : enrichedVideoData?.likeCount ??
-          enrichedVideoData?.likes ??
-          enrichedVideoData?.favorite ??
-          video.favorite ??
-          0) > 0) && (
+        {likeDisplayCount > 0 && (
             <Text
               style={{
                 fontSize: getResponsiveFontSize(9, 10, 11),
@@ -97,13 +122,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
                 textShadowRadius: 2,
               }}
             >
-              {canUseBackendLikes
-                ? activeLikesCount
-                : enrichedVideoData?.likeCount ??
-                enrichedVideoData?.likes ??
-                enrichedVideoData?.favorite ??
-                video.favorite ??
-                0}
+              {formatCount(likeDisplayCount)}
             </Text>
           )}
       </TouchableOpacity>
@@ -130,9 +149,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color="white"
         />
-        {(videoStats[videoKey]?.comment === 1
-          ? (video.comment ?? 0) + 1
-          : video.comment ?? 0) > 0 && (
+        {commentDisplayCount > 0 && (
             <Text
               style={{
                 fontSize: getResponsiveFontSize(9, 10, 11),
@@ -144,9 +161,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
                 textShadowRadius: 2,
               }}
             >
-              {videoStats[videoKey]?.comment === 1
-                ? (video.comment ?? 0) + 1
-                : video.comment ?? 0}
+              {formatCount(commentDisplayCount)}
             </Text>
           )}
       </TouchableOpacity>
@@ -176,7 +191,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color={libraryStore.isItemSaved(videoKey) ? "#FEA74E" : "#FFFFFF"}
         />
-        {(videoStats[videoKey]?.totalSaves || video.saved || 0) > 0 && (
+        {saveDisplayCount > 0 && (
           <Text
             style={{
               fontSize: getResponsiveFontSize(9, 10, 11),
@@ -188,7 +203,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
               textShadowRadius: 2,
             }}
           >
-            {videoStats[videoKey]?.totalSaves || video.saved || 0}
+            {formatCount(saveDisplayCount)}
           </Text>
         )}
       </TouchableOpacity>
@@ -211,7 +226,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
         accessibilityRole="button"
       >
         <Feather name="send" size={getResponsiveSize(28, 32, 36)} color="white" />
-        {(videoStats[videoKey]?.sheared || video.sheared || 0) > 0 && (
+        {shareDisplayCount > 0 && (
           <Text
             style={{
               fontSize: getResponsiveFontSize(9, 10, 11),
@@ -223,7 +238,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
               textShadowRadius: 2,
             }}
           >
-            {videoStats[videoKey]?.sheared || video.sheared || 0}
+            {formatCount(shareDisplayCount)}
           </Text>
         )}
       </TouchableOpacity>

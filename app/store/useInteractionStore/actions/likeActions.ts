@@ -1,5 +1,11 @@
 import type { ContentStats } from "../../../utils/contentInteractionAPI";
 import { persistContentInteraction } from "../../../utils/contentInteractionPersist";
+import { ensureAuthenticatedForInteraction } from "../../../utils/auth/requireAuthForInteraction";
+import {
+  isRateLimitError,
+  RateLimitError,
+} from "../../../utils/contentInteraction/errors";
+import { createGestureIdempotencyKey } from "../../../utils/contentInteraction/idempotency";
 import type { StoreGet, StoreSet } from "../types";
 
 export type ToggleLikeOptions = {
@@ -7,22 +13,82 @@ export type ToggleLikeOptions = {
   initialLiked?: boolean;
 };
 
+export type ToggleLikeResult = {
+  liked: boolean;
+  totalLikes: number;
+  rateLimited?: boolean;
+  message?: string;
+  offlineQueued?: boolean;
+  /** Guest / expired session — heart was not changed */
+  authRequired?: boolean;
+};
+
+const DEFAULT_COOLDOWN_MS = 3000;
+let lastRateLimitAlertAt = 0;
+
+function rollbackOptimisticLike(set: StoreSet, contentId: string, key: string) {
+  set((state: any) => {
+    const s = state.contentStats[contentId];
+    if (!s) {
+      return {
+        loadingInteraction: { ...state.loadingInteraction, [key]: false },
+      };
+    }
+    const liked = !s.userInteractions.liked;
+    const likes = Math.max(0, (s.likes || 0) + (liked ? 1 : -1));
+    return {
+      contentStats: {
+        ...state.contentStats,
+        [contentId]: {
+          ...s,
+          likes,
+          userInteractions: { ...s.userInteractions, liked },
+        },
+      },
+      loadingInteraction: { ...state.loadingInteraction, [key]: false },
+    };
+  });
+}
+
 export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
   return {
     toggleLike: async (
       contentId: string,
       contentType: string,
       options: ToggleLikeOptions = {}
-    ): Promise<{ liked: boolean; totalLikes: number }> => {
+    ): Promise<ToggleLikeResult> => {
       const key = `${contentId}_like`;
-      // Ignore a second tap until the authoritative response returns. Without
-      // this, rapid taps can toggle twice and make the heart appear unresponsive.
-      if (get().loadingInteraction[key]) {
+      const now = Date.now();
+      const cooldownUntil = get().likeCooldownUntil?.[contentId] ?? 0;
+
+      const currentSnapshot = () => {
         const current = get().contentStats[contentId];
         return {
-          liked: current?.userInteractions?.liked ?? false,
+          liked:
+            current?.userInteractions?.liked ?? options.initialLiked ?? false,
           totalLikes: current?.likes ?? options.initialLikes ?? 0,
         };
+      };
+
+      // Guests: prompt login and leave the heart untouched.
+      const auth = await ensureAuthenticatedForInteraction({
+        action: "like",
+        message: "Log in to like this and keep it across devices.",
+      });
+      if (!auth.ok) {
+        return { ...currentSnapshot(), authRequired: true };
+      }
+
+      if (cooldownUntil > now) {
+        return {
+          ...currentSnapshot(),
+          rateLimited: true,
+          message: "Please wait a moment before liking again.",
+        };
+      }
+
+      if (get().loadingInteraction[key]) {
+        return currentSnapshot();
       }
 
       const defaultStats: ContentStats = {
@@ -39,6 +105,12 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
           viewed: false,
         },
       };
+
+      // Capture baseline before optimistic flip (needed for offline coalesce).
+      const baselineBefore = get().contentStats[contentId];
+      const baselineLiked = Boolean(
+        baselineBefore?.userInteractions?.liked ?? options.initialLiked ?? false
+      );
 
       set((state: any) => {
         const existing = state.contentStats[contentId];
@@ -85,22 +157,41 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
         });
       }
 
+      const idempotencyKey = createGestureIdempotencyKey();
+
       try {
-        const result = await api.toggleLike(contentId, contentType);
-        const optimisticLiked = Boolean(optimistic?.userInteractions?.liked);
-        const serverLiked = Boolean(result.liked);
-        // Backend has returned success with liked:false + likeCount:1 after a
-        // like tap (see Metro). Prefer the optimistic heart when they disagree
-        // so the UI doesn't flash red then gray while BE is wrong.
-        const liked =
-          serverLiked === optimisticLiked
-            ? serverLiked
-            : (() => {
-                console.warn(
-                  `⚠️ LIKE MISMATCH ${contentId}: optimistic=${optimisticLiked} server=${serverLiked} count=${result.totalLikes}. Keeping optimistic liked.`
-                );
-                return optimisticLiked;
-              })();
+        const result = await api.toggleLike(contentId, contentType, {
+          idempotencyKey,
+          baselineLiked,
+          expectedLiked: Boolean(optimistic?.userInteractions?.liked),
+          expectedTotalLikes: optimistic?.likes ?? 0,
+        });
+
+        // Offline queue accepted the optimistic state — keep heart, clear loading.
+        if (result?.offlineQueued || result?.offlineCancelled) {
+          set((state: any) => ({
+            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+          }));
+          return {
+            liked: result.liked,
+            totalLikes: result.totalLikes,
+            offlineQueued: Boolean(result.offlineQueued),
+          };
+        }
+
+        // Backend is source of truth after a successful HTTP response.
+        const liked = Boolean(result.liked);
+        if (
+          Boolean(optimistic?.userInteractions?.liked) !== liked &&
+          __DEV__
+        ) {
+          console.log(
+            `ℹ️ Like reconciled ${contentId}: optimistic=${Boolean(
+              optimistic?.userInteractions?.liked
+            )} → server=${liked} count=${result.totalLikes}`
+          );
+        }
+
         set((state: any) => {
           const s = state.contentStats[contentId];
           if (!s) return state;
@@ -123,6 +214,7 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
+
         const latest = get().contentStats[contentId];
         if (latest) {
           void persistContentInteraction(contentId, {
@@ -133,29 +225,14 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
             views: latest.views,
           });
         }
+
         return {
           liked: latest?.userInteractions?.liked ?? liked,
           totalLikes: latest?.likes ?? result.totalLikes,
         };
       } catch (error) {
-        console.error("Error toggling like:", error);
-        set((state: any) => {
-          const s = state.contentStats[contentId];
-          if (!s) return state;
-          const liked = !s.userInteractions.liked;
-          const likes = Math.max(0, (s.likes || 0) + (liked ? 1 : -1));
-          return {
-            contentStats: {
-              ...state.contentStats,
-              [contentId]: {
-                ...s,
-                likes,
-                userInteractions: { ...s.userInteractions, liked },
-              },
-            },
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
-          };
-        });
+        rollbackOptimisticLike(set, contentId, key);
+
         const currentState = get().contentStats[contentId];
         if (currentState) {
           void persistContentInteraction(contentId, {
@@ -163,6 +240,38 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
             liked: currentState.userInteractions?.liked,
           });
         }
+
+        if (isRateLimitError(error)) {
+          const retryAfterMs =
+            error instanceof RateLimitError
+              ? error.retryAfterMs
+              : DEFAULT_COOLDOWN_MS;
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Please wait a moment before liking again.";
+
+          set((state: any) => ({
+            likeCooldownUntil: {
+              ...(state.likeCooldownUntil || {}),
+              [contentId]: Date.now() + retryAfterMs,
+            },
+          }));
+
+          if (Date.now() - lastRateLimitAlertAt > 2000) {
+            lastRateLimitAlertAt = Date.now();
+            console.warn(`⏳ Like rate-limited for ${contentId}: ${message}`);
+          }
+
+          return {
+            liked: currentState?.userInteractions?.liked ?? false,
+            totalLikes: currentState?.likes ?? 0,
+            rateLimited: true,
+            message,
+          };
+        }
+
+        console.error("Error toggling like:", error);
         return {
           liked: currentState?.userInteractions?.liked ?? false,
           totalLikes: currentState?.likes ?? 0,

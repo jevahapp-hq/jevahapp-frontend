@@ -3,24 +3,28 @@
  * Centralized haptic feedback functions
  */
 
+import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
 /**
  * Trigger haptic feedback
  * Platform-specific implementation
  */
-export const triggerHapticFeedback = (type: "light" | "medium" | "heavy" = "light"): void => {
-  if (Platform.OS === "ios") {
-    // iOS haptic feedback
-    // Note: Requires expo-haptics package
-    // import * as Haptics from 'expo-haptics';
-    // Haptics.impactAsync(Haptics.ImpactFeedbackStyle[type]);
-  } else if (Platform.OS === "android") {
-    // Android haptic feedback
-    // Note: Requires react-native-haptic-feedback package
-    // HapticFeedback.trigger(type);
+export const triggerHapticFeedback = (
+  type: "light" | "medium" | "heavy" = "light"
+): void => {
+  if (Platform.OS === "web") return;
+  try {
+    const style =
+      type === "heavy"
+        ? Haptics.ImpactFeedbackStyle.Heavy
+        : type === "medium"
+          ? Haptics.ImpactFeedbackStyle.Medium
+          : Haptics.ImpactFeedbackStyle.Light;
+    void Haptics.impactAsync(style);
+  } catch {
+    // Soft devices / simulators — ignore
   }
-  // Silent fallback for other platforms
 };
 
 /**
@@ -28,6 +32,13 @@ export const triggerHapticFeedback = (type: "light" | "medium" | "heavy" = "ligh
  */
 export const triggerButtonHaptic = (): void => {
   triggerHapticFeedback("light");
+};
+
+/**
+ * Decisive play/pause double-tap feel (TikTok-adjacent).
+ */
+export const triggerMediaPlayHaptic = (): void => {
+  triggerHapticFeedback("medium");
 };
 
 /**

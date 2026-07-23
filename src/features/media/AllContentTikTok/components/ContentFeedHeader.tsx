@@ -12,7 +12,13 @@ interface ContentFeedHeaderProps {
   contentType: ContentType | "ALL";
   filteredMediaListLength: number;
   firstFour: MediaItem[];
-  renderContentByType: (item: MediaItem, index: number, shouldRenderPlayer?: boolean) => React.ReactNode;
+  currentlyVisibleVideo: string | null;
+  getContentKey: (item: MediaItem) => string;
+  renderContentByType: (
+    item: MediaItem,
+    index: number,
+    shouldRenderPlayer?: boolean
+  ) => React.ReactNode;
 }
 
 export function ContentFeedHeader({
@@ -20,8 +26,15 @@ export function ContentFeedHeader({
   contentType,
   filteredMediaListLength,
   firstFour,
+  currentlyVisibleVideo,
+  getContentKey,
   renderContentByType,
 }: ContentFeedHeaderProps) {
+  const mostRecentKey = mostRecentItem ? getContentKey(mostRecentItem) : null;
+  // Keep Most Recent player mounted until scroll focuses another card.
+  const renderMostRecentPlayer =
+    !currentlyVisibleVideo || currentlyVisibleVideo === mostRecentKey;
+
   return (
     <>
       {mostRecentItem && (
@@ -37,7 +50,7 @@ export function ContentFeedHeader({
           >
             Most Recent
           </Text>
-          {renderContentByType(mostRecentItem, 0, true)}
+          {renderContentByType(mostRecentItem, 0, renderMostRecentPlayer)}
         </View>
       )}
       <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
@@ -53,11 +66,15 @@ export function ContentFeedHeader({
           {contentType === "ALL" ? "For You" : `${contentType} · For You`}{" "}
           ({filteredMediaListLength})
         </Text>
-        {firstFour.map((item, index) => (
-          <React.Fragment key={item._id ?? `first-${index}`}>
-            {renderContentByType(item, index, false)}
-          </React.Fragment>
-        ))}
+        {firstFour.map((item, index) => {
+          const key = getContentKey(item);
+          const shouldRenderPlayer = currentlyVisibleVideo === key;
+          return (
+            <React.Fragment key={item._id ?? `first-${index}`}>
+              {renderContentByType(item, index, shouldRenderPlayer)}
+            </React.Fragment>
+          );
+        })}
         {(contentType === "ALL" || contentType === "live") && (
           <>
             <View style={{ marginTop: 32 }} />
@@ -211,14 +228,21 @@ export function ContentFeedHeader({
                     maxWidth: 280,
                   }}
                 >
-                  Real-time sermons, worship sessions, and live events — streamed directly to your screen.
+                  Real-time sermons, worship sessions, and live events — streamed
+                  directly to your screen.
                 </Text>
 
                 {/* Feature bullets */}
                 {[
                   { icon: "videocam-outline", text: "HD live video streaming" },
-                  { icon: "chatbubble-ellipses-outline", text: "Live chat & prayer requests" },
-                  { icon: "notifications-outline", text: "Event reminders & alerts" },
+                  {
+                    icon: "chatbubble-ellipses-outline",
+                    text: "Live chat & prayer requests",
+                  },
+                  {
+                    icon: "notifications-outline",
+                    text: "Event reminders & alerts",
+                  },
                 ].map((item) => (
                   <View
                     key={item.text}
@@ -239,7 +263,11 @@ export function ContentFeedHeader({
                         marginRight: 12,
                       }}
                     >
-                      <Ionicons name={item.icon as any} size={16} color="#256E63" />
+                      <Ionicons
+                        name={item.icon as any}
+                        size={16}
+                        color="#256E63"
+                      />
                     </View>
                     <Text
                       style={{

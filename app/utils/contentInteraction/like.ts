@@ -1,22 +1,78 @@
 import type { ContentInteractionClient } from "./client";
+import { isLikelyNetworkFailure, isNetworkOnline } from "./connectivity";
+import { RateLimitError, parseRetryAfterMs } from "./errors";
 import { fallbackToggleLike } from "./fallbacks";
+import { createGestureIdempotencyKey } from "./idempotency";
+import { enqueueOrCancelLikeMutation } from "./likeQueue";
+import type {
+  ToggleLikeRequestOptions,
+  ToggleLikeResponse,
+} from "./likeTypes";
 import { devLog, devWarn } from "./logging";
+import { persistContentInteraction } from "../contentInteractionPersist";
+
+async function queueOfflineLike(
+  contentId: string,
+  contentType: string,
+  options: ToggleLikeRequestOptions,
+  idempotencyKey: string
+): Promise<ToggleLikeResponse> {
+  const baselineLiked = Boolean(options.baselineLiked);
+  const targetLiked =
+    typeof options.expectedLiked === "boolean"
+      ? options.expectedLiked
+      : !baselineLiked;
+  const targetTotalLikes = Math.max(
+    0,
+    options.expectedTotalLikes ?? 0
+  );
+
+  const { pending, cancelled } = await enqueueOrCancelLikeMutation({
+    contentId,
+    contentType,
+    idempotencyKey,
+    baselineLiked,
+    targetLiked,
+    targetTotalLikes,
+  });
+
+  void persistContentInteraction(contentId, {
+    liked: targetLiked,
+    likes: targetTotalLikes,
+  });
+
+  return {
+    liked: targetLiked,
+    totalLikes: targetTotalLikes,
+    offlineQueued: pending,
+    offlineCancelled: cancelled,
+  };
+}
 
 export async function toggleLike(
   ctx: ContentInteractionClient,
   contentId: string,
-  contentType: string
-): Promise<{ liked: boolean; totalLikes: number }> {
-  // Map content types to backend expected types (move outside try block)
+  contentType: string,
+  options: ToggleLikeRequestOptions = {}
+): Promise<ToggleLikeResponse> {
   const backendContentType = ctx.mapContentTypeToBackend(contentType);
+  const idempotencyKey =
+    options.idempotencyKey || createGestureIdempotencyKey();
 
   try {
+    // Local-only / invalid ids stay on the legacy local map — never hit the API.
     if (!ctx.isValidObjectId(contentId)) {
       return fallbackToggleLike(ctx, contentId);
     }
-    const headers = await ctx.getAuthHeaders();
 
+    const online = await isNetworkOnline();
+    if (!online) {
+      return queueOfflineLike(contentId, contentType, options, idempotencyKey);
+    }
+
+    const headers = await ctx.getAuthHeaders();
     const requestUrl = `${ctx.baseURL}/api/content/${backendContentType}/${contentId}/like`;
+
     devLog(
       "📡 TOGGLE LIKE: Making request",
       JSON.stringify(
@@ -24,7 +80,7 @@ export async function toggleLike(
           url: requestUrl,
           method: "POST",
           hasAuth: Boolean((headers as any)?.Authorization),
-          contentTypeHeader: (headers as any)?.["Content-Type"],
+          idempotencyKey,
           contentType: backendContentType,
           contentId,
         },
@@ -33,12 +89,12 @@ export async function toggleLike(
       )
     );
 
-    // Use the correct endpoint from backend docs
     const response = await fetch(requestUrl, {
       method: "POST",
       headers: {
         ...headers,
         "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
       },
     });
 
@@ -54,42 +110,61 @@ export async function toggleLike(
       try {
         errorData = JSON.parse(errorText);
       } catch {
-        // Not JSON, use text as message
+        // Not JSON
       }
 
-      // Handle specific error codes per guide
       if (response.status === 401) {
-        // Token expired or invalid - should trigger token refresh
         throw new Error("Authentication required. Please log in again.");
       }
 
       if (response.status === 400) {
-        // Invalid content type or content ID
         if (errorData.message?.includes("Invalid content type")) {
           console.error(
             `❌ TOGGLE LIKE: Backend rejected contentType "${backendContentType}" ` +
               `(original: "${contentType}").`
           );
         }
+        if (
+          /idempotency/i.test(errorData.code || "") ||
+          /idempotency/i.test(errorData.message || "")
+        ) {
+          throw new Error(
+            errorData.message || "Invalid idempotency key. Please try again."
+          );
+        }
         throw new Error(errorData.message || `Invalid request: ${errorText}`);
       }
 
       if (response.status === 404) {
-        // Content not found
         devWarn(
           `⚠️ TOGGLE LIKE: Content not found (404) for ${backendContentType}/${contentId}`
         );
         throw new Error("Content not found");
       }
 
-      if (response.status === 429) {
-        // Rate limited - don't rollback, user's action was valid
+      if (response.status === 409) {
         throw new Error(
-          "Too many requests. Please wait a moment before liking again."
+          errorData.message ||
+            "Like conflict. Please try again with a new gesture."
         );
       }
 
-      // Other errors
+      if (response.status === 429) {
+        throw new RateLimitError(
+          errorData.message ||
+            "Too many requests. Please wait a moment before liking again.",
+          parseRetryAfterMs(response.headers.get("Retry-After"), 3000)
+        );
+      }
+
+      if (response.status === 503) {
+        // Idempotency store unavailable — surface; do not invent a local like.
+        throw new Error(
+          errorData.message ||
+            "Like temporarily unavailable. Please try again shortly."
+        );
+      }
+
       console.error(
         "❌ TOGGLE LIKE: Request failed",
         response.status,
@@ -103,8 +178,6 @@ export async function toggleLike(
     const result = await response.json();
     devLog(`✅ Like toggled successfully for ${contentId}:`, result);
 
-    // FIXED: Parse response strictly per backend format
-    // `data.liked` MUST be the post-toggle state for the authenticated user.
     const liked = result.data?.liked ?? false;
     const totalLikes = result.data?.likeCount ?? 0;
 
@@ -114,50 +187,57 @@ export async function toggleLike(
       result.data.liked === false &&
       Number(result.data?.likeCount) > 0
     ) {
-      devWarn(
-        `⚠️ LIKE RESPONSE LOOKS INCONSISTENT for ${contentId}: liked=false but likeCount=${result.data.likeCount}. Frontend may keep optimistic liked.`
+      // Valid IG semantics: I unliked / never liked, but others still have likes.
+      devLog(
+        `ℹ️ Like response for ${contentId}: liked=false, likeCount=${result.data.likeCount} (global count; not a contradiction)`
       );
     }
 
-    // Track analytics for backend consolidation
-    const analyticsData = {
-      action: "like_toggle",
-      contentId,
-      contentType: backendContentType,
+    void persistContentInteraction(contentId, {
       liked,
-      totalLikes,
-      endpoint: `/api/content/${backendContentType}/${contentId}/like`,
-      responseTime: Date.now(),
-      success: true,
-      rawResponse: result, // Include full response for debugging
-    };
-    devLog("📊 USER_INTERACTION:", JSON.stringify(analyticsData, null, 2));
+      likes: totalLikes,
+    });
 
-    return {
-      liked,
-      totalLikes,
-    };
+    return { liked, totalLikes };
   } catch (error) {
-    console.error("Error toggling like:", error);
     const errorMessage =
       error instanceof Error ? error.message : String(error);
 
-    // Track error analytics for backend consolidation
-    const errorAnalyticsData = {
-      action: "like_toggle_error",
-      contentId,
-      contentType: backendContentType,
-      error: errorMessage || "Unknown error",
-      endpoint: `/api/content/${backendContentType}/${contentId}/like`,
-      responseTime: Date.now(),
-      success: false,
-    };
     devLog(
       "📊 USER_INTERACTION_ERROR:",
-      JSON.stringify(errorAnalyticsData, null, 2)
+      JSON.stringify(
+        {
+          action: "like_toggle_error",
+          contentId,
+          contentType: backendContentType,
+          error: errorMessage || "Unknown error",
+          success: false,
+        },
+        null,
+        2
+      )
     );
 
-    // Fallback to local storage if API fails
-    return fallbackToggleLike(ctx, contentId);
+    if (
+      error instanceof RateLimitError ||
+      (error instanceof Error &&
+        /authentication required|too many requests|idempotency|conflict|not found|unavailable/i.test(
+          error.message
+        ))
+    ) {
+      throw error;
+    }
+
+    // Transport / offline failures → durable queue (same Idempotency-Key).
+    if (
+      isLikelyNetworkFailure(error) ||
+      !(await isNetworkOnline(true))
+    ) {
+      return queueOfflineLike(contentId, contentType, options, idempotencyKey);
+    }
+
+    console.error("Error toggling like:", error);
+    // Last resort: still queue rather than invent a second local toggle.
+    return queueOfflineLike(contentId, contentType, options, idempotencyKey);
   }
 }

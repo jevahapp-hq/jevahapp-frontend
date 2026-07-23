@@ -14,6 +14,7 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
         contentStats: {},
         loadingStats: {},
         loadingInteraction: {},
+        likeCooldownUntil: {},
         comments: {},
         loadingComments: {},
         savedContent: [],

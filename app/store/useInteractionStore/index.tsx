@@ -21,6 +21,7 @@ export const useInteractionStore = create<InteractionState>()(
       contentStats: {},
       loadingStats: {},
       loadingInteraction: {},
+      likeCooldownUntil: {},
       comments: {},
       loadingComments: {},
       savedContent: [],

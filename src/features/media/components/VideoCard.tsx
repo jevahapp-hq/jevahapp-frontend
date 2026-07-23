@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Image, TouchableOpacity, View } from "react-native";
 
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
@@ -13,6 +13,20 @@ import { VideoCardFooter } from "./VideoCard/VideoCardFooter";
 import { VideoCardModals } from "./VideoCard/VideoCardModals";
 import { VideoCardPlayerArea } from "./VideoCard/VideoCardPlayerArea";
 import { useVideoCardInteractionStats } from "./VideoCard/hooks/useVideoCardInteractionStats";
+
+function resolvePosterUri(video: VideoCardProps["video"]): string | null {
+  const raw =
+    (video as any).thumbnailUrl ??
+    (video as any).coverImageUrl ??
+    (video as any).imageUrl ??
+    null;
+  if (!raw) return null;
+  if (typeof raw === "string") return isValidUri(raw) ? raw : null;
+  if (typeof raw === "object" && typeof raw.uri === "string") {
+    return isValidUri(raw.uri) ? raw.uri : null;
+  }
+  return null;
+}
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -124,6 +138,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   });
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const posterUri = useMemo(() => resolvePosterUri(video), [video]);
   useEffect(() => {
     try {
       const {
@@ -144,28 +159,44 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           : undefined
       }
     >
-      <VideoCardPlayerArea
-        video={video}
-        contentKey={key}
-        index={index}
-        isActive={true}
-        videoUrl={videoUrl}
-        videoVolume={videoVolume}
-        isMuted={isMuted}
-        onVideoTap={onVideoTap}
-        onTogglePlay={onTogglePlay}
-        onToggleMute={onToggleMute}
-        getContentKey={getContentKey}
-        onDelete={onDelete}
-        onModalToggle={onModalToggle}
-        modalVisible={modalVisible}
-        checkIfDownloaded={checkIfDownloaded}
-        getTimeAgo={getTimeAgo}
-        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-        getUserAvatarFromContent={getUserAvatarFromContent}
-        onLayout={onLayout}
-        onForceActive={() => { }}
-      />
+      {shouldRenderPlayer ? (
+        <VideoCardPlayerArea
+          video={video}
+          contentKey={key}
+          index={index}
+          isActive={true}
+          videoUrl={videoUrl}
+          videoVolume={videoVolume}
+          isMuted={isMuted}
+          onVideoTap={onVideoTap}
+          onTogglePlay={onTogglePlay}
+          onToggleMute={onToggleMute}
+          getContentKey={getContentKey}
+          onDelete={onDelete}
+          onModalToggle={onModalToggle}
+          modalVisible={modalVisible}
+          checkIfDownloaded={checkIfDownloaded}
+          getTimeAgo={getTimeAgo}
+          getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+          getUserAvatarFromContent={getUserAvatarFromContent}
+          onLayout={onLayout}
+          onForceActive={() => { }}
+        />
+      ) : (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onVideoTap(key, video, index)}
+          className="w-full h-[400px] overflow-hidden relative bg-black"
+        >
+          {posterUri ? (
+            <Image
+              source={{ uri: posterUri }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="cover"
+            />
+          ) : null}
+        </TouchableOpacity>
+      )}
 
       <VideoCardFooter
         video={video}

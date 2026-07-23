@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -13,6 +13,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { ExtractionResult, pdfExtractor } from "../services/PdfTextExtractor";
+import {
+  ensurePdfCacheDir,
+  evictOldPdfCache,
+  getCachedPdfUri,
+  getPdfCachePath,
+} from "../utils/pdfCache";
+import { PERF, perfMark, perfMeasure } from "../../src/shared/utils/perfMarks";
 
 // Decode URL-encoded text (like the %20 for spaces, %E2%80%99 for special chars)
 const decodeText = (text: string) => {
@@ -59,6 +66,7 @@ export default function PdfViewer() {
   const ebookId = Array.isArray(rawEbookId) ? rawEbookId[0] : rawEbookId;
   const title = Array.isArray(rawTitle) ? rawTitle[0] : rawTitle;
   const desc = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
+  const ebookFirstPageMeasuredRef = useRef(false);
 
   // Log received params for debugging
   useEffect(() => {
@@ -73,6 +81,18 @@ export default function PdfViewer() {
       platform: Platform.OS,
     });
   }, [rawUrl, decodedUrl, url, ebookId, title]);
+
+  useEffect(() => {
+    if (!url) return;
+    ebookFirstPageMeasuredRef.current = false;
+    perfMark("ebook.first_page.start");
+  }, [url]);
+
+  const markEbookFirstPage = useCallback(() => {
+    if (ebookFirstPageMeasuredRef.current) return;
+    ebookFirstPageMeasuredRef.current = true;
+    perfMeasure(PERF.EBOOK_FIRST_PAGE, "ebook.first_page.start");
+  }, []);
 
   // On Android, set fallbackUri immediately when URL is available
   useEffect(() => {
@@ -176,10 +196,7 @@ export default function PdfViewer() {
     console.log(`📄 Page viewing changed to: ${currentViewingPage}/${totalPages}`);
   }, [currentViewingPage, totalPages]);
 
-  const cachePath = useMemo(() => {
-    const safe = encodeURIComponent(String(url || ""));
-    return `${FileSystem.cacheDirectory}pdf-cache/${safe}.pdf`;
-  }, [url]);
+  const cachePath = useMemo(() => getPdfCachePath(String(url || "")), [url]);
 
   useEffect(() => {
     // On Android, set up Google Docs viewer IMMEDIATELY (synchronous, no async operations)
@@ -194,6 +211,14 @@ export default function PdfViewer() {
         setFallbackUri(docsUri);
         setLoading(false);
         setErrorText(null);
+        // Still warm disk cache in background for offline / iOS-parity reopen.
+        void getCachedPdfUri(trimmedUrl).then((hit) => {
+          if (!hit) {
+            void FileSystem.downloadAsync(trimmedUrl, getPdfCachePath(trimmedUrl))
+              .then(() => evictOldPdfCache())
+              .catch(() => {});
+          }
+        });
         return; // Exit early, don't run download logic
       }
     }
@@ -201,10 +226,7 @@ export default function PdfViewer() {
     let cancelled = false;
     const ensureDir = async () => {
       try {
-        const dir = `${FileSystem.cacheDirectory}pdf-cache`;
-        const info = await FileSystem.getInfoAsync(dir);
-        if (!info.exists)
-          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+        await ensurePdfCacheDir();
       } catch { }
     };
 
@@ -301,6 +323,7 @@ export default function PdfViewer() {
           console.log("✅ PDF downloaded successfully:", res.uri);
           setLocalUri(res.uri);
           setLoading(false);
+          void evictOldPdfCache();
         } else if (!cancelled) {
           console.warn("⚠️ Download completed but no URI returned, using fallback");
           setLoading(false);
@@ -454,6 +477,7 @@ export default function PdfViewer() {
               console.log("✅ Android: Google Docs viewer loaded successfully");
               setLoading(false);
               setErrorText(null);
+              markEbookFirstPage();
             }}
             onError={(error) => {
               console.error("❌ Android WebView error:", error);
@@ -848,6 +872,7 @@ export default function PdfViewer() {
               onLoadEnd={() => {
                 console.log("✅ PDF WebView loaded successfully");
                 setLoading(false);
+                markEbookFirstPage();
               }}
               onError={(error) => {
                 console.error("❌ PDF WebView error on iOS:", error);
@@ -1084,6 +1109,7 @@ export default function PdfViewer() {
                 console.log("✅ Google Docs viewer loaded successfully");
                 setLoading(false);
                 setErrorText(null);
+                markEbookFirstPage();
               }}
               onError={(error) => {
                 console.error("❌ Fallback WebView error:", error);

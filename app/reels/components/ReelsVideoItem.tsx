@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import {
+  Image,
   Text,
   TouchableWithoutFeedback,
   View,
@@ -87,6 +88,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     videoRefs,
     screenHeight,
     isIOS,
+    currentIndex_state,
     playingVideos,
     mutedVideos,
     videoDuration,
@@ -152,6 +154,19 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
 
   const isPlaying = playingVideos[videoKey] ?? false;
   const isMuted = mutedVideos[videoKey] ?? false;
+  // Mount active + ±1 so swipe-in doesn't wait on cold native player alloc.
+  const shouldMountPlayer = Math.abs(index - currentIndex_state) <= 1;
+
+  const posterUri = useMemo(() => {
+    const raw =
+      enriched?.thumbnailUrl ||
+      enriched?.coverImageUrl ||
+      enriched?.imageUrl ||
+      null;
+    if (typeof raw === "string") return raw;
+    if (raw && typeof raw === "object" && typeof raw.uri === "string") return raw.uri;
+    return null;
+  }, [enriched]);
 
   // Track if we should render skeletons
   const showSkeletons = isActive && (!isPlaying || !localDuration);
@@ -176,32 +191,44 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     <View style={{ height: screenHeight, width: "100%", backgroundColor: "#000000" }}>
       <TouchableWithoutFeedback onPress={() => isActive && onToggleVideoPlay()}>
         <View style={{ width: "100%", height: "100%" }}>
-          <ReelsVideoPlayer
-            videoKey={videoKey}
-            contentId={String(enriched._id || enriched.id || "")}
-            videoUrl={videoUrl}
-            isActive={isActive}
-            isMuted={isMuted}
-            videoVolume={1.0}
-            isPlaying={isPlaying}
-            videoRefs={videoRefs}
-            onToggleVideoPlay={onToggleVideoPlay}
-            setVideoDuration={setVideoDuration}
-            setVideoPosition={setVideoPosition}
-            setLocalPosition={setLocalPosition}
-            setLocalDuration={setLocalDuration}
-            setIsDragging={setIsDragging}
-            isDragging={isDragging}
-            localDuration={localDuration}
-            videoPosition={videoPosition}
-            globalVideoStore={globalVideoStore}
-            mediaStore={mediaStore}
-            userHasManuallyPaused={userHasManuallyPaused}
-            showPauseOverlay={showPauseOverlay}
-            getResponsiveSize={getResponsiveSize}
-            triggerHapticFeedback={triggerHapticFeedback}
-            isIOS={isIOS}
-          />
+          {shouldMountPlayer ? (
+            <ReelsVideoPlayer
+              videoKey={videoKey}
+              contentId={String(enriched._id || enriched.id || "")}
+              videoUrl={videoUrl}
+              isActive={isActive}
+              isMuted={isMuted}
+              videoVolume={1.0}
+              isPlaying={isPlaying}
+              videoRefs={videoRefs}
+              onToggleVideoPlay={onToggleVideoPlay}
+              setVideoDuration={setVideoDuration}
+              setVideoPosition={setVideoPosition}
+              setLocalPosition={setLocalPosition}
+              setLocalDuration={setLocalDuration}
+              setIsDragging={setIsDragging}
+              isDragging={isDragging}
+              localDuration={localDuration}
+              videoPosition={videoPosition}
+              globalVideoStore={globalVideoStore}
+              mediaStore={mediaStore}
+              userHasManuallyPaused={userHasManuallyPaused}
+              showPauseOverlay={showPauseOverlay}
+              getResponsiveSize={getResponsiveSize}
+              triggerHapticFeedback={triggerHapticFeedback}
+              isIOS={isIOS}
+            />
+          ) : (
+            <View style={{ width: "100%", height: "100%", backgroundColor: "#000" }}>
+              {posterUri ? (
+                <Image
+                  source={{ uri: posterUri }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
+          )}
 
           {showSkeletons && (
             <View className="absolute inset-0" style={{ justifyContent: "flex-end", padding: getResponsiveSpacing(12, 16, 20), zIndex: 5 }} pointerEvents="none">

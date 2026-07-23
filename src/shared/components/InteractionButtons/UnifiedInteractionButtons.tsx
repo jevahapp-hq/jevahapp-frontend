@@ -6,10 +6,13 @@
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import { Share, Text, TouchableOpacity, View, ViewStyle } from "react-native";
+import { Alert, Share, Text, TouchableOpacity, View, ViewStyle } from "react-native";
 import { UI_CONFIG } from "../../constants";
 import { triggerButtonHaptic } from "../../utils/haptics";
+import { formatCount } from "../../utils/formatCount";
 import { getResponsiveSpacing } from "../../utils/responsive";
+
+let lastUnifiedLikeAlertAt = 0;
 
 export interface UnifiedInteractionButtonsProps {
   // Content info
@@ -166,7 +169,20 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
       setIsLoading((prev) => ({ ...prev, like: true }));
       try {
         // Store handles optimistic update automatically
-        await hookBasedState.toggleLike(contentId, contentType);
+        const result = await hookBasedState.toggleLike(contentId, contentType);
+        if (result?.rateLimited) {
+          if (Date.now() - lastUnifiedLikeAlertAt > 2500) {
+            lastUnifiedLikeAlertAt = Date.now();
+            Alert.alert(
+              "Slow down",
+              result.message || "Please wait a moment before liking again."
+            );
+          }
+          return;
+        }
+        if (result?.authRequired) {
+          return;
+        }
       } catch (error) {
         console.error("Error toggling like:", error);
         // Store automatically handles rollback on error
@@ -296,7 +312,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
       {showCounts && (
         <TouchableOpacity style={buttonStyle} disabled>
           <MaterialIcons name="visibility" size={iconSize} color={iconColor} />
-          {showCounts && finalViewCount > 0 && <Text style={textStyle}>{finalViewCount}</Text>}
+          {showCounts && finalViewCount > 0 && <Text style={textStyle}>{formatCount(finalViewCount)}</Text>}
         </TouchableOpacity>
       )}
 
@@ -316,13 +332,13 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
             textShadowRadius: finalLikeState ? 10 : 0,
           }}
         />
-        {showCounts && finalLikeCount > 0 && <Text style={textStyle}>{finalLikeCount}</Text>}
+        {showCounts && finalLikeCount > 0 && <Text style={textStyle}>{formatCount(finalLikeCount)}</Text>}
       </TouchableOpacity>
 
       {/* Comment */}
       <TouchableOpacity style={buttonStyle} onPress={handleComment}>
         <Ionicons name="chatbubble-outline" size={iconSize} color={iconColor} />
-        {showCounts && finalCommentCount > 0 && <Text style={textStyle}>{finalCommentCount}</Text>}
+        {showCounts && finalCommentCount > 0 && <Text style={textStyle}>{formatCount(finalCommentCount)}</Text>}
       </TouchableOpacity>
 
       {/* Save */}
@@ -336,7 +352,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
           size={iconSize}
           color={saveColor}
         />
-        {showCounts && finalSaveCount > 0 && <Text style={textStyle}>{finalSaveCount}</Text>}
+        {showCounts && finalSaveCount > 0 && <Text style={textStyle}>{formatCount(finalSaveCount)}</Text>}
       </TouchableOpacity>
 
       {/* Download (if handler provided) */}
@@ -361,7 +377,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
       >
         <Ionicons name="share-outline" size={iconSize} color={iconColor} />
         {showCounts && shareCount > 0 && (
-          <Text style={textStyle}>{shareCount}</Text>
+          <Text style={textStyle}>{formatCount(shareCount)}</Text>
         )}
       </TouchableOpacity>
     </View>

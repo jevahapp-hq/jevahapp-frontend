@@ -1,4 +1,5 @@
 import type { ContentStats } from "../../../utils/contentInteractionAPI";
+import { ensureAuthenticatedForInteraction } from "../../../utils/auth/requireAuthForInteraction";
 import type { StoreSet } from "../types";
 
 const VIEW_RECORD_MIN_INTERVAL_MS = 2500;
@@ -6,10 +7,24 @@ const viewRecordThrottleRef: { lastTime?: number; backoffUntil?: number } = {};
 
 export function createShareViewActions(set: StoreSet, api: any) {
   return {
-    recordShare: async (contentId: string, contentType: string, shareMethod: string = "generic") => {
+    recordShare: async (
+      contentId: string,
+      contentType: string,
+      shareMethod: string = "generic"
+    ) => {
+      // Allow OS share for guests; only persist analytics when authenticated.
+      const auth = await ensureAuthenticatedForInteraction({
+        action: "share",
+        silent: true,
+      });
+      if (!auth.ok) return;
+
       try {
-        const result = await api.recordShare(contentId, contentType, shareMethod);
-        // Soft-fail from API (404 etc.) — don't mark shared or bump counts
+        const result = await api.recordShare(
+          contentId,
+          contentType,
+          shareMethod
+        );
         if (result?.ok === false) return;
 
         set((state: any) => {
@@ -34,7 +49,9 @@ export function createShareViewActions(set: StoreSet, api: any) {
               viewed: currentStats?.userInteractions?.viewed || false,
             },
           };
-          return { contentStats: { ...state.contentStats, [contentId]: updatedStats } };
+          return {
+            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+          };
         });
       } catch {
         // Quiet — share analytics must never interrupt the user
@@ -52,8 +69,18 @@ export function createShareViewActions(set: StoreSet, api: any) {
       }
     ) => {
       const now = Date.now();
-      if (now - (viewRecordThrottleRef.lastTime || 0) < VIEW_RECORD_MIN_INTERVAL_MS) return;
-      if (viewRecordThrottleRef.backoffUntil && now < viewRecordThrottleRef.backoffUntil) return;
+      if (
+        now - (viewRecordThrottleRef.lastTime || 0) <
+        VIEW_RECORD_MIN_INTERVAL_MS
+      ) {
+        return;
+      }
+      if (
+        viewRecordThrottleRef.backoffUntil &&
+        now < viewRecordThrottleRef.backoffUntil
+      ) {
+        return;
+      }
       viewRecordThrottleRef.lastTime = now;
 
       try {
@@ -78,12 +105,22 @@ export function createShareViewActions(set: StoreSet, api: any) {
               viewed: result.hasViewed ?? true,
             },
           };
-          return { contentStats: { ...state.contentStats, [contentId]: updatedStats } };
+          return {
+            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+          };
         });
       } catch (error) {
-        const is429 = error instanceof Error && (String(error.message).includes("429") || (error as any).status === 429);
+        const is429 =
+          error instanceof Error &&
+          (String(error.message).includes("429") ||
+            (error as any).status === 429);
         if (is429) viewRecordThrottleRef.backoffUntil = Date.now() + 60000;
-        if (__DEV__) console.error("Error recording view:", error instanceof Error ? error.message : error);
+        if (__DEV__) {
+          console.error(
+            "Error recording view:",
+            error instanceof Error ? error.message : error
+          );
+        }
       }
     },
   };

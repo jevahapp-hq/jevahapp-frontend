@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import { mediaApi } from "../../core/api/MediaApi";
+import { formatCount } from "../utils/formatCount";
 
 interface SaveButtonProps {
   contentId: string;
@@ -172,7 +173,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
             fontWeight: "normal",
           }}
         >
-          {saveCount}
+          {formatCount(saveCount)}
         </Text>
       )}
     </TouchableOpacity>

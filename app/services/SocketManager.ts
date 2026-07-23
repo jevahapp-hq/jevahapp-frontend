@@ -225,16 +225,10 @@ class SocketManager {
     // Both carry an authoritative likeCount for the content item.
     this.socket.on("content-like-update", (data: any) => {
       try {
-        const { useInteractionStore } = require("../store/useInteractionStore");
-        const store = useInteractionStore.getState();
-        const contentId = data?.contentId;
-        const likeCount = data?.likeCount;
-
-        if (contentId && typeof likeCount === "number") {
-          store.mutateStats(String(contentId), () => ({
-            likes: Number(likeCount) || 0,
-          }));
-        }
+        const {
+          applyLiveEngagementCounts,
+        } = require("../utils/contentInteraction/socketCounts");
+        applyLiveEngagementCounts(data);
       } catch (e) {
         console.error("Error applying content-like-update socket event:", e);
       }
@@ -242,16 +236,10 @@ class SocketManager {
 
     this.socket.on("like-updated", (data: any) => {
       try {
-        const { useInteractionStore } = require("../store/useInteractionStore");
-        const store = useInteractionStore.getState();
-        const contentId = data?.contentId;
-        const likeCount = data?.likeCount;
-
-        if (contentId && typeof likeCount === "number") {
-          store.mutateStats(String(contentId), () => ({
-            likes: Number(likeCount) || 0,
-          }));
-        }
+        const {
+          applyLiveEngagementCounts,
+        } = require("../utils/contentInteraction/socketCounts");
+        applyLiveEngagementCounts(data);
       } catch (e) {
         console.error("Error applying like-updated socket event:", e);
       }
@@ -405,30 +393,30 @@ class SocketManager {
 
   // Event handlers (to be implemented by components)
   public handleContentReaction(data: any): void {
-    // Update interaction store with real-time data
+    // Counts only — never refresh full stats (that can clobber local liked).
     try {
-      const { useInteractionStore } = require("../store/useInteractionStore");
-      const store = useInteractionStore.getState();
-
-      if (data.contentId && data.actionType === "like") {
-        // Update like count in real-time
-        store.refreshContentStats(data.contentId);
-      }
+      const {
+        applyLiveEngagementCounts,
+      } = require("../utils/contentInteraction/socketCounts");
+      applyLiveEngagementCounts(data);
     } catch (error) {
       console.error("Error updating store from socket:", error);
     }
   }
 
   public handleContentComment(data: any): void {
-    // Update interaction store with real-time comment data
     try {
+      const {
+        applyLiveEngagementCounts,
+      } = require("../utils/contentInteraction/socketCounts");
+      applyLiveEngagementCounts({
+        contentId: data?.contentId,
+        commentCount: data?.totalComments ?? data?.commentCount,
+        likeCount: data?.likeCount ?? data?.totalLikes,
+      });
       const { useInteractionStore } = require("../store/useInteractionStore");
-      const store = useInteractionStore.getState();
-
-      if (data.contentId) {
-        // Refresh comments and stats for this content
-        store.loadComments(data.contentId);
-        store.refreshContentStats(data.contentId);
+      if (data?.contentId) {
+        useInteractionStore.getState().loadComments(data.contentId);
       }
     } catch (error) {
       console.error("Error updating store from socket comment:", error);
@@ -436,15 +424,11 @@ class SocketManager {
   }
 
   public handleCountUpdate(data: any): void {
-    // Update interaction store with real-time count updates
     try {
-      const { useInteractionStore } = require("../store/useInteractionStore");
-      const store = useInteractionStore.getState();
-
-      if (data.contentId) {
-        // Refresh all stats for this content
-        store.refreshContentStats(data.contentId);
-      }
+      const {
+        applyLiveEngagementCounts,
+      } = require("../utils/contentInteraction/socketCounts");
+      applyLiveEngagementCounts(data);
     } catch (error) {
       console.error("Error updating store from socket count update:", error);
     }

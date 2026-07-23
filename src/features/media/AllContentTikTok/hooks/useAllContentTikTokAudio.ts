@@ -5,6 +5,8 @@
  */
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { takePreloadedSound } from "../../../../shared/utils/audioPrefetch";
+import { PERF, measureSpan } from "../../../../shared/utils/perfMarks";
 
 export interface UseAllContentTikTokAudioParams {
   playMedia: (key: string, type: "video" | "audio") => void;
@@ -121,14 +123,28 @@ export function useAllContentTikTokAudio({
         }
 
         const resumePos = pausedAudioMap[id] ?? 0;
-        const { sound } = await Audio.Sound.createAsync(
-          { uri },
-          {
-            shouldPlay: true,
-            isMuted: audioMuteMap[id] ?? false,
-            positionMillis: resumePos,
-          }
-        );
+        const preloaded = takePreloadedSound(uri);
+        const { sound } = preloaded
+          ? { sound: preloaded }
+          : await measureSpan(PERF.MUSIC_START, () =>
+              Audio.Sound.createAsync(
+                { uri },
+                {
+                  shouldPlay: true,
+                  isMuted: audioMuteMap[id] ?? false,
+                  positionMillis: resumePos,
+                }
+              )
+            );
+        if (preloaded) {
+          await measureSpan(PERF.MUSIC_START, async () => {
+            await sound.setStatusAsync({
+              shouldPlay: true,
+              isMuted: audioMuteMap[id] ?? false,
+              positionMillis: resumePos,
+            });
+          });
+        }
 
         setSoundMap((prev) => ({ ...prev, [id]: sound }));
         setPlayingAudioId(id);

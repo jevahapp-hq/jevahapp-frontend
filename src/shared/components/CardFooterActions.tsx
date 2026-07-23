@@ -7,6 +7,7 @@ import LikeBurst from "./LikeBurst";
 import LikeButton from "./LikeButton";
 import SaveButton from "./SaveButton";
 import { CardFooterSkeleton } from "./Skeleton/CardFooterSkeleton";
+import { formatCount } from "../utils/formatCount";
 
 type Props = {
   viewCount: number;
@@ -70,7 +71,7 @@ function CardFooterActions({
       <View className="flex-row items-center mr-6" pointerEvents="box-none">
         <MaterialIcons name="visibility" size={24} color={mediumShade} />
         {viewCount > 0 && (
-          <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{viewCount}</Text>
+          <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{formatCount(viewCount)}</Text>
         )}
       </View>
 
@@ -151,7 +152,7 @@ function CardFooterActions({
             color={saved ? savedActiveColor : mediumShade}
           />
           {saveCount > 0 && (
-            <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{saveCount}</Text>
+            <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{formatCount(saveCount)}</Text>
           )}
         </TouchableOpacity>
       )}
@@ -206,7 +207,7 @@ function AnimatedLikeButton({
         style={{ marginLeft: -6, marginTop: -8 }}
       />
       {likeCount > 0 && (
-        <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{likeCount}</Text>
+        <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{formatCount(likeCount)}</Text>
       )}
     </AnimatedButton>
   );

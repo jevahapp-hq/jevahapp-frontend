@@ -19,6 +19,7 @@ import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingAudioPlayer from "../src/shared/components/FloatingAudioPlayer";
+import LikeQueueBootstrap from "./components/LikeQueueBootstrap";
 import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -27,8 +28,24 @@ import { useAuth } from "./hooks/useAuth";
 import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
+import { PERF, getAllPerfSummaries, perfMark, perfMeasure } from "../src/shared/utils/perfMarks";
 import { warmupBackend } from "./utils/apiWarmup";
 import { PerformanceOptimizer } from "./utils/performance";
+
+let splashPerfRecorded = false;
+function recordSplashHide(): void {
+  if (splashPerfRecorded) return;
+  splashPerfRecorded = true;
+  perfMeasure(PERF.SPLASH_HIDE, PERF.APP_START);
+}
+
+if (__DEV__) {
+  (globalThis as any).__jevahDumpPerf = () => {
+    const summaries = getAllPerfSummaries();
+    console.log("📊 Jevah perf summaries", summaries);
+    return summaries;
+  };
+}
 
 // ✅ Initialize Sentry
 Sentry.init({
@@ -84,6 +101,7 @@ const tokenCache = {
 
 // Keep native splash visible until we're ready (fonts + critical init)
 SplashScreen.preventAutoHideAsync().catch(() => { });
+perfMark(PERF.APP_START);
 
 // Create React Query client with cache settings matching backend (15 minutes)
 const queryClient = new QueryClient({
@@ -178,7 +196,11 @@ export default function RootLayout() {
   // Never leave users trapped on the native splash if font/native startup stalls.
   useEffect(() => {
     const fallback = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
+      SplashScreen.hideAsync()
+        .then(() => {
+          recordSplashHide();
+        })
+        .catch(() => {});
     }, 1800);
     return () => clearTimeout(fallback);
   }, []);
@@ -225,7 +247,11 @@ export default function RootLayout() {
   // Hide as soon as fonts resolve; background hydration is not a launch gate.
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => { });
+      SplashScreen.hideAsync()
+        .then(() => {
+          recordSplashHide();
+        })
+        .catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 
@@ -306,6 +332,7 @@ export default function RootLayout() {
               <PersistentNotificationProvider>
                 <NotificationProvider>
                   <CommentModalProvider>
+                    <LikeQueueBootstrap />
                     <Slot />
                     <CommentModalV2 />
                     <FloatingAudioPlayer />

@@ -1,5 +1,6 @@
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { takePreloadedSound } from "../../src/shared/utils/audioPrefetch";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 
 export interface AudioPlayerState {
@@ -162,10 +163,27 @@ export const useAdvancedAudioPlayer = (
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
       await ensureAudioMode();
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: audioUrl },
-        { shouldPlay: false, isMuted: false, volume, isLooping: loop }
-      );
+      const preloaded = takePreloadedSound(audioUrl);
+      const sound =
+        preloaded ||
+        (
+          await Audio.Sound.createAsync(
+            { uri: audioUrl },
+            { shouldPlay: false, isMuted: false, volume, isLooping: loop }
+          )
+        ).sound;
+      if (preloaded) {
+        try {
+          await sound.setStatusAsync({
+            shouldPlay: false,
+            isMuted: false,
+            volume,
+            isLooping: loop,
+          });
+        } catch {
+          // keep going with preloaded defaults
+        }
+      }
       soundRef.current = sound;
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded) {

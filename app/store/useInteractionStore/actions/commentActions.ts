@@ -1,4 +1,5 @@
 import type { ContentStats } from "../../../utils/contentInteractionAPI";
+import { ensureAuthenticatedForInteraction } from "../../../utils/auth/requireAuthForInteraction";
 import type { StoreSet } from "../types";
 
 export function createCommentActions(set: StoreSet, api: any) {
@@ -9,6 +10,17 @@ export function createCommentActions(set: StoreSet, api: any) {
       contentType: string = "media",
       parentCommentId?: string
     ) => {
+      const auth = await ensureAuthenticatedForInteraction({
+        action: "comment",
+      });
+      if (!auth.ok) {
+        const err = new Error("Authentication required") as Error & {
+          authRequired?: boolean;
+        };
+        err.authRequired = true;
+        throw err;
+      }
+
       try {
         const newComment = await api.addComment(
           contentId,
@@ -20,7 +32,6 @@ export function createCommentActions(set: StoreSet, api: any) {
           const currentComments = state.comments[contentId] || [];
           const updatedComments = [newComment, ...currentComments];
           const currentStats = state.contentStats[contentId];
-          // NEVER use comments.length as total — list is paginated
           const nextTotal =
             typeof newComment?.totalComments === "number"
               ? newComment.totalComments
@@ -73,10 +84,7 @@ export function createCommentActions(set: StoreSet, api: any) {
           const total =
             typeof result.totalComments === "number"
               ? result.totalComments
-              : Math.max(
-                  currentStats?.comments ?? 0,
-                  allComments.length
-                );
+              : Math.max(currentStats?.comments ?? 0, allComments.length);
           const updatedStats: ContentStats = {
             ...currentStats,
             contentId,
@@ -107,6 +115,9 @@ export function createCommentActions(set: StoreSet, api: any) {
     },
 
     toggleCommentLike: async (commentId: string, contentId: string) => {
+      const auth = await ensureAuthenticatedForInteraction({ action: "like" });
+      if (!auth.ok) return;
+
       try {
         const result = await api.toggleCommentLike(commentId);
         set((state: any) => {

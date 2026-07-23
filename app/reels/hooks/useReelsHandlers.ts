@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { Share } from "react-native";
 import allMediaAPI from "../../utils/allMediaAPI";
+import { ensureAuthenticatedForInteraction } from "../../utils/auth/requireAuthForInteraction";
 import { useInteractionStore } from "../../store/useInteractionStore";
 import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
 
@@ -142,6 +143,38 @@ export function useReelsHandlers({
   const handleSave = useCallback(
     async (key: string) => {
       try {
+        const auth = await ensureAuthenticatedForInteraction({ action: "save" });
+        if (!auth.ok) return;
+
+        // Prefer durable backend bookmark when we have a real content id.
+        if (canUseBackendLikes && contentIdForHooks) {
+          const result = await useInteractionStore
+            .getState()
+            .toggleSave(
+              contentIdForHooks,
+              mapContentTypeForBackend(activeContentType || "media")
+            );
+          if (result?.authRequired) return;
+
+          if (result.saved) {
+            libraryStore.addToLibrary({
+              id: key,
+              title: currentVideo.title || title,
+              speaker: currentVideo.speaker || speaker,
+              timeAgo: currentVideo.timeAgo || timeAgo,
+              contentType: "Reel",
+              fileUrl: currentVideo.fileUrl || imageUrl,
+              thumbnailUrl:
+                currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
+              originalKey: key,
+              createdAt: new Date().toISOString(),
+            });
+          } else {
+            libraryStore.removeFromLibrary(key);
+          }
+          return;
+        }
+
         const isSaved = libraryStore.isItemSaved(key);
         if (isSaved) {
           libraryStore.removeFromLibrary(key);
@@ -153,7 +186,8 @@ export function useReelsHandlers({
             timeAgo: currentVideo.timeAgo || timeAgo,
             contentType: "Reel",
             fileUrl: currentVideo.fileUrl || imageUrl,
-            thumbnailUrl: currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
+            thumbnailUrl:
+              currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
             originalKey: key,
             createdAt: new Date().toISOString(),
           });
@@ -162,7 +196,17 @@ export function useReelsHandlers({
         console.error("❌ Error handling save:", e);
       }
     },
-    [libraryStore, currentVideo, title, speaker, timeAgo, imageUrl]
+    [
+      libraryStore,
+      currentVideo,
+      title,
+      speaker,
+      timeAgo,
+      imageUrl,
+      canUseBackendLikes,
+      contentIdForHooks,
+      activeContentType,
+    ]
   );
 
   const handleShare = useCallback(

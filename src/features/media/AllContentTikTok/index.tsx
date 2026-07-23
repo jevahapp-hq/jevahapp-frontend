@@ -24,6 +24,7 @@ import {
   getUserAvatarFromContent,
   getUserDisplayNameFromContent,
 } from "../../../shared/utils";
+import { PERF, perfMark, perfMeasure } from "../../../shared/utils/perfMarks";
 
 // Feature-specific imports
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ import {
   useAllContentTikTokHandlers,
   useAllContentTikTokScroll,
   useAllContentTikTokSocket,
+  useAdjacentVideoPrefetch,
   useContentStatsHelpers,
 } from "./hooks";
 // Component imports (app is at project root, sibling to src - need 4 levels up)
@@ -156,8 +158,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [videoVolume, setVideoVolume] = useState<number>(1.0);
   const [currentlyVisibleVideo, setCurrentlyVisibleVideo] = useState<string | null>(null);
 
-  useAllContentTikTokSocket();
-
   // Helper functions to get state for specific keys
   const getVideoState = (key: string) => ({
     isPlaying: playingVideos[key] ?? false,
@@ -191,6 +191,37 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     setIsLoadingContent,
     previouslyViewed,
   });
+
+  const focusedFeedItem = useMemo(() => {
+    if (!currentlyVisibleVideo) return null;
+    return (
+      filteredMediaList.find(
+        (item) => getContentKey(item) === currentlyVisibleVideo
+      ) ?? null
+    );
+  }, [currentlyVisibleVideo, filteredMediaList, getContentKey]);
+
+  useAllContentTikTokSocket({
+    focusedContentId: focusedFeedItem
+      ? String(focusedFeedItem._id || getContentKey(focusedFeedItem))
+      : currentlyVisibleVideo,
+    focusedContentType: focusedFeedItem?.contentType || "media",
+  });
+
+  useAdjacentVideoPrefetch({
+    focusedKey: currentlyVisibleVideo,
+    items: filteredMediaList,
+    getContentKey,
+  });
+
+  const feedFirstPaintMarkedRef = useRef(false);
+  useEffect(() => {
+    if (feedFirstPaintMarkedRef.current) return;
+    if (filteredMediaList.length === 0) return;
+    feedFirstPaintMarkedRef.current = true;
+    perfMark(PERF.FEED_FIRST_PAINT);
+    perfMeasure(PERF.FEED_FIRST_PAINT, PERF.APP_START);
+  }, [filteredMediaList.length]);
 
   const {
     getUserLikeState,
@@ -370,10 +401,20 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         contentType={activeTab}
         filteredMediaListLength={filteredMediaList.length}
         firstFour={firstFour}
+        currentlyVisibleVideo={currentlyVisibleVideo}
+        getContentKey={getContentKey}
         renderContentByType={renderContentByType}
       />
     ),
-    [mostRecentItem, activeTab, filteredMediaList.length, firstFour, renderContentByType]
+    [
+      mostRecentItem,
+      activeTab,
+      filteredMediaList.length,
+      firstFour,
+      currentlyVisibleVideo,
+      getContentKey,
+      renderContentByType,
+    ]
   );
 
   const renderListItem = useCallback(

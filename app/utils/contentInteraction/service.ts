@@ -25,9 +25,10 @@ export class ContentInteractionService {
   // ============= LIKE INTERACTIONS =============
   toggleLike(
     contentId: string,
-    contentType: string
-  ): Promise<{ liked: boolean; totalLikes: number }> {
-    return likes.toggleLike(this.ctx, contentId, contentType);
+    contentType: string,
+    options?: import("./likeTypes").ToggleLikeRequestOptions
+  ): Promise<import("./likeTypes").ToggleLikeResponse> {
+    return likes.toggleLike(this.ctx, contentId, contentType, options);
   }
 
   // ============= SAVE INTERACTIONS =============

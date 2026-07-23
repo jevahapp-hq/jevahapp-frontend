@@ -32,6 +32,7 @@ import { CommentSkeleton } from "../../src/shared/components/CommentSkeleton";
 import { formatTimeAgo } from "../../src/shared/utils";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { ensureAuthenticatedForInteraction } from "../utils/auth/requireAuthForInteraction";
 
 type Reply = {
   id: string;
@@ -75,6 +76,10 @@ export default function CommentModalV2() {
   } = useCommentModal();
   const { user } = useUserProfile();
   const isAuthenticated = !!user;
+
+  const promptGuestLogin = useCallback(() => {
+    void ensureAuthenticatedForInteraction({ action: "comment" });
+  }, []);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -712,7 +717,10 @@ export default function CommentModalV2() {
             ) : null}
 
             <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
-              <View
+              <TouchableOpacity
+                activeOpacity={isAuthenticated ? 1 : 0.85}
+                disabled={isAuthenticated}
+                onPress={promptGuestLogin}
                 style={{
                   flex: 1,
                   backgroundColor: isAuthenticated ? "#F9FAFB" : "#F3F4F6",
@@ -747,13 +755,20 @@ export default function CommentModalV2() {
                   }}
                   multiline
                   editable={isAuthenticated && !isSubmitting}
+                  pointerEvents={isAuthenticated ? "auto" : "none"}
                   returnKeyType="default"
                   blurOnSubmit={false}
                 />
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
-                disabled={!text.trim() || !isAuthenticated || isSubmitting}
-                onPress={handleSubmit}
+                disabled={
+                  isAuthenticated
+                    ? !text.trim() || isSubmitting
+                    : false
+                }
+                onPress={
+                  isAuthenticated ? handleSubmit : promptGuestLogin
+                }
                 style={{
                   width: 42,
                   height: 42,

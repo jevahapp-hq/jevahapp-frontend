@@ -77,4 +77,12 @@ export const PERFORMANCE_FEATURES = {
   ENABLE_DEBOUNCING: true,
   ENABLE_THROTTLING: true,
   ENABLE_MEMOIZATION: true,
+  /** CDN Range warmup for upcoming videos (feed + Reels). Kill switch. */
+  ENABLE_VIDEO_PREFETCH:
+    process.env.EXPO_PUBLIC_ENABLE_VIDEO_PREFETCH !== "0",
+  /** Pre-create next Audio.Sound for music cards. Kill switch. */
+  ENABLE_AUDIO_PREFETCH:
+    process.env.EXPO_PUBLIC_ENABLE_AUDIO_PREFETCH !== "0",
+  /** Disk-warm upcoming ebook PDFs. Kill switch. */
+  ENABLE_PDF_PREFETCH: process.env.EXPO_PUBLIC_ENABLE_PDF_PREFETCH !== "0",
 };

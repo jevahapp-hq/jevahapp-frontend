@@ -4,6 +4,7 @@ import { Text, TouchableOpacity, ViewStyle } from "react-native";
 import { UI_CONFIG } from "../../constants";
 import { CommentIconProps } from "../../types/comment.types";
 import { triggerHapticFeedback } from "../../utils";
+import { formatCount } from "../../utils/formatCount";
 import {
     getResponsiveFontSize,
     getResponsiveSize,
@@ -95,7 +96,7 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
         if (displayCount > 0) {
           return (
             <Text style={textStyle} pointerEvents="none">
-              {displayCount}
+              {formatCount(displayCount)}
             </Text>
           );
         }

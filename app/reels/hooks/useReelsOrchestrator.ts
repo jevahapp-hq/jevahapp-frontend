@@ -12,6 +12,7 @@ import { useReelsStore } from "../../store/useReelsStore";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { useDownloadHandler } from "../../utils/downloadUtils";
 import { getPersistedStats } from "../../utils/persistentStorage";
+import { useEngagementSocket } from "../../hooks/useEngagementSocket";
 import {
     useReelsCurrentVideo,
     useReelsHandlers,
@@ -20,6 +21,7 @@ import {
     useReelsVideoList,
     useReelsVideoPlayback
 } from "./";
+import { useReelsAdjacentPrefetch } from "./useReelsAdjacentPrefetch";
 
 /**
  * useReelsOrchestrator - The "Master Hook" for the Reels feature.
@@ -115,6 +117,13 @@ export function useReelsOrchestrator() {
     const activeIsLiked = useUserInteraction(current.contentIdForHooks, "liked");
     const activeLikesCount = useContentCount(current.contentIdForHooks, "likes");
 
+    useEngagementSocket({
+      focusedContentId: current.canUseBackendLikes
+        ? current.contentIdForHooks
+        : null,
+      focusedContentType: current.activeContentType || "media",
+    });
+
     useEffect(() => {
         if (!current.canUseBackendLikes) return;
         loadContentStats(current.contentIdForHooks, current.activeContentType);
@@ -208,6 +217,11 @@ export function useReelsOrchestrator() {
     }, [playingVideos, current.modalKey, mediaStore, globalVideoStore]);
 
     const allVideos = parsedVideoList.length > 0 ? parsedVideoList : [current.currentVideo];
+
+    useReelsAdjacentPrefetch({
+        currentIndex: currentIndex_state,
+        videos: allVideos,
+    });
 
     return {
         // State

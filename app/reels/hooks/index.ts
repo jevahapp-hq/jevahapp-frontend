@@ -1,3 +1,4 @@
+export * from "./useReelsAdjacentPrefetch";
 export * from "./useReelsCurrentVideo";
 export * from "./useReelsHandlers";
 export { useReelsOrchestrator } from "./useReelsOrchestrator";
