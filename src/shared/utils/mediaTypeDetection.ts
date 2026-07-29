@@ -55,7 +55,11 @@ export const detectMediaType = (item: MediaItem | null | undefined): MediaType =
 
   const contentType = (item.contentType || "").toLowerCase();
   const fileUrl = (item.fileUrl || "").toLowerCase();
-  const mimeType = (item.mimeType || "").toLowerCase();
+  const mimeType = (
+    item.mimeType ||
+    (item as { fileMimeType?: string }).fileMimeType ||
+    ""
+  ).toLowerCase();
 
   // Check MIME type first (most reliable)
   if (mimeType) {
@@ -79,17 +83,26 @@ export const detectMediaType = (item: MediaItem | null | undefined): MediaType =
   if (hasAudioExtension) return "audio";
   if (hasEbookExtension) return "ebook";
 
-  // Check contentType as fallback
-  if (contentType.includes("video") || contentType === "videos" || contentType === "live") {
+  // Check contentType as fallback — exact tokens only (never title text;
+  // "book" substring must not classify a video titled "Book of Enoch")
+  if (
+    contentType === "video" ||
+    contentType === "videos" ||
+    contentType === "live"
+  ) {
     return "video";
   }
-  if (contentType.includes("audio") || contentType === "music") {
+  if (contentType === "audio" || contentType === "music" || contentType === "podcast") {
     return "audio";
   }
   if (
-    contentType.includes("ebook") ||
-    contentType.includes("book") ||
-    contentType.includes("pdf")
+    contentType === "ebook" ||
+    contentType === "ebooks" ||
+    contentType === "e-books" ||
+    contentType === "books" ||
+    contentType === "book" ||
+    contentType === "pdf" ||
+    contentType === "image"
   ) {
     return "ebook";
   }

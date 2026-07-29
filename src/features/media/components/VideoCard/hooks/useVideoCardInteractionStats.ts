@@ -92,7 +92,10 @@ export function useVideoCardInteractionStats({
   if (userLikeState && likeCount < 1) likeCount = 1;
 
   const saveCount = Math.max(storeSaves, fallbackSaveCount);
-  const commentCount = Math.max(storeComments, fallbackCommentCount);
+  // After comments list loads, store total is truth (incl. 0). Never Math.max with stale feed.
+  const commentCount = stats?.commentsConfirmed
+    ? Math.max(0, storeComments)
+    : Math.max(storeComments, fallbackCommentCount);
   const viewCount = Math.max(storeViews, fallbackViewCount);
 
   useHydrateContentStats(contentId, "media");

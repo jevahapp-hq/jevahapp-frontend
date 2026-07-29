@@ -25,12 +25,33 @@ const EMPTY: FeedAffinityProfile = {
 let memory: FeedAffinityProfile = { ...EMPTY, families: {}, tags: {}, speakers: {} };
 
 function contentFamily(item: MediaItem): string {
-  const t = (item.contentType || "").toLowerCase();
-  if (t.includes("video") || t === "live") return "video";
-  if (t.includes("audio") || t.includes("music") || t.includes("hymn") || t.includes("podcast"))
+  const t = (item.contentType || "").toLowerCase().trim();
+  if (t === "video" || t === "videos" || t === "live") return "video";
+  if (
+    t === "audio" ||
+    t === "music" ||
+    t === "hymn" ||
+    t === "hymns" ||
+    t === "podcast" ||
+    t === "podcasts"
+  )
     return "audio";
-  if (t.includes("book") || t.includes("ebook")) return "ebook";
-  if (t.includes("sermon") || t.includes("teaching") || t.includes("devotional"))
+  if (
+    t === "book" ||
+    t === "books" ||
+    t === "ebook" ||
+    t === "ebooks" ||
+    t === "e-books" ||
+    t === "pdf" ||
+    t === "image"
+  )
+    return "ebook";
+  if (
+    t === "sermon" ||
+    t === "teaching" ||
+    t === "teachings" ||
+    t === "devotional"
+  )
     return "sermon";
   return "other";
 }

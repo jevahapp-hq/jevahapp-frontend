@@ -11,6 +11,7 @@ import type {
   EligibilityStatus,
   MediaFile,
   ModerationError,
+  UploadResultState,
   UploadState,
 } from "../types";
 
@@ -29,6 +30,9 @@ export function useUploadFormState() {
     message: "",
   });
   const [moderationError, setModerationError] = useState<ModerationError | null>(
+    null
+  );
+  const [uploadResult, setUploadResult] = useState<UploadResultState | null>(
     null
   );
   const [eligibilityStatus, setEligibilityStatus] =
@@ -89,6 +93,7 @@ export function useUploadFormState() {
     setFile(null);
     setThumbnail(null);
     setModerationError(null);
+    setUploadResult(null);
     setEligibilityStatus(null);
     setUploadState({ status: "idle", progress: 0, message: "" });
   };
@@ -114,6 +119,8 @@ export function useUploadFormState() {
     setUploadState,
     moderationError,
     setModerationError,
+    uploadResult,
+    setUploadResult,
     eligibilityStatus,
     setEligibilityStatus,
     detectedFileType,

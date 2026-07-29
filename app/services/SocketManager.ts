@@ -76,6 +76,17 @@ class SocketManager {
         });
         clearTimeout(timeoutId);
         if (!response.ok) {
+          // Stale JWT / user missing on this API → force logout (do not stay "signed in")
+          if (response.status === 401 || response.status === 402) {
+            console.warn(
+              "⚠️ Auth check failed (session dead) — forcing logout"
+            );
+            const { notifySessionExpired } = await import(
+              "../utils/sessionExpired"
+            );
+            notifySessionExpired();
+            return;
+          }
           console.warn(
             "⚠️ Auth check failed, continuing without real-time features"
           );
@@ -207,6 +218,17 @@ class SocketManager {
       console.log("Real-time comment received:", data);
       this.handleContentComment(data);
     });
+
+    const onTyping = (data: any) => {
+      this.handleCommentTyping(data);
+    };
+    this.socket.on("comment-typing", onTyping);
+    this.socket.on("comment-typing-start", (data: any) =>
+      onTyping({ ...data, isTyping: true })
+    );
+    this.socket.on("comment-typing-stop", (data: any) =>
+      onTyping({ ...data, isTyping: false })
+    );
 
     this.socket.on("count-update", (data) => {
       console.log("Real-time count update:", data);
@@ -391,6 +413,36 @@ class SocketManager {
     }
   }
 
+  /**
+   * Broadcast that the current user is typing in a content comments room.
+   * Backend should fan out `comment-typing` to other room members.
+   */
+  sendCommentTyping(
+    contentId: string,
+    contentType: string,
+    isTyping: boolean,
+    meta?: { userId?: string; displayName?: string }
+  ): void {
+    if (!this.socket?.connected) return;
+    try {
+      const payload = {
+        contentId,
+        contentType,
+        isTyping,
+        userId: meta?.userId,
+        displayName: meta?.displayName,
+      };
+      this.socket.emit("comment-typing", payload);
+      // Aliases some backends already use
+      this.socket.emit(
+        isTyping ? "comment-typing-start" : "comment-typing-stop",
+        payload
+      );
+    } catch {
+      // non-blocking
+    }
+  }
+
   // Event handlers (to be implemented by components)
   public handleContentReaction(data: any): void {
     // Counts only — never refresh full stats (that can clobber local liked).
@@ -421,6 +473,10 @@ class SocketManager {
     } catch (error) {
       console.error("Error updating store from socket comment:", error);
     }
+  }
+
+  public handleCommentTyping(_data: any): void {
+    // Override via setEventHandlers({ onCommentTyping })
   }
 
   public handleCountUpdate(data: any): void {
@@ -472,6 +528,7 @@ class SocketManager {
   setEventHandlers(handlers: {
     onContentReaction?: (data: any) => void;
     onContentComment?: (data: any) => void;
+    onCommentTyping?: (data: any) => void;
     onCountUpdate?: (data: any) => void;
     onViewerCountUpdate?: (data: any) => void;
     onLikeNotification?: (data: any) => void;
@@ -482,6 +539,9 @@ class SocketManager {
     }
     if (handlers.onContentComment) {
       this.handleContentComment = handlers.onContentComment;
+    }
+    if (handlers.onCommentTyping) {
+      this.handleCommentTyping = handlers.onCommentTyping;
     }
     if (handlers.onCountUpdate) {
       this.handleCountUpdate = handlers.onCountUpdate;

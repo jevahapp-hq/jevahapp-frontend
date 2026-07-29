@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { Alert } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useNotification } from "../../../context/NotificationContext";
+import { buildErrorResult } from "../components/UploadResultModal";
 import { getUploadTimeoutMs, uploadMedia } from "../api/uploadMedia";
 import { checkAuthenticationStatus } from "../utils";
 import type { UploadFlowDeps } from "./uploadFlow/types";
@@ -40,17 +40,18 @@ export function useUploadFlow(deps: UploadFlowDeps) {
     setLoading,
     setUploadState,
     setModerationError,
+    setUploadResult,
     setEligibilityStatus,
     validateMediaEligibilityLocal,
     resetForm,
   } = deps;
 
   const router = useRouter();
-  const { showNotification } = useNotification();
   const queryClient = useQueryClient();
   const successNavigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const successNavigateRef = useRef<(() => void) | null>(null);
 
   const { startSimulated, stopSimulated } = useSimulatedUploadProgress(
     setUploadState
@@ -77,6 +78,7 @@ export function useUploadFlow(deps: UploadFlowDeps) {
     try {
       setLoading(true);
       setModerationError(null);
+      setUploadResult(null);
       setUploadState({
         status: "verifying",
         progress: 0,
@@ -168,8 +170,8 @@ export function useUploadFlow(deps: UploadFlowDeps) {
           res,
           result,
           rawText,
-          showNotification,
           setModerationError,
+          setUploadResult,
           setUploadState,
         });
         return;
@@ -179,7 +181,7 @@ export function useUploadFlow(deps: UploadFlowDeps) {
 
       if (!result || typeof result !== "object" || !(result as { media?: unknown }).media) {
         setLoading(false);
-        handleUploadParseFailure();
+        handleUploadParseFailure(setUploadResult);
         return;
       }
 
@@ -198,28 +200,35 @@ export function useUploadFlow(deps: UploadFlowDeps) {
         genre?: string;
       };
 
-      await persistUploadedMedia({ uploaded, file, isSermonContent });
+      const feedItem = await persistUploadedMedia({
+        uploaded,
+        file,
+        isSermonContent,
+        selectedType,
+      });
 
       scheduleUploadSuccessNavigation({
         router,
         queryClient,
         selectedType,
+        feedItem,
+        file,
+        isSermonContent,
         resetForm,
         setLoading,
         setUploadState,
+        setUploadResult,
         successNavigateTimeoutRef,
+        onReadyNavigate: (navigateToFeed) => {
+          successNavigateRef.current = navigateToFeed;
+        },
       });
     } catch (error) {
       stopSimulated();
       cleanupSocket();
       setLoading(false);
       setUploadState({ status: "error", progress: 0, message: "" });
-      showNotification({
-        type: "error",
-        title: "Upload Failed",
-        message: mapUploadNetworkError(error),
-        duration: 5000,
-      });
+      setUploadResult(buildErrorResult(mapUploadNetworkError(error)));
     }
   };
 
@@ -257,5 +266,25 @@ export function useUploadFlow(deps: UploadFlowDeps) {
     await proceedWithUpload();
   };
 
-  return { handleUpload };
+  const confirmSuccessNavigate = () => {
+    successNavigateRef.current?.();
+    successNavigateRef.current = null;
+  };
+
+  const cancelSuccessNavigate = () => {
+    if (successNavigateTimeoutRef.current) {
+      clearTimeout(successNavigateTimeoutRef.current);
+      successNavigateTimeoutRef.current = null;
+    }
+    successNavigateRef.current = null;
+    setUploadResult(null);
+    resetForm();
+    setUploadState({ status: "idle", progress: 0, message: "" });
+  };
+
+  return {
+    handleUpload,
+    confirmSuccessNavigate,
+    cancelSuccessNavigate,
+  };
 }

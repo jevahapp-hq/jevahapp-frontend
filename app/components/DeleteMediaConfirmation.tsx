@@ -52,14 +52,10 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
       
       if (result.success) {
         setHasDeleted(true);
-        // Show success notification
         setShowSuccessToast(true);
-        // Close modal immediately and call onSuccess (smooth like TikTok/Instagram)
-        // onSuccess will handle removing from UI, so we don't need to wait
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 300); // Short delay for smooth UX
+        // Instant remove like TikTok/IG — parent strips item from feed immediately
+        onSuccess();
+        onClose();
       }
     } catch (err: any) {
       // Only show error if it's not a 404 for an already-deleted item
@@ -71,10 +67,8 @@ export const DeleteMediaConfirmation: React.FC<DeleteMediaConfirmationProps> = (
         // Media was already deleted, treat as success (suppress redundant error)
         setHasDeleted(true);
         setShowSuccessToast(true);
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 300);
+        onSuccess();
+        onClose();
       }
     } finally {
       setIsLoading(false);

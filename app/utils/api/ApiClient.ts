@@ -58,6 +58,8 @@ export class ApiClient {
           // If refresh fails with 401, clear tokens
           if (refreshResponse.status === 401) {
             await TokenManager.clearToken();
+            const { notifySessionExpired } = await import("../sessionExpired");
+            notifySessionExpired();
             console.log("🔄 Session expired, tokens cleared");
           }
 
@@ -194,10 +196,12 @@ export class ApiClient {
 
               return retryData;
             } else {
-              // Token refresh failed, return the original error
-              const errorText = await response.text().catch(() => "");
+              // Had a Bearer token, server said 401/402, refresh failed → session is dead
+              await TokenManager.clearToken();
+              const { notifySessionExpired } = await import("../sessionExpired");
+              notifySessionExpired();
               console.log(
-                `❌ API: Token refresh failed, returning 401 error`
+                `❌ API: Token refresh failed, forcing logout`
               );
               throw new Error("Authentication failed. Please log in again.");
             }

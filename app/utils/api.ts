@@ -1,50 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Platform } from "react-native";
-import { environmentManager } from "./environmentManager";
+import {
+  API_BASE_URL,
+  environmentManager,
+  getApiBaseUrl,
+} from "./environmentManager";
+import { notifySessionExpired } from "./sessionExpired";
 import TokenUtils from "./tokenUtils";
 
-// Prioritize environment variable over environment manager
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || environmentManager.getCurrentUrl();
-
-// Function to get API base URL (for use in services)
-export function getApiBaseUrl(): string {
-  return API_BASE_URL;
-}
-
-// Log the API URL source for debugging
-if (process.env.EXPO_PUBLIC_API_URL) {
-  console.log(
-    "🌐 Using EXPO_PUBLIC_API_URL from environment:",
-    process.env.EXPO_PUBLIC_API_URL
-  );
-} else {
-  console.log(
-    "🌐 Using API URL from environment manager:",
-    environmentManager.getCurrentUrl()
-  );
-}
-
-// Update API URL when environment changes (only if no environment variable is set)
-if (!process.env.EXPO_PUBLIC_API_URL) {
-  environmentManager.addListener((environment) => {
-    // API_BASE_URL is now a const, so we can't reassign it
-    // This logic should be handled differently if needed
-    console.log(
-      "🌐 Environment switched to:",
-      environment,
-      "URL:",
-      API_BASE_URL
-    );
-
-    // Update axios base URL
-    // apiAxios.defaults.baseURL is set at creation time
-  });
-}
-
-// Log the current API URL for debugging
-console.log("🌐 Final API Base URL:", API_BASE_URL);
+export { API_BASE_URL, getApiBaseUrl };
 
 // Configure axios defaults for better timeout handling
 axios.defaults.timeout = 30000; // 30 seconds timeout to handle Render cold starts
@@ -85,6 +50,11 @@ export const apiAxios = axios.create({
     "Content-Type": "application/json",
     "expo-platform": Platform.OS,
   },
+});
+
+// Keep axios in sync if environmentManager.setEnvironment is used in __DEV__
+environmentManager.addListener(() => {
+  apiAxios.defaults.baseURL = getApiBaseUrl();
 });
 
 // Add request interceptor to automatically add auth token
@@ -233,6 +203,7 @@ apiAxios.interceptors.response.use(
           if (refreshResponse.status === 401 || refreshResponse.status === 402) {
             console.error(`❌ Token refresh also returned ${refreshResponse.status} - session is invalid`);
             await TokenUtils.clearAuthTokens();
+            notifySessionExpired();
             throw new Error("Session expired. Please log in again.");
           }
           
@@ -240,8 +211,9 @@ apiAxios.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error("❌ Token refresh error:", refreshError);
-        // Clear tokens and redirect to login if needed
+        // Clear tokens and show session-expired UX
         await TokenUtils.clearAuthTokens();
+        notifySessionExpired();
         return Promise.reject(error);
       }
     }

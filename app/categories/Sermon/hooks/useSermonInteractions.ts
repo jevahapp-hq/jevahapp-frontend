@@ -5,6 +5,8 @@ import { useGlobalMediaStore } from "../../../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../store/useInteractionStore";
 import { useLibraryStore } from "../../../store/useLibraryStore";
+import contentInteractionAPI from "../../../utils/contentInteractionAPI";
+import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
 import { persistStats, toggleFavorite } from "../../../utils/persistentStorage";
 
 interface UseSermonInteractionsParams {
@@ -182,17 +184,70 @@ export function useSermonInteractions({
     }
   };
 
-  const incrementView = (key: string, item: any) => {
+  const incrementView = async (
+    countKey: string,
+    item: any,
+    payload?: {
+      durationMs?: number;
+      progressPct?: number;
+      isComplete?: boolean;
+    }
+  ) => {
+    if (viewCounted[countKey]) return;
+
+    const contentId = String(item?._id || "").trim();
+    if (contentId) {
+      try {
+        const result = await contentInteractionAPI.recordView(
+          contentId,
+          viewContentTypeForItem(item?.contentType),
+          {
+            durationMs: payload?.durationMs ?? 3000,
+            progressPct: payload?.progressPct ?? 100,
+            isComplete: payload?.isComplete ?? true,
+            source: "feed",
+          }
+        );
+        if (result?.counted === false) return;
+        setViewCounted((prev) => ({ ...prev, [countKey]: true }));
+        setContentStats((prev) => {
+          const statsKey = `${item.contentType}-${item._id || item.fileUrl}`;
+          const views =
+            result?.totalViews != null
+              ? Number(result.totalViews)
+              : (prev[statsKey]?.views || 0) + 1;
+          const updated = {
+            ...prev,
+            [statsKey]: {
+              ...prev[statsKey],
+              views,
+              sheared: prev[statsKey]?.sheared || item.sheared || 0,
+              favorite: prev[statsKey]?.favorite || item.favorite || 0,
+              saved: prev[statsKey]?.saved || item.saved || 0,
+              comment: prev[statsKey]?.comment || item.comment || 0,
+            },
+          };
+          persistStats(updated);
+          return updated;
+        });
+        return;
+      } catch {
+        // fall through to local bump
+      }
+    }
+
+    setViewCounted((prev) => ({ ...prev, [countKey]: true }));
     setContentStats((prev) => {
+      const statsKey = `${item.contentType}-${item._id || item.fileUrl}`;
       const updated = {
         ...prev,
-        [key]: {
-          ...prev[key],
-          views: (prev[key]?.views || 0) + 1,
-          sheared: prev[key]?.sheared || item.sheared || 0,
-          favorite: prev[key]?.favorite || item.favorite || 0,
-          saved: prev[key]?.saved || item.saved || 0,
-          comment: prev[key]?.comment || item.comment || 0,
+        [statsKey]: {
+          ...prev[statsKey],
+          views: (prev[statsKey]?.views || 0) + 1,
+          sheared: prev[statsKey]?.sheared || item.sheared || 0,
+          favorite: prev[statsKey]?.favorite || item.favorite || 0,
+          saved: prev[statsKey]?.saved || item.saved || 0,
+          comment: prev[statsKey]?.comment || item.comment || 0,
         },
       };
       persistStats(updated);

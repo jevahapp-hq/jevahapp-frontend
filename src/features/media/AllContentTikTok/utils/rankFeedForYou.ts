@@ -1,81 +1,47 @@
 /**
- * Client-side For You ranking until /api/feed/for-you ships.
- * Scores: engagement + recency + affinity + diversity + cross-session rotation.
+ * Client-side For You ordering.
+ * Primary: seeded Fisher–Yates shuffle so each visit/refresh looks different.
+ * Light diversity pass avoids long runs of the same content family.
  */
 import type { MediaItem } from "../../../../shared/types";
-import {
-  affinityScore,
-  type FeedAffinityProfile,
-} from "./feedAffinityStore";
+import type { FeedAffinityProfile } from "./feedAffinityStore";
 
 export type FeedRankOptions = {
-  /** Content IDs the user has already viewed locally */
   previouslyViewedIds?: Set<string> | string[];
-  /** IDs impressed in the last 24h — demoted hard so relaunch feels different */
   seenTodayIds?: Set<string> | string[];
-  /** Cold-start seed so top-of-feed order rotates each launch */
+  /** Cold-start / refresh seed — changes order every visit */
   sessionSeed?: number;
-  /** On-device preference profile (likes / watches) */
   affinity?: FeedAffinityProfile;
-  /** IDs that were top-of-feed last session — heavy demotion on relaunch */
   lastSessionTopIds?: Set<string> | string[];
-  /** Prefer slightly more freshness (0–1). Default 0.32 */
-  recencyWeight?: number;
-  /** Prefer engagement (likes/views/comments). Default 0.45 */
-  engagementWeight?: number;
-  /** Prefer user affinity. Default 0.35 */
-  affinityWeight?: number;
-  /** Soft-penalize already viewed items. Default 0.55 */
-  viewedPenalty?: number;
-  /** Soft diversity stride. Default 4 */
+  /** Soft diversity stride. Default 3. Set 0 to skip. */
   diversifyEvery?: number;
 };
 
-const HOUR_MS = 60 * 60 * 1000;
-
-function asNumber(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function getEngagement(item: MediaItem) {
-  const likes = asNumber(item.likes ?? item.likeCount ?? item.totalLikes ?? item.favorite);
-  const views = asNumber(item.views ?? item.viewCount ?? item.totalViews);
-  const comments = asNumber(item.comments ?? item.commentCount ?? item.comment);
-  const shares = asNumber(item.shares ?? item.shareCount ?? item.totalShares ?? item.sheared);
-  const saves = asNumber(item.saves ?? item.saved);
-  return { likes, views, comments, shares, saves };
-}
-
-function engagementScore(item: MediaItem): number {
-  const { likes, views, comments, shares, saves } = getEngagement(item);
-  return (
-    Math.log1p(likes) * 3.2 +
-    Math.log1p(views) * 1.4 +
-    Math.log1p(comments) * 2.6 +
-    Math.log1p(shares) * 2.2 +
-    Math.log1p(saves) * 1.8
-  );
-}
-
-function recencyScore(item: MediaItem, now: number): number {
-  const created = Date.parse(item.createdAt || "");
-  if (!Number.isFinite(created)) return 0.15;
-  const ageHours = Math.max(0, (now - created) / HOUR_MS);
-  if (ageHours <= 6) return 1;
-  if (ageHours <= 48) return 0.85;
-  if (ageHours <= 7 * 24) return 0.55;
-  if (ageHours <= 14 * 24) return 0.3;
-  return Math.max(0.08, Math.exp(-ageHours / (21 * 24)));
-}
-
 function contentFamily(item: MediaItem): string {
-  const t = (item.contentType || "").toLowerCase();
-  if (t.includes("video") || t === "live") return "video";
-  if (t.includes("audio") || t.includes("music") || t.includes("hymn") || t.includes("podcast"))
+  const t = (item.contentType || "").toLowerCase().trim();
+  if (t === "video" || t === "videos" || t === "live") return "video";
+  if (
+    t === "audio" ||
+    t === "music" ||
+    t === "hymn" ||
+    t === "hymns" ||
+    t === "podcast" ||
+    t === "podcasts"
+  )
     return "audio";
-  if (t.includes("book") || t.includes("ebook")) return "ebook";
-  if (t.includes("sermon") || t.includes("teaching") || t.includes("devotional")) return "sermon";
+  // Exact tokens only — never `.includes("book")` (titles are not contentType)
+  if (
+    t === "book" ||
+    t === "books" ||
+    t === "ebook" ||
+    t === "ebooks" ||
+    t === "e-books" ||
+    t === "pdf" ||
+    t === "image"
+  )
+    return "ebook";
+  if (t === "sermon" || t === "teaching" || t === "teachings" || t === "devotional")
+    return "sermon";
   return "other";
 }
 
@@ -85,29 +51,47 @@ function normalizeIds(ids?: Set<string> | string[]): Set<string> {
   return new Set(ids.filter(Boolean));
 }
 
-function seededJitter(id: string, seed: number): number {
-  let h = seed >>> 0;
-  for (let i = 0; i < id.length; i++) {
-    h = Math.imul(h ^ id.charCodeAt(i), 0x9e3779b1);
-  }
-  return ((h >>> 0) % 10000) / 10000;
+/** Mulberry32 — fast deterministic PRNG from a 32-bit seed */
+function mulberry32(seed: number): () => number {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-type Scored = { item: MediaItem; score: number; family: string };
+/** Seeded Fisher–Yates — O(n), uniform permutation */
+export function seededShuffle<T>(items: T[], seed: number): T[] {
+  const out = items.slice();
+  const rand = mulberry32(seed >>> 0 || 1);
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
+}
 
-function diversify(scored: Scored[], diversifyEvery: number): Scored[] {
-  const ordered: Scored[] = [];
-  const pool = [...scored];
+type Tagged = { item: MediaItem; family: string };
+
+function diversify(tagged: Tagged[], diversifyEvery: number): Tagged[] {
+  if (diversifyEvery <= 0 || tagged.length < 3) return tagged;
+
+  const ordered: Tagged[] = [];
+  const pool = [...tagged];
 
   while (pool.length > 0) {
-    const recentFamilies = ordered
+    const recent = ordered
       .slice(-Math.max(1, diversifyEvery - 1))
       .map((x) => x.family);
 
     let pickIndex = 0;
-    if (recentFamilies.length >= diversifyEvery - 1) {
-      const dominant = recentFamilies[0];
-      const allSame = recentFamilies.every((f) => f === dominant);
+    if (recent.length >= diversifyEvery - 1) {
+      const dominant = recent[0];
+      const allSame = recent.every((f) => f === dominant);
       if (allSame) {
         const alt = pool.findIndex((p) => p.family !== dominant);
         if (alt >= 0) pickIndex = alt;
@@ -120,87 +104,11 @@ function diversify(scored: Scored[], diversifyEvery: number): Scored[] {
   return ordered;
 }
 
-function exploreTopFeed(scored: Scored[], seed: number): Scored[] {
-  if (scored.length < 3) return scored;
-
-  const poolSize = Math.min(8, scored.length);
-  const pool = scored.slice(0, poolSize);
-  const tail = scored.slice(poolSize);
-  const picked: Scored[] = [];
-
-  for (let slot = 0; slot < Math.min(3, pool.length); slot++) {
-    const remaining = pool.filter((x) => !picked.includes(x));
-    if (remaining.length === 0) break;
-    const window = Math.min(5 - slot, remaining.length);
-    const idx = Math.floor(seededJitter(`slot${slot}`, seed + slot * 17) * window);
-    picked.push(remaining[idx]);
-  }
-
-  const rest = pool.filter((x) => !picked.includes(x));
-  return [...picked, ...rest, ...tail];
-}
-
-function scoreBucket(
-  items: MediaItem[],
-  options: {
-    now: number;
-    viewed: Set<string>;
-    lastSessionTops: Set<string>;
-    sessionSeed: number;
-    recencyWeight: number;
-    engagementWeight: number;
-    affinityWeight: number;
-    viewedPenalty: number;
-    affinity?: FeedAffinityProfile;
-  }
-): Scored[] {
-  const {
-    now,
-    viewed,
-    lastSessionTops,
-    sessionSeed,
-    recencyWeight,
-    engagementWeight,
-    affinityWeight,
-    viewedPenalty,
-    affinity,
-  } = options;
-
-  return items.map((item, index) => {
-    const id = String(item._id || "");
-    const eng = engagementScore(item);
-    const rec = recencyScore(item, now);
-    const aff = affinityScore(item, affinity);
-    let score =
-      eng * engagementWeight +
-      rec * recencyWeight * 8 +
-      aff * affinityWeight * 10;
-
-    score += seededJitter(id || String(index), sessionSeed) * 3.2;
-    score += (items.length - index) * 0.0001;
-
-    if (id && viewed.has(id)) {
-      score *= 1 - viewedPenalty;
-    }
-
-    // Previous session #1–#3: don't open with the same cards (IG/TikTok relaunch)
-    if (id && lastSessionTops.has(id)) {
-      score *= 0.12;
-    }
-
-    const ageMs = now - Date.parse(item.createdAt || "");
-    // Tiny boost for brand-new uploads only when they already have some signal
-    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 12 * HOUR_MS && eng >= 0.5) {
-      score += 1.2;
-    }
-
-    return { item, score, family: contentFamily(item) };
-  });
-}
-
 /**
- * Rank media for a TikTok/IG-style feed ordering.
- * Items seen today are pushed below fresh ones so relaunch feels different.
+ * Randomize feed for IG/TikTok-style discovery.
+ * - Full seeded shuffle (different order each seed / visit)
+ * - Items seen today + last-session tops pushed toward the back
+ * - Soft family diversity so you don't get 8 videos in a row
  */
 export function rankFeedForYou(
   items: MediaItem[],
@@ -208,53 +116,34 @@ export function rankFeedForYou(
 ): MediaItem[] {
   if (!items?.length) return [];
 
-  const now = Date.now();
-  const viewed = normalizeIds(options.previouslyViewedIds);
   const seenToday = normalizeIds(options.seenTodayIds);
   const lastSessionTops = normalizeIds(options.lastSessionTopIds);
-  const sessionSeed = options.sessionSeed ?? 1;
-  const recencyWeight = options.recencyWeight ?? 0.32;
-  const engagementWeight = options.engagementWeight ?? 0.48;
-  const affinityWeight = options.affinityWeight ?? 0.38;
-  const viewedPenalty = options.viewedPenalty ?? 0.62;
-  const diversifyEvery = Math.max(2, options.diversifyEvery ?? 3);
+  const viewed = normalizeIds(options.previouslyViewedIds);
+  const sessionSeed = (options.sessionSeed ?? Date.now()) >>> 0 || 1;
+  const diversifyEvery = Math.max(0, options.diversifyEvery ?? 3);
 
-  const fresh: MediaItem[] = [];
-  const recycled: MediaItem[] = [];
+  const primary: MediaItem[] = [];
+  const demoted: MediaItem[] = [];
+
   for (const item of items) {
     const id = String(item._id || "");
-    if (id && seenToday.has(id)) recycled.push(item);
-    else fresh.push(item);
+    const pushBack =
+      (id && seenToday.has(id)) ||
+      (id && lastSessionTops.has(id)) ||
+      (id && viewed.has(id));
+    if (pushBack) demoted.push(item);
+    else primary.push(item);
   }
 
-  const scoreOpts = {
-    now,
-    viewed,
-    lastSessionTops,
-    sessionSeed,
-    recencyWeight,
-    engagementWeight,
-    affinityWeight,
-    viewedPenalty,
-    affinity: options.affinity,
-  };
+  // Independent shuffles so demoted block also rotates, not a fixed tail order
+  const shuffledPrimary = seededShuffle(primary, sessionSeed);
+  const shuffledDemoted = seededShuffle(demoted, sessionSeed ^ 0x9e3779b9);
 
-  const freshScored = exploreTopFeed(
-    scoreBucket(fresh, scoreOpts).sort((a, b) => b.score - a.score),
-    sessionSeed
+  const tagged: Tagged[] = [...shuffledPrimary, ...shuffledDemoted].map(
+    (item) => ({ item, family: contentFamily(item) })
   );
-  const recycledScored = scoreBucket(recycled, {
-    ...scoreOpts,
-    viewedPenalty: Math.min(0.95, viewedPenalty + 0.38),
-    affinityWeight: affinityWeight * 0.45,
-  }).sort((a, b) => b.score - a.score);
 
-  const ordered = [
-    ...diversify(freshScored, diversifyEvery),
-    ...diversify(recycledScored, diversifyEvery),
-  ];
-
-  return ordered.map((x) => x.item);
+  return diversify(tagged, diversifyEvery).map((x) => x.item);
 }
 
 export function pickMostRecentItem(items: MediaItem[]): MediaItem | null {
@@ -269,4 +158,9 @@ export function pickMostRecentItem(items: MediaItem[]): MediaItem | null {
     }
   }
   return best;
+}
+
+/** New seed for pull-to-refresh / remount — guarantees a new permutation */
+export function createFeedShuffleSeed(): number {
+  return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0 || 1;
 }

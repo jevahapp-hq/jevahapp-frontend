@@ -2,6 +2,7 @@ import type {
   EligibilityStatus,
   MediaFile,
   ModerationError,
+  UploadResultState,
   UploadState,
 } from "../../types";
 
@@ -18,6 +19,7 @@ export type UploadFlowDeps = {
     v: UploadState | ((prev: UploadState) => UploadState)
   ) => void;
   setModerationError: (v: ModerationError | null) => void;
+  setUploadResult: (v: UploadResultState | null) => void;
   setEligibilityStatus: (v: EligibilityStatus | null) => void;
   validateMediaEligibilityLocal: () => EligibilityStatus;
   resetForm: () => void;

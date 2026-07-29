@@ -29,8 +29,7 @@ export const formatFriendlyRejectionMessage = (
 ): { title: string; message: string; isReview: boolean } => {
   const isReview = status === "under_review";
 
-  // Friendly title
-  const title = isReview ? "📋 Under Review" : "💡 Upload Needs Adjustment";
+  const title = isReview ? "Under review" : "Needs a small tweak";
 
   // Build friendly message
   let message = "";

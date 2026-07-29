@@ -1,31 +1,50 @@
+/**
+ * Signup email verification bottom sheet (2 steps).
+ * Rounded top corners, dim backdrop, drag-to-dismiss.
+ */
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Dimensions, Image, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
 import {
-    GestureHandlerRootView,
-    HandlerStateChangeEvent,
-    PanGestureHandler,
-    PanGestureHandlerGestureEvent,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  GestureHandlerRootView,
+  PanGestureHandler,
+  State,
 } from "react-native-gesture-handler";
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withTiming
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../hooks/useAuth";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
+const SPRING = { damping: 26, stiffness: 280, mass: 0.8 };
+const BRAND = "#256E63";
+const INK = "#090E24";
 
-type VerifyEmailModalProps = {
+export type VerifyEmailModalProps = {
   visible: boolean;
   onClose: () => void;
-  onVerify: () => void;
+  onVerify?: () => void;
   emailAddress: string;
   password: string;
   firstName: string;
   lastName: string;
 };
+
+type Step = "verify" | "emailSent";
 
 export default function VerifyEmail({
   visible,
@@ -36,202 +55,301 @@ export default function VerifyEmail({
   firstName,
   lastName,
 }: VerifyEmailModalProps) {
-  const [currentStep, setCurrentStep] = useState<"verify" | "email">("verify");
-  const verifyCardY = useSharedValue(SCREEN_HEIGHT);
-  const emailSeenY = useSharedValue(SCREEN_HEIGHT);
-  const lastTranslateY = useSharedValue(0);
+  const insets = useSafeAreaInsets();
   const { resendVerification } = useAuth();
+
+  const [step, setStep] = useState<Step>("verify");
   const [sending, setSending] = useState(false);
-  const [sendMessage, setSendMessage] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendMessage, setSendMessage] = useState<string | null>(null);
+
+  const sheetY = useSharedValue(SCREEN_HEIGHT);
+  const dimOpacity = useSharedValue(0);
+  const dragY = useSharedValue(0);
+
+  const dismiss = useCallback(() => {
+    sheetY.value = withTiming(SCREEN_HEIGHT, { duration: 240 });
+    dimOpacity.value = withTiming(0, { duration: 200 });
+    runOnJS(onClose)();
+  }, [onClose, sheetY, dimOpacity]);
 
   useEffect(() => {
     if (visible) {
-      // Reset to first step when modal becomes visible
-      setCurrentStep("verify");
-      // Show first modal immediately
-      verifyCardY.value = withTiming(0, { duration: 300 });
-      emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 0 });
+      setStep("verify");
+      setSendError(null);
+      setSendMessage(null);
+      setSending(false);
+      dragY.value = 0;
+      dimOpacity.value = withTiming(1, { duration: 220 });
+      sheetY.value = withSpring(0, SPRING);
     } else {
-      // Hide both modals
-      verifyCardY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-      emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
+      sheetY.value = SCREEN_HEIGHT;
+      dimOpacity.value = 0;
+      dragY.value = 0;
     }
-  }, [visible]);
+  }, [visible, sheetY, dimOpacity, dragY]);
 
-  const handleVerifyMe = () => {
-    // Call resend verification, then transition
+  const handleVerifyMe = async () => {
     if (sending) return;
     setSending(true);
-    setSendMessage(null);
     setSendError(null);
-    resendVerification(emailAddress)
-      .then((res: any) => {
-        try {
-          const msg =
-            res?.message || res?.data?.message || "Verification email sent";
-          setSendMessage(msg);
-        } catch {}
-      })
-      .catch((e: any) => {
-        const msg = e?.message || "Failed to send verification email";
-        setSendError(msg);
-      })
-      .finally(() => {
-        setSending(false);
-        verifyCardY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-        emailSeenY.value = withTiming(0, { duration: 300 });
-        setCurrentStep("email");
+    setSendMessage(null);
+
+    try {
+      const res: any = await resendVerification(emailAddress);
+      const msg =
+        res?.message || res?.data?.message || "Verification email sent";
+      setSendMessage(msg);
+      onVerify?.();
+      setStep("emailSent");
+    } catch (e: any) {
+      setSendError(e?.message || "Failed to send verification email");
+      // Still advance so user can continue to code entry if email was already sent
+      setStep("emailSent");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleContinueToCode = () => {
+    sheetY.value = withTiming(SCREEN_HEIGHT, { duration: 220 });
+    dimOpacity.value = withTiming(0, { duration: 180 });
+    onClose();
+    setTimeout(() => {
+      router.push({
+        pathname: "/auth/codeVerification",
+        params: {
+          emailAddress,
+          password,
+          firstName,
+          lastName,
+        },
       });
+    }, 180);
   };
 
-  const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
-    const { translationY } = event.nativeEvent;
-    if (translationY > 0) {
-      if (currentStep === "verify") {
-        verifyCardY.value = translationY;
-      } else {
-        emailSeenY.value = translationY;
-      }
-      lastTranslateY.value = translationY;
-    }
-  };
-
-  const onGestureEnd = (
-    _event: HandlerStateChangeEvent<Record<string, unknown>>
-  ) => {
-    if (lastTranslateY.value > 100) {
-      // Dismiss modal
-      verifyCardY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-      emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-      runOnJS(onClose)();
-    } else {
-      // Return to original position
-      if (currentStep === "verify") {
-        verifyCardY.value = withTiming(0, { duration: 300 });
-      } else {
-        emailSeenY.value = withTiming(0, { duration: 300 });
-      }
-    }
-  };
-
-  const verifyStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: verifyCardY.value }],
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetY.value + dragY.value }],
   }));
 
-  const emailSeenStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: emailSeenY.value }],
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: dimOpacity.value,
   }));
 
   if (!visible) return null;
 
-  return (
-    <GestureHandlerRootView className="absolute inset-0 z-50">
-      {/* Background overlay */}
-      <TouchableOpacity
-        className="absolute inset-0"
-        style={{ backgroundColor: 'rgba(0, 0, 0, 0.35)' }}
-        activeOpacity={1}
-        onPress={() => {
-          // Close modal when overlay is pressed
-          verifyCardY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-          emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-          runOnJS(onClose)();
-        }}
-      />
-      
-      {/* First Card - Verification */}
-      <PanGestureHandler
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onGestureEnd}
-      >
-        <Animated.View
-          style={verifyStyle}
-          className="absolute bottom-0 w-full h-[450px] bg-white rounded-t-3xl shadow-xl"
-        >
-          <View className="flex-1 items-center px-6 pt-4 gap-[10px]">
-            <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
-            <Image source={require("../../assets/images/16.png")} />
-            <Text className="text-2xl font-bold text-[#1D2939] text-center mt-4 mb-2">
-              We've got to verify you
-            </Text>
-            <Text className="text-base text-[#344054] text-center mb-4">
-              Select which verification method you prefer, and it will be sent
-              to your email.
-            </Text>
-            {sendError && (
-              <Text className="text-red-600 text-sm text-center">
-                {sendError}
-              </Text>
-            )}
-            <TouchableOpacity
-              onPress={handleVerifyMe}
-              className="bg-[#090E24] rounded-full mt-4 w-[320px] h-[48px] flex items-center justify-center"
-              disabled={sending}
-            >
-              <Text className="text-white font-semibold text-lg">
-                {sending ? "Sending…" : "Verify Me"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </PanGestureHandler>
+  const isVerify = step === "verify";
 
-      {/* Second Card - Email Sent */}
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <TouchableOpacity activeOpacity={1} onPress={dismiss} style={StyleSheet.absoluteFill}>
+        <Animated.View style={[styles.dim, dimStyle]} pointerEvents="none" />
+      </TouchableOpacity>
+
       <PanGestureHandler
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onGestureEnd}
+        activeOffsetY={8}
+        failOffsetX={[-24, 24]}
+        onGestureEvent={(event) => {
+          "worklet";
+          const ty = event.nativeEvent.translationY;
+          if (ty > 0) dragY.value = ty;
+        }}
+        onHandlerStateChange={(event) => {
+          "worklet";
+          if (event.nativeEvent.state !== State.END) return;
+          const ty = event.nativeEvent.translationY;
+          if (ty > 120) {
+            dragY.value = 0;
+            runOnJS(dismiss)();
+          } else {
+            dragY.value = withSpring(0, SPRING);
+          }
+        }}
       >
         <Animated.View
-          style={emailSeenStyle}
-          className="absolute bottom-0 w-full h-[480px] bg-white rounded-t-3xl px-6 shadow-xl"
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, 16) + 8 },
+            sheetStyle,
+          ]}
         >
-          <View className="flex flex-col justify-center items-center mt-6">
-            <View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
-            <Image
-              source={require("../../assets/images/Clip path group.png")}
-            />
-            <Text className="text-4xl font-bold mt-4 mb-4 text-[#1D2939] text-center">
-              You've got an email
-            </Text>
-            <Text className="text-base mb-4 text-[#1D2939] text-center">
-              Check your email for a verification message. If you don't see it,
-              check your spam folder.
-            </Text>
-            {sendError && (
-              <Text className="text-red-600 text-sm text-center mb-2">
-                {sendError}
-              </Text>
+          <View style={styles.handle} />
+
+          <View style={styles.iconWrap}>
+            {isVerify ? (
+              <View style={styles.iconCircle}>
+                <Ionicons name="shield-checkmark" size={48} color={BRAND} />
+              </View>
+            ) : (
+              <Image
+                source={require("../../assets/images/Clip path group.png")}
+                style={styles.mailImage}
+                resizeMode="contain"
+              />
             )}
-            <TouchableOpacity
-              onPress={() => {
-                emailSeenY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-                verifyCardY.value = withTiming(SCREEN_HEIGHT, {
-                  duration: 250,
-                });
-                runOnJS(() => {
-                  onClose();
-                  // Reduced delay for faster navigation
-                  setTimeout(() => {
-                    router.push({
-                      pathname: "/auth/codeVerification",
-                      params: {
-                        emailAddress,
-                        password,
-                        firstName,
-                        lastName,
-                      },
-                    });
-                  }, 200);
-                })();
-              }}
-              className="bg-[#090E24] p-2 rounded-full mt-4 w-[333px] h-[45px]"
-            >
-              <Text className="text-white text-center mt-1">Okay, Got It</Text>
-            </TouchableOpacity>
           </View>
+
+          <Text style={styles.title}>
+            {isVerify ? "We've got to verify you" : "You've got an email"}
+          </Text>
+
+          <Text style={styles.subtitle}>
+            {isVerify
+              ? `We'll send a verification code to ${emailAddress || "your email"}. It only takes a minute to finish signup.`
+              : "Check your inbox for the code. If you don't see it, look in spam — then enter it on the next screen."}
+          </Text>
+
+          {sendError ? <Text style={styles.error}>{sendError}</Text> : null}
+          {sendMessage && !isVerify ? (
+            <Text style={styles.success}>{sendMessage}</Text>
+          ) : null}
+
+          {isVerify ? (
+            <TouchableOpacity
+              style={[styles.cta, sending && styles.ctaDisabled]}
+              activeOpacity={0.88}
+              disabled={sending}
+              onPress={() => {
+                void handleVerifyMe();
+              }}
+            >
+              {sending ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.ctaText}>Send verification code</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.cta}
+              activeOpacity={0.88}
+              onPress={handleContinueToCode}
+            >
+              <Text style={styles.ctaText}>Okay, got it</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+
+          {isVerify ? (
+            <TouchableOpacity onPress={dismiss} hitSlop={12} style={styles.secondary}>
+              <Text style={styles.secondaryText}>Not now</Text>
+            </TouchableOpacity>
+          ) : null}
         </Animated.View>
       </PanGestureHandler>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    justifyContent: "flex-end",
+  },
+  dim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+  },
+  sheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 22,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D0D5DD",
+    marginBottom: 16,
+  },
+  iconWrap: {
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  iconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#E8F5F1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mailImage: {
+    width: 96,
+    height: 96,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#101828",
+    fontFamily: "Rubik-Bold",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#475467",
+    fontFamily: "Rubik-Regular",
+    textAlign: "center",
+    maxWidth: 340,
+    marginBottom: 18,
+  },
+  error: {
+    color: "#D92D20",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 10,
+    fontFamily: "Rubik-Regular",
+  },
+  success: {
+    color: BRAND,
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 10,
+    fontFamily: "Rubik-Regular",
+  },
+  cta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: INK,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 360,
+    minHeight: 52,
+  },
+  ctaDisabled: {
+    opacity: 0.65,
+  },
+  ctaText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: "Rubik-SemiBold",
+  },
+  secondary: {
+    marginTop: 14,
+    paddingVertical: 8,
+  },
+  secondaryText: {
+    color: "#667085",
+    fontSize: 14,
+    fontFamily: "Rubik-Regular",
+  },
+});

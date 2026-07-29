@@ -1,46 +1,83 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
-    createContext,
-    ReactNode,
-    useContext,
-    useRef,
-    useState,
+  createContext,
+  ReactNode,
+  useContext,
+  useRef,
+  useState,
 } from "react";
+import {
+  mapCachedComment,
+  mapCommentsDeep,
+  toCachePayload,
+  type CommentCreatorInfo,
+  type CommentThreadItem,
+} from "../components/comments";
+import { useCommentTyping } from "../hooks/comments/useCommentTyping";
 import SocketManager from "../services/SocketManager";
 import { useInteractionStore } from "../store/useInteractionStore";
-import contentInteractionAPI from "../utils/contentInteractionAPI";
+import { getApiBaseUrl } from "../utils/api";
+import contentInteractionAPI, {
+  hydrateCommentsCacheFromDisk,
+  invalidateDiskCommentsCache,
+  peekCachedComments,
+  putCachedComments,
+  writeDiskCommentsCache,
+} from "../utils/contentInteractionAPI";
 import TokenUtils from "../utils/tokenUtils";
 
-interface Comment {
-  id: string;
-  userName: string;
-  avatar: string;
-  timestamp: string;
-  comment: string;
-  likes: number;
-  isLiked: boolean;
-  replies?: Comment[];
-  parentId?: string; // ID of the parent comment if this is a reply
-}
+type Comment = CommentThreadItem;
+
+export type { CommentCreatorInfo };
+
+export type SubmitCommentInput =
+  | string
+  | {
+      text: string;
+      mentions?: { userId: string; displayName: string }[];
+      localImage?: { uri: string; type: string; name: string } | null;
+    };
+
+export type EditCommentInput = {
+  content?: string;
+  imageUrl?: string;
+  clearImage?: boolean;
+  localImage?: { uri: string; type: string; name: string } | null;
+};
 
 interface CommentModalContextType {
   isVisible: boolean;
   comments: Comment[];
   isLoadingComments: boolean;
+  loadError: string | null;
+  composerError: string | null;
+  clearComposerError: () => void;
   showCommentModal: (
     comments: Comment[],
     contentId?: string,
     contentType?: "media" | "devotional",
-    contentOwnerName?: string
+    contentOwnerName?: string,
+    creator?: CommentCreatorInfo | null
   ) => void;
   hideCommentModal: () => void;
-  addComment: (comment: Comment) => void; // local insert (kept for backwards compatibility)
+  addComment: (comment: Comment) => void;
   updateComment: (commentId: string, updates: Partial<Comment>) => void;
   likeComment: (commentId: string) => void;
-  replyToComment: (commentId: string, replyText: string) => void;
-  submitComment: (text: string) => Promise<void>;
+  replyToComment: (
+    commentId: string,
+    replyTextOrPayload: SubmitCommentInput
+  ) => Promise<void>;
+  submitComment: (textOrPayload: SubmitCommentInput) => Promise<void>;
+  editComment: (commentId: string, input: EditCommentInput) => Promise<void>;
+  deleteComment: (commentId: string) => Promise<void>;
   loadMoreComments: () => Promise<void>;
+  retryLoadComments: () => Promise<void>;
   contentOwnerName?: string;
+  contentCreator?: CommentCreatorInfo | null;
+  /** Other users currently typing in this thread */
+  typingUsers: { userId: string; displayName: string }[];
+  /** Call from composer while the local user types */
+  setLocalTyping: (isTyping: boolean) => void;
 }
 
 const CommentModalContext = createContext<CommentModalContextType | undefined>(
@@ -59,6 +96,9 @@ export const useCommentModal = () => {
       isVisible: false,
       comments: [] as Comment[],
       isLoadingComments: false,
+      loadError: null,
+      composerError: null,
+      clearComposerError: () => {},
       showCommentModal: () => {},
       hideCommentModal: () => {},
       addComment: () => {},
@@ -66,8 +106,14 @@ export const useCommentModal = () => {
       likeComment: () => {},
       replyToComment: async () => {},
       submitComment: async () => {},
+      editComment: async () => {},
+      deleteComment: async () => {},
       loadMoreComments: async () => {},
+      retryLoadComments: async () => {},
       contentOwnerName: undefined as string | undefined,
+      contentCreator: null,
+      typingUsers: [],
+      setLocalTyping: () => {},
     } as CommentModalContextType;
   }
   return context;
@@ -87,12 +133,17 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     "media" | "devotional"
   >("media");
   const [currentContentOwnerName, setCurrentContentOwnerName] = useState<string>("");
+  const [contentCreator, setContentCreator] = useState<CommentCreatorInfo | null>(
+    null
+  );
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "top">("newest");
-  const isLoadingRef = useRef(false);
+  const loadGenRef = useRef(0);
   const [isOpening, setIsOpening] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [composerError, setComposerError] = useState<string | null>(null);
 
   const { addComment: addCommentToStore, toggleCommentLike } =
     useInteractionStore();
@@ -100,73 +151,115 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
   const currentUserIdRef = useRef<string>("");
   const currentUserFirstNameRef = useRef<string>("");
   const currentUserLastNameRef = useRef<string>("");
+  const lastSheetRef = useRef<{ contentId: string; comments: Comment[] } | null>(
+    null
+  );
+  const currentContentIdRef = useRef("");
+  const currentContentTypeRef = useRef<"media" | "devotional">("media");
+
+  const typing = useCommentTyping({
+    getContentId: () => currentContentIdRef.current,
+    getContentType: () => currentContentTypeRef.current,
+    getSocket: () => socketManagerRef.current,
+    getCurrentUserId: () => currentUserIdRef.current,
+    getDisplayName: () =>
+      `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() ||
+      "You",
+  });
+  const {
+    typingUsers,
+    setLocalTyping,
+    applyRemoteTyping,
+    clearTyping,
+    stopLocalTypingBroadcast,
+  } = typing;
 
   const showCommentModal = (
     newComments: Comment[],
     contentId?: string,
     contentType: "media" | "devotional" = "media",
-    contentOwnerName?: string
+    contentOwnerName?: string,
+    creator?: CommentCreatorInfo | null
   ) => {
-    // INSTANT RESPONSE - No blocking conditions
-    // console.log("📣 showCommentModal called INSTANTLY", {
-    //   contentId,
-    //   contentType,
-    //   incomingCount: newComments?.length || 0,
-    // });
-    
-    // Try to load cached comments immediately for instant display
-    let cachedComments: Comment[] = [];
-    if (contentId) {
-      try {
-        // Check interaction store for cached comments
-        const store = useInteractionStore.getState();
-        const storeComments = store.comments[contentId];
-        if (storeComments && Array.isArray(storeComments) && storeComments.length > 0) {
-          // Transform store comments to Comment format
-          cachedComments = storeComments.slice(0, 12).map((c: any) => ({
-            id: c.id || c._id,
-            userName: c.userName || c.username || "User",
-            avatar: c.avatar || c.userAvatar || "",
-            timestamp: c.timestamp || c.createdAt || new Date().toISOString(),
-            comment: c.comment || c.text || "",
-            likes: c.likes || 0,
-            isLiked: c.isLiked || false,
-            replies: c.replies || [],
-            userId: c.userId,
-          }));
-          // console.log("⚡ Using cached comments from store:", cachedComments.length);
-        }
-      } catch (e) {
-        // console.warn("Failed to load cached comments:", e);
-      }
-    }
-    
-    // Set modal visible IMMEDIATELY - no delays
+    const type = contentType || "media";
+
+    // Paint sheet IMMEDIATELY — no awaits on open path
     setIsVisible(true);
-    // Show loading skeleton if no cached comments, otherwise show cached
-    if (cachedComments.length > 0) {
-      setComments(cachedComments);
-      setIsLoadingComments(false);
+    setLoadError(null);
+    setComposerError(null);
+    setIsOpening(false);
+    if (contentId) setCurrentContentId(contentId);
+    setCurrentContentType(type);
+    if (contentId) currentContentIdRef.current = contentId;
+    currentContentTypeRef.current = type;
+    if (contentOwnerName) setCurrentContentOwnerName(contentOwnerName);
+    if (creator?.displayName) {
+      setContentCreator(creator);
+      if (!contentOwnerName) setCurrentContentOwnerName(creator.displayName);
+    } else if (contentOwnerName) {
+      setContentCreator({
+        userId: "",
+        displayName: contentOwnerName,
+      });
     } else {
-      // Don't show dummy comments - show skeleton instead
-      setComments([]);
-      setIsLoadingComments(true);
-    }
-    if (contentId) {
-      setCurrentContentId(contentId);
-    }
-    setCurrentContentType(contentType || "media");
-    if (contentOwnerName) {
-      setCurrentContentOwnerName(contentOwnerName);
+      setContentCreator(null);
     }
     setPage(1);
     setHasMore(true);
-    setIsOpening(false);
-    
-    // console.log("📣 showCommentModal -> setIsVisible(true) INSTANT");
 
-    // Fetch NOW — InteractionManager deferral made open feel laggy on slow devices
+    let instant: Comment[] = [];
     if (contentId) {
+      const mem = peekCachedComments(contentId, sortBy);
+      if (mem?.comments?.length) {
+        instant = mem.comments.map(mapCachedComment).filter((c) => c.id);
+      } else if (
+        lastSheetRef.current?.contentId === contentId &&
+        lastSheetRef.current.comments.length
+      ) {
+        instant = lastSheetRef.current.comments;
+      } else {
+        try {
+          const storeComments =
+            useInteractionStore.getState().comments[contentId];
+          if (Array.isArray(storeComments) && storeComments.length > 0) {
+            instant = storeComments
+              .slice(0, 20)
+              .map(mapCachedComment)
+              .filter((c) => c.id);
+          }
+        } catch {
+          // no-op
+        }
+      }
+    }
+    if (newComments?.length && instant.length === 0) {
+      instant = newComments;
+    }
+
+    if (instant.length > 0) {
+      setComments(instant);
+      setIsLoadingComments(false);
+    } else {
+      setComments([]);
+      setIsLoadingComments(true);
+    }
+
+    clearTyping();
+
+    if (contentId) {
+      // Disk → memory hydrate (survives app kill). Apply if list still empty.
+      void hydrateCommentsCacheFromDisk(contentId, sortBy).then((disk) => {
+        if (!disk?.comments?.length) return;
+        const mapped = disk.comments.map(mapCachedComment).filter((c) => c.id);
+        if (!mapped.length) return;
+        setComments((prev) => (prev.length > 0 ? prev : mapped));
+        setIsLoadingComments(false);
+      });
+
+      // Silent refresh when we already painted cache — no skeleton flash
+      void loadCommentsFromServer(contentId, type, 1, sortBy, true, {
+        silent: instant.length > 0,
+      });
       void AsyncStorage.getItem("user")
         .then((userStr) => {
           if (!userStr) return;
@@ -180,25 +273,35 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
           }
         })
         .catch(() => {});
-
-      void loadCommentsFromServer(contentId, contentType, 1, sortBy, true).catch(
-        () => {}
-      );
-      void joinRealtimeRoom(contentId, contentType).catch(() => {});
+      void joinRealtimeRoom(contentId, type).catch(() => {});
     }
   };
 
   const hideCommentModal = () => {
-    try {
-      // console.log("📣 hideCommentModal called");
-    } catch {}
+    if (currentContentId && comments.length > 0) {
+      lastSheetRef.current = {
+        contentId: currentContentId,
+        comments,
+      };
+      try {
+        putCachedComments(currentContentId, sortBy, {
+          comments: toCachePayload(currentContentId, comments) as any,
+          totalComments: comments.length,
+          hasMore,
+        });
+        void writeDiskCommentsCache(currentContentId, sortBy, {
+          comments,
+          hasMore,
+          totalComments: comments.length,
+        });
+      } catch {}
+    }
     setIsVisible(false);
-    setIsOpening(false); // Reset opening state
-    setComments([]);
-    setCurrentContentId("");
-    setCurrentContentOwnerName("");
-    setHasMore(true);
-    // Leave realtime room
+    setIsOpening(false);
+    setLoadError(null);
+    clearTyping();
+    stopLocalTypingBroadcast();
+    // Do NOT clear comments — keeps reopen instant
     try {
       socketManagerRef.current?.leaveContentRoom(
         currentContentId,
@@ -221,9 +324,7 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
    */
   const updateComment = (commentId: string, updates: Partial<Comment>) => {
     setComments((prev) =>
-      prev.map((comment) =>
-        comment.id === commentId ? { ...comment, ...updates } : comment
-      )
+      mapCommentsDeep(prev, commentId, (c) => ({ ...c, ...updates }))
     );
   };
 
@@ -277,34 +378,55 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     }
   };
 
-  const replyToComment = async (commentId: string, replyText: string) => {
+  const normalizeSubmitInput = (
+    textOrPayload: SubmitCommentInput
+  ): {
+    text: string;
+    mentions?: { userId: string; displayName: string }[];
+    localImage?: { uri: string; type: string; name: string } | null;
+  } => {
+    if (typeof textOrPayload === "string") {
+      return { text: textOrPayload };
+    }
+    return {
+      text: textOrPayload.text || "",
+      mentions: textOrPayload.mentions,
+      localImage: textOrPayload.localImage,
+    };
+  };
+
+  const replyToComment = async (
+    commentId: string,
+    replyTextOrPayload: SubmitCommentInput
+  ) => {
     try {
       if (!currentContentId) return;
-      
-      // Check if user is authenticated before allowing reply
-      const token = await AsyncStorage.getItem("userToken") || 
-                   await AsyncStorage.getItem("token");
-      
-      if (!token) {
-        // console.warn("⚠️ User not authenticated. Cannot submit reply.");
-        return;
-      }
+      const { text, mentions, localImage } =
+        normalizeSubmitInput(replyTextOrPayload);
+      if (!text.trim() && !localImage) return;
 
-      // Optimistic local reply - uses functional update with immutability
+      const token =
+        (await AsyncStorage.getItem("userToken")) ||
+        (await AsyncStorage.getItem("token"));
+
+      if (!token) return;
+
       const tempId = `temp-${Date.now()}`;
       const optimisticReply: Comment = {
         id: tempId,
-        userName: `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() || "You",
+        userName:
+          `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() ||
+          "You",
         avatar: "",
         timestamp: new Date().toISOString(),
-        comment: replyText,
+        comment: text.trim(),
         likes: 0,
         isLiked: false,
         parentId: commentId,
-        // @ts-ignore optional
         userId: currentUserIdRef.current,
+        imageUrl: localImage?.uri,
+        mentions,
       };
-      // Functional update: creates new array for replies using spread operator
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId
@@ -312,18 +434,20 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
             : c
         )
       );
-      // Backend
+
       await contentInteractionAPI.addComment(
         currentContentId,
-        replyText,
+        text.trim(),
         currentContentType,
-        commentId
+        {
+          parentCommentId: commentId,
+          mentions,
+          localImage,
+        }
       );
-      // Re-fetch replies or top-level if needed
     } catch (error) {
-      const err = error as Error & { status?: number; statusText?: string };
-      
-      // Log error with context
+      const err = error as Error & { status?: number; statusText?: string; code?: string };
+
       console.error("Error adding reply:", {
         error: err.message,
         status: err.status,
@@ -331,40 +455,41 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         commentId,
         contentId: currentContentId,
       });
-      
-      // Rollback: Remove optimistic reply if API call failed
-      // Functional update ensures immutability - creates new array with filter
+
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId
-            ? { ...c, replies: (c.replies || []).filter(reply => !reply.id.startsWith('temp-')) }
+            ? {
+                ...c,
+                replies: (c.replies || []).filter(
+                  (reply) => !reply.id.startsWith("temp-")
+                ),
+              }
             : c
         )
       );
-      
-      // Re-throw error so UI can show user-friendly message if needed
+
+      if (err.code === "COMMENT_IMAGE_UNSUPPORTED") {
+        setComposerError(err.message);
+      }
       throw error;
     }
   };
 
-  const submitComment = async (text: string) => {
+  const submitComment = async (textOrPayload: SubmitCommentInput) => {
     try {
-      if (!currentContentId || !text.trim()) return;
-      
-      // Check if user is authenticated before allowing comment submission
+      if (!currentContentId) return;
+      const { text, mentions, localImage } =
+        normalizeSubmitInput(textOrPayload);
+      if (!text.trim() && !localImage) return;
+
       const token =
         (await AsyncStorage.getItem("userToken")) ||
         (await AsyncStorage.getItem("token"));
-      
-      if (!token) {
-        // console.warn("⚠️ User not authenticated. Cannot submit comment.");
-        // You could show an alert here to prompt user to login
-        return;
-      }
+
+      if (!token) return;
 
       const trimmed = text.trim();
-
-      // Optimistic insert (temporary id) - uses functional update for immutability
       const tempId = `temp-${Date.now()}`;
       const optimistic: Comment = {
         id: tempId,
@@ -377,28 +502,30 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         likes: 0,
         isLiked: false,
         replies: [],
-        // @ts-ignore optional
         userId: currentUserIdRef.current,
+        imageUrl: localImage?.uri,
+        mentions,
       };
-      // Functional update: creates new array reference with spread operator
       setComments((prev) => [optimistic, ...prev]);
 
-      // Optimistically bump comment count in the centralized store
       try {
         const store = useInteractionStore.getState();
         store.mutateStats(currentContentId, (s) => ({
           comments: Math.max(0, (s?.comments || 0) + 1),
+          commentsConfirmed: true,
         }));
       } catch {}
 
-      // Call backend and get the real, canonical comment
       const created = await contentInteractionAPI.addComment(
         currentContentId,
         trimmed,
-        currentContentType
+        currentContentType,
+        {
+          mentions,
+          localImage,
+        }
       );
 
-      // Replace the temporary optimistic comment with the real one
       const createdComment: Comment = {
         id: created.id,
         userName: created.username,
@@ -408,24 +535,21 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         likes: created.likes || 0,
         isLiked: false,
         replies: [],
-        // @ts-ignore optional
         userId: created.userId,
+        imageUrl: created.imageUrl,
+        mentions: created.mentions,
       };
 
-      // Replace optimistic comment with real one - functional update ensures immutability
       setComments((prev) => {
-        // Filter out temp comments and create new array with real comment at top
         const withoutTemps = prev.filter((c) => !c.id.startsWith("temp-"));
         return [createdComment, ...withoutTemps];
       });
 
-      // Invalidate cache since we added a new comment
       try {
         const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
         await AsyncStorage.removeItem(cacheKey);
       } catch {}
 
-      // Keep store list warmed for next open — no full refetch (keeps UI snappy)
       try {
         useInteractionStore.setState((state: any) => {
           const existing = state.comments[currentContentId] || [];
@@ -443,6 +567,8 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
                   likes: created.likes || 0,
                   isLiked: false,
                   userId: created.userId,
+                  imageUrl: created.imageUrl,
+                  mentions: created.mentions,
                 },
                 ...existing.filter(
                   (c: any) =>
@@ -456,35 +582,153 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         // no-op
       }
     } catch (e) {
-      const error = e as Error & { status?: number; statusText?: string };
-      
-      // Log error with context
+      const error = e as Error & {
+        status?: number;
+        statusText?: string;
+        code?: string;
+      };
+
       console.error("Error submitting comment:", {
         error: error.message,
         status: error.status,
         statusText: error.statusText,
         contentId: currentContentId,
       });
-      
-      // Rollback: Remove any optimistic comments if API call failed
-      // Functional update ensures we create new array reference
+
       setComments((prev) =>
         prev.filter((comment) => !comment.id.startsWith("temp-"))
       );
-      
-      // Rollback comment count that was optimistically incremented
+
       try {
         const store = useInteractionStore.getState();
         store.mutateStats(currentContentId, (s) => ({
           comments: Math.max(0, (s?.comments || 0) - 1),
         }));
-      } catch (rollbackError) {
-        // Silently fail rollback - not critical
+      } catch {
+        // Silently fail rollback
       }
-      
-      // Re-throw error so UI can show user-friendly message if needed
-      // The error is caught by the calling component which can show an alert/toast
+
+      if (error.code === "COMMENT_IMAGE_UNSUPPORTED") {
+        setComposerError(error.message);
+      }
+
       throw error;
+    }
+  };
+
+  const editComment = async (commentId: string, input: EditCommentInput) => {
+    if (!commentId) return;
+
+    let snapshot: Comment | null = null;
+    const findIn = (
+      list: Array<Comment | NonNullable<Comment["replies"]>[number]>
+    ): Comment | null => {
+      for (const c of list) {
+        if (c.id === commentId) return c as Comment;
+        const replies = (c as Comment).replies;
+        if (replies?.length) {
+          const hit = findIn(replies);
+          if (hit) return hit;
+        }
+      }
+      return null;
+    };
+
+    setComments((prev) => {
+      if (!snapshot) snapshot = findIn(prev);
+      const base = snapshot;
+      const nextContent =
+        input.content != null ? input.content : base?.comment || "";
+      let nextImage = base?.imageUrl;
+      if (input.clearImage) nextImage = undefined;
+      else if (input.localImage?.uri) nextImage = input.localImage.uri;
+      else if (input.imageUrl) nextImage = input.imageUrl;
+
+      return mapCommentsDeep(prev, commentId, (c) => ({
+        ...c,
+        comment: nextContent,
+        imageUrl: nextImage,
+        isEdited: true,
+        editedAt: new Date().toISOString(),
+      }));
+    });
+
+    try {
+      const updated = await contentInteractionAPI.editComment(commentId, {
+        content: input.content,
+        imageUrl: input.imageUrl,
+        clearImage: input.clearImage,
+        localImage: input.localImage,
+      });
+
+      setComments((prev) =>
+        mapCommentsDeep(prev, commentId, (c) => ({
+          ...c,
+          comment: updated.comment,
+          imageUrl: updated.imageUrl,
+          mentions: updated.mentions ?? c.mentions,
+          isEdited: updated.isEdited ?? true,
+          editedAt: updated.editedAt || new Date().toISOString(),
+          userName: updated.username || c.userName,
+          avatar: updated.userAvatar || c.avatar,
+        }))
+      );
+
+      try {
+        const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
+        await AsyncStorage.removeItem(cacheKey);
+      } catch {}
+    } catch (e) {
+      const rollBack = snapshot;
+      if (rollBack) {
+        setComments((prev) =>
+          mapCommentsDeep(prev, commentId, () => rollBack)
+        );
+      }
+      const error = e as Error & { code?: string; message?: string };
+      if (
+        error.code === "COMMENT_IMAGE_UNSUPPORTED" ||
+        error.code === "COMMENT_EDIT_WINDOW_EXPIRED" ||
+        error.code === "COMMENT_CONTENT_REQUIRED"
+      ) {
+        setComposerError(error.message || "Couldn't update comment");
+      }
+      throw e;
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!commentId) return;
+
+    let snapshot: Comment[] | null = null;
+    setComments((prev) => {
+      snapshot = prev;
+      return mapCommentsDeep(prev, commentId, () => null);
+    });
+
+    try {
+      const store = useInteractionStore.getState();
+      store.mutateStats(currentContentId, (s) => ({
+        comments: Math.max(0, (s?.comments || 0) - 1),
+        commentsConfirmed: true,
+      }));
+    } catch {}
+
+    try {
+      await contentInteractionAPI.deleteComment(commentId);
+      try {
+        const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
+        await AsyncStorage.removeItem(cacheKey);
+      } catch {}
+    } catch (e) {
+      if (snapshot) setComments(snapshot);
+      try {
+        const store = useInteractionStore.getState();
+        store.mutateStats(currentContentId, (s) => ({
+          comments: Math.max(0, (s?.comments || 0) + 1),
+        }));
+      } catch {}
+      throw e;
     }
   };
 
@@ -493,71 +737,20 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     contentType: "media" | "devotional",
     pageNum: number,
     sort: "newest" | "oldest" | "top",
-    replace: boolean = false
+    replace: boolean = false,
+    opts?: { silent?: boolean }
   ) => {
-    if (isLoadingRef.current) return;
-    isLoadingRef.current = true;
-    if (pageNum === 1) {
+    const gen = ++loadGenRef.current;
+    if (pageNum === 1 && replace && !opts?.silent) {
       setIsLoadingComments(true);
+      setLoadError(null);
+    } else if (pageNum === 1 && replace && opts?.silent) {
+      setLoadError(null);
     }
     try {
-      // Check cache first for instant display (only on first page)
-      if (pageNum === 1) {
-        try {
-          const cacheKey = `comments-cache-${contentId}-${sort}`;
-          const cached = await AsyncStorage.getItem(cacheKey);
-          if (cached) {
-            const parsedCache = JSON.parse(cached);
-            const cacheAge = Date.now() - (parsedCache.timestamp || 0);
-            const CACHE_TTL = 5 * 60 * 1000; // fast reopen; fresh socket events still update totals
-            
-            if (cacheAge < CACHE_TTL && parsedCache.comments && parsedCache.comments.length > 0) {
-              // console.log("⚡ Loading comments from cache (age:", Math.round(cacheAge / 1000), "s)");
-              const cachedComments: Comment[] = parsedCache.comments.map((c: any) => ({
-                id: c.id,
-                userName: c.userName || "User",
-                avatar: c.avatar || "",
-                timestamp: c.timestamp,
-                comment: c.comment,
-                likes: c.likes || 0,
-                isLiked: c.isLiked || false,
-                replies: c.replies || [],
-                userId: c.userId,
-              }));
-              
-              if (replace) {
-                setComments(cachedComments);
-              } else {
-                setComments((prev) => {
-                  const existingById = new Map(prev.map((p) => [p.id, p] as const));
-                  const merged: Comment[] = [...prev];
-                  for (const c of cachedComments) {
-                    if (!existingById.has(c.id)) {
-                      merged.push(c);
-                    }
-                  }
-                  return merged;
-                });
-              }
-              setHasMore(parsedCache.hasMore || false);
-              setPage(parsedCache.page || 1);
-              
-              // Still fetch fresh data in background, but don't wait
-              // This ensures cache is updated for next time
-            }
-          }
-        } catch (cacheError) {
-          // console.warn("Cache read error:", cacheError);
-        }
-      }
-      
-      // GET comments is PUBLIC - no auth required
-      // Token is optional (only needed for isLiked status)
-      // Don't block comment loading if no token - comments should be publicly viewable
+      // First page smaller for faster TTFB
+      const limit = pageNum === 1 ? 12 : 20;
 
-      // First page smaller for faster TTFB (IG-style explore feel)
-      const limit = pageNum === 1 ? 8 : 20;
-      
       const res = await contentInteractionAPI.getComments(
         contentId,
         contentType,
@@ -565,116 +758,136 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         limit,
         sort
       );
-      
-      // console.log("📥 Comments loaded from server:", {
-      //   contentId,
-      //   contentType,
-      //   commentCount: res.comments?.length || 0,
-      //   totalComments: res.totalComments,
-      //   hasMore: res.hasMore,
-      //   firstComment: res.comments?.[0],
-      // });
-      
-      // Helper function to recursively map comments and their replies
+
+      if (gen !== loadGenRef.current) return; // stale response
+
       const mapComment = (c: any): Comment => {
-        // Extract user name - support multiple formats from backend
-        const first = c.firstName || c.userFirstName || c.user?.firstName || c.author?.firstName || "";
-        const last = c.lastName || c.userLastName || c.user?.lastName || c.author?.lastName || "";
+        const first =
+          c.firstName ||
+          c.userFirstName ||
+          c.user?.firstName ||
+          c.author?.firstName ||
+          "";
+        const last =
+          c.lastName ||
+          c.userLastName ||
+          c.user?.lastName ||
+          c.author?.lastName ||
+          "";
         const fullName = `${String(first).trim()} ${String(last).trim()}`.trim();
-        const name = fullName || c.username || c.user?.username || "User";
-        
-        const mappedComment: Comment = {
+        const name =
+          fullName || c.username || c.userName || c.user?.username || "User";
+
+        return {
           id: c.id || c._id,
           userName: name,
-          avatar: c.userAvatar || c.avatar || c.user?.avatar || c.user?.avatarUrl || c.author?.avatar || "",
+          avatar:
+            c.userAvatar ||
+            c.avatar ||
+            c.user?.avatar ||
+            c.user?.avatarUrl ||
+            c.author?.avatar ||
+            "",
           timestamp: c.timestamp || c.createdAt,
           comment: c.comment || c.content,
           likes: c.likes || c.likesCount || 0,
-          isLiked: Boolean(c.isLiked || false), // Backend should provide this
-          replies: Array.isArray(c.replies) && c.replies.length > 0
-            ? c.replies.map((r: any) => mapComment(r))
-            : [],
-          // @ts-ignore optional
+          isLiked: Boolean(c.isLiked || false),
+          imageUrl:
+            c.imageUrl ||
+            c.image ||
+            c.mediaUrl ||
+            c.attachmentUrl ||
+            undefined,
+          mentions: Array.isArray(c.mentions) ? c.mentions : undefined,
+          isEdited: Boolean(c.isEdited || c.edited),
+          editedAt: c.editedAt ? String(c.editedAt) : undefined,
+          replies:
+            Array.isArray(c.replies) && c.replies.length > 0
+              ? c.replies.map((r: any) => mapComment(r))
+              : [],
           userId: c.userId || c.user?._id || c.author?._id,
         };
-        
-        return mappedComment;
       };
-      
-      let mapped: Comment[] = (res.comments || []).map(mapComment);
-      
-      // Count total comments including replies for debugging
-      const totalWithReplies = mapped.reduce((sum, c) => {
-        return sum + 1 + (c.replies?.length || 0);
-      }, 0);
-      
-      // console.log("📊 Mapped comments:", {
-      //   topLevel: mapped.length,
-      //   totalWithReplies,
-      //   expectedTotal: res.totalComments,
-      // });
+
+      const mapped: Comment[] = (res.comments || [])
+        .map(mapComment)
+        .filter((c) => c.id && String(c.id) !== "undefined");
+
+      const total = Number(res.totalComments || 0);
+      // Never treat an empty next page as “couldn't load” when we already have rows.
+      // Also don't trust a stale hasMore:true when this page is short.
+      const nextHasMore =
+        mapped.length >= limit &&
+        pageNum * limit < Math.max(total, mapped.length);
+
       setComments((prev) => {
         if (replace) return mapped;
-        // Merge by id to keep any optimistic items not yet returned by server
+        if (mapped.length === 0) return prev;
         const existingById = new Map(prev.map((p) => [p.id, p] as const));
-        const merged: Comment[] = [];
-        // Keep current items first to preserve optimistic at the top
-        for (const p of prev) {
-          merged.push(p);
-        }
+        const merged: Comment[] = prev.map((p) => {
+          const newer = mapped.find((m) => m.id === p.id);
+          // Refresh fields (e.g. imageUrl) if server sent a fuller row
+          return newer ? { ...p, ...newer } : p;
+        });
         for (const m of mapped) {
-          if (!existingById.has(m.id)) {
-            merged.push(m);
-          }
+          if (!existingById.has(m.id)) merged.push(m);
         }
         return merged;
       });
-      setHasMore(Boolean(res.hasMore));
+      setHasMore(nextHasMore);
       setPage(pageNum);
       setIsLoadingComments(false);
 
-      // Keep card comment badge in sync with real total
+      if (pageNum === 1) {
+        setLoadError(
+          mapped.length === 0 && total === 0
+            ? null
+            : mapped.length === 0 && total > 0
+              ? "Comments couldn't be loaded. Pull to retry."
+              : null
+        );
+      } else if (mapped.length === 0) {
+        setHasMore(false);
+      }
+
+      if (mapped.length === 0 && total === 0 && replace) {
+        setLoadError(null);
+      }
+
       if (typeof res.totalComments === "number") {
         try {
           useInteractionStore.getState().mutateStats(contentId, () => ({
             comments: Math.max(0, res.totalComments),
+            commentsConfirmed: true,
           }));
         } catch {
           // no-op
         }
       }
-      
-      // Cache the results for faster subsequent loads (only cache first page)
-      if (pageNum === 1) {
-        try {
-          const cacheKey = `comments-cache-${contentId}-${sort}`;
-          await AsyncStorage.setItem(cacheKey, JSON.stringify({
-            comments: mapped,
-            hasMore: res.hasMore,
-            page: pageNum,
-            timestamp: Date.now(),
-          }));
-          // console.log("💾 Cached comments for faster next load");
-        } catch (cacheError) {
-          // console.warn("Cache write error:", cacheError);
-        }
+
+      if (pageNum === 1 && mapped.length > 0) {
+        lastSheetRef.current = { contentId, comments: mapped };
+        putCachedComments(contentId, sort, {
+          comments: toCachePayload(contentId, mapped) as any,
+          totalComments: total || mapped.length,
+          hasMore: nextHasMore,
+        });
+        void writeDiskCommentsCache(contentId, sort, {
+          comments: mapped,
+          hasMore: nextHasMore,
+          totalComments: total || mapped.length,
+          page: pageNum,
+        });
       }
     } catch (e) {
-      // console.error("❌ Failed loading comments from server:", {
-      //   contentId,
-      //   contentType,
-      //   error: e,
-      //   pageNum,
-      // });
-      // Don't throw error, just log it and continue with empty state
-      if (replace) {
-        setComments([]);
+      if (gen !== loadGenRef.current) return;
+      if (__DEV__) {
+        console.error("❌ Failed loading comments:", e);
+      }
+      if (!opts?.silent) {
+        setLoadError("Couldn't load comments. Tap to retry.");
       }
       setIsLoadingComments(false);
-      // If we have a comment count but no comments loaded, this might indicate an API issue
-      // The UI will show empty, but the count badge will still show the number
-    } finally {
-      isLoadingRef.current = false;
     }
   };
 
@@ -688,6 +901,18 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     );
   };
 
+  const retryLoadComments = async () => {
+    if (!currentContentId) return;
+    setLoadError(null);
+    await loadCommentsFromServer(
+      currentContentId,
+      currentContentType,
+      1,
+      sortBy,
+      true
+    );
+  };
+
   const joinRealtimeRoom = async (
     contentId: string,
     contentType: "media" | "devotional"
@@ -697,36 +922,37 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         const token = await TokenUtils.getAuthToken();
         if (!token) return;
         const manager = new SocketManager({
-          serverUrl: "https://api.jevahapp.com",
+          serverUrl: getApiBaseUrl(),
           authToken: token,
         });
         await manager.connect();
         manager.setEventHandlers({
           onContentComment: (data: any) => {
-            if (data?.contentId === currentContentId) {
-              // Invalidate cache when new comment arrives via socket
+            const activeId = currentContentIdRef.current;
+            if (data?.contentId === activeId) {
               try {
-                const cacheKey = `comments-cache-${currentContentId}-${sortBy}`;
-                AsyncStorage.removeItem(cacheKey).catch(() => {});
+                void invalidateDiskCommentsCache(activeId, sortBy);
               } catch {}
-              
-              // Refresh comments on any new comment event
               loadCommentsFromServer(
-                currentContentId,
-                currentContentType,
+                activeId,
+                currentContentTypeRef.current,
                 1,
                 sortBy,
-                true
+                true,
+                { silent: true }
               );
-              // Also refresh/store counts to keep badges in sync
               try {
-                const store = useInteractionStore.getState();
-                store.refreshContentStats(currentContentId);
+                useInteractionStore.getState().refreshContentStats(activeId);
               } catch {}
             }
           },
+          onCommentTyping: applyRemoteTyping,
         });
         socketManagerRef.current = manager;
+      } else {
+        socketManagerRef.current.setEventHandlers({
+          onCommentTyping: applyRemoteTyping,
+        });
       }
       socketManagerRef.current.joinContentRoom(contentId, contentType);
     } catch (e) {
@@ -738,6 +964,9 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     isVisible,
     comments,
     isLoadingComments,
+    loadError,
+    composerError,
+    clearComposerError: () => setComposerError(null),
     showCommentModal,
     hideCommentModal,
     addComment,
@@ -745,8 +974,14 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
     likeComment,
     replyToComment,
     submitComment,
+    editComment,
+    deleteComment,
     loadMoreComments,
+    retryLoadComments,
     contentOwnerName: currentContentOwnerName,
+    contentCreator,
+    typingUsers,
+    setLocalTyping,
   };
 
   return (

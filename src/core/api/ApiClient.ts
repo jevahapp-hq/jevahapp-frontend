@@ -2,14 +2,16 @@ import { API_CONFIG } from "../../shared/constants";
 import { ApiResponse } from "../../shared/types";
 
 class ApiClient {
-  private baseURL: string;
   private timeout: number;
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
-    this.baseURL = API_CONFIG.BASE_URL;
     this.timeout = API_CONFIG.TIMEOUT;
+  }
+
+  private get baseURL(): string {
+    return API_CONFIG.BASE_URL;
   }
 
   // Generic request method
@@ -221,6 +223,10 @@ class ApiClient {
             console.log("⚠️ Refresh token also invalid, clearing tokens");
             const TokenUtils = await import("../../../app/utils/tokenUtils");
             await TokenUtils.default.clearAuthTokens();
+            const { notifySessionExpired } = await import(
+              "../../../app/utils/sessionExpired"
+            );
+            notifySessionExpired();
             console.log("🔄 Session expired, tokens cleared");
           } else {
             // Other errors (network, server errors) - don't clear tokens

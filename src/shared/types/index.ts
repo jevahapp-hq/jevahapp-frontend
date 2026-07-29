@@ -11,6 +11,9 @@ export interface MediaItem extends BaseEntity {
   fileUrl: string;
   title: string;
   speaker?: string;
+  /** Optional MIME from upload / API — preferred over title for type detection */
+  mimeType?: string;
+  fileMimeType?: string;
   uploadedBy?: string | {
     _id: string;
     firstName?: string;
@@ -130,6 +133,8 @@ export interface VideoCardProps {
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   isAutoPlayEnabled?: boolean;
   shouldRenderPlayer?: boolean;
+  /** Feed focus loop — measureInWindow host */
+  focusRef?: (node: any) => void;
 }
 
 // Music/Audio-specific interfaces
@@ -147,6 +152,7 @@ export interface MusicCardProps {
   progress?: number;
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   onPause?: (id: string) => void;
+  focusRef?: (node: any) => void;
 }
 
 // Ebook-specific interfaces

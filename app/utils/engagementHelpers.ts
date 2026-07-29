@@ -17,8 +17,11 @@ export function mapContentTypeForBackend(contentType: string): string {
     return "ebook";
   }
   if (normalized === "podcast" || normalized === "podcasts") return "podcast";
+  if (normalized === "devotional" || normalized === "devotionals") {
+    return "devotional";
+  }
 
-  // video, audio, music, live, sermon, sermons, devotional, teachings, etc. → media
+  // video, audio, music, live, sermon, sermons, teachings, recording, image, etc. → media
   return "media";
 }
 

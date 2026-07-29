@@ -1,13 +1,5 @@
-import { Alert } from "react-native";
-import type { UploadState } from "../../types";
-import { formatFriendlyRejectionMessage } from "../../utils";
-
-type NotificationFn = (opts: {
-  type: "error" | "warning" | "info";
-  title: string;
-  message: string;
-  duration?: number;
-}) => void;
+import type { ModerationError, UploadResultState, UploadState } from "../../types";
+import { buildErrorResult, buildModerationResult } from "../../components/UploadResultModal";
 
 export function mapUploadNetworkError(error: unknown): string {
   const err = error as { name?: string; message?: string };
@@ -26,26 +18,21 @@ export async function handleUploadHttpError(params: {
   res: Response;
   result: unknown;
   rawText: string | null;
-  showNotification: NotificationFn;
-  setModerationError: (v: {
-    message: string;
-    reason?: string;
-    flags?: string[];
-    status?: string;
-  } | null) => void;
+  setModerationError: (v: ModerationError | null) => void;
+  setUploadResult: (v: UploadResultState | null) => void;
   setUploadState: (v: UploadState) => void;
 }): Promise<boolean> {
-  const { res, result, rawText, showNotification, setModerationError, setUploadState } =
+  const { res, result, rawText, setModerationError, setUploadResult, setUploadState } =
     params;
 
   if (res.status === 413) {
-    showNotification({
-      type: "warning",
-      title: "File too large",
-      message:
-        "The file exceeds the server's size limit. Please choose a smaller file or compress your media.",
-      duration: 5000,
-    });
+    setUploadResult(
+      buildErrorResult(
+        "The file exceeds the server's size limit. Choose a smaller file or compress your media.",
+        "File too large"
+      )
+    );
+    setUploadState({ status: "idle", progress: 0, message: "" });
     return true;
   }
 
@@ -59,28 +46,16 @@ export async function handleUploadHttpError(params: {
       };
     };
     const moderationResult = body.moderationResult || {};
-    const errorMessage =
-      body.message || "Content does not meet our community guidelines.";
-    const friendly = formatFriendlyRejectionMessage(
-      moderationResult.status,
-      moderationResult.reason,
-      moderationResult.flags,
-      errorMessage
-    );
-
-    showNotification({
-      type: friendly.isReview ? "info" : "warning",
-      title: friendly.title,
-      message: friendly.message,
-      duration: 6000,
-    });
-
-    setModerationError({
-      message: errorMessage,
+    const moderation: ModerationError = {
+      message:
+        body.message || "Content does not meet our community guidelines.",
       reason: moderationResult.reason,
       flags: moderationResult.flags || [],
       status: moderationResult.status,
-    });
+    };
+
+    setModerationError(moderation);
+    setUploadResult(buildModerationResult(moderation));
     setUploadState({ status: "idle", progress: 0, message: "" });
     return true;
   }
@@ -90,18 +65,17 @@ export async function handleUploadHttpError(params: {
     (body && (body.message || body.error)) ||
     (rawText ? `Unexpected response (${res.status}).` : `HTTP ${res.status}`);
 
-  showNotification({
-    type: "error",
-    title: "Upload failed",
-    message: message || "Please try again.",
-    duration: 5000,
-  });
+  setUploadResult(buildErrorResult(message || "Please try again."));
+  setUploadState({ status: "idle", progress: 0, message: "" });
   return true;
 }
 
-export function handleUploadParseFailure() {
-  Alert.alert(
-    "Upload failed",
-    "Server returned unexpected response. Please try again."
+export function handleUploadParseFailure(
+  setUploadResult: (v: UploadResultState | null) => void
+) {
+  setUploadResult(
+    buildErrorResult(
+      "Server returned an unexpected response. Please try again."
+    )
   );
 }

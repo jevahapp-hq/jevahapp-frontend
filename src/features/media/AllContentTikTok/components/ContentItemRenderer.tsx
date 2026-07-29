@@ -5,7 +5,7 @@
  */
 import React from "react";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon } from "../../../../shared/utils";
+import { detectMediaType, isAudioSermon } from "../../../../shared/utils";
 import EbookCard from "../../components/EbookCard";
 import MusicCard from "../../components/MusicCard";
 import VideoCard from "../../components/VideoCard";
@@ -36,9 +36,9 @@ export interface ContentItemRendererProps {
   onShare: (key: string, item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
   onModalToggle: (val: string | null) => void;
-  onLayout: (event: any, key: string, type: "video" | "music", uri?: string) => void;
+  onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   onPause: () => void;
-  onDelete: () => void;
+  onDelete: (item?: MediaItem) => void;
   playAudio: (uri: string, id: string) => void;
   pauseAllAudio: () => void;
   checkIfDownloaded: (item: any) => boolean;
@@ -48,6 +48,7 @@ export interface ContentItemRendererProps {
   isAutoPlayEnabled: boolean;
   currentUserId: string | null;
   shouldRenderPlayer?: boolean;
+  focusRef?: (node: any) => void;
 }
 
 function ContentItemRendererInner(props: ContentItemRendererProps) {
@@ -88,12 +89,30 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     isAutoPlayEnabled,
     currentUserId,
     shouldRenderPlayer,
+    focusRef,
   } = props;
 
   const key = getKey(item);
   const contentId = item._id || key;
   const modalKey = key;
   const isAudioSermonValue = isAudioSermon(item);
+  // File MIME/URL win over a wrong stored contentType (e.g. video titled "Book…")
+  const mediaKind = detectMediaType(item);
+  const storedType = String(item.contentType || "").toLowerCase().trim();
+  const isSermon =
+    storedType === "sermon" || storedType === "devotional";
+
+  const rejectGate = () => {
+    if (item.moderationStatus !== "rejected") return null;
+    const isOwner =
+      currentUserId &&
+      (item.userId === currentUserId ||
+        (typeof item.uploadedBy === "object" &&
+          item.uploadedBy?._id === currentUserId) ||
+        item.uploadedBy === currentUserId);
+    if (!isOwner) return <ContentUnavailableState />;
+    return null;
+  };
 
   const backendUserFavorites = { [key]: getUserLikeState(contentId) };
   const backendGlobalFavoriteCounts = { [key]: getLikeCount(contentId) };
@@ -131,6 +150,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     isAutoPlayEnabled,
     onDelete,
     shouldRenderPlayer: props.shouldRenderPlayer,
+    focusRef: props.focusRef,
   };
 
   const musicCardProps = {
@@ -147,6 +167,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onLayout,
     onPause: pauseAllAudio,
     onDelete,
+    focusRef: props.focusRef,
   };
 
   const ebookCardProps = {
@@ -161,56 +182,44 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onDelete,
   };
 
-  switch (item.contentType) {
+  const rejected = rejectGate();
+  if (rejected) return rejected;
+
+  if (isSermon) {
+    if (isAudioSermonValue) return <MusicCard key={key} {...musicCardProps} />;
+    return <VideoCard key={key} {...videoCardProps} />;
+  }
+
+  if (mediaKind === "video") {
+    return <VideoCard key={key} {...videoCardProps} />;
+  }
+  if (mediaKind === "audio") {
+    return <MusicCard key={key} {...musicCardProps} />;
+  }
+  if (mediaKind === "ebook") {
+    return <EbookCard key={key} {...ebookCardProps} />;
+  }
+
+  // Ambiguous file: use stored contentType tokens only (never title text)
+  switch (storedType) {
     case "video":
     case "videos":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
+    case "live":
       return <VideoCard key={key} {...videoCardProps} />;
-
-    case "sermon":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
-      if (isAudioSermonValue) return <MusicCard key={key} {...musicCardProps} />;
-      return <VideoCard key={key} {...videoCardProps} />;
-
     case "audio":
     case "music":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
+    case "podcast":
+    case "podcasts":
       return <MusicCard key={key} {...musicCardProps} />;
-
     case "image":
     case "ebook":
+    case "e-books":
     case "books":
-    default:
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
+    case "book":
+    case "pdf":
       return <EbookCard key={key} {...ebookCardProps} />;
+    default:
+      return <VideoCard key={key} {...videoCardProps} />;
   }
 }
 
@@ -243,6 +252,7 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
     prev.progresses[prevKey] === next.progresses[nextKey] &&
     (prev.currentlyVisibleVideo === prevKey) === (next.currentlyVisibleVideo === nextKey) &&
+    (prev.shouldRenderPlayer ?? true) === (next.shouldRenderPlayer ?? true) &&
     (prev.playingAudioId === prevMusicId) === (next.playingAudioId === nextMusicId) &&
     (prev.audioProgressMap[prevMusicId] ?? 0) === (next.audioProgressMap[nextMusicId] ?? 0) &&
     (prev.modalVisible === prevKey) === (next.modalVisible === nextKey) &&

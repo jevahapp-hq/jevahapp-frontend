@@ -25,6 +25,8 @@ export type ToggleLikeResult = {
 
 const DEFAULT_COOLDOWN_MS = 3000;
 let lastRateLimitAlertAt = 0;
+/** Latest-wins: ignore stale API responses after rapid like/unlike. */
+const likeGeneration = new Map<string, number>();
 
 function rollbackOptimisticLike(set: StoreSet, contentId: string, key: string) {
   set((state: any) => {
@@ -87,9 +89,10 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
         };
       }
 
-      if (get().loadingInteraction[key]) {
-        return currentSnapshot();
-      }
+      // IG/TikTok: never block the next tap while a request is in flight.
+      // Latest generation wins; stale responses are ignored.
+      const generation = (likeGeneration.get(contentId) ?? 0) + 1;
+      likeGeneration.set(contentId, generation);
 
       const defaultStats: ContentStats = {
         contentId,
@@ -142,7 +145,8 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
               userInteractions: { ...s.userInteractions, liked },
             },
           },
-          loadingInteraction: { ...state.loadingInteraction, [key]: true },
+          // Heart is already flipped — don't hold the UI in a loading lock.
+          loadingInteraction: { ...state.loadingInteraction, [key]: false },
         };
       });
 
@@ -167,11 +171,13 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
           expectedTotalLikes: optimistic?.likes ?? 0,
         });
 
+        // A newer tap already moved the heart — ignore this response.
+        if (likeGeneration.get(contentId) !== generation) {
+          return currentSnapshot();
+        }
+
         // Offline queue accepted the optimistic state — keep heart, clear loading.
         if (result?.offlineQueued || result?.offlineCancelled) {
-          set((state: any) => ({
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
-          }));
           return {
             liked: result.liked,
             totalLikes: result.totalLikes,
@@ -231,6 +237,11 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
           totalLikes: latest?.likes ?? result.totalLikes,
         };
       } catch (error) {
+        // Only roll back if this tap is still the latest gesture.
+        if (likeGeneration.get(contentId) !== generation) {
+          return currentSnapshot();
+        }
+
         rollbackOptimisticLike(set, contentId, key);
 
         const currentState = get().contentStats[contentId];

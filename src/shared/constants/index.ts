@@ -1,6 +1,10 @@
-// API Configuration
+// API Configuration — follows EXPO_PUBLIC_API_ENV (local | production)
+import { getApiBaseUrl } from "../../../app/utils/environmentManager";
+
 export const API_CONFIG = {
-  BASE_URL: "https://api.jevahapp.com",
+  get BASE_URL() {
+    return getApiBaseUrl();
+  },
   ENDPOINTS: {
     ALL_CONTENT: "/api/media/public/all-content",
     ALL_CONTENT_AUTH: "/api/media/all-content",
@@ -154,7 +158,9 @@ export const PAGINATION_CONFIG = {
 
 // Socket Configuration
 export const SOCKET_CONFIG = {
-  SERVER_URL: "https://api.jevahapp.com",
+  get SERVER_URL() {
+    return getApiBaseUrl();
+  },
   RECONNECT_ATTEMPTS: 5,
   RECONNECT_DELAY: 1000,
   HEARTBEAT_INTERVAL: 30000,

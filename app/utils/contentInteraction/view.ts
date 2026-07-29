@@ -55,6 +55,20 @@ export async function recordView(
     );
 
     if (!response.ok) {
+      // Local/incomplete backends often lack /view — don't treat as app failure
+      if (response.status === 404) {
+        recordViewThrottle.backoffUntil = Date.now() + 60_000;
+        if (__DEV__) {
+          devWarn(
+            "⚠️ View endpoint missing (404). Skipping view posts for 60s."
+          );
+        }
+        return { totalViews: 0, counted: false };
+      }
+      if (response.status === 429) {
+        recordViewThrottle.backoffUntil = Date.now() + 60_000;
+        return { totalViews: 0, counted: false };
+      }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 

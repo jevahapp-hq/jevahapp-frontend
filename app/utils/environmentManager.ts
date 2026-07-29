@@ -1,39 +1,80 @@
+import { Platform } from "react-native";
+
+/**
+ * API environment switch.
+ *
+ * Set in `.env`:
+ *   EXPO_PUBLIC_API_ENV=production   # live: https://api.jevahapp.com
+ *   EXPO_PUBLIC_API_ENV=local        # local backend
+ *
+ * Optional URL overrides:
+ *   EXPO_PUBLIC_API_URL_LOCAL=http://192.168.x.x:4000   # physical device
+ *   EXPO_PUBLIC_API_URL_PRODUCTION=https://api.jevahapp.com
+ *
+ * Legacy: EXPO_PUBLIC_API_URL is treated as the production URL when env=production.
+ */
+
 export type Environment = "local" | "production";
 
-interface EnvironmentConfig {
-  local: {
-    url: string;
-    name: string;
-  };
-  production: {
-    url: string;
-    name: string;
-  };
+export const PRODUCTION_API_URL = "https://api.jevahapp.com";
+
+/** Android emulator → host machine. iOS simulator → localhost. */
+function defaultLocalApiUrl(): string {
+  if (Platform.OS === "android") {
+    return "http://10.0.2.2:4000";
+  }
+  return "http://localhost:4000";
 }
 
-const ENVIRONMENT_CONFIG: EnvironmentConfig = {
-  local: {
-    url: process.env.EXPO_PUBLIC_API_URL || "http://10.156.136.168:4000",
-    name: "Local Development",
-  },
-  production: {
-    url: "https://api.jevahapp.com",
-    name: "Production",
-  },
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
+function parseApiEnv(raw: string | undefined): Environment {
+  const value = (raw || "").trim().toLowerCase();
+  if (
+    value === "local" ||
+    value === "dev" ||
+    value === "development" ||
+    value === "localhost"
+  ) {
+    return "local";
+  }
+  return "production";
+}
+
+export function resolveApiEnvironment(): Environment {
+  return parseApiEnv(process.env.EXPO_PUBLIC_API_ENV);
+}
+
+export function resolveApiBaseUrl(
+  environment: Environment = resolveApiEnvironment()
+): string {
+  if (environment === "local") {
+    const local =
+      process.env.EXPO_PUBLIC_API_URL_LOCAL?.trim() || defaultLocalApiUrl();
+    return stripTrailingSlash(local);
+  }
+
+  const production =
+    process.env.EXPO_PUBLIC_API_URL_PRODUCTION?.trim() ||
+    process.env.EXPO_PUBLIC_API_URL?.trim() ||
+    PRODUCTION_API_URL;
+
+  return stripTrailingSlash(production);
+}
+
+const ENVIRONMENT_NAMES: Record<Environment, string> = {
+  local: "Local Development",
+  production: "Production",
 };
 
 class EnvironmentManager {
-  private currentEnvironment: Environment = "production";
-  private listeners: ((env: Environment) => void)[] = [];
+  private currentEnvironment: Environment;
+  private listeners: Array<(env: Environment) => void> = [];
 
   constructor() {
-    this.detectEnvironment();
-  }
-
-  private detectEnvironment(): void {
-    // Always use production environment — EXPO_PUBLIC_API_URL in .env already points
-    // to the production server, so we never want to fall back to a local IP.
-    this.currentEnvironment = "production";
+    this.currentEnvironment = resolveApiEnvironment();
   }
 
   getCurrentEnvironment(): Environment {
@@ -41,11 +82,18 @@ class EnvironmentManager {
   }
 
   getCurrentUrl(): string {
-    return ENVIRONMENT_CONFIG[this.currentEnvironment].url;
+    return resolveApiBaseUrl(this.currentEnvironment);
   }
 
   getEnvironmentName(environment: Environment): string {
-    return ENVIRONMENT_CONFIG[environment].name;
+    return ENVIRONMENT_NAMES[environment];
+  }
+
+  /** Dev-only helper — restart Metro after changing .env for a full switch. */
+  setEnvironment(environment: Environment): void {
+    if (this.currentEnvironment === environment) return;
+    this.currentEnvironment = environment;
+    this.notifyListeners();
   }
 
   addListener(listener: (env: Environment) => void): () => void {
@@ -61,3 +109,16 @@ class EnvironmentManager {
 }
 
 export const environmentManager = new EnvironmentManager();
+
+/** Canonical API origin used across the app (no trailing slash). */
+export const API_BASE_URL = environmentManager.getCurrentUrl();
+
+export function getApiBaseUrl(): string {
+  return environmentManager.getCurrentUrl();
+}
+
+if (__DEV__) {
+  console.log(
+    `🌐 API env=${environmentManager.getCurrentEnvironment()} url=${API_BASE_URL}`
+  );
+}

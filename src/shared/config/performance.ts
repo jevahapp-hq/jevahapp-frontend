@@ -15,10 +15,10 @@ export const PERFORMANCE_CONFIG = {
 
   // Video optimization
   VIDEO: {
-    MAX_CONCURRENT: 3, // Max videos playing simultaneously
-    PRELOAD_DISTANCE: 2, // Preload 2 videos ahead
-    MEMORY_THRESHOLD: 0.8, // Cleanup at 80% memory usage
-    CACHE_DURATION: 600000, // 10 minutes
+    MAX_CONCURRENT: 4, // Warm more players ahead for instant first frame
+    PRELOAD_DISTANCE: 4, // Prefetch 4 videos ahead / behind
+    MEMORY_THRESHOLD: 0.85,
+    CACHE_DURATION: 2 * 60 * 60 * 1000, // 2 hours — heavy client cache
     QUALITY: {
       LOW: 'q_auto:low',
       MEDIUM: 'q_auto:good',
@@ -37,10 +37,10 @@ export const PERFORMANCE_CONFIG = {
 
   // Memory management
   MEMORY: {
-    MAX_CACHE_SIZE: 50,
-    CLEANUP_INTERVAL: 30000, // 30 seconds
-    MEMORY_THRESHOLD: 0.8,
-    CACHE_EXPIRY: 300000, // 5 minutes
+    MAX_CACHE_SIZE: 120,
+    CLEANUP_INTERVAL: 60000,
+    MEMORY_THRESHOLD: 0.85,
+    CACHE_EXPIRY: 2 * 60 * 60 * 1000, // 2 hours
   },
 
   // Network optimization

@@ -6,6 +6,7 @@
 import { Share } from "react-native";
 import { MediaItem } from "../../../../src/shared/types";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
+import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
 import { convertToDownloadableItem } from "../../../utils/downloadUtils";
 import {
   persistStats,
@@ -89,7 +90,7 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
     setRecommendedModalIndex(null);
   };
 
-  const incrementView = (key: string, video: VideoCardData) => {
+  const incrementView = async (key: string, video: VideoCardData) => {
     const alreadyExists = previouslyViewedState.some((item) => item.fileUrl === video.fileUrl);
     if (!alreadyExists) {
       const thumbnailUrl = video.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg";
@@ -106,14 +107,40 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
         return updatedViewed;
       });
     }
+
+    const contentId = String((video as any)._id || "").trim();
+    let nextViews = (videoStats[key]?.views || video.views || 0) + 1;
+
+    if (contentId) {
+      try {
+        const result = await contentInteractionAPI.recordView(
+          contentId,
+          viewContentTypeForItem((video as any).contentType || "videos"),
+          {
+            durationMs: 3000,
+            progressPct: 100,
+            isComplete: true,
+            source: "feed",
+          }
+        );
+        if (result?.counted === false) {
+          // Keep previously-viewed list, but do not inflate local count
+          return;
+        }
+        if (result?.totalViews != null) {
+          nextViews = Number(result.totalViews) || nextViews;
+        }
+      } catch {
+        // local bump below
+      }
+    }
+
     setVideoStats((prev) => {
-      const currentViews = prev[key]?.views || 0;
-      const newViews = currentViews + 1;
       const updated = {
         ...prev,
         [key]: {
           ...prev[key],
-          views: newViews,
+          views: nextViews,
           sheared: prev[key]?.sheared || video.sheared || 0,
           favorite: prev[key]?.favorite || video.favorite || 0,
           saved: prev[key]?.saved || video.saved || 0,

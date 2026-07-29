@@ -35,6 +35,11 @@ export default function LoginScreen() {
 
     const hydrateFromStorage = async () => {
       try {
+        const { resetSessionExpiredGate } = await import(
+          "../utils/sessionExpired"
+        );
+        resetSessionExpiredGate();
+
         const [storedEmail, storedRemember, storedToken] = await Promise.all([
           AsyncStorage.getItem("lastEmail"),
           AsyncStorage.getItem("rememberMe"),
@@ -51,14 +56,32 @@ export default function LoginScreen() {
         if (rememberFlag) {
           setRememberMe(true);
 
-          // If we still have a token and the user chose Remember Me,
-          // skip the form and take them back into the app.
+          // Only skip the form if the token is still valid on *this* API.
+          // Stale prod tokens against local Mongo used to bounce users back in.
           if (storedToken) {
-            // console.log(
-            //   "🔐 Remember Me active with stored token – redirecting to HomeScreen"
-            // );
-            router.replace("/categories/HomeScreen");
-            return;
+            try {
+              const { getApiBaseUrl } = await import(
+                "../utils/environmentManager"
+              );
+              const meRes = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${storedToken}`,
+                  "Content-Type": "application/json",
+                },
+              });
+              if (cancelled) return;
+              if (meRes.ok) {
+                router.replace("/categories/HomeScreen");
+                return;
+              }
+              const { clearLocalSessionState } = await import(
+                "../utils/sessionExpired"
+              );
+              await clearLocalSessionState();
+            } catch {
+              // Network blip — stay on login; do not auto-enter with unknown session
+            }
           }
         }
       } catch (err) {

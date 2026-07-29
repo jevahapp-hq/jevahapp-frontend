@@ -1,34 +1,100 @@
+/**
+ * Lightweight “email sent” confirmation — kept for routes that still import it.
+ * Prefer VerifyEmail modal for the full signup verify flow.
+ */
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { View, Text, Image, TextInput, TouchableOpacity } from "react-native";
-
+import {
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function EmailSeen() {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View className="flex justify-center px-6 rounded-4xl mt-6 w-[393px] h-[480px]">
-      <View className="flex flex-col justify-center items-center w-[333px]">
-    
-
-<View className="w-[36px] h-[4px] bg-gray-300 self-center rounded-full mb-6 mt-0" />
-        <Image source={require("../../assets/images/Clip path group.png")} />
-
-        <Text className="text-[32px] font-rubik-semibold mb-4 mt-4 text-[#1D2939] text-clip text-center">You’ve got an email</Text>
-
-        <Text className="text-[15px] mb-4 mt-4 text-[#344054] font-rubik text-clip text-center">Check your email, we’ve sent you a verification code. Enter the code in the next screen.</Text>
-
-        <TouchableOpacity
+    <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={styles.handle} />
+      <Image
+        source={require("../../assets/images/Clip path group.png")}
+        style={styles.image}
+        resizeMode="contain"
+      />
+      <Text style={styles.title}>You've got an email</Text>
+      <Text style={styles.subtitle}>
+        Check your email — we sent a verification code. Enter it on the next
+        screen to finish signup.
+      </Text>
+      <TouchableOpacity
+        style={styles.cta}
+        activeOpacity={0.88}
         onPress={() => router.push("/auth/codeVerification")}
-        className="bg-[#090E24] p-2 rounded-full  mt-4 w-[333px] h-[45px]"
       >
-        <Text className="text-white text-center mt-1">Okay, Got It</Text>
+        <Text style={styles.ctaText}>Okay, got it</Text>
+        <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
       </TouchableOpacity>
-
-      </View>
-
     </View>
   );
 }
 
-
-
-
-
+const styles = StyleSheet.create({
+  sheet: {
+    marginTop: 24,
+    marginHorizontal: 16,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    alignItems: "center",
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D0D5DD",
+    marginBottom: 16,
+  },
+  image: {
+    width: 96,
+    height: 96,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#101828",
+    fontFamily: "Rubik-Bold",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#475467",
+    fontFamily: "Rubik-Regular",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  cta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#090E24",
+    paddingVertical: 16,
+    borderRadius: 16,
+    width: "100%",
+    minHeight: 52,
+  },
+  ctaText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: "Rubik-SemiBold",
+  },
+});

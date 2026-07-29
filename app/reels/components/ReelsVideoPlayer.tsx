@@ -3,6 +3,7 @@ import { ResizeMode, Video } from "expo-av";
 import { MutableRefObject, memo, useEffect, useRef } from "react";
 import { TouchableOpacity, View } from "react-native";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
+import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
 import { handleVideoError } from "../../../src/shared/utils/videoUrlManager";
 
 interface ReelsVideoPlayerProps {
@@ -162,19 +163,28 @@ const ReelsVideoPlayer = memo(({
                         status.durationMillis
                     ) {
                         const positionMs = status.positionMillis || 0;
-                        const progressPct = (positionMs / status.durationMillis) * 100;
-                        const qualifies =
-                            positionMs >= 3000 || progressPct >= 25 || status.didJustFinish;
+                        const progress =
+                            status.durationMillis > 0
+                                ? positionMs / status.durationMillis
+                                : 0;
+                        const { qualifies, finished } = qualifiesPlaybackView({
+                            family: "video",
+                            isPlaying: true,
+                            positionMs,
+                            progress,
+                            durationMs: status.durationMillis,
+                        });
+                        const done = finished || Boolean(status.didJustFinish);
 
-                        if (qualifies) {
+                        if (qualifies || done) {
                             hasTrackedViewRef.current = true;
                             contentInteractionAPI
                                 .recordView(contentId, "media", {
-                                    durationMs: status.didJustFinish
+                                    durationMs: done
                                         ? status.durationMillis
                                         : positionMs,
-                                    progressPct: Math.round(progressPct),
-                                    isComplete: Boolean(status.didJustFinish),
+                                    progressPct: Math.round(progress * 100),
+                                    isComplete: done,
                                     source: "reels",
                                 })
                                 .then((result) => {

@@ -91,6 +91,10 @@ export class BaseApiClient {
           if (refreshResponse.status === 401 || refreshResponse.status === 402) {
             console.log("⚠️ Refresh token also invalid, clearing tokens");
             await TokenUtils.clearAuthTokens();
+            const { notifySessionExpired } = await import(
+              "../../../app/utils/sessionExpired"
+            );
+            notifySessionExpired();
             console.log("Session expired, tokens cleared");
           } else {
             // Other errors (network, server errors) - don't clear tokens

@@ -58,6 +58,7 @@ export interface UseAllContentTikTokHandlersParams {
   setShowSuccessCard: (v: boolean) => void;
   setCurrentlyVisibleVideo: (v: string | null) => void;
   refreshAllContent: () => Promise<void>;
+  reshuffleFeed?: () => Promise<void>;
   setRefreshing: (v: boolean) => void;
   toggleLike: (
     contentId: string,
@@ -90,6 +91,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     setShowSuccessCard,
     setCurrentlyVisibleVideo,
     refreshAllContent,
+    reshuffleFeed,
     setRefreshing,
     toggleLike,
     toggleSave,
@@ -219,8 +221,39 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
   const handleComment = useCallback(
     (key: string, item: MediaItem) => {
       const contentId = item._id || key;
-      // Open once — footer no longer also opens
-      showCommentModal([], contentId, "media", item.speaker || item.title);
+      const mapped = mapContentTypeForBackend(item.contentType || "media");
+      const uploadedBy = item.uploadedBy as any;
+      const creatorId =
+        typeof uploadedBy === "string"
+          ? uploadedBy
+          : String(uploadedBy?._id || uploadedBy?.id || "");
+      const creatorName =
+        item.speaker ||
+        (typeof uploadedBy === "object"
+          ? `${uploadedBy?.firstName || ""} ${uploadedBy?.lastName || ""}`.trim() ||
+            uploadedBy?.username
+          : "") ||
+        item.title ||
+        "";
+      const creatorAvatar =
+        item.speakerAvatar ||
+        (typeof uploadedBy === "object"
+          ? uploadedBy?.avatar || uploadedBy?.avatarUrl
+          : undefined);
+
+      showCommentModal(
+        [],
+        contentId,
+        mapped === "devotional" ? "devotional" : "media",
+        creatorName || undefined,
+        creatorName
+          ? {
+              userId: creatorId,
+              displayName: creatorName,
+              avatar: creatorAvatar,
+            }
+          : null
+      );
     },
     [showCommentModal]
   );
@@ -376,11 +409,13 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      // New shuffle seed first so UI order changes even if network is cached
+      await reshuffleFeed?.();
       await refreshAllContent();
     } finally {
       setRefreshing(false);
     }
-  }, [refreshAllContent, setRefreshing]);
+  }, [refreshAllContent, reshuffleFeed, setRefreshing]);
 
   return {
     handleVideoTap,

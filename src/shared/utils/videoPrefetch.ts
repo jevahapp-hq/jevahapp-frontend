@@ -11,8 +11,8 @@ import { PERF, recordSample } from "./perfMarks";
 
 const inflight = new Set<string>();
 const MAX_CONCURRENT = Math.min(
-  2,
-  PERFORMANCE_CONFIG.VIDEO.MAX_CONCURRENT || 2
+  4,
+  PERFORMANCE_CONFIG.VIDEO.MAX_CONCURRENT || 4
 );
 let active = 0;
 const queue: string[] = [];
@@ -29,7 +29,7 @@ async function warmUrl(url: string): Promise<void> {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        Range: "bytes=0-262143", // ~256KB
+        Range: "bytes=0-524287", // ~512KB — faster first-frame readiness
       },
     });
 

@@ -1,6 +1,10 @@
 import type { ContentInteractionClient } from "./client";
 import { isLikelyNetworkFailure, isNetworkOnline } from "./connectivity";
-import { RateLimitError, parseRetryAfterMs } from "./errors";
+import {
+  LikeServerError,
+  RateLimitError,
+  parseRetryAfterMs,
+} from "./errors";
 import { fallbackToggleLike } from "./fallbacks";
 import { createGestureIdempotencyKey } from "./idempotency";
 import { enqueueOrCancelLikeMutation } from "./likeQueue";
@@ -22,10 +26,7 @@ async function queueOfflineLike(
     typeof options.expectedLiked === "boolean"
       ? options.expectedLiked
       : !baselineLiked;
-  const targetTotalLikes = Math.max(
-    0,
-    options.expectedTotalLikes ?? 0
-  );
+  const targetTotalLikes = Math.max(0, options.expectedTotalLikes ?? 0);
 
   const { pending, cancelled } = await enqueueOrCancelLikeMutation({
     contentId,
@@ -73,30 +74,61 @@ export async function toggleLike(
     const headers = await ctx.getAuthHeaders();
     const requestUrl = `${ctx.baseURL}/api/content/${backendContentType}/${contentId}/like`;
 
-    devLog(
-      "📡 TOGGLE LIKE: Making request",
-      JSON.stringify(
-        {
-          url: requestUrl,
-          method: "POST",
-          hasAuth: Boolean((headers as any)?.Authorization),
-          idempotencyKey,
-          contentType: backendContentType,
-          contentId,
-        },
-        null,
-        2
-      )
-    );
-
-    const response = await fetch(requestUrl, {
-      method: "POST",
-      headers: {
+    const postLike = async (withIdempotencyKey: boolean) => {
+      const reqHeaders: Record<string, string> = {
         ...headers,
         "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
-      },
-    });
+      };
+      if (withIdempotencyKey) {
+        reqHeaders["Idempotency-Key"] = idempotencyKey;
+      }
+
+      devLog(
+        "📡 TOGGLE LIKE: Making request",
+        JSON.stringify(
+          {
+            url: requestUrl,
+            method: "POST",
+            hasAuth: Boolean((headers as any)?.Authorization),
+            idempotencyKey: withIdempotencyKey ? idempotencyKey : null,
+            contentType: backendContentType,
+            contentId,
+          },
+          null,
+          2
+        )
+      );
+
+      return fetch(requestUrl, {
+        method: "POST",
+        headers: reqHeaders,
+      });
+    };
+
+    let response = await postLike(true);
+
+    // Local Redis/idempotency store down → backend asks to retry without the key.
+    if (response.status === 503) {
+      const peekText = await response.text();
+      let peekData: any = {};
+      try {
+        peekData = JSON.parse(peekText);
+      } catch {
+        // Not JSON
+      }
+      const msg = String(peekData.message || peekText || "");
+      if (/idempotency/i.test(msg) || /idempotency/i.test(peekData.code || "")) {
+        devWarn(
+          "⚠️ TOGGLE LIKE: Idempotency store unavailable (503) — retrying without Idempotency-Key"
+        );
+        response = await postLike(false);
+      } else {
+        throw new Error(
+          peekData.message ||
+            "Like temporarily unavailable. Please try again shortly."
+        );
+      }
+    }
 
     devLog(
       "📡 TOGGLE LIKE: Response status:",
@@ -158,10 +190,28 @@ export async function toggleLike(
       }
 
       if (response.status === 503) {
-        // Idempotency store unavailable — surface; do not invent a local like.
         throw new Error(
           errorData.message ||
             "Like temporarily unavailable. Please try again shortly."
+        );
+      }
+
+      // 5xx / LIKE_OPERATION_FAILED — server bug or corrupt content row.
+      // Do NOT offline-queue (retries will keep failing and fake a success).
+      if (
+        response.status >= 500 ||
+        errorData.code === "LIKE_OPERATION_FAILED"
+      ) {
+        console.error(
+          "❌ TOGGLE LIKE: Server failed",
+          response.status,
+          errorData.code || "",
+          errorText
+        );
+        throw new LikeServerError(
+          errorData.message || "Failed to toggle like",
+          response.status,
+          errorData.code
         );
       }
 
@@ -218,10 +268,12 @@ export async function toggleLike(
       )
     );
 
+    // Server / auth / rate-limit / conflict — let store roll back optimistic UI.
     if (
+      error instanceof LikeServerError ||
       error instanceof RateLimitError ||
       (error instanceof Error &&
-        /authentication required|too many requests|idempotency|conflict|not found|unavailable/i.test(
+        /authentication required|too many requests|idempotency|conflict|not found|unavailable|failed to toggle like/i.test(
           error.message
         ))
     ) {
@@ -229,15 +281,13 @@ export async function toggleLike(
     }
 
     // Transport / offline failures → durable queue (same Idempotency-Key).
-    if (
-      isLikelyNetworkFailure(error) ||
-      !(await isNetworkOnline(true))
-    ) {
+    if (isLikelyNetworkFailure(error) || !(await isNetworkOnline(true))) {
       return queueOfflineLike(contentId, contentType, options, idempotencyKey);
     }
 
     console.error("Error toggling like:", error);
-    // Last resort: still queue rather than invent a second local toggle.
-    return queueOfflineLike(contentId, contentType, options, idempotencyKey);
+    throw error instanceof Error
+      ? error
+      : new Error(errorMessage || "Failed to toggle like");
   }
 }

@@ -48,7 +48,11 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
                 : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
             shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
             views: Math.max(existing?.views ?? 0, stats.views ?? 0),
-            comments: Math.max(existing?.comments ?? 0, stats.comments ?? 0),
+            // List-confirmed total wins; otherwise heal toward metadata (can go down to 0)
+            comments: existing?.commentsConfirmed
+              ? Math.max(0, existing.comments ?? 0)
+              : Math.max(0, stats.comments ?? 0),
+            commentsConfirmed: existing?.commentsConfirmed,
             userInteractions: {
               liked: hasActiveLike
                 ? existingLiked
@@ -136,11 +140,10 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
                   stats.views ?? 0,
                   Number(cached?.views) || 0
                 ),
-                comments: Math.max(
-                  existing?.comments ?? 0,
-                  stats.comments ?? 0,
-                  Number(cached?.comments) || 0
-                ),
+                comments: existing?.commentsConfirmed
+                  ? Math.max(0, existing.comments ?? 0)
+                  : Math.max(0, stats.comments ?? 0),
+                commentsConfirmed: existing?.commentsConfirmed,
                 userInteractions: {
                   liked:
                     cacheIsFresh && cached?.liked !== undefined

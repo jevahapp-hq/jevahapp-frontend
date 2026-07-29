@@ -2,7 +2,13 @@
  * Upload screen orchestrator — wires hooks + presentational pieces
  */
 
-import { KeyboardAvoidingView, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import {
   getButtonSize,
   getKeyboardAdjustment,
@@ -15,13 +21,11 @@ import AuthHeader from "../../components/AuthHeader";
 import { useMediaStore } from "../../store/useUploadStore";
 import { AiVerificationPlate } from "./components/AiVerificationPlate";
 import { MediaPickers } from "./components/MediaPickers";
-import {
-  ModerationErrorInline,
-  ModerationErrorModal,
-} from "./components/ModerationErrorModal";
+import { ModerationErrorInline } from "./components/ModerationErrorModal";
 import { UploadFormFields } from "./components/UploadFormFields";
 import { UploadLimitsPlate } from "./components/UploadLimitsPlate";
 import { UploadProgressModal } from "./components/UploadProgressModal";
+import { UploadResultModal } from "./components/UploadResultModal";
 import { useAIDescription } from "./hooks/useAIDescription";
 import { useMediaPickers } from "./hooks/useMediaPickers";
 import { useUploadFlow } from "./hooks/useUploadFlow";
@@ -55,35 +59,32 @@ export default function UploadScreen() {
     setDescription: form.setDescription,
   });
 
-  const { handleUpload } = useUploadFlow({
-    file: form.file,
-    thumbnail: form.thumbnail,
-    title: form.title,
-    description: form.description,
-    selectedCategory: form.selectedCategory,
-    selectedType: form.selectedType,
-    isSermonContent: form.isSermonContent,
-    setLoading: form.setLoading,
-    setUploadState: form.setUploadState,
-    setModerationError: form.setModerationError,
-    setEligibilityStatus: form.setEligibilityStatus,
-    validateMediaEligibilityLocal: form.validateMediaEligibilityLocal,
-    resetForm: form.resetForm,
-  });
+  const { handleUpload, confirmSuccessNavigate, cancelSuccessNavigate } =
+    useUploadFlow({
+      file: form.file,
+      thumbnail: form.thumbnail,
+      title: form.title,
+      description: form.description,
+      selectedCategory: form.selectedCategory,
+      selectedType: form.selectedType,
+      isSermonContent: form.isSermonContent,
+      setLoading: form.setLoading,
+      setUploadState: form.setUploadState,
+      setModerationError: form.setModerationError,
+      setUploadResult: form.setUploadResult,
+      setEligibilityStatus: form.setEligibilityStatus,
+      validateMediaEligibilityLocal: form.validateMediaEligibilityLocal,
+      resetForm: form.resetForm,
+    });
+
+  const result = form.uploadResult;
+  const isSuccess = result?.kind === "success";
 
   return (
     <>
       <UploadProgressModal
         visible={form.loading}
         uploadState={form.uploadState}
-      />
-
-      <ModerationErrorModal
-        moderationError={form.moderationError}
-        onDismiss={() => form.setModerationError(null)}
-        onIdleReset={() =>
-          form.setUploadState({ status: "idle", progress: 0, message: "" })
-        }
       />
 
       <KeyboardAvoidingView
@@ -150,13 +151,13 @@ export default function UploadScreen() {
                 onGenerateAIDescription={generateAIDescription}
               />
 
-              {form.moderationError && (
+              {form.moderationError && !result ? (
                 <ModerationErrorInline
                   moderationError={form.moderationError}
                   setModerationError={form.setModerationError}
                   setUploadState={form.setUploadState}
                 />
-              )}
+              ) : null}
 
               <View className="items-center mt-6">
                 <AiVerificationPlate />
@@ -195,6 +196,31 @@ export default function UploadScreen() {
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      <UploadResultModal
+        result={result}
+        onPrimary={() => {
+          if (isSuccess) {
+            confirmSuccessNavigate();
+            return;
+          }
+          form.setUploadResult(null);
+        }}
+        onSecondary={
+          isSuccess
+            ? () => {
+                cancelSuccessNavigate();
+              }
+            : undefined
+        }
+        onDismiss={() => {
+          if (isSuccess) {
+            cancelSuccessNavigate();
+            return;
+          }
+          form.setUploadResult(null);
+        }}
+      />
     </>
   );
 }

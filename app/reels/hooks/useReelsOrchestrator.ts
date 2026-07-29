@@ -1,7 +1,12 @@
 import { Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMediaDeletion } from "../../../src/shared/hooks/useMediaDeletion";
+import {
+  refreshFeedAfterDelete,
+  removeMediaFromFeedCaches,
+} from "../../../src/shared/utils/removeMediaFromFeedCaches";
 import { useCommentModal } from "../../context/CommentModalContext";
 import { useUserProfile } from "../../hooks/useUserProfile";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
@@ -140,6 +145,32 @@ export function useReelsOrchestrator() {
         isModalVisible: menuVisible,
     });
 
+    const queryClient = useQueryClient();
+
+    /** After API delete succeeds — remove instantly from Reels + feed caches (no second delete call). */
+    const handleDeleteSuccessUi = useCallback(() => {
+        const id = String(current.currentVideo?._id || "").trim();
+        setMenuVisible(false);
+        closeDeleteModal();
+        if (id) {
+            reelsStore.removeVideoById(id);
+            removeMediaFromFeedCaches(queryClient, id);
+            refreshFeedAfterDelete(queryClient);
+        }
+        const remaining = useReelsStore.getState().videoList;
+        const nextIndex = useReelsStore.getState().currentIndex;
+        setCurrentIndex_state(nextIndex);
+        if (remaining.length === 0) {
+            router.back();
+        }
+    }, [
+        current.currentVideo?._id,
+        closeDeleteModal,
+        queryClient,
+        reelsStore,
+        router,
+    ]);
+
     const triggerHapticFeedback = () => {
         // Basic trigger logic if needed
     };
@@ -275,6 +306,7 @@ export function useReelsOrchestrator() {
         isOwner,
         showDeleteModal,
         closeDeleteModal,
+        handleDeleteSuccessUi,
         triggerHapticFeedback,
         toggleVideoPlay,
         checkIfDownloaded,

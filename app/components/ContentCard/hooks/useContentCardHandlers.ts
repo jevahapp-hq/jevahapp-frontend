@@ -2,6 +2,8 @@ import { Animated } from "react-native";
 import { useCallback } from "react";
 import { useGlobalMediaStore } from "../../../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../store/useGlobalVideoStore";
+import contentInteractionAPI from "../../../utils/contentInteractionAPI";
+import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
 import { getUserDisplayNameFromContent } from "../../../utils/userValidation";
 import { getTimeAgo } from "../utils";
 import type { ContentCardProps } from "../types";
@@ -91,14 +93,51 @@ export function useContentCardHandlers(params: HandlersParams) {
   }, [commentAnimation]);
 
   const incrementView = useCallback(() => {
-    if (!viewCounted) {
+    if (viewCounted) return;
+    const contentId = String(content._id || "").trim();
+
+    const bumpLocal = (views?: number) => {
       setContentStats((prev) => ({
         ...prev,
-        [key]: { ...prev[key], views: (prev[key]?.views || content.viewCount) + 1 },
+        [key]: {
+          ...prev[key],
+          views:
+            typeof views === "number"
+              ? views
+              : (prev[key]?.views || content.viewCount || 0) + 1,
+        },
       }));
       setViewCounted(true);
+    };
+
+    if (!contentId) {
+      bumpLocal();
+      return;
     }
-  }, [viewCounted, key, content.viewCount, setContentStats, setViewCounted]);
+
+    void contentInteractionAPI
+      .recordView(contentId, viewContentTypeForItem(content.contentType), {
+        durationMs: 3000,
+        progressPct: 25,
+        isComplete: false,
+        source: "feed",
+      })
+      .then((result) => {
+        if (result?.counted === false) return;
+        bumpLocal(
+          result?.totalViews != null ? Number(result.totalViews) : undefined
+        );
+      })
+      .catch(() => bumpLocal());
+  }, [
+    viewCounted,
+    key,
+    content._id,
+    content.contentType,
+    content.viewCount,
+    setContentStats,
+    setViewCounted,
+  ]);
 
   const toggleVideoPlay = useCallback(() => {
     if (content.contentType === "video") {

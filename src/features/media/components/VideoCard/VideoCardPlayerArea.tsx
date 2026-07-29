@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudioPlayer";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
@@ -69,6 +69,19 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const suppressAutoLoopRef = useRef(false);
   const [hasTrackedView, setHasTrackedView] = useState(false);
   const ttffMeasuredRef = useRef(false);
+
+  const posterUri = useMemo(() => {
+    const raw =
+      (video as any).thumbnailUrl ??
+      (video as any).coverImageUrl ??
+      (video as any).imageUrl ??
+      null;
+    if (typeof raw === "string" && isValidUri(raw)) return raw;
+    if (raw && typeof raw === "object" && typeof raw.uri === "string" && isValidUri(raw.uri)) {
+      return raw.uri;
+    }
+    return null;
+  }, [video]);
 
   useEffect(() => {
     if (!videoUrl) return;
@@ -169,6 +182,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     isAudioSermon: isAudioSermonValue,
     videoTitle: video.title,
     contentId,
+    contentType: video.contentType || "media",
     isPlaying,
     handleVideoError,
     setFailedVideoLoad,
@@ -243,11 +257,23 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     <View className="w-full h-[400px] overflow-hidden relative bg-black">
       <TouchableWithoutFeedback onPress={handleVideoTap}>
         <View className="absolute inset-0">
+          {/* Keep cover under the player until the first frame is ready (no poster→player swap). */}
+          {!!posterUri && !videoLoaded && (
+            <Image
+              source={{ uri: posterUri }}
+              style={{
+                width: "100%",
+                height: "100%",
+                position: "absolute",
+              }}
+              resizeMode="cover"
+            />
+          )}
           {videoUrl && !isAudioSermonValue && player && (
             <VideoView
               key={videoUrl || key}
               player={player}
-              style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "black" }}
+              style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "transparent" }}
               contentFit="cover"
               nativeControls={false}
               fullscreenOptions={{ enable: false }}

@@ -1,155 +1,97 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * CommentModalV2 — thin composition shell (TikTok / IG same-window overlay).
+ * Row UI, animation, overlays, and composer live under ./comments/*.
+ */
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
-  Image,
-  Keyboard,
-  Modal,
   Platform,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  Pressable,
+  StyleSheet,
   View,
 } from "react-native";
-import {
-  GestureHandlerRootView,
-  PanGestureHandler,
-} from "react-native-gesture-handler";
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import { PanGestureHandler } from "react-native-gesture-handler";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AnimatedButton } from "../../src/shared/components/AnimatedButton";
-import { CommentSkeleton } from "../../src/shared/components/CommentSkeleton";
-import { formatTimeAgo } from "../../src/shared/utils";
+import { formatCount } from "../../src/shared/utils/formatCount";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { ensureAuthenticatedForInteraction } from "../utils/auth/requireAuthForInteraction";
-
-type Reply = {
-  id: string;
-  userName: string;
-  avatar?: string;
-  timestamp: string;
-  comment: string;
-  likes?: number;
-  isLiked?: boolean;
-};
-
-type CommentRow = {
-  id: string;
-  userName: string;
-  avatar?: string;
-  timestamp: string;
-  comment: string;
-  likes: number;
-  isLiked: boolean;
-  replies?: Reply[];
-};
-
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SCREEN_H = Dimensions.get("screen").height;
-/** IG/TikTok default half-sheet (~62% of screen) */
-const SHEET_HEIGHT_REST = Math.round(SCREEN_HEIGHT * 0.62);
-const DISMISS_THRESHOLD = 120;
-const SPRING_OPEN = { damping: 26, stiffness: 340, mass: 0.72 };
-const TIMING_OUT = { duration: 220, easing: Easing.in(Easing.cubic) };
+import contentInteractionAPI from "../utils/contentInteractionAPI";
+import {
+  CommentActionsModal,
+  CommentComposer,
+  CommentDeleteModal,
+  CommentListEmpty,
+  CommentRow,
+  CommentSheetHeader,
+  CommentSortModal,
+  CommentTypingBanner,
+  countAllComments,
+  sortCommentThread,
+  useCommentSheetAnimation,
+  useCommentSheetUiState,
+  type CommentThreadItem,
+  type MentionCandidate,
+  type SubmitCommentPayload,
+} from "./comments";
+import {
+  MEDIA_PEEK_HEIGHT,
+} from "./commentSheetLayout";
+import { COMMENT_COMPOSER_COLORS as C } from "./comments/types";
 
 export default function CommentModalV2() {
   const {
     isVisible,
     comments,
     isLoadingComments,
+    loadError,
+    composerError,
+    clearComposerError,
     hideCommentModal,
     submitComment,
     likeComment,
     replyToComment,
+    editComment,
+    deleteComment,
     loadMoreComments,
+    retryLoadComments,
+    contentOwnerName,
+    contentCreator,
+    typingUsers,
+    setLocalTyping,
   } = useCommentModal();
-  const { user } = useUserProfile();
+
+  const { user, getAvatarUrl, getFullName } = useUserProfile();
   const isAuthenticated = !!user;
+  const myAvatar = user ? getAvatarUrl(user) : null;
+  const myName = user ? getFullName(user) : "";
+  const myUserId = String(user?.id || user?._id || "");
+  const insets = useSafeAreaInsets();
+  const listRef = useRef<FlatList<CommentThreadItem>>(null);
+  const lastCountRef = useRef(0);
+
+  const ui = useCommentSheetUiState();
+  const anim = useCommentSheetAnimation({
+    isVisible,
+    onHideComplete: hideCommentModal,
+    onClosedUiReset: ui.resetUi,
+  });
 
   const promptGuestLogin = useCallback(() => {
     void ensureAuthenticatedForInteraction({ action: "comment" });
   }, []);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [text, setText] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [expandedReplies, setExpandedReplies] = useState<
-    Record<string, boolean>
-  >({});
-  const inputRef = useRef<TextInput>(null);
-  const listRef = useRef<FlatList<CommentRow>>(null);
-  const lastCountRef = useRef(0);
-  const closingRef = useRef(false);
-  const [replyingTo, setReplyingTo] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const insets = useSafeAreaInsets();
 
-  const translateY = useSharedValue(SCREEN_HEIGHT);
-  const backdropOpacity = useSharedValue(0);
+  const sortedComments = useMemo(
+    () => sortCommentThread(comments as CommentThreadItem[], ui.sortMode),
+    [comments, ui.sortMode]
+  );
 
-  // Dock sheet above the keyboard. Height stays ~rest size (clamped to
-  // remaining space) so header + list + full composer stay visible.
-  const sheetBottom = keyboardHeight;
-  const sheetHeight =
-    keyboardHeight > 0
-      ? Math.min(SHEET_HEIGHT_REST, Math.max(300, SCREEN_HEIGHT - keyboardHeight))
-      : SHEET_HEIGHT_REST;
-
-  useEffect(() => {
-    const onShow = (e: {
-      endCoordinates: { height: number; screenY: number };
-    }) => {
-      const { height, screenY } = e.endCoordinates;
-      // screenY-based inset can overshoot in Modal coords because SCREEN_H >
-      // window height (system nav). That left a video strip above the keyboard.
-      const fromScreen = Math.max(0, SCREEN_H - screenY);
-      const windowOvershoot = Math.max(0, SCREEN_H - SCREEN_HEIGHT);
-      const measured = Math.max(height, fromScreen) - windowOvershoot;
-      setKeyboardHeight(Math.max(0, measured));
-    };
-    const onHide = () => setKeyboardHeight(0);
-    const show = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      onShow
-    );
-    const hide = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      onHide
-    );
-    return () => {
-      show?.remove();
-      hide?.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isVisible) {
-      closingRef.current = false;
-      translateY.value = SHEET_HEIGHT_REST;
-      backdropOpacity.value = 0;
-      translateY.value = withSpring(0, SPRING_OPEN);
-      backdropOpacity.value = withTiming(0.5, { duration: 220 });
-    } else {
-      translateY.value = SCREEN_HEIGHT;
-      backdropOpacity.value = 0;
-      setText("");
-      setReplyingTo(null);
-      setExpandedReplies({});
-      setKeyboardHeight(0);
-    }
-  }, [isVisible, translateY, backdropOpacity]);
+  const totalCount = useMemo(
+    () => countAllComments(comments as CommentThreadItem[]),
+    [comments]
+  );
 
   useEffect(() => {
     if (!isVisible) return;
@@ -161,670 +103,370 @@ export default function CommentModalV2() {
     lastCountRef.current = comments.length;
   }, [comments, isVisible]);
 
-  const finishHide = useCallback(() => {
-    closingRef.current = false;
-    hideCommentModal();
-  }, [hideCommentModal]);
-
-  const closeModal = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    Keyboard.dismiss();
-    translateY.value = withTiming(sheetHeight + 40, TIMING_OUT);
-    backdropOpacity.value = withTiming(0, { duration: 180 });
-    setTimeout(() => finishHide(), 210);
-  }, [finishHide, translateY, backdropOpacity, sheetHeight]);
-
-  const handleSubmit = async () => {
-    const trimmed = text.trim();
-    if (!trimmed || !isAuthenticated || isSubmitting) return;
-
-    setIsSubmitting(true);
-    const commentText = trimmed;
-    const wasReplying = !!replyingTo;
-    const replyId = replyingTo?.id;
-    const replyName = replyingTo?.name || "";
-
-    setText("");
-    if (replyingTo) setReplyingTo(null);
-
-    try {
-      if (wasReplying && replyId) {
-        setExpandedReplies((prev) => ({ ...prev, [replyId]: true }));
-        await replyToComment(replyId, commentText);
-      } else {
-        await submitComment(commentText);
-      }
-    } catch (error) {
-      const err = error as Error & { status?: number };
-      setText(commentText);
-      if (wasReplying && replyId) {
-        setReplyingTo({ id: replyId, name: replyName });
-      }
-      const errorMessage =
-        err.status === 500
-          ? "Server error. Please try again later."
-          : err.status === 404
-            ? "Content not found. Please refresh and try again."
-            : err.message || "Failed to post comment. Please try again.";
-      Alert.alert("Error", errorMessage, [{ text: "OK" }]);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const startReply = useCallback((id: string, name: string) => {
-    setReplyingTo({ id, name });
-    const mention = `@${name} `;
-    setText((prev) => (prev.startsWith(mention) ? prev : mention));
-    setTimeout(() => inputRef.current?.focus(), 16);
-  }, []);
-
-  const toggleReplies = useCallback((id: string) => {
-    setExpandedReplies((prev) => ({ ...prev, [id]: !prev[id] }));
-  }, []);
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
-
-  const dismissFromGesture = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    Keyboard.dismiss();
-    setTimeout(() => finishHide(), 200);
-  }, [finishHide]);
-
-  const handleGestureEnd = (event: any) => {
-    "worklet";
-    const ty = event.translationY ?? event.nativeEvent?.translationY ?? 0;
-    if (ty > DISMISS_THRESHOLD) {
-      translateY.value = withTiming(SHEET_HEIGHT_REST + 80, TIMING_OUT);
-      backdropOpacity.value = withTiming(0, { duration: 180 });
-      runOnJS(dismissFromGesture)();
-    } else {
-      translateY.value = withSpring(0, SPRING_OPEN);
-    }
-  };
-
-  const keyExtractor = useCallback((item: CommentRow) => item.id, []);
-
-  const renderItem = useCallback(
-    ({ item: c }: { item: CommentRow }) => {
-      const replies = Array.isArray(c.replies) ? c.replies : [];
-      const replyCount = replies.length;
-      const isExpanded = expandedReplies[c.id] ?? replyCount <= 2;
-      const visibleReplies = isExpanded ? replies : [];
-
+  const isCreator = useCallback(
+    (name?: string) => {
+      if (!name || !contentOwnerName) return false;
       return (
-        <View
-          style={{
-            paddingVertical: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: "#F3F4F6",
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-              {c.avatar ? (
-                <Image
-                  source={{ uri: c.avatar }}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: "#E5E7EB",
-                  }}
-                />
-              ) : (
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: "#E5E7EB",
-                  }}
-                />
-              )}
-              <Text
-                numberOfLines={1}
-                style={{
-                  marginLeft: 8,
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: "#374151",
-                  maxWidth: "62%",
-                }}
-              >
-                {c.userName || "User"}
-              </Text>
-              <Text
-                style={{
-                  marginLeft: 6,
-                  fontSize: 11,
-                  color: "#9CA3AF",
-                  fontWeight: "600",
-                }}
-              >
-                {formatTimeAgo(c.timestamp)}
-              </Text>
-            </View>
-            <AnimatedCommentLikeButton
-              isLiked={c.isLiked}
-              likes={c.likes}
-              onPress={() => likeComment(c.id)}
-            />
-          </View>
-
-          <Text
-            style={{
-              fontSize: 14,
-              color: "#374151",
-              marginTop: 8,
-              marginLeft: 40,
-              lineHeight: 20,
-            }}
-          >
-            {c.comment}
-          </Text>
-
-          <View
-            style={{
-              marginTop: 8,
-              marginLeft: 40,
-              flexDirection: "row",
-              alignItems: "center",
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.6}
-              onPress={() => startReply(c.id, c.userName || "User")}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text
-                style={{ fontSize: 12, color: "#6B7280", fontWeight: "700" }}
-              >
-                Reply
-              </Text>
-            </TouchableOpacity>
-            {replyCount > 0 && (
-              <TouchableOpacity
-                activeOpacity={0.6}
-                onPress={() => toggleReplies(c.id)}
-                style={{ marginLeft: 16 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text
-                  style={{ fontSize: 12, color: "#10B981", fontWeight: "700" }}
-                >
-                  {isExpanded
-                    ? "Hide replies"
-                    : `View ${replyCount} ${replyCount === 1 ? "reply" : "replies"}`}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {isExpanded && replyCount > 0 && (
-            <View style={{ marginTop: 4, marginLeft: 40 }}>
-              {visibleReplies.map((r) => (
-                <View key={r.id} style={{ paddingVertical: 10 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                    }}
-                  >
-                    {r.avatar ? (
-                      <Image
-                        source={{ uri: r.avatar }}
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          backgroundColor: "#E5E7EB",
-                        }}
-                      />
-                    ) : (
-                      <View
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          backgroundColor: "#E5E7EB",
-                        }}
-                      />
-                    )}
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: "#374151",
-                        maxWidth: "70%",
-                      }}
-                    >
-                      {r.userName || "User"}
-                    </Text>
-                    <Text
-                      style={{
-                        marginLeft: 6,
-                        fontSize: 10,
-                        color: "#9CA3AF",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {formatTimeAgo(r.timestamp)}
-                    </Text>
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#374151",
-                      marginTop: 6,
-                      marginLeft: 32,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {r.comment}
-                  </Text>
-                  <TouchableOpacity
-                    activeOpacity={0.6}
-                    style={{ marginTop: 6, marginLeft: 32 }}
-                    onPress={() => startReply(c.id, r.userName || "User")}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: "#6B7280",
-                        fontWeight: "700",
-                      }}
-                    >
-                      Reply
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+        name.trim().toLowerCase() === contentOwnerName.trim().toLowerCase()
       );
     },
-    [expandedReplies, likeComment, startReply, toggleReplies]
+    [contentOwnerName]
   );
 
-  const listEmpty = useMemo(() => {
-    if (isLoadingComments) {
-      return (
-        <View style={{ paddingTop: 8 }}>
-          <CommentSkeleton count={5} />
-        </View>
-      );
-    }
-    return (
-      <View style={{ paddingVertical: 48, alignItems: "center" }}>
-        <Ionicons name="chatbubble-outline" size={44} color="#D1D5DB" />
-        <Text
-          style={{
-            fontSize: 16,
-            color: "#6B7280",
-            marginTop: 12,
-            textAlign: "center",
-          }}
-        >
-          No comments yet
-        </Text>
-        <Text
-          style={{
-            fontSize: 14,
-            color: "#9CA3AF",
-            marginTop: 4,
-            textAlign: "center",
-          }}
-        >
-          Be the first to share your thoughts!
-        </Text>
-      </View>
-    );
-  }, [isLoadingComments]);
+  const isOwnComment = useCallback(
+    (userId?: string) => {
+      if (!myUserId || !userId) return false;
+      return String(userId) === String(myUserId);
+    },
+    [myUserId]
+  );
 
-  // Safe inset lives INSIDE the composer so the white panel covers nav keys
-  // while the input still clears the system navigation.
-  // When keyboard is up, no extra pad — sheet bottom should meet the keys.
+  const searchMentions = useCallback(
+    async (q: string): Promise<MentionCandidate[]> => {
+      try {
+        const rows = await contentInteractionAPI.searchUsersForMentions(q, 10);
+        return rows.map((r) => ({
+          userId: r.userId,
+          displayName: r.displayName,
+          avatar: r.avatar,
+        }));
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
+  const handleSubmit = async (payload: SubmitCommentPayload) => {
+    if (!isAuthenticated || ui.isSubmitting) return;
+    const hasBody =
+      !!payload.text.trim() ||
+      !!payload.localImage ||
+      (ui.editingComment &&
+        !payload.clearImage &&
+        !!ui.editingComment.imageUrl);
+    if (!hasBody && !payload.clearImage) return;
+    if (
+      ui.editingComment &&
+      payload.clearImage &&
+      !payload.text.trim() &&
+      !payload.localImage
+    ) {
+      Alert.alert("Keep something", "Comments need text or a photo.");
+      return;
+    }
+
+    ui.setIsSubmitting(true);
+    const wasReplying = !!ui.replyingTo;
+    const replyId = ui.replyingTo?.id;
+    const replyName = ui.replyingTo?.name || "";
+    const wasEditing = ui.editingComment;
+    const editId = ui.editingComment?.id;
+
+    if (ui.replyingTo) ui.setReplyingTo(null);
+
+    try {
+      if (wasEditing && editId) {
+        await editComment(editId, {
+          content: payload.text,
+          clearImage: payload.clearImage,
+          localImage: payload.localImage,
+        });
+        ui.setEditingComment(null);
+      } else if (wasReplying && replyId) {
+        ui.setExpandedReplies((prev) => ({ ...prev, [replyId]: true }));
+        await replyToComment(replyId, payload);
+      } else {
+        await submitComment(payload);
+      }
+    } catch (error) {
+      const err = error as Error & { status?: number; code?: string };
+      if (wasReplying && replyId && !wasEditing) {
+        ui.setReplyingTo({ id: replyId, name: replyName });
+      }
+      if (
+        err.code !== "COMMENT_IMAGE_UNSUPPORTED" &&
+        err.code !== "COMMENT_EDIT_WINDOW_EXPIRED" &&
+        err.code !== "COMMENT_CONTENT_REQUIRED"
+      ) {
+        Alert.alert(
+          "Error",
+          err.message || "Failed to post comment. Please try again.",
+          [{ text: "OK" }]
+        );
+      }
+      throw error;
+    } finally {
+      ui.setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!ui.deleteTarget) return;
+    const id = ui.deleteTarget.id;
+    ui.setDeleteBusy(true);
+    try {
+      await deleteComment(id);
+      ui.setDeleteTarget(null);
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Couldn't delete comment");
+    } finally {
+      ui.setDeleteBusy(false);
+    }
+  }, [
+    deleteComment,
+    ui.deleteTarget,
+    ui.setDeleteBusy,
+    ui.setDeleteTarget,
+  ]);
+
+  const keyExtractor = useCallback((item: CommentThreadItem) => item.id, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: CommentThreadItem }) => (
+      <CommentRow
+        comment={item}
+        repliesExpanded={ui.expandedReplies[item.id] === true}
+        isOwn={isOwnComment}
+        isCreator={isCreator}
+        onLike={likeComment}
+        onReply={ui.startReply}
+        onToggleReplies={ui.toggleReplies}
+        onOpenOwnMenu={ui.openOwnMenu}
+      />
+    ),
+    [
+      ui.expandedReplies,
+      ui.startReply,
+      ui.toggleReplies,
+      ui.openOwnMenu,
+      isOwnComment,
+      isCreator,
+      likeComment,
+    ]
+  );
+
+  const listEmpty = useMemo(
+    () => (
+      <CommentListEmpty
+        isLoading={isLoadingComments}
+        loadError={loadError}
+        onRetry={() => void retryLoadComments()}
+      />
+    ),
+    [isLoadingComments, loadError, retryLoadComments]
+  );
+
   const composerBottomPad =
-    keyboardHeight > 0 ? 0 : Math.max(insets.bottom, 8);
+    anim.keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 10);
+
+  if (!isVisible) return null;
+
+  const headerLabel =
+    totalCount === 1 ? "1 comment" : `${formatCount(totalCount)} comments`;
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="none"
-      onRequestClose={closeModal}
-      presentationStyle="overFullScreen"
-      statusBarTranslucent
-    >
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        {/* Full-bleed dim over video / feed + BottomNav. Tap to close. */}
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeModal}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-          }}
-        >
+    <View style={styles.overlayRoot} pointerEvents="box-none">
+      <Pressable
+        style={[styles.dimHitArea, { height: MEDIA_PEEK_HEIGHT }]}
+        onPress={anim.closeModal}
+        accessibilityRole="button"
+        accessibilityLabel="Close comments"
+      >
+        <Animated.View style={[styles.dimFill, anim.backdropStyle]} />
+      </Pressable>
+
           <Animated.View
-            style={[
-              {
-                flex: 1,
-                backgroundColor: "rgba(0, 0, 0, 1)",
-              },
-              backdropAnimatedStyle,
-            ]}
-          />
-        </TouchableOpacity>
-
-        {/* White bridge under the sheet: if keyboard inset is 1–N px high,
-            this fills the strip so video never peeks between input and keys. */}
-        {keyboardHeight > 0 ? (
-          <View
             pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: keyboardHeight,
-              backgroundColor: "#FFFFFF",
-            }}
-          />
-        ) : null}
+        style={[styles.keyboardBridge, anim.keyboardBridgeStyle]}
+      />
 
-        {/* Sheet docks above keyboard (bottom = measured keyboard inset). */}
-        <Animated.View
-          style={[
-            {
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: sheetBottom,
-              height: sheetHeight,
-              backgroundColor: "#FFFFFF",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              flexDirection: "column",
-              overflow: "hidden",
-            },
-            sheetAnimatedStyle,
-          ]}
-        >
-          {/* Swipe-dismiss only on handle/header so FlatList scroll wins */}
+      <Animated.View style={[styles.sheet, anim.sheetAnimatedStyle]}>
           <PanGestureHandler
             activeOffsetY={8}
-            failOffsetX={[-20, 20]}
-            onGestureEvent={(event) => {
-              "worklet";
-              const ty = event.nativeEvent.translationY;
-              if (ty > 0) {
-                translateY.value = ty;
-              }
-            }}
-            onEnded={handleGestureEnd}
+          failOffsetX={[-24, 24]}
+          enabled={anim.keyboardHeight === 0}
+          onGestureEvent={anim.onPanGestureEvent}
+          onEnded={anim.handleGestureEnd}
           >
             <Animated.View>
-              <View
-                style={{
-                  alignItems: "center",
-                  paddingTop: 8,
-                  paddingBottom: 4,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: "#D1D5DB",
-                  }}
-                />
-              </View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingHorizontal: 16,
-                  paddingBottom: 10,
-                  borderBottomWidth: 1,
-                  borderBottomColor: "#F3F4F6",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color: "#374151",
-                  }}
-                >
-                  Comments
-                </Text>
-                <TouchableOpacity
-                  onPress={closeModal}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#F3F4F6",
-                    borderRadius: 18,
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="close" size={18} color="#374151" />
-                </TouchableOpacity>
+            <View style={styles.handleWrap}>
+              <View style={styles.handle} />
               </View>
             </Animated.View>
           </PanGestureHandler>
 
+        <CommentSheetHeader
+          title={headerLabel}
+          onSort={() => ui.setSortSheetOpen(true)}
+          onClose={anim.closeModal}
+        />
+
           <FlatList
             ref={listRef}
-            data={isLoadingComments ? [] : (comments as CommentRow[])}
+          data={sortedComments}
             keyExtractor={keyExtractor}
             renderItem={renderItem}
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingTop: 4,
-              paddingBottom: 12,
-              flexGrow: 1,
-            }}
-            showsVerticalScrollIndicator={false}
+          ListEmptyComponent={listEmpty}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
-            onEndReachedThreshold={0.4}
-            onEndReached={() => {
-              void loadMoreComments?.();
-            }}
-            ListEmptyComponent={listEmpty}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
             initialNumToRender={8}
             maxToRenderPerBatch={8}
             windowSize={7}
-            // Android + keyboard layout changes can blank the list if true
-            removeClippedSubviews={false}
-          />
+          removeClippedSubviews={Platform.OS === "android"}
+          onEndReached={() => {
+            void loadMoreComments();
+          }}
+          onEndReachedThreshold={0.35}
+        />
 
-          <View
-            // Keep composer from collapsing when FlatList + keyboard relayout
-            collapsable={false}
-            style={{
-              borderTopWidth: 1,
-              borderTopColor: "#E5E7EB",
-              backgroundColor: "#FFFFFF",
-              paddingHorizontal: 12,
-              paddingTop: 10,
-              paddingBottom: composerBottomPad,
-              flexShrink: 0,
-            }}
-          >
-            {replyingTo ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                }}
-              >
-                <Text style={{ fontSize: 12, color: "#6B7280" }}>
-                  Replying to{" "}
-                  <Text style={{ fontWeight: "700", color: "#10B981" }}>
-                    @{replyingTo.name}
-                  </Text>
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setReplyingTo(null);
-                    setText("");
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: "#9CA3AF",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
+        <CommentTypingBanner users={typingUsers} />
 
-            <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
-              <TouchableOpacity
-                activeOpacity={isAuthenticated ? 1 : 0.85}
-                disabled={isAuthenticated}
-                onPress={promptGuestLogin}
-                style={{
-                  flex: 1,
-                  backgroundColor: isAuthenticated ? "#F9FAFB" : "#F3F4F6",
-                  borderRadius: 20,
-                  paddingHorizontal: 14,
-                  paddingVertical: Platform.OS === "ios" ? 10 : 8,
-                  borderWidth: 1,
-                  borderColor: isAuthenticated ? "#E5E7EB" : "#D1D5DB",
-                  maxHeight: 110,
-                }}
-              >
-                <TextInput
-                  ref={inputRef}
-                  value={text}
-                  onChangeText={setText}
-                  placeholder={
-                    isAuthenticated
-                      ? replyingTo
-                        ? `Reply to ${replyingTo.name}...`
-                        : "Add a comment..."
-                      : "Sign in to comment"
-                  }
-                  placeholderTextColor={
-                    isAuthenticated ? "#6B7280" : "#9CA3AF"
-                  }
-                  style={{
-                    fontSize: 14,
-                    color: isAuthenticated ? "#374151" : "#9CA3AF",
-                    paddingVertical: 0,
-                    minHeight: 20,
-                    maxHeight: 90,
-                  }}
-                  multiline
-                  editable={isAuthenticated && !isSubmitting}
-                  pointerEvents={isAuthenticated ? "auto" : "none"}
-                  returnKeyType="default"
-                  blurOnSubmit={false}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={
-                  isAuthenticated
-                    ? !text.trim() || isSubmitting
-                    : false
+        <CommentComposer
+          key={isVisible ? "open" : "closed"}
+          isAuthenticated={isAuthenticated}
+          isSubmitting={ui.isSubmitting}
+          myAvatar={myAvatar}
+          myName={myName}
+          myUserId={myUserId}
+          replyingTo={ui.replyingTo}
+          onCancelReply={() => ui.setReplyingTo(null)}
+          editingComment={ui.editingComment}
+          onCancelEdit={() => ui.setEditingComment(null)}
+          onPromptLogin={promptGuestLogin}
+          onSubmit={handleSubmit}
+          onSearchMentions={searchMentions}
+          onTypingActivity={setLocalTyping}
+          threadComments={comments as CommentThreadItem[]}
+          creator={
+            contentCreator
+              ? {
+                  userId: contentCreator.userId,
+                  displayName: contentCreator.displayName,
+                  avatar: contentCreator.avatar,
+                  isCreator: true,
                 }
-                onPress={
-                  isAuthenticated ? handleSubmit : promptGuestLogin
-                }
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 21,
-                  backgroundColor:
-                    text.trim() && isAuthenticated && !isSubmitting
-                      ? "#10B981"
-                      : "#D1D5DB",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginLeft: 8,
-                  marginBottom: 1,
-                }}
-                activeOpacity={0.7}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons name="send" size={18} color="#FFFFFF" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Animated.View>
-      </GestureHandlerRootView>
-    </Modal>
-  );
-}
+              : contentOwnerName
+                ? {
+                    userId: "",
+                    displayName: contentOwnerName,
+                    isCreator: true,
+                  }
+                : null
+          }
+          composerError={composerError}
+          onClearComposerError={clearComposerError}
+          bottomPad={composerBottomPad}
+          onFocusInput={() => {
+            requestAnimationFrame(() => {
+              listRef.current?.scrollToOffset({
+                offset: 0,
+                animated: true,
+              });
+            });
+          }}
+        />
+      </Animated.View>
 
-function AnimatedCommentLikeButton({
-  isLiked,
-  likes,
-  onPress,
-}: {
-  isLiked: boolean;
-  likes: number;
-  onPress: () => void;
-}) {
-  return (
-    <AnimatedButton
-      onPress={onPress}
-      style={{ flexDirection: "row", alignItems: "center", paddingLeft: 8 }}
-      pressScale={0.8}
-      damping={12}
-      stiffness={400}
-    >
-      <Ionicons
-        name={isLiked ? "heart" : "heart-outline"}
-        size={18}
-        color={isLiked ? "#EF4444" : "#9CA3AF"}
+      <CommentSortModal
+        visible={ui.sortSheetOpen}
+        value={ui.sortMode}
+        onClose={() => ui.setSortSheetOpen(false)}
+        onChange={ui.setSortMode}
       />
-      {typeof likes === "number" && likes > 0 ? (
-        <Text style={{ marginLeft: 4, fontSize: 11, color: "#6B7280" }}>
-          {likes}
-        </Text>
-      ) : null}
-    </AnimatedButton>
+
+      <CommentActionsModal
+        visible={!!ui.actionsTarget}
+        canEdit={!!ui.actionsTarget?.canEdit}
+        onClose={() => ui.setActionsTarget(null)}
+        onEdit={() => {
+          if (!ui.actionsTarget) return;
+          ui.startEdit(ui.actionsTarget);
+        }}
+        onDelete={() => {
+          if (!ui.actionsTarget) return;
+          ui.confirmDelete(ui.actionsTarget.id, ui.actionsTarget.comment);
+        }}
+      />
+
+      <CommentDeleteModal
+        visible={!!ui.deleteTarget}
+        preview={ui.deleteTarget?.comment}
+        busy={ui.deleteBusy}
+        onCancel={() => {
+          if (ui.deleteBusy) return;
+          ui.setDeleteTarget(null);
+        }}
+        onConfirm={() => {
+          void handleConfirmDelete();
+        }}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  overlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  dimHitArea: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+  },
+  dimFill: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  keyboardBridge: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: C.sheet,
+  },
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    backgroundColor: C.sheet,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    flexDirection: "column",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 18,
+  },
+  handleWrap: {
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 8,
+    minHeight: 28,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.handle,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 8,
+    flexGrow: 1,
+  },
+});

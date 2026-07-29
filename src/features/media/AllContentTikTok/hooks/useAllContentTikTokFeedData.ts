@@ -19,8 +19,10 @@ import {
   idsSeenToday,
   markFeedImpressions,
   rememberLastSessionTopIds,
+  rotateSessionSeed,
 } from "../utils/feedImpressionStore";
 import {
+  createFeedShuffleSeed,
   pickMostRecentItem,
   rankFeedForYou,
 } from "../utils/rankFeedForYou";
@@ -49,7 +51,9 @@ export function useAllContentTikTokFeedData(
   const [lastSessionTopIds, setLastSessionTopIds] = useState<Set<string>>(
     new Set()
   );
-  const [sessionSeed, setSessionSeed] = useState<number>(1);
+  const [sessionSeed, setSessionSeed] = useState<number>(() =>
+    createFeedShuffleSeed()
+  );
   const [impressionsReady, setImpressionsReady] = useState(false);
   const [affinity, setAffinity] = useState<
     import("../utils/feedAffinityStore").FeedAffinityProfile | undefined
@@ -303,6 +307,11 @@ export function useAllContentTikTokFeedData(
     }
   }, [mediaList.length, setPreviouslyViewed, setIsLoadingContent, libraryStore]);
 
+  const reshuffleFeed = useCallback(async () => {
+    const seed = await rotateSessionSeed();
+    setSessionSeed(seed);
+  }, []);
+
   return {
     filteredMediaList,
     categorizedContent,
@@ -310,6 +319,7 @@ export function useAllContentTikTokFeedData(
     firstFour,
     nextFour,
     rest,
+    reshuffleFeed,
   };
 }
 

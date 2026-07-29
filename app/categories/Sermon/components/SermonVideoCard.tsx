@@ -18,6 +18,7 @@ import {
   getVideoUrlFromMedia,
 } from "../../../../src/shared/utils/videoUrlManager";
 import { useGlobalVideoStore } from "../../../store/useGlobalVideoStore";
+import { qualifiesPlaybackView } from "../../../utils/contentInteraction/viewQualification";
 import {
   getUserAvatarFromContent,
   getUserDisplayNameFromContent,
@@ -229,16 +230,38 @@ export default function SermonVideoCard({
             }}
             onPlaybackStatusUpdate={(status) => {
               if (!status.isLoaded) return;
-              const pct = status.durationMillis
-                ? (status.positionMillis / status.durationMillis) * 100
-                : 0;
+              const positionMs = status.positionMillis || 0;
+              const durationMs = status.durationMillis || 0;
+              const progress =
+                durationMs > 0 ? positionMs / durationMs : 0;
+              const pct = progress * 100;
               globalVideoStore.setVideoProgress(modalKey, pct);
               const ref = videoRefs.current[modalKey];
-              if (status.didJustFinish) {
-                if (!viewCounted[modalKey]) {
-                  incrementView(key, video);
-                  setViewCounted((prev) => ({ ...prev, [modalKey]: true }));
+
+              if (
+                status.isPlaying &&
+                !viewCounted[modalKey] &&
+                durationMs > 0
+              ) {
+                const { qualifies, finished } = qualifiesPlaybackView({
+                  family: "video",
+                  isPlaying: true,
+                  positionMs,
+                  progress,
+                  durationMs,
+                });
+                if (qualifies || finished || status.didJustFinish) {
+                  void incrementView(modalKey, video, {
+                    durationMs: finished || status.didJustFinish
+                      ? durationMs
+                      : positionMs,
+                    progressPct: Math.round(pct),
+                    isComplete: Boolean(finished || status.didJustFinish),
+                  });
                 }
+              }
+
+              if (status.didJustFinish) {
                 ref?.setPositionAsync(0);
                 globalVideoStore.pauseVideo(modalKey);
                 globalVideoStore.setVideoCompleted(modalKey, true);

@@ -144,7 +144,7 @@ const ReelsView = () => {
           navigateMainTab(tab as any);
         }}
         onCloseDelete={o.closeDeleteModal}
-        onDeleteSuccess={o.handlers.handleDeleteConfirm}
+        onDeleteSuccess={o.handleDeleteSuccessUi}
         onCloseReport={() => o.setShowReportModal(false)}
         onCloseDetails={() => o.setShowDetailsModal(false)}
         getResponsiveSpacing={o.responsive.getResponsiveSpacing}

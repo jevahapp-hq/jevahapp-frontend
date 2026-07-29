@@ -8,8 +8,13 @@ import * as comments from "./comments";
 import * as stats from "./stats";
 import * as savedContent from "./savedContent";
 import * as analytics from "./analytics";
-import type { BatchMetadataItem } from "./types";
-import type { CommentData, ContentInteraction, ContentStats } from "./types";
+import type {
+  BatchMetadataItem,
+  CommentData,
+  ContentInteraction,
+  ContentStats,
+  EditCommentOptions,
+} from "./types";
 
 /**
  * Public API surface matching the original ContentInteractionService.
@@ -98,14 +103,14 @@ export class ContentInteractionService {
     contentId: string,
     comment: string,
     contentType: string = "media",
-    parentCommentId?: string
+    parentCommentIdOrOptions?: string | import("./types").AddCommentOptions
   ): Promise<CommentData> {
     return comments.addComment(
       this.ctx,
       contentId,
       comment,
       contentType,
-      parentCommentId
+      parentCommentIdOrOptions
     );
   }
 
@@ -136,12 +141,22 @@ export class ContentInteractionService {
     return comments.toggleCommentLike(this.ctx, commentId);
   }
 
-  editComment(commentId: string, content: string): Promise<CommentData> {
-    return comments.editComment(this.ctx, commentId, content);
+  editComment(
+    commentId: string,
+    contentOrOptions: string | EditCommentOptions
+  ): Promise<CommentData> {
+    return comments.editComment(this.ctx, commentId, contentOrOptions);
   }
 
   deleteComment(commentId: string): Promise<void> {
     return comments.deleteComment(this.ctx, commentId);
+  }
+
+  searchUsersForMentions(
+    q: string,
+    limit: number = 10
+  ): Promise<{ userId: string; displayName: string; avatar?: string }[]> {
+    return comments.searchUsersForMentions(this.ctx, q, limit);
   }
 
   // ============= GET CONTENT STATS =============

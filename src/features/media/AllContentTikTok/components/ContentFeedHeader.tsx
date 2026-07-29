@@ -30,11 +30,6 @@ export function ContentFeedHeader({
   getContentKey,
   renderContentByType,
 }: ContentFeedHeaderProps) {
-  const mostRecentKey = mostRecentItem ? getContentKey(mostRecentItem) : null;
-  // Keep Most Recent player mounted until scroll focuses another card.
-  const renderMostRecentPlayer =
-    !currentlyVisibleVideo || currentlyVisibleVideo === mostRecentKey;
-
   return (
     <>
       {mostRecentItem && (
@@ -50,7 +45,7 @@ export function ContentFeedHeader({
           >
             Most Recent
           </Text>
-          {renderContentByType(mostRecentItem, 0, renderMostRecentPlayer)}
+          {renderContentByType(mostRecentItem, 0)}
         </View>
       )}
       <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
@@ -66,15 +61,11 @@ export function ContentFeedHeader({
           {contentType === "ALL" ? "For You" : `${contentType} · For You`}{" "}
           ({filteredMediaListLength})
         </Text>
-        {firstFour.map((item, index) => {
-          const key = getContentKey(item);
-          const shouldRenderPlayer = currentlyVisibleVideo === key;
-          return (
-            <React.Fragment key={item._id ?? `first-${index}`}>
-              {renderContentByType(item, index, shouldRenderPlayer)}
-            </React.Fragment>
-          );
-        })}
+        {firstFour.map((item, index) => (
+          <React.Fragment key={item._id ?? `first-${index}`}>
+            {renderContentByType(item, index)}
+          </React.Fragment>
+        ))}
         {(contentType === "ALL" || contentType === "live") && (
           <>
             <View style={{ marginTop: 32 }} />

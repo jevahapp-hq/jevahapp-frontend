@@ -11,6 +11,7 @@ export interface UseVideoCardPlaybackParams {
   isAudioSermon: boolean;
   videoTitle: string;
   contentId: string;
+  contentType?: string;
   isPlaying: boolean;
   handleVideoError: (error: any) => void;
   setFailedVideoLoad: (v: boolean) => void;
@@ -28,6 +29,7 @@ export function useVideoCardPlayback({
   player,
   isAudioSermon,
   contentId,
+  contentType,
   isPlaying,
   handleVideoError,
   setFailedVideoLoad,
@@ -41,6 +43,7 @@ export function useVideoCardPlayback({
 }: UseVideoCardPlaybackParams) {
   const { maybeRecordView } = useVideoViewTracking({
     contentId,
+    contentType,
     hasTrackedView,
     setHasTrackedView,
     storeRef,

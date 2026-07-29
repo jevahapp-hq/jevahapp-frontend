@@ -16,8 +16,10 @@ import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "re
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
+import { CommentMediaShift } from "./components/CommentMediaShift";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
+import SessionExpiredOverlay from "./components/SessionExpiredOverlay";
 import FloatingAudioPlayer from "../src/shared/components/FloatingAudioPlayer";
 import LikeQueueBootstrap from "./components/LikeQueueBootstrap";
 import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
@@ -73,6 +75,8 @@ Sentry.init({
 
 const API_BASE_URL =
   Constants.expoConfig?.extra?.API_URL ||
+  process.env.EXPO_PUBLIC_API_URL_PRODUCTION ||
+  process.env.EXPO_PUBLIC_API_URL ||
   "https://api.jevahapp.com";
 
 const publishableKey =
@@ -333,8 +337,11 @@ export default function RootLayout() {
                 <NotificationProvider>
                   <CommentModalProvider>
                     <LikeQueueBootstrap />
-                    <Slot />
+                    <CommentMediaShift>
+                      <Slot />
+                    </CommentMediaShift>
                     <CommentModalV2 />
+                    <SessionExpiredOverlay />
                     <FloatingAudioPlayer />
                     <ServerUnavailableModalWrapper />
                   </CommentModalProvider>

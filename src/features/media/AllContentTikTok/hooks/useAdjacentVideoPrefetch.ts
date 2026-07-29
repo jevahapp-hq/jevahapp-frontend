@@ -34,8 +34,16 @@ function getEbookUrl(item: MediaItem): string | null {
 }
 
 function isEbook(item: MediaItem): boolean {
-  const t = String(item.contentType || "").toLowerCase();
-  return t.includes("ebook") || t.includes("book") || t === "pdf";
+  const t = String(item.contentType || "").toLowerCase().trim();
+  return (
+    t === "ebook" ||
+    t === "ebooks" ||
+    t === "e-books" ||
+    t === "books" ||
+    t === "book" ||
+    t === "pdf" ||
+    t === "image"
+  );
 }
 
 export function useAdjacentVideoPrefetch(options: {
@@ -84,23 +92,29 @@ export function useAdjacentVideoPrefetch(options: {
       const pdfUrls: string[] = [];
 
       for (let i = 1; i <= ahead; i += 1) {
-        const item = items[index + i];
-        if (!item) continue;
+        const candidates = [items[index + i], items[index - i]];
+        for (const item of candidates) {
+          if (!item) continue;
 
-        if (isEbook(item)) {
-          const pdf = getEbookUrl(item);
-          if (pdf) pdfUrls.push(pdf);
-          continue;
+          if (isEbook(item)) {
+            const pdf = getEbookUrl(item);
+            if (pdf) pdfUrls.push(pdf);
+            continue;
+          }
+
+          if (
+            isAudioSermon(item) ||
+            String(item.contentType).toLowerCase().includes("music") ||
+            String(item.contentType).toLowerCase().includes("audio")
+          ) {
+            const audio = getAudioUrl(item);
+            if (audio) audioUrls.push(audio);
+            continue;
+          }
+
+          const url = getVideoUrlFromMedia(item);
+          if (url) videoUrls.push(url);
         }
-
-        if (isAudioSermon(item) || String(item.contentType).toLowerCase().includes("music") || String(item.contentType).toLowerCase().includes("audio")) {
-          const audio = getAudioUrl(item);
-          if (audio) audioUrls.push(audio);
-          continue;
-        }
-
-        const url = getVideoUrlFromMedia(item);
-        if (url) videoUrls.push(url);
       }
 
       if (videoUrls.length > 0) prefetchVideoUrls(videoUrls);

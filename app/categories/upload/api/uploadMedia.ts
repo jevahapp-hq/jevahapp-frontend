@@ -5,6 +5,7 @@
 import { Platform } from "react-native";
 import { API_BASE_URL } from "../constants";
 import type { MediaFile } from "../types";
+import { resolveUploadContentType } from "../utils/resolveUploadContentType";
 
 export type BuildUploadFormDataParams = {
   file: MediaFile;
@@ -51,21 +52,13 @@ export function buildUploadFormData({
     );
   }
 
-  // Handle sermon content type - determine if it should be music or videos based on file type
-  let apiContentType = selectedType;
-  if (selectedType === "sermon") {
-    if (file.mimeType.startsWith("audio/")) {
-      apiContentType = "music";
-    } else if (file.mimeType.startsWith("video/")) {
-      apiContentType = "videos";
-    } else {
-      apiContentType = "music";
-    }
-  } else if (selectedType === "ebook") {
-    apiContentType = "books";
-  }
-
-  formData.append("contentType", apiContentType);
+  // File MIME/extension + selected type — never title ("Book of Enoch" ≠ ebook)
+  const resolved = resolveUploadContentType({
+    selectedType,
+    file,
+    isSermonContent: selectedType === "sermon",
+  });
+  formData.append("contentType", resolved.contentType);
   formData.append(
     "genre",
     JSON.stringify([selectedCategory.toLowerCase(), "All"])

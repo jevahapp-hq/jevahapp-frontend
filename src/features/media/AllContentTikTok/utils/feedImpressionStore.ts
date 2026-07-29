@@ -55,24 +55,34 @@ export async function markFeedImpressions(ids: string[]): Promise<void> {
 }
 
 /**
- * Stable-enough session seed that changes each cold start so top of feed rotates
- * among similarly scored items.
+ * Stable-enough session seed that changes each cold start so top of feed rotates.
  */
 export async function getOrCreateSessionSeed(): Promise<number> {
   try {
-    const existing = await AsyncStorage.getItem(SESSION_SEED_KEY);
-    // One seed per process: if we already set it this session, keep it
     if ((global as any).__jevahFeedSessionSeed != null) {
       return (global as any).__jevahFeedSessionSeed as number;
     }
-    const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
+    const seed =
+      (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0 || 1;
     (global as any).__jevahFeedSessionSeed = seed;
     await AsyncStorage.setItem(SESSION_SEED_KEY, String(seed));
-    void existing;
     return seed;
   } catch {
-    return Date.now();
+    return (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0 || 1;
   }
+}
+
+/** Force a new permutation (pull-to-refresh / explicit reshuffle). */
+export async function rotateSessionSeed(): Promise<number> {
+  const seed =
+    (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0 || 1;
+  (global as any).__jevahFeedSessionSeed = seed;
+  try {
+    await AsyncStorage.setItem(SESSION_SEED_KEY, String(seed));
+  } catch {
+    // no-op
+  }
+  return seed;
 }
 
 export function idsSeenToday(map: ImpressionMap, now = Date.now()): Set<string> {

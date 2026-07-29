@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+import { getApiBaseUrl } from "./environmentManager";
 
 export interface AllMediaItem {
   _id: string;
@@ -42,10 +41,8 @@ export interface AllMediaResponse {
 }
 
 class AllMediaAPI {
-  private baseURL: string;
-
-  constructor() {
-    this.baseURL = API_BASE_URL;
+  private get baseURL(): string {
+    return getApiBaseUrl();
   }
 
   private async getAuthHeaders(): Promise<HeadersInit> {
@@ -798,24 +795,34 @@ class AllMediaAPI {
   }> {
     try {
       const headers = await this.getAuthHeaders();
-
-      const response = await fetch(
+      const urls = [
         `${this.baseURL}/api/content/comments/${commentId}`,
-        {
+        `${this.baseURL}/api/interactions/comments/${commentId}`,
+      ];
+
+      let lastStatus = 0;
+      let lastText = "";
+      for (const url of urls) {
+        const response = await fetch(url, {
           method: "DELETE",
           headers,
+        });
+        lastStatus = response.status;
+        if (response.ok) {
+          const data = await response.json().catch(() => ({ success: true }));
+          return { success: true, data };
         }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `HTTP error! status: ${response.status} - ${errorText}`
-        );
+        lastText = await response.text().catch(() => "");
+        if (response.status !== 404 && response.status !== 405) {
+          throw new Error(
+            `HTTP error! status: ${response.status} - ${lastText}`
+          );
+        }
       }
 
-      const data = await response.json();
-      return { success: true, data };
+      throw new Error(
+        `HTTP error! status: ${lastStatus || 404} - ${lastText}`
+      );
     } catch (error) {
       console.error("Error deleting comment:", error);
       return {

@@ -32,8 +32,10 @@ export interface UserData {
   updatedAt?: string;
 }
 
-// API Configuration
-export const API_BASE_URL = "https://api.jevahapp.com/api";
+// API Configuration — origin + /api (legacy callers). Prefer getApiBaseUrl().
+import { getApiBaseUrl } from "../environmentManager";
+
+export const API_BASE_URL = `${getApiBaseUrl()}/api`;
 
 // Cache configuration
 export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes

@@ -7,7 +7,7 @@
  * - Scan button remains the explicit expand / open affordance
  */
 import { useCallback, useEffect, useRef } from "react";
-import type { MediaItem } from "../../../../shared/types";
+import type { MediaItem } from "../../../../../shared/types";
 import { triggerMediaPlayHaptic } from "../../../../../shared/utils/haptics";
 import {
   createMediaTapRecognizer,

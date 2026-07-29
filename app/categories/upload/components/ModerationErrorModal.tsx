@@ -1,171 +1,14 @@
 /**
- * Moderation rejection / under-review modal + inline banner
+ * Inline moderation banner (sheet uses UploadResultModal).
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import {
   getResponsiveFontSize,
-  getResponsiveSpacing,
 } from "../../../../utils/responsive";
 import type { ModerationError, UploadState } from "../types";
 import { formatFriendlyRejectionMessage } from "../utils";
-
-type ModerationErrorModalProps = {
-  moderationError: ModerationError | null;
-  onDismiss: () => void;
-  onIdleReset: () => void;
-};
-
-export function ModerationErrorModal({
-  moderationError,
-  onDismiss,
-  onIdleReset,
-}: ModerationErrorModalProps) {
-  return (
-    <Modal
-      visible={!!moderationError}
-      transparent
-      animationType="fade"
-      onRequestClose={() => {
-        onDismiss();
-        onIdleReset();
-      }}
-    >
-      <TouchableOpacity
-        activeOpacity={1}
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: getResponsiveSpacing(20, 24, 32),
-        }}
-        onPress={() => {}}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 20,
-            padding: getResponsiveSpacing(24, 28, 36),
-            width: "100%",
-            maxWidth: 400,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            elevation: 8,
-          }}
-        >
-          {moderationError &&
-            (() => {
-              const friendly = formatFriendlyRejectionMessage(
-                moderationError.status,
-                moderationError.reason,
-                moderationError.flags,
-                moderationError.message
-              );
-              const isReview = friendly.isReview;
-              return (
-                <>
-                  <View
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 28,
-                      backgroundColor: isReview
-                        ? "rgba(255, 193, 7, 0.2)"
-                        : "rgba(255, 152, 0, 0.2)",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      alignSelf: "center",
-                      marginBottom: getResponsiveSpacing(16, 20, 24),
-                    }}
-                  >
-                    <Ionicons
-                      name={isReview ? "time-outline" : "bulb-outline"}
-                      size={32}
-                      color={isReview ? "#b38600" : "#e65100"}
-                    />
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: getResponsiveFontSize(18, 20, 22),
-                      fontWeight: "600",
-                      textAlign: "center",
-                      color: "#1a1a1a",
-                      marginBottom: getResponsiveSpacing(12, 14, 16),
-                    }}
-                  >
-                    {friendly.title}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: getResponsiveFontSize(14, 15, 16),
-                      lineHeight: 22,
-                      textAlign: "center",
-                      color: "#444",
-                      marginBottom: getResponsiveSpacing(16, 20, 24),
-                    }}
-                  >
-                    {friendly.message}
-                  </Text>
-                  {!isReview && (
-                    <View
-                      style={{
-                        backgroundColor: "rgba(255, 193, 7, 0.08)",
-                        padding: getResponsiveSpacing(12, 14, 16),
-                        borderRadius: 12,
-                        marginBottom: getResponsiveSpacing(16, 20, 24),
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: getResponsiveFontSize(12, 13, 14),
-                          color: "#666",
-                          fontStyle: "italic",
-                          textAlign: "center",
-                        }}
-                      >
-                        Tip: Review your content to align with our gospel
-                        community guidelines, then try again.
-                      </Text>
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => {
-                      onDismiss();
-                      if (!isReview) {
-                        onIdleReset();
-                      }
-                    }}
-                    style={{
-                      backgroundColor: isReview ? "#b38600" : "#e65100",
-                      paddingVertical: getResponsiveSpacing(14, 16, 18),
-                      borderRadius: 12,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: getResponsiveFontSize(15, 16, 17),
-                        fontWeight: "600",
-                        color: "#fff",
-                      }}
-                    >
-                      {isReview ? "Got it" : "Try again"}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              );
-            })()}
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
 
 type ModerationErrorInlineProps = {
   moderationError: ModerationError;
@@ -238,8 +81,8 @@ export function ModerationErrorInline({
               fontStyle: "italic",
             }}
           >
-            💡 Tip: Review your content and make sure it aligns with our gospel
-            community guidelines.
+            Tip: Make sure title and description clearly reflect gospel-aligned
+            teaching, then try again.
           </Text>
         </View>
       )}

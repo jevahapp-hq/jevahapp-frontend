@@ -2,6 +2,86 @@ import { API_CONFIG } from "../../shared/constants";
 import { ContentFilter, MediaApiResponse, MediaItem } from "../../shared/types";
 import { apiClient } from "./ApiClient";
 
+/** Normalize varied backend list shapes into a single { media, total, ... } */
+function parseMediaListPayload(response: any): {
+  media: any[];
+  total: number;
+  page: number;
+  limit: number;
+  pagination: any;
+} {
+  const root = response?.data;
+  // apiClient wraps JSON as { success, data: <body> }. Body may itself be
+  // { data: { media } }, { media }, { data: [...] }, or a bare array.
+  const body =
+    root && typeof root === "object" && !Array.isArray(root) && "data" in root
+      ? (root as any).data ?? root
+      : root;
+
+  let mediaArr: any[] = [];
+  let pagination: any = null;
+
+  if (Array.isArray(body)) {
+    mediaArr = body;
+  } else if (body?.media && Array.isArray(body.media)) {
+    mediaArr = body.media;
+    pagination = body.pagination;
+  } else if (body?.data?.media && Array.isArray(body.data.media)) {
+    mediaArr = body.data.media;
+    pagination = body.data?.pagination || body.pagination;
+  } else if (Array.isArray(body?.data)) {
+    mediaArr = body.data;
+    pagination = body.pagination;
+  } else if (Array.isArray(root)) {
+    mediaArr = root;
+  } else if (root?.media && Array.isArray(root.media)) {
+    mediaArr = root.media;
+    pagination = root.pagination;
+  }
+
+  // Merge recommendations.sections when main media is sparse
+  const recommendations =
+    body?.recommendations?.sections ||
+    root?.recommendations?.sections ||
+    body?.data?.recommendations?.sections ||
+    [];
+  if (Array.isArray(recommendations) && recommendations.length > 0) {
+    const seenIds = new Set(mediaArr.map((m) => m?._id || m?.id));
+    const supplemental: any[] = [];
+    for (const section of recommendations) {
+      const sectionItems = section?.media || section?.items || [];
+      if (!Array.isArray(sectionItems)) continue;
+      for (const item of sectionItems) {
+        const id = item?._id || item?.id;
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          supplemental.push(item);
+        }
+      }
+    }
+    if (supplemental.length > 0) {
+      mediaArr = [...mediaArr, ...supplemental];
+    }
+  }
+
+  const total =
+    pagination?.total ??
+    body?.total ??
+    body?.data?.total ??
+    root?.total ??
+    mediaArr.length;
+  const page =
+    pagination?.page ?? body?.page ?? body?.data?.page ?? root?.page ?? 1;
+  const limit =
+    pagination?.limit ??
+    body?.limit ??
+    body?.data?.limit ??
+    root?.limit ??
+    50;
+
+  return { media: mediaArr, total, page, limit, pagination };
+}
+
 class MediaApi {
   // Get all content (public) - with pagination support
   async getAllContentPublic(options?: {
@@ -23,63 +103,14 @@ class MediaApi {
     const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT, Object.keys(params).length > 0 ? params : undefined);
 
     if (response.success) {
-      const data = (response as any).data || {};
-
-      let mediaArr: any[] = [];
-      let total = 0;
-      let page = 1;
-      let limit = 50;
-      let pagination: any = null;
-
-      // Extract media array based on possible response structures
-      if (data?.media && Array.isArray(data.media)) {
-        mediaArr = data.media;
-        pagination = data.pagination;
-      } else if (data?.data?.media && Array.isArray(data.data.media)) {
-        mediaArr = data.data.media;
-        pagination = data.data?.pagination || data.pagination;
-      } else if (Array.isArray(data)) {
-        mediaArr = data;
-      } else if (Array.isArray((response as any).data)) {
-        mediaArr = (response as any).data;
-      }
-
-      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed 
-      // to show sermons/music until backend fixes the data.media filter.
-      const recommendations = data?.recommendations?.sections || (response as any).recommendations?.sections || data?.data?.recommendations?.sections || [];
-      if (recommendations.length > 0) {
-        const seenIds = new Set(mediaArr.map(m => m._id || m.id));
-        const supplemental: any[] = [];
-
-        recommendations.forEach((section: any) => {
-          const sectionItems = section.media || section.items || [];
-          if (Array.isArray(sectionItems)) {
-            sectionItems.forEach((item: any) => {
-              const id = item._id || item.id;
-              if (id && !seenIds.has(id)) {
-                seenIds.add(id);
-                supplemental.push(item);
-              }
-            });
-          }
-        });
-
-        if (supplemental.length > 0) {
-          mediaArr = [...mediaArr, ...supplemental];
-        }
-      }
-
-      total = pagination?.total || data?.data?.total || data?.total || mediaArr.length;
-      page = pagination?.page || data?.data?.page || data?.page || 1;
-      limit = pagination?.limit || data?.data?.limit || data?.limit || 50;
-
+      const parsed = parseMediaListPayload(response);
       return {
         success: true,
-        media: mediaArr,
-        total,
-        page,
-        limit,
-        pagination, // Include pagination metadata if available
+        media: parsed.media,
+        total: parsed.total,
+        page: parsed.page,
+        limit: parsed.limit,
+        pagination: parsed.pagination,
       };
     }
 
@@ -112,63 +143,14 @@ class MediaApi {
     );
 
     if (response.success) {
-      const data = (response as any).data || {};
-
-      // Handle both old format (backward compatibility) and new paginated format
-      let mediaArr: any[] = [];
-      let total = 0;
-      let page = 1;
-      let limit = 50;
-      let pagination: any = null;
-
-      // Extract media array based on possible response structures
-      if (data?.media && Array.isArray(data.media)) {
-        mediaArr = data.media;
-        pagination = data.pagination;
-      } else if (data?.data?.media && Array.isArray(data.data.media)) {
-        mediaArr = data.data.media;
-        pagination = data.data?.pagination || data.pagination;
-      } else if (Array.isArray(data)) {
-        mediaArr = data;
-      } else if (Array.isArray((response as any).data)) {
-        mediaArr = (response as any).data;
-      }
-
-      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed
-      const recommendations = data?.recommendations?.sections || (response as any).recommendations?.sections || data?.data?.recommendations?.sections || [];
-      if (recommendations.length > 0) {
-        const seenIds = new Set(mediaArr.map(m => m._id || m.id));
-        const supplemental: any[] = [];
-
-        recommendations.forEach((section: any) => {
-          const sectionItems = section.media || section.items || [];
-          if (Array.isArray(sectionItems)) {
-            sectionItems.forEach((item: any) => {
-              const id = item._id || item.id;
-              if (id && !seenIds.has(id)) {
-                seenIds.add(id);
-                supplemental.push(item);
-              }
-            });
-          }
-        });
-
-        if (supplemental.length > 0) {
-          mediaArr = [...mediaArr, ...supplemental];
-        }
-      }
-
-      total = pagination?.total || data?.data?.total || data?.total || mediaArr.length;
-      page = pagination?.page || data?.data?.page || data?.page || 1;
-      limit = pagination?.limit || data?.data?.limit || data?.limit || 50;
-
+      const parsed = parseMediaListPayload(response);
       return {
         success: true,
-        media: mediaArr,
-        total,
-        page,
-        limit,
-        pagination, // Include pagination metadata if available
+        media: parsed.media,
+        total: parsed.total,
+        page: parsed.page,
+        limit: parsed.limit,
+        pagination: parsed.pagination,
       };
     }
 
@@ -196,55 +178,14 @@ class MediaApi {
     );
 
     if (response.success) {
-      const data = (response as any).data || {};
-      let mediaArr: any[] = [];
-      let total = 0;
-      let page = 1;
-      let limit = 10;
-      let pagination: any = null;
-
-      // Extract media array based on possible response structures
-      if (data?.media && Array.isArray(data.media)) {
-        mediaArr = data.media;
-        pagination = data.pagination;
-      } else if (data?.data?.media && Array.isArray(data.data.media)) {
-        mediaArr = data.data.media;
-        pagination = data.data?.pagination || data.pagination;
-      } else if (Array.isArray(data)) {
-        mediaArr = data;
-      } else if (Array.isArray((response as any).data)) {
-        mediaArr = (response as any).data;
-      }
-
-      // TEMPORARY WORKAROUND: Merge recommendations.sections into the main feed
-      const recommendations = data?.recommendations?.sections || (response as any).recommendations?.sections || data?.data?.recommendations?.sections || [];
-      if (recommendations.length > 0) {
-        const seenIds = new Set(mediaArr.map((m: any) => m._id || m.id));
-        const supplemental: any[] = [];
-
-        recommendations.forEach((section: any) => {
-          const sectionItems = section.media || section.items || [];
-          if (Array.isArray(sectionItems)) {
-            sectionItems.forEach((item: any) => {
-              const id = item._id || item.id;
-              if (id && !seenIds.has(id)) {
-                seenIds.add(id);
-                supplemental.push(item);
-              }
-            });
-          }
-        });
-
-        if (supplemental.length > 0) {
-          mediaArr = [...mediaArr, ...supplemental];
-        }
-      }
+      const parsed = parseMediaListPayload(response);
       return {
         success: true,
-        media: mediaArr,
-        total: data?.total || data?.data?.total || 0,
-        page: data?.page || data?.data?.page || 1,
-        limit: data?.limit || data?.data?.limit || 10,
+        media: parsed.media,
+        total: parsed.total,
+        page: parsed.page,
+        limit: parsed.limit,
+        pagination: parsed.pagination,
       };
     }
 

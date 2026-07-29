@@ -22,6 +22,22 @@ export type ModerationError = {
   status?: string;
 };
 
+export type UploadResultKind =
+  | "success"
+  | "error"
+  | "moderation"
+  | "review";
+
+export type UploadResultState = {
+  kind: UploadResultKind;
+  title: string;
+  message: string;
+  tip?: string;
+  primaryLabel?: string;
+  secondaryLabel?: string;
+  moderation?: ModerationError;
+};
+
 export type EligibilityStatus = {
   isValid: boolean;
   errors: string[];

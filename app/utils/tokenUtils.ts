@@ -156,21 +156,24 @@ export class TokenUtils {
    */
   static async validateTokenWithBackend(
     token: string,
-    baseUrl: string = "https://api.jevahapp.com"
+    baseUrl?: string
   ): Promise<boolean> {
     try {
       if (!this.isValidJWTFormat(token)) {
         return false;
       }
 
-      const response = await fetch(`${baseUrl}/api/auth/validate`, {
+      const { getApiBaseUrl } = await import("./environmentManager");
+      const origin = baseUrl || getApiBaseUrl();
+
+      const response = await fetch(`${origin}/api/auth/validate`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         timeout: 5000,
-      });
+      } as any);
 
       return response.ok;
     } catch (error) {

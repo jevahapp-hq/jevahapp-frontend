@@ -20,6 +20,7 @@ import {
   getPdfCachePath,
 } from "../utils/pdfCache";
 import { PERF, perfMark, perfMeasure } from "../../src/shared/utils/perfMarks";
+import { useEbookReaderViewTracking } from "./hooks/useEbookReaderViewTracking";
 
 // Decode URL-encoded text (like the %20 for spaces, %E2%80%99 for special chars)
 const decodeText = (text: string) => {
@@ -132,6 +133,12 @@ export default function PdfViewer() {
   const [pageTexts, setPageTexts] = useState<string[]>([]);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [currentViewingPage, setCurrentViewingPage] = useState<number>(1);
+
+  useEbookReaderViewTracking({
+    ebookId,
+    currentPage: currentViewingPage,
+    totalPages,
+  });
   const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
   const [extractionAttempted, setExtractionAttempted] = useState(false);
 

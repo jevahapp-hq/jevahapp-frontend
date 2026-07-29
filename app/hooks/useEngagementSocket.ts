@@ -4,6 +4,7 @@
  */
 import { useEffect, useRef } from "react";
 import SocketManager from "../services/SocketManager";
+import { getApiBaseUrl } from "../utils/api";
 import { applyLiveEngagementCounts } from "../utils/contentInteraction/socketCounts";
 import { mapContentTypeForBackend } from "../utils/engagementHelpers";
 import TokenUtils from "../utils/tokenUtils";
@@ -92,7 +93,7 @@ export function useEngagementSocket(options: UseEngagementSocketOptions = {}) {
   useEffect(() => {
     let unbind: (() => void) | undefined;
     let cancelled = false;
-    const serverUrl = options.serverUrl || "https://api.jevahapp.com";
+    const serverUrl = options.serverUrl || getApiBaseUrl();
 
     const initializeSocket = async () => {
       try {

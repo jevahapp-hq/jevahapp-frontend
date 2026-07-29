@@ -138,12 +138,23 @@ const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
   }
 };
 
+/** Map Home tab filters to API list `contentType` values. */
+function normalizeListContentType(contentType: string): string {
+  const t = (contentType || "ALL").toLowerCase();
+  if (t === "all") return "ALL";
+  if (t === "e-books" || t === "ebook" || t === "ebooks") return "books";
+  if (t === "video") return "videos";
+  if (t === "audio") return "music";
+  return contentType;
+}
+
 /** Shared fetcher for prefetch and useMedia - show content as fast as possible */
 export async function fetchAllContentPublic(contentType: string = "ALL") {
+  const apiContentType = normalizeListContentType(contentType);
   const response = await mediaApi.getAllContentPublic({
     page: 1,
     limit: 12,
-    contentType: contentType !== "ALL" ? contentType : undefined,
+    contentType: apiContentType !== "ALL" ? apiContentType : undefined,
   });
 
   if (!response.success) throw new Error(response.error || "Failed to fetch content");
@@ -180,10 +191,11 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
 
 /** Fetcher for authenticated all-content (includes user's uploads) */
 async function fetchAllContentWithAuth(contentType: string = "ALL") {
+  const apiContentType = normalizeListContentType(contentType);
   const response = await mediaApi.getAllContentWithAuth({
     page: 1,
     limit: 12,
-    contentType: contentType !== "ALL" ? contentType : undefined,
+    contentType: apiContentType !== "ALL" ? apiContentType : undefined,
   });
 
   if (!response.success) throw new Error(response.error || "Failed to fetch content");
@@ -217,18 +229,49 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
   const queryClient = useQueryClient();
   const cacheEntry = useContentCacheStore((s) => s.get("ALL:first"));
-  const cachedForInitial = !useAuth && contentType === "ALL" && cacheEntry?.items?.length
-    ? { media: cacheEntry.items, total: cacheEntry.total ?? 0 }
-    : undefined;
+  // Seed both public + auth queries so login flip doesn't blank the All tab
+  const cachedForInitial =
+    contentType === "ALL" && cacheEntry?.items?.length
+      ? { media: cacheEntry.items, total: cacheEntry.total ?? 0 }
+      : undefined;
+
+  const allContentQueryKey = [
+    "all-content",
+    contentType,
+    1,
+    12,
+    useAuth,
+  ] as const;
 
   const allContentQuery = useQuery({
-    queryKey: ["all-content", contentType, 1, 12, useAuth],
-    queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
+    queryKey: allContentQueryKey,
+    queryFn: async () => {
+      const result = useAuth
+        ? await fetchAllContentWithAuth(contentType)
+        : await fetchAllContentPublic(contentType);
+
+      // Flaky local/backends sometimes return success with []. Don't wipe a good feed.
+      if (!result.media?.length) {
+        const prev = queryClient.getQueryData<{
+          media: MediaItem[];
+          total: number;
+        }>(allContentQueryKey);
+        if (prev?.media?.length) {
+          if (__DEV__) {
+            console.warn(
+              "⚠️ all-content returned empty; keeping previous feed items"
+            );
+          }
+          return prev;
+        }
+      }
+      return result;
+    },
     enabled: immediate,
     initialData: cachedForInitial,
-    placeholderData: (prev) => prev,
-    staleTime: 30 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    placeholderData: (prev) => prev ?? cachedForInitial,
+    staleTime: 2 * 60 * 60 * 1000, // 2h — heavy feed cache
+    gcTime: 24 * 60 * 60 * 1000, // keep in memory a day
     retry: 1,
     refetchOnMount: !cachedForInitial,
     refetchOnWindowFocus: false,
@@ -279,14 +322,33 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         // Sync stats to store
         syncMediaStatsToInteractionStore(result.media);
 
+        if (!result.media.length) {
+          const prev = queryClient.getQueryData<{
+            media: MediaItem[];
+            total: number;
+            page: number;
+            limit: number;
+            pages: number;
+          }>(["default-content", page, limit, contentType]);
+          if (prev?.media?.length) {
+            if (__DEV__) {
+              console.warn(
+                "⚠️ default-content returned empty; keeping previous feed items"
+              );
+            }
+            return prev;
+          }
+        }
+
         return result;
       }
 
       throw new Error(response.error || "Failed to fetch content");
     },
     enabled: shouldFetchDefault,
-    staleTime: 30 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     retry: 1,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -305,13 +367,24 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   };
 
   // Only skeleton when there is nothing renderable yet
-  const hasRenderable = allContent.length > 0 || defaultContent.length > 0;
-  const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
-  const defaultContentLoading =
+  const hasAnyItems = allContent.length > 0 || defaultContent.length > 0;
+  const allContentPending =
+    (allContentQuery.isLoading || allContentQuery.isFetching) &&
+    allContent.length === 0;
+  const defaultContentPending =
     shouldFetchDefault &&
-    defaultContentQuery.isLoading &&
+    (defaultContentQuery.isLoading ||
+      defaultContentQuery.isFetching ||
+      defaultContentQuery.isPending) &&
     defaultContent.length === 0;
-  const loading = !hasRenderable && (allContentLoading || defaultContentLoading);
+  // Wait for primary (+ fallback if needed) before declaring empty
+  const waitingOnFallback =
+    shouldFetchDefault &&
+    !defaultContentQuery.isFetched &&
+    defaultContent.length === 0;
+  const loading =
+    !hasAnyItems &&
+    (allContentPending || defaultContentPending || waitingOnFallback);
 
   // Error states
   const allContentError = allContentQuery.error
@@ -322,7 +395,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     : null;
   const error = allContentError || defaultContentError;
 
-  const hasContent = allContent.length > 0 || defaultContent.length > 0;
+  const hasContent = hasAnyItems;
 
   // Legacy fetch function - now uses React Query internally
   // Kept for backward compatibility but React Query handles caching
@@ -340,13 +413,19 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
             response = await mediaApi.getAllContentWithAuth({
               page: pageNum,
               limit: 20,
-              contentType: contentType !== "ALL" ? contentType : undefined,
+              contentType: (() => {
+                const api = normalizeListContentType(contentType);
+                return api !== "ALL" ? api : undefined;
+              })(),
             });
           } else {
             response = await mediaApi.getAllContentPublic({
               page: pageNum,
               limit: 20,
-              contentType: contentType !== "ALL" ? contentType : undefined,
+              contentType: (() => {
+                const api = normalizeListContentType(contentType);
+                return api !== "ALL" ? api : undefined;
+              })(),
             });
           }
 
@@ -428,9 +507,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   // Load more content for infinite scroll (TODO: implement with infinite query)
   const loadMoreAllContent = useCallback(async () => {
     // For now, just refetch - can be enhanced with infinite query later
-    if (allContentLoading) return;
+    if (allContentPending) return;
     await allContentQuery.refetch();
-  }, [allContentQuery, allContentLoading]);
+  }, [allContentQuery, allContentPending]);
 
   // Refresh default content using React Query
   const refreshDefaultContent = useCallback(async () => {
