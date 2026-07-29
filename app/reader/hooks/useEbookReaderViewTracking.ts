@@ -3,8 +3,8 @@
  * Rules: ≥10s dwell OR ≥10% page progress OR last page.
  */
 import { useEffect, useRef, useState } from "react";
-import contentInteractionAPI from "../utils/contentInteractionAPI";
-import { qualifiesEbookView } from "../utils/contentInteraction/viewQualification";
+import contentInteractionAPI from "../../utils/contentInteractionAPI";
+import { qualifiesEbookView } from "../../utils/contentInteraction/viewQualification";
 
 export function useEbookReaderViewTracking(options: {
   ebookId?: string | null;
@@ -56,7 +56,7 @@ export function useEbookReaderViewTracking(options: {
         try {
           const {
             useInteractionStore,
-          } = require("../store/useInteractionStore");
+          } = require("../../store/useInteractionStore");
           if (result?.totalViews != null) {
             useInteractionStore.getState().mutateStats?.(id, () => ({
               views: Number(result.totalViews) || 0,
