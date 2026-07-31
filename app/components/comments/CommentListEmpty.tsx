@@ -31,9 +31,11 @@ export function CommentListEmpty({ isLoading, loadError, onRetry }: Props) {
   }
   return (
     <View style={styles.emptyWrap}>
-      <Ionicons name="chatbubble-outline" size={40} color="#D0D1D3" />
-      <Text style={styles.emptyTitle}>No comments yet</Text>
-      <Text style={styles.emptySub}>Be the first to comment</Text>
+      <Ionicons name="chatbubble-ellipses-outline" size={44} color="#D0D1D3" />
+      <Text style={styles.emptyTitle}>Be the first to comment</Text>
+      <Text style={styles.emptySub}>
+        Share a thought, prayer, or encouragement — start the conversation.
+      </Text>
     </View>
   );
 }
@@ -41,6 +43,7 @@ export function CommentListEmpty({ isLoading, loadError, onRetry }: Props) {
 const styles = StyleSheet.create({
   emptyWrap: {
     paddingVertical: 56,
+    paddingHorizontal: 28,
     alignItems: "center",
   },
   emptyTitle: {
@@ -48,10 +51,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: C.text,
+    textAlign: "center",
   },
   emptySub: {
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 13,
     color: C.meta,
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

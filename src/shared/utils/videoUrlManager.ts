@@ -134,15 +134,71 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
 };
 
 export const getVideoUrlFromMedia = (media: any): string | null => {
-  // Priority order: playbackUrl > hlsUrl > fileUrl (favouring processed streaming URLs)
-  const videoUrl = media?.playbackUrl || media?.hlsUrl || media?.fileUrl;
+  const fileUrl =
+    typeof media?.fileUrl === "string" ? media.fileUrl.trim() : "";
+  const playbackUrl =
+    typeof media?.playbackUrl === "string" ? media.playbackUrl.trim() : "";
+  const hlsUrl = typeof media?.hlsUrl === "string" ? media.hlsUrl.trim() : "";
 
-  if (!videoUrl || typeof videoUrl !== 'string' || videoUrl.trim() === '') {
-    return null;
-  }
+  const mime = String(
+    media?.fileMimeType || media?.mimeType || media?.contentType || ""
+  ).toLowerCase();
+  const looksLikeVideoMime =
+    mime.startsWith("video/") ||
+    mime === "videos" ||
+    mime === "video" ||
+    mime.includes("sermon");
 
-  return videoUrl.trim();
+  const durationSec = Number(media?.duration ?? media?.durationSec) || 0;
+  const processingStatus = String(
+    media?.processingStatus || ""
+  ).toLowerCase();
+  // Ready (or unknown status) but duration missing: never prefer incomplete HLS.
+  const blockHlsPrimary =
+    durationSec < 0.5 &&
+    processingStatus !== "processing" &&
+    processingStatus !== "pending" &&
+    processingStatus !== "failed";
+
+  const isHls = (u: string) => /\.m3u8(\?|#|$)/i.test(u);
+  const isProgressive = (u: string) =>
+    !!u &&
+    !isHls(u) &&
+    (/\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u) ||
+      // R2 / CDN keys often have no extension — treat fileUrl as progressive for videos
+      (looksLikeVideoMime && u === fileUrl));
+
+  // Prefer progressive faststart MP4 (fileUrl / non-HLS playbackUrl) for seek.
+  // HLS is fallback only when no MP4 — and never when duration is still unknown
+  // on a ready card (incomplete playlist → player.duration=0 → seek broken).
+  if (fileUrl && isProgressive(fileUrl)) return fileUrl;
+  if (fileUrl && looksLikeVideoMime && !isHls(fileUrl)) return fileUrl;
+  if (playbackUrl && isProgressive(playbackUrl)) return playbackUrl;
+  if (playbackUrl && !isHls(playbackUrl)) return playbackUrl;
+  if (!blockHlsPrimary && hlsUrl) return hlsUrl;
+  if (!blockHlsPrimary && playbackUrl) return playbackUrl;
+  if (fileUrl) return fileUrl;
+  // Last resort: HLS even without duration (nothing else to play)
+  if (hlsUrl) return hlsUrl;
+  if (playbackUrl) return playbackUrl;
+  return null;
 };
+
+/** Hint for expo-video VideoSource.contentType */
+export const getVideoSourceContentType = (
+  url: string | null | undefined,
+  mimeHint?: string | null
+): "hls" | "progressive" | undefined => {
+  if (!url) return undefined;
+  if (/\.m3u8(\?|#|$)/i.test(url)) return "hls";
+  if (/\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(url)) return "progressive";
+  const mime = String(mimeHint || "").toLowerCase();
+  if (mime.startsWith("video/") || mime === "videos" || mime === "video") {
+    return "progressive";
+  }
+  return undefined;
+};
+
 
 /**
  * Gets the best URL to use for video playback

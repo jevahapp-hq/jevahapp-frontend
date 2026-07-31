@@ -6,6 +6,7 @@ import { Alert } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { detectFileType, getMimeTypeFromName, isImage } from "../utils";
+import { probeVideoDurationSec } from "../utils/probeVideoDuration";
 import type { DetectedFileType, EligibilityStatus, MediaFile } from "../types";
 
 type UseMediaPickersParams = {
@@ -75,6 +76,14 @@ export function useMediaPickers({
       mimeType: guessedMime,
       size: fileSize,
     };
+
+    // Probe duration so feed seek works before backend ffprobe finishes
+    if (guessedMime.startsWith("video/")) {
+      const durationSec = await probeVideoDurationSec(uri);
+      if (durationSec && durationSec > 0) {
+        selectedFile.durationSec = durationSec;
+      }
+    }
 
     setFile(selectedFile);
     const detectedType = detectFileType(selectedFile);

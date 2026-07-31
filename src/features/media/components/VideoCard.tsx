@@ -99,13 +99,19 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const posterUri = useMemo(() => resolvePosterUri(video), [video]);
 
   useEffect(() => {
-    if (__DEV__ && video.title.includes("61 (HD)")) {
-      console.log(`🔍 [VideoCard] Tracking problematic upload: "${video.title}"`);
-      console.log(`   - rawVideoUrl: ${rawVideoUrl}`);
-      console.log(`   - videoUrl: ${videoUrl}`);
-      console.log(`   - shouldRenderPlayer: ${shouldRenderPlayer}`);
-    }
-  }, [video, videoUrl, shouldRenderPlayer, rawVideoUrl]);
+    if (!__DEV__ || !shouldRenderPlayer || index > 2) return;
+    console.log("[feed-card]", {
+      id: contentId,
+      duration: (video as any).duration,
+      processingStatus: (video as any).processingStatus,
+      fileUrl: typeof (video as any).fileUrl === "string"
+        ? (video as any).fileUrl.slice(0, 80)
+        : (video as any).fileUrl,
+      hlsUrl: typeof (video as any).hlsUrl === "string"
+        ? (video as any).hlsUrl.slice(0, 80)
+        : (video as any).hlsUrl,
+    });
+  }, [contentId, video, shouldRenderPlayer, index]);
 
   return (
     <MediaCardShell

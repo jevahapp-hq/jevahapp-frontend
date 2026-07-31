@@ -74,7 +74,9 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
     ) => {
       if (!items?.length) return;
       set((state: any) => {
-        const next = { ...state.contentStats };
+        let changed = false;
+        let next: Record<string, ContentStats> | null = null;
+
         for (const item of items) {
           const {
             contentId,
@@ -88,7 +90,7 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
           if (!contentId) continue;
           const cached = getCachedContentInteraction(contentId);
           const cacheIsFresh = isContentInteractionFresh(contentId);
-          const existing = next[contentId];
+          const existing = (next ?? state.contentStats)[contentId];
           const base: ContentStats =
             existing ??
             ({
@@ -106,38 +108,62 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
               },
             } as ContentStats);
 
+          const nextLikes =
+            cacheIsFresh && cached?.likes !== undefined
+              ? Math.max(0, cached.likes)
+              : Math.max(base.likes ?? 0, Number(likes) || 0);
+          const nextSaves =
+            cacheIsFresh && cached?.saves !== undefined
+              ? Math.max(0, cached.saves)
+              : Math.max(base.saves ?? 0, Number(saves) || 0);
+          const nextComments = Math.max(
+            base.comments ?? 0,
+            Number(comments) || 0,
+            Number(cached?.comments) || 0
+          );
+          const nextViews = Math.max(
+            base.views ?? 0,
+            Number(views) || 0,
+            Number(cached?.views) || 0
+          );
+          const nextLiked =
+            resolveLikedFlag(contentId, hasLiked) ??
+            base.userInteractions.liked;
+          const nextSaved =
+            resolveSavedFlag(contentId, hasBookmarked) ??
+            base.userInteractions.saved;
+
+          if (
+            existing &&
+            existing.likes === nextLikes &&
+            existing.saves === nextSaves &&
+            existing.comments === nextComments &&
+            existing.views === nextViews &&
+            existing.userInteractions?.liked === nextLiked &&
+            existing.userInteractions?.saved === nextSaved
+          ) {
+            continue;
+          }
+
+          if (!next) next = { ...state.contentStats };
+          changed = true;
           next[contentId] = {
             ...base,
-            likes:
-              cacheIsFresh && cached?.likes !== undefined
-                ? Math.max(0, cached.likes)
-                : Math.max(base.likes ?? 0, Number(likes) || 0),
-            saves:
-              cacheIsFresh && cached?.saves !== undefined
-                ? Math.max(0, cached.saves)
-                : Math.max(base.saves ?? 0, Number(saves) || 0),
-            comments: Math.max(
-              base.comments ?? 0,
-              Number(comments) || 0,
-              Number(cached?.comments) || 0
-            ),
-            views: Math.max(
-              base.views ?? 0,
-              Number(views) || 0,
-              Number(cached?.views) || 0
-            ),
+            likes: nextLikes,
+            saves: nextSaves,
+            comments: nextComments,
+            views: nextViews,
             userInteractions: {
               ...base.userInteractions,
               // Sticky local liked/saved beat stale feed hasLiked:false (backend bug).
-              liked:
-                resolveLikedFlag(contentId, hasLiked) ??
-                base.userInteractions.liked,
-              saved:
-                resolveSavedFlag(contentId, hasBookmarked) ??
-                base.userInteractions.saved,
+              liked: nextLiked,
+              saved: nextSaved,
             },
           };
         }
+
+        // Bail out with same state — avoids feed/FlashList infinite re-render loops.
+        if (!changed || !next) return state;
         return { contentStats: next };
       });
     },

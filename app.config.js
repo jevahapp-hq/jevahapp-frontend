@@ -7,7 +7,7 @@ export default {
     version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/images/Jevah.png",
-    scheme: "jevahapp",
+    scheme: ["jevahapp", "jevah"],
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     owner: "bldlne",

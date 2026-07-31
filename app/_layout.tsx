@@ -27,6 +27,7 @@ import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
 import { useAuth } from "./hooks/useAuth";
+import { useArtistDeepLinks } from "./hooks/useArtistDeepLinks";
 import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
@@ -123,6 +124,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const router = useRouter();
+  useArtistDeepLinks();
   const [fontsLoaded, fontError] = useFonts({
     Rubik_400Regular,
     Rubik_600SemiBold,

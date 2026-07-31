@@ -240,13 +240,39 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
       setComments(instant);
       setIsLoadingComments(false);
     } else {
+      // Known-zero from feed stats → show empty CTA immediately (no infinite skeleton)
+      let knownEmpty = false;
+      if (contentId) {
+        try {
+          const stats = useInteractionStore.getState().stats[contentId];
+          if (
+            stats?.commentsConfirmed &&
+            Number(stats.comments || 0) === 0
+          ) {
+            knownEmpty = true;
+          }
+        } catch {
+          // no-op
+        }
+      }
       setComments([]);
-      setIsLoadingComments(true);
+      setIsLoadingComments(!knownEmpty);
     }
 
     clearTyping();
 
     if (contentId) {
+      const knownEmptyFromStats = (() => {
+        try {
+          const stats = useInteractionStore.getState().stats[contentId];
+          return Boolean(
+            stats?.commentsConfirmed && Number(stats.comments || 0) === 0
+          );
+        } catch {
+          return false;
+        }
+      })();
+
       // Disk → memory hydrate (survives app kill). Apply if list still empty.
       void hydrateCommentsCacheFromDisk(contentId, sortBy).then((disk) => {
         if (!disk?.comments?.length) return;
@@ -256,10 +282,18 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         setIsLoadingComments(false);
       });
 
-      // Silent refresh when we already painted cache — no skeleton flash
+      // Silent when we already have cache OR confirmed zero — avoid skeleton flash
       void loadCommentsFromServer(contentId, type, 1, sortBy, true, {
-        silent: instant.length > 0,
+        silent: instant.length > 0 || knownEmptyFromStats,
       });
+
+      // Never leave skeleton forever if the request hangs (offline / timeout)
+      const openedFor = contentId;
+      setTimeout(() => {
+        if (currentContentIdRef.current !== openedFor) return;
+        setIsLoadingComments((still) => (still ? false : still));
+      }, 10000);
+
       void AsyncStorage.getItem("user")
         .then((userStr) => {
           if (!userStr) return;
@@ -759,7 +793,11 @@ export const CommentModalProvider: React.FC<CommentModalProviderProps> = ({
         sort
       );
 
-      if (gen !== loadGenRef.current) return; // stale response
+      if (gen !== loadGenRef.current) {
+        // Stale response — still clear loading if a newer request isn't in flight
+        // with a higher gen that will clear it. Safer no-op when superseded.
+        return;
+      }
 
       const mapComment = (c: any): Comment => {
         const first =

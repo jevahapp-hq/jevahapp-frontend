@@ -7,6 +7,8 @@ export type MediaFile = {
   name: string;
   mimeType: string;
   size?: number;
+  /** Local probe / picker duration in seconds */
+  durationSec?: number;
 };
 
 export type UploadState = {

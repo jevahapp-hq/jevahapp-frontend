@@ -83,6 +83,8 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
   const applySeek = useCallback(
     (percent: number, { fromDragEnd }: { fromDragEnd: boolean }) => {
       const clamped = Math.max(0, Math.min(1, percent));
+      // Always move the knob + notify parent. Parent no-ops player seek
+      // until duration is known; hold UI at target until sync/timeout.
       updateState({
         isDragging: false,
         isSeeking: true,
@@ -95,7 +97,13 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
       if (fromDragEnd && config.enableHaptics) triggerHaptic("medium");
       else if (config.enableHaptics) triggerHaptic("light");
     },
-    [animatedValue, config.enableHaptics, onSeekToPercent, triggerHaptic, updateState]
+    [
+      animatedValue,
+      config.enableHaptics,
+      onSeekToPercent,
+      triggerHaptic,
+      updateState,
+    ]
   );
 
   const gestureCallbacks = useMemo(
@@ -118,6 +126,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
         animatedValue.setValue(next);
       },
       onLiveSeek: (next: number) => {
+        if (!(durationMs > 0)) return;
         onSeekToPercent(Math.max(0, Math.min(1, next)));
       },
       onDragEnd: (finalProgress: number) => {
@@ -132,6 +141,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
       applySeek,
       animatedValue,
       config.enableHaptics,
+      durationMs,
       externalProgress,
       onScrubStart,
       onSeekToPercent,
@@ -196,7 +206,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
       <View className="flex-1 flex-row items-center">
         {config.showTimeLabels ? (
           <Text className="text-white text-xs font-rubik mr-2 min-w-[35px]">
-            {formatTime(currentProgress * durationMs)}
+            {durationMs > 0 ? formatTime(currentProgress * durationMs) : "0:00"}
           </Text>
         ) : null}
 
@@ -218,7 +228,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
 
         {config.showTimeLabels ? (
           <Text className="text-white text-xs font-rubik ml-2 min-w-[35px]">
-            {formatTime(durationMs)}
+            {durationMs > 0 ? formatTime(durationMs) : "--:--"}
           </Text>
         ) : null}
       </View>

@@ -46,7 +46,8 @@ export function useAllContentTikTokFeedData(
     previouslyViewed = [],
   } = params;
 
-  const libraryStore = useLibraryStore();
+  const libraryIsLoaded = useLibraryStore((s) => s.isLoaded);
+  const loadSavedItems = useLibraryStore((s) => s.loadSavedItems);
   const [seenTodayIds, setSeenTodayIds] = useState<Set<string>>(new Set());
   const [lastSessionTopIds, setLastSessionTopIds] = useState<Set<string>>(
     new Set()
@@ -189,7 +190,23 @@ export function useAllContentTikTokFeedData(
     };
   }, [mostRecentItem?._id, firstFour]);
 
-  // Hydrate liked/saved + counts from feed immediately (no InteractionManager delay)
+  // Hydrate liked/saved + counts from feed immediately (no InteractionManager delay).
+  // Fingerprint deps — not filteredMediaList identity — so ranking remounts don't loop.
+  const feedInteractionFingerprint = useMemo(() => {
+    return (filteredMediaList || [])
+      .slice(0, 40)
+      .map((i) => {
+        if (!i._id) return "";
+        const likes = i.likeCount ?? i.totalLikes ?? i.likes ?? i.favorite ?? 0;
+        const saves = i.saves ?? i.saved ?? 0;
+        const comments = i.commentCount ?? i.comments ?? i.comment ?? 0;
+        const views = i.viewCount ?? i.totalViews ?? i.views ?? 0;
+        return `${i._id}:${i.hasLiked ? 1 : 0}:${i.hasBookmarked ? 1 : 0}:${likes}:${saves}:${comments}:${views}`;
+      })
+      .filter(Boolean)
+      .join("|");
+  }, [filteredMediaList]);
+
   useEffect(() => {
     const items = (filteredMediaList || []).slice(0, 40);
     if (items.length === 0) return;
@@ -211,7 +228,8 @@ export function useAllContentTikTokFeedData(
         .getState()
         .hydrateUserInteractionsFromFeed(withInteractions);
     }
-  }, [filteredMediaList]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint tracks meaningful feed interaction fields
+  }, [feedInteractionFingerprint]);
 
   // Restore persisted like/save flags ASAP so relaunch doesn't flash gray then red
   useEffect(() => {
@@ -282,30 +300,61 @@ export function useAllContentTikTokFeedData(
 
   // Load persisted data off the critical path
   useEffect(() => {
+    let cancelled = false;
     const loadAllData = async () => {
       setIsLoadingContent(true);
       try {
         const [, viewed] = await Promise.all([
           getPersistedStats(),
           getViewed(),
-          libraryStore.isLoaded
-            ? Promise.resolve()
-            : libraryStore.loadSavedItems(),
+          libraryIsLoaded ? Promise.resolve() : loadSavedItems(),
         ]);
-        setPreviouslyViewed(viewed || []);
+        if (cancelled) return;
+        const next = viewed || [];
+        setPreviouslyViewed((prev) => {
+          if (
+            prev.length === next.length &&
+            prev.every((p, i) => {
+              const a =
+                typeof p === "string"
+                  ? p
+                  : String(p?._id || p?.id || p?.contentId || "");
+              const b = next[i];
+              const bId =
+                typeof b === "string"
+                  ? b
+                  : String(b?._id || b?.id || b?.contentId || "");
+              return a === bId;
+            })
+          ) {
+            return prev;
+          }
+          return next;
+        });
       } catch (error) {
         if (__DEV__) console.error("❌ Error loading AllContent data:", error);
       } finally {
-        setIsLoadingContent(false);
+        if (!cancelled) setIsLoadingContent(false);
       }
     };
 
     if (mediaList.length > 0) {
-      InteractionManager.runAfterInteractions(() => loadAllData());
+      InteractionManager.runAfterInteractions(() => {
+        void loadAllData();
+      });
     } else {
       setIsLoadingContent(false);
     }
-  }, [mediaList.length, setPreviouslyViewed, setIsLoadingContent, libraryStore]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    mediaList.length,
+    setPreviouslyViewed,
+    setIsLoadingContent,
+    libraryIsLoaded,
+    loadSavedItems,
+  ]);
 
   const reshuffleFeed = useCallback(async () => {
     const seed = await rotateSessionSeed();

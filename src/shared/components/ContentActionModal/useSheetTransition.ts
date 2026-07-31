@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dimensions } from "react-native";
-import {
+import { State } from "react-native-gesture-handler";
+import type {
   HandlerStateChangeEvent,
   PanGestureHandlerGestureEvent,
 } from "react-native-gesture-handler";
@@ -21,18 +22,22 @@ const OPEN_SPRING = {
 };
 
 const CLOSE_DURATION = 240;
+/** Finger travel (px) before the sheet dismisses */
+const DISMISS_THRESHOLD = 100;
+/** Fast flick downward also dismisses */
+const DISMISS_VELOCITY = 900;
 
 /**
- * Drives the bottom-sheet open/close transition and swipe-to-dismiss gesture.
- * Unmount is scheduled with a JS timer rather than a Reanimated animation
- * callback so closing works even if worklet callbacks fail to fire.
+ * Bottom-sheet open/close + swipe-down-to-dismiss.
+ * Gesture end must only run on END/CANCELLED — handling BEGAN/ACTIVE
+ * was fighting the drag and made pull-to-close feel broken.
  */
 export function useSheetTransition(isVisible: boolean, onClose: () => void) {
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const backdropOpacity = useSharedValue(0);
-  const lastTranslateY = useSharedValue(0);
   const [internalVisible, setInternalVisible] = useState(isVisible);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closingRef = useRef(false);
 
   const clearCloseTimer = useCallback(() => {
     if (closeTimer.current) {
@@ -42,16 +47,20 @@ export function useSheetTransition(isVisible: boolean, onClose: () => void) {
   }, []);
 
   const startCloseAnimation = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     backdropOpacity.value = withTiming(0, { duration: CLOSE_DURATION });
     translateY.value = withTiming(SCREEN_HEIGHT, { duration: CLOSE_DURATION });
     clearCloseTimer();
     closeTimer.current = setTimeout(() => {
       setInternalVisible(false);
+      closingRef.current = false;
     }, CLOSE_DURATION + 30);
   }, [backdropOpacity, translateY, clearCloseTimer]);
 
   useEffect(() => {
     if (isVisible) {
+      closingRef.current = false;
       clearCloseTimer();
       setInternalVisible(true);
       backdropOpacity.value = withTiming(1, { duration: 200 });
@@ -69,23 +78,43 @@ export function useSheetTransition(isVisible: boolean, onClose: () => void) {
     onClose();
   }, [startCloseAnimation, onClose]);
 
+  const dismissFromGesture = useCallback(() => {
+    startCloseAnimation();
+    onClose();
+  }, [startCloseAnimation, onClose]);
+
   const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
     const { translationY } = event.nativeEvent;
     if (translationY > 0) {
       translateY.value = translationY;
-      lastTranslateY.value = translationY;
     }
   };
 
   const onGestureEnd = (
-    _event: HandlerStateChangeEvent<Record<string, unknown>>
+    event: HandlerStateChangeEvent<Record<string, unknown>> | { nativeEvent?: any }
   ) => {
-    if (lastTranslateY.value > 150) {
-      requestClose();
+    const native = (event as any)?.nativeEvent ?? event;
+    const state = native?.state;
+    // Only settle on gesture end — ignore BEGAN/ACTIVE (old bug fought the drag)
+    if (
+      state != null &&
+      state !== State.END &&
+      state !== State.CANCELLED &&
+      state !== State.FAILED
+    ) {
+      return;
+    }
+
+    const ty = Number(native?.translationY ?? 0);
+    const vy = Number(native?.velocityY ?? 0);
+
+    if (ty > DISMISS_THRESHOLD || vy > DISMISS_VELOCITY) {
+      translateY.value = withTiming(SCREEN_HEIGHT, { duration: CLOSE_DURATION });
+      backdropOpacity.value = withTiming(0, { duration: CLOSE_DURATION });
+      dismissFromGesture();
     } else {
       translateY.value = withSpring(0, OPEN_SPRING);
     }
-    lastTranslateY.value = 0;
   };
 
   const sheetStyle = useAnimatedStyle(() => ({

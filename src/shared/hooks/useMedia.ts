@@ -18,6 +18,8 @@ import {
 } from "../types";
 import { filterContentByType, transformApiResponseToMediaItem } from "../utils";
 
+const EMPTY_MEDIA_LIST: MediaItem[] = [];
+
 /** Sync stats from media items to useInteractionStore to prevent redundant metadata fetches */
 const syncMediaStatsToInteractionStore = (items: MediaItem[]) => {
   if (!items || items.length === 0) return;
@@ -278,7 +280,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     refetchOnReconnect: false,
   });
 
-  const allContentEarly = allContentQuery.data?.media || [];
+  const allContentEarly = allContentQuery.data?.media ?? EMPTY_MEDIA_LIST;
   // Default feed is fallback — don't contend with the primary fetch on cold start
   const shouldFetchDefault =
     immediate &&
@@ -356,9 +358,11 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   });
 
   // Extract data from React Query (0ms if cached!)
-  const allContent = allContentQuery.data?.media || [];
+  // Stable empty fallback — `|| []` would allocate a new array every render and
+  // retrigger feed memos/effects (Maximum update depth with hydrate).
+  const allContent = allContentQuery.data?.media ?? EMPTY_MEDIA_LIST;
   const allContentTotal = allContentQuery.data?.total || 0;
-  const defaultContent = defaultContentQuery.data?.media || [];
+  const defaultContent = defaultContentQuery.data?.media ?? EMPTY_MEDIA_LIST;
   const defaultContentPagination = {
     page: defaultContentQuery.data?.page || page,
     limit: defaultContentQuery.data?.limit || limit,

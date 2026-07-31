@@ -62,6 +62,8 @@ export interface MediaItem extends BaseEntity {
   hasViewed?: boolean;
   hasShared?: boolean;
   moderationStatus?: "approved" | "under_review" | "rejected";
+  /** Async media worker status — seekable only when ready + duration > 0 */
+  processingStatus?: "ready" | "processing" | "pending" | "failed" | string;
   playbackUrl?: string; // HLS or processed playback URL from backend
   hlsUrl?: string; // Legacy HLS field
   isHidden?: boolean;

@@ -14,6 +14,9 @@ import { PERF, perfMark, perfMeasure } from "../../../../shared/utils/perfMarks"
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
+import { useHealMissingDuration } from "./hooks/useHealMissingDuration";
+import { normalizeDurationToMs } from "./player/normalizeDuration";
+import { getVideoSourceContentType } from "../../../../shared/utils/videoUrlManager";
 
 export interface VideoCardPlayerAreaProps {
   video: MediaItem;
@@ -96,12 +99,27 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   }, [videoLoaded, key]);
 
   const player = useVideoPlayer(
-    videoUrl ? { uri: videoUrl, useCaching: true } : "",
+    videoUrl
+      ? {
+          uri: videoUrl,
+          useCaching: true,
+          ...(getVideoSourceContentType(
+            videoUrl,
+            (video as any).fileMimeType || (video as any).mimeType
+          )
+            ? {
+                contentType: getVideoSourceContentType(
+                  videoUrl,
+                  (video as any).fileMimeType || (video as any).mimeType
+                ),
+              }
+            : {}),
+        }
+      : "",
     (p) => {
       p.loop = false;
       p.muted = isMuted;
       p.volume = videoVolume;
-      // 100ms ticks keep the scrubber moving while the video plays
       p.timeUpdateEventInterval = 0.1;
     }
   );
@@ -170,6 +188,23 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     setFailedVideoLoad(true);
   }, []);
 
+  const healedDurationMs = useHealMissingDuration({
+    mediaId: contentId,
+    durationSec: (video as any).duration ?? (video as any).durationSec,
+    processingStatus: (video as any).processingStatus,
+    enabled: !isAudioSermonValue,
+  });
+
+  const mediaDurationMs = useMemo(() => {
+    const v = video as any;
+    // Prefer already-ms fields; never treat them as seconds.
+    if (typeof v.durationMs === "number" && v.durationMs > 0) {
+      return Math.min(v.durationMs, 24 * 60 * 60 * 1000);
+    }
+    const fromApi = normalizeDurationToMs(v.duration ?? v.durationSec);
+    return Math.max(fromApi, healedDurationMs);
+  }, [video, healedDurationMs]);
+
   const {
     lastKnownDurationRef,
     videoDurationMs,
@@ -193,6 +228,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     storeRef,
     isMountedRef,
     suppressAutoLoopRef,
+    initialDurationMs: mediaDurationMs,
   });
 
   const { seekToPercent } = useVideoCardSeek({
@@ -202,7 +238,8 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     player,
     videoPositionMs,
     lastKnownDurationRef,
-    backendDurationMs: (video as any).duration ? (video as any).duration * 1000 : 0,
+    backendDurationMs: mediaDurationMs,
+    mediaId: contentId,
     setVideoPositionMs,
     setVideoProgress,
     suppressAutoLoopRef,
@@ -327,7 +364,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
             ? (audioState?.duration ?? 0)
             : videoDurationMs ||
               lastKnownDurationRef.current ||
-              ((video as any).duration ? (video as any).duration * 1000 : 0) ||
+              mediaDurationMs ||
               0
         }
         showControls={true}

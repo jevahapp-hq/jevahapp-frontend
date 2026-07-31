@@ -1,8 +1,9 @@
 /**
- * Seek for expo-video (primary) with expo-av / audio fallbacks.
- * Optimistically updates scrubber position so the bar follows the finger.
+ * Seek for expo-video — absolute % seek when duration is known.
+ * Scrubber UI always moves; player seek only runs with a real duration.
  */
 import React, { useCallback } from "react";
+import { setCachedDurationMs } from "../player/durationCache";
 import {
   getPlayerDurationMs,
   seekPlayerBySeconds,
@@ -17,9 +18,9 @@ export interface UseVideoCardSeekParams {
   videoPositionMs: number;
   lastKnownDurationRef: React.MutableRefObject<number>;
   backendDurationMs: number;
+  mediaId?: string;
   setVideoPositionMs?: (ms: number) => void;
   setVideoProgress?: (progress: number) => void;
-  /** Blocks near-end auto-loop while scrubbing */
   suppressAutoLoopRef?: React.MutableRefObject<boolean>;
 }
 
@@ -31,15 +32,17 @@ export function useVideoCardSeek({
   videoPositionMs,
   lastKnownDurationRef,
   backendDurationMs,
+  mediaId,
   setVideoPositionMs,
   setVideoProgress,
   suppressAutoLoopRef,
 }: UseVideoCardSeekParams) {
-  const resolveDurationMs = useCallback(() => {
+  const resolveDurationMs = useCallback((): number => {
     const fromPlayer = getPlayerDurationMs(player, 0);
     const fromRef = lastKnownDurationRef.current || 0;
     const fromBackend = backendDurationMs || 0;
-    return fromPlayer || fromRef || fromBackend || 0;
+    const resolved = fromPlayer || fromRef || fromBackend || 0;
+    return resolved >= 500 ? resolved : 0;
   }, [player, lastKnownDurationRef, backendDurationMs]);
 
   const seekBySeconds = useCallback(
@@ -59,8 +62,12 @@ export function useVideoCardSeek({
         return;
       }
 
-      const durationMs = resolveDurationMs();
-      await seekPlayerBySeconds(player, deltaSec, videoPositionMs, durationMs);
+      await seekPlayerBySeconds(
+        player,
+        deltaSec,
+        videoPositionMs,
+        resolveDurationMs()
+      );
     },
     [
       isAudioSermon,
@@ -88,37 +95,50 @@ export function useVideoCardSeek({
         return;
       }
 
+      // Refresh duration from player right before seek (often appears after play)
+      const live = getPlayerDurationMs(player, 0);
+      if (live >= 500) {
+        lastKnownDurationRef.current = live;
+        setCachedDurationMs(mediaId, live);
+      }
+
       const durationMs = resolveDurationMs();
+      // Optimistic UI even if we can't drive the decoder yet
+      setVideoProgress?.(clamped);
+      if (durationMs > 0) {
+        setVideoPositionMs?.(clamped * durationMs);
+      }
+
       if (!player || durationMs <= 0) {
-        if (__DEV__) {
-          console.warn("Video seekToPercent skipped", {
-            hasPlayer: Boolean(player),
-            durationMs,
-          });
-        }
         return;
       }
 
       if (suppressAutoLoopRef) suppressAutoLoopRef.current = true;
 
-      const targetMs = clamped * durationMs;
-      // Optimistic UI — bar/position follow immediately; player catches up
-      setVideoPositionMs?.(targetMs);
-      setVideoProgress?.(clamped);
-      if (durationMs > 0) lastKnownDurationRef.current = durationMs;
+      const targetMs = Math.min(
+        clamped * durationMs,
+        Math.max(0, durationMs - 250)
+      );
 
-      const ok = await seekPlayerToMs(player, targetMs);
-      if (!ok && __DEV__) {
-        console.warn(
-          "Video seekToPercent: player did not seek (check expo-video adapter)"
-        );
+      const wasPlaying = Boolean(player.playing);
+      try {
+        if (wasPlaying && typeof player.pause === "function") player.pause();
+      } catch {
+        // no-op
       }
 
-      // Keep loop suppressed briefly so timeUpdate doesn't snap to 0 mid-seek
+      await seekPlayerToMs(player, targetMs, durationMs);
+
+      try {
+        if (wasPlaying && typeof player.play === "function") player.play();
+      } catch {
+        // no-op
+      }
+
       if (suppressAutoLoopRef) {
         setTimeout(() => {
           if (suppressAutoLoopRef) suppressAutoLoopRef.current = false;
-        }, 350);
+        }, 1200);
       }
     },
     [
@@ -131,8 +151,12 @@ export function useVideoCardSeek({
       setVideoProgress,
       lastKnownDurationRef,
       suppressAutoLoopRef,
+      mediaId,
     ]
   );
 
-  return { seekBySeconds, seekToPercent };
+  return {
+    seekBySeconds,
+    seekToPercent,
+  };
 }

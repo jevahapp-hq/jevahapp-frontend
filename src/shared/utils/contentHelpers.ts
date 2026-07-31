@@ -43,6 +43,22 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       thumbnailUrl: enrichedItem.thumbnailUrl || enrichedItem.imageUrl,
       createdAt: enrichedItem.createdAt || enrichedItem.created_at || new Date().toISOString(),
       duration: enrichedItem.duration,
+      // Playback URLs + MIME — required for MP4-over-HLS seek preference
+      playbackUrl: enrichedItem.playbackUrl,
+      hlsUrl: enrichedItem.hlsUrl,
+      fileMimeType: enrichedItem.fileMimeType || enrichedItem.mimeType,
+      mimeType: enrichedItem.mimeType || enrichedItem.fileMimeType,
+      moderationStatus: enrichedItem.moderationStatus,
+      processingStatus: (() => {
+        const raw =
+          enrichedItem.processingStatus ||
+          enrichedItem.status ||
+          undefined;
+        if (raw == null || raw === "") return undefined;
+        const s = String(raw).toLowerCase();
+        if (s === "queued") return "pending";
+        return s;
+      })(),
       // Additional fields
       likes: enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
       shares: enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,

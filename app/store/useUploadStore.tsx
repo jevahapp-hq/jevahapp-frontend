@@ -119,6 +119,7 @@ export interface MediaItem {
   comment: number;
   duration?: number; // Duration in seconds from backend — used for progress bar
   moderationStatus?: "approved" | "under_review" | "rejected";
+  processingStatus?: "ready" | "processing" | "pending" | "failed" | string;
   playbackUrl?: string;
   hlsUrl?: string;
 }

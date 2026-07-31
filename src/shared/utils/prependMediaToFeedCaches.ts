@@ -15,6 +15,21 @@ function prependToList<T extends { _id?: string; id?: string }>(
   return [item, ...existing];
 }
 
+function patchInList<T extends { _id?: string; id?: string }>(
+  list: T[] | undefined,
+  id: string,
+  patch: Partial<T>
+): T[] | undefined {
+  if (!Array.isArray(list) || !id) return list;
+  let changed = false;
+  const next = list.map((item) => {
+    if (itemId(item) !== id) return item;
+    changed = true;
+    return { ...item, ...patch };
+  });
+  return changed ? next : list;
+}
+
 /**
  * Instantly surface a just-uploaded item in React Query + Zustand feed caches
  * so Home tabs don't wait on a stale 12-item page / disabled refetchOnMount.
@@ -91,6 +106,60 @@ export function prependMediaToFeedCaches(
       items,
       total:
         typeof page.total === "number" ? page.total + added : items.length,
+      fetchedAt: Date.now(),
+    });
+  }
+}
+
+/**
+ * Patch an existing feed item (e.g. after media worker returns duration / MP4 URLs).
+ */
+export function patchMediaInFeedCaches(
+  queryClient: QueryClient,
+  mediaId: string,
+  patch: Partial<MediaItem>
+): void {
+  const id = String(mediaId || "").trim();
+  if (!id) return;
+
+  const mergeQueryData = (old: any) => {
+    if (!old) return old;
+    if (Array.isArray(old.media)) {
+      const media = patchInList(old.media, id, patch);
+      if (media === old.media) return old;
+      return { ...old, media };
+    }
+    if (Array.isArray(old)) {
+      return patchInList(old, id, patch) ?? old;
+    }
+    return old;
+  };
+
+  queryClient.setQueriesData({ queryKey: ["all-content"] }, mergeQueryData);
+  queryClient.setQueriesData({ queryKey: ["default-content"] }, mergeQueryData);
+  queryClient.setQueriesData(
+    { queryKey: ["all-content-infinite"] },
+    (old: any) => {
+      if (!old?.pages?.length) return old;
+      let changed = false;
+      const pages = old.pages.map((page: any) => {
+        const next = mergeQueryData(page);
+        if (next !== page) changed = true;
+        return next;
+      });
+      return changed ? { ...old, pages } : old;
+    }
+  );
+
+  const cache = useContentCacheStore.getState().cache;
+  for (const key of Object.keys(cache)) {
+    const page = cache[key];
+    if (!page?.items) continue;
+    const items = patchInList(page.items, id, patch);
+    if (!items || items === page.items) continue;
+    useContentCacheStore.getState().set(key, {
+      ...page,
+      items,
       fetchedAt: Date.now(),
     });
   }

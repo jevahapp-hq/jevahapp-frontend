@@ -150,18 +150,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     playingVideos,
   });
 
-  const { comments } = useInteractionStore();
+  const comments = useInteractionStore((s) => s.comments);
   const { loadDownloadedItems } = useDownloadStore();
 
-  // Interaction store
-  const {
-    contentStats,
-    toggleLike,
-    toggleSave,
-    recordShare,
-    loadContentStats,
-    loadingInteraction,
-  } = useInteractionStore();
+  // Interaction store — select fields so hydrate no-ops don't thrash the feed
+  const contentStats = useInteractionStore((s) => s.contentStats);
+  const toggleLike = useInteractionStore((s) => s.toggleLike);
+  const toggleSave = useInteractionStore((s) => s.toggleSave);
+  const recordShare = useInteractionStore((s) => s.recordShare);
+  const loadContentStats = useInteractionStore((s) => s.loadContentStats);
+  const loadingInteraction = useInteractionStore((s) => s.loadingInteraction);
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);

@@ -1,7 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { useCreatorMe } from "../../hooks/useCreatorMe";
 import { apiClient } from "../../utils/dataFetching";
+import { CreatorStatusBanner } from "../creators/CreatorStatusBanner";
 
 type ProfileSummaryProps = {
   user: any;
@@ -20,9 +23,13 @@ export default function ProfileSummary({
   onLogout,
   onProfileUpdate,
 }: ProfileSummaryProps) {
+  const router = useRouter();
   const [avatarError, setAvatarError] = useState(false);
   const [updatingBio, setUpdatingBio] = useState(false);
   const avatarUrl = user ? getAvatarUrl(user) ?? undefined : undefined;
+  const { data: creatorMe, loading: creatorLoading } = useCreatorMe({
+    enabled: !!user,
+  });
 
   const handleAddBio = () => {
     Alert.prompt(
@@ -143,6 +150,14 @@ export default function ProfileSummary({
           </TouchableOpacity>
         )}
       </View>
+
+      {user ? (
+        <CreatorStatusBanner
+          me={creatorMe}
+          loading={creatorLoading}
+          onPress={() => router.push("/creators")}
+        />
+      ) : null}
 
       {/* Logout Button - Close to profile */}
       <View className="items-center">

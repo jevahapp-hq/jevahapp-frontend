@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -20,7 +21,21 @@ import CopyrightFreeSongModal from "../components/CopyrightFreeSongModal";
 import copyrightFreeMusicAPI, {
   CopyrightFreeSongResponse,
 } from "../services/copyrightFreeMusicAPI";
+import { musicCatalogApi } from "../services/music-catalog";
+import {
+  isTrackPlayable,
+  isTrackProcessing,
+  trackCardToSongUi,
+  type TrackCard,
+} from "../services/music-catalog/trackTypes";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import {
+  MusicLaneTabs,
+  type MusicLane,
+} from "./music/MusicLaneTabs";
+import { useRouter } from "expo-router";
+
+const ARTISTS_PAGE_SIZE = 20;
 
 type DisplayMode = "list" | "grid" | "small" | "large";
 
@@ -34,8 +49,13 @@ interface DiscoverCard {
 
 export default function Music() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [musicLane, setMusicLane] = useState<MusicLane>("copyright-free");
   const [songs, setSongs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [artistsPage, setArtistsPage] = useState(1);
+  const [artistsHasMore, setArtistsHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchInput, setShowSearchInput] = useState(false);
@@ -121,14 +141,54 @@ export default function Music() {
   );
 
   /**
-   * Load songs from API
+   * Load songs by lane. Copyright-free and Artists never mix.
+   * Artists lane supports pagination (append when page > 1).
    */
   const loadSongs = useCallback(
-    async (search?: string, category?: string | null) => {
+    async (
+      search?: string,
+      category?: string | null,
+      lane: MusicLane = musicLane,
+      opts?: { page?: number; append?: boolean }
+    ) => {
+      const page = opts?.page ?? 1;
+      const append = opts?.append === true;
       setError(null);
-      setLoading(true);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
 
       try {
+        if (lane === "artists") {
+          const { tracks, total } = await musicCatalogApi.listArtistTracks({
+            search: search || undefined,
+            genre: category || undefined,
+            page,
+            limit: ARTISTS_PAGE_SIZE,
+          });
+          // Strict: artist lane only — never CF
+          const artistOnly = tracks.filter((t: TrackCard) => t.lane === "artist");
+          const mapped = artistOnly.map(trackCardToSongUi);
+          setSongs((prev) => {
+            if (!append) return mapped;
+            const seen = new Set(prev.map((s) => s.id));
+            return [...prev, ...mapped.filter((s) => !seen.has(s.id))];
+          });
+          setArtistsPage(page);
+          if (typeof total === "number") {
+            const prior = append ? (page - 1) * ARTISTS_PAGE_SIZE : 0;
+            setArtistsHasMore(prior + artistOnly.length < total);
+          } else {
+            setArtistsHasMore(artistOnly.length >= ARTISTS_PAGE_SIZE);
+          }
+          return;
+        }
+
+        setArtistsHasMore(false);
+        setArtistsPage(1);
+
         const response = search
           ? await copyrightFreeMusicAPI.searchSongs(search, {
             category: category || undefined,
@@ -143,32 +203,61 @@ export default function Music() {
         if (response.success && response.data?.songs?.length) {
           const transformedSongs = response.data.songs
             .map(transformBackendSong)
-            // Defensive: ensure this screen shows ONLY copyright-free catalog
-            .filter(
-              (s) =>
-                !s?.contentType ||
-                String(s?.contentType || "").toLowerCase() ===
-                "copyright-free-music"
-            );
+            // Defensive: CF shelf ONLY — drop anything that looks like artist/original
+            .filter((s) => {
+              const ct = String(s?.contentType || "").toLowerCase();
+              const songLane = String((s as any)?.lane || "").toLowerCase();
+              if (songLane === "artist") return false;
+              return !ct || ct === "copyright-free-music" || ct === "curated";
+            });
           setSongs(transformedSongs);
         } else {
           setSongs([]);
         }
       } catch (err) {
         console.error("Error loading songs:", err);
-        setError("Failed to load songs. Please try again.");
-        setSongs([]);
+        setError(
+          lane === "artists"
+            ? "Artist catalog unavailable. Pull to retry or check backend /api/music/tracks?lane=artist."
+            : "Failed to load songs. Please try again."
+        );
+        if (!append) setSongs([]);
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     },
-    [transformBackendSong]
+    [transformBackendSong, musicLane]
   );
 
+  const loadMoreArtists = useCallback(() => {
+    if (musicLane !== "artists" || loading || loadingMore || !artistsHasMore) {
+      return;
+    }
+    void loadSongs(searchQuery || undefined, selectedCategory, "artists", {
+      page: artistsPage + 1,
+      append: true,
+    });
+  }, [
+    musicLane,
+    loading,
+    loadingMore,
+    artistsHasMore,
+    artistsPage,
+    loadSongs,
+    searchQuery,
+    selectedCategory,
+  ]);
+
+
   /**
-   * Load categories
+   * Load categories (copyright-free shelf only)
    */
   const loadCategories = useCallback(async () => {
+    if (musicLane !== "copyright-free") {
+      setCategories([]);
+      return;
+    }
     try {
       const response = await copyrightFreeMusicAPI.getCategories();
       if (response.success && response.data?.categories) {
@@ -179,40 +268,64 @@ export default function Music() {
     } catch (err) {
       console.warn("Error loading categories:", err);
     }
-  }, []);
+  }, [musicLane]);
 
   useEffect(() => {
-    loadSongs(searchQuery || undefined, selectedCategory);
+    loadSongs(searchQuery || undefined, selectedCategory, musicLane);
     loadCategories();
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, musicLane]);
+
+  const openArtistProfile = useCallback(
+    (slug?: string) => {
+      if (!slug) return;
+      router.push({
+        pathname: "/artists/[slug]",
+        params: { slug },
+      });
+    },
+    [router]
+  );
 
   /**
    * Handle play/pause for a song
    */
   const handlePlayPress = useCallback(
     async (song: any) => {
+      if (song?.lane === "artist" || song?.contentType === "artist-music") {
+        if (!isTrackPlayable(song) || isTrackProcessing(song)) {
+          Alert.alert(
+            "Processing…",
+            "This track is still encoding. Try again in a moment."
+          );
+          return;
+        }
+      }
+      if (!song?.audioUrl) {
+        return;
+      }
       if (currentTrack?.id === song.id && globalIsPlaying) {
         await togglePlayPause();
       } else {
-        // Build queue from current songs
-        const state = useGlobalAudioPlayerStore.getState();
         const songIndex = songs.findIndex((s) => s.id === song.id);
 
         if (songIndex !== -1) {
-          const mappedQueue = songs.map((s) => ({
-            id: s.id,
-            title: s.title,
-            artist: s.artist,
-            audioUrl: s.audioUrl,
-            thumbnailUrl: s.thumbnailUrl,
-            duration: s.duration,
-            category: s.category,
-            description: s.description,
-          }));
+          const mappedQueue = songs
+            .filter((s) => !!s.audioUrl && isTrackPlayable(s))
+            .map((s) => ({
+              id: s.id,
+              title: s.title,
+              artist: s.artist,
+              audioUrl: s.audioUrl,
+              thumbnailUrl: s.thumbnailUrl,
+              duration: s.duration,
+              category: s.category,
+              description: s.description,
+            }));
 
+          const queueIndex = mappedQueue.findIndex((s) => s.id === song.id);
           useGlobalAudioPlayerStore.setState({
             queue: mappedQueue,
-            currentIndex: songIndex,
+            currentIndex: Math.max(0, queueIndex),
           });
         }
 
@@ -229,6 +342,10 @@ export default function Music() {
           },
           true
         );
+
+        if (song?.lane === "artist" || song?.contentType === "artist-music") {
+          void musicCatalogApi.recordPlay(song.id);
+        }
       }
     },
     [currentTrack, globalIsPlaying, setTrack, togglePlayPause, songs]
@@ -503,16 +620,27 @@ export default function Music() {
             >
               {item.title}
             </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#98A2B3",
-                fontFamily: "Rubik_400Regular",
+            <TouchableOpacity
+              disabled={!item.artistSlug}
+              onPress={(e) => {
+                e.stopPropagation();
+                openArtistProfile(item.artistSlug);
               }}
-              numberOfLines={1}
+              activeOpacity={item.artistSlug ? 0.7 : 1}
             >
-              By {item.artist} • {formatDuration(item.duration)}
-            </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: item.artistSlug ? "#256E63" : "#98A2B3",
+                  fontFamily: "Rubik_400Regular",
+                }}
+                numberOfLines={1}
+              >
+                {isTrackProcessing(item)
+                  ? "Processing…"
+                  : `By ${item.artist} • ${formatDuration(item.duration)}`}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* 3-dot menu */}
@@ -538,7 +666,7 @@ export default function Music() {
         </TouchableOpacity>
       );
     },
-    [handlePlayPress, formatDuration]
+    [handlePlayPress, formatDuration, openArtistProfile]
   );
 
   /**
@@ -609,20 +737,28 @@ export default function Music() {
           >
             {item.title}
           </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              color: "#98A2B3",
-              fontFamily: "Rubik_400Regular",
+          <TouchableOpacity
+            disabled={!item.artistSlug}
+            onPress={(e) => {
+              e.stopPropagation();
+              openArtistProfile(item.artistSlug);
             }}
-            numberOfLines={1}
           >
-            {item.artist}
-          </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                color: item.artistSlug ? "#256E63" : "#98A2B3",
+                fontFamily: "Rubik_400Regular",
+              }}
+              numberOfLines={1}
+            >
+              {item.artist}
+            </Text>
+          </TouchableOpacity>
         </TouchableOpacity>
       );
     },
-    [SCREEN_WIDTH, handlePlayPress]
+    [SCREEN_WIDTH, handlePlayPress, openArtistProfile]
   );
 
   /**
@@ -762,10 +898,11 @@ export default function Music() {
             <Text
               style={{
                 fontSize: 14,
-                color: "#98A2B3",
+                color: item.artistSlug ? "#256E63" : "#98A2B3",
                 fontFamily: "Rubik_400Regular",
               }}
               numberOfLines={1}
+              onPress={() => openArtistProfile(item.artistSlug)}
             >
               By {item.artist} • {formatDuration(item.duration)}
             </Text>
@@ -773,7 +910,7 @@ export default function Music() {
         </TouchableOpacity>
       );
     },
-    [SCREEN_WIDTH, formatDuration, handlePlayPress]
+    [SCREEN_WIDTH, formatDuration, handlePlayPress, openArtistProfile]
   );
 
   /**
@@ -799,6 +936,19 @@ export default function Music() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <MusicLaneTabs
+        lane={musicLane}
+        onChange={(next) => {
+          setMusicLane(next);
+          setSelectedCategory(null);
+          setSearchQuery("");
+          setSongs([]);
+          setArtistsPage(1);
+          setArtistsHasMore(false);
+          setLoading(true);
+        }}
+      />
+
       {/* Header with Search and Display Mode Toggle */}
       <View
         style={{
@@ -936,21 +1086,35 @@ export default function Music() {
         )}
       </View>
 
-      {/* Discover Weekly Cards (Scrollable Horizontal) */}
-      <View style={{ marginBottom: 16 }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-          }}
-        >
-          {discoverCards.map((card) => (
-            <View key={card.id}>{renderDiscoverCard({ item: card })}</View>
-          ))}
-        </ScrollView>
-      </View>
+      {/* Discover Weekly — copyright-free shelf only */}
+      {musicLane === "copyright-free" ? (
+        <View style={{ marginBottom: 16 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+            }}
+          >
+            {discoverCards.map((card) => (
+              <View key={card.id}>{renderDiscoverCard({ item: card })}</View>
+            ))}
+          </ScrollView>
+        </View>
+      ) : (
+        <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 13,
+              color: "#6B7280",
+              fontFamily: "Rubik_400Regular",
+            }}
+          >
+            Original gospel from Jevah creators — never mixed with copyright-free beds.
+          </Text>
+        </View>
+      )}
 
       {/* Songs List */}
       {loading ? (
@@ -1016,18 +1180,47 @@ export default function Music() {
           >
             No songs found
           </Text>
+          {musicLane === "artists" ? (
+            <TouchableOpacity
+              onPress={() => router.push("/creators")}
+              style={{ marginTop: 16 }}
+            >
+              <Text
+                style={{
+                  color: "#0A332D",
+                  fontFamily: "Rubik_500Medium",
+                  fontSize: 14,
+                }}
+              >
+                Are you an artist? Become a creator
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : (
         <FlatList
           data={songs}
           renderItem={renderSongItem}
           keyExtractor={(item) => item.id}
-          key={displayMode} // Force re-render when display mode changes
+          key={`${displayMode}-${musicLane}`}
           numColumns={displayMode === "grid" ? 2 : displayMode === "small" ? 3 : 1}
           contentContainerStyle={{
             paddingBottom: 100, // Space for bottom nav
           }}
           showsVerticalScrollIndicator={false}
+          onRefresh={() =>
+            loadSongs(searchQuery || undefined, selectedCategory, musicLane)
+          }
+          refreshing={loading && !loadingMore}
+          onEndReached={musicLane === "artists" ? loadMoreArtists : undefined}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color="#0A332D" />
+              </View>
+            ) : null
+          }
         />
       )}
 

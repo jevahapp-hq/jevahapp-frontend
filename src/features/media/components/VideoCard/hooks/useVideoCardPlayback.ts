@@ -23,6 +23,8 @@ export interface UseVideoCardPlaybackParams {
   isMountedRef: React.MutableRefObject<boolean>;
   /** Blocks near-end auto-loop while scrubbing */
   suppressAutoLoopRef?: React.MutableRefObject<boolean>;
+  /** Media.duration normalized to ms — seeds scrubber before player reports */
+  initialDurationMs?: number;
 }
 
 export function useVideoCardPlayback({
@@ -40,6 +42,7 @@ export function useVideoCardPlayback({
   storeRef,
   isMountedRef,
   suppressAutoLoopRef,
+  initialDurationMs = 0,
 }: UseVideoCardPlaybackParams) {
   const { maybeRecordView } = useVideoViewTracking({
     contentId,
@@ -91,9 +94,11 @@ export function useVideoCardPlayback({
   } = useVideoProgressTracker({
     player,
     enabled: !isAudioSermon,
+    mediaId: contentId,
     updateIntervalSec: 0.1,
     isMountedRef,
     suppressAutoLoopRef,
+    initialDurationMs,
     onTick,
     onReady,
     onError,
