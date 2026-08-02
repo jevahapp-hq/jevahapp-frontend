@@ -11,14 +11,12 @@ type UploadProgressModalProps = {
 };
 
 function getLoadingMessage(uploadState: UploadState) {
-  if (uploadState.status === "verifying") {
-    return uploadState.message || "Analyzing content...";
-  }
-  if (uploadState.status === "uploading") {
-    return "Uploading approved content...";
-  }
+  if (uploadState.message?.trim()) return uploadState.message;
+  if (uploadState.status === "verifying") return "Analyzing content...";
+  if (uploadState.status === "uploading") return "Uploading...";
   return "Processing...";
 }
+
 
 export function UploadProgressModal({
   visible,
@@ -49,7 +47,7 @@ export function UploadProgressModal({
             </View>
           ) : null}
 
-          {uploadState.status === "verifying" ? (
+          {uploadState.status === "verifying" && progress < 90 ? (
             <Text style={styles.hint}>This may take 10–30 seconds</Text>
           ) : null}
         </View>

@@ -2,6 +2,7 @@
  * Upload screen orchestrator — wires hooks + presentational pieces
  */
 
+import { useCallback, useState } from "react";
 import {
   KeyboardAvoidingView,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getButtonSize,
   getKeyboardAdjustment,
@@ -18,6 +20,7 @@ import {
   getTouchTargetSize,
 } from "../../../utils/responsive";
 import AuthHeader from "../../components/AuthHeader";
+import TopToast from "../../components/TopToast";
 import { useMediaStore } from "../../store/useUploadStore";
 import { AiVerificationPlate } from "./components/AiVerificationPlate";
 import { MediaPickers } from "./components/MediaPickers";
@@ -33,6 +36,16 @@ import { useUploadFormState } from "./hooks/useUploadFormState";
 
 export default function UploadScreen() {
   const form = useUploadFormState();
+  const insets = useSafeAreaInsets();
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    text: string;
+    type: "success" | "error" | "info";
+  }>({ visible: false, text: "", type: "info" });
+
+  const showSoftNotice = useCallback((text: string) => {
+    setToast({ visible: true, text, type: "info" });
+  }, []);
 
   const { pickMedia, pickThumbnail } = useMediaPickers({
     title: form.title,
@@ -41,6 +54,8 @@ export default function UploadScreen() {
     setFile: form.setFile,
     setDetectedFileType: form.setDetectedFileType,
     setThumbnail: form.setThumbnail,
+    setSelectedType: form.setSelectedType,
+    setIsSermonContent: form.setIsSermonContent,
     setEligibilityStatus: form.setEligibilityStatus,
     validateMediaEligibilityLocal: form.validateMediaEligibilityLocal,
   });
@@ -75,6 +90,7 @@ export default function UploadScreen() {
       setEligibilityStatus: form.setEligibilityStatus,
       validateMediaEligibilityLocal: form.validateMediaEligibilityLocal,
       resetForm: form.resetForm,
+      onSoftNotice: showSoftNotice,
     });
 
   const result = form.uploadResult;
@@ -196,6 +212,14 @@ export default function UploadScreen() {
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      <TopToast
+        visible={toast.visible}
+        text={toast.text}
+        type={toast.type}
+        topOffset={Math.max(insets.top + 8, 48)}
+        onClose={() => setToast((t) => ({ ...t, visible: false }))}
+      />
 
       <UploadResultModal
         result={result}

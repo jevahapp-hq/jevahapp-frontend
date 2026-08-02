@@ -3,8 +3,10 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   Text,
   TextInput,
   TouchableOpacity,
@@ -40,12 +42,86 @@ type UploadFormFieldsProps = {
   detectedFileType: DetectedFileType;
   eligibilityStatus: EligibilityStatus | null;
   setEligibilityStatus: (v: EligibilityStatus | null) => void;
-  validateMediaEligibilityLocal: () => EligibilityStatus;
+  validateMediaEligibilityLocal: (overrides?: {
+    file?: MediaFile | null;
+    title?: string;
+    selectedCategory?: string;
+    selectedType?: string;
+  }) => EligibilityStatus;
   isGeneratingDescription: boolean;
   descriptionGenerationError: string | null;
   bibleVerses: string[];
   onGenerateAIDescription: () => void;
 };
+
+const FIELD_HELP: Record<string, string> = {
+  title:
+    "A short, clear name for your post (what people see first in the feed).",
+  description:
+    "Optional story or context. You can also generate one with AI after you add a title, file, and cover.",
+  category:
+    "The topic lane this post belongs in (Worship, Youth, Teachings, etc.).",
+  contentType:
+    "The format of your file — Videos, Music, Books, Podcasts, or Sermons. Match the file you uploaded.",
+  cover:
+    "A square image that represents your post. Required for a strong first impression.",
+};
+
+function FieldLabel({
+  label,
+  icon,
+  helpKey,
+  openHelp,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  helpKey: string;
+  openHelp: (key: string) => void;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 6,
+      }}
+    >
+      <Ionicons
+        name={icon}
+        size={14}
+        color="#64748B"
+        style={{ marginRight: 6 }}
+      />
+      <Text
+        style={{
+          fontSize: getResponsiveFontSize(11, 12, 12),
+          color: "#64748B",
+          fontFamily: "Rubik-SemiBold",
+          letterSpacing: 0.4,
+          flex: 1,
+        }}
+      >
+        {label}
+      </Text>
+      <Pressable
+        onPress={() => openHelp(helpKey)}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={`Help for ${label}`}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#F1F5F9",
+        }}
+      >
+        <Ionicons name="help" size={12} color="#64748B" />
+      </Pressable>
+    </View>
+  );
+}
 
 export function UploadFormFields({
   title,
@@ -68,11 +144,23 @@ export function UploadFormFields({
   bibleVerses,
   onGenerateAIDescription,
 }: UploadFormFieldsProps) {
-  const revalidate = () => {
-    setTimeout(() => {
-      const validation = validateMediaEligibilityLocal();
+  const [helpKey, setHelpKey] = useState<string | null>(null);
+
+  const applyValidation = useCallback(
+    (overrides?: {
+      file?: MediaFile | null;
+      title?: string;
+      selectedCategory?: string;
+      selectedType?: string;
+    }) => {
+      const validation = validateMediaEligibilityLocal(overrides);
       setEligibilityStatus(validation);
-    }, 100);
+    },
+    [validateMediaEligibilityLocal, setEligibilityStatus]
+  );
+
+  const openHelp = (key: string) => {
+    setHelpKey((prev) => (prev === key ? null : key));
   };
 
   const isReady = !!(title && file && thumbnail);
@@ -80,15 +168,31 @@ export function UploadFormFields({
 
   return (
     <View className="flex-1">
-      <Text className="text-xs text-gray-600 mb-1 font-medium">TITLE</Text>
+      <FieldLabel
+        label="TITLE"
+        icon="text-outline"
+        helpKey="title"
+        openHelp={openHelp}
+      />
+      {helpKey === "title" ? (
+        <Text
+          style={{
+            fontSize: getResponsiveFontSize(11, 12, 13),
+            color: "#64748B",
+            fontFamily: "Rubik-Regular",
+            marginBottom: 8,
+            lineHeight: 17,
+          }}
+        >
+          {FIELD_HELP.title}
+        </Text>
+      ) : null}
       <TextInput
         placeholder="Enter title..."
         value={title}
         onChangeText={(text) => {
           setTitle(text);
-          if (file && selectedCategory && selectedType) {
-            revalidate();
-          }
+          applyValidation({ title: text });
         }}
         multiline
         textAlignVertical="top"
@@ -100,7 +204,25 @@ export function UploadFormFields({
         }}
       />
 
-      <Text className="text-xs text-gray-600 mb-1 font-medium">DESCRIPTION</Text>
+      <FieldLabel
+        label="DESCRIPTION"
+        icon="create-outline"
+        helpKey="description"
+        openHelp={openHelp}
+      />
+      {helpKey === "description" ? (
+        <Text
+          style={{
+            fontSize: getResponsiveFontSize(11, 12, 13),
+            color: "#64748B",
+            fontFamily: "Rubik-Regular",
+            marginBottom: 8,
+            lineHeight: 17,
+          }}
+        >
+          {FIELD_HELP.description}
+        </Text>
+      ) : null}
       <TextInput
         placeholder="Enter description..."
         value={description}
@@ -118,16 +240,7 @@ export function UploadFormFields({
       {/* AI Description Generation Button */}
       <View className="mb-3" style={{ zIndex: 10 }}>
         <TouchableOpacity
-          onPress={() => {
-            console.log("🔵 Button pressed", {
-              isGeneratingDescription,
-              title: !!title,
-              file: !!file,
-              thumbnail: !!thumbnail,
-              isReady,
-            });
-            onGenerateAIDescription();
-          }}
+          onPress={onGenerateAIDescription}
           disabled={isDisabled}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -190,7 +303,7 @@ export function UploadFormFields({
                     ? "Enter title to enable"
                     : !file
                       ? "Upload file to enable"
-                      : "Upload thumbnail to enable"}
+                      : "Upload cover to enable"}
                 </Text>
               </>
             ) : (
@@ -233,7 +346,7 @@ export function UploadFormFields({
               marginBottom: 6,
             }}
           >
-            📖 Suggested Bible Verses:
+            Suggested Bible Verses
           </Text>
           {bibleVerses.map((verse, index) => (
             <Text
@@ -283,50 +396,88 @@ export function UploadFormFields({
               fontFamily: "Rubik-Regular",
             }}
           >
-            {descriptionGenerationError.includes("too large") ||
-            descriptionGenerationError.includes("timed out") ||
-            descriptionGenerationError.includes("limitations")
-              ? "⚠️ "
-              : "❌ "}
             {descriptionGenerationError}
           </Text>
         </View>
       )}
 
-      <Text className="text-xs text-gray-600 mb-2 font-medium">CATEGORY</Text>
-      <View className="flex-row flex-wrap mb-4">
+      <FieldLabel
+        label="CATEGORY"
+        icon="grid-outline"
+        helpKey="category"
+        openHelp={openHelp}
+      />
+      {helpKey === "category" ? (
+        <Text
+          style={{
+            fontSize: getResponsiveFontSize(11, 12, 13),
+            color: "#64748B",
+            fontFamily: "Rubik-Regular",
+            marginBottom: 8,
+            lineHeight: 17,
+          }}
+        >
+          {FIELD_HELP.category}
+        </Text>
+      ) : null}
+      <View className="mb-4">
         <CategoryTypeTags
           items={categories.map((item) => ({ label: item, value: item }))}
           selected={selectedCategory}
-          onSelect={setSelectedCategory}
-          onAfterSelect={revalidate}
+          onSelect={(value) => {
+            setSelectedCategory(value);
+            applyValidation({ selectedCategory: value });
+          }}
         />
       </View>
 
-      <Text className="text-xs text-gray-600 mb-2 font-medium">
-        CONTENT TYPE
-      </Text>
+      <FieldLabel
+        label="CONTENT TYPE"
+        icon="layers-outline"
+        helpKey="contentType"
+        openHelp={openHelp}
+      />
+      {helpKey === "contentType" ? (
+        <Text
+          style={{
+            fontSize: getResponsiveFontSize(11, 12, 13),
+            color: "#64748B",
+            fontFamily: "Rubik-Regular",
+            marginBottom: 8,
+            lineHeight: 17,
+          }}
+        >
+          {FIELD_HELP.contentType}
+        </Text>
+      ) : null}
       {file && (
         <Text
-          className="text-[11px] text-gray-500 mb-1"
-          style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
+          style={{
+            fontSize: getResponsiveFontSize(10, 11, 12),
+            color: "#64748B",
+            fontFamily: "Rubik-Regular",
+            marginBottom: 8,
+          }}
         >
-          {detectedFileType === "video" && "Detected file: Video (e.g. MP4)"}
+          {detectedFileType === "video" && "Detected: Video — pick Videos or Sermons"}
           {detectedFileType === "audio" &&
-            "Detected file: Audio (e.g. MP3, WAV)"}
+            "Detected: Audio — pick Music, Podcasts, or Sermons"}
           {detectedFileType === "ebook" &&
-            "Detected file: Document / Ebook (e.g. PDF, EPUB)"}
+            "Detected: Document — pick Books or Ebook"}
           {detectedFileType === "unknown" &&
-            "File type not recognized yet. Please choose the correct content type."}
+            "File type unclear — choose the matching content type"}
         </Text>
       )}
-      <View className="flex-row flex-wrap mb-4">
+      <View className="mb-4">
         <CategoryTypeTags
           items={contentTypes}
           selected={selectedType}
-          onSelect={setSelectedType}
+          onSelect={(value) => {
+            setSelectedType(value);
+            setIsSermonContent(value === "sermon");
+            applyValidation({ selectedType: value });
+          }}
           onSermonsChange={setIsSermonContent}
-          onAfterSelect={revalidate}
         />
       </View>
 

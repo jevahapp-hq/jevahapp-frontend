@@ -1,7 +1,8 @@
 /**
  * MusicCard — thin composition shell (media slot + shared chrome).
  */
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useRef } from "react";
+import { View } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { MusicCardProps } from "../../../../shared/types";
 import {
@@ -31,6 +32,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const { showCommentModal } = useCommentModal();
   const contentId = audio._id || `music-${index}`;
   const isSermon = audio.contentType === "sermon";
+  const playerAnchorRef = useRef<View>(null);
 
   const chrome = useMediaCardChrome({
     item: audio,
@@ -69,6 +71,30 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     }
   }, [playback]);
 
+  const openComments = useCallback(() => {
+    const finish = (anchor: { mediaBottomY: number; mediaHeight?: number } | null) => {
+      if (onComment) onComment(audio, anchor);
+      else showCommentModal([], String(contentId), "media", undefined, null, anchor);
+    };
+
+    const node = playerAnchorRef.current;
+    if (node && typeof (node as any).measureInWindow === "function") {
+      (node as any).measureInWindow(
+        (_x: number, y: number, _w: number, h: number) => {
+          const mediaBottomY =
+            Number.isFinite(y) && Number.isFinite(h) && h > 0 ? y + h : undefined;
+          finish(
+            mediaBottomY != null
+              ? { mediaBottomY, mediaHeight: h }
+              : null
+          );
+        }
+      );
+      return;
+    }
+    finish(null);
+  }, [audio, contentId, onComment, showCommentModal]);
+
   return (
     <MediaCardShell
       focusRef={focusRef}
@@ -84,29 +110,31 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           : undefined
       }
     >
-      <MusicCardPlayerArea
-        audio={audio}
-        thumbnailUri={thumbnailUri}
-        isSermon={isSermon}
-        attemptedPlay={playback.attemptedPlay}
-        hasDuration={!!playback.playerState.duration}
-        progress={
-          playback.isVirtualTrack
-            ? playback.globalAudioStore.progress || 0
-            : playback.playerState.progress || 0
-        }
-        isMuted={
-          playback.isVirtualTrack
-            ? playback.globalAudioStore.isMuted || false
-            : playback.playerState.isMuted || false
-        }
-        isPlaying={playback.isPlayingFromGlobal}
-        onToggleOverlay={() => playback.setShowOverlay((v) => !v)}
-        onToggleMute={handleMute}
-        onSeekRelative={playback.seekBySeconds}
-        onSeekToPercent={playback.onSeekToPercent}
-        onPlayPress={() => void playback.handlePlayPress(onPlay)}
-      />
+      <View ref={playerAnchorRef} collapsable={false}>
+        <MusicCardPlayerArea
+          audio={audio}
+          thumbnailUri={thumbnailUri}
+          isSermon={isSermon}
+          attemptedPlay={playback.attemptedPlay}
+          hasDuration={!!playback.playerState.duration}
+          progress={
+            playback.isVirtualTrack
+              ? playback.globalAudioStore.progress || 0
+              : playback.playerState.progress || 0
+          }
+          isMuted={
+            playback.isVirtualTrack
+              ? playback.globalAudioStore.isMuted || false
+              : playback.playerState.isMuted || false
+          }
+          isPlaying={playback.isPlayingFromGlobal}
+          onToggleOverlay={() => playback.setShowOverlay((v) => !v)}
+          onToggleMute={handleMute}
+          onSeekRelative={playback.seekBySeconds}
+          onSeekToPercent={playback.onSeekToPercent}
+          onPlayPress={() => void playback.handlePlayPress(onPlay)}
+        />
+      </View>
 
       <MediaCardFooter
         item={audio}
@@ -117,10 +145,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         likeBurstKey={chrome.likeBurstKey}
         setLikeBurstKey={chrome.setLikeBurstKey}
         onLike={() => onLike(audio)}
-        onComment={() => {
-          if (onComment) onComment(audio);
-          else showCommentModal([], String(contentId));
-        }}
+        onComment={openComments}
         commentCount={stats.commentCount}
         userSaveState={stats.userSaveState}
         saveCount={stats.saveCount}

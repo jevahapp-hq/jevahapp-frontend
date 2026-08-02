@@ -2,6 +2,7 @@ import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { useCommentModal } from "../context/CommentModalContext";
 import HomeTabContent from "./HomeTabContent";
 import {
   BibleScreenWithSuspense,
@@ -20,6 +21,7 @@ const tabList = ["Home", "Community", "Library", "Bible"];
 
 export default function HomeScreen() {
   const [selectedTab, setSelectedTab] = useState("Home");
+  const { isVisible: isCommentSheetOpen } = useCommentModal();
   const { default: defaultTabParamRaw } = useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
@@ -65,17 +67,19 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1 }} className="w-full">
       {renderTabContent()}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: "#fff",
-        }}
-      >
-        <BottomNav selectedTab={selectedTab} setSelectedTab={handleTabChange} />
-      </View>
+      {!isCommentSheetOpen ? (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: "#fff",
+          }}
+        >
+          <BottomNav selectedTab={selectedTab} setSelectedTab={handleTabChange} />
+        </View>
+      ) : null}
     </View>
   );
 }

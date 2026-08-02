@@ -2,7 +2,7 @@
  * Core upload form state + local eligibility helpers
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Dimensions } from "react-native";
 import { getOrientation } from "../../../../utils/responsive";
 import { detectFileType, validateMediaEligibility } from "../utils";
@@ -14,6 +14,13 @@ import type {
   UploadResultState,
   UploadState,
 } from "../types";
+
+type EligibilityOverrides = {
+  file?: MediaFile | null;
+  title?: string;
+  selectedCategory?: string;
+  selectedType?: string;
+};
 
 export function useUploadFormState() {
   const [file, setFile] = useState<MediaFile | null>(null);
@@ -53,36 +60,68 @@ export function useUploadFormState() {
     return () => subscription?.remove();
   }, []);
 
-  const validateMediaEligibilityLocal = (): EligibilityStatus => {
-    const result = validateMediaEligibility({
-      file,
-      title,
-      selectedCategory,
-      selectedType,
-    });
+  const validateMediaEligibilityLocal = useCallback(
+    (overrides?: EligibilityOverrides): EligibilityStatus => {
+      const nextFile = overrides?.file !== undefined ? overrides.file : file;
+      const nextTitle =
+        overrides?.title !== undefined ? overrides.title : title;
+      const nextCategory =
+        overrides?.selectedCategory !== undefined
+          ? overrides.selectedCategory
+          : selectedCategory;
+      const nextType =
+        overrides?.selectedType !== undefined
+          ? overrides.selectedType
+          : selectedType;
 
-    const warnings = [...result.warnings];
-    if (file) {
-      const actualFileType = detectFileType(file);
-      if (
-        !thumbnail &&
-        (selectedType === "music" ||
-          selectedType === "videos" ||
-          selectedType === "podcasts" ||
-          (selectedType === "sermon" && actualFileType === "video"))
-      ) {
-        warnings.push("Thumbnail recommended for better visibility");
+      const result = validateMediaEligibility({
+        file: nextFile,
+        title: nextTitle,
+        selectedCategory: nextCategory,
+        selectedType: nextType,
+      });
+
+      const warnings = [...result.warnings];
+      if (nextFile) {
+        const actualFileType = detectFileType(nextFile);
+        if (
+          !thumbnail &&
+          (nextType === "music" ||
+            nextType === "videos" ||
+            nextType === "podcasts" ||
+            (nextType === "sermon" && actualFileType === "video"))
+        ) {
+          warnings.push("Cover photo recommended for better visibility");
+        }
       }
-    }
-    if (description && description.length > 500) {
-      warnings.push("Description should be 500 characters or less");
-    }
+      if (description && description.length > 500) {
+        warnings.push("Description should be 500 characters or less");
+      }
 
-    return {
-      ...result,
-      warnings,
-    };
-  };
+      return {
+        ...result,
+        warnings,
+      };
+    },
+    [file, title, selectedCategory, selectedType, thumbnail, description]
+  );
+
+  // Live checklist (IG/TikTok style) — always validate against latest state
+  useEffect(() => {
+    if (!file && !title && !selectedCategory && !selectedType) {
+      setEligibilityStatus(null);
+      return;
+    }
+    setEligibilityStatus(validateMediaEligibilityLocal());
+  }, [
+    file,
+    title,
+    selectedCategory,
+    selectedType,
+    thumbnail,
+    description,
+    validateMediaEligibilityLocal,
+  ]);
 
   const resetForm = () => {
     setTitle("");

@@ -1,7 +1,8 @@
 /**
  * EbookCard — thin composition shell (cover + shared chrome).
  */
-import React, { memo } from "react";
+import React, { memo, useCallback, useRef } from "react";
+import { View } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { EbookCardProps } from "../../../../shared/types";
 import {
@@ -28,6 +29,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
 }) => {
   const { showCommentModal } = useCommentModal();
   const contentId = ebook._id || `ebook-${index}`;
+  const coverAnchorRef = useRef<View>(null);
 
   const chrome = useMediaCardChrome({
     item: ebook,
@@ -40,9 +42,36 @@ export const EbookCard: React.FC<EbookCardProps> = ({
 
   const openEbook = useEbookOpen(ebook, chrome.setShowDetailsModal);
 
+  const openComments = useCallback(() => {
+    const finish = (
+      anchor: { mediaBottomY: number; mediaHeight?: number } | null
+    ) => {
+      if (onComment) onComment(ebook, anchor);
+      else
+        showCommentModal([], String(contentId), "media", undefined, null, anchor);
+    };
+
+    const node = coverAnchorRef.current;
+    if (node && typeof (node as any).measureInWindow === "function") {
+      (node as any).measureInWindow(
+        (_x: number, y: number, _w: number, h: number) => {
+          const mediaBottomY =
+            Number.isFinite(y) && Number.isFinite(h) && h > 0 ? y + h : undefined;
+          finish(
+            mediaBottomY != null ? { mediaBottomY, mediaHeight: h } : null
+          );
+        }
+      );
+      return;
+    }
+    finish(null);
+  }, [contentId, ebook, onComment, showCommentModal]);
+
   return (
     <MediaCardShell className="flex flex-col mb-10" style={{}}>
-      <EbookCardCoverArea ebook={ebook} onPress={openEbook} />
+      <View ref={coverAnchorRef} collapsable={false}>
+        <EbookCardCoverArea ebook={ebook} onPress={openEbook} />
+      </View>
 
       <MediaCardFooter
         item={ebook}
@@ -53,10 +82,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         likeBurstKey={chrome.likeBurstKey}
         setLikeBurstKey={chrome.setLikeBurstKey}
         onLike={() => onLike(ebook)}
-        onComment={() => {
-          if (onComment) onComment(ebook);
-          else showCommentModal([], String(contentId));
-        }}
+        onComment={openComments}
         commentCount={stats.commentCount}
         userSaveState={stats.userSaveState}
         saveCount={stats.saveCount}

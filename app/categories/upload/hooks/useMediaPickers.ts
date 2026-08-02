@@ -16,9 +16,36 @@ type UseMediaPickersParams = {
   setFile: (file: MediaFile | null) => void;
   setDetectedFileType: (type: DetectedFileType) => void;
   setThumbnail: (thumb: MediaFile | null) => void;
+  setSelectedType: (type: string) => void;
+  setIsSermonContent: (v: boolean) => void;
   setEligibilityStatus: (status: EligibilityStatus | null) => void;
-  validateMediaEligibilityLocal: () => EligibilityStatus;
+  validateMediaEligibilityLocal: (overrides?: {
+    file?: MediaFile | null;
+    title?: string;
+    selectedCategory?: string;
+    selectedType?: string;
+  }) => EligibilityStatus;
 };
+
+/** Suggest content type from detected media (creator can still change it). */
+function suggestContentType(
+  detected: DetectedFileType,
+  current: string
+): string | null {
+  if (current === "sermon") return null; // keep intentional sermon choice
+  if (detected === "video" && current !== "videos") return "videos";
+  if (detected === "audio" && current !== "music" && current !== "podcasts") {
+    return "music";
+  }
+  if (
+    detected === "ebook" &&
+    current !== "books" &&
+    current !== "ebook"
+  ) {
+    return "books";
+  }
+  return null;
+}
 
 export function useMediaPickers({
   title,
@@ -27,6 +54,8 @@ export function useMediaPickers({
   setFile,
   setDetectedFileType,
   setThumbnail,
+  setSelectedType,
+  setIsSermonContent,
   setEligibilityStatus,
   validateMediaEligibilityLocal,
 }: UseMediaPickersParams) {
@@ -62,13 +91,6 @@ export function useMediaPickers({
     }
 
     const fileSize = result.assets[0].size;
-    console.log("📁 File selected:", {
-      name,
-      mimeType: guessedMime,
-      size: fileSize,
-      hasSize: !!fileSize,
-      uri: uri?.substring(0, 50) + "...",
-    });
 
     const selectedFile: MediaFile = {
       uri,
@@ -77,7 +99,6 @@ export function useMediaPickers({
       size: fileSize,
     };
 
-    // Probe duration so feed seek works before backend ffprobe finishes
     if (guessedMime.startsWith("video/")) {
       const durationSec = await probeVideoDurationSec(uri);
       if (durationSec && durationSec > 0) {
@@ -89,10 +110,21 @@ export function useMediaPickers({
     const detectedType = detectFileType(selectedFile);
     setDetectedFileType(detectedType);
 
-    if (title && selectedCategory && selectedType) {
-      const validation = validateMediaEligibilityLocal();
-      setEligibilityStatus(validation);
+    const suggested = suggestContentType(detectedType, selectedType);
+    const nextType = suggested || selectedType;
+    if (suggested) {
+      setSelectedType(suggested);
+      setIsSermonContent(false);
     }
+
+    setEligibilityStatus(
+      validateMediaEligibilityLocal({
+        file: selectedFile,
+        selectedType: nextType,
+        title,
+        selectedCategory,
+      })
+    );
   };
 
   const pickThumbnail = async () => {
@@ -103,7 +135,7 @@ export function useMediaPickers({
       if (status !== "granted") {
         Alert.alert(
           "Permission needed",
-          "Please allow access to photo library to select thumbnail."
+          "Please allow access to photo library to select a cover photo."
         );
         return;
       }
@@ -125,7 +157,7 @@ export function useMediaPickers({
       }
     } catch (error) {
       console.error("Error picking thumbnail:", error);
-      Alert.alert("Error", "Failed to select thumbnail image.");
+      Alert.alert("Error", "Failed to select cover photo.");
     }
   };
 

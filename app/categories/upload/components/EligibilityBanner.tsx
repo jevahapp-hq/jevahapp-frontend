@@ -1,10 +1,13 @@
 /**
- * Eligibility status banner (ready / requirements)
+ * Soft upload readiness checklist (IG-style inline guidance — not a scary error wall)
  */
 
 import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
-import { getResponsiveFontSize } from "../../../../utils/responsive";
+import {
+  getResponsiveFontSize,
+  getResponsiveSpacing,
+} from "../../../../utils/responsive";
 import type { EligibilityStatus } from "../types";
 
 type EligibilityBannerProps = {
@@ -14,104 +17,104 @@ type EligibilityBannerProps = {
 export function EligibilityBanner({
   eligibilityStatus,
 }: EligibilityBannerProps) {
+  const isValid = eligibilityStatus.isValid;
+  const accent = isValid ? "#16A34A" : "#DF930E";
+  const bg = isValid ? "rgba(22, 163, 74, 0.06)" : "rgba(223, 147, 14, 0.06)";
+  const border = isValid ? "rgba(22, 163, 74, 0.2)" : "rgba(223, 147, 14, 0.22)";
+
   return (
     <View
-      className="mb-6 p-4 rounded-xl border-l-[4px]"
       style={{
-        backgroundColor: eligibilityStatus.isValid
-          ? "rgba(34, 197, 94, 0.03)"
-          : "rgba(239, 68, 68, 0.03)",
-        borderLeftColor: eligibilityStatus.isValid ? "#22c55e" : "#ef4444",
-        borderTopColor: "rgba(0,0,0,0.05)",
-        borderRightColor: "rgba(0,0,0,0.05)",
-        borderBottomColor: "rgba(0,0,0,0.05)",
+        marginBottom: getResponsiveSpacing(16, 20, 24),
+        padding: getResponsiveSpacing(14, 16, 18),
+        borderRadius: 16,
+        backgroundColor: bg,
         borderWidth: 1,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-        elevation: 1,
+        borderColor: border,
       }}
     >
-      {eligibilityStatus.isValid ? (
-        <View className="flex-row items-center">
-          <View
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              backgroundColor: "rgba(34, 197, 94, 0.15)",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Ionicons name="checkmark" size={16} color="#166534" />
-          </View>
-          <Text
-            className="ml-3 font-medium"
-            style={{
-              fontSize: getResponsiveFontSize(12, 14, 15),
-              color: "#166534",
-              fontFamily: "Rubik-Medium",
-            }}
-          >
-            Ready to post - AI verification active
-          </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: isValid ? 0 : 10 }}>
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: isValid
+              ? "rgba(22, 163, 74, 0.15)"
+              : "rgba(223, 147, 14, 0.15)",
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 10,
+          }}
+        >
+          <Ionicons
+            name={isValid ? "checkmark-circle" : "sparkles-outline"}
+            size={16}
+            color={accent}
+          />
         </View>
-      ) : (
-        <View>
-          <View className="flex-row items-center mb-3">
+        <Text
+          style={{
+            flex: 1,
+            fontSize: getResponsiveFontSize(13, 14, 15),
+            fontFamily: "Rubik-SemiBold",
+            color: isValid ? "#166534" : "#92400E",
+          }}
+        >
+          {isValid ? "Ready to post" : "Almost there — finish these"}
+        </Text>
+      </View>
+
+      {!isValid && (
+        <View style={{ paddingLeft: 38 }}>
+          {eligibilityStatus.errors.map((error, index) => (
             <View
+              key={`${index}-${error.slice(0, 24)}`}
               style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                justifyContent: "center",
-                alignItems: "center",
+                flexDirection: "row",
+                alignItems: "flex-start",
+                marginBottom: 6,
               }}
             >
-              <Ionicons name="alert-circle" size={18} color="#991b1b" />
+              <Ionicons
+                name="ellipse-outline"
+                size={10}
+                color="#B45309"
+                style={{ marginTop: 4, marginRight: 8 }}
+              />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: getResponsiveFontSize(12, 13, 14),
+                  lineHeight: 18,
+                  fontFamily: "Rubik-Regular",
+                  color: "#78350F",
+                }}
+              >
+                {error}
+              </Text>
             </View>
-            <Text
-              className="ml-3 font-semibold"
-              style={{
-                fontSize: getResponsiveFontSize(13, 15, 17),
-                color: "#991b1b",
-                fontFamily: "Rubik-SemiBold",
-              }}
-            >
-              Upload Requirements:
-            </Text>
-          </View>
-          <View className="ml-9">
-            {eligibilityStatus.errors.map((error, index) => (
-              <View key={index} className="flex-row items-start mb-1.5">
-                <View
-                  style={{
-                    width: 4,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: "#ef4444",
-                    marginTop: 7,
-                    marginRight: 8,
-                  }}
-                />
-                <Text
-                  style={{
-                    fontSize: getResponsiveFontSize(11, 13, 14),
-                    color: "#7f1d1d",
-                    lineHeight: 18,
-                    fontFamily: "Rubik-Regular",
-                  }}
-                >
-                  {error}
-                </Text>
-              </View>
-            ))}
-          </View>
+          ))}
         </View>
       )}
+
+      {isValid && eligibilityStatus.warnings?.length > 0 ? (
+        <View style={{ marginTop: 10, paddingLeft: 38 }}>
+          {eligibilityStatus.warnings.map((w, i) => (
+            <Text
+              key={`${i}-${w.slice(0, 20)}`}
+              style={{
+                fontSize: getResponsiveFontSize(11, 12, 13),
+                color: "#64748B",
+                fontFamily: "Rubik-Regular",
+                marginBottom: 4,
+              }}
+            >
+              Tip: {w}
+            </Text>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

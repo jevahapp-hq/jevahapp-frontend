@@ -3,6 +3,8 @@ import SocketManager from "../../../../services/SocketManager";
 import TokenUtils from "../../../../utils/tokenUtils";
 import { API_BASE_URL } from "../../constants";
 import type { UploadState } from "../../types";
+import { mapUploadProgressEvent } from "./mapUploadProgress";
+import { useUploadStatusPoll } from "./useUploadStatusPoll";
 
 type ProgressStage = {
   uploadId: string;
@@ -22,7 +24,14 @@ export function useUploadSocketProgress(
   const currentUploadIdRef = useRef<string | null>(null);
   const isUsingRealTimeProgressRef = useRef(false);
 
+  const { startPoll, stopPoll, markRealtimeEvent } = useUploadStatusPoll(
+    setUploadState,
+    stopSimulated,
+    isUsingRealTimeProgressRef
+  );
+
   const cleanupSocket = useCallback(() => {
+    stopPoll();
     if (socketManagerRef.current) {
       const socket = (socketManagerRef.current as { socket?: { off: Function } })
         .socket;
@@ -32,12 +41,15 @@ export function useUploadSocketProgress(
     }
     currentUploadIdRef.current = null;
     isUsingRealTimeProgressRef.current = false;
-  }, []);
+  }, [stopPoll]);
 
   const connectSocket = useCallback(
     async (uploadId: string) => {
       currentUploadIdRef.current = uploadId;
       isUsingRealTimeProgressRef.current = false;
+
+      // Always arm poll fallback (no-ops if BE returns 404)
+      startPoll(uploadId);
 
       try {
         const token = await TokenUtils.getAuthToken();
@@ -57,24 +69,12 @@ export function useUploadSocketProgress(
         const handleUploadProgress = (progressData: ProgressStage) => {
           if (progressData.uploadId !== uploadId) return;
 
-          if (!isUsingRealTimeProgressRef.current) {
-            isUsingRealTimeProgressRef.current = true;
-            stopSimulated();
-          }
-
-          let status: UploadState["status"] = "verifying";
-          if (progressData.stage === "complete") status = "success";
-          else if (
-            progressData.stage === "error" ||
-            progressData.stage === "rejected"
-          )
-            status = "error";
-          else if (progressData.stage === "finalizing") status = "uploading";
-
+          markRealtimeEvent();
+          const mapped = mapUploadProgressEvent(progressData);
           setUploadState({
-            status,
-            progress: Math.min(progressData.progress, 100),
-            message: progressData.message || progressData.stage,
+            status: mapped.status,
+            progress: mapped.progress,
+            message: mapped.message,
           });
         };
 
@@ -83,22 +83,20 @@ export function useUploadSocketProgress(
         if (!socket.connected) {
           const connectionTimeout = setTimeout(() => {
             if (!socket.connected) {
-              console.warn("⚠️ Socket.IO connection timeout, using simulated progress");
+              console.warn(
+                "⚠️ Socket.IO connection timeout — poll/sim progress active"
+              );
             }
           }, 3000);
           socket.once("connect", () => {
             clearTimeout(connectionTimeout);
-            isUsingRealTimeProgressRef.current = true;
-            stopSimulated();
           });
-        } else {
-          isUsingRealTimeProgressRef.current = true;
         }
       } catch (socketError) {
         console.warn("⚠️ Failed to initialize Socket.IO:", socketError);
       }
     },
-    [setUploadState, stopSimulated]
+    [markRealtimeEvent, setUploadState, startPoll]
   );
 
   return {

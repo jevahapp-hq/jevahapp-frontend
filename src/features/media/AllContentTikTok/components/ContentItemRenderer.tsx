@@ -165,7 +165,10 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     audio: item,
     index,
     onLike: () => onLike(key, item),
-    onComment: () => onComment(key, item),
+    onComment: (
+      item: MediaItem,
+      a?: { mediaBottomY: number; mediaHeight?: number } | null
+    ) => onComment(key, item, a),
     onSave: () => onSave(key, item),
     onShare: () => onShare(key, item),
     onDownload: () => onDownload(item),
@@ -182,7 +185,10 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     ebook: item,
     index,
     onLike: () => onLike(key, item),
-    onComment: () => onComment(key, item),
+    onComment: (
+      item: MediaItem,
+      a?: { mediaBottomY: number; mediaHeight?: number } | null
+    ) => onComment(key, item, a),
     onSave: () => onSave(key, item),
     onShare: () => onShare(key, item),
     onDownload: () => onDownload(item),

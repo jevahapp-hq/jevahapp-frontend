@@ -148,7 +148,10 @@ export interface MusicCardProps {
   audio: MediaItem;
   index: number;
   onLike: (item: MediaItem) => void;
-  onComment: (item: MediaItem) => void;
+  onComment: (
+    item: MediaItem,
+    anchor?: { mediaBottomY: number; mediaHeight?: number } | null
+  ) => void;
   onSave: (item: MediaItem) => void;
   onShare: (item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
@@ -166,7 +169,10 @@ export interface EbookCardProps {
   ebook: MediaItem;
   index: number;
   onLike: (item: MediaItem) => void;
-  onComment: (item: MediaItem) => void;
+  onComment: (
+    item: MediaItem,
+    anchor?: { mediaBottomY: number; mediaHeight?: number } | null
+  ) => void;
   onSave: (item: MediaItem) => void;
   onShare: (item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;

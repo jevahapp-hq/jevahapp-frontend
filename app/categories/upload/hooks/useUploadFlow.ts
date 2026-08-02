@@ -44,6 +44,7 @@ export function useUploadFlow(deps: UploadFlowDeps) {
     setEligibilityStatus,
     validateMediaEligibilityLocal,
     resetForm,
+    onSoftNotice,
   } = deps;
 
   const router = useRouter();
@@ -237,14 +238,17 @@ export function useUploadFlow(deps: UploadFlowDeps) {
     setEligibilityStatus(validation);
 
     if (!validation.isValid) {
-      Alert.alert("Upload Not Eligible", validation.errors.join("\n\n"), [
-        { text: "OK" },
-      ]);
+      // Soft toast + inline checklist (IG-style) — no blocking Alert wall
+      onSoftNotice?.(
+        validation.errors[0] || "Complete the remaining steps below."
+      );
       return;
     }
 
     if (!file || !title || !selectedCategory || !selectedType) {
-      Alert.alert("Missing fields", "Please complete all required fields.");
+      onSoftNotice?.(
+        "Add your media, title, category, and content type to post."
+      );
       return;
     }
 
@@ -253,10 +257,10 @@ export function useUploadFlow(deps: UploadFlowDeps) {
 
     if (selectedType === "music" && !thumbnail) {
       Alert.alert(
-        "Thumbnail Recommended",
-        "Adding a thumbnail image will help your music stand out. Would you like to continue without one?",
+        "Cover recommended",
+        "A cover photo helps your track stand out. Continue without one?",
         [
-          { text: "Add Thumbnail", style: "cancel" },
+          { text: "Add cover", style: "cancel" },
           { text: "Continue", onPress: () => proceedWithUpload() },
         ]
       );

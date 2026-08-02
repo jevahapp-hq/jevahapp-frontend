@@ -21,8 +21,15 @@ export type UploadFlowDeps = {
   setModerationError: (v: ModerationError | null) => void;
   setUploadResult: (v: UploadResultState | null) => void;
   setEligibilityStatus: (v: EligibilityStatus | null) => void;
-  validateMediaEligibilityLocal: () => EligibilityStatus;
+  validateMediaEligibilityLocal: (overrides?: {
+    file?: MediaFile | null;
+    title?: string;
+    selectedCategory?: string;
+    selectedType?: string;
+  }) => EligibilityStatus;
   resetForm: () => void;
+  /** Soft UX notice (toast) instead of Alert for missing fields */
+  onSoftNotice?: (text: string) => void;
 };
 
 export type UploadProgressController = {

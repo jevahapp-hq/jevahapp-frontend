@@ -1,13 +1,43 @@
 /**
- * Category / content-type selection chips
+ * Category / content-type selection chips (icons + aligned padding)
  */
 
-import { Text, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Text, TouchableOpacity, View } from "react-native";
 import {
   getResponsiveFontSize,
   getResponsiveSpacing,
   getTouchTargetSize,
 } from "../../../../utils/responsive";
+
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+const CATEGORY_ICONS: Record<string, IoniconName> = {
+  Worship: "musical-notes-outline",
+  Inspiration: "sunny-outline",
+  Youth: "people-outline",
+  Teachings: "book-outline",
+  Marriage: "heart-outline",
+  Counselling: "chatbubbles-outline",
+};
+
+const CONTENT_TYPE_ICONS: Record<string, IoniconName> = {
+  music: "musical-note-outline",
+  videos: "videocam-outline",
+  books: "library-outline",
+  ebook: "document-text-outline",
+  podcasts: "mic-outline",
+  sermon: "radio-outline",
+};
+
+function resolveIcon(label: string, value: string): IoniconName {
+  return (
+    CONTENT_TYPE_ICONS[value] ||
+    CATEGORY_ICONS[label] ||
+    CATEGORY_ICONS[value] ||
+    "ellipse-outline"
+  );
+}
 
 type CategoryTypeTagsProps = {
   label: string;
@@ -15,7 +45,7 @@ type CategoryTypeTagsProps = {
   selected: string;
   onSelect: (value: string) => void;
   onSermonsChange?: (isSermon: boolean) => void;
-  onAfterSelect?: () => void;
+  onAfterSelect?: (value: string) => void;
 };
 
 export function CategoryTypeTag({
@@ -27,36 +57,54 @@ export function CategoryTypeTag({
   onAfterSelect,
 }: CategoryTypeTagsProps) {
   const isSelected = value === selected;
-  const tagPaddingHorizontal = getResponsiveSpacing(10, 14, 18);
-  const tagPaddingVertical = getResponsiveSpacing(6, 8, 10);
-  const tagFontSize = getResponsiveFontSize(12, 14, 16);
+  const tagPaddingHorizontal = getResponsiveSpacing(12, 14, 16);
+  const tagPaddingVertical = getResponsiveSpacing(8, 9, 10);
+  const tagFontSize = getResponsiveFontSize(12, 13, 14);
+  const iconSize = getResponsiveFontSize(14, 15, 16);
   const touchTargetSize = getTouchTargetSize();
+  const gap = getResponsiveSpacing(6, 7, 8);
+  const icon = resolveIcon(label, value);
 
   return (
     <TouchableOpacity
-      key={value}
       onPress={() => {
         onSelect(value);
-        if (label === "Sermons") {
+        if (label === "Sermons" || value === "sermon") {
           onSermonsChange?.(true);
         } else {
           onSermonsChange?.(false);
         }
-        onAfterSelect?.();
+        onAfterSelect?.(value);
       }}
-      className={`rounded-full mr-2 mb-2 border ${
-        isSelected ? "bg-black border-black" : "bg-white border-gray-300"
-      }`}
+      activeOpacity={0.85}
       style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
         paddingHorizontal: tagPaddingHorizontal,
         paddingVertical: tagPaddingVertical,
-        minHeight: touchTargetSize,
+        minHeight: Math.max(touchTargetSize - 8, 40),
+        marginRight: getResponsiveSpacing(8, 8, 10),
+        marginBottom: getResponsiveSpacing(8, 8, 10),
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: isSelected ? "#0F172A" : "#E2E8F0",
+        backgroundColor: isSelected ? "#0F172A" : "#FFFFFF",
       }}
-      activeOpacity={0.8}
     >
+      <Ionicons
+        name={icon}
+        size={iconSize}
+        color={isSelected ? "#FFFFFF" : "#64748B"}
+        style={{ marginRight: gap }}
+      />
       <Text
-        className={isSelected ? "text-white" : "text-black"}
-        style={{ fontSize: tagFontSize }}
+        style={{
+          fontSize: tagFontSize,
+          fontFamily: "Rubik-Medium",
+          color: isSelected ? "#FFFFFF" : "#0F172A",
+          lineHeight: tagFontSize + 4,
+        }}
       >
         {label}
       </Text>
@@ -69,7 +117,7 @@ type CategoryTypeTagsListProps = {
   selected: string;
   onSelect: (value: string) => void;
   onSermonsChange?: (isSermon: boolean) => void;
-  onAfterSelect?: () => void;
+  onAfterSelect?: (value: string) => void;
 };
 
 export function CategoryTypeTags({
@@ -80,7 +128,13 @@ export function CategoryTypeTags({
   onAfterSelect,
 }: CategoryTypeTagsListProps) {
   return (
-    <>
+    <View
+      style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+      }}
+    >
       {items.map((item) => (
         <CategoryTypeTag
           key={item.value}
@@ -92,6 +146,6 @@ export function CategoryTypeTags({
           onAfterSelect={onAfterSelect}
         />
       ))}
-    </>
+    </View>
   );
 }
