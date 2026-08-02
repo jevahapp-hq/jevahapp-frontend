@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
+  InteractionManager,
   ScrollView,
   StyleSheet,
   Text,
@@ -130,10 +131,23 @@ export default function HomeTabContent() {
     return "ALL";
   });
 
-  // Pre-mount every persistent feed so ALL ↔ SERMON ↔ VIDEO ↔ E-BOOKS is
-  // instant (data + FlashList already warm — opacity swap only).
+  // Cold-start with ONLY the active feed mounted. Pre-mounting ALL + VIDEO +
+  // SERMON + E-BOOKS (and their idle video decoders) at once OOM-crashed
+  // Expo Go on reload and left a white blank home pane. Other persistent
+  // feeds warm in after first interactions so category switches stay fast.
   const [visitedFeedCategories, setVisitedFeedCategories] = useState<Set<string>>(
-    () => new Set(PERSISTENT_FEED_CATEGORIES)
+    () => {
+      const initial =
+        defaultCategoryValue && typeof defaultCategoryValue === "string"
+          ? mapContentTypeToCategory(defaultCategoryValue)
+          : "ALL";
+      const start = (
+        PERSISTENT_FEED_CATEGORIES as readonly string[]
+      ).includes(initial)
+        ? initial
+        : "ALL";
+      return new Set([start]);
+    }
   );
 
   useEffect(() => {
@@ -153,6 +167,20 @@ export default function HomeTabContent() {
       }
     }
   }, [defaultCategoryValue]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      setTimeout(() => {
+        if (cancelled) return;
+        setVisitedFeedCategories(new Set(PERSISTENT_FEED_CATEGORIES));
+      }, 1200);
+    });
+    return () => {
+      cancelled = true;
+      task.cancel?.();
+    };
+  }, []);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>(
@@ -384,9 +412,14 @@ export default function HomeTabContent() {
                   contentType={mapCategoryToContentType(cat)}
                   useAuthFeed={!!user}
                   isFeedActive={active}
-                  // Only the active feed may keep decoders warm.
-                  // Keeping ALL+VIDEO+SERMON warm at once hung the device.
-                  keepVideoDecoders={active && shouldKeepVideoDecoders(cat)}
+                  // Keep a single idle decoder warm (the last video the user
+                  // was watching) even while this pane is hidden, so
+                  // switching back doesn't re-decode from scratch. This is
+                  // intentionally bounded to 1 decoder per hidden pane
+                  // (FEED_WARM_IDLE_MOUNT_COUNT) — previously gating this to
+                  // "active only" defeated its purpose entirely and made
+                  // every category switch look like a full refresh.
+                  keepVideoDecoders={shouldKeepVideoDecoders(cat)}
                 />
               </View>
             );

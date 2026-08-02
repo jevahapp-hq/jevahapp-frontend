@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageProps } from 'expo-image';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -7,6 +8,8 @@ interface SafeImageProps extends Omit<ImageProps, 'source'> {
   uri?: string;
   fallbackText?: string;
   fallbackStyle?: any;
+  /** Icon shown in the fallback state instead of the default generic image icon. */
+  fallbackIcon?: keyof typeof Ionicons.glyphMap;
   showFallback?: boolean;
   showLoadingIndicator?: boolean;
   /** Enable URL optimization (size/quality). Default true for remote (http) URIs. */
@@ -23,6 +26,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   uri,
   fallbackText = 'No Image',
   fallbackStyle,
+  fallbackIcon = 'image-outline',
   showFallback = true,
   showLoadingIndicator = true,
   optimize: optimizeProp,
@@ -93,6 +97,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
             fallbackStyle,
           ]}
         >
+          <Ionicons name={fallbackIcon} size={28} color="#C4C9D0" style={{ marginBottom: 6 }} />
           <Text style={{ color: '#9CA3AF', fontSize: 12, fontWeight: '500' }}>
             {fallbackText}
           </Text>
@@ -108,7 +113,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         source={{ uri: optimizedUri }}
         style={[{ width: '100%', height: '100%' }, style]}
         contentFit="cover"
-        cachePolicy="disk"
+        cachePolicy="memory-disk"
         onLoadStart={handleLoadStart}
         onLoadEnd={handleLoadEnd}
         onError={handleError}

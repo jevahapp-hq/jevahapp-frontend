@@ -131,6 +131,10 @@ export interface VideoCardProps {
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   isAutoPlayEnabled?: boolean;
   shouldRenderPlayer?: boolean;
+  /** Most Recent hero cell — hide priming chrome, prioritize decode. */
+  isHero?: boolean;
+  /** Fires when the first decoded frame is ready (hero fast-path). */
+  onSurfaceReadyChange?: (ready: boolean) => void;
   /** Scoped key for global playback store (prevents echo across feed tabs). */
   playbackKey?: string;
   /** When false, player stays paused and muted (hidden category pane). */

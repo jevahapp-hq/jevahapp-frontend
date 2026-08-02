@@ -1,22 +1,20 @@
 /**
  * ContentFeedStates - Loading, Error, Empty states for AllContentTikTok
- * Loading avoids large white skeleton cards (looked like blank video stages).
  */
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { VideoCardSkeleton } from "../../../../shared/components/Skeleton";
 import { UI_CONFIG } from "../../../../shared/constants";
 
+/**
+ * Skeleton-only fallback for a true empty cold start (no disk cache yet).
+ * Prefer showing cached feed rows immediately — do not overlay a brand spinner.
+ */
 export function LoadingState() {
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "transparent",
-      }}
-    >
-      <ActivityIndicator size="small" color={UI_CONFIG.COLORS.PRIMARY} />
+    <View style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
+      <VideoCardSkeleton hideProgressBar dark />
+      <VideoCardSkeleton hideProgressBar dark />
     </View>
   );
 }

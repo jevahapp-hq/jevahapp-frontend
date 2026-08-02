@@ -11,3 +11,8 @@ export {
 } from "./feedVideoConfig";
 export { FeedVideoSurface } from "./FeedVideoSurface";
 export { useInstantFeedVideoPlayer } from "./useInstantFeedVideoPlayer";
+export {
+  captureVideoFrameSnapshot,
+  getVideoFrameSnapshot,
+  useVideoFrameSnapshot,
+} from "./videoFrameSnapshotCache";

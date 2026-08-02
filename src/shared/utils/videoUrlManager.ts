@@ -144,6 +144,21 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
   return videoUrl.trim();
 };
 
+/** Distinct playable URL candidates for retry / codec fallback. */
+export const getVideoUrlCandidates = (media: any): string[] => {
+  const raw = [media?.playbackUrl, media?.hlsUrl, media?.fileUrl];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const candidate of raw) {
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(getBestVideoUrl(trimmed));
+  }
+  return out;
+};
+
 /**
  * Gets the best URL to use for video playback
  */

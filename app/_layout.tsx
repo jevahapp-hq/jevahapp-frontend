@@ -15,7 +15,10 @@ import { useEffect, useState } from "react";
 import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
+import {
+  fetchAllContentPublic,
+  fetchDefaultContentPage,
+} from "../src/shared/hooks/useMedia";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingAudioPlayer from "../src/shared/components/FloatingAudioPlayer";
@@ -25,6 +28,8 @@ import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
 import { useAuth } from "./hooks/useAuth";
 import { useDownloadStore } from "./store/useDownloadStore";
+import { hydrateLibraryCache } from "./screens/library/AllLibrary/utils/libraryCache";
+import { useContentCacheStore } from "./store/useContentCacheStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { warmupBackend } from "./utils/apiWarmup";
@@ -175,7 +180,8 @@ export default function RootLayout() {
   const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
   const { signOut } = useAuth();
 
-  // Critical path: only persisted media (current playback). Show app shell ASAP.
+  // Critical path: rehydrate disk cache + start feed prefetch in parallel so
+  // Most Recent can paint (and network can resolve) as soon as splash hides.
   useEffect(() => {
     if (!fontsLoaded || isInitialized) return;
 
@@ -183,7 +189,63 @@ export default function RootLayout() {
 
     const runCriticalInit = async () => {
       try {
-        await loadPersistedMedia();
+        // Fire network prefetch alongside rehydrate — do not wait for
+        // InteractionManager / library warmup (those used to delay the feed).
+        const feedPrefetch = Promise.all([
+          warmupBackend().catch(() => {}),
+          queryClient.prefetchQuery({
+            queryKey: ["all-content", "ALL", 1, 20, false],
+            queryFn: () => fetchAllContentPublic("ALL"),
+            staleTime: 30 * 60 * 1000,
+          }),
+          queryClient.prefetchQuery({
+            queryKey: ["default-content", 1, 40, "ALL"],
+            queryFn: () => fetchDefaultContentPage("ALL", 1, 40),
+            staleTime: 30 * 60 * 1000,
+          }),
+        ]).catch(() => {});
+
+        await Promise.all([
+          loadPersistedMedia(),
+          useContentCacheStore.persist.rehydrate(),
+        ]);
+
+        // Seed React Query from disk for both public + auth keys so logged-in
+        // home (useAuth: true) never mounts with an empty query.
+        const allFirst = useContentCacheStore.getState().get("ALL:first");
+        if (allFirst?.items?.length) {
+          const seed = {
+            media: allFirst.items,
+            total: allFirst.total ?? 0,
+          };
+          queryClient.setQueryData(
+            ["all-content", "ALL", 1, 20, false],
+            (prev: typeof seed | undefined) => prev ?? seed
+          );
+          queryClient.setQueryData(
+            ["all-content", "ALL", 1, 20, true],
+            (prev: typeof seed | undefined) => prev ?? seed
+          );
+        }
+        const defaultPage = useContentCacheStore.getState().get("ALL:page:1");
+        if (defaultPage?.items?.length) {
+          const seed = {
+            media: defaultPage.items,
+            total: defaultPage.total ?? 0,
+            page: defaultPage.page || 1,
+            limit: defaultPage.limit || 40,
+            pages: Math.ceil(
+              (defaultPage.total || 0) / (defaultPage.limit || 40)
+            ),
+          };
+          queryClient.setQueryData(
+            ["default-content", 1, 40, "ALL"],
+            (prev: typeof seed | undefined) => prev ?? seed
+          );
+        }
+
+        // Don't block splash on network — prefetch continues in background.
+        void feedPrefetch;
       } catch {
         // Non-blocking; app works without it
       }
@@ -198,12 +260,13 @@ export default function RootLayout() {
     };
   }, [fontsLoaded, loadPersistedMedia, isInitialized]);
 
-  // Deferred init: run after first paint so content appears faster
+  // Deferred init: non-feed work after first paint
   useEffect(() => {
     if (!fontsLoaded || !isInitialized) return;
 
     const task = InteractionManager.runAfterInteractions(() => {
       (async () => {
+        hydrateLibraryCache();
         try {
           await loadDownloadedItems();
         } catch { }
@@ -213,13 +276,6 @@ export default function RootLayout() {
         try {
           await PerformanceOptimizer.getInstance().preloadCriticalData();
         } catch { }
-        // Stagger requests to avoid 429 - warmup first, then prefetch after longer delay
-        await warmupBackend().catch(() => { });
-        await new Promise((r) => setTimeout(r, 2500));
-        queryClient.prefetchQuery({
-          queryKey: ["all-content", "ALL", 1, 50, false],
-          queryFn: () => fetchAllContentPublic("ALL"),
-        }).catch(() => { });
       })();
     });
 
@@ -293,6 +349,12 @@ export default function RootLayout() {
         </Text>
       </View>
     );
+  }
+
+  // Keep native splash up until feed disk cache is rehydrated so Home can
+  // mount with ALL:first already available (avoids a wasted empty first paint).
+  if (!isInitialized) {
+    return <View style={{ flex: 1 }} />;
   }
 
   // ✅ Normal app rendering

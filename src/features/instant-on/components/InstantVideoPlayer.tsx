@@ -165,6 +165,11 @@ export const InstantVideoPlayer: React.FC<InstantVideoPlayerProps> = ({
         nativeControls={false}
         allowsFullscreen={false}
         allowsPictureInPicture={false}
+        // Rendered inside a paging FlashList feed - adjacent items can have
+        // an overlapping VideoView mounted during scroll transitions. The
+        // default Android `surfaceView` can fail to render in that case -
+        // see https://github.com/androidx/media/issues/1107
+        surfaceType="textureView"
       />
     </View>
   );

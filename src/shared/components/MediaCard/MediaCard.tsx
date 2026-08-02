@@ -120,10 +120,8 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           <View className="relative" style={{ height: cardHeight }}>
             {/* Background Image/Thumbnail */}
             <SafeImage
-              uri={
-                thumbnailUri ||
-                "https://via.placeholder.com/300x200/cccccc/ffffff?text=Media"
-              }
+              uri={thumbnailUri}
+              fallbackText="Media"
               style={{
                 width: "100%",
                 height: "100%",
@@ -234,10 +232,8 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       {/* Thumbnail */}
       <View className="w-16 h-16 rounded-lg overflow-hidden bg-gray-200">
         <SafeImage
-          uri={
-            thumbnailUri ||
-            "https://via.placeholder.com/64x64/cccccc/ffffff?text=Media"
-          }
+          uri={thumbnailUri}
+          fallbackText="Media"
           style={{
             width: "100%",
             height: "100%",

@@ -9,6 +9,10 @@ import { useInteractionStore } from "../../../../store/useInteractionStore";
 import { useLibraryStore } from "../../../../store/useLibraryStore";
 import allMediaAPI from "../../../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../../../utils/downloadUtils";
+import {
+  addItemToLibraryCache,
+  removeItemFromLibraryCache,
+} from "../utils/libraryCache";
 
 interface UseAllLibraryHandlersProps {
   savedItems: any[];
@@ -58,6 +62,7 @@ export function useAllLibraryHandlers({
         next.delete(itemId);
         return next;
       });
+      removeItemFromLibraryCache(itemId);
     },
     [setSavedItems, setSavedItemIds]
   );
@@ -157,6 +162,7 @@ export function useAllLibraryHandlers({
             return exists ? prev : [item, ...prev];
           });
           setSavedItemIds((prev) => new Set([...prev, itemId]));
+          addItemToLibraryCache(item);
           refreshSavedState();
           Alert.alert("Success", `"${item.title}" has been added to your library`);
         } catch {

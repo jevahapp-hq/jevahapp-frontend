@@ -6,7 +6,7 @@
  * - hooks/useReelsVideoPlayback: seek, formatTime, playback effects
  * - components/ReelsModals: modals + header + bottom nav
  */
-import { Video } from "expo-av";
+import type { VideoPlayer } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, StatusBar, View, ViewToken } from "react-native";
@@ -38,6 +38,7 @@ import {
   useReelsVideoList,
   useReelsVideoPlayback,
 } from "./hooks";
+import { getReelVideoKey } from "./utils/reelVideoKey";
 
 type Params = {
   title: string;
@@ -74,7 +75,7 @@ export default function Reelsviewscroll() {
   } = params;
   const router = useRouter();
 
-  const videoRefs = useRef<Record<string, Video>>({});
+  const videoRefs = useRef<Record<string, VideoPlayer>>({});
   const flatListRef = useRef<FlatList>(null);
 
   const [hasError, setHasError] = useState(false);
@@ -123,10 +124,17 @@ export default function Reelsviewscroll() {
     reelsStoreSetVideoList: reelsStore.setVideoList,
   });
 
-  const currentVideoIndex =
+  const requestedVideoIndex =
     reelsStore.currentIndex !== undefined && reelsStore.currentIndex !== null
       ? reelsStore.currentIndex
       : parseInt(currentIndex) || 0;
+  // The store index can be stale — e.g. saved while browsing a longer list
+  // than the one currently loaded. Clamp to the real list so scrollToIndex
+  // and current-video lookups never go out of range.
+  const currentVideoIndex = Math.min(
+    Math.max(requestedVideoIndex, 0),
+    Math.max(parsedVideoList.length - 1, 0)
+  );
   const [currentIndex_state, setCurrentIndex_state] = useState(currentVideoIndex);
 
   const {
@@ -254,7 +262,7 @@ export default function Reelsviewscroll() {
   });
 
   const { seekToPosition, formatTime, toggleMute } = useReelsVideoPlayback({
-    videoRefs: videoRefs as React.RefObject<Record<string, Video>>,
+    videoRefs: videoRefs as React.RefObject<Record<string, VideoPlayer>>,
     videoDuration,
     modalKey,
     setVideoDuration,
@@ -317,19 +325,20 @@ export default function Reelsviewscroll() {
     videoData: any,
     index: number,
     isActive = false,
-    passedVideoKey?: string
+    passedVideoKey?: string,
+    shouldMountPlayer = false
   ) => {
     const enriched = UserProfileCache.enrichContentWithUserData(videoData);
     const speakerName = getSpeakerName(enriched, "Creator");
     const videoKey =
-      passedVideoKey ||
-      `reel-${enriched._id || enriched.id || index}-${enriched.title}-${speakerName}`;
+      passedVideoKey || getReelVideoKey(enriched, index, speakerName);
     return (
       <ReelsVideoItem
         videoData={videoData}
         index={index}
         isActive={isActive}
-        passedVideoKey={passedVideoKey}
+        shouldMountPlayer={shouldMountPlayer}
+        passedVideoKey={videoKey}
         videoRefs={videoRefs}
         screenHeight={screenHeight}
         screenWidth={screenWidth}
@@ -404,7 +413,7 @@ export default function Reelsviewscroll() {
           const videoData = allVideos[newIndex];
           if (videoData) {
             const speakerName = getSpeakerName(videoData, "Creator");
-            const videoKey = `reel-${videoData._id || videoData.id || newIndex}-${videoData.title}-${speakerName}`;
+            const videoKey = getReelVideoKey(videoData, newIndex, speakerName);
 
             mediaStore.updateLastAccessed(videoKey);
             if (!userHasManuallyPaused) {
@@ -419,10 +428,16 @@ export default function Reelsviewscroll() {
 
   useEffect(() => {
     if (flatListRef.current && parsedVideoList.length > 0) {
+      // Re-clamp against the list length as of THIS render — the effect
+      // only re-runs on length changes, and the index must stay in range.
+      const targetIndex = Math.min(
+        Math.max(currentVideoIndex, 0),
+        parsedVideoList.length - 1
+      );
       // Small delay to ensure FlatList is ready
       const timer = setTimeout(() => {
         flatListRef.current?.scrollToIndex({
-          index: currentVideoIndex,
+          index: targetIndex,
           animated: false,
         });
       }, 100);
@@ -432,8 +447,12 @@ export default function Reelsviewscroll() {
 
   const renderItem = ({ item, index }: { item: any, index: number }) => {
     const isActive = index === currentIndex_state;
-    const speakerName = getSpeakerName(item, "unknown");
-    const videoKey = `reel-${item._id || item.id || index}-${item.title}-${speakerName}`;
+    // Active + 1 neighbor each way — expo-video preload window (docs: player
+    // buffers even before the surface is focused). Keeps swipes smooth without
+    // mounting every reel decoder.
+    const shouldMountPlayer = Math.abs(index - currentIndex_state) <= 1;
+    const speakerName = getSpeakerName(item, "Creator");
+    const videoKey = getReelVideoKey(item, index, speakerName);
 
     return (
       <View
@@ -443,7 +462,7 @@ export default function Reelsviewscroll() {
           backgroundColor: "#000000",
         }}
       >
-        {renderVideoItem(item, index, isActive, videoKey)}
+        {renderVideoItem(item, index, isActive, videoKey, shouldMountPlayer)}
       </View>
     );
   };
@@ -456,8 +475,8 @@ export default function Reelsviewscroll() {
         data={allVideos}
         renderItem={renderItem}
         keyExtractor={(item, index) => {
-          const speakerName = getSpeakerName(item, "unknown");
-          return `reel-${item._id || item.id || index}-${item.title}-${speakerName}`;
+          const speakerName = getSpeakerName(item, "Creator");
+          return getReelVideoKey(item, index, speakerName);
         }}
         pagingEnabled
         showsVerticalScrollIndicator={false}
@@ -468,6 +487,18 @@ export default function Reelsviewscroll() {
           offset: screenHeight * index,
           index,
         })}
+        onScrollToIndexFailed={(info) => {
+          // Last-resort net: never crash on a bad index — land on the
+          // nearest valid item instead.
+          const fallbackIndex = Math.min(
+            Math.max(info.index, 0),
+            Math.max(allVideos.length - 1, 0)
+          );
+          flatListRef.current?.scrollToOffset({
+            offset: screenHeight * fallbackIndex,
+            animated: false,
+          });
+        }}
         removeClippedSubviews={true}
         initialNumToRender={1}
         maxToRenderPerBatch={2}

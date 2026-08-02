@@ -5,10 +5,10 @@
  */
 import React from "react";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon } from "../../../../shared/utils";
 import EbookCard from "../../components/EbookCard";
 import MusicCard from "../../components/MusicCard";
 import VideoCard from "../../components/VideoCard";
+import { getFeedContentKind } from "../utils/feedContentKind";
 import { ContentUnavailableState } from "./ContentFeedStates";
 
 export interface ContentItemRendererProps {
@@ -50,6 +50,14 @@ export interface ContentItemRendererProps {
   currentUserId: string | null;
   shouldRenderPlayer?: boolean;
   isFeedActive?: boolean;
+  /**
+   * Exact FlashList row key (e.g. Most Recent). Must match
+   * `currentlyVisibleVideo` / playMedia keys from the feed orchestrator.
+   */
+  feedRowKey?: string;
+  /** Most Recent hero — priority decode, no priming play overlay. */
+  isHero?: boolean;
+  onSurfaceReadyChange?: (ready: boolean) => void;
 }
 
 function ContentItemRendererInner(props: ContentItemRendererProps) {
@@ -92,13 +100,17 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     currentUserId,
     shouldRenderPlayer,
     isFeedActive,
+    feedRowKey,
+    isHero,
+    onSurfaceReadyChange,
   } = props;
 
   const key = getKey(item);
-  const playbackKey = getPlaybackKey(item);
+  // Prefer the feed row key so Most Recent visibility/play matches the
+  // orchestrator (row.key), not a stripped content-only key.
+  const playbackKey = feedRowKey || getPlaybackKey(item);
   const contentId = item._id || key;
   const modalKey = key;
-  const isAudioSermonValue = isAudioSermon(item);
 
   const backendUserFavorites = { [key]: getUserLikeState(contentId) };
   const backendGlobalFavoriteCounts = { [key]: getLikeCount(contentId) };
@@ -138,6 +150,8 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     shouldRenderPlayer: props.shouldRenderPlayer,
     playbackKey,
     isFeedActive,
+    isHero,
+    onSurfaceReadyChange,
   };
 
   const musicCardProps = {
@@ -168,56 +182,34 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onDelete,
   };
 
-  switch (item.contentType) {
+  // Single classification pass drives BOTH which card renders here and,
+  // via the same `getFeedContentKind`, how the feed mounts/recycles/warms
+  // this row in index.tsx — the "smart content manager" that keeps video
+  // preload/decoder logic from ever running against an ebook or audio row.
+  if (item.moderationStatus === "rejected") {
+    const isOwner =
+      currentUserId &&
+      (item.userId === currentUserId ||
+        (typeof item.uploadedBy === "object" &&
+          item.uploadedBy?._id === currentUserId) ||
+        item.uploadedBy === currentUserId);
+    if (!isOwner) return <ContentUnavailableState />;
+  }
+
+  // No `key` prop on any branch below — this is FlashList v2's recycled
+  // cell output, not a `.map()` child. A `key` here made React fully
+  // unmount/remount the whole card (new decoder, re-fetched thumbnail,
+  // reset scroll/tap state) every time a cell got recycled to a different
+  // item, instead of letting FlashList efficiently update props on the
+  // reused view — the main cause of visible flicker/re-init while
+  // scrolling fast.
+  switch (getFeedContentKind(item)) {
     case "video":
-    case "videos":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
-      return <VideoCard key={key} {...videoCardProps} />;
-
-    case "sermon":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
-      if (isAudioSermonValue) return <MusicCard key={key} {...musicCardProps} />;
-      return <VideoCard key={key} {...videoCardProps} />;
-
+      return <VideoCard {...videoCardProps} />;
     case "audio":
-    case "music":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
-      return <MusicCard key={key} {...musicCardProps} />;
-
-    case "image":
+      return <MusicCard {...musicCardProps} />;
     case "ebook":
-    case "books":
-    default:
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
-      return <EbookCard key={key} {...ebookCardProps} />;
+      return <EbookCard {...ebookCardProps} />;
   }
 }
 
@@ -234,8 +226,8 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
   const prevMusicId = `music-${prev.item._id || prev.index}`;
   const nextMusicId = `music-${next.item._id || next.index}`;
 
-  const prevPlaybackKey = prev.getPlaybackKey(prev.item);
-  const nextPlaybackKey = next.getPlaybackKey(next.item);
+  const prevPlaybackKey = prev.feedRowKey || prev.getPlaybackKey(prev.item);
+  const nextPlaybackKey = next.feedRowKey || next.getPlaybackKey(next.item);
 
   return (
     prev.getUserLikeState(prevContentId) === next.getUserLikeState(nextContentId) &&
@@ -253,7 +245,9 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     // adds this key — autoplay has nothing to drive shouldPlay on.
     !!prev.shouldRenderPlayer === !!next.shouldRenderPlayer &&
     prev.isFeedActive === next.isFeedActive &&
-    prev.isAutoPlayEnabled === next.isAutoPlayEnabled
+    prev.isAutoPlayEnabled === next.isAutoPlayEnabled &&
+    prev.feedRowKey === next.feedRowKey &&
+    !!prev.isHero === !!next.isHero
   );
 }
 

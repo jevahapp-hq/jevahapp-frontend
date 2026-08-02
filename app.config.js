@@ -65,6 +65,13 @@ export default {
       "expo-font",
       "expo-asset",
       "expo-media-library",
+      [
+        "expo-video",
+        {
+          supportsBackgroundPlayback: true,
+          supportsPictureInPicture: false,
+        },
+      ],
 
       [
         "@sentry/react-native",

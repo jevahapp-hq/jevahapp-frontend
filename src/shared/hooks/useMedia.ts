@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useContentCacheStore
@@ -6,7 +6,7 @@ import {
 import { useInteractionStore } from "../../../app/store/useInteractionStore";
 import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 import { mediaApi } from "../../core/api/MediaApi";
-import {
+import type {
   ContentFilter,
   MediaItem,
   UseMediaOptions,
@@ -93,6 +93,64 @@ export async function fetchAllContentPublic(contentType: string = "ALL") {
   return result;
 }
 
+/** Shared fetcher for default-content prefetch + useMedia */
+export async function fetchDefaultContentPage(
+  contentType: string = "ALL",
+  page: number = 1,
+  limit: number = 40
+) {
+  const response = await mediaApi.getDefaultContent({
+    page,
+    limit,
+    contentType:
+      contentType !== "ALL"
+        ? (contentType as ContentFilter["contentType"])
+        : undefined,
+  });
+
+  if (!response.success) throw new Error(response.error || "Failed to fetch content");
+
+  const enrichedMedia = UserProfileCache.enrichContentArray(response.media || []);
+  const transformedMedia = enrichedMedia
+    .map(transformApiResponseToMediaItem)
+    .filter((item): item is MediaItem => item !== null);
+
+  const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
+  useContentCacheStore.getState().set(defaultKey, {
+    items: transformedMedia,
+    page: response.page || page,
+    limit: response.limit || limit,
+    total: response.total || 0,
+    fetchedAt: Date.now(),
+  });
+
+  // Also seed ALL:first so Most Recent can paint from disk on next cold start
+  // even if the auth feed is what the home tab requests.
+  if (contentType === "ALL" && page === 1 && transformedMedia.length > 0) {
+    const existing = useContentCacheStore.getState().get("ALL:first");
+    if (!existing?.items?.length) {
+      useContentCacheStore.getState().set("ALL:first", {
+        items: transformedMedia.slice(0, 20),
+        page: 1,
+        limit: 20,
+        total: response.total || 0,
+        fetchedAt: Date.now(),
+      });
+    }
+  }
+
+  const result = {
+    media: transformedMedia,
+    total: response.total || 0,
+    page: response.page || page,
+    limit: response.limit || limit,
+    pages: Math.ceil((response.total || 0) / (response.limit || limit)),
+  };
+
+  syncMediaStatsToInteractionStore(result.media);
+  return result;
+}
+
 /** Fetcher for authenticated all-content (includes user's uploads) */
 async function fetchAllContentWithAuth(contentType: string = "ALL") {
   const response = await mediaApi.getAllContentWithAuth({
@@ -118,6 +176,18 @@ async function fetchAllContentWithAuth(contentType: string = "ALL") {
   // Sync stats to store
   syncMediaStatsToInteractionStore(result.media);
 
+  // Persist so the next reload can paint Most Recent before the network returns
+  // (logged-in home uses useAuth=true and previously skipped cache seeding).
+  if (contentType === "ALL" && result.media.length > 0) {
+    useContentCacheStore.getState().set("ALL:first", {
+      items: result.media,
+      page: 1,
+      limit: 20,
+      total: result.total,
+      fetchedAt: Date.now(),
+    });
+  }
+
   return result;
 }
 
@@ -131,27 +201,48 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   } = options;
 
   const queryClient = useQueryClient();
+  // Disk-backed seed (hydrated in _layout before splash hides). Used for both
+  // public and auth home feeds so Most Recent can paint on the first frame.
   const cacheEntry = useContentCacheStore((s) => s.get("ALL:first"));
-  const cachedForInitial = !useAuth && contentType === "ALL" && cacheEntry?.items?.length
-    ? { media: cacheEntry.items, total: cacheEntry.total ?? 0 }
+  const defaultCacheKey = `${contentType || "ALL"}:page:${page || 1}`;
+  const defaultCacheEntry = useContentCacheStore((s) => s.get(defaultCacheKey));
+
+  const cachedAllContent =
+    contentType === "ALL" && cacheEntry?.items?.length
+      ? { media: cacheEntry.items, total: cacheEntry.total ?? 0 }
+      : undefined;
+
+  const cachedDefaultContent = defaultCacheEntry?.items?.length
+    ? {
+        media: defaultCacheEntry.items,
+        total: defaultCacheEntry.total ?? 0,
+        page: defaultCacheEntry.page || page,
+        limit: defaultCacheEntry.limit || limit,
+        pages: Math.ceil(
+          (defaultCacheEntry.total || 0) /
+            (defaultCacheEntry.limit || limit || 40)
+        ),
+      }
     : undefined;
 
   const allContentQuery = useQuery({
     queryKey: ["all-content", contentType, 1, 20, useAuth],
     queryFn: () => (useAuth ? fetchAllContentWithAuth(contentType) : fetchAllContentPublic(contentType)),
     enabled: immediate,
-    initialData: cachedForInitial,
-    // Keep showing the previous query's data (e.g. the public feed) while a
-    // new query key's data is fetched - this happens when `useAuth` flips
-    // from false to true once auth resolves. Without this, the feed briefly
-    // renders empty because the new (useAuth: true) query starts with no
-    // data at all, even though we already had content to show.
-    placeholderData: keepPreviousData,
+    // Seed both public and auth from disk so Most Recent paints immediately.
+    // Auth still refetches (staleTime + refetchOnMount) so uploads appear;
+    // initialDataUpdatedAt uses cache age so a fresh disk seed doesn't block
+    // that refetch for 30 minutes.
+    initialData: cachedAllContent,
+    initialDataUpdatedAt: useAuth
+      ? 0
+      : cacheEntry?.fetchedAt,
+    placeholderData: (previousData) => previousData ?? cachedAllContent,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     retry: 1,
-    // Keep category feeds warm — remount/refetch on tab switch felt like a refresh.
-    refetchOnMount: false,
+    // Auth home must refetch on mount so uploads aren't stuck behind stale cache.
+    refetchOnMount: useAuth ? "always" : false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -159,49 +250,11 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   // Use React Query for default content
   const defaultContentQuery = useQuery({
     queryKey: ["default-content", page, limit, contentType],
-    queryFn: async () => {
-      const response = await mediaApi.getDefaultContent({
-        page,
-        limit,
-        contentType: contentType !== "ALL" ? contentType : undefined,
-      });
-
-      if (response.success) {
-        const enrichedMedia = UserProfileCache.enrichContentArray(response.media || []);
-        const transformedMedia = enrichedMedia
-          .map(transformApiResponseToMediaItem)
-          .filter((item): item is MediaItem => item !== null);
-
-        // Also update Zustand cache for backward compatibility
-        const defaultKey = `${contentType || "ALL"}:page:${page || 1}`;
-        useContentCacheStore.getState().set(defaultKey, {
-          items: transformedMedia,
-          page: response.page || page,
-          limit: response.limit || limit,
-          total: response.total || 0,
-          fetchedAt: Date.now(),
-        });
-
-        const result = {
-          media: transformedMedia,
-          total: response.total || 0,
-          page: response.page || page,
-          limit: response.limit || limit,
-          pages: Math.ceil((response.total || 0) / (response.limit || limit)),
-        };
-
-        // Sync stats to store
-        syncMediaStatsToInteractionStore(result.media);
-
-        return result;
-      }
-
-      throw new Error(response.error || "Failed to fetch content");
-    },
+    queryFn: () => fetchDefaultContentPage(contentType, page, limit),
     enabled: immediate,
-    // Keep showing the previous page/tab's data while a new contentType or
-    // page fetches, instead of flashing empty in between.
-    placeholderData: keepPreviousData,
+    initialData: cachedDefaultContent,
+    initialDataUpdatedAt: defaultCacheEntry?.fetchedAt,
+    placeholderData: (previousData) => previousData ?? cachedDefaultContent,
     staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for better UX
     gcTime: 60 * 60 * 1000, // 60 minutes - keep in cache longer
     retry: 1,
@@ -287,16 +340,19 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
 
   const defaultContent = useMemo(() => {
     if (extraPages.length === 0) return defaultContentPage1;
+    // Fall back to fileUrl when _id/id is missing so items without a stable
+    // ID still get deduped instead of silently re-appearing on later pages.
+    const dedupeKey = (item: MediaItem) =>
+      String(item._id || (item as any).id || item.fileUrl || "");
     const seen = new Set<string>();
     const merged: MediaItem[] = [];
     for (const item of defaultContentPage1) {
-      const id = item._id || (item as any).id;
-      if (id) seen.add(String(id));
+      const key = dedupeKey(item);
+      if (key) seen.add(key);
       merged.push(item);
     }
     for (const item of extraPages) {
-      const id = item._id || (item as any).id;
-      const key = id ? String(id) : "";
+      const key = dedupeKey(item);
       if (key && seen.has(key)) continue;
       if (key) seen.add(key);
       merged.push(item);
@@ -316,10 +372,15 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
         ? highestLoadedPage < computedPages
         : lastFetchedPageWasFull;
 
-  // Loading states (only show loading if no cached data)
+  // Loading only when BOTH sources are empty — don't block Most Recent on
+  // default-content. Coming Soon fills in when that query resolves.
   const allContentLoading = allContentQuery.isLoading && allContent.length === 0;
-  const defaultContentLoading = defaultContentQuery.isLoading && defaultContent.length === 0;
-  const loading = allContentLoading || defaultContentLoading;
+  const defaultContentLoading =
+    defaultContentQuery.isLoading && defaultContent.length === 0;
+  const loading =
+    allContent.length === 0 &&
+    defaultContent.length === 0 &&
+    (allContentLoading || defaultContentLoading);
 
   // Error states
   const allContentError = allContentQuery.error
@@ -456,18 +517,21 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
           return;
         }
         setExtraPages((prev) => {
+          // Fall back to fileUrl when _id/id is missing so items without a
+          // stable ID are still deduped instead of always passing through.
+          const dedupeKey = (item: MediaItem) =>
+            String(item._id || (item as any).id || item.fileUrl || "");
           const seen = new Set<string>();
           for (const item of defaultContentPage1) {
-            const id = item._id || (item as any).id;
-            if (id) seen.add(String(id));
+            const key = dedupeKey(item);
+            if (key) seen.add(key);
           }
           for (const item of prev) {
-            const id = item._id || (item as any).id;
-            if (id) seen.add(String(id));
+            const key = dedupeKey(item);
+            if (key) seen.add(key);
           }
           const unique = transformedMedia.filter((item) => {
-            const id = item._id || (item as any).id;
-            const key = id ? String(id) : "";
+            const key = dedupeKey(item);
             if (!key) return true;
             if (seen.has(key)) return false;
             seen.add(key);

@@ -444,10 +444,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       <TouchableWithoutFeedback onPress={handleOverlayToggle}>
         <View className="w-full h-[400px] overflow-hidden relative">
           <SafeImage
-            uri={
-              thumbnailUri ||
-              "https://via.placeholder.com/400x400/cccccc/ffffff?text=Music"
-            }
+            uri={thumbnailUri}
+            fallbackText="Music"
+            fallbackIcon="musical-notes-outline"
             style={{ width: "100%", height: "100%", position: "absolute" }}
             size="large"
           />

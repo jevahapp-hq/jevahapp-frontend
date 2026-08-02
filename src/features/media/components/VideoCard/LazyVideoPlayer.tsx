@@ -52,6 +52,12 @@ export const LazyVideoPlayer: React.FC<LazyVideoPlayerProps> = ({
             contentFit="cover"
             nativeControls={false}
             fullscreenOptions={{ enable: false }}
+            // VideoCard is rendered inside scrollable feeds where more than
+            // one VideoView can be mounted simultaneously. The default
+            // Android `surfaceView` can fail to render (or render out of
+            // bounds) when views overlap - see the known upstream issue:
+            // https://github.com/androidx/media/issues/1107
+            surfaceType="textureView"
         />
     );
 };

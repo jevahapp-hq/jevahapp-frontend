@@ -47,10 +47,10 @@ function ContentSection({ selectedIndex }: ContentSectionProps) {
 
   // Handle video press - memoized
   const handleVideoPress = useCallback((video: Video, index: number) => {
-    // Get user's actual avatar URL, fallback to placeholder if not available
-    const userAvatarUrl = user && getAvatarUrl(user) 
-      ? getAvatarUrl(user) 
-      : "https://via.placeholder.com/40x40/cccccc/ffffff?text=U";
+    // Get user's actual avatar URL; leave empty when unavailable so the
+    // consuming avatar component renders its own initials fallback instead
+    // of depending on an external placeholder service.
+    const userAvatarUrl = user && getAvatarUrl(user) ? getAvatarUrl(user) : "";
     
     // Prepare video list for navigation
     const videoListForNavigation = videos.map((v, idx) => ({

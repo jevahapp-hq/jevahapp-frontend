@@ -15,10 +15,13 @@ interface FeedVideoSurfaceProps {
  */
 export function FeedVideoSurface({
   player,
-  visible,
+  visible: _visible,
   onFirstFrameRender,
   height = FEED_VIDEO_PLAYER_HEIGHT,
 }: FeedVideoSurfaceProps) {
+  // Always composited. Hiding with opacity:0 stopped iOS from painting /
+  // firing onFirstFrameRender, which left Most Recent black + silent.
+  // Snapshot underlay in VideoCardPlayerArea covers any brief black gap.
   return (
     <View
       style={[styles.host, { height }]}
@@ -27,12 +30,18 @@ export function FeedVideoSurface({
     >
       <VideoView
         player={player}
-        style={[styles.video, { opacity: visible ? 1 : 0 }]}
+        style={styles.video}
         contentFit="cover"
         nativeControls={false}
         fullscreenOptions={{ enable: false }}
         allowsPictureInPicture={false}
         useExoShutter={false}
+        // Multiple feed rows can have a mounted VideoView at once (grow-only
+        // mounts + scroll transitions). Android's default `surfaceView` can
+        // render one of them out of bounds/blank when views overlap - see
+        // https://github.com/androidx/media/issues/1107. `textureView` is
+        // slightly less power-efficient but avoids that failure mode.
+        surfaceType="textureView"
         onFirstFrameRender={onFirstFrameRender}
       />
     </View>

@@ -8,7 +8,9 @@ import TokenUtils from "../../../../../app/utils/tokenUtils";
 
 export function useAllContentTikTokSocket(
   setSocketManager: (m: SocketManager | null) => void,
-  setRealTimeCounts: React.Dispatch<React.SetStateAction<Record<string, any>>>
+  setRealTimeCounts: (
+    updater: (prev: Record<string, any>) => Record<string, any>
+  ) => void
 ) {
   const managerRef = useRef<SocketManager | null>(null);
 

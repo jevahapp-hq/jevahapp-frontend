@@ -1,16 +1,21 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
-import { MutableRefObject, useEffect, useState } from "react";
+import type { VideoPlayer } from "expo-video";
+import { VideoView } from "expo-video";
+import { MutableRefObject, useEffect, useMemo, useRef } from "react";
 import {
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
-import { getBestVideoUrl, getVideoUrlFromMedia, handleVideoError } from "../../../src/shared/utils/videoUrlManager";
+import {
+  getBestVideoUrl,
+  getVideoUrlFromMedia,
+} from "../../../src/shared/utils/videoUrlManager";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
+import { useReelsExpoVideoPlayer } from "../hooks/useReelsExpoVideoPlayer";
+import { getReelVideoKey } from "../utils/reelVideoKey";
 import { ReelsActionButtons } from "./ReelsActionButtons";
 import { ReelsMenu } from "./ReelsMenu";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
@@ -19,8 +24,10 @@ export interface ReelsVideoItemProps {
   videoData: any;
   index: number;
   isActive: boolean;
+  /** Mount decoder for active ± neighbors only. */
+  shouldMountPlayer: boolean;
   passedVideoKey?: string;
-  videoRefs: MutableRefObject<Record<string, Video>>;
+  videoRefs: MutableRefObject<Record<string, VideoPlayer>>;
   screenHeight: number;
   screenWidth: number;
   isIOS: boolean;
@@ -79,23 +86,18 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     videoData,
     index,
     isActive,
+    shouldMountPlayer,
     passedVideoKey,
     videoRefs,
     screenHeight,
-    screenWidth,
-    isIOS,
-    currentIndex_state,
     playingVideos,
     mutedVideos,
-    videoDuration,
-    videoPosition,
     isDragging,
     showPauseOverlay,
     userHasManuallyPaused,
     modalKey,
     currentVideo,
     video,
-    enrichedVideoData,
     activeIsLiked,
     activeLikesCount,
     canUseBackendLikes,
@@ -119,11 +121,9 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     onReport,
     onMenuToggle,
     onMenuClose,
-    setIsDragging,
     setVideoDuration,
     setVideoPosition,
     triggerHapticFeedback,
-    formatTime,
     globalVideoStore,
     mediaStore,
     source,
@@ -132,11 +132,137 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     checkIfDownloaded,
     currentUser,
     getAvatarUrl,
+    videoPosition,
   } = props;
 
-  const videoVolume = 1.0;
+  const hasValidData = !!(videoData && videoData.title);
+  const enriched = useMemo(
+    () =>
+      hasValidData
+        ? UserProfileCache.enrichContentWithUserData(videoData)
+        : null,
+    [hasValidData, videoData]
+  );
 
-  if (!videoData || !videoData.title) {
+  const speakerName = enriched
+    ? getSpeakerName(enriched, "Creator")
+    : "Creator";
+  const videoKey =
+    passedVideoKey ||
+    getReelVideoKey(enriched || videoData || {}, index, speakerName);
+
+  const rawVideoUrl = enriched ? getVideoUrlFromMedia(enriched) : null;
+  const videoUrl = rawVideoUrl ? getBestVideoUrl(rawVideoUrl) : null;
+  const isMuted = mutedVideos[videoKey] ?? false;
+  // Active reel autoplays unless the user explicitly paused. Do not require
+  // playingVideos[key] — store keys used to diverge from the cell key.
+  const shouldPlay =
+    isActive &&
+    !userHasManuallyPaused &&
+    (playingVideos[videoKey] ?? playingVideos[modalKey] ?? true);
+
+  const {
+    player,
+    firstFrameReady,
+    positionMs,
+    durationMs,
+    seekToMs,
+    handleFirstFrameRender,
+  } = useReelsExpoVideoPlayer({
+    source: videoUrl,
+    isActive,
+    shouldPlay,
+    isMuted,
+    volume: 1,
+    shouldMount: shouldMountPlayer && !!videoUrl,
+  });
+
+  const lastReportedDurationRef = useRef(0);
+  const didMarkLoadedRef = useRef(false);
+  const registerVideoPlayer = globalVideoStore.registerVideoPlayer;
+  const unregisterVideoPlayer = globalVideoStore.unregisterVideoPlayer;
+  const setOverlayVisible = globalVideoStore.setOverlayVisible;
+
+  useEffect(() => {
+    if (!player || !shouldMountPlayer) {
+      delete videoRefs.current[videoKey];
+      try {
+        unregisterVideoPlayer(videoKey);
+      } catch {
+        // no-op
+      }
+      return;
+    }
+
+    videoRefs.current[videoKey] = player;
+    registerVideoPlayer(videoKey, {
+      pause: async () => {
+        try {
+          player.pause();
+          player.muted = true;
+          player.volume = 0;
+          setOverlayVisible(videoKey, true);
+        } catch {
+          // no-op
+        }
+      },
+      play: async () => {
+        try {
+          player.play();
+        } catch {
+          // no-op
+        }
+      },
+      showOverlay: () => {
+        setOverlayVisible(videoKey, true);
+      },
+      key: videoKey,
+    });
+
+    return () => {
+      delete videoRefs.current[videoKey];
+      try {
+        unregisterVideoPlayer(videoKey);
+      } catch {
+        // no-op
+      }
+    };
+  }, [
+    player,
+    shouldMountPlayer,
+    videoKey,
+    videoRefs,
+    registerVideoPlayer,
+    unregisterVideoPlayer,
+    setOverlayVisible,
+  ]);
+
+  // Report duration once (or when it actually changes) — never every tick.
+  useEffect(() => {
+    if (!isActive || durationMs <= 0) return;
+    if (Math.abs(durationMs - lastReportedDurationRef.current) < 250) return;
+    lastReportedDurationRef.current = durationMs;
+    setVideoDuration(durationMs);
+    if (!didMarkLoadedRef.current) {
+      didMarkLoadedRef.current = true;
+      try {
+        mediaStore.setVideoLoaded?.(videoKey, true);
+      } catch {
+        // no-op
+      }
+    }
+  }, [isActive, durationMs, setVideoDuration, mediaStore, videoKey]);
+
+  // Keep parent position loosely in sync without store progress spam (that
+  // re-rendered the whole FlatList every 100ms and blew the update depth).
+  useEffect(() => {
+    if (!isActive || isDragging) return;
+    if (Math.abs(positionMs - (videoPosition || 0)) > 1000) {
+      setVideoPosition(positionMs);
+    }
+  }, [isActive, isDragging, positionMs, setVideoPosition, videoPosition]);
+
+  if (!hasValidData) {
     return (
       <View
         style={{
@@ -144,6 +270,7 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
           width: "100%",
           justifyContent: "center",
           alignItems: "center",
+          backgroundColor: "#000",
         }}
       >
         <Text style={{ color: "#fff", fontSize: 16 }}>Invalid video data</Text>
@@ -151,14 +278,7 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
     );
   }
 
-  const enriched = UserProfileCache.enrichContentWithUserData(videoData);
-  const speakerName = getSpeakerName(enriched, "Creator");
-  const videoKey =
-    passedVideoKey ||
-    `reel-${enriched._id || enriched.id || index}-${enriched.title}-${speakerName}`;
-
-  const rawVideoUrl = getVideoUrlFromMedia(enriched);
-  if (!rawVideoUrl) {
+  if (!rawVideoUrl || !enriched) {
     return (
       <View
         style={{
@@ -173,41 +293,11 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
           Video not available
         </Text>
         <Text style={{ color: "#888", fontSize: 12 }}>
-          {enriched.title || "No title"}
+          {videoData?.title || "No title"}
         </Text>
       </View>
     );
   }
-
-  const videoUrl = getBestVideoUrl(rawVideoUrl);
-
-  if (__DEV__ && isActive) {
-    console.log(`🎬 [ReelsVideoItem] Initializing player for ${enriched.title}:`, {
-      id: enriched._id || enriched.id,
-      videoKey,
-      rawVideoUrl: rawVideoUrl?.substring(0, 100),
-      resolvedUrl: videoUrl?.substring(0, 100),
-      hasPlaybackUrl: !!enriched.playbackUrl,
-      hasHlsUrl: !!enriched.hlsUrl
-    });
-  }
-
-  mediaStore.getVideoCacheStatus(videoKey);
-
-  const handleComment = (key: string) => onComment(key);
-  const handleSave = (key: string) => onSave(key);
-  const handleShare = (key: string) => onShare(key);
-
-  const [localPosition, setLocalPosition] = useState(videoPosition);
-  const [localDuration, setLocalDuration] = useState(videoDuration);
-
-  // Sync with global props occasionally or when active changes
-  useEffect(() => {
-    if (isActive) {
-      setLocalPosition(videoPosition);
-      setLocalDuration(videoDuration);
-    }
-  }, [isActive, videoPosition, videoDuration]);
 
   return (
     <View
@@ -234,184 +324,37 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
           accessibilityRole="button"
           accessibilityHint="Double tap to like, long press for more options"
         >
-          <Video
-            ref={(ref) => {
-              if (ref) {
-                const existingRef = videoRefs.current[videoKey];
-                if (existingRef && existingRef !== ref) {
-                  try {
-                    existingRef.pauseAsync().catch(() => { });
-                    globalVideoStore.unregisterVideoPlayer(videoKey);
-                  } catch (e) { }
-                }
-                videoRefs.current[videoKey] = ref;
-                globalVideoStore.registerVideoPlayer(videoKey, {
-                  pause: async () => {
-                    try {
-                      await ref.pauseAsync();
-                      globalVideoStore.setOverlayVisible(videoKey, true);
-                    } catch (err) {
-                      console.warn(`Failed to pause ${videoKey}:`, err);
-                    }
-                  },
-                  showOverlay: () => {
-                    globalVideoStore.setOverlayVisible(videoKey, true);
-                  },
-                  key: videoKey,
-                });
-              } else {
-                delete videoRefs.current[videoKey];
-                globalVideoStore.unregisterVideoPlayer(videoKey);
-              }
-            }}
-            source={{
-              uri: getBestVideoUrl(rawVideoUrl || ""),
-              headers: {
-                "User-Agent": "JevahApp/1.0",
-                Accept: "video/*",
-              },
-            }}
-            style={{
-              width: "100%",
-              height: "100%",
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: isActive ? 1 : 0,
-            }}
-            resizeMode={ResizeMode.COVER}
-            isMuted={mutedVideos[videoKey] ?? false}
-            volume={mutedVideos[videoKey] ? 0.0 : videoVolume}
-            shouldPlay={isActive && (playingVideos[videoKey] ?? false)}
-            useNativeControls={false}
-            isLooping={true}
-            onError={async (error) => {
-              const errorDetails = (error as any)?.error || error;
-              const errorAnalysis = handleVideoError(
-                error as any,
-                videoUrl,
-                enriched.title
-              );
+          {player ? (
+            <VideoView
+              player={player}
+              style={{
+                width: "100%",
+                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: isActive ? 1 : 0,
+              }}
+              contentFit="cover"
+              nativeControls={false}
+              fullscreenOptions={{ enable: false }}
+              allowsPictureInPicture={false}
+              useExoShutter={false}
+              surfaceType="textureView"
+              onFirstFrameRender={handleFirstFrameRender}
+            />
+          ) : (
+            <View style={{ flex: 1, backgroundColor: "#000" }} />
+          )}
 
-              if (__DEV__) {
-                console.log(`🕵️ [Reels Probe] Probing URL for ${enriched.title}:`, videoUrl);
-                fetch(videoUrl, { method: 'HEAD' })
-                  .then(res => console.log(`📡 [Reels Probe] Result: ${res.status} ${res.statusText}`))
-                  .catch(err => console.error(`📡 [Reels Probe] Failed:`, err.message));
-              }
-
-              console.error(
-                `❌ Video loading error in reels for ${enriched.title}:`,
-                { errorDetails, errorAnalysis }
-              );
-              const ref = videoRefs.current[videoKey];
-              if (ref) {
-                try {
-                  await ref.pauseAsync();
-                  globalVideoStore.pauseVideo(videoKey);
-                } catch { }
-              }
-              try {
-                globalVideoStore.unregisterVideoPlayer(videoKey);
-              } catch { }
-            }}
-            onLoad={(status: any) => {
-              mediaStore.setVideoLoaded(videoKey, true);
-              if (status.durationMillis) {
-                setLocalDuration(status.durationMillis);
-                setVideoDuration(status.durationMillis);
-              }
-              if (playingVideos[videoKey] && !userHasManuallyPaused) {
-                const ref = videoRefs.current[videoKey];
-                if (ref) ref.playAsync().catch(() => { });
-              }
-            }}
-            onPlaybackStatusUpdate={(status) => {
-              if (!isActive || !status.isLoaded) return;
-
-              // High frequency local update for UI responsiveness
-              if (status.positionMillis !== undefined && !isDragging) {
-                setLocalPosition(status.positionMillis);
-              }
-
-              // Update duration if found
-              if (status.durationMillis && (localDuration === 0 || localDuration !== status.durationMillis)) {
-                setLocalDuration(status.durationMillis);
-                setVideoDuration(status.durationMillis);
-              }
-
-              if (status.durationMillis && videoDuration === 0) {
-                if (
-                  !status.isPlaying &&
-                  !playingVideos[videoKey] &&
-                  !userHasManuallyPaused
-                ) {
-                  setTimeout(
-                    () => globalVideoStore.playVideoGlobally(videoKey),
-                    100
-                  );
-                }
-              }
-
-              // Only bubble up position to parent if significant or when dragging ends to avoid lag
-              if (!isDragging && status.positionMillis !== undefined) {
-                // Bubbling to parent less frequently helps responsiveness
-                // but local position ensures bar is smooth
-                if (Math.abs(status.positionMillis - videoPosition) > 1000) {
-                  setVideoPosition(status.positionMillis);
-                }
-              }
-
-              const pct = status.durationMillis
-                ? (status.positionMillis / status.durationMillis) * 100
-                : 0;
-              globalVideoStore.setVideoProgress(videoKey, pct);
-              const ref = videoRefs.current[videoKey];
-              if (status.didJustFinish) {
-                ref?.setPositionAsync(0).catch(() => { });
-                globalVideoStore.pauseVideo(videoKey);
-                triggerHapticFeedback();
-              }
-            }}
-            shouldCorrectPitch={isIOS}
-            progressUpdateIntervalMillis={isIOS ? 100 : 250}
-          />
-
-          {isActive && (!playingVideos[videoKey] || !videoDuration) && (
+          {isActive && !firstFrameReady && (
             <View
               className="absolute inset-0"
-              style={{
-                justifyContent: "flex-end",
-                padding: getResponsiveSpacing(12, 16, 20),
-              }}
+              style={{ backgroundColor: "#000" }}
               pointerEvents="none"
-            >
-              <View style={{ marginBottom: getResponsiveSpacing(8, 10, 12) }}>
-                <Skeleton
-                  dark
-                  height={getResponsiveSize(20, 22, 24)}
-                  width={"65%"}
-                  borderRadius={0}
-                />
-              </View>
-              <View style={{ marginBottom: getResponsiveSpacing(6, 8, 10) }}>
-                <Skeleton
-                  dark
-                  height={getResponsiveSize(14, 16, 18)}
-                  width={"40%"}
-                  borderRadius={0}
-                />
-              </View>
-              <Skeleton
-                dark
-                height={getResponsiveSize(6, 7, 8)}
-                width={"90%"}
-                borderRadius={0}
-                style={{ opacity: 0.8 }}
-              />
-            </View>
+            />
           )}
 
           {isActive && !playingVideos[videoKey] && (
@@ -424,13 +367,6 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 activeOpacity={0.8}
                 accessibilityLabel="Play video"
                 accessibilityRole="button"
-                style={{
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 8 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 16,
-                  elevation: 8,
-                }}
               >
                 <MaterialIcons
                   name="play-arrow"
@@ -450,21 +386,11 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
               }}
               pointerEvents="none"
             >
-              <View
-                style={{
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 8 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 16,
-                  elevation: 8,
-                }}
-              >
-                <MaterialIcons
-                  name="pause"
-                  size={getResponsiveSize(50, 60, 70)}
-                  color="rgba(255, 255, 255, 0.6)"
-                />
-              </View>
+              <MaterialIcons
+                name="pause"
+                size={getResponsiveSize(50, 60, 70)}
+                color="rgba(255, 255, 255, 0.6)"
+              />
             </View>
           )}
 
@@ -482,9 +408,9 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 enrichedVideoData={enriched}
                 libraryStore={libraryStore}
                 onLike={onLike}
-                onComment={handleComment}
-                onSave={handleSave}
-                onShare={handleShare}
+                onComment={onComment}
+                onSave={onSave}
+                onShare={onShare}
                 getResponsiveSpacing={getResponsiveSpacing}
                 getResponsiveSize={getResponsiveSize}
                 getResponsiveFontSize={getResponsiveFontSize}
@@ -513,28 +439,31 @@ export function ReelsVideoItem(props: ReelsVideoItemProps) {
                 checkIfDownloaded={checkIfDownloaded}
                 onClose={onMenuClose}
                 onViewDetails={onViewDetails}
-                onSave={handleSave}
+                onSave={onSave}
                 onDelete={onDelete}
                 onReport={onReport}
                 onDownload={onDownload}
-                onShare={handleShare}
+                onShare={onShare}
               />
               <VideoProgressBar
-                progress={localDuration > 0 ? localPosition / localDuration : 0}
-                currentMs={localPosition}
-                durationMs={localDuration}
-                isMuted={mutedVideos[videoKey] ?? false}
+                progress={durationMs > 0 ? positionMs / durationMs : 0}
+                currentMs={positionMs}
+                durationMs={durationMs}
+                isMuted={isMuted}
                 onToggleMute={() => onToggleMute(videoKey)}
-                onSeekToPercent={(pct: number) => onSeek(videoKey, pct * 100)}
+                onSeekToPercent={(pct: number) => {
+                  seekToMs(pct * durationMs);
+                  onSeek(videoKey, pct * 100);
+                }}
                 showControls={true}
-                bottomOffset={getResponsiveSpacing(80, 95, 115)} // Neatly below ReelsSpeakerInfo
+                bottomOffset={getResponsiveSpacing(80, 95, 115)}
                 enlargeOnDrag={true}
                 knobSize={8}
                 knobSizeDragging={12}
                 trackHeights={{ normal: 2, dragging: 6 }}
                 enableHaptics={true}
                 mutePosition="left"
-                style={{ zIndex: 100 }} // Ensure it's on top of video and overlays in Reels
+                style={{ zIndex: 100 }}
               />
             </>
           )}

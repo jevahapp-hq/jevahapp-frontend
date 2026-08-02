@@ -1,6 +1,6 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { VideoPlayer } from "expo-video";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 
 export const useVideoPlaybackControl = ({
@@ -30,6 +30,8 @@ export const useVideoPlaybackControl = ({
 
   const isPlaying = playingVideos[videoKey] || false;
   const shouldPlayThisVideo = currentlyPlayingVideo === videoKey && isPlaying;
+  const playbackReadyRef = useRef(playbackReady);
+  playbackReadyRef.current = playbackReady;
 
   // Keep-awake management
   useEffect(() => {
@@ -59,6 +61,10 @@ export const useVideoPlaybackControl = ({
 
     const playerRef = {
       pause: async () => {
+        // Critical: while the first frame is still decoding, pauseAll /
+        // viewability / neighbor teardown must NOT kill muted pre-roll —
+        // otherwise onFirstFrameRender never fires and the cell stays black.
+        if (!playbackReadyRef.current) return;
         const current = videoRef.current;
         if (!current) return;
         try {
@@ -99,7 +105,6 @@ export const useVideoPlaybackControl = ({
   }, [
     videoKey,
     videoRef,
-    playbackReady,
     registerVideoPlayer,
     unregisterVideoPlayer,
     setOverlayVisible,

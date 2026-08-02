@@ -5,6 +5,7 @@
  */
 import { useMemo } from "react";
 import { getUserDisplayNameFromContent } from "../../utils/userValidation";
+import { getReelVideoKey } from "../utils/reelVideoKey";
 
 export interface UseReelsCurrentVideoParams {
   parsedVideoList: any[];
@@ -94,8 +95,6 @@ export function useReelsCurrentVideo({
     return getUserDisplayNameFromContent(video, "Creator");
   };
 
-  const reelKey = `reel-${currentVideo.title}-${getSpeakerNameForReel(currentVideo)}`;
-  const modalKey = reelKey;
   const contentId = currentVideo._id || currentVideo.id || null;
   const contentIdForHooks = (contentId || "") as string;
   const canUseBackendLikes = Boolean(contentIdForHooks);
@@ -142,6 +141,15 @@ export function useReelsCurrentVideo({
       return fallback;
     }
   };
+
+  // Must match FlatList keyExtractor / ReelsVideoItem videoKey or autoplay
+  // writes playingVideos[wrongKey] and the active cell never starts.
+  const reelKey = getReelVideoKey(
+    currentVideo,
+    currentIndex,
+    getSpeakerName(currentVideo, "Creator")
+  );
+  const modalKey = reelKey;
 
   const video = useMemo(
     () => ({

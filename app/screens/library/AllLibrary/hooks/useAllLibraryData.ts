@@ -1,29 +1,90 @@
 /**
  * useAllLibraryData - Data loading, filtering, and refresh for AllLibrary
+ *
+ * Instant-load strategy:
+ * 1. Seed state synchronously from the MMKV bookmark cache (or the already
+ *    hydrated Zustand library store) so content paints on the first frame.
+ * 2. Refresh from the API in the background without a blocking spinner.
+ * 3. Persist fresh API results back to the cache for the next cold start.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import allMediaAPI from "../../../../utils/allMediaAPI";
 import { useLibraryStore } from "../../../../store/useLibraryStore";
 import {
   filterItemsByType,
   mapContentTypeToAPI,
 } from "../utils/libraryHelpers";
+import {
+  cacheLibraryItems,
+  getCachedLibraryItemsSync,
+} from "../utils/libraryCache";
 
 interface UseAllLibraryDataProps {
   contentType?: string;
 }
 
+const isUserBookmark = (item: any): boolean =>
+  !item.isDefaultContent &&
+  !item.isOnboardingContent &&
+  item.isInLibrary !== false;
+
+interface DerivedItemState {
+  savedIds: Set<string>;
+  likeState: Record<string, boolean>;
+  likeCountState: Record<string, number>;
+  overlayState: Record<string, boolean>;
+}
+
+const deriveItemState = (items: any[]): DerivedItemState => {
+  const savedIds = new Set<string>();
+  const likeState: Record<string, boolean> = {};
+  const likeCountState: Record<string, number> = {};
+  const overlayState: Record<string, boolean> = {};
+
+  items.forEach((item: any) => {
+    const itemId = item._id || item.id;
+    savedIds.add(itemId);
+    if (item.contentType === "videos") overlayState[itemId] = true;
+    likeState[itemId] = item.isLiked || false;
+    likeCountState[itemId] = item.likeCount || item.likes || 0;
+  });
+
+  return { savedIds, likeState, likeCountState, overlayState };
+};
+
 export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   const libraryStore = useLibraryStore();
 
-  const [savedItems, setSavedItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Synchronous seed: MMKV cache first (rich API payloads), then the Zustand
+  // store hydrated at app start. Runs once, before the first paint.
+  const [seed] = useState(() => {
+    const apiContentType = mapContentTypeToAPI(contentType);
+    const cached = getCachedLibraryItemsSync(apiContentType);
+    if (cached && cached.length > 0) {
+      return { items: cached.filter(isUserBookmark) };
+    }
+    return { items: useLibraryStore.getState().getAllSavedItems() };
+  });
+  const seedState = useMemo(() => deriveItemState(seed.items), [seed.items]);
+
+  const [savedItems, setSavedItems] = useState<any[]>(seed.items);
+  const [loading, setLoading] = useState(seed.items.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [savedItemIds, setSavedItemIds] = useState<Set<string>>(new Set());
-  const [likedItems, setLikedItems] = useState<Record<string, boolean>>({});
-  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
-  const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({});
+  const [savedItemIds, setSavedItemIds] = useState<Set<string>>(
+    seedState.savedIds
+  );
+  const [likedItems, setLikedItems] = useState<Record<string, boolean>>(
+    seedState.likeState
+  );
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>(
+    seedState.likeCountState
+  );
+  const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>(
+    seedState.overlayState
+  );
+
+  const hasDataRef = useRef(seed.items.length > 0);
 
   const loadFromLocalStorage = useCallback(async () => {
     try {
@@ -32,21 +93,12 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
       }
       const localItems = libraryStore.getAllSavedItems();
       setSavedItems(localItems);
+      hasDataRef.current = localItems.length > 0;
 
-      const savedIds = new Set<string>();
-      const likeState: Record<string, boolean> = {};
-      const likeCountState: Record<string, number> = {};
-
-      localItems.forEach((item: any) => {
-        const itemId = item.id || item._id;
-        savedIds.add(itemId);
-        likeState[itemId] = item.isLiked || false;
-        likeCountState[itemId] = item.likeCount || item.likes || 0;
-      });
-
-      setSavedItemIds(savedIds);
-      setLikedItems(likeState);
-      setLikeCounts(likeCountState);
+      const derived = deriveItemState(localItems);
+      setSavedItemIds(derived.savedIds);
+      setLikedItems(derived.likeState);
+      setLikeCounts(derived.likeCountState);
       setError(null);
     } catch (localError) {
       console.error("Error loading from local storage:", localError);
@@ -68,109 +120,77 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
     return [];
   }, []);
 
-  const applyItemsToState = useCallback(
-    (apiItems: any[]) => {
-      const userBookmarks = apiItems.filter(
-        (item: any) =>
-          !item.isDefaultContent &&
-          !item.isOnboardingContent &&
-          item.isInLibrary !== false
-      );
+  const applyItemsToState = useCallback((apiItems: any[]) => {
+    const userBookmarks = apiItems.filter(isUserBookmark);
 
-      if (userBookmarks.length > 0) {
-        setSavedItems(userBookmarks);
+    if (userBookmarks.length > 0) {
+      setSavedItems(userBookmarks);
+      hasDataRef.current = true;
 
-        const overlayState: Record<string, boolean> = {};
-        const likeState: Record<string, boolean> = {};
-        const likeCountState: Record<string, number> = {};
-        const savedIds = new Set<string>();
+      const derived = deriveItemState(userBookmarks);
+      setShowOverlay(derived.overlayState);
+      setLikedItems(derived.likeState);
+      setLikeCounts(derived.likeCountState);
+      setSavedItemIds(derived.savedIds);
+      setError(null);
+      return true;
+    }
+    return false;
+  }, []);
 
-        userBookmarks.forEach((item: any) => {
-          const itemId = item._id || item.id;
-          savedIds.add(itemId);
-          if (item.contentType === "videos") overlayState[itemId] = true;
-          likeState[itemId] = item.isLiked || false;
-          likeCountState[itemId] = item.likeCount || item.likes || 0;
-        });
+  const fetchAndApply = useCallback(async () => {
+    const apiContentType = mapContentTypeToAPI(contentType);
+    const response = await allMediaAPI.getSavedContent(1, 50, apiContentType);
 
-        setShowOverlay(overlayState);
-        setLikedItems(likeState);
-        setLikeCounts(likeCountState);
-        setSavedItemIds(savedIds);
-        setError(null);
-        return true;
-      }
-      return false;
-    },
-    []
-  );
-
-  const loadSavedItems = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const apiContentType = mapContentTypeToAPI(contentType);
-      const response = await allMediaAPI.getSavedContent(1, 50, apiContentType);
-
-      if (response.success && response.data) {
-        const apiItems = parseApiItems(response);
-        const applied = applyItemsToState(apiItems);
-        if (!applied) await loadFromLocalStorage();
+    if (response.success && response.data) {
+      const apiItems = parseApiItems(response);
+      const applied = applyItemsToState(apiItems);
+      if (applied) {
+        cacheLibraryItems(apiItems, apiContentType);
       } else {
         await loadFromLocalStorage();
       }
+    } else {
+      await loadFromLocalStorage();
+    }
+  }, [contentType, parseApiItems, applyItemsToState, loadFromLocalStorage]);
+
+  const loadSavedItems = useCallback(async () => {
+    // Only block the UI with a spinner when there is nothing to show yet;
+    // otherwise refresh silently behind the seeded content.
+    if (!hasDataRef.current) setLoading(true);
+    setError(null);
+
+    try {
+      await fetchAndApply();
     } catch (err) {
       console.error("Error loading saved items:", err);
-      setError("Failed to load library content. Using local storage as fallback.");
-      await loadFromLocalStorage();
+      if (!hasDataRef.current) {
+        setError(
+          "Failed to load library content. Using local storage as fallback."
+        );
+        await loadFromLocalStorage();
+      }
     } finally {
       setLoading(false);
     }
-  }, [
-    contentType,
-    parseApiItems,
-    applyItemsToState,
-    loadFromLocalStorage,
-  ]);
+  }, [fetchAndApply, loadFromLocalStorage]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const apiContentType = mapContentTypeToAPI(contentType);
-      const response = await allMediaAPI.getSavedContent(1, 50, apiContentType);
-
-      if (response.success && response.data) {
-        const apiItems = parseApiItems(response);
-        const applied = applyItemsToState(apiItems);
-        if (!applied) await loadFromLocalStorage();
-      } else {
-        await loadFromLocalStorage();
-      }
+      await fetchAndApply();
     } catch (err) {
       console.error("Error refreshing saved items:", err);
       await loadFromLocalStorage();
     } finally {
       setRefreshing(false);
     }
-  }, [
-    contentType,
-    parseApiItems,
-    applyItemsToState,
-    loadFromLocalStorage,
-  ]);
+  }, [fetchAndApply, loadFromLocalStorage]);
 
   useEffect(() => {
     loadSavedItems();
   }, [contentType, loadSavedItems]);
-
-  useEffect(() => {
-    setLikedItems({});
-    setLikeCounts({});
-    setSavedItemIds(new Set());
-    setSavedItems([]);
-    setShowOverlay({});
-  }, []);
 
   const filteredItems = useMemo(
     () => filterItemsByType(savedItems, contentType),

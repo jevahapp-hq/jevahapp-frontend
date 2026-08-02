@@ -23,6 +23,11 @@ interface BibleReaderProps {
   canNavigatePrev: boolean;
   canNavigateNext: boolean;
   onScreenTap?: () => void;
+  // Verses already fetched by the verse picker screen - when provided,
+  // skips a redundant network request and shows content instantly.
+  initialVerses?: BibleVerse[];
+  // Verse number the user picked - the reader scrolls to it on open.
+  initialVerseNumber?: number | null;
 }
 
 interface WordPosition {
@@ -38,14 +43,20 @@ export default function BibleReader({
   canNavigatePrev,
   canNavigateNext,
   onScreenTap,
+  initialVerses,
+  initialVerseNumber,
 }: BibleReaderProps) {
   const [verses, setVerses] = useState<BibleVerse[]>([]);
-  const [verseCount, setVerseCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentWordPosition, setCurrentWordPosition] = useState<WordPosition | null>(null);
   const [allWords, setAllWords] = useState<WordPosition[]>([]);
   const flatListRef = useRef<FlatList>(null);
+  // Word index the current speech utterance started from - needed to map
+  // TTS progress (relative to the text we handed it) back onto the full
+  // allWords array when playback starts partway through a chapter.
+  const playbackOffsetRef = useRef(0);
+  const autoPlayedForRef = useRef<string | null>(null);
 
   // Slide controls
   const screenWidth = Dimensions.get("window").width;
@@ -96,9 +107,11 @@ export default function BibleReader({
       setCurrentWordPosition(null);
     },
     onProgress: ({ currentWord }) => {
-      // Update current word position for highlighting
-      if (currentWord > 0 && currentWord <= allWords.length) {
-        const wordPos = allWords[currentWord - 1];
+      // Update current word position for highlighting - offset by where
+      // this utterance started in case playback began mid-chapter.
+      const index = currentWord - 1 + playbackOffsetRef.current;
+      if (currentWord > 0 && index < allWords.length) {
+        const wordPos = allWords[index];
         setCurrentWordPosition(wordPos);
         
         // Auto-scroll to current verse
@@ -110,8 +123,14 @@ export default function BibleReader({
   });
 
   useEffect(() => {
-    loadVerses();
-    loadChapterInfo();
+    if (initialVerses && initialVerses.length > 0) {
+      // Already fetched by the verse picker - show instantly, no refetch.
+      setVerses(initialVerses);
+      setLoading(false);
+      setError(null);
+    } else {
+      loadVerses();
+    }
     // Stop any ongoing speech when chapter changes
     const cleanup = () => {
       stop();
@@ -119,7 +138,25 @@ export default function BibleReader({
     };
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookName, chapterNumber]);
+  }, [bookName, chapterNumber, initialVerses]);
+
+  // Scroll to the verse the user picked, once it's rendered.
+  useEffect(() => {
+    if (!initialVerseNumber || verses.length === 0) return;
+    const index = verses.findIndex(
+      (v) => v.verseNumber === initialVerseNumber
+    );
+    if (index < 0) return;
+    const timeout = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index,
+        animated: false,
+        viewPosition: 0.1,
+      });
+    }, 150);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verses, initialVerseNumber]);
 
   // Build word mapping when verses change
   useEffect(() => {
@@ -139,6 +176,20 @@ export default function BibleReader({
     }
   }, [verses]);
 
+  // Auto-play the audio starting from the verse the user picked in the
+  // verse selector, once everything needed to speak it is ready.
+  useEffect(() => {
+    if (!initialVerseNumber || allWords.length === 0) return;
+    const key = `${bookName}-${chapterNumber}-${initialVerseNumber}`;
+    if (autoPlayedForRef.current === key) return;
+    autoPlayedForRef.current = key;
+    const timeout = setTimeout(() => {
+      startReadingFromVerse(initialVerseNumber);
+    }, 400); // let the scroll-into-view settle first
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allWords, initialVerseNumber, bookName, chapterNumber]);
+
   // Auto-scroll to verse helper
   const scrollToVerse = (verseIndex: number) => {
     if (flatListRef.current && verseIndex >= 0 && verseIndex < verses.length) {
@@ -147,22 +198,6 @@ export default function BibleReader({
         animated: true,
         viewPosition: 0.3, // Show verse near top
       });
-    }
-  };
-
-  const loadChapterInfo = async () => {
-    try {
-      // Get chapter info with verse count
-      const chapter = await bibleApiService.getChapter(bookName, chapterNumber);
-      // Use actualVerseCount if available, otherwise use verseCount or verses length
-      setVerseCount(
-        (chapter as any).actualVerseCount ||
-          (chapter as any).verseCount ||
-          verses.length
-      );
-    } catch (err) {
-      console.error("Error loading chapter info:", err);
-      // Will be set when verses load
     }
   };
 
@@ -175,10 +210,6 @@ export default function BibleReader({
         chapterNumber
       );
       setVerses(chapterVerses);
-      // Update verse count from loaded verses if not already set
-      if (chapterVerses.length > 0 && verseCount === 0) {
-        setVerseCount(chapterVerses.length);
-      }
     } catch (err) {
       setError("Failed to load verses. Please try again.");
       console.error("Error loading verses:", err);
@@ -201,6 +232,7 @@ export default function BibleReader({
         console.warn("No words available to speak");
         return;
       }
+      playbackOffsetRef.current = 0;
       const fullText = getFullText();
       console.log(`🎙️ Speaking ${allWords.length} words`);
       await speak(fullText);
@@ -211,9 +243,28 @@ export default function BibleReader({
     }
   };
 
+  // Start reading aloud from a specific verse rather than the top of the
+  // chapter - used when the user picks a verse from the verse selector.
+  const startReadingFromVerse = async (verseNumber: number) => {
+    if (allWords.length === 0) return;
+    const startIndex = allWords.findIndex(
+      (w) => verses[w.verseIndex]?.verseNumber === verseNumber
+    );
+    const offset = startIndex >= 0 ? startIndex : 0;
+    playbackOffsetRef.current = offset;
+    const textFromVerse = allWords
+      .slice(offset)
+      .map((wp) => wp.word)
+      .join(" ");
+    if (!textFromVerse) return;
+    console.log(`🎙️ Speaking from verse ${verseNumber} (word ${offset})`);
+    await speak(textFromVerse);
+  };
+
   // Handle stop
   const handleStop = () => {
     stop();
+    playbackOffsetRef.current = 0;
     setCurrentWordPosition(null);
   };
 

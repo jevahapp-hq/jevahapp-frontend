@@ -48,6 +48,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   shouldRenderPlayer = false,
   isFeedActive = true,
   playbackKey,
+  isHero = false,
+  onSurfaceReadyChange,
 }) => {
   const contentId = video._id || getContentKey(video);
   const key = playbackKey ?? getContentKey(video);
@@ -126,7 +128,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   });
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [surfaceReady, setSurfaceReady] = useState(false);
 
   useEffect(() => {
     try {
@@ -137,24 +138,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     } catch { }
   }, []);
 
-  // Reset reveal when this cell switches video / leaves mount window.
-  useEffect(() => {
-    setSurfaceReady(false);
-  }, [key, videoUrl, shouldRenderPlayer]);
-
-  const handleSurfaceReadyChange = useCallback((ready: boolean) => {
-    setSurfaceReady(ready);
-  }, []);
-
   // Always reserve footer layout for video posts — popping it in after the
   // frame caused FlashList rows to stack/flash over each other.
   const isVideoPost = !isAudioSermonValue && !!videoUrl;
   const showFooterSlot = isAudioSermonValue || !videoUrl || isVideoPost;
-  const footerVisible = isAudioSermonValue || !videoUrl || surfaceReady;
 
   return (
+    // No `key` here — FlashList v2 recycles this exact component instance
+    // across items; a `key` prop forces React to tear down and remount the
+    // whole card (new player, re-fetched thumbnail, reset state) on every
+    // recycle instead of just diffing/updating props.
     <View
-      key={modalKey}
       className="flex flex-col"
       collapsable={false}
       style={{
@@ -190,15 +184,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         onForceActive={() => { }}
         shouldRenderPlayer={shouldRenderPlayer}
         isFeedActive={isFeedActive}
-        onSurfaceReadyChange={handleSurfaceReadyChange}
+        isViewportVisible={currentlyVisibleVideo === key}
+        isHero={isHero}
+        onSurfaceReadyChange={onSurfaceReadyChange}
       />
 
       {showFooterSlot && (
-        <View
-          style={{ opacity: footerVisible ? 1 : 0 }}
-          pointerEvents={footerVisible ? "auto" : "none"}
-          collapsable={false}
-        >
+        <View collapsable={false}>
           <VideoCardFooter
             video={video}
             contentKey={key}

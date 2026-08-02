@@ -45,8 +45,33 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       saved: enrichedItem.saved || enrichedItem.saves || 0,
       comment: enrichedItem.comment || enrichedItem.comments || enrichedItem.commentCount || 0,
       favorite: enrichedItem.favorite || enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
-      imageUrl: enrichedItem.imageUrl || enrichedItem.thumbnailUrl || enrichedItem.fileUrl,
-      thumbnailUrl: enrichedItem.thumbnailUrl || enrichedItem.imageUrl,
+      // Prefer real image posters only. Never fall back to fileUrl for
+      // imageUrl — mp4/m3u8/"video" URIs break expo-image and leave a black
+      // cell. API also sends `thumbnail` as a sibling of thumbnailUrl.
+      imageUrl: (() => {
+        const candidate =
+          enrichedItem.imageUrl ||
+          enrichedItem.thumbnailUrl ||
+          enrichedItem.thumbnail ||
+          null;
+        if (typeof candidate !== "string" || !candidate.trim()) return undefined;
+        if (/\.(mp4|m3u8|mov|webm|mp3|m4a|aac|wav|pdf)(\?|$)/i.test(candidate)) {
+          return undefined;
+        }
+        return candidate;
+      })(),
+      thumbnailUrl: (() => {
+        const candidate =
+          enrichedItem.thumbnailUrl ||
+          enrichedItem.thumbnail ||
+          enrichedItem.imageUrl ||
+          null;
+        if (typeof candidate !== "string" || !candidate.trim()) return undefined;
+        if (/\.(mp4|m3u8|mov|webm|mp3|m4a|aac|wav|pdf)(\?|$)/i.test(candidate)) {
+          return undefined;
+        }
+        return candidate;
+      })(),
       createdAt: enrichedItem.createdAt || enrichedItem.created_at || new Date().toISOString(),
       duration: enrichedItem.duration,
       // Additional fields
@@ -102,7 +127,9 @@ export const filterContentByType = (
 
     // Handle aliases
     if (filterType === "video" || filterType === "videos") {
-      return itemType === "video" || itemType === "videos" || itemType === "sermon";
+      // Strictly videos — sermons live in their own SERMON tab and are
+      // often audio, so they don't belong in the VIDEO category.
+      return itemType === "video" || itemType === "videos";
     }
     if (filterType === "audio" || filterType === "music") {
       return itemType === "audio" || itemType === "music";
