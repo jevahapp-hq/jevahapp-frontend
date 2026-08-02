@@ -254,13 +254,15 @@ class AuthService {
             mediaApi.getAllContentWithAuth().then(async (resp) => {
               if (resp.success && Array.isArray(resp.media)) {
                 const items = resp.media as any[];
-                useContentCacheStore.getState().set("ALL:first", {
+                const entry = {
                   items,
                   page: 1,
-                  limit: resp.limit || 10,
+                  limit: resp.limit || 12,
                   total: resp.total || 0,
                   fetchedAt: Date.now(),
-                });
+                };
+                useContentCacheStore.getState().set("ALL:first:auth", entry);
+                useContentCacheStore.getState().set("ALL:first", entry);
                 // Hydrate liked/saved from feed response for instant UI (before batch stats)
                 const withInteractions = items
                   .filter((i) => i._id && (i.hasLiked === true || i.hasBookmarked === true))

@@ -20,8 +20,10 @@ export class TokenUtils {
       // If not found in AsyncStorage, try SecureStore
       if (!token) {
         try {
-          const { default: SecureStore } = await import("expo-secure-store");
-          token = await SecureStore.getItemAsync("jwt");
+          const SecureStore = await import("expo-secure-store");
+          if (typeof SecureStore.getItemAsync === "function") {
+            token = await SecureStore.getItemAsync("jwt");
+          }
         } catch (secureStoreError) {
           console.log("SecureStore not available or no JWT token");
         }
@@ -74,11 +76,13 @@ export class TokenUtils {
     // Check SecureStore
     if (!token) {
       try {
-        const { default: SecureStore } = await import("expo-secure-store");
-        const jwtToken = await SecureStore.getItemAsync("jwt");
-        if (jwtToken) {
-          sources.push("jwt");
-          token = jwtToken;
+        const SecureStore = await import("expo-secure-store");
+        if (typeof SecureStore.getItemAsync === "function") {
+          const jwtToken = await SecureStore.getItemAsync("jwt");
+          if (jwtToken) {
+            sources.push("jwt");
+            token = jwtToken;
+          }
         }
       } catch (error) {
         // SecureStore not available
@@ -108,8 +112,10 @@ export class TokenUtils {
 
       // Store in SecureStore
       try {
-        const { default: SecureStore } = await import("expo-secure-store");
-        await SecureStore.setItemAsync("jwt", token);
+        const SecureStore = await import("expo-secure-store");
+        if (typeof SecureStore.setItemAsync === "function") {
+          await SecureStore.setItemAsync("jwt", token);
+        }
       } catch (secureStoreError) {
         console.warn(
           "⚠️ Could not store token in SecureStore:",
@@ -135,8 +141,10 @@ export class TokenUtils {
 
       // Clear SecureStore
       try {
-        const { default: SecureStore } = await import("expo-secure-store");
-        await SecureStore.deleteItemAsync("jwt");
+        const SecureStore = await import("expo-secure-store");
+        if (typeof SecureStore.deleteItemAsync === "function") {
+          await SecureStore.deleteItemAsync("jwt");
+        }
       } catch (secureStoreError) {
         console.warn(
           "⚠️ Could not clear token from SecureStore:",

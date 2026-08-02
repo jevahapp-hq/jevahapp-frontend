@@ -31,7 +31,11 @@ export interface ContentItemRendererProps {
   onTogglePlay: (key: string) => void;
   onToggleMute: (key: string) => void;
   onLike: (key: string, item: MediaItem) => void;
-  onComment: (key: string, item: MediaItem) => void;
+  onComment: (
+    key: string,
+    item: MediaItem,
+    anchor?: { mediaBottomY: number; mediaHeight?: number } | null
+  ) => void;
   onSave: (key: string, item: MediaItem) => void;
   onShare: (key: string, item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
@@ -134,7 +138,11 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onTogglePlay,
     onToggleMute: onToggleMute,
     onLike: () => onLike(key, item),
-    onComment: () => onComment(key, item),
+    onComment: (
+      k: string,
+      i: MediaItem,
+      a?: { mediaBottomY: number; mediaHeight?: number } | null
+    ) => onComment(k, i, a),
     onSave: () => onSave(key, item),
     onDownload: () => onDownload(item),
     onShare: () => onShare(key, item),

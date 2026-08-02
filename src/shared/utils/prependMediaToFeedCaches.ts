@@ -1,5 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useContentCacheStore } from "../../../app/store/useContentCacheStore";
+import {
+  FEED_PAGE_SIZE,
+  LEGACY_ALL_FIRST_KEY,
+  feedZustandFirstPageKey,
+} from "../config/feedCachePolicy";
 import type { MediaItem } from "../types";
 
 function itemId(item: { _id?: string; id?: string }): string {
@@ -30,6 +35,66 @@ function patchInList<T extends { _id?: string; id?: string }>(
   return changed ? next : list;
 }
 
+function mergePageData(old: any, item: MediaItem) {
+  if (!old) {
+    return { media: [item], total: 1 };
+  }
+  if (Array.isArray(old.media)) {
+    const media = prependToList(old.media, item);
+    const added = media.length > (old.media?.length || 0) ? 1 : 0;
+    return {
+      ...old,
+      media,
+      total: typeof old.total === "number" ? old.total + added : media.length,
+    };
+  }
+  if (Array.isArray(old)) {
+    return prependToList(old, item);
+  }
+  return old;
+}
+
+function mergeInfiniteOrPage(old: any, item: MediaItem) {
+  if (old?.pages && Array.isArray(old.pages)) {
+    if (!old.pages.length) {
+      return {
+        pages: [{ media: [item], total: 1, page: 1, limit: FEED_PAGE_SIZE }],
+        pageParams: [1],
+      };
+    }
+    const pages = [...old.pages];
+    pages[0] = mergePageData(pages[0], item);
+    return { ...old, pages };
+  }
+  return mergePageData(old, item);
+}
+
+function patchPageData(old: any, id: string, patch: Partial<MediaItem>) {
+  if (!old) return old;
+  if (Array.isArray(old.media)) {
+    const media = patchInList(old.media, id, patch);
+    if (media === old.media) return old;
+    return { ...old, media };
+  }
+  if (Array.isArray(old)) {
+    return patchInList(old, id, patch) ?? old;
+  }
+  return old;
+}
+
+function patchInfiniteOrPage(old: any, id: string, patch: Partial<MediaItem>) {
+  if (old?.pages && Array.isArray(old.pages)) {
+    let changed = false;
+    const pages = old.pages.map((page: any) => {
+      const next = patchPageData(page, id, patch);
+      if (next !== page) changed = true;
+      return next;
+    });
+    return changed ? { ...old, pages } : old;
+  }
+  return patchPageData(old, id, patch);
+}
+
 /**
  * Instantly surface a just-uploaded item in React Query + Zustand feed caches
  * so Home tabs don't wait on a stale 12-item page / disabled refetchOnMount.
@@ -41,46 +106,24 @@ export function prependMediaToFeedCaches(
   const id = itemId(item);
   if (!id) return;
 
-  const mergeQueryData = (old: any) => {
-    if (!old) {
-      return { media: [item], total: 1 };
-    }
-    if (Array.isArray(old.media)) {
-      const media = prependToList(old.media, item);
-      const added = media.length > (old.media?.length || 0) ? 1 : 0;
-      return {
-        ...old,
-        media,
-        total:
-          typeof old.total === "number" ? old.total + added : media.length,
-      };
-    }
-    if (Array.isArray(old)) {
-      return prependToList(old, item);
-    }
-    return old;
-  };
-
-  queryClient.setQueriesData({ queryKey: ["all-content"] }, mergeQueryData);
-  queryClient.setQueriesData({ queryKey: ["default-content"] }, mergeQueryData);
+  queryClient.setQueriesData(
+    { queryKey: ["all-content"] },
+    (old: any) => mergeInfiniteOrPage(old, item)
+  );
+  queryClient.setQueriesData(
+    { queryKey: ["default-content"] },
+    (old: any) => mergePageData(old, item)
+  );
   queryClient.setQueriesData(
     { queryKey: ["all-content-infinite"] },
-    (old: any) => {
-      if (!old?.pages?.length) {
-        return {
-          pages: [{ media: [item], total: 1 }],
-          pageParams: [1],
-        };
-      }
-      const pages = [...old.pages];
-      pages[0] = mergeQueryData(pages[0]);
-      return { ...old, pages };
-    }
+    (old: any) => mergeInfiniteOrPage(old, item)
   );
 
   const cache = useContentCacheStore.getState().cache;
   const touchKeys = new Set([
-    "ALL:first",
+    LEGACY_ALL_FIRST_KEY,
+    feedZustandFirstPageKey("ALL", false),
+    feedZustandFirstPageKey("ALL", true),
     "ALL:page:1",
     ...Object.keys(cache),
   ]);
@@ -88,11 +131,16 @@ export function prependMediaToFeedCaches(
   for (const key of touchKeys) {
     const page = cache[key];
     if (!page?.items) {
-      if (key === "ALL:first" || key === "ALL:page:1") {
+      if (
+        key === LEGACY_ALL_FIRST_KEY ||
+        key === "ALL:page:1" ||
+        key === feedZustandFirstPageKey("ALL", false) ||
+        key === feedZustandFirstPageKey("ALL", true)
+      ) {
         useContentCacheStore.getState().set(key, {
           items: [item],
           page: 1,
-          limit: 12,
+          limit: FEED_PAGE_SIZE,
           total: 1,
           fetchedAt: Date.now(),
         });
@@ -122,33 +170,17 @@ export function patchMediaInFeedCaches(
   const id = String(mediaId || "").trim();
   if (!id) return;
 
-  const mergeQueryData = (old: any) => {
-    if (!old) return old;
-    if (Array.isArray(old.media)) {
-      const media = patchInList(old.media, id, patch);
-      if (media === old.media) return old;
-      return { ...old, media };
-    }
-    if (Array.isArray(old)) {
-      return patchInList(old, id, patch) ?? old;
-    }
-    return old;
-  };
-
-  queryClient.setQueriesData({ queryKey: ["all-content"] }, mergeQueryData);
-  queryClient.setQueriesData({ queryKey: ["default-content"] }, mergeQueryData);
+  queryClient.setQueriesData(
+    { queryKey: ["all-content"] },
+    (old: any) => patchInfiniteOrPage(old, id, patch)
+  );
+  queryClient.setQueriesData(
+    { queryKey: ["default-content"] },
+    (old: any) => patchPageData(old, id, patch)
+  );
   queryClient.setQueriesData(
     { queryKey: ["all-content-infinite"] },
-    (old: any) => {
-      if (!old?.pages?.length) return old;
-      let changed = false;
-      const pages = old.pages.map((page: any) => {
-        const next = mergeQueryData(page);
-        if (next !== page) changed = true;
-        return next;
-      });
-      return changed ? { ...old, pages } : old;
-    }
+    (old: any) => patchInfiniteOrPage(old, id, patch)
   );
 
   const cache = useContentCacheStore.getState().cache;

@@ -86,19 +86,20 @@ export class BaseApiClient {
           const errorText = await refreshResponse.text().catch(() => "");
           console.error(`Token refresh failed: ${refreshResponse.status}`, errorText);
 
-          // Only clear tokens if refresh endpoint itself returns 401/402
-          // This means the refresh token is also invalid
+          // IG/TikTok: end session only when refresh proves identity is dead
           if (refreshResponse.status === 401 || refreshResponse.status === 402) {
-            console.log("⚠️ Refresh token also invalid, clearing tokens");
-            await TokenUtils.clearAuthTokens();
-            const { notifySessionExpired } = await import(
+            const { endSessionIfNeeded } = await import(
               "../../../app/utils/sessionExpired"
             );
-            notifySessionExpired();
-            console.log("Session expired, tokens cleared");
+            if (endSessionIfNeeded(refreshResponse.status, errorText, "refresh")) {
+              console.log("Session expired, tokens cleared");
+            } else {
+              console.warn(
+                "⚠️ Token refresh 401 looks like outage — keeping session"
+              );
+            }
           } else {
             // Other errors (network, server errors) - don't clear tokens
-            // User might still be able to use the app with cached content
             console.log("⚠️ Token refresh failed but not due to auth, keeping tokens");
           }
 
@@ -219,16 +220,34 @@ export class BaseApiClient {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
-        console.error(
-          `❌ API Error: ${response.status} ${response.statusText}`,
-          errorText
-        );
+        const isAuth =
+          response.status === 401 || response.status === 402;
+        const isOutage =
+          response.status === 0 ||
+          response.status === 429 ||
+          response.status >= 500;
 
-        // Handle 401/402 errors with user-friendly messages
-        if (response.status === 401 || response.status === 402) {
+        if (isAuth || isOutage) {
+          if (__DEV__) {
+            console.warn(
+              `⚠️ API ${response.status}: ${method} ${endpoint}`,
+              errorText.slice(0, 200)
+            );
+          }
+        } else {
+          console.error(
+            `❌ API Error: ${response.status} ${response.statusText}`,
+            errorText
+          );
+        }
+
+        // Auth errors: soft message — hard logout is owned by refreshToken only
+        if (isAuth) {
           return {
             success: false,
-            error: "Session expired. Please login again.",
+            error: requireAuth
+              ? "Authentication required"
+              : "Unauthorized: No token provided",
           };
         }
 

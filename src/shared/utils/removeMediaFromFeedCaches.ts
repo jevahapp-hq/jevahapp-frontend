@@ -23,7 +23,7 @@ export function removeMediaFromFeedCaches(
   const id = String(mediaId || "").trim();
   if (!id) return;
 
-  const stripQueryData = (old: any) => {
+  const stripPageData = (old: any) => {
     if (!old) return old;
     if (Array.isArray(old.media)) {
       const media = filterMediaList(old.media, id);
@@ -39,17 +39,21 @@ export function removeMediaFromFeedCaches(
     return old;
   };
 
-  queryClient.setQueriesData({ queryKey: ["all-content"] }, stripQueryData);
-  queryClient.setQueriesData({ queryKey: ["default-content"] }, stripQueryData);
-  queryClient.setQueriesData(
-    { queryKey: ["all-content-infinite"] },
-    (old: any) => {
-      if (!old?.pages) return old;
+  const stripInfiniteOrPage = (old: any) => {
+    if (old?.pages && Array.isArray(old.pages)) {
       return {
         ...old,
-        pages: old.pages.map((page: any) => stripQueryData(page)),
+        pages: old.pages.map((page: any) => stripPageData(page)),
       };
     }
+    return stripPageData(old);
+  };
+
+  queryClient.setQueriesData({ queryKey: ["all-content"] }, stripInfiniteOrPage);
+  queryClient.setQueriesData({ queryKey: ["default-content"] }, stripPageData);
+  queryClient.setQueriesData(
+    { queryKey: ["all-content-infinite"] },
+    stripInfiniteOrPage
   );
 
   const cache = useContentCacheStore.getState().cache;

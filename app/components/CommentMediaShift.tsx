@@ -1,6 +1,6 @@
 /**
- * Lifts the app feed into the comment peek when the comment sheet opens,
- * so media visibly shifts up instead of sitting under an opaque overlay.
+ * Lifts + optionally scales the app feed into the comment peek when the
+ * comment sheet opens, so the media bottom meets the sheet top (TikTok/IG).
  */
 import { useEffect, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
@@ -13,25 +13,42 @@ import { useCommentModal } from "../context/CommentModalContext";
 import {
   COMMENT_SHEET_IN,
   COMMENT_SHEET_OUT,
-  MEDIA_SHIFT_Y,
 } from "./commentSheetLayout";
 
 export function CommentMediaShift({ children }: { children: ReactNode }) {
-  const { isVisible } = useCommentModal();
+  const { isVisible, mediaShiftY, mediaScale, mediaPeekHeight } =
+    useCommentModal();
   const shiftY = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const peek = useSharedValue(mediaPeekHeight);
+
+  useEffect(() => {
+    peek.value = mediaPeekHeight;
+  }, [mediaPeekHeight, peek]);
 
   useEffect(() => {
     if (isVisible) {
-      shiftY.value = withTiming(MEDIA_SHIFT_Y, COMMENT_SHEET_IN);
+      shiftY.value = withTiming(mediaShiftY, COMMENT_SHEET_IN);
+      scale.value = withTiming(mediaScale, COMMENT_SHEET_IN);
     } else {
       shiftY.value = withTiming(0, COMMENT_SHEET_OUT);
+      scale.value = withTiming(1, COMMENT_SHEET_OUT);
     }
-  }, [isVisible, shiftY]);
+  }, [isVisible, mediaShiftY, mediaScale, shiftY, scale]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    flex: 1,
-    transform: [{ translateY: shiftY.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    // Scale about the sheet/peek seam so the docked media bottom stays flush
+    const p = peek.value;
+    return {
+      flex: 1,
+      transform: [
+        { translateY: shiftY.value },
+        { translateY: p },
+        { scale: scale.value },
+        { translateY: -p },
+      ],
+    };
+  });
 
   return (
     <View

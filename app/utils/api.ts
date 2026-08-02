@@ -6,7 +6,6 @@ import {
   environmentManager,
   getApiBaseUrl,
 } from "./environmentManager";
-import { notifySessionExpired } from "./sessionExpired";
 import TokenUtils from "./tokenUtils";
 
 export { API_BASE_URL, getApiBaseUrl };
@@ -199,21 +198,38 @@ apiAxios.interceptors.response.use(
             error: errorText,
           });
           
-          // If refresh fails with 401 or 402, the session is truly invalid
+          // IG/TikTok: end session only when refresh proves identity is dead
           if (refreshResponse.status === 401 || refreshResponse.status === 402) {
-            console.error(`❌ Token refresh also returned ${refreshResponse.status} - session is invalid`);
-            await TokenUtils.clearAuthTokens();
-            notifySessionExpired();
-            throw new Error("Session expired. Please log in again.");
+            const { endSessionIfNeeded } = await import("./sessionExpired");
+            if (endSessionIfNeeded(refreshResponse.status, errorText, "refresh")) {
+              console.error(
+                `❌ Token refresh also returned ${refreshResponse.status} - session is invalid`
+              );
+              throw new Error("Session expired. Please log in again.");
+            }
+            console.warn("⚠️ Token refresh 401 looks like outage — keeping session");
+            throw new Error(
+              `Backend temporarily unavailable: ${refreshResponse.status}`
+            );
           }
           
           throw new Error(`Token refresh failed: ${refreshResponse.status}`);
         }
       } catch (refreshError) {
         console.error("❌ Token refresh error:", refreshError);
-        // Clear tokens and show session-expired UX
-        await TokenUtils.clearAuthTokens();
-        notifySessionExpired();
+        const msg =
+          refreshError instanceof Error
+            ? refreshError.message
+            : String(refreshError);
+        // Already ended session above, or soft outage — never wipe on unknown
+        if (
+          msg.includes("Session expired") ||
+          msg.includes("temporarily unavailable") ||
+          msg.includes("Token refresh failed")
+        ) {
+          return Promise.reject(error);
+        }
+        // Network / thrown before classify — keep session (IG style)
         return Promise.reject(error);
       }
     }
@@ -271,7 +287,14 @@ export class APIClient {
 
     const json = await res.json().catch(() => ({} as any));
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${JSON.stringify(json)}`);
+      const { endSessionIfNeeded, authFailureTextFromBody } = await import(
+        "./sessionExpired"
+      );
+      const bodyText = authFailureTextFromBody(json);
+      endSessionIfNeeded(res.status, json, "refresh");
+      throw new Error(
+        `HTTP ${res.status}: ${bodyText || JSON.stringify(json)}`
+      );
     }
 
     const newToken = (json as any)?.data?.token || (json as any)?.token;

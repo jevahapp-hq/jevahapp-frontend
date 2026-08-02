@@ -69,6 +69,16 @@ export async function recordView(
         recordViewThrottle.backoffUntil = Date.now() + 60_000;
         return { totalViews: 0, counted: false };
       }
+      // Auth / Mongo-not-ready 401s — soft skip, don't spam ERROR stacks
+      if (response.status === 401 || response.status === 402) {
+        recordViewThrottle.backoffUntil = Date.now() + 15_000;
+        if (__DEV__) {
+          devWarn(
+            "⚠️ View post skipped (401). Backing off 15s."
+          );
+        }
+        return { totalViews: 0, counted: false };
+      }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 

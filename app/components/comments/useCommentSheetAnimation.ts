@@ -6,30 +6,51 @@ import {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { getWindowHeight } from "../commentSheetAnchor";
 import {
   COMMENT_SHEET_BACKDROP_MAX,
   COMMENT_SHEET_DISMISS_THRESHOLD,
   COMMENT_SHEET_IN,
   COMMENT_SHEET_OUT,
   MEDIA_PEEK_HEIGHT,
-  SCREEN_HEIGHT,
-  SHEET_HEIGHT_REST,
 } from "../commentSheetLayout";
 
 const SCREEN_H = Dimensions.get("screen").height;
 
 export function useCommentSheetAnimation(options: {
   isVisible: boolean;
+  /** Dynamic peek — measured media bottom when available */
+  mediaPeekHeight?: number;
   onHideComplete: () => void;
   onClosedUiReset?: () => void;
 }) {
-  const { isVisible, onHideComplete, onClosedUiReset } = options;
+  const {
+    isVisible,
+    mediaPeekHeight = MEDIA_PEEK_HEIGHT,
+    onHideComplete,
+    onClosedUiReset,
+  } = options;
+  const peekRef = useRef(mediaPeekHeight);
+  peekRef.current = mediaPeekHeight;
+  const windowH = getWindowHeight();
+  const sheetRestHeight = Math.max(280, windowH - mediaPeekHeight);
+
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const closingRef = useRef(false);
 
-  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const translateY = useSharedValue(windowH);
   const backdropOpacity = useSharedValue(0);
   const keyboardOffset = useSharedValue(0);
+  const peekShared = useSharedValue(mediaPeekHeight);
+  const windowHShared = useSharedValue(windowH);
+
+  useEffect(() => {
+    peekShared.value = mediaPeekHeight;
+  }, [mediaPeekHeight, peekShared]);
+
+  useEffect(() => {
+    windowHShared.value = windowH;
+  }, [windowH, windowHShared]);
 
   useEffect(() => {
     const onShow = (e: {
@@ -37,7 +58,8 @@ export function useCommentSheetAnimation(options: {
     }) => {
       const { height, screenY } = e.endCoordinates;
       const fromScreen = Math.max(0, SCREEN_H - screenY);
-      const windowOvershoot = Math.max(0, SCREEN_H - SCREEN_HEIGHT);
+      const liveH = getWindowHeight();
+      const windowOvershoot = Math.max(0, SCREEN_H - liveH);
       const measured = Math.max(
         0,
         Math.max(height, fromScreen) - windowOvershoot
@@ -70,14 +92,14 @@ export function useCommentSheetAnimation(options: {
   useEffect(() => {
     if (isVisible) {
       closingRef.current = false;
-      translateY.value = SHEET_HEIGHT_REST;
+      translateY.value = sheetRestHeight;
       backdropOpacity.value = 0;
       translateY.value = withTiming(0, COMMENT_SHEET_IN);
       backdropOpacity.value = withTiming(COMMENT_SHEET_BACKDROP_MAX, {
         duration: 160,
       });
     } else {
-      translateY.value = SCREEN_HEIGHT;
+      translateY.value = getWindowHeight();
       backdropOpacity.value = 0;
       keyboardOffset.value = 0;
       setKeyboardHeight(0);
@@ -85,6 +107,7 @@ export function useCommentSheetAnimation(options: {
     }
   }, [
     isVisible,
+    sheetRestHeight,
     translateY,
     backdropOpacity,
     keyboardOffset,
@@ -101,7 +124,8 @@ export function useCommentSheetAnimation(options: {
     closingRef.current = true;
     Keyboard.dismiss();
     keyboardOffset.value = withTiming(0, { duration: 160 });
-    translateY.value = withTiming(SHEET_HEIGHT_REST + 40, COMMENT_SHEET_OUT);
+    const rest = Math.max(280, getWindowHeight() - peekRef.current);
+    translateY.value = withTiming(rest + 40, COMMENT_SHEET_OUT);
     backdropOpacity.value = withTiming(0, { duration: 140 });
     setTimeout(() => finishHide(), 165);
   }, [finishHide, translateY, backdropOpacity, keyboardOffset]);
@@ -126,7 +150,8 @@ export function useCommentSheetAnimation(options: {
     "worklet";
     const ty = event.translationY ?? event.nativeEvent?.translationY ?? 0;
     if (ty > COMMENT_SHEET_DISMISS_THRESHOLD) {
-      translateY.value = withTiming(SHEET_HEIGHT_REST + 80, COMMENT_SHEET_OUT);
+      const rest = Math.max(280, windowHShared.value - peekShared.value);
+      translateY.value = withTiming(rest + 80, COMMENT_SHEET_OUT);
       backdropOpacity.value = withTiming(0, { duration: 180 });
       runOnJS(dismissFromGesture)();
     } else {
@@ -136,7 +161,8 @@ export function useCommentSheetAnimation(options: {
 
   const sheetAnimatedStyle = useAnimatedStyle(() => {
     const kb = keyboardOffset.value;
-    const h = Math.max(280, SCREEN_HEIGHT - MEDIA_PEEK_HEIGHT - kb);
+    const peek = peekShared.value;
+    const h = Math.max(280, windowHShared.value - peek - kb);
     return {
       bottom: kb,
       height: h,
@@ -168,5 +194,6 @@ export function useCommentSheetAnimation(options: {
     backdropStyle,
     keyboardBridgeStyle,
     translateY,
+    mediaPeekHeight,
   };
 }

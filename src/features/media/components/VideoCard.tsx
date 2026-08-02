@@ -1,5 +1,5 @@
-import React, { memo, useEffect, useMemo } from "react";
-import { Image, TouchableOpacity } from "react-native";
+import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { Image, TouchableOpacity, View } from "react-native";
 
 import { VideoCardProps } from "../../../shared/types";
 import { isAudioSermon, isValidUri } from "../../../shared/utils";
@@ -97,6 +97,28 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   });
 
   const posterUri = useMemo(() => resolvePosterUri(video), [video]);
+  const playerAnchorRef = useRef<View>(null);
+
+  const openComments = useCallback(() => {
+    const node = playerAnchorRef.current;
+    if (node && typeof (node as any).measureInWindow === "function") {
+      (node as any).measureInWindow(
+        (_x: number, y: number, _w: number, h: number) => {
+          const mediaBottomY =
+            Number.isFinite(y) && Number.isFinite(h) && h > 0 ? y + h : undefined;
+          onComment(
+            key,
+            video,
+            mediaBottomY != null
+              ? { mediaBottomY, mediaHeight: h }
+              : null
+          );
+        }
+      );
+      return;
+    }
+    onComment(key, video, null);
+  }, [key, onComment, video]);
 
   useEffect(() => {
     if (!__DEV__ || !shouldRenderPlayer || index > 2) return;
@@ -123,34 +145,37 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       }
     >
       {shouldRenderPlayer ? (
-        <VideoCardPlayerArea
-          video={video}
-          contentKey={key}
-          index={index}
-          isActive={isFocused}
-          videoUrl={videoUrl}
-          videoVolume={videoVolume}
-          isMuted={isMuted}
-          onVideoTap={onVideoTap}
-          onTogglePlay={onTogglePlay}
-          onToggleMute={onToggleMute}
-          getContentKey={getContentKey}
-          onDelete={onDelete}
-          onModalToggle={onModalToggle}
-          modalVisible={modalVisible}
-          checkIfDownloaded={checkIfDownloaded}
-          getTimeAgo={getTimeAgo}
-          getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-          getUserAvatarFromContent={getUserAvatarFromContent}
-          onLayout={onLayout}
-          onForceActive={() => {}}
-        />
+        <View ref={playerAnchorRef} collapsable={false}>
+          <VideoCardPlayerArea
+            video={video}
+            contentKey={key}
+            index={index}
+            isActive={isFocused}
+            videoUrl={videoUrl}
+            videoVolume={videoVolume}
+            isMuted={isMuted}
+            onVideoTap={onVideoTap}
+            onTogglePlay={onTogglePlay}
+            onToggleMute={onToggleMute}
+            getContentKey={getContentKey}
+            onDelete={onDelete}
+            onModalToggle={onModalToggle}
+            modalVisible={modalVisible}
+            checkIfDownloaded={checkIfDownloaded}
+            getTimeAgo={getTimeAgo}
+            getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+            getUserAvatarFromContent={getUserAvatarFromContent}
+            onLayout={onLayout}
+            onForceActive={() => {}}
+          />
+        </View>
       ) : (
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => onVideoTap(key, video, index)}
-          className="w-full h-[400px] overflow-hidden relative bg-black"
-        >
+        <View ref={playerAnchorRef} collapsable={false}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => onVideoTap(key, video, index)}
+            className="w-full h-[400px] overflow-hidden relative bg-black"
+          >
           {posterUri ? (
             <Image
               source={{ uri: posterUri }}
@@ -158,7 +183,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               resizeMode="cover"
             />
           ) : null}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       )}
 
       <MediaCardFooter
@@ -170,7 +196,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         likeBurstKey={chrome.likeBurstKey}
         setLikeBurstKey={chrome.setLikeBurstKey}
         onLike={() => onLike(key, video)}
-        onComment={() => onComment(key, video)}
+        onComment={openComments}
         commentCount={commentCount}
         userSaveState={userSaveState}
         saveCount={saveCount}

@@ -28,12 +28,18 @@ export const useUserProfile = () => {
   // Try to load from AsyncStorage first for instant display
   const [initialUser, setInitialUser] = useState<User | null>(null);
   const [storageLoaded, setStorageLoaded] = useState(false);
+  const [hasAuthToken, setHasAuthToken] = useState(false);
 
   // Load from AsyncStorage on mount for instant display
   useEffect(() => {
     const loadFromStorage = async () => {
       try {
-        const storedUser = await AsyncStorage.getItem("user");
+        const [storedUser, userToken, token] = await Promise.all([
+          AsyncStorage.getItem("user"),
+          AsyncStorage.getItem("userToken"),
+          AsyncStorage.getItem("token"),
+        ]);
+        setHasAuthToken(Boolean(userToken || token));
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
           setInitialUser(parsedUser);
@@ -123,7 +129,7 @@ export const useUserProfile = () => {
 
       return userWithSection;
     },
-    enabled: storageLoaded, // Wait for storage to load first
+    enabled: storageLoaded && hasAuthToken, // Skip /auth/me when logged out
     staleTime: 15 * 60 * 1000, // 15 minutes - matches backend cache
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: 1,

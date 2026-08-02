@@ -219,7 +219,11 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
   );
 
   const handleComment = useCallback(
-    (key: string, item: MediaItem) => {
+    (
+      key: string,
+      item: MediaItem,
+      anchor?: { mediaBottomY: number; mediaHeight?: number } | null
+    ) => {
       const contentId = item._id || key;
       const mapped = mapContentTypeForBackend(item.contentType || "media");
       const uploadedBy = item.uploadedBy as any;
@@ -252,7 +256,8 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
               displayName: creatorName,
               avatar: creatorAvatar,
             }
-          : null
+          : null,
+        anchor ?? null
       );
     },
     [showCommentModal]

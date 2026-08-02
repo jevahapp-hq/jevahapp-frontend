@@ -36,9 +36,6 @@ import {
   type MentionCandidate,
   type SubmitCommentPayload,
 } from "./comments";
-import {
-  MEDIA_PEEK_HEIGHT,
-} from "./commentSheetLayout";
 import { COMMENT_COMPOSER_COLORS as C } from "./comments/types";
 
 export default function CommentModalV2() {
@@ -61,6 +58,7 @@ export default function CommentModalV2() {
     contentCreator,
     typingUsers,
     setLocalTyping,
+    mediaPeekHeight,
   } = useCommentModal();
 
   const { user, getAvatarUrl, getFullName } = useUserProfile();
@@ -75,6 +73,7 @@ export default function CommentModalV2() {
   const ui = useCommentSheetUiState();
   const anim = useCommentSheetAnimation({
     isVisible,
+    mediaPeekHeight,
     onHideComplete: hideCommentModal,
     onClosedUiReset: ui.resetUi,
   });
@@ -268,7 +267,7 @@ export default function CommentModalV2() {
   return (
     <View style={styles.overlayRoot} pointerEvents="box-none">
       <Pressable
-        style={[styles.dimHitArea, { height: MEDIA_PEEK_HEIGHT }]}
+        style={[styles.dimHitArea, { height: mediaPeekHeight }]}
         onPress={anim.closeModal}
         accessibilityRole="button"
         accessibilityLabel="Close comments"

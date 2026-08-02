@@ -119,7 +119,11 @@ export interface VideoCardProps {
   onTogglePlay: (key: string) => void;
   onToggleMute: (key: string) => void;
   onLike: (key: string, item: MediaItem) => void;
-  onComment: (key: string, item: MediaItem) => void;
+  onComment: (
+    key: string,
+    item: MediaItem,
+    anchor?: { mediaBottomY: number; mediaHeight?: number } | null
+  ) => void;
   onSave: (key: string, item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
   onShare: (key: string, item: MediaItem) => void;
@@ -424,6 +428,8 @@ export interface UseMediaOptions {
 export interface UseMediaReturn {
   loadMoreAllContent?: () => Promise<void>; // For infinite scroll
   hasMorePages?: boolean; // Whether there are more pages to load
+  /** True while a next page is in flight (footer spinner). */
+  isFetchingNextPage?: boolean;
   allContent: MediaItem[];
   defaultContent: MediaItem[];
   loading: boolean;

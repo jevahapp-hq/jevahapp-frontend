@@ -1,3 +1,32 @@
+/**
+ * Session-expired gate + local wipe.
+ * Classification lives in authSessionPolicy (IG / TikTok rules).
+ */
+
+import {
+  authFailureTextFromBody,
+  classifySessionFailure,
+  isGuestNoTokenError,
+  isHardAuthFailureMessage,
+  isOutageStatus,
+  isTransientBackendAuthError,
+  logSoftAuthFailure,
+  shouldForceLogoutOnAuthFailure,
+  type SessionDecision,
+} from "./authSessionPolicy";
+
+export {
+  authFailureTextFromBody,
+  classifySessionFailure,
+  isGuestNoTokenError,
+  isHardAuthFailureMessage,
+  isOutageStatus,
+  isTransientBackendAuthError,
+  logSoftAuthFailure,
+  shouldForceLogoutOnAuthFailure,
+};
+export type { SessionDecision };
+
 type SessionExpiredListener = () => void;
 
 let listeners: SessionExpiredListener[] = [];
@@ -44,8 +73,10 @@ export async function clearLocalSessionState(): Promise<void> {
     }
 
     try {
-      const { default: SecureStore } = await import("expo-secure-store");
-      await SecureStore.deleteItemAsync("jwt");
+      const SecureStore = await import("expo-secure-store");
+      if (typeof SecureStore.deleteItemAsync === "function") {
+        await SecureStore.deleteItemAsync("jwt");
+      }
     } catch {
       // continue
     }
@@ -57,14 +88,13 @@ export async function clearLocalSessionState(): Promise<void> {
 }
 
 /**
- * Fire once per "session death" until auth is restored / overlay dismissed.
+ * Fire once per hard session death until auth is restored / overlay dismissed.
  * Clears tokens + cached user immediately, then shows session-expired UX.
  */
 export function notifySessionExpired(): void {
   if (notified) return;
   notified = true;
 
-  // Do not wait — identity must drop even if overlay is slow
   void clearLocalSessionState();
 
   listeners.forEach((listener) => {
@@ -77,22 +107,25 @@ export function notifySessionExpired(): void {
 }
 
 /**
- * True when a 401/402 body means the account/session is dead on this API
- * (stale prod token on local Mongo, deleted user, invalid refresh, etc.).
+ * End session only when policy says so (refresh proved identity is dead).
  */
-export function isHardAuthFailureMessage(message: string | undefined | null): boolean {
-  if (!message) return false;
-  const m = message.toLowerCase();
-  return (
-    m.includes("user not found") ||
-    m.includes("invalid refresh") ||
-    m.includes("invalid token") ||
-    m.includes("jwt expired") ||
-    m.includes("token expired") ||
-    m.includes("session expired") ||
-    m.includes("unauthorized") ||
-    m.includes("authentication failed")
-  );
+export function endSessionIfNeeded(
+  status: number,
+  bodyOrMessage: unknown,
+  context: "request" | "refresh" | "socket" = "refresh"
+): boolean {
+  const decision = classifySessionFailure({
+    status,
+    bodyOrMessage,
+    hadBearerToken: true,
+    context,
+  });
+  if (decision !== "end_session") {
+    logSoftAuthFailure("Session not ended", decision, String(status));
+    return false;
+  }
+  notifySessionExpired();
+  return true;
 }
 
 export function resetSessionExpiredGate(): void {

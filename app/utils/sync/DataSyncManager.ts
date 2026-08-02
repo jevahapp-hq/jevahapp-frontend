@@ -40,6 +40,10 @@ export class DataSyncManager {
 
   async syncUserData(): Promise<void> {
     await this.queueSync(async () => {
+      const TokenUtils = (await import("../tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
+      if (!token) return; // Guest — IG/TikTok: never call /auth/me
+
       const apiClient = new ApiClient();
       const userData = await apiClient.getUserProfile();
       await AsyncStorage.setItem("user", JSON.stringify(userData.user));

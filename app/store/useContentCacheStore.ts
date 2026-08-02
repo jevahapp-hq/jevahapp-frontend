@@ -22,7 +22,8 @@ export interface CachedPage<T = any> {
 
 interface ContentCacheState {
   cache: Record<string, CachedPage>;
-  ttlMs: number; // default 2 minutes
+  /** Must match React Query FEED_STALE_MS (see feedCachePolicy). */
+  ttlMs: number;
   setTTL: (ms: number) => void;
   get: (key: string) => CachedPage | undefined;
   set: (key: string, page: CachedPage) => void;
@@ -30,11 +31,14 @@ interface ContentCacheState {
   clear: () => void;
 }
 
+/** Aligned with src/shared/config/feedCachePolicy FEED_STALE_MS */
+const FEED_STALE_MS = 2 * 60 * 60 * 1000;
+
 export const useContentCacheStore = create<ContentCacheState>()(
   persist(
     (set, get) => ({
       cache: {},
-      ttlMs: 15 * 60 * 1000, // 15 minutes to match backend cache
+      ttlMs: FEED_STALE_MS,
       setTTL: (ms) => set({ ttlMs: ms }),
       get: (key) => get().cache[key],
       set: (key, page) => set((s) => ({ cache: { ...s.cache, [key]: page } })),
@@ -56,7 +60,7 @@ export const useContentCacheStore = create<ContentCacheState>()(
     {
       name: "content-cache-store",
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
     }
   )
 );

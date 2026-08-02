@@ -15,7 +15,6 @@ import { useEffect, useState } from "react";
 import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { fetchAllContentPublic } from "../src/shared/hooks/useMedia";
 import { CommentMediaShift } from "./components/CommentMediaShift";
 import CommentModalV2 from "./components/CommentModalV2";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -239,10 +238,21 @@ export default function RootLayout() {
         // Warm API then prefetch first page (same key as useMedia for cache hit)
         await warmupBackend().catch(() => { });
         await new Promise((r) => setTimeout(r, 800));
-        queryClient.prefetchQuery({
-          queryKey: ["all-content", "ALL", 1, 12, false],
-          queryFn: () => fetchAllContentPublic("ALL"),
-          staleTime: 30 * 60 * 1000,
+        queryClient.prefetchInfiniteQuery({
+          queryKey: ["all-content", "ALL", 12, false],
+          queryFn: async ({ pageParam = 1 }) => {
+            const { fetchAllContentPage } = await import(
+              "../src/shared/media/fetchAllContentPage"
+            );
+            return fetchAllContentPage({
+              contentType: "ALL",
+              page: pageParam as number,
+              limit: 12,
+              useAuth: false,
+            });
+          },
+          initialPageParam: 1,
+          staleTime: 2 * 60 * 60 * 1000,
         }).catch(() => { });
       })();
     });

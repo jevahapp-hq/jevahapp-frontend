@@ -62,42 +62,9 @@ class SocketManager {
         tokenPreview: TokenUtils.getTokenPreview(this.authToken),
       });
 
-      // Test backend connectivity with an authenticated endpoint (soft-fail)
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(`${this.serverUrl}/api/auth/me`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${this.authToken}`,
-            "Content-Type": "application/json",
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (!response.ok) {
-          // Stale JWT / user missing on this API → force logout (do not stay "signed in")
-          if (response.status === 401 || response.status === 402) {
-            console.warn(
-              "⚠️ Auth check failed (session dead) — forcing logout"
-            );
-            const { notifySessionExpired } = await import(
-              "../utils/sessionExpired"
-            );
-            notifySessionExpired();
-            return;
-          }
-          console.warn(
-            "⚠️ Auth check failed, continuing without real-time features"
-          );
-          return; // Continue app without socket
-        }
-      } catch (healthError) {
-        console.warn(
-          "⚠️ Backend not reachable (socket), continuing without real-time features"
-        );
-        return; // Continue app without socket
-      }
+      // IG/TikTok style: do NOT preflight /auth/me (that causes false logouts
+      // when Mongo is warming). Connect with the JWT; on auth_error keep session
+      // and skip realtime — API refresh flow owns hard logout.
 
       this.socket = io(this.serverUrl, {
         auth: {

@@ -1,4 +1,3 @@
-import { useFocusEffect } from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -6,17 +5,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  RefreshControl,
-  View,
-} from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { View } from "react-native";
 
-// FlashList v2 type workaround
-const FeedList = FlashList as any;
-
-// Shared imports
-import { UI_CONFIG } from "../../../shared/constants";
 import { ContentType, MediaItem } from "../../../shared/types";
 import {
   getContentKey,
@@ -25,34 +15,28 @@ import {
   getUserDisplayNameFromContent,
   isAudioSermon,
 } from "../../../shared/utils";
-import { PERF, perfMark, perfMeasure } from "../../../shared/utils/perfMarks";
-import {
-  refreshFeedAfterDelete,
-  removeMediaFromFeedCaches,
-} from "../../../shared/utils/removeMediaFromFeedCaches";
-import { prefetchVideoUrls } from "../../../shared/utils/videoPrefetch";
-import { getVideoUrlFromMedia } from "../../../shared/utils/videoUrlManager";
 
-// Feature-specific imports
-import { useQueryClient } from "@tanstack/react-query";
-import { useMedia } from "../../../shared/hooks/useMedia";
-import { ContentFeedHeader } from "./components/ContentFeedHeader";
+import { AllContentTikTokList } from "./components/AllContentTikTokList";
 import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 import {
+  useActiveMediaPlayback,
+  useAdjacentCommentsPrefetch,
+  useAdjacentVideoPrefetch,
   useAllContentTikTokAudio,
   useAllContentTikTokFeedData,
+  useAllContentTikTokFeedSource,
   useAllContentTikTokHandlers,
+  useAllContentTikTokLifecycle,
   useAllContentTikTokScroll,
   useAllContentTikTokSocket,
-  useAdjacentVideoPrefetch,
-  useAdjacentCommentsPrefetch,
-  useActiveMediaPlayback,
+  useAllContentTikTokWarmup,
   useContentStatsHelpers,
   useFeedFocusLoop,
 } from "./hooks";
 import { ContentErrorBoundary } from "../../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../../app/components/SuccessCard";
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useUserProfile } from "../../../../app/hooks/useUserProfile";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
 import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
@@ -71,76 +55,48 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 }) => {
   const { user } = useUserProfile();
   const currentUserId = user?._id || user?.id || null;
+  const { isVisible: isCommentSheetOpen } = useCommentModal();
 
-  // Media data from the new hook (useAuthFeed so newly uploaded content appears when logged in)
   const {
-    allContent,
-    defaultContent,
+    mediaList,
     error,
-    loading: feedLoading,
+    feedLoading,
     refreshAllContent,
-    getFilteredContent,
     hasContent,
-  } = useMedia({ immediate: true, contentType: activeTab, useAuth: useAuthFeed });
+    loadMoreAllContent,
+    hasMorePages,
+    isFetchingNextPage,
+    handleDeleteSuccess,
+  } = useAllContentTikTokFeedSource({ activeTab, useAuthFeed });
 
-  const queryClient = useQueryClient();
-  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
-
-  const handleDeleteSuccess = useCallback(
-    (deleted?: MediaItem | { _id?: string; id?: string }) => {
-      const id = String(deleted?._id || (deleted as any)?.id || "").trim();
-      if (id) {
-        setRemovedIds((prev) => {
-          if (prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.add(id);
-          return next;
-        });
-        removeMediaFromFeedCaches(queryClient, id);
-      }
-      // Soft refresh like big platforms — cache already updated above
-      refreshFeedAfterDelete(queryClient);
-      void refreshAllContent();
-    },
-    [queryClient, refreshAllContent]
-  );
-
-  // Get global video state - FIX: Read from the same store we write to with REACTIVE SUBSCRIPTIONS
-  // Using specific selectors for stability
   const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
-  const pauseAllMediaGlobally = useGlobalMediaStore((s) => s.pauseAllMedia);
-
   const pauseVideoAction = useGlobalVideoStore((s) => s.pauseVideo);
   const pauseAllVideosAction = useGlobalVideoStore((s) => s.pauseAllVideos);
   const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
-  const enableAutoPlayAction = useGlobalVideoStore((s) => s.enableAutoPlay);
 
   const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
   const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
   const progresses = useGlobalVideoStore((s) => s.progresses);
-  const showOverlay = useGlobalVideoStore((s) => s.showOverlay);
   const currentlyPlayingVideo = useGlobalVideoStore(
     (s) => s.currentlyPlayingVideo
   );
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
 
-  // Create functions to match what components expect
-  const playMedia = useCallback((key: string, type: "video" | "audio") => {
-    // ✅ Use unified media store for both video and audio to handle mutual pausing
-    // This ensures video pauses audio and audio pauses video
-    playMediaGlobally(key, type);
-  }, [playMediaGlobally]);
+  const playMedia = useCallback(
+    (key: string, type: "video" | "audio") => {
+      playMediaGlobally(key, type);
+    },
+    [playMediaGlobally]
+  );
 
-  const pauseMedia = useCallback((key: string) => {
-    pauseVideoAction(key);
-  }, [pauseVideoAction]);
-
-  const toggleMute = useCallback((key: string) => {
-    toggleVideoMuteAction(key);
-  }, [toggleVideoMuteAction]);
+  const pauseMedia = useCallback(
+    (key: string) => {
+      pauseVideoAction(key);
+    },
+    [pauseVideoAction]
+  );
 
   const {
-    isLoadingAudio,
     playingAudioId,
     audioProgressMap,
     playAudio,
@@ -152,61 +108,31 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const comments = useInteractionStore((s) => s.comments);
   const { loadDownloadedItems } = useDownloadStore();
-
-  // Interaction store — select fields so hydrate no-ops don't thrash the feed
   const contentStats = useInteractionStore((s) => s.contentStats);
   const toggleLike = useInteractionStore((s) => s.toggleLike);
   const toggleSave = useInteractionStore((s) => s.toggleSave);
   const recordShare = useInteractionStore((s) => s.recordShare);
-  const loadContentStats = useInteractionStore((s) => s.loadContentStats);
-  const loadingInteraction = useInteractionStore((s) => s.loadingInteraction);
 
-  // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState<string | null>(null);
-
-  // Success card state
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const toggleModal = useCallback((val: string | null) => {
     setModalVisible(val);
   }, []);
   const [previouslyViewed, setPreviouslyViewed] = useState<any[]>([]);
-  const [isLoadingContent, setIsLoadingContent] = useState(false);
-
+  const [, setIsLoadingContent] = useState(false);
   const videoRefs = useRef<Record<string, any>>({});
-  const isMountedRef = useRef(true);
-  const [videoVolume, setVideoVolume] = useState<number>(1.0);
-  const [currentlyVisibleVideo, setCurrentlyVisibleVideo] = useState<string | null>(null);
-
-  // Helper functions to get state for specific keys
-  const getVideoState = (key: string) => ({
-    isPlaying: playingVideos[key] ?? false,
-    isMuted: mutedVideos[key] ?? false,
-    progress: progresses[key] ?? 0,
-    showOverlay: showOverlay[key] ?? false,
-  });
-  const isVideoPlaying = (key: string) => playingVideos[key] ?? false;
-  const isVideoMuted = (key: string) => mutedVideos[key] ?? false;
-  const getVideoProgress = (key: string) => progresses[key] ?? 0;
-  const getVideoOverlay = (key: string) => showOverlay[key] ?? false;
-
-  // Use content directly - useMedia already returns transformed MediaItem[]
-  const mediaList: MediaItem[] = useMemo(() => {
-    const sourceData = allContent.length > 0 ? allContent : defaultContent;
-    if (!sourceData || !Array.isArray(sourceData)) return [];
-    if (removedIds.size === 0) return sourceData;
-    return sourceData.filter(
-      (item) => !removedIds.has(String(item._id || (item as any).id || ""))
-    );
-  }, [allContent, defaultContent, removedIds]);
+  const [videoVolume] = useState<number>(1.0);
+  const [currentlyVisibleVideo, setCurrentlyVisibleVideo] = useState<
+    string | null
+  >(null);
 
   const {
     filteredMediaList,
     categorizedContent,
     mostRecentItem,
     firstFour,
-    nextFour,
     rest,
     reshuffleFeed,
   } = useAllContentTikTokFeedData({
@@ -217,7 +143,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     previouslyViewed,
   });
 
-  // Stable feed order for adjacent player mounting (Most Recent → For You).
   const orderedFeedKeys = useMemo(() => {
     const keys: string[] = [];
     if (mostRecentItem) keys.push(getContentKey(mostRecentItem));
@@ -226,7 +151,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     return keys;
   }, [mostRecentItem, firstFour, rest]);
 
-  // Seed focus so the first cards mount players immediately (no poster-only flash).
   useEffect(() => {
     if (currentlyVisibleVideo) return;
     if (!mostRecentItem) return;
@@ -240,7 +164,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         (item) => getContentKey(item) === currentlyVisibleVideo
       ) ?? null
     );
-  }, [currentlyVisibleVideo, filteredMediaList, getContentKey]);
+  }, [currentlyVisibleVideo, filteredMediaList]);
 
   useAllContentTikTokSocket({
     focusedContentId: focusedFeedItem
@@ -263,24 +187,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     radius: 1,
   });
 
-  // Aggressively warm the first cards' bytes so players aren't poster-stuck
-  useEffect(() => {
-    if (filteredMediaList.length === 0) return;
-    const urls = filteredMediaList
-      .slice(0, 8)
-      .map((item) => getVideoUrlFromMedia(item))
-      .filter(Boolean) as string[];
-    if (urls.length) prefetchVideoUrls(urls);
-  }, [filteredMediaList]);
-
-  const feedFirstPaintMarkedRef = useRef(false);
-  useEffect(() => {
-    if (feedFirstPaintMarkedRef.current) return;
-    if (filteredMediaList.length === 0) return;
-    feedFirstPaintMarkedRef.current = true;
-    perfMark(PERF.FEED_FIRST_PAINT);
-    perfMeasure(PERF.FEED_FIRST_PAINT, PERF.APP_START);
-  }, [filteredMediaList.length]);
+  useAllContentTikTokWarmup(filteredMediaList);
 
   const {
     getUserLikeState,
@@ -294,13 +201,19 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     pauseAllAudio();
   }, [pauseAllVideosAction, pauseAllAudio]);
 
+  useAllContentTikTokLifecycle({
+    pauseAllMedia,
+    pauseAllAudio,
+    setCurrentlyVisibleVideo,
+  });
+
   const {
     setListHostRef,
     registerFocusTarget,
     onScrollForFocus,
     evaluateFocus,
   } = useFeedFocusLoop({
-    enabled: isAutoPlayEnabled,
+    enabled: isAutoPlayEnabled && !isCommentSheetOpen,
     focusedKey: currentlyVisibleVideo,
     setFocusedKey: setCurrentlyVisibleVideo,
   });
@@ -336,7 +249,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     [currentlyVisibleVideo, orderedFeedKeys]
   );
 
-  const toggleVideoMute = useCallback((key: string) => toggleVideoMuteAction(key), [toggleVideoMuteAction]);
+  const toggleVideoMute = useCallback(
+    (key: string) => toggleVideoMuteAction(key),
+    [toggleVideoMuteAction]
+  );
 
   const {
     handleVideoTap,
@@ -375,6 +291,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     recordShare: recordShare as any,
     loadDownloadedItems,
   });
+
+  const onEndReached = useCallback(() => {
+    if (!hasMorePages || isFetchingNextPage) return;
+    void loadMoreAllContent?.();
+  }, [hasMorePages, isFetchingNextPage, loadMoreAllContent]);
 
   const renderContentByType = useCallback(
     (item: MediaItem, index: number, _ignored?: boolean) => {
@@ -429,7 +350,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       );
     },
     [
-      getContentKey,
       getUserLikeState,
       getLikeCount,
       contentStats,
@@ -462,74 +382,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     ]
   );
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-      try {
-        pauseAllMedia();
-      } catch { }
-    };
-  }, []);
+  // Silence unused vars kept for parity with prior playback wiring
+  void currentlyPlayingVideo;
+  void videoRefs;
 
-  // Stats are loaded via useAllContentTikTokFeedData — no duplicate needed
-
-  // Pause all media when component loses focus
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (__DEV__) console.log("📱 Pausing all media on focus loss");
-        try {
-          pauseAllMedia();
-        } catch { }
-        setCurrentlyVisibleVideo(null);
-        pauseAllAudio();
-      };
-    }, [pauseAllMedia, pauseAllAudio])
-  );
-
-  // Hooks must run unconditionally (before any early return) to satisfy Rules of Hooks
-  const listHeaderComponent = useMemo(
-    () => (
-      <ContentFeedHeader
-        mostRecentItem={mostRecentItem}
-        contentType={activeTab}
-        filteredMediaListLength={filteredMediaList.length}
-        firstFour={firstFour}
-        currentlyVisibleVideo={currentlyVisibleVideo}
-        getContentKey={getContentKey}
-        renderContentByType={renderContentByType}
-      />
-    ),
-    [
-      mostRecentItem,
-      activeTab,
-      filteredMediaList.length,
-      firstFour,
-      currentlyVisibleVideo,
-      getContentKey,
-      renderContentByType,
-    ]
-  );
-
-  const renderListItem = useCallback(
-    ({ item, index }: { item: MediaItem; index: number }) => {
-      return renderContentByType(item, index + firstFour.length + 1);
-    },
-    [renderContentByType, firstFour.length]
-  );
-
-  const keyExtractor = useCallback(
-    (item: MediaItem) => getContentKey(item),
-    []
-  );
-
-  const listFooterComponent = useMemo(() => null, []);
   if (error && !hasContent) return <ErrorState message={error} />;
   if (feedLoading && filteredMediaList.length === 0) {
     return <LoadingState count={2} />;
   }
-  if (filteredMediaList.length === 0) return <EmptyState contentType={activeTab} />;
+  if (filteredMediaList.length === 0) {
+    return <EmptyState contentType={activeTab} />;
+  }
 
   return (
     <ContentErrorBoundary>
@@ -541,31 +404,24 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             duration={3000}
           />
         )}
-        <View style={{ flex: 1 }} ref={setListHostRef} collapsable={false}>
-        <FeedList
-          data={rest}
-          renderItem={renderListItem}
-          keyExtractor={keyExtractor}
-          ListHeaderComponent={listHeaderComponent}
-          ListFooterComponent={listFooterComponent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[UI_CONFIG.COLORS.PRIMARY]}
-              tintColor={UI_CONFIG.COLORS.PRIMARY}
-            />
-          }
-          showsVerticalScrollIndicator={true}
+        <AllContentTikTokList
+          activeTab={activeTab}
+          rest={rest}
+          mostRecentItem={mostRecentItem ?? null}
+          firstFour={firstFour}
+          filteredMediaListLength={filteredMediaList.length}
+          currentlyVisibleVideo={currentlyVisibleVideo}
+          getContentKey={getContentKey}
+          renderContentByType={renderContentByType}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
           onScroll={handleScroll}
-          onScrollEndDrag={handleScrollEnd}
-          onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
-          estimatedItemSize={500}
-          keyboardShouldPersistTaps="handled"
-          overscan={500}
+          onScrollEnd={handleScrollEnd}
+          setListHostRef={setListHostRef}
+          onEndReached={onEndReached}
+          isFetchingNextPage={isFetchingNextPage}
+          scrollEnabled={!isCommentSheetOpen}
         />
-        </View>
       </View>
     </ContentErrorBoundary>
   );

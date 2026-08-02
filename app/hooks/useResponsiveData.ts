@@ -200,7 +200,15 @@ export function useResponsiveData<T>(
 // User data hook
 export function useUserData() {
   return useResponsiveData(
-    () => apiClient.getUserProfile(),
+    async () => {
+      const TokenUtils = (await import("../utils/tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
+      if (!token) {
+        // Guest — never call /auth/me
+        return null as any;
+      }
+      return apiClient.getUserProfile();
+    },
     {
       cache: true,
       cacheDuration: 5 * 60 * 1000, // 5 minutes

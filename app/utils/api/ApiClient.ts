@@ -55,12 +55,25 @@ export class ApiClient {
             errorText
           );
 
-          // If refresh fails with 401, clear tokens
-          if (refreshResponse.status === 401) {
-            await TokenManager.clearToken();
-            const { notifySessionExpired } = await import("../sessionExpired");
-            notifySessionExpired();
-            console.log("🔄 Session expired, tokens cleared");
+          // IG/TikTok: end session only when refresh proves identity is dead
+          if (
+            refreshResponse.status === 401 ||
+            refreshResponse.status === 402
+          ) {
+            const { endSessionIfNeeded } = await import("../sessionExpired");
+            if (
+              endSessionIfNeeded(
+                refreshResponse.status,
+                errorText,
+                "refresh"
+              )
+            ) {
+              console.log("🔄 Session expired, tokens cleared");
+            } else {
+              console.warn(
+                "⚠️ Token refresh 401 looks like outage — keeping session"
+              );
+            }
           }
 
           return null;
@@ -196,30 +209,58 @@ export class ApiClient {
 
               return retryData;
             } else {
-              // Had a Bearer token, server said 401/402, refresh failed → session is dead
-              await TokenManager.clearToken();
-              const { notifySessionExpired } = await import("../sessionExpired");
-              notifySessionExpired();
-              console.log(
-                `❌ API: Token refresh failed, forcing logout`
+              // Refresh failed — only end session when policy says so
+              const errBody = await response.text().catch(() => "");
+              const { endSessionIfNeeded } = await import("../sessionExpired");
+              if (endSessionIfNeeded(response.status, errBody, "refresh")) {
+                console.log(`❌ API: Token refresh failed, forcing logout`);
+                throw new Error("Authentication failed. Please log in again.");
+              }
+              console.warn(
+                `⚠️ API: ${response.status} + refresh failed (outage) — keeping session`
               );
-              throw new Error("Authentication failed. Please log in again.");
+              throw new Error(
+                `HTTP ${response.status}: Backend temporarily unavailable`
+              );
             }
           }
 
           if (!response.ok) {
-            console.error(
-              `❌ API: HTTP ${response.status}: ${response.statusText}`
-            );
             let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            let errorBody: unknown = null;
 
             try {
-              const errorData = await response.json();
-              if (errorData.message) {
-                errorMessage = errorData.message;
-              }
+              errorBody = await response.json();
+              const msg = (errorBody as any)?.message;
+              if (msg) errorMessage = msg;
             } catch (parseError) {
               // If we can't parse the error response, use the default message
+            }
+
+            const {
+              isGuestNoTokenError,
+              isTransientBackendAuthError,
+              authFailureTextFromBody,
+            } = await import("../sessionExpired");
+            const combined = authFailureTextFromBody(errorBody) || errorMessage;
+            const softAuth =
+              (response.status === 401 || response.status === 402) &&
+              (!token ||
+                isGuestNoTokenError(combined) ||
+                isTransientBackendAuthError(combined));
+
+            if (softAuth) {
+              if (__DEV__) {
+                console.warn(
+                  `⚠️ API: ${method} ${endpoint} → ${response.status} (expected / soft)`,
+                  combined
+                );
+              }
+            } else {
+              console.error(
+                `❌ API: HTTP ${response.status}: ${response.statusText}`,
+                combined
+              );
             }
 
             throw new Error(errorMessage);
@@ -234,7 +275,19 @@ export class ApiClient {
 
           return data;
         } catch (error) {
-          console.error(`API request failed: ${method} ${endpoint}`, error);
+          const msg = error instanceof Error ? error.message : String(error);
+          const { isGuestNoTokenError, isTransientBackendAuthError } =
+            await import("../sessionExpired");
+          if (isGuestNoTokenError(msg) || isTransientBackendAuthError(msg)) {
+            if (__DEV__) {
+              console.warn(
+                `⚠️ API soft-fail: ${method} ${endpoint}`,
+                msg
+              );
+            }
+          } else {
+            console.error(`API request failed: ${method} ${endpoint}`, error);
+          }
           throw error;
         }
       },
@@ -248,6 +301,12 @@ export class ApiClient {
   // User-related API methods
   async getUserProfile(): Promise<{ user: UserData }> {
     try {
+      // Guest: skip /auth/me entirely — avoids noisy 401 "No token provided"
+      const token = await TokenManager.getToken();
+      if (!token) {
+        throw new Error("Unauthorized: No token provided");
+      }
+
       const result = await this.request("/auth/me", { cache: true });
 
       // Validate the response structure
@@ -268,10 +327,17 @@ export class ApiClient {
 
       return result;
     } catch (error: any) {
+      const msg: string = error?.message || "";
+      const { isGuestNoTokenError } = await import("../sessionExpired");
+
+      if (isGuestNoTokenError(msg)) {
+        // Expected when browsing logged out — no ERROR stack
+        throw new Error("Unauthorized: No token provided");
+      }
+
       console.error("❌ API: getUserProfile error:", error);
 
       // Provide more specific error messages
-      const msg: string = error?.message || "";
       if (
         msg.includes("401") ||
         msg.includes("402") ||

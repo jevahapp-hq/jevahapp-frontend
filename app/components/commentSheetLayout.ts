@@ -1,19 +1,14 @@
 import { Dimensions } from "react-native";
 import { Easing } from "react-native-reanimated";
 
+/** @deprecated Prefer getWindowHeight() — kept for module-load fallbacks */
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-/** Top band where media stays visible while comments are open */
-export const MEDIA_PEEK_HEIGHT = Math.round(SCREEN_HEIGHT * 0.38);
+/** Top band where media stays visible while comments are open (~42%) */
+export const MEDIA_PEEK_HEIGHT = Math.round(SCREEN_HEIGHT * 0.42);
 
 /** Resting sheet height (below the media peek) */
 export const SHEET_HEIGHT_REST = SCREEN_HEIGHT - MEDIA_PEEK_HEIGHT;
-
-/**
- * How far to lift the underlying feed so the active media
- * centers inside the peek (TikTok / IG behavior).
- */
-export const MEDIA_SHIFT_Y = -Math.round(SHEET_HEIGHT_REST * 0.5);
 
 /** Main comments sheet — fast + smooth (ease-out cubic bezier) */
 export const COMMENT_SHEET_IN = {
