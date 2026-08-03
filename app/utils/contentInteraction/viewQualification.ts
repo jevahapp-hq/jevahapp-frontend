@@ -11,13 +11,15 @@
 export const VIEW_QUALIFICATION = {
   video: { minMs: 3000, minProgress: 0.25 },
   audio: { minMs: 10000, minProgress: 0.2 },
+  /** Copyright-free discovery surface (short clips OK) */
+  copyrightFree: { minMs: 3000, minProgress: 0.25 },
   ebook: { minMs: 10000, minProgress: 0.1 },
 } as const;
 
 export type ViewFamily = keyof typeof VIEW_QUALIFICATION;
 
 export function qualifiesPlaybackView(params: {
-  family: "video" | "audio";
+  family: "video" | "audio" | "copyrightFree";
   isPlaying: boolean;
   positionMs: number;
   progress: number; // 0–1

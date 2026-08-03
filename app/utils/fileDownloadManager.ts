@@ -4,6 +4,7 @@
 // Expo's warning suggests either migrating to the new File/Directory API
 // or importing from "expo-file-system/legacy" – we choose the latter here
 // to avoid breaking the current implementation.
+import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import { downloadAPI } from "./downloadAPI";
 
@@ -22,21 +23,29 @@ export interface DownloadResult {
 
 export type DownloadProgressCallback = (progress: DownloadProgress) => void;
 
+const isNativeFs =
+  Platform.OS === "ios" || Platform.OS === "android";
+
 class FileDownloadManager {
   private downloadDir: string;
   private activeDownloads: Map<string, FileSystem.DownloadResumable> = new Map();
   private lastProgressUpdate: Map<string, number> = new Map();
 
   constructor() {
-    // Use app-specific directory (not accessible via Files app or Gallery)
+    // Web / SSR: expo-file-system is unavailable — skip native paths.
+    if (!isNativeFs || !FileSystem.documentDirectory) {
+      this.downloadDir = "";
+      return;
+    }
     this.downloadDir = `${FileSystem.documentDirectory}downloads/`;
-    this.ensureDownloadDirectory();
+    void this.ensureDownloadDirectory();
   }
 
   /**
    * Ensure download directory exists
    */
   private async ensureDownloadDirectory(): Promise<void> {
+    if (!this.downloadDir || !isNativeFs) return;
     try {
       const dirInfo = await FileSystem.getInfoAsync(this.downloadDir);
       if (!dirInfo.exists) {
@@ -101,6 +110,13 @@ class FileDownloadManager {
     onProgress?: DownloadProgressCallback
   ): Promise<DownloadResult> {
     try {
+      if (!isNativeFs || !this.downloadDir) {
+        return {
+          success: false,
+          error: "Downloads are not available on web",
+        };
+      }
+
       // Ensure download directory exists before starting
       await this.ensureDownloadDirectory();
 

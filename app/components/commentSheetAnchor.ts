@@ -36,15 +36,16 @@ function computeMediaScale(peekHeight: number, playerH: number): number {
 }
 
 /**
- * Dock player bottom to sheet top inside a ~40–55% peek band.
+ * Dock player bottom to sheet top.
+ * Peek stays ~22–34% so the sheet is ~66–78% (more comments visible).
  */
 export function resolveCommentSheetLayout(
   anchor?: CommentMediaAnchor | null
 ): CommentSheetLayoutLive {
   const H = getWindowHeight();
-  const MIN_PEEK = Math.round(H * 0.4);
-  const MAX_PEEK = Math.round(H * 0.55);
-  const FALLBACK_PEEK = Math.round(H * 0.42);
+  const MIN_PEEK = Math.round(H * 0.22);
+  const MAX_PEEK = Math.round(H * 0.34);
+  const FALLBACK_PEEK = Math.round(H * 0.28);
 
   if (
     !anchor ||
@@ -68,7 +69,7 @@ export function resolveCommentSheetLayout(
       ? Math.round(anchor.mediaHeight as number)
       : DEFAULT_PLAYER_H;
 
-  // Prefer flush-at-measure, clamped so sheet stays ≥ ~45% and peek ≥ 40%
+  // Prefer flush-at-measure; clamp peek so sheet stays tall (~66%+)
   const peekHeight = Math.max(MIN_PEEK, Math.min(MAX_PEEK, measured));
   const shiftY = peekHeight - measured;
   const mediaScale = computeMediaScale(peekHeight, playerH);

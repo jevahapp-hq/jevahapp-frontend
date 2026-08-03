@@ -15,23 +15,33 @@ export interface SongModalOptionsProps {
   visible: boolean;
   song: any;
   viewCount: number;
+  shareCount?: number;
+  isInLibrary?: boolean;
+  isTogglingSave?: boolean;
   optionsSongData: any | null;
   loadingOptionsSong: boolean;
   onClose: () => void;
   onAddToPlaylist: () => void;
+  onToggleSave?: () => void;
 }
 
 export function SongModalOptions({
   visible,
   song,
   viewCount,
+  shareCount = 0,
+  isInLibrary = false,
+  isTogglingSave = false,
   optionsSongData,
   loadingOptionsSong,
   onClose,
   onAddToPlaylist,
+  onToggleSave,
 }: SongModalOptionsProps) {
   const displayCount =
     optionsSongData?.views ?? optionsSongData?.viewCount ?? viewCount ?? 0;
+  const displayShares =
+    optionsSongData?.shareCount ?? shareCount ?? 0;
 
   return (
     <Modal
@@ -136,8 +146,75 @@ export function SongModalOptions({
                     </Text>
                   )}
                 </View>
+                <View style={{ marginLeft: 16, flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#6B7280",
+                      fontFamily: "Rubik",
+                      marginBottom: 2,
+                    }}
+                  >
+                    Shares
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      color: "#111827",
+                      fontWeight: "600",
+                      fontFamily: "Rubik-SemiBold",
+                    }}
+                  >
+                    {Number(displayShares).toLocaleString()}
+                  </Text>
+                </View>
               </View>
             </>
+          )}
+
+          {onToggleSave && (
+            <TouchableOpacity
+              onPress={onToggleSave}
+              disabled={isTogglingSave}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 12,
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: isInLibrary ? "#ECFDF5" : "#F3F4F6",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                {isTogglingSave ? (
+                  <ActivityIndicator size="small" color="#256E63" />
+                ) : (
+                  <Ionicons
+                    name={isInLibrary ? "bookmark" : "bookmark-outline"}
+                    size={18}
+                    color="#256E63"
+                  />
+                )}
+              </View>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#111827",
+                  fontWeight: "500",
+                  fontFamily: "Rubik-Medium",
+                }}
+              >
+                {isInLibrary ? "Remove from library" : "Save to library"}
+              </Text>
+            </TouchableOpacity>
           )}
 
           <TouchableOpacity

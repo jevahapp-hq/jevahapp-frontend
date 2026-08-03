@@ -1,6 +1,10 @@
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { takePreloadedSound } from "../../src/shared/utils/audioPrefetch";
+import {
+  resolveAudioDurationMs,
+  trackDurationToMs,
+} from "../store/audioPlayer/resolveAudioDurationMs";
 import { useGlobalMediaStore } from "../store/useGlobalMediaStore";
 
 export interface AudioPlayerState {
@@ -28,6 +32,8 @@ export interface UseAdvancedAudioPlayerOptions {
   autoPlay?: boolean;
   loop?: boolean;
   volume?: number;
+  /** BE duration in seconds — used when expo-av reports durationMillis 0 */
+  fallbackDurationSec?: number;
   onPlaybackStatusUpdate?: (status: AudioPlayerState) => void;
   onError?: (error: string) => void;
   onFinished?: () => void;
@@ -42,6 +48,7 @@ export const useAdvancedAudioPlayer = (
     autoPlay = false,
     loop = false,
     volume = 1.0,
+    fallbackDurationSec,
     onPlaybackStatusUpdate,
     onError,
     onFinished,
@@ -49,6 +56,11 @@ export const useAdvancedAudioPlayer = (
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const statusUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackDurationMsRef = useRef(trackDurationToMs(fallbackDurationSec));
+
+  useEffect(() => {
+    fallbackDurationMsRef.current = trackDurationToMs(fallbackDurationSec);
+  }, [fallbackDurationSec]);
 
   // Keep the latest callback props in refs so we don't have to
   // recreate our internal callbacks/effects on every render.
@@ -76,7 +88,7 @@ export const useAdvancedAudioPlayer = (
     isLoading: false,
     isMuted: false,
     progress: 0,
-    duration: 0,
+    duration: trackDurationToMs(fallbackDurationSec),
     position: 0,
     error: null,
   });
@@ -99,20 +111,25 @@ export const useAdvancedAudioPlayer = (
     try {
       const status = await soundRef.current.getStatusAsync();
       if (status.isLoaded) {
-        const newState: AudioPlayerState = {
-          isPlaying: status.isPlaying || false,
-          isLoading: false,
-          isMuted: status.isMuted || false,
-          progress: status.durationMillis
-            ? (status.positionMillis || 0) / status.durationMillis
-            : 0,
-          duration: status.durationMillis || 0,
-          position: status.positionMillis || 0,
-          error: null,
-        };
-        setState(newState);
-        // Use ref to avoid recreating callback dependencies on every render
-        onPlaybackStatusUpdateRef.current?.(newState);
+        setState((prev) => {
+          const duration = resolveAudioDurationMs({
+            playerDurationMs: status.durationMillis,
+            knownMs: prev.duration,
+            trackDurationSec: fallbackDurationMsRef.current / 1000,
+          });
+          const position = status.positionMillis || 0;
+          const newState: AudioPlayerState = {
+            isPlaying: status.isPlaying || false,
+            isLoading: false,
+            isMuted: status.isMuted || false,
+            progress: duration > 0 ? position / duration : 0,
+            duration,
+            position,
+            error: null,
+          };
+          onPlaybackStatusUpdateRef.current?.(newState);
+          return newState;
+        });
         if (status.didJustFinish) {
           setState((prev) => ({
             ...prev,
@@ -187,19 +204,25 @@ export const useAdvancedAudioPlayer = (
       soundRef.current = sound;
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded) {
-          const newState: AudioPlayerState = {
-            isPlaying: status.isPlaying || false,
-            isLoading: false,
-            isMuted: status.isMuted || false,
-            progress: status.durationMillis
-              ? (status.positionMillis || 0) / status.durationMillis
-              : 0,
-            duration: status.durationMillis || 0,
-            position: status.positionMillis || 0,
-            error: null,
-          };
-          setState(newState);
-          onPlaybackStatusUpdateRef.current?.(newState);
+          setState((prev) => {
+            const duration = resolveAudioDurationMs({
+              playerDurationMs: status.durationMillis,
+              knownMs: prev.duration,
+              trackDurationSec: fallbackDurationMsRef.current / 1000,
+            });
+            const position = status.positionMillis || 0;
+            const newState: AudioPlayerState = {
+              isPlaying: status.isPlaying || false,
+              isLoading: false,
+              isMuted: status.isMuted || false,
+              progress: duration > 0 ? position / duration : 0,
+              duration,
+              position,
+              error: null,
+            };
+            onPlaybackStatusUpdateRef.current?.(newState);
+            return newState;
+          });
           if (status.didJustFinish) {
             setState((prev) => ({
               ...prev,
@@ -211,7 +234,14 @@ export const useAdvancedAudioPlayer = (
           }
         }
       });
-      setState((prev) => ({ ...prev, isLoading: false }));
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        duration: resolveAudioDurationMs({
+          knownMs: prev.duration,
+          trackDurationSec: fallbackDurationMsRef.current / 1000,
+        }),
+      }));
       if (autoPlay) {
         startStatusUpdates();
         try {
@@ -316,14 +346,26 @@ export const useAdvancedAudioPlayer = (
 
   const seekTo = useCallback(
     async (position: number) => {
-      if (!soundRef.current || state.duration === 0) return;
+      if (!soundRef.current) return;
       try {
-        const positionMillis = position * state.duration;
+        const status = await soundRef.current.getStatusAsync();
+        if (!status.isLoaded) return;
+
+        const duration = resolveAudioDurationMs({
+          playerDurationMs: status.durationMillis,
+          knownMs: state.duration,
+          trackDurationSec: fallbackDurationMsRef.current / 1000,
+        });
+        if (duration <= 0) return;
+
+        const clamped = Math.max(0, Math.min(position, 1));
+        const positionMillis = clamped * duration;
         await soundRef.current.setPositionAsync(positionMillis);
         setState((prev) => ({
           ...prev,
           position: positionMillis,
-          progress: position,
+          progress: clamped,
+          duration,
         }));
       } catch (error) {
         const errorMessage = `Seek error: ${error}`;

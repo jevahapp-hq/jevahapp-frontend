@@ -8,4 +8,9 @@ export type {
   CopyrightFreeSongResponse,
   CopyrightFreeSongsResponse,
   CopyrightFreeSongCategoriesResponse,
+  AudioLibraryResponse,
 } from "./copyright-free/types";
+export {
+  mapCopyrightFreeSong,
+  resolveDurationSec,
+} from "./copyright-free/mapCopyrightFreeSong";

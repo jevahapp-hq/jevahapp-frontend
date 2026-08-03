@@ -140,14 +140,13 @@ socket.emit("upload-progress", {
 | `rejected` | Moderation reject | `error` | keep last |
 | `error` | Hard failure | `error` | keep last |
 
-FE mapping today:
+FE mapping today (`mapUploadProgress.ts`):
 
-- `complete` → `success`
-- `error` \| `rejected` → `error`
-- `finalizing` → `uploading`
-- anything else → `verifying`
-
-**Ask:** emit at least `received`, `uploading` (or byte %), `verifying`/`processing`, `finalizing`, `complete`|`rejected`|`error`. Prefer monotonic `progress`.
+- `received` / `uploading` / `finalizing` → `uploading`
+- `verifying` / `scanning` / `processing` / `moderating` → `verifying`
+- `complete` → `success` (even if HTTP still in flight)
+- `error` / `rejected` → `error`
+- Progress is monotonic on FE (never lower than last shown)
 
 ### Optional HTTP progress (even better)
 
@@ -155,18 +154,30 @@ If Socket.IO is flaky on some devices, also support:
 
 ```
 GET /api/media/upload/:uploadId/status
-→ { uploadId, progress, stage, message, mediaId? }
+Authorization: Bearer <jwt>
+→ {
+  "success": true,
+  "data": {
+    "uploadId": "…",
+    "progress": 72,
+    "stage": "verifying",
+    "message": "…",
+    "mediaId": null,
+    "timestamp": "…"
+  }
+}
 ```
 
-FE **already polls** every 800ms while `loading` if no socket event for 3s (404 ⇒ endpoint not ready; FE keeps sim/socket).
+FE polls every **800ms** after **~3s** without a socket event (re-arms if socket goes quiet again). Soft-fails on 404.
 
 ### Response body (success)
 
-Return enough for feed insert without a second round-trip:
+Prefer `data`; keep legacy `media` for older clients. FE uses `extractUploadedMedia()`:
 
 ```json
 {
   "success": true,
+  "uploadId": "…",
   "data": {
     "_id": "...",
     "contentType": "videos",
@@ -175,12 +186,14 @@ Return enough for feed insert without a second round-trip:
     "thumbnailUrl": "...",
     "duration": 123.4,
     "processingStatus": "ready" | "processing" | "pending",
-    "hlsUrl": null
-  }
+    "hlsUrl": null,
+    "moderationStatus": "approved" | "under_review" | "pending"
+  },
+  "media": { "...legacy..." }
 }
 ```
 
-If `processingStatus !== "ready"`, keep emitting progress until seekable/ready so the bar doesn’t jump to 100% then stall on playback.
+If `processingStatus !== "ready"`, FE still inserts into feed and polls seekability — do not assume scrubber-ready.
 
 ### Moderation reject (HTTP 403)
 
@@ -216,16 +229,30 @@ FE shows premium result modal (not a raw Alert).
 
 ---
 
-## 6. Seamlessness checklist for backend
+## 6. Seamlessness checklist
 
-1. Accept `X-Upload-ID` and echo it on every progress event.  
-2. Do not listen for uploads before Mongo is connected (avoid fake 401s during verify).  
-3. Emit progress early (`received` within ~200ms of request start).  
-4. Monotonic 0–100; never regress.  
-5. On reject, emit `rejected` then return 403 + `moderationResult`.  
-6. On success, emit `complete` at 100 **before or with** HTTP 200.  
-7. Include `duration` when known so feed scrubber works immediately.  
-8. If processing continues after HTTP 200, either keep socket progress until `ready`, or return `processingStatus` and a poll URL.
+### Backend (confirmed shipped 2026-08-02)
+
+- [x] Honor `X-Upload-ID` on every socket event + poll
+- [x] Early `received` (~5%) when multipart accepted
+- [x] Stages: `received`, `uploading`, `verifying`/`scanning`, `processing`, `finalizing`, `complete` / `rejected` / `error`
+- [x] Monotonic progress
+- [x] Emit `rejected` then HTTP 403 + `moderationResult`
+- [x] Emit `complete` at 100 with HTTP success (session ~2 min for poll)
+- [x] `GET /api/media/upload/:uploadId/status` (UUID → progress)
+- [x] Thumbnail optional; response `data` (+ legacy `media`)
+
+**Dev note:** BullMQ needs Redis ≥ 5. Local `3.0.x` (Memurai old) breaks progress workers — use Redis 7 / Docker `redis:7`.
+
+### Frontend (aligned)
+
+- [x] Always send `X-Upload-ID` (= `createUploadId()`)
+- [x] Connect socket before POST; stop simulated bar on first real event
+- [x] Map stages per §4; `complete` → success UI even while HTTP in flight
+- [x] Poll status if socket quiet ~3s (800ms interval; soft 404)
+- [x] Prefer `data` on success; `media` fallback (`extractUploadedMedia`)
+- [x] Optional thumbnail OK
+- [x] FE progress never regresses (max with previous)
 
 ---
 
@@ -238,6 +265,9 @@ FE shows premium result modal (not a raw Alert).
 | `utils/uploadValidation.ts` | Client eligibility |
 | `api/uploadMedia.ts` | FormData + `POST` + `X-Upload-ID` |
 | `hooks/uploadFlow/useUploadSocketProgress.ts` | Socket consumer |
+| `hooks/uploadFlow/useUploadStatusPoll.ts` | HTTP status poll fallback |
+| `hooks/uploadFlow/mapUploadProgress.ts` | Stage → FE status/message |
+| `hooks/uploadFlow/extractUploadedMedia.ts` | Prefer `data`, fallback `media` |
 | `hooks/uploadFlow/useSimulatedUploadProgress.ts` | Fallback bar |
 | `hooks/useUploadFlow.ts` | Orchestration |
 | `components/UploadProgressModal.tsx` | Progress UI |
@@ -247,4 +277,5 @@ FE shows premium result modal (not a raw Alert).
 ## 8. Out of scope / related docs
 
 - Gospel classifier policy: `docs/BACKEND_UPLOAD_ENOCH_MODERATION_HANDOFF.md`  
-- Modular upload structure: `docs/UPLOAD_MODULARIZATION.md`
+- Modular upload structure: `docs/UPLOAD_MODULARIZATION.md`  
+- Critical blockers (Mongo/feed/bookmark): `docs/BACKEND_CRITICAL_FE_BLOCKERS_HANDOFF.md`

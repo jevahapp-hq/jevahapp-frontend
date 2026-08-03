@@ -96,6 +96,8 @@ export function MusicCardPlayerArea(props: {
           onToggleMute={onToggleMute}
           onSeekRelative={onSeekRelative}
           onSeekToPercent={onSeekToPercent}
+          seekEnabled={hasDuration}
+          skipSeconds={10}
         />
 
         <View className="absolute bottom-4 left-3" pointerEvents="box-none">

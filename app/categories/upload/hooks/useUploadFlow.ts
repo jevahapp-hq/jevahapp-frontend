@@ -21,6 +21,7 @@ import {
   createUploadId,
   validateUploadFileSize,
 } from "./uploadFlow/uploadPayload";
+import { extractUploadedMedia } from "./uploadFlow/extractUploadedMedia";
 import {
   persistUploadedMedia,
   scheduleUploadSuccessNavigation,
@@ -178,28 +179,22 @@ export function useUploadFlow(deps: UploadFlowDeps) {
         return;
       }
 
-      cleanupSocket();
-
-      if (!result || typeof result !== "object" || !(result as { media?: unknown }).media) {
+      // Prefer `data` (current BE); fall back to legacy `media`
+      const uploaded = extractUploadedMedia(result);
+      if (!uploaded) {
         setLoading(false);
+        cleanupSocket();
         handleUploadParseFailure(setUploadResult);
         return;
       }
 
-      const uploaded = (result as { media: Record<string, unknown> }).media as {
-        _id: string;
-        title: string;
-        description?: string;
-        fileUrl: string;
-        playbackUrl?: string;
-        hlsUrl?: string;
-        contentType: string;
-        fileMimeType?: string;
-        thumbnailUrl?: string;
-        imageUrl?: string;
-        duration?: number;
-        genre?: string;
-      };
+      // Socket may already have sent `complete` — snap bar to 100
+      setUploadState((prev) => ({
+        status: "success",
+        progress: Math.max(prev.progress || 0, 100),
+        message: prev.message || "Upload complete",
+      }));
+      cleanupSocket();
 
       const feedItem = await persistUploadedMedia({
         uploaded,

@@ -69,13 +69,13 @@ export function useUploadSocketProgress(
         const handleUploadProgress = (progressData: ProgressStage) => {
           if (progressData.uploadId !== uploadId) return;
 
-          markRealtimeEvent();
+          markRealtimeEvent(uploadId);
           const mapped = mapUploadProgressEvent(progressData);
-          setUploadState({
+          setUploadState((prev) => ({
             status: mapped.status,
-            progress: mapped.progress,
+            progress: Math.max(prev.progress || 0, mapped.progress),
             message: mapped.message,
-          });
+          }));
         };
 
         socket.on("upload-progress", handleUploadProgress);

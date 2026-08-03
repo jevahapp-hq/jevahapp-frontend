@@ -4,10 +4,12 @@
  */
 import { getApiBaseUrl } from "../../utils/api";
 import TokenUtils from "../../utils/tokenUtils";
+import { mapCopyrightFreeSong } from "./mapCopyrightFreeSong";
 import type {
   CopyrightFreeSongResponse,
   CopyrightFreeSongsResponse,
   CopyrightFreeSongCategoriesResponse,
+  AudioLibraryResponse,
 } from "./types";
 
 class CopyrightFreeMusicAPI {
@@ -87,6 +89,17 @@ class CopyrightFreeMusicAPI {
         if (__DEV__) console.warn("Failed to parse JSON response:", parseError);
         return { success: false, data: { songs: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } } };
       }
+      if (data.success && Array.isArray(data.data?.songs)) {
+        data = {
+          ...data,
+          data: {
+            ...data.data,
+            songs: data.data.songs.map((s) =>
+              mapCopyrightFreeSong(s)
+            ) as CopyrightFreeSongResponse[],
+          },
+        };
+      }
       return data;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -123,7 +136,10 @@ class CopyrightFreeMusicAPI {
         if (__DEV__) console.warn("Failed to parse JSON response:", parseError);
         return { success: false, data: {} as CopyrightFreeSongResponse };
       }
-      return { success: result.success, data: result.data as CopyrightFreeSongResponse };
+      return {
+        success: result.success,
+        data: mapCopyrightFreeSong(result.data) as CopyrightFreeSongResponse,
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const isNetworkError =
@@ -211,31 +227,9 @@ class CopyrightFreeMusicAPI {
       }
 
       if (unifiedData.success && unifiedData.data) {
-        const songs = unifiedData.data.results.map((item: any) => ({
-          id: item.id || item._id,
-          _id: item._id || item.id,
-          title: item.title,
-          artist: item.artist || item.singer,
-          singer: item.singer || item.artist,
-          year: item.year || new Date(item.createdAt).getFullYear(),
-          audioUrl: item.audioUrl || item.fileUrl,
-          fileUrl: item.fileUrl || item.audioUrl,
-          thumbnailUrl: item.thumbnailUrl || "",
-          category: item.category || "",
-          duration: item.duration || 0,
-          contentType: "copyright-free-music" as const,
-          description: item.description || "",
-          speaker: item.speaker,
-          uploadedBy: item.uploadedBy || "system",
-          createdAt: item.createdAt,
-          viewCount: Math.max(Number(item.viewCount ?? item.views ?? 0) || 0, Number(item.likeCount ?? item.likes ?? 0) || 0),
-          views: Math.max(Number(item.views ?? item.viewCount ?? 0) || 0, Number(item.likes ?? item.likeCount ?? 0) || 0),
-          likeCount: item.likeCount ?? item.likes ?? 0,
-          likes: item.likes ?? item.likeCount ?? 0,
-          isLiked: item.isLiked || false,
-          isInLibrary: item.isInLibrary || false,
-          isPublicDomain: item.isPublicDomain !== undefined ? item.isPublicDomain : true,
-        }));
+        const songs = (unifiedData.data.results || []).map((item: any) =>
+          mapCopyrightFreeSong(item)
+        );
 
         return { success: true, data: { songs, pagination: unifiedData.data.pagination } };
       }
@@ -387,7 +381,14 @@ class CopyrightFreeMusicAPI {
     platform: string = "internal"
   ): Promise<{
     success: boolean;
-    data: { shareCount: number; likeCount?: number; viewCount?: number };
+    data: {
+      shared?: boolean;
+      shareCount: number;
+      likeCount?: number;
+      viewCount?: number;
+      shareUrl?: string;
+      platform?: string;
+    };
   }> {
     try {
       const token = await TokenUtils.getAuthToken();
@@ -414,7 +415,13 @@ class CopyrightFreeMusicAPI {
 
   async toggleSave(songId: string): Promise<{
     success: boolean;
-    data: { bookmarked: boolean; bookmarkCount: number };
+    data: {
+      saved?: boolean;
+      saveCount?: number;
+      bookmarked?: boolean;
+      bookmarkCount?: number;
+      isInLibrary?: boolean;
+    };
   }> {
     try {
       const token = await TokenUtils.getAuthToken();
@@ -432,7 +439,21 @@ class CopyrightFreeMusicAPI {
         data = await response.json();
       } catch (parseError) {
         if (__DEV__) console.warn("Failed to parse JSON response:", parseError);
-        return { success: false, data: null };
+        return { success: false, data: null as any };
+      }
+      // Normalize aliases
+      if (data?.data) {
+        const d = data.data;
+        const saved = d.saved ?? d.bookmarked ?? d.isInLibrary ?? false;
+        const saveCount = d.saveCount ?? d.bookmarkCount ?? 0;
+        data.data = {
+          ...d,
+          saved,
+          bookmarked: d.bookmarked ?? saved,
+          isInLibrary: d.isInLibrary ?? saved,
+          saveCount,
+          bookmarkCount: d.bookmarkCount ?? saveCount,
+        };
       }
       return data;
     } catch (error) {
@@ -444,7 +465,15 @@ class CopyrightFreeMusicAPI {
   async recordView(
     songId: string,
     payload?: { durationMs?: number; progressPct?: number; isComplete?: boolean }
-  ): Promise<{ success: boolean; data: { viewCount: number; hasViewed: boolean } }> {
+  ): Promise<{
+    success: boolean;
+    data: {
+      viewCount: number;
+      hasViewed?: boolean;
+      counted?: boolean;
+      isNewView?: boolean;
+    };
+  }> {
     try {
       const token = await TokenUtils.getAuthToken();
       if (!token) throw new Error("Authentication required");
@@ -467,7 +496,13 @@ class CopyrightFreeMusicAPI {
       }
 
       const data = await response.json();
-      if (__DEV__) console.log(`✅ View API Success:`, { success: data.success, viewCount: data.data?.viewCount });
+      if (__DEV__) {
+        console.log(`✅ View API Success:`, {
+          success: data.success,
+          viewCount: data.data?.viewCount,
+          counted: data.data?.counted,
+        });
+      }
       return data;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -477,20 +512,79 @@ class CopyrightFreeMusicAPI {
         errorMessage.includes("NetworkError");
 
       if (isNetworkError) {
-        if (__DEV__) {
-          const errorKey = `network_error_view_${songId}_${Date.now()}`;
-          if (!(global as any).__loggedNetworkErrors) (global as any).__loggedNetworkErrors = new Set();
-          if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
-            (global as any).__loggedNetworkErrors.add(errorKey);
-            setTimeout(() => (global as any).__loggedNetworkErrors?.delete(errorKey), 10000);
-            console.warn(`⚠️ Network error recording view for song ${songId} (offline or server unreachable)`);
-          }
-        }
-        return { success: false, data: { viewCount: 0, hasViewed: false } };
+        if (__DEV__) console.warn("Network error recording view (offline)");
+        return { success: false, data: { viewCount: 0, counted: false } };
+      }
+      console.error(`Error recording view for song ${songId}:`, error);
+      throw error;
+    }
+  }
+
+  async recordPlay(songId: string): Promise<{ success: boolean; data?: { playCount?: number } }> {
+    try {
+      const token = await TokenUtils.getAuthToken();
+      if (!token) throw new Error("Authentication required");
+      const response = await fetch(`${this.baseUrl}/${songId}/play`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        return { success: false };
+      }
+      return await response.json();
+    } catch {
+      return { success: false };
+    }
+  }
+
+  /**
+   * Unified audio library: CF saves + bookmarked media music/audio/podcast/sermon.
+   * GET /api/audio/library
+   */
+  async getLibrary(): Promise<AudioLibraryResponse> {
+    try {
+      const token = await TokenUtils.getAuthToken();
+      if (!token) throw new Error("Authentication required");
+
+      const response = await fetch(`${getApiBaseUrl()}/api/audio/library`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return { success: false, data: { items: [], songs: [], total: 0 } };
       }
 
-      if (__DEV__) console.error(`❌ Error recording view for song ${songId}:`, error);
-      return { success: false, data: { viewCount: 0, hasViewed: false } };
+      const json = await response.json();
+      const payload = json?.data ?? json;
+      const rawItems =
+        payload?.items ||
+        payload?.songs ||
+        (Array.isArray(payload) ? payload : []);
+      const items = (rawItems as any[]).map((item) =>
+        mapCopyrightFreeSong({
+          ...item,
+          source: item.source || "copyright-free",
+        })
+      ) as CopyrightFreeSongResponse[];
+
+      return {
+        success: Boolean(json?.success !== false),
+        data: {
+          items,
+          songs: items,
+          total: Number(payload?.total ?? items.length) || items.length,
+        },
+      };
+    } catch (error) {
+      if (__DEV__) console.warn("getLibrary failed:", error);
+      return { success: false, data: { items: [], songs: [], total: 0 } };
     }
   }
 }

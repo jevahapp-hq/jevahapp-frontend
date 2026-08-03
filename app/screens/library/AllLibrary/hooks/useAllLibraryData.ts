@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import allMediaAPI from "../../../../utils/allMediaAPI";
+import copyrightFreeMusicAPI from "../../../../services/copyrightFreeMusicAPI";
 import { useLibraryStore } from "../../../../store/useLibraryStore";
 import {
   filterItemsByType,
@@ -110,6 +111,28 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
     setError(null);
 
     try {
+      const type = (contentType || "").toLowerCase();
+      const preferAudioLibrary =
+        !type ||
+        type === "all" ||
+        type === "music" ||
+        type === "audio" ||
+        type === "podcast" ||
+        type === "podcasts" ||
+        type === "sermon" ||
+        type === "sermons";
+
+      if (preferAudioLibrary) {
+        const audioLib = await copyrightFreeMusicAPI.getLibrary();
+        if (audioLib.success && audioLib.data.items.length > 0) {
+          const applied = applyItemsToState(audioLib.data.items);
+          if (applied) {
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       const apiContentType = mapContentTypeToAPI(contentType);
       const response = await allMediaAPI.getSavedContent(1, 50, apiContentType);
 
@@ -137,6 +160,28 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      const type = (contentType || "").toLowerCase();
+      const preferAudioLibrary =
+        !type ||
+        type === "all" ||
+        type === "music" ||
+        type === "audio" ||
+        type === "podcast" ||
+        type === "podcasts" ||
+        type === "sermon" ||
+        type === "sermons";
+
+      if (preferAudioLibrary) {
+        const audioLib = await copyrightFreeMusicAPI.getLibrary();
+        if (audioLib.success && audioLib.data.items.length > 0) {
+          const applied = applyItemsToState(audioLib.data.items);
+          if (applied) {
+            setRefreshing(false);
+            return;
+          }
+        }
+      }
+
       const apiContentType = mapContentTypeToAPI(contentType);
       const response = await allMediaAPI.getSavedContent(1, 50, apiContentType);
 

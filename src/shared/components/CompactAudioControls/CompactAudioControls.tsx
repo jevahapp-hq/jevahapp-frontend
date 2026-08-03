@@ -8,8 +8,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
-import GlobalAudioInstanceManager from "../../../app/utils/globalAudioInstanceManager";
+import { useGlobalAudioPlayerStore } from "../../../../app/store/useGlobalAudioPlayerStore";
+import GlobalAudioInstanceManager from "../../../../app/utils/globalAudioInstanceManager";
 
 interface AudioPlayerState {
   isPlaying: boolean;

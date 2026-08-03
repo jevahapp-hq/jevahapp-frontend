@@ -8,13 +8,24 @@ export function useSongInteractions(song: any) {
   const [viewCount, setViewCount] = useState(
     song?.viewCount ?? song?.views ?? Math.max(song?.likeCount ?? 0, song?.likes ?? 0)
   );
+  const [shareCount, setShareCount] = useState(song?.shareCount || 0);
+  const [saveCount, setSaveCount] = useState(song?.saveCount || 0);
+  const [isInLibrary, setIsInLibrary] = useState(
+    Boolean(song?.isInLibrary ?? song?.isSaved)
+  );
   const [isTogglingLike, setIsTogglingLike] = useState(false);
+  const [isTogglingSave, setIsTogglingSave] = useState(false);
 
   useEffect(() => {
     if (song) {
       setIsLiked(song.isLiked || false);
       setLikeCount(song.likeCount || song.likes || 0);
-      setViewCount(Math.max(song.viewCount ?? song.views ?? 0, song.likeCount ?? song.likes ?? 0));
+      setViewCount(
+        Math.max(song.viewCount ?? song.views ?? 0, song.likeCount ?? song.likes ?? 0)
+      );
+      setShareCount(song.shareCount || 0);
+      setSaveCount(song.saveCount || 0);
+      setIsInLibrary(Boolean(song.isInLibrary ?? song.isSaved));
     }
   }, [song]);
 
@@ -40,7 +51,7 @@ export function useSongInteractions(song: any) {
         setLikeCount(previousLikeCount);
         Alert.alert("Error", "Failed to update like");
       }
-    } catch (error) {
+    } catch {
       setIsLiked(previousLiked);
       setLikeCount(previousLikeCount);
       Alert.alert("Error", "Failed to update like");
@@ -49,14 +60,54 @@ export function useSongInteractions(song: any) {
     }
   }, [song, isLiked, likeCount, isTogglingLike]);
 
+  const handleToggleSave = useCallback(async () => {
+    if (!song || isTogglingSave) return;
+    const songId = song._id || song.id;
+    if (!songId) return;
+    const previousSaved = isInLibrary;
+    const previousCount = saveCount;
+    setIsInLibrary(!previousSaved);
+    setSaveCount(previousSaved ? Math.max(0, previousCount - 1) : previousCount + 1);
+    setIsTogglingSave(true);
+    try {
+      const result = await copyrightFreeMusicAPI.toggleSave(songId);
+      if (result.success && result.data) {
+        const saved =
+          result.data.saved ?? result.data.bookmarked ?? result.data.isInLibrary ?? false;
+        setIsInLibrary(Boolean(saved));
+        const nextCount =
+          result.data.saveCount ?? result.data.bookmarkCount ?? previousCount;
+        setSaveCount(Number(nextCount) || 0);
+      } else {
+        setIsInLibrary(previousSaved);
+        setSaveCount(previousCount);
+        Alert.alert("Error", "Failed to update library");
+      }
+    } catch {
+      setIsInLibrary(previousSaved);
+      setSaveCount(previousCount);
+      Alert.alert("Error", "Failed to update library");
+    } finally {
+      setIsTogglingSave(false);
+    }
+  }, [song, isInLibrary, saveCount, isTogglingSave]);
+
   return {
     isLiked,
     likeCount,
     viewCount,
+    shareCount,
+    saveCount,
+    isInLibrary,
     isTogglingLike,
+    isTogglingSave,
     setIsLiked,
     setLikeCount,
     setViewCount,
+    setShareCount,
+    setSaveCount,
+    setIsInLibrary,
     handleToggleLike,
+    handleToggleSave,
   };
 }

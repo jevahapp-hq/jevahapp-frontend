@@ -6,6 +6,7 @@ import TokenUtils from "../../utils/tokenUtils";
 import { creatorsApi } from "./CreatorsApi";
 import {
   normalizeTrackCard,
+  isTrackPlayable,
   type TrackCard,
 } from "../music-catalog/trackTypes";
 
@@ -243,7 +244,55 @@ export async function uploadCreatorTrack(params: {
   }
 
   onProgress?.("Finalizing…");
-  return finalizeTrack(intent.trackId, { publish: publish !== false });
+  const finalized = await finalizeTrack(intent.trackId, {
+    publish: publish !== false,
+  });
+
+  // Poll until ready + prefer duration > 0 before treating as seekable
+  onProgress?.("Processing…");
+  const ready = await pollCreatorTrackUntilReady(intent.trackId, {
+    onProgress,
+  });
+  return ready || finalized;
+}
+
+/** Poll GET /api/creators/me/tracks until track is ready (and duration if available). */
+export async function pollCreatorTrackUntilReady(
+  trackId: string,
+  opts?: {
+    maxAttempts?: number;
+    intervalMs?: number;
+    onProgress?: (phase: string) => void;
+  }
+): Promise<TrackCard | null> {
+  const maxAttempts = opts?.maxAttempts ?? 15;
+  const intervalMs = opts?.intervalMs ?? 2000;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const { tracks } = await creatorsApi.getMyTracks({ page: 1, limit: 50 });
+      const raw = (tracks || []).find(
+        (t: any) => String(t.id || t._id) === String(trackId)
+      );
+      if (raw) {
+        const card = normalizeTrackCard(raw, "artist");
+        if (card && isTrackPlayable(card)) {
+          // Prefer duration > 0; if still 0, still return playable (soft-disable seek on FE)
+          if (card.durationSec > 0 || i >= 3) {
+            opts?.onProgress?.(
+              card.durationSec > 0 ? "Ready" : "Ready (duration pending)"
+            );
+            return card;
+          }
+        }
+      }
+    } catch {
+      // keep polling
+    }
+    opts?.onProgress?.(`Processing… (${i + 1}/${maxAttempts})`);
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return null;
 }
 
 export async function requireCreatorAuthToken(): Promise<string> {

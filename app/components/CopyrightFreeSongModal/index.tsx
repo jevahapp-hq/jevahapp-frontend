@@ -1,501 +1,38 @@
 /**
- * CopyrightFreeSongModal - Composed from SongModalPlayer, SongModalOptions, etc.
+ * CopyrightFreeSongModal - thin shell; logic in useSongModalController.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  InteractionManager,
   Modal,
   Platform,
-  Share,
   StatusBar,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import { GestureDetector } from "react-native-gesture-handler";
+import Animated from "react-native-reanimated";
 
-import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
-import { useGlobalAudioPlayerStore } from "../../store/useGlobalAudioPlayerStore";
-import { usePlaylistStore, type Playlist } from "../../store/usePlaylistStore";
-import { playlistAPI } from "../../utils/playlistAPI";
 import { SongModalCreatePlaylist } from "./SongModalCreatePlaylist";
 import { SongModalOptions } from "./SongModalOptions";
 import { SongModalPlayer } from "./SongModalPlayer";
 import { SongModalPlaylistDetail } from "./SongModalPlaylistDetail";
 import { SongModalPlaylistSelection } from "./SongModalPlaylistSelection";
 import { SongModalPlaylistView } from "./SongModalPlaylistView";
-import {
-  useCopyrightFreeSongRealtime,
-  useCopyrightFreeSongViewTracking,
-  useSeekPanResponder,
-} from "./useCopyrightFreeSongModalLogic";
-import { transformBackendSong } from "./utils/transformBackendSong";
+import { useSongModalController } from "./hooks/useSongModalController";
+import type { CopyrightFreeSongModalProps } from "./types";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+export type { CopyrightFreeSongModalProps } from "./types";
 
-export interface CopyrightFreeSongModalProps {
-  visible: boolean;
-  song: any | null;
-  onClose: () => void;
-  onPlay?: (song: any) => void;
-  isPlaying?: boolean;
-  audioProgress?: number;
-  audioDuration?: number;
-  audioPosition?: number;
-  isMuted?: boolean;
-  onTogglePlay?: () => void;
-  onToggleMute?: () => void;
-  onSeek?: (progress: number) => void;
-  formatTime?: (ms: number) => string;
-  variant?: "player" | "options";
-  initialAction?: "options" | "playlist" | null;
-}
+export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProps) {
+  const m = useSongModalController(props);
 
-const defaultFormatTime = (ms: number) => {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-};
-
-export default function CopyrightFreeSongModal({
-  visible,
-  song,
-  onClose,
-  onPlay,
-  isPlaying = false,
-  audioProgress = 0,
-  audioDuration = 0,
-  audioPosition = 0,
-  isMuted = false,
-  onTogglePlay,
-  onToggleMute,
-  onSeek,
-  formatTime = defaultFormatTime,
-  variant,
-  initialAction,
-}: CopyrightFreeSongModalProps) {
-  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
-  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
-  const [showPlaylistView, setShowPlaylistView] = useState(false);
-  const [showPlaylistDetail, setShowPlaylistDetail] = useState(false);
-  const [selectedPlaylistForDetail, setSelectedPlaylistForDetail] = useState<Playlist | null>(null);
-  const [newPlaylistName, setNewPlaylistName] = useState("");
-  const [newPlaylistDescription, setNewPlaylistDescription] = useState("");
-  const [isSeeking, setIsSeeking] = useState(false);
-  const [seekProgress, setSeekProgress] = useState(0);
-  const progressBarRef = useRef<View>(null);
-  const [showOptionsModal, setShowOptionsModal] = useState(variant === "options" || initialAction === "options");
-  const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
-  const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
-  const [isLiked, setIsLiked] = useState(song?.isLiked || false);
-  const [likeCount, setLikeCount] = useState(song?.likeCount || song?.likes || 0);
-  const [viewCount, setViewCount] = useState(
-    song?.viewCount ?? song?.views ?? Math.max(song?.likeCount ?? 0, song?.likes ?? 0)
-  );
-  const [isTogglingLike, setIsTogglingLike] = useState(false);
-  const [hasTrackedView, setHasTrackedView] = useState(false);
-  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
-
-  const repeatMode = useGlobalAudioPlayerStore((s) => s.repeatMode);
-  const isShuffled = useGlobalAudioPlayerStore((s) => s.isShuffled);
-  const setRepeatMode = useGlobalAudioPlayerStore((s) => s.setRepeatMode);
-  const toggleShuffle = useGlobalAudioPlayerStore((s) => s.toggleShuffle);
-
-  const {
-    playlists,
-    loadPlaylistsFromBackend,
-  } = usePlaylistStore();
-
-  const translateY = useSharedValue(SCREEN_HEIGHT);
-  const playlistViewTranslateY = useSharedValue(SCREEN_HEIGHT);
-  const playlistDetailTranslateY = useSharedValue(SCREEN_HEIGHT);
-  const dragY = useSharedValue(0);
-
-  const gesture = Gesture.Pan()
-    .activeOffsetY([0, 10]) // Start recognizing pan only when moving down at least 10px
-    .failOffsetX([-20, 20]) // Fail if moving horizontally too much
-    .onUpdate((event) => {
-      if (event.translationY > 0) {
-        dragY.value = event.translationY;
-      }
-    })
-    .onEnd((event) => {
-      if (event.translationY > 120 || event.velocityY > 600) {
-        dragY.value = withTiming(SCREEN_HEIGHT, { duration: 250 }, () => {
-          runOnJS(onClose)();
-        });
-      } else {
-        dragY.value = withSpring(0, { damping: 20, stiffness: 200 });
-      }
-    });
-
-  useEffect(() => {
-    if (song) {
-      setIsLiked(song.isLiked || false);
-      setLikeCount(song.likeCount || song.likes || 0);
-      setViewCount(Math.max(song.viewCount ?? song.views ?? 0, song.likeCount ?? song.likes ?? 0));
-      setHasTrackedView(false);
-    }
-  }, [song]);
-
-  useCopyrightFreeSongViewTracking({
-    visible,
-    song,
-    isPlaying,
-    audioProgress,
-    audioPosition,
-    audioDuration,
-    hasTrackedView,
-    setHasTrackedView,
-    setViewCount,
-    likeCount,
-  });
-
-  useCopyrightFreeSongRealtime({
-    visible,
-    songId: song?._id || song?.id || null,
-    setLikeCount,
-    setViewCount,
-    setIsLiked,
-  });
-
-  const panResponder = useSeekPanResponder({
-    audioProgress,
-    onSeek,
-    progressBarRef,
-    setIsSeeking,
-    setSeekProgress,
-  });
-
-  const prevShowPlaylistModalRef = useRef(false);
-  useEffect(() => {
-    if (showPlaylistModal && !prevShowPlaylistModalRef.current) {
-      InteractionManager.runAfterInteractions(() => loadPlaylistsFromBackend());
-    }
-    prevShowPlaylistModalRef.current = showPlaylistModal;
-  }, [showPlaylistModal, loadPlaylistsFromBackend]);
-
-  useEffect(() => {
-    if (showPlaylistView) {
-      playlistViewTranslateY.value = withSpring(0, { damping: 30, stiffness: 300, mass: 0.8, overshootClamping: true });
-    } else {
-      playlistViewTranslateY.value = withSpring(SCREEN_HEIGHT, { damping: 30, stiffness: 300, mass: 0.8 });
-    }
-  }, [showPlaylistView, playlistViewTranslateY]);
-
-  useEffect(() => {
-    if (showPlaylistDetail) {
-      playlistDetailTranslateY.value = withSpring(0, { damping: 30, stiffness: 300, mass: 0.8, overshootClamping: true });
-    } else {
-      playlistDetailTranslateY.value = withSpring(SCREEN_HEIGHT, { damping: 30, stiffness: 300, mass: 0.8 });
-    }
-  }, [showPlaylistDetail, playlistDetailTranslateY]);
-
-  const playlistViewAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: playlistViewTranslateY.value }],
-  }));
-
-  const playlistDetailAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: playlistDetailTranslateY.value }],
-  }));
-
-  const modalAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value + dragY.value }],
-  }));
-
-  useEffect(() => {
-    if (visible) {
-      dragY.value = 0;
-      translateY.value = withSpring(0, { damping: 30, stiffness: 300, mass: 0.8, overshootClamping: true });
-    } else {
-      translateY.value = withSpring(SCREEN_HEIGHT, { damping: 30, stiffness: 300, mass: 0.8 });
-    }
-  }, [visible, translateY, dragY]);
-
-
-  const handleAddToPlaylist = useCallback(() => {
-    if (!song) return;
-    setShowPlaylistModal(true);
-  }, [song]);
-
-  const handleOptionsPress = useCallback(() => {
-    if (!song) return;
-    setOptionsSongData(null);
-    setShowOptionsModal(true);
-  }, [song]);
-
-  useEffect(() => {
-    if (!visible || !song) return;
-    const songId = song.id || song._id;
-    if (!songId) return;
-
-    let cancelled = false;
-    copyrightFreeMusicAPI
-      .getSongById(songId)
-      .then((response) => {
-        if (cancelled || !response.success || !response.data) return;
-        const fresh = transformBackendSong(response.data);
-        setIsLiked(Boolean(fresh.isLiked));
-        setLikeCount(fresh.likeCount ?? fresh.likes ?? 0);
-        setViewCount(
-          Math.max(
-            fresh.viewCount ?? fresh.views ?? 0,
-            fresh.likeCount ?? fresh.likes ?? 0
-          )
-        );
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [visible, song?._id, song?.id]);
-
-  useEffect(() => {
-    if (!showOptionsModal || !song) return;
-    const songId = song.id || song._id;
-    if (!songId) return;
-
-    setLoadingOptionsSong(true);
-    copyrightFreeMusicAPI
-      .getSongById(songId)
-      .then((response) => {
-        if (response.success && response.data) {
-          const transformedSong = transformBackendSong(response.data);
-          setOptionsSongData(transformedSong);
-          setViewCount((prev: number) =>
-            Math.max(transformedSong.views ?? transformedSong.viewCount ?? 0, likeCount ?? 0, prev)
-          );
-        }
-      })
-      .catch(() => setOptionsSongData(song))
-      .finally(() => setLoadingOptionsSong(false));
-  }, [showOptionsModal, song, likeCount]);
-
-  const handleClosePlaylistModal = useCallback(() => setShowPlaylistModal(false), []);
-
-  const handleCreatePlaylist = useCallback(async () => {
-    if (!newPlaylistName.trim()) {
-      Alert.alert("Error", "Please enter a playlist name");
-      return;
-    }
-    try {
-      setIsLoadingPlaylists(true);
-      const result = await playlistAPI.createPlaylist({
-        name: newPlaylistName.trim(),
-        description: newPlaylistDescription.trim() || undefined,
-        isPublic: false,
-      });
-      if (!result.success || !result.data) {
-        Alert.alert("Error", result.error || "Failed to create playlist");
-        setIsLoadingPlaylists(false);
-        return;
-      }
-      const playlistId = result.data._id;
-      setNewPlaylistName("");
-      setNewPlaylistDescription("");
-      setShowCreatePlaylist(false);
-      await loadPlaylistsFromBackend();
-      if (song) {
-        const songId = song._id || song.id;
-        if (songId) {
-          const addResult = await playlistAPI.addTrackToPlaylist(playlistId, {
-            copyrightFreeSongId: songId,
-            position: undefined,
-          });
-          if (addResult.success) {
-            await loadPlaylistsFromBackend();
-            setShowPlaylistModal(false);
-            Alert.alert("Success", "Playlist created and song added!");
-          } else {
-            setShowPlaylistModal(true);
-            Alert.alert("Success", "Playlist created! But failed to add song.");
-          }
-        } else {
-          setShowPlaylistModal(true);
-          Alert.alert("Success", "Playlist created!");
-        }
-      } else {
-        setShowPlaylistModal(true);
-        Alert.alert("Success", "Playlist created!");
-      }
-      setIsLoadingPlaylists(false);
-    } catch (error) {
-      console.error("Error creating playlist:", error);
-      Alert.alert("Error", "Failed to create playlist");
-      setIsLoadingPlaylists(false);
-    }
-  }, [newPlaylistName, newPlaylistDescription, song, loadPlaylistsFromBackend]);
-
-  const handleAddToExistingPlaylist = useCallback(
-    async (playlistId: string) => {
-      if (!song) return;
-      try {
-        setIsLoadingPlaylists(true);
-        const songId = song._id || song.id;
-        if (!songId) {
-          Alert.alert("Error", "Invalid song ID");
-          setIsLoadingPlaylists(false);
-          return;
-        }
-        const result = await playlistAPI.addTrackToPlaylist(playlistId, {
-          copyrightFreeSongId: songId,
-          position: undefined,
-        });
-        if (!result.success) {
-          if (result.error?.includes("already in the playlist")) {
-            Alert.alert("Info", "This song is already in the playlist");
-          } else {
-            Alert.alert("Error", result.error || "Failed to add song to playlist");
-          }
-          setIsLoadingPlaylists(false);
-          return;
-        }
-        await loadPlaylistsFromBackend();
-        setNewPlaylistName("");
-        setNewPlaylistDescription("");
-        setShowCreatePlaylist(false);
-        setShowPlaylistModal(false);
-        Alert.alert("Success", "Song added to playlist!");
-        setIsLoadingPlaylists(false);
-      } catch (error) {
-        console.error("Error adding song to playlist:", error);
-        Alert.alert("Error", "Failed to add song to playlist");
-        setIsLoadingPlaylists(false);
-      }
-    },
-    [song, loadPlaylistsFromBackend]
-  );
-
-  const handleToggleLike = useCallback(async () => {
-    if (!song || isTogglingLike) return;
-    const songId = song._id || song.id;
-    if (!songId) return;
-    const previousLiked = isLiked;
-    const previousLikeCount = likeCount;
-    setIsLiked(!previousLiked);
-    setLikeCount(previousLiked ? previousLikeCount - 1 : previousLikeCount + 1);
-    setIsTogglingLike(true);
-    try {
-      const result = await copyrightFreeMusicAPI.toggleLike(songId);
-      if (result.success && result.data) {
-        setIsLiked(result.data.liked);
-        setLikeCount(result.data.likeCount);
-        if (result.data.viewCount !== undefined) {
-          setViewCount(Math.max(result.data.viewCount, result.data.likeCount ?? 0));
-        }
-      } else {
-        setIsLiked(previousLiked);
-        setLikeCount(previousLikeCount);
-        Alert.alert("Error", "Failed to update like");
-      }
-    } catch (error) {
-      setIsLiked(previousLiked);
-      setLikeCount(previousLikeCount);
-      Alert.alert("Error", "Failed to update like");
-    } finally {
-      setIsTogglingLike(false);
-    }
-  }, [song, isLiked, likeCount, isTogglingLike]);
-
-  const handleShare = useCallback(async () => {
-    if (!song) return;
-    const songId = song._id || song.id;
-    if (!songId) return;
-
-    try {
-      const result = await Share.share({
-        title: song.title,
-        message: `Listen to ${song.title} on Jevah`,
-        url: song.audioUrl || song.fileUrl,
-      });
-      if (result.action === Share.sharedAction) {
-        const response = await copyrightFreeMusicAPI.recordShare(
-          songId,
-          result.activityType || "internal"
-        );
-        if (response.success && response.data) {
-          setViewCount((prev) =>
-            Math.max(response.data.viewCount ?? prev, response.data.likeCount ?? likeCount, prev)
-          );
-        }
-      }
-    } catch (error) {
-      if (__DEV__) console.warn("Failed to share copyright-free song:", error);
-    }
-  }, [song, likeCount]);
-
-  const handleDeletePlaylist = useCallback(
-    async (playlistId: string) => {
-      Alert.alert("Delete Playlist", "Are you sure you want to delete this playlist?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setIsLoadingPlaylists(true);
-              const result = await playlistAPI.deletePlaylist(playlistId);
-              if (result.success) {
-                await loadPlaylistsFromBackend();
-                Alert.alert("Success", "Playlist deleted");
-              } else {
-                Alert.alert("Error", result.error || "Failed to delete playlist");
-              }
-              setIsLoadingPlaylists(false);
-            } catch (error) {
-              console.error("Error deleting playlist:", error);
-              Alert.alert("Error", "Failed to delete playlist");
-              setIsLoadingPlaylists(false);
-            }
-          },
-        },
-      ]);
-    },
-    [loadPlaylistsFromBackend]
-  );
-
-  const handleSkip = useCallback(
-    (seconds: number) => {
-      if (!onSeek) return;
-      const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
-      if (!durationMs || durationMs <= 0) return;
-      const newPositionMs = Math.max(0, Math.min(durationMs, (audioPosition || 0) + seconds * 1000));
-      onSeek(newPositionMs / durationMs);
-    },
-    [onSeek, audioDuration, audioPosition, song]
-  );
-
-  const imageSource = useMemo(() => {
-    if (!song?.thumbnailUrl) return null;
-    return typeof song.thumbnailUrl === "string"
-      ? { uri: song.thumbnailUrl }
-      : song.thumbnailUrl;
-  }, [song?.thumbnailUrl]);
-
-  const albumArtSize = useMemo(() => {
-    const screenWidth = Dimensions.get("window").width;
-    const screenHeight = Dimensions.get("window").height;
-    return Math.min(screenWidth * 0.65, screenHeight * 0.35, 280);
-  }, []);
-
-  if (!song) return null;
+  if (!m.song) return null;
 
   return (
     <>
       <Modal
-        visible={visible}
+        visible={props.visible}
         transparent
         animationType="none"
-        onRequestClose={onClose}
+        onRequestClose={m.onClose}
         statusBarTranslucent
       >
         <StatusBar barStyle="light-content" />
@@ -508,132 +45,129 @@ export default function CopyrightFreeSongModal({
                 paddingTop: Platform.OS === "ios" ? 50 : 40,
                 paddingBottom: Platform.OS === "ios" ? 40 : 30,
               },
-              modalAnimatedStyle,
+              m.modalAnimatedStyle,
             ]}
           >
-
             <View collapsable={false} style={{ flex: 1 }}>
-              <GestureDetector gesture={gesture}>
+              <GestureDetector gesture={m.gesture}>
                 <View collapsable={false} style={{ flex: 1 }}>
                   <SongModalPlayer
-
-                    song={song}
-                    albumArtSize={albumArtSize}
-                    imageSource={imageSource}
-                    isLiked={isLiked}
-                    likeCount={likeCount}
-                    viewCount={viewCount}
-                    isTogglingLike={isTogglingLike}
-                    isPlaying={!!isPlaying}
-                    isSeeking={isSeeking}
-                    seekProgress={seekProgress}
-                    audioProgress={audioProgress}
-                    audioDuration={audioDuration}
-                    audioPosition={audioPosition}
-                    repeatMode={repeatMode}
-                    isShuffled={isShuffled}
-                    isMuted={!!isMuted}
-                    progressBarRef={progressBarRef}
-                    panHandlers={panResponder.panHandlers}
-                    formatTime={formatTime}
-                    onClose={onClose}
-                    onOptionsPress={handleOptionsPress}
-                    onToggleLike={handleToggleLike}
-                    onTogglePlay={() => (onTogglePlay ? onTogglePlay() : onPlay?.(song))}
-                    onToggleMute={() => onToggleMute?.()}
-                    onSkip={handleSkip}
-                    onRepeatCycle={() => {
-                      if (repeatMode === "none") setRepeatMode("all");
-                      else if (repeatMode === "all") setRepeatMode("one");
-                      else setRepeatMode("none");
-                    }}
-                    onToggleShuffle={toggleShuffle}
-                    onOpenPlaylistView={() => setShowPlaylistView(true)}
-                    onShare={handleShare}
+                    song={m.song}
+                    albumArtSize={m.albumArtSize}
+                    imageSource={m.imageSource}
+                    isLiked={m.isLiked}
+                    likeCount={m.likeCount}
+                    viewCount={m.viewCount}
+                    isTogglingLike={m.isTogglingLike}
+                    isPlaying={!!m.isPlaying}
+                    isSeeking={m.isSeeking}
+                    seekProgress={m.seekProgress}
+                    audioProgress={m.audioProgress}
+                    audioDuration={m.audioDuration}
+                    audioPosition={m.audioPosition}
+                    repeatMode={m.repeatMode}
+                    isShuffled={m.isShuffled}
+                    isMuted={!!m.isMuted}
+                    progressBarRef={m.progressBarRef}
+                    panHandlers={m.panHandlers}
+                    formatTime={m.formatTime}
+                    onClose={m.onClose}
+                    onOptionsPress={m.handleOptionsPress}
+                    onToggleLike={m.handleToggleLike}
+                    onTogglePlay={() =>
+                      m.onTogglePlay ? m.onTogglePlay() : m.onPlay?.(m.song)
+                    }
+                    onToggleMute={() => m.onToggleMute?.()}
+                    onSkip={m.handleSkip}
+                    onRepeatCycle={m.handleRepeatCycle}
+                    onToggleShuffle={m.toggleShuffle}
+                    onOpenPlaylistView={() => m.setShowPlaylistView(true)}
+                    onShare={m.handleShare}
                   />
                 </View>
               </GestureDetector>
             </View>
-
-
-
           </Animated.View>
         </View>
       </Modal>
 
       <SongModalPlaylistView
-        visible={showPlaylistView}
-        playlists={playlists}
-        isLoadingPlaylists={isLoadingPlaylists}
-        animatedStyle={playlistViewAnimatedStyle}
-        onClose={() => setShowPlaylistView(false)}
+        visible={m.showPlaylistView}
+        playlists={m.playlists}
+        isLoadingPlaylists={m.isLoadingPlaylists}
+        animatedStyle={m.playlistViewAnimatedStyle}
+        onClose={() => m.setShowPlaylistView(false)}
         onSelectPlaylist={(playlist) => {
-          setSelectedPlaylistForDetail(playlist);
-          setShowPlaylistView(false);
-          setShowPlaylistDetail(true);
+          m.setSelectedPlaylistForDetail(playlist);
+          m.setShowPlaylistView(false);
+          m.setShowPlaylistDetail(true);
         }}
       />
 
       <SongModalPlaylistSelection
-        visible={showPlaylistModal}
-        playlists={playlists}
-        isLoadingPlaylists={isLoadingPlaylists}
-        onClose={handleClosePlaylistModal}
+        visible={m.showPlaylistModal}
+        playlists={m.playlists}
+        isLoadingPlaylists={m.isLoadingPlaylists}
+        onClose={m.handleClosePlaylistModal}
         onCreateNew={async () => {
-          await loadPlaylistsFromBackend();
-          setShowCreatePlaylist(true);
-          setShowPlaylistModal(false);
+          await m.loadPlaylistsFromBackend();
+          m.setShowCreatePlaylist(true);
+          m.setShowPlaylistModal(false);
         }}
-        onAddToPlaylist={handleAddToExistingPlaylist}
-        onDeletePlaylist={handleDeletePlaylist}
+        onAddToPlaylist={m.handleAddToExistingPlaylist}
+        onDeletePlaylist={m.handleDeletePlaylist}
       />
 
       <SongModalCreatePlaylist
-        visible={showCreatePlaylist}
-        playlistName={newPlaylistName}
-        playlistDescription={newPlaylistDescription}
-        isLoading={isLoadingPlaylists}
-        onNameChange={setNewPlaylistName}
-        onDescriptionChange={setNewPlaylistDescription}
-        onCreate={handleCreatePlaylist}
+        visible={m.showCreatePlaylist}
+        playlistName={m.newPlaylistName}
+        playlistDescription={m.newPlaylistDescription}
+        isLoading={m.isLoadingPlaylists}
+        onNameChange={m.setNewPlaylistName}
+        onDescriptionChange={m.setNewPlaylistDescription}
+        onCreate={m.handleCreatePlaylist}
         onCancel={() => {
-          setShowCreatePlaylist(false);
-          setNewPlaylistName("");
-          setNewPlaylistDescription("");
+          m.setShowCreatePlaylist(false);
+          m.setNewPlaylistName("");
+          m.setNewPlaylistDescription("");
         }}
       />
 
       <SongModalPlaylistDetail
-        visible={showPlaylistDetail}
-        playlist={selectedPlaylistForDetail}
-        animatedStyle={playlistDetailAnimatedStyle}
+        visible={m.showPlaylistDetail}
+        playlist={m.selectedPlaylistForDetail}
+        animatedStyle={m.playlistDetailAnimatedStyle}
         onClose={() => {
-          setShowPlaylistDetail(false);
-          setSelectedPlaylistForDetail(null);
+          m.setShowPlaylistDetail(false);
+          m.setSelectedPlaylistForDetail(null);
         }}
         onBack={() => {
-          setShowPlaylistDetail(false);
-          setSelectedPlaylistForDetail(null);
-          setTimeout(() => setShowPlaylistView(true), 100);
+          m.setShowPlaylistDetail(false);
+          m.setSelectedPlaylistForDetail(null);
+          setTimeout(() => m.setShowPlaylistView(true), 100);
         }}
-        onPlaySong={(s) => onPlay?.(s)}
+        onPlaySong={(s) => m.onPlay?.(s)}
       />
 
       <SongModalOptions
-        visible={showOptionsModal}
-        song={song}
-        viewCount={viewCount}
-        optionsSongData={optionsSongData}
-        loadingOptionsSong={loadingOptionsSong}
+        visible={m.showOptionsModal}
+        song={m.song}
+        viewCount={m.viewCount}
+        shareCount={m.shareCount}
+        isInLibrary={m.isInLibrary}
+        isTogglingSave={m.isTogglingSave}
+        optionsSongData={m.optionsSongData}
+        loadingOptionsSong={m.loadingOptionsSong}
         onClose={() => {
-          setShowOptionsModal(false);
-          setOptionsSongData(null);
+          m.setShowOptionsModal(false);
+          m.setOptionsSongData(null);
         }}
         onAddToPlaylist={() => {
-          setShowOptionsModal(false);
-          setOptionsSongData(null);
-          setShowPlaylistModal(true);
+          m.setShowOptionsModal(false);
+          m.setOptionsSongData(null);
+          m.setShowPlaylistModal(true);
         }}
+        onToggleSave={m.handleToggleSave}
       />
     </>
   );

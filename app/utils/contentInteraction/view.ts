@@ -85,7 +85,7 @@ export async function recordView(
     const data = await response.json();
     const viewCount = data?.data?.viewCount ?? data?.totalViews ?? 0;
     const hasViewed = data?.data?.hasViewed ?? undefined;
-    const counted = data?.data?.counted ?? true;
+    const counted = data?.data?.counted === true;
 
     return {
       totalViews: Number(viewCount) || 0,

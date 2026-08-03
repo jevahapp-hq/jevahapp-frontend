@@ -3,7 +3,11 @@ import { Alert } from "react-native";
 import { usePlaylistStore } from "../../store/usePlaylistStore";
 import { playlistAPI } from "../../utils/playlistAPI";
 
-export function usePlaylistActions(song: any, onSuccess?: () => void) {
+export function usePlaylistActions(
+  song: any,
+  setShowCreatePlaylist?: (v: boolean) => void,
+  setShowPlaylistModal?: (v: boolean) => void
+) {
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [newPlaylistDescription, setNewPlaylistDescription] = useState("");
@@ -29,6 +33,7 @@ export function usePlaylistActions(song: any, onSuccess?: () => void) {
       const playlistId = result.data._id;
       setNewPlaylistName("");
       setNewPlaylistDescription("");
+      setShowCreatePlaylist?.(false);
       await loadPlaylistsFromBackend();
       if (song) {
         const songId = song._id || song.id;
@@ -39,15 +44,18 @@ export function usePlaylistActions(song: any, onSuccess?: () => void) {
           });
           if (addResult.success) {
             await loadPlaylistsFromBackend();
+            setShowPlaylistModal?.(false);
             Alert.alert("Success", "Playlist created and song added!");
-            onSuccess?.();
           } else {
+            setShowPlaylistModal?.(true);
             Alert.alert("Success", "Playlist created! But failed to add song.");
           }
         } else {
+          setShowPlaylistModal?.(true);
           Alert.alert("Success", "Playlist created!");
         }
       } else {
+        setShowPlaylistModal?.(true);
         Alert.alert("Success", "Playlist created!");
       }
       setIsLoadingPlaylists(false);
@@ -56,7 +64,14 @@ export function usePlaylistActions(song: any, onSuccess?: () => void) {
       Alert.alert("Error", "Failed to create playlist");
       setIsLoadingPlaylists(false);
     }
-  }, [newPlaylistName, newPlaylistDescription, song, loadPlaylistsFromBackend, onSuccess]);
+  }, [
+    newPlaylistName,
+    newPlaylistDescription,
+    song,
+    loadPlaylistsFromBackend,
+    setShowCreatePlaylist,
+    setShowPlaylistModal,
+  ]);
 
   const handleAddToExistingPlaylist = useCallback(
     async (playlistId: string) => {
@@ -83,8 +98,11 @@ export function usePlaylistActions(song: any, onSuccess?: () => void) {
           return;
         }
         await loadPlaylistsFromBackend();
+        setNewPlaylistName("");
+        setNewPlaylistDescription("");
+        setShowCreatePlaylist?.(false);
+        setShowPlaylistModal?.(false);
         Alert.alert("Success", "Song added to playlist!");
-        onSuccess?.();
         setIsLoadingPlaylists(false);
       } catch (error) {
         console.error("Error adding song to playlist:", error);
@@ -92,7 +110,7 @@ export function usePlaylistActions(song: any, onSuccess?: () => void) {
         setIsLoadingPlaylists(false);
       }
     },
-    [song, loadPlaylistsFromBackend, onSuccess]
+    [song, loadPlaylistsFromBackend, setShowCreatePlaylist, setShowPlaylistModal]
   );
 
   const handleDeletePlaylist = useCallback(

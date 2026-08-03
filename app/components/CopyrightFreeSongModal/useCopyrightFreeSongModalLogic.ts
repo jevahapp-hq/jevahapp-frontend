@@ -6,6 +6,7 @@ import { PanResponder, View } from "react-native";
 import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
 import SocketManager from "../../services/SocketManager";
 import { getApiBaseUrl } from "../../utils/api";
+import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
 import TokenUtils from "../../utils/tokenUtils";
 
 export function useCopyrightFreeSongViewTracking({
@@ -41,28 +42,33 @@ export function useCopyrightFreeSongViewTracking({
 
     const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
     const positionMs = audioPosition || 0;
-    const progressPct = audioProgress ? Math.round(audioProgress * 100) : 0;
-    const isComplete = durationMs > 0 && audioProgress >= 0.999;
+    const { qualifies, finished } = qualifiesPlaybackView({
+      family: "copyrightFree",
+      isPlaying,
+      positionMs,
+      progress: audioProgress || 0,
+      durationMs,
+    });
 
-    const meetsThreshold =
-      positionMs >= 3000 || progressPct >= 25 || isComplete;
-
-    if (meetsThreshold) {
+    if (qualifies) {
       (async () => {
         if (isRecordingViewRef.current) return;
         isRecordingViewRef.current = true;
 
         try {
           const result = await copyrightFreeMusicAPI.recordView(songId, {
-            durationMs: isComplete ? durationMs : positionMs,
-            progressPct,
-            isComplete,
+            durationMs: finished ? durationMs : positionMs,
+            progressPct: Math.round((audioProgress || 0) * 100),
+            isComplete: finished,
           });
 
           if (result.success && result.data) {
-            setViewCount((prev) =>
-              Math.max(result.data.viewCount ?? 0, likeCount ?? 0, prev)
-            );
+            // Only bump UI when BE counted this view
+            if (result.data.counted === true) {
+              setViewCount((prev) =>
+                Math.max(result.data.viewCount ?? 0, likeCount ?? 0, prev)
+              );
+            }
             setHasTrackedView(true);
           }
         } catch (error) {
@@ -94,12 +100,18 @@ export function useCopyrightFreeSongRealtime({
   setLikeCount,
   setViewCount,
   setIsLiked,
+  setShareCount,
+  setIsInLibrary,
+  setSaveCount,
 }: {
   visible: boolean;
   songId: string | null;
   setLikeCount: React.Dispatch<React.SetStateAction<number>>;
   setViewCount: React.Dispatch<React.SetStateAction<number>>;
   setIsLiked: React.Dispatch<React.SetStateAction<boolean>>;
+  setShareCount?: React.Dispatch<React.SetStateAction<number>>;
+  setIsInLibrary?: React.Dispatch<React.SetStateAction<boolean>>;
+  setSaveCount?: React.Dispatch<React.SetStateAction<number>>;
 }) {
   const socketManagerRef = useRef<SocketManager | null>(null);
 
@@ -156,6 +168,15 @@ export function useCopyrightFreeSongRealtime({
             if (typeof data.liked === "boolean") {
               setIsLiked(data.liked);
             }
+            if (typeof data.shareCount === "number" && setShareCount) {
+              setShareCount(data.shareCount);
+            }
+            if (typeof data.saveCount === "number" && setSaveCount) {
+              setSaveCount(data.saveCount);
+            }
+            if (typeof data.saved === "boolean" && setIsInLibrary) {
+              setIsInLibrary(data.saved);
+            }
           } catch (e) {
             if (__DEV__) console.warn("⚠️ Error applying real-time song update:", e);
           }
@@ -185,7 +206,16 @@ export function useCopyrightFreeSongRealtime({
         socketManagerRef.current = null;
       }
     };
-  }, [visible, songId, setLikeCount, setViewCount, setIsLiked]);
+  }, [
+    visible,
+    songId,
+    setLikeCount,
+    setViewCount,
+    setIsLiked,
+    setShareCount,
+    setIsInLibrary,
+    setSaveCount,
+  ]);
 }
 
 export function useSeekPanResponder({

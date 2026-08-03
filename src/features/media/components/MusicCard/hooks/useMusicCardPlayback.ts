@@ -23,7 +23,12 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
 
   const [playerState, controls] = useAdvancedAudioPlayer(
     isValidUri(audioUrl) ? audioUrl : null,
-    { audioKey, autoPlay: false, loop: false }
+    {
+      audioKey,
+      autoPlay: false,
+      loop: false,
+      fallbackDurationSec: Number(audio.duration) || undefined,
+    }
   );
 
   const globalAudioStore = useGlobalAudioPlayerStore();
@@ -116,7 +121,10 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
                   getUserDisplayNameFromContent(audio) || "Unknown Artist",
                 audioUrl,
                 thumbnailUrl: thumbnailUri || "",
-                duration: (playerState.duration || 0) / 1000,
+                duration:
+                  playerState.duration > 0
+                    ? playerState.duration / 1000
+                    : Number(audio.duration) || 0,
                 category:
                   audio.category?.[0] || audio.contentType || "music",
                 description: audio.description || "",
@@ -172,15 +180,17 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
 
   const seekBySeconds = useCallback(
     async (deltaSec: number) => {
-      const dur = playerState.duration || 0;
-      if (dur === 0) return;
+      const dur =
+        playerState.duration ||
+        (Number(audio.duration) > 0 ? Number(audio.duration) * 1000 : 0);
+      if (dur <= 0) return;
       const nextMs = Math.max(
         0,
         Math.min((playerState.position || 0) + deltaSec * 1000, dur)
       );
       await controls.seekTo(nextMs / dur);
     },
-    [playerState.duration, playerState.position, controls]
+    [playerState.duration, playerState.position, controls, audio.duration]
   );
 
   const onSeekToPercent = useCallback(
