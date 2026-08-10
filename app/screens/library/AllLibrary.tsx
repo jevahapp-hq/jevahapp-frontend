@@ -36,7 +36,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     onRefresh,
     savedItemIds,
     setSavedItemIds,
-    showOverlay,
     setShowOverlay,
     isItemSaved,
     refreshSavedState,
@@ -47,16 +46,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
 
   const dotsRefs = useRef<Record<string, any>>({});
   const playback = useAllLibraryPlayback();
-  const {
-    playingVideos,
-    playingAudio,
-    videoRefs,
-    togglePlay,
-    toggleAudioPlay,
-    seekVideo,
-    seekAudio,
-    toggleAudioMute,
-  } = playback;
+  const { playingAudio, toggleAudioPlay } = playback;
 
   const handlers = useAllLibraryHandlers({
     savedItems: data.savedItems,
@@ -79,18 +69,19 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       return (
         <AllLibraryMediaCard
           item={item}
-          isPlaying={playingVideos[itemId] ?? false}
           isAudioPlaying={playingAudio === itemId}
-          showVideoOverlay={showOverlay[itemId] ?? true}
-          videoRefs={videoRefs}
           dotsRefs={dotsRefs}
           menuOpenId={menuOpenId}
           setMenuOpenId={setMenuOpenId}
           setMenuPos={setMenuPos}
           onTogglePlay={(id) => {
             if (isVideoContent(item)) {
-              const allVideos = filteredItems.filter((v: any) => isVideoContent(v));
-              const videoIndex = allVideos.findIndex((v: any) => (v._id || v.id) === id);
+              const allVideos = filteredItems.filter((v: any) =>
+                isVideoContent(v)
+              );
+              const videoIndex = allVideos.findIndex(
+                (v: any) => (v._id || v.id) === id
+              );
 
               navigateToReels({
                 video: item,
@@ -102,10 +93,8 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
                 getTimeAgo: () => "Recent",
                 getDisplayName: (speaker, uploadedBy) => speaker || "Creator",
                 source: "AllLibrary",
-                category: "videos"
+                category: "videos",
               });
-            } else {
-              togglePlay(id, setShowOverlay);
             }
           }}
           onToggleAudioPlay={toggleAudioPlay}
@@ -120,26 +109,17 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           onRemoveFromLibrary={handlers.handleRemoveFromLibrary}
           onDeletePress={handlers.handleDeletePress}
           isOwner={handlers.isOwnerMap[itemId] ?? false}
-          setPlayingVideos={playback.setPlayingVideos}
-          setShowOverlay={setShowOverlay}
           router={router}
         />
       );
     },
     [
-      playingVideos,
       playingAudio,
-      showOverlay,
       menuOpenId,
-      togglePlay,
       toggleAudioPlay,
-      setShowOverlay,
       handlers,
-      playback.setPlayingVideos,
       handleDownload,
       router,
-      videoRefs,
-      dotsRefs,
       filteredItems,
       navigateToReels,
     ]
@@ -213,9 +193,10 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 12 }}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={true}
-          initialNumToRender={8}
-          maxToRenderPerBatch={10}
-          windowSize={7}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={50}
+          windowSize={5}
         />
       )}
 
@@ -227,9 +208,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
             handlers.selectedItemForDelete.id ||
             ""
           }
-          mediaTitle={
-            handlers.selectedItemForDelete.title || "this media"
-          }
+          mediaTitle={handlers.selectedItemForDelete.title || "this media"}
           onClose={() => {
             handlers.setShowDeleteModal(false);
             handlers.setSelectedItemForDelete(null);

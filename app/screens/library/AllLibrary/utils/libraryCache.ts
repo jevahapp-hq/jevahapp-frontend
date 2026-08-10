@@ -136,3 +136,30 @@ export const clearLibraryCache = (): void => {
   memoryCache = {};
   AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
 };
+
+/**
+ * Prefetch bookmarks into the sync cache so Library can paint without waiting
+ * on the network when the user opens the tab.
+ */
+export const prefetchLibraryBookmarks = async (): Promise<void> => {
+  try {
+    await hydrateLibraryCache();
+    const allMediaAPI = (await import("../../../../utils/allMediaAPI")).default;
+    const response = await allMediaAPI.getSavedContent(1, 50);
+    if (!response.success || !response.data) return;
+
+    const d = response.data;
+    const items =
+      d?.data?.media ||
+      d?.media ||
+      (Array.isArray(d?.data) ? d.data : null) ||
+      (Array.isArray(d) ? d : null) ||
+      [];
+
+    if (Array.isArray(items) && items.length > 0) {
+      cacheLibraryItems(items);
+    }
+  } catch {
+    // Best-effort warm-up; Library still refreshes on mount
+  }
+};

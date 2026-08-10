@@ -163,35 +163,23 @@ export const getContentTypeColor = (contentType: string): string => {
   }
 };
 
-/**
- * Thumbnail source with comprehensive fallbacks
- */
-export const getThumbnailSource = (item: any): { uri: string } | number => {
-  if (item.thumbnailUrl) return { uri: item.thumbnailUrl };
-  if (item.mediaUrl) return { uri: item.mediaUrl };
-  if (item.fileUrl) return { uri: item.fileUrl };
-  if (
-    item.imageUrl &&
-    typeof item.imageUrl === "object" &&
-    item.imageUrl.uri
-  ) {
-    return item.imageUrl;
-  }
-  if (item.imageUrl && typeof item.imageUrl === "string") {
-    return { uri: item.imageUrl };
-  }
-  if (item.coverImage) {
-    return typeof item.coverImage === "string"
-      ? { uri: item.coverImage }
-      : item.coverImage;
-  }
-  const type = item.contentType?.toLowerCase();
+const isImageUri = (uri?: string | null): uri is string => {
+  if (typeof uri !== "string" || !uri.trim()) return false;
+  // Never pass media file URLs to Image — they break expo-image / RN Image.
+  return !/\.(mp4|m3u8|mov|webm|avi|mkv|mp3|m4a|aac|wav|flac|ogg|pdf|epub)(\?|$)/i.test(
+    uri
+  );
+};
+
+const typeFallbackThumb = (contentType?: string): number => {
+  const type = contentType?.toLowerCase() || "";
   switch (type) {
     case "videos":
     case "video":
       return require("../../../../../assets/images/image (10).png");
     case "music":
     case "audio":
+    case "sermon":
       return require("../../../../../assets/images/image (12).png");
     case "e-books":
     case "ebook":
@@ -203,6 +191,22 @@ export const getThumbnailSource = (item: any): { uri: string } | number => {
     default:
       return require("../../../../../assets/images/image (13).png");
   }
+};
+
+/**
+ * Thumbnail source with image-only fallbacks (never video/audio/pdf URLs).
+ */
+export const getThumbnailSource = (item: any): { uri: string } | number => {
+  const candidates = [
+    item.thumbnailUrl,
+    item.thumbnail,
+    typeof item.imageUrl === "string" ? item.imageUrl : item.imageUrl?.uri,
+    typeof item.coverImage === "string" ? item.coverImage : item.coverImage?.uri,
+  ];
+  for (const candidate of candidates) {
+    if (isImageUri(candidate)) return { uri: candidate.trim() };
+  }
+  return typeFallbackThumb(item.contentType);
 };
 
 /**

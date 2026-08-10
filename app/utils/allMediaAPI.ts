@@ -43,25 +43,42 @@ export interface AllMediaResponse {
 
 class AllMediaAPI {
   private baseURL: string;
+  /** In-memory JWT so bookmark/library calls skip AsyncStorage/SecureStore round-trips. */
+  private cachedAuthToken: string | null | undefined = undefined;
 
   constructor() {
     this.baseURL = API_BASE_URL;
   }
 
+  clearAuthTokenCache(): void {
+    this.cachedAuthToken = undefined;
+  }
+
+  private async resolveAuthToken(): Promise<string | null> {
+    if (this.cachedAuthToken !== undefined) {
+      return this.cachedAuthToken;
+    }
+
+    let token = await AsyncStorage.getItem("userToken");
+    if (!token) {
+      token = await AsyncStorage.getItem("token");
+    }
+    if (!token) {
+      try {
+        const { default: SecureStore } = await import("expo-secure-store");
+        token = await SecureStore.getItemAsync("jwt");
+      } catch {
+        // SecureStore unavailable
+      }
+    }
+
+    this.cachedAuthToken = token || null;
+    return this.cachedAuthToken;
+  }
+
   private async getAuthHeaders(): Promise<HeadersInit> {
     try {
-      let token = await AsyncStorage.getItem("userToken");
-      if (!token) {
-        token = await AsyncStorage.getItem("token");
-      }
-      if (!token) {
-        try {
-          const { default: SecureStore } = await import("expo-secure-store");
-          token = await SecureStore.getItemAsync("jwt");
-        } catch (secureStoreError) {
-          console.log("SecureStore not available or no JWT token");
-        }
-      }
+      const token = await this.resolveAuthToken();
 
       if (token) {
         return {
@@ -968,12 +985,6 @@ class AllMediaAPI {
     data?: any;
     error?: string;
   }> {
-    console.log("🔍 AllMediaAPI: Getting saved content with params:", {
-      page,
-      limit,
-      contentType,
-    });
-
     try {
       const headers = await this.getAuthHeaders();
 
@@ -983,7 +994,6 @@ class AllMediaAPI {
         ...(contentType && { contentType }),
       });
 
-      console.log("📡 AllMediaAPI: Using endpoint: /api/bookmark/user");
       const response = await fetch(
         `${this.baseURL}/api/bookmark/user?${queryParams}`,
         {
@@ -992,21 +1002,13 @@ class AllMediaAPI {
         }
       );
 
-      console.log(
-        "📡 AllMediaAPI: Response status:",
-        response.status,
-        response.statusText
-      );
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("❌ AllMediaAPI: API Error:", response.status, errorText);
+        if (__DEV__) {
+          console.error("AllMediaAPI saved content error:", response.status, errorText);
+        }
 
-        // Handle 500 errors gracefully
         if (response.status === 500) {
-          console.warn(
-            "⚠️ AllMediaAPI: Backend server error (500) - returning empty saved content"
-          );
           return {
             success: false,
             error: "Backend server error",
@@ -1020,14 +1022,11 @@ class AllMediaAPI {
       }
 
       const data = await response.json();
-      console.log(
-        "📡 AllMediaAPI: API Response:",
-        JSON.stringify(data, null, 2)
-      );
-      console.log("✅ AllMediaAPI: Successfully got saved content");
       return { success: true, data };
     } catch (error) {
-      console.error("❌ AllMediaAPI: Error getting saved content:", error);
+      if (__DEV__) {
+        console.error("AllMediaAPI: Error getting saved content:", error);
+      }
 
       return {
         success: false,

@@ -96,6 +96,10 @@ export function useFeedViewability({
         if (prevKey && playingVideosRef.current[prevKey]) {
           pauseMediaRef.current(prevKey);
         }
+        // New video in view — stop any MusicCard/sermon audio still playing.
+        if (playingAudioIdRef.current) {
+          pauseAllAudioRef.current();
+        }
         setCurrentlyVisibleVideo(topVideoKey);
         currentlyVisibleVideoRef.current = topVideoKey;
         if (isAutoPlayEnabledRef.current) {
@@ -127,10 +131,20 @@ export function useFeedViewability({
     }) => {
       const activeAudioKey = playingAudioIdRef.current;
       if (!activeAudioKey) return;
-      const stillVisible = info.viewableItems.some(
-        (token) =>
-          token.item?.rowType === "media" && token.item.key === activeAudioKey
-      );
+      // playingAudioId may be feed row.key, raw content _id, or music-${_id}
+      // depending on which card registered it — match all forms.
+      const stillVisible = info.viewableItems.some((token) => {
+        const row = token.item;
+        if (!row || row.rowType !== "media") return false;
+        const contentId = row.item?._id != null ? String(row.item._id) : "";
+        if (row.key === activeAudioKey) return true;
+        if (!contentId) return false;
+        return (
+          activeAudioKey === contentId ||
+          activeAudioKey === `music-${contentId}` ||
+          activeAudioKey.endsWith(`::${contentId}`)
+        );
+      });
       if (!stillVisible) {
         pauseAllAudioRef.current();
       }

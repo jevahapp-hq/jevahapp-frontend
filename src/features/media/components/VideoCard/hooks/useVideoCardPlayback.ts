@@ -107,7 +107,9 @@ export function useVideoCardPlayback({
       if (!isMountedRef.current) return;
 
       if (status === "error") {
-        setFailedVideoLoad(true);
+        // Do not flip failedVideoLoad here for every error — transient iOS
+        // "Operation Stopped" is auto-retried by useInstantFeedVideoPlayer.
+        // handleVideoError decides whether the failure is permanent.
         handleVideoError(error ?? new Error("Video playback error"));
         return;
       }

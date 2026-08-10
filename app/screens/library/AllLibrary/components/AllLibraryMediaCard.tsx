@@ -1,10 +1,11 @@
 /**
- * AllLibraryMediaCard - Renders video, audio, or book card for library grid
+ * AllLibraryMediaCard - Thumbnail-only grid card (no inline expo-av players).
+ * Videos open in Reels on tap; audio uses the global player.
  */
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
-import React from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
+import React, { memo } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 import {
   getContentTypeIcon,
   getThumbnailSource,
@@ -15,15 +16,10 @@ import {
 
 const isValidUri = (u: any) =>
   typeof u === "string" && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
-const DEFAULT_VIDEO_URI =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
 export interface AllLibraryMediaCardProps {
   item: any;
-  isPlaying: boolean;
   isAudioPlaying: boolean;
-  showVideoOverlay: boolean;
-  videoRefs: React.MutableRefObject<Record<string, any>>;
   dotsRefs: React.MutableRefObject<Record<string, any>>;
   menuOpenId: string | null;
   setMenuOpenId: (id: string | null) => void;
@@ -38,17 +34,12 @@ export interface AllLibraryMediaCardProps {
   onRemoveFromLibrary: (item: any) => void;
   onDeletePress: (item: any) => void;
   isOwner: boolean;
-  setPlayingVideos: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  setShowOverlay: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   router: any;
 }
 
-export function AllLibraryMediaCard({
+function AllLibraryMediaCardComponent({
   item,
-  isPlaying,
   isAudioPlaying,
-  showVideoOverlay,
-  videoRefs,
   dotsRefs,
   menuOpenId,
   setMenuOpenId,
@@ -56,15 +47,12 @@ export function AllLibraryMediaCard({
   onTogglePlay,
   onToggleAudioPlay,
   onOpenBook,
-  onOpenBookInPdfViewer,
   onCheckOwnership,
   onShare,
   onDownloadRequest,
   onRemoveFromLibrary,
   onDeletePress,
   isOwner,
-  setPlayingVideos,
-  setShowOverlay,
   router,
 }: AllLibraryMediaCardProps) {
   const itemId = item._id || item.id;
@@ -79,10 +67,9 @@ export function AllLibraryMediaCard({
     item.contentType?.toLowerCase().includes("pdf") ||
     isEbookContent(item);
 
-  const videoUrl = item.mediaUrl || item.fileUrl;
   const audioUrl = item.mediaUrl || item.fileUrl;
-  const safeVideoUri = isValidUri(videoUrl) ? String(videoUrl).trim() : DEFAULT_VIDEO_URI;
   const safeAudioUri = isValidUri(audioUrl) ? String(audioUrl).trim() : "";
+  const thumbSource = getThumbnailSource(item);
 
   const handleBookPress = () => {
     const pdfUrl = item.mediaUrl || item.fileUrl || "";
@@ -100,6 +87,25 @@ export function AllLibraryMediaCard({
     }
   };
 
+  const renderThumb = () => (
+    <Image
+      source={thumbSource}
+      style={{ width: "100%", height: "100%", borderRadius: 12 }}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      recyclingKey={String(itemId)}
+      transition={0}
+    />
+  );
+
+  const renderTitle = () => (
+    <View className="absolute bottom-2 left-2 right-2">
+      <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+        {item.title}
+      </Text>
+    </View>
+  );
+
   return (
     <View
       className="w-[48%] mb-6 h-[232px] rounded-xl bg-[#E5E5EA]"
@@ -112,48 +118,13 @@ export function AllLibraryMediaCard({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          <Video
-            ref={(ref) => {
-              if (ref) videoRefs.current[itemId] = ref;
-            }}
-            source={{ uri: safeVideoUri }}
-            style={{
-              width: "100%",
-              height: "100%",
-              position: "absolute",
-              borderRadius: 12,
-            }}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            isMuted={false}
-            useNativeControls={false}
-            onError={() => {
-              setPlayingVideos((prev) => ({ ...prev, [itemId]: false }));
-              setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
-            }}
-            onPlaybackStatusUpdate={(status) => {
-              if (!status.isLoaded) return;
-              if (status.didJustFinish) {
-                setPlayingVideos((prev) => ({ ...prev, [itemId]: false }));
-                setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
-              }
-            }}
-          />
-          {!isPlaying && showVideoOverlay && (
-            <>
-              <View className="absolute inset-0 justify-center items-center">
-                <View className="bg-white/70 p-2 rounded-full">
-                  <Ionicons name="play" size={24} color="#FEA74E" />
-                </View>
-              </View>
-              <View className="absolute bottom-2 left-2 right-2">
-                <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
-                  {item.title}
-                </Text>
-              </View>
-            </>
-          )}
+          {renderThumb()}
+          <View className="absolute inset-0 justify-center items-center">
+            <View className="bg-white/70 p-2 rounded-full">
+              <Ionicons name="play" size={24} color="#FEA74E" />
+            </View>
+          </View>
+          {renderTitle()}
         </TouchableOpacity>
       ) : isAudio ? (
         <TouchableOpacity
@@ -161,11 +132,7 @@ export function AllLibraryMediaCard({
           className="w-full h-full"
           activeOpacity={0.9}
         >
-          <Image
-            source={getThumbnailSource(item)}
-            className="h-full w-full rounded-xl"
-            resizeMode="cover"
-          />
+          {renderThumb()}
           <View className="absolute inset-0 justify-center items-center">
             <View className="bg-black/60 p-3 rounded-full">
               <Ionicons
@@ -175,11 +142,7 @@ export function AllLibraryMediaCard({
               />
             </View>
           </View>
-          <View className="absolute bottom-2 left-2 right-2">
-            <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
-              {item.title}
-            </Text>
-          </View>
+          {renderTitle()}
         </TouchableOpacity>
       ) : isBook ? (
         <TouchableOpacity
@@ -188,17 +151,8 @@ export function AllLibraryMediaCard({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          <Image
-            source={getThumbnailSource(item)}
-            className="h-full w-full rounded-xl"
-            style={{ borderRadius: 12 }}
-            resizeMode="cover"
-          />
-          <View className="absolute bottom-2 left-2 right-2">
-            <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
-              {item.title}
-            </Text>
-          </View>
+          {renderThumb()}
+          {renderTitle()}
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
@@ -206,21 +160,9 @@ export function AllLibraryMediaCard({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          <Image
-            source={getThumbnailSource(item)}
-            className="h-full w-full rounded-xl"
-            style={{ borderRadius: 12 }}
-            resizeMode="cover"
-          />
+          {renderThumb()}
+          {renderTitle()}
         </TouchableOpacity>
-      )}
-
-      {!isVideo && !isAudio && !isBook && (
-        <View className="absolute bottom-2 left-2 right-2">
-          <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
-            {item.title}
-          </Text>
-        </View>
       )}
 
       <View
@@ -384,3 +326,5 @@ export function AllLibraryMediaCard({
     </View>
   );
 }
+
+export const AllLibraryMediaCard = memo(AllLibraryMediaCardComponent);

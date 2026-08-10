@@ -1,28 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Dimensions, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
-    getResponsiveBorderRadius,
-    getResponsiveShadow,
-    getResponsiveSpacing,
-    getResponsiveTextStyle,
+  Dimensions,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  getResponsiveBorderRadius,
+  getResponsiveShadow,
+  getResponsiveSpacing,
+  getResponsiveTextStyle,
 } from "../../../utils/responsive";
-import CopyrightFreeSongs from "../../components/CopyrightFreeSongs";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
+import Music from "../../categories/music";
 import { useFastPerformance } from "../../utils/fastPerformance";
 import { navigateMainTab } from "../../utils/navigation";
-import { AllLibraryWithSuspense } from "../../utils/lazyImports";
+import AllLibrary from "./AllLibrary";
 import PlaylistsLibrary from "./PlaylistsLibrary";
-import Music from "../../categories/music";
-import { Suspense } from "react";
-
-// Loading fallback for lazy-loaded content
-const ContentLoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", minHeight: 200 }}>
-    <ActivityIndicator size="large" color="#000" />
-  </View>
-);
 
 const categories = ["ALL", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "PLAYLISTS"];
 
@@ -30,49 +27,45 @@ export default function LibraryScreen() {
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("Library");
-  const router = useRouter();
   const { fastPress } = useFastPerformance();
   const scrollViewRef = useRef<ScrollView>(null);
-  const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
+  const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>(
+    {}
+  );
 
-  // Scroll to selected category button when category changes
   useEffect(() => {
     if (selectedCategory && scrollViewRef.current) {
-      // Small delay to ensure layout is complete
       setTimeout(() => {
         const selectedIndex = categories.indexOf(selectedCategory);
         if (selectedIndex !== -1 && scrollViewRef.current) {
           const scrollView = scrollViewRef.current;
-          const screenWidth = Dimensions.get('window').width;
+          const screenWidth = Dimensions.get("window").width;
           const parentPadding = getResponsiveSpacing(16, 20, 24, 32);
           const scrollViewWidth = screenWidth - parentPadding * 2;
-          
-          // Try to use stored position if available
+
           if (buttonLayouts.current[selectedCategory]) {
             const buttonLayout = buttonLayouts.current[selectedCategory];
-            // Calculate scroll position to center the button in the viewport
-            const buttonCenter = buttonLayout.x + (buttonLayout.width / 2);
+            const buttonCenter = buttonLayout.x + buttonLayout.width / 2;
             const viewportCenter = scrollViewWidth / 2;
             const scrollPosition = buttonCenter - viewportCenter;
-            
+
             scrollView.scrollTo({
               x: Math.max(0, scrollPosition),
               animated: true,
             });
           } else {
-            // Fallback: scroll based on approximate position
-            const buttonWidth = 100; // Approximate button width including padding
-            const buttonMargin = getResponsiveSpacing(4, 6, 8, 10) * 2; // Left + right margin
-            
-            // Calculate approximate button position
+            const buttonWidth = 100;
+            const buttonMargin = getResponsiveSpacing(4, 6, 8, 10) * 2;
             let accumulatedWidth = 0;
             for (let i = 0; i < selectedIndex; i++) {
               accumulatedWidth += buttonWidth + buttonMargin;
             }
-            
-            // Center the button
-            const scrollPosition = accumulatedWidth - (scrollViewWidth / 2) + (buttonWidth / 2) - parentPadding;
-            
+            const scrollPosition =
+              accumulatedWidth -
+              scrollViewWidth / 2 +
+              buttonWidth / 2 -
+              parentPadding;
+
             scrollView.scrollTo({
               x: Math.max(0, scrollPosition),
               animated: true,
@@ -83,42 +76,22 @@ export default function LibraryScreen() {
     }
   }, [selectedCategory]);
 
-  const handleCategoryPress = useCallback(
-    (category: string) => {
-      // Immediate visual feedback
-      setSelectedCategory(category);
-    },
-    []
-  );
+  const handleCategoryPress = useCallback((category: string) => {
+    setSelectedCategory(category);
+  }, []);
 
   const renderContent = () => {
     switch (selectedCategory) {
       case "ALL":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="ALL" />
-          </Suspense>
-        );
+        return <AllLibrary contentType="ALL" />;
       case "SERMON":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="SERMON" />
-          </Suspense>
-        );
+        return <AllLibrary contentType="SERMON" />;
       case "MUSIC":
         return <Music />;
       case "E-BOOKS":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="E-BOOKS" />
-          </Suspense>
-        );
+        return <AllLibrary contentType="E-BOOKS" />;
       case "VIDEO":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="VIDEO" />
-          </Suspense>
-        );
+        return <AllLibrary contentType="VIDEO" />;
       case "PLAYLISTS":
         return <PlaylistsLibrary />;
       default:
@@ -143,7 +116,6 @@ export default function LibraryScreen() {
         />
       </View>
 
-      {/* Category tabs - matching AllContent style exactly */}
       <View
         style={{
           paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
@@ -206,12 +178,9 @@ export default function LibraryScreen() {
         </ScrollView>
       </View>
 
-      {/* Content area - conditional rendering to avoid VirtualizedList nesting */}
       {selectedCategory === "PLAYLISTS" ? (
-        // PlaylistsLibrary handles its own scrolling with FlatList
         <View className="flex-1 mt-2">{renderContent()}</View>
       ) : (
-        // Other categories can use ScrollView
         <View style={{ flex: 1, width: "100%", backgroundColor: "#FCFCFD" }}>
           {renderContent()}
         </View>

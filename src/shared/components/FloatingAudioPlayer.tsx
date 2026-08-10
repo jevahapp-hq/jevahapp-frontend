@@ -34,26 +34,24 @@ export default function FloatingAudioPlayer() {
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
   const slideAnim = useRef(new Animated.Value(100)).current; // For slide-up animation
 
-  const {
-    currentTrack,
-    isPlaying,
-    position,
-    duration,
-    progress,
-    togglePlayPause,
-    seekToProgress,
-    toggleMute,
-    isMuted,
-    stop,
-    next,
-    previous,
-    clear,
-  } = useGlobalAudioPlayerStore();
+  const currentTrack = useGlobalAudioPlayerStore((s) => s.currentTrack);
+  const isPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const position = useGlobalAudioPlayerStore((s) => s.position);
+  const duration = useGlobalAudioPlayerStore((s) => s.duration);
+  const progress = useGlobalAudioPlayerStore((s) => s.progress);
+  const isMuted = useGlobalAudioPlayerStore((s) => s.isMuted);
+  const togglePlayPause = useGlobalAudioPlayerStore((s) => s.togglePlayPause);
+  const seekToProgress = useGlobalAudioPlayerStore((s) => s.seekToProgress);
+  const toggleMute = useGlobalAudioPlayerStore((s) => s.toggleMute);
+  const stop = useGlobalAudioPlayerStore((s) => s.stop);
+  const next = useGlobalAudioPlayerStore((s) => s.next);
+  const previous = useGlobalAudioPlayerStore((s) => s.previous);
+  const clear = useGlobalAudioPlayerStore((s) => s.clear);
 
   const handleCloseMini = React.useCallback(() => {
-    // For an explicit close tap, immediately clear the global
-    // audio player so the mini player disappears in one action.
-    clear();
+    // Clear is synchronous for UI; AV cleanup happens in the background.
+    void clear();
+    setShowFullPlayer(false);
   }, [clear]);
 
   // Check authentication using Clerk

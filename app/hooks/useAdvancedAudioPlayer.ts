@@ -48,16 +48,16 @@ export const useAdvancedAudioPlayer = (
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const statusUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Intentional play/pause — status callbacks must not flip the icon back
+  // while pauseAsync is slow or hung (common with flaky remote URLs).
+  const wantPlayingRef = useRef(false);
 
-  // Keep the latest callback props in refs so we don't have to
-  // recreate our internal callbacks/effects on every render.
   const onPlaybackStatusUpdateRef = useRef<
     ((status: AudioPlayerState) => void) | undefined
   >(onPlaybackStatusUpdate);
   const onErrorRef = useRef<((error: string) => void) | undefined>(onError);
   const onFinishedRef = useRef<(() => void) | undefined>(onFinished);
 
-  // Sync refs when callbacks change
   useEffect(() => {
     onPlaybackStatusUpdateRef.current = onPlaybackStatusUpdate;
   }, [onPlaybackStatusUpdate]);
@@ -81,6 +81,7 @@ export const useAdvancedAudioPlayer = (
   });
 
   const cleanup = useCallback(async () => {
+    wantPlayingRef.current = false;
     if (statusUpdateIntervalRef.current) {
       clearInterval(statusUpdateIntervalRef.current);
       statusUpdateIntervalRef.current = null;
@@ -93,41 +94,55 @@ export const useAdvancedAudioPlayer = (
     }
   }, []);
 
+  const applyLoadedStatus = useCallback(
+    (status: {
+      isPlaying?: boolean;
+      isMuted?: boolean;
+      durationMillis?: number | null;
+      positionMillis?: number;
+      didJustFinish?: boolean;
+    }) => {
+      const reportedPlaying = !!status.isPlaying && wantPlayingRef.current;
+      const newState: AudioPlayerState = {
+        isPlaying: reportedPlaying,
+        isLoading: false,
+        isMuted: status.isMuted || false,
+        progress: status.durationMillis
+          ? (status.positionMillis || 0) / status.durationMillis
+          : 0,
+        duration: status.durationMillis || 0,
+        position: status.positionMillis || 0,
+        error: null,
+      };
+      setState(newState);
+      onPlaybackStatusUpdateRef.current?.(newState);
+      if (status.didJustFinish) {
+        wantPlayingRef.current = false;
+        setState((prev) => ({
+          ...prev,
+          isPlaying: false,
+          progress: 0,
+          position: 0,
+        }));
+        onFinishedRef.current?.();
+      }
+    },
+    []
+  );
+
   const handleStatusUpdate = useCallback(async () => {
     if (!soundRef.current) return;
     try {
       const status = await soundRef.current.getStatusAsync();
       if (status.isLoaded) {
-        const newState: AudioPlayerState = {
-          isPlaying: status.isPlaying || false,
-          isLoading: false,
-          isMuted: status.isMuted || false,
-          progress: status.durationMillis
-            ? (status.positionMillis || 0) / status.durationMillis
-            : 0,
-          duration: status.durationMillis || 0,
-          position: status.positionMillis || 0,
-          error: null,
-        };
-        setState(newState);
-        // Use ref to avoid recreating callback dependencies on every render
-        onPlaybackStatusUpdateRef.current?.(newState);
-        if (status.didJustFinish) {
-          setState((prev) => ({
-            ...prev,
-            isPlaying: false,
-            progress: 0,
-            position: 0,
-          }));
-          onFinishedRef.current?.();
-        }
+        applyLoadedStatus(status);
       }
     } catch (error) {
       const errorMessage = `Status update error: ${error}`;
       setState((prev) => ({ ...prev, error: errorMessage, isLoading: false }));
       onErrorRef.current?.(errorMessage);
     }
-  }, []);
+  }, [applyLoadedStatus]);
 
   const startStatusUpdates = useCallback(() => {
     if (statusUpdateIntervalRef.current) return;
@@ -152,7 +167,7 @@ export const useAdvancedAudioPlayer = (
         interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         playThroughEarpieceAndroid: false,
       });
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, []);
@@ -169,32 +184,12 @@ export const useAdvancedAudioPlayer = (
       soundRef.current = sound;
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded) {
-          const newState: AudioPlayerState = {
-            isPlaying: status.isPlaying || false,
-            isLoading: false,
-            isMuted: status.isMuted || false,
-            progress: status.durationMillis
-              ? (status.positionMillis || 0) / status.durationMillis
-              : 0,
-            duration: status.durationMillis || 0,
-            position: status.positionMillis || 0,
-            error: null,
-          };
-          setState(newState);
-          onPlaybackStatusUpdateRef.current?.(newState);
-          if (status.didJustFinish) {
-            setState((prev) => ({
-              ...prev,
-              isPlaying: false,
-              progress: 0,
-              position: 0,
-            }));
-            onFinishedRef.current?.();
-          }
+          applyLoadedStatus(status);
         }
       });
       setState((prev) => ({ ...prev, isLoading: false }));
       if (autoPlay) {
+        wantPlayingRef.current = true;
         startStatusUpdates();
         try {
           await sound.playAsync();
@@ -213,53 +208,50 @@ export const useAdvancedAudioPlayer = (
     loop,
     startStatusUpdates,
     ensureAudioMode,
+    applyLoadedStatus,
   ]);
 
   const play = useCallback(async () => {
     try {
-      // If audio is not loaded yet, wait for it to load (should be preloaded, but handle edge case)
       if (!soundRef.current) {
         await loadAudio();
-        // Wait a bit for the sound to be ready
         let attempts = 0;
         while (!soundRef.current && attempts < 10) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise((resolve) => setTimeout(resolve, 50));
           attempts++;
         }
       }
       if (!soundRef.current) return;
-      
-      // Check if already loaded and playing
+
+      wantPlayingRef.current = true;
+      setState((prev) => ({ ...prev, isPlaying: true, isLoading: true }));
+
       const status = await soundRef.current.getStatusAsync();
       if (status.isLoaded && status.isPlaying) {
-        return; // Already playing
+        setState((prev) => ({ ...prev, isLoading: false }));
+        startStatusUpdates();
+        return;
       }
-      
-      setState((prev) => ({ ...prev, isLoading: true }));
-      // Ensure any legacy/global audio instances are stopped before starting this one
+
       try {
-        // Runtime require to avoid circular deps if the manager is not used elsewhere
         const audioManagerModule = require("../utils/globalAudioInstanceManager");
         const audioManager = audioManagerModule.default.getInstance();
-        audioManager.stopAllAudio().catch(() => {
-          // ignore manager errors; local playback will still work
-        });
+        audioManager.stopAllAudio().catch(() => {});
       } catch {
-        // manager not available, ignore
+        // manager not available
       }
-      
-      // Pause global audio player (copyright-free songs) when normal song starts
+
       try {
         const globalAudioStoreModule = require("../store/useGlobalAudioPlayerStore");
         const globalAudioStore = globalAudioStoreModule.useGlobalAudioPlayerStore;
         if (globalAudioStore) {
-          const state = globalAudioStore.getState();
-          if (state.isPlaying && state.soundInstance) {
-            await state.pause();
+          const storeState = globalAudioStore.getState();
+          if (storeState.isPlaying && storeState.soundInstance) {
+            await storeState.pause();
           }
         }
-      } catch (error) {
-        // no-op - global audio store might not be available
+      } catch {
+        // no-op
       }
 
       useGlobalMediaStore.getState().playMediaGlobally(audioKey, "audio");
@@ -267,20 +259,28 @@ export const useAdvancedAudioPlayer = (
       setState((prev) => ({ ...prev, isPlaying: true, isLoading: false }));
       startStatusUpdates();
     } catch (error) {
+      wantPlayingRef.current = false;
       const errorMessage = `Play error: ${error}`;
       console.warn(errorMessage, { audioUrl });
-      setState((prev) => ({ ...prev, error: errorMessage, isLoading: false }));
+      setState((prev) => ({
+        ...prev,
+        isPlaying: false,
+        error: errorMessage,
+        isLoading: false,
+      }));
       onError?.(errorMessage);
     }
-  }, [audioKey, loadAudio, startStatusUpdates, onError]);
+  }, [audioKey, loadAudio, startStatusUpdates, onError, audioUrl]);
 
   const pause = useCallback(async () => {
+    // Optimistic UI — icon flips even if AV pause hangs on bad network.
+    wantPlayingRef.current = false;
+    setState((prev) => ({ ...prev, isPlaying: false }));
+    stopStatusUpdates();
+    useGlobalMediaStore.getState().pauseAudio(audioKey);
     if (!soundRef.current) return;
     try {
       await soundRef.current.pauseAsync();
-      setState((prev) => ({ ...prev, isPlaying: false }));
-      stopStatusUpdates();
-      useGlobalMediaStore.getState().pauseAudio(audioKey);
     } catch (error) {
       const errorMessage = `Pause error: ${error}`;
       setState((prev) => ({ ...prev, error: errorMessage }));
@@ -289,12 +289,12 @@ export const useAdvancedAudioPlayer = (
   }, [audioKey, stopStatusUpdates, onError]);
 
   const togglePlay = useCallback(async () => {
-    if (state.isPlaying) {
+    if (wantPlayingRef.current) {
       await pause();
-    } else {
-      await play();
+      return;
     }
-  }, [state.isPlaying, play, pause]);
+    await play();
+  }, [play, pause]);
 
   const seekTo = useCallback(
     async (position: number) => {
@@ -345,17 +345,18 @@ export const useAdvancedAudioPlayer = (
   );
 
   const stop = useCallback(async () => {
+    wantPlayingRef.current = false;
+    setState((prev) => ({
+      ...prev,
+      isPlaying: false,
+      progress: 0,
+      position: 0,
+    }));
+    stopStatusUpdates();
+    useGlobalMediaStore.getState().pauseAudio(audioKey);
     if (!soundRef.current) return;
     try {
       await soundRef.current.stopAsync();
-      setState((prev) => ({
-        ...prev,
-        isPlaying: false,
-        progress: 0,
-        position: 0,
-      }));
-      stopStatusUpdates();
-      useGlobalMediaStore.getState().pauseAudio(audioKey);
     } catch (error) {
       const errorMessage = `Stop error: ${error}`;
       setState((prev) => ({ ...prev, error: errorMessage }));
@@ -377,7 +378,6 @@ export const useAdvancedAudioPlayer = (
     };
   }, [cleanup]);
 
-  // Preload audio immediately when URL is available (not wait for play click)
   useEffect(() => {
     if (audioUrl && !soundRef.current) {
       loadAudio();

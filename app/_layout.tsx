@@ -28,7 +28,10 @@ import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
 import { useAuth } from "./hooks/useAuth";
 import { useDownloadStore } from "./store/useDownloadStore";
-import { hydrateLibraryCache } from "./screens/library/AllLibrary/utils/libraryCache";
+import {
+  hydrateLibraryCache,
+  prefetchLibraryBookmarks,
+} from "./screens/library/AllLibrary/utils/libraryCache";
 import { useContentCacheStore } from "./store/useContentCacheStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
@@ -190,7 +193,8 @@ export default function RootLayout() {
     const runCriticalInit = async () => {
       try {
         // Fire network prefetch alongside rehydrate — do not wait for
-        // InteractionManager / library warmup (those used to delay the feed).
+        // InteractionManager. Library cache hydrate runs in parallel so the
+        // Library tab can seed synchronously on first open.
         const feedPrefetch = Promise.all([
           warmupBackend().catch(() => {}),
           queryClient.prefetchQuery({
@@ -203,11 +207,13 @@ export default function RootLayout() {
             queryFn: () => fetchDefaultContentPage("ALL", 1, 40),
             staleTime: 30 * 60 * 1000,
           }),
+          prefetchLibraryBookmarks().catch(() => {}),
         ]).catch(() => {});
 
         await Promise.all([
           loadPersistedMedia(),
           useContentCacheStore.persist.rehydrate(),
+          hydrateLibraryCache(),
         ]);
 
         // Seed React Query from disk for both public + auth keys so logged-in
@@ -266,7 +272,6 @@ export default function RootLayout() {
 
     const task = InteractionManager.runAfterInteractions(() => {
       (async () => {
-        hydrateLibraryCache();
         try {
           await loadDownloadedItems();
         } catch { }

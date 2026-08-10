@@ -324,15 +324,57 @@ function VideoCardPlayerInner(
   useEffect(() => {
     if (!player) return;
     const sub = player.addListener("statusChange", ({ status, error }) => {
+      // Ready means silent auto-retry recovered — clear any stale error chrome.
+      if (status === "readyToPlay") {
+        setFailedVideoLoad(false);
+        return;
+      }
+      // Transient iOS "Operation Stopped" is recovered inside
+      // useInstantFeedVideoPlayer. Only treat non-recoverable / exhausted
+      // failures as UI errors (loadTimedOut drives Tap to retry).
       if (status === "error" || error) {
-        setFailedVideoLoad(true);
+        const message =
+          typeof error === "string"
+            ? error
+            : error && typeof error === "object" && "message" in error
+              ? String((error as { message?: unknown }).message ?? "")
+              : "";
+        const transient =
+          /operation stopped|operation was cancelled|operation canceled|cancelled|canceled|-11839/i.test(
+            message
+          );
+        if (!transient) {
+          setFailedVideoLoad(true);
+        }
+        if (__DEV__) {
+          console.warn("[VideoCardPlayerArea] playback error", error);
+        }
       }
     });
     return () => sub.remove();
   }, [player]);
 
+  // Sync permanent failure UI with the player's recovery timeout.
+  useEffect(() => {
+    if (loadTimedOut) setFailedVideoLoad(true);
+    else if (firstFrameReady) setFailedVideoLoad(false);
+  }, [loadTimedOut, firstFrameReady]);
+
   const handleVideoError = useCallback((error: unknown) => {
-    setFailedVideoLoad(true);
+    const message =
+      typeof error === "string"
+        ? error
+        : error && typeof error === "object" && "message" in error
+          ? String((error as { message?: unknown }).message ?? "")
+          : String(error ?? "");
+    const transient =
+      /operation stopped|operation was cancelled|operation canceled|cancelled|canceled|-11839/i.test(
+        message
+      );
+    // Let useInstantFeedVideoPlayer auto-retry transient AVPlayer failures.
+    if (!transient) {
+      setFailedVideoLoad(true);
+    }
     if (__DEV__) {
       console.warn("[VideoCardPlayerArea] playback error", error);
     }
@@ -433,7 +475,10 @@ function VideoCardPlayerInner(
     return <VideoPlayerSlot videoUrl={videoUrl} />;
   }
 
-  const showLoadError = failedVideoLoad || loadTimedOut;
+  // Tap to retry only after silent auto-retries are exhausted (loadTimedOut)
+  // or a non-transient decode failure. Avoid flashing retry on cold-start
+  // "Operation Stopped" races.
+  const showLoadError = loadTimedOut || failedVideoLoad;
 
   // Snapshot as static bg until live video paints. No spinner / API thumbnail.
   const showPlayChrome = !showLoadError;

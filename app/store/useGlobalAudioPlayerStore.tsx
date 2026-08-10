@@ -160,21 +160,23 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           console.warn("Error stopping legacy audio manager before global track:", error);
         }
 
-        // Pause any normal songs playing via useAdvancedAudioPlayer
-        // by using the global media store to pause all audio
-        try {
-          const globalMediaStore = require("./useGlobalMediaStore").useGlobalMediaStore;
-          if (globalMediaStore) {
-            const state = globalMediaStore.getState();
-            // Pause all audio that's currently playing
-            Object.keys(state.playingAudio || {}).forEach((audioKey) => {
-              if (state.playingAudio[audioKey]) {
-                state.pauseAudio(audioKey);
-              }
-            });
+        // Pause other useAdvancedAudioPlayer instances via the media store —
+        // but NOT when registering a virtual track: that local player is the
+        // intentional source of playback and must keep its playingAudio flag.
+        if (!track.isVirtual) {
+          try {
+            const globalMediaStore = require("./useGlobalMediaStore").useGlobalMediaStore;
+            if (globalMediaStore) {
+              const state = globalMediaStore.getState();
+              Object.keys(state.playingAudio || {}).forEach((audioKey) => {
+                if (state.playingAudio[audioKey]) {
+                  state.pauseAudio(audioKey);
+                }
+              });
+            }
+          } catch (error) {
+            // no-op - global media store might not be available
           }
-        } catch (error) {
-          // no-op - global media store might not be available
         }
 
         // Stop current track if playing
@@ -345,7 +347,14 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         const { soundInstance, currentTrack, __virtualTrackControls } = get();
         // If this is a virtual track, use the external player's controls
         if (currentTrack?.isVirtual && __virtualTrackControls) {
-          await __virtualTrackControls.play();
+          // Optimistic UI first — never block the icon on AV await
+          set({ isPlaying: true });
+          try {
+            await __virtualTrackControls.play();
+          } catch (error) {
+            console.warn("Error playing virtual track:", error);
+            set({ isPlaying: false });
+          }
           return;
         }
         // Otherwise use the global player's controls
@@ -371,7 +380,13 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         const { soundInstance, currentTrack, __virtualTrackControls } = get();
         // If this is a virtual track, use the external player's controls
         if (currentTrack?.isVirtual && __virtualTrackControls) {
-          await __virtualTrackControls.pause();
+          // Optimistic UI first — icon must flip even if AV pause is slow/hung
+          set({ isPlaying: false });
+          try {
+            await __virtualTrackControls.pause();
+          } catch (error) {
+            console.warn("Error pausing virtual track:", error);
+          }
           return;
         }
         // Otherwise use the global player's controls
@@ -387,16 +402,25 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
 
       togglePlayPause: async () => {
         const { isPlaying, play, pause, currentTrack, __virtualTrackControls } = get();
-        // If this is a virtual track, use the external player's controls
+        // Virtual tracks: drive pause/play from store isPlaying — do NOT call the
+        // card's togglePlay (it often closes over a stale isPlaying=false).
         if (currentTrack?.isVirtual && __virtualTrackControls) {
-          await __virtualTrackControls.togglePlayPause();
-          // ✅ Sync playing state after toggle for virtual tracks
-          // The external player will update its state, but we need to sync it here
-          // We'll rely on the MusicCard's useEffect to sync, but also update optimistically
-          setTimeout(() => {
-            // The actual state will be synced by MusicCard's useEffect
-            // This is just for immediate UI feedback
-          }, 50);
+          if (isPlaying) {
+            set({ isPlaying: false });
+            try {
+              await __virtualTrackControls.pause();
+            } catch (error) {
+              console.warn("Error pausing virtual track:", error);
+            }
+          } else {
+            set({ isPlaying: true });
+            try {
+              await __virtualTrackControls.play();
+            } catch (error) {
+              console.warn("Error playing virtual track:", error);
+              set({ isPlaying: false });
+            }
+          }
           return;
         }
         // Otherwise use the global player's controls
@@ -541,18 +565,16 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       clear: async () => {
-        const { soundInstance, stop } = get();
-        await stop();
-        if (soundInstance) {
-          try {
-            await soundInstance.unloadAsync();
-          } catch (error) {
-            console.warn("Error unloading audio:", error);
-          }
-        }
+        const { soundInstance, currentTrack, __virtualTrackControls } = get();
+        // Clear UI immediately so the mini-player/X never waits on AV pause.
+        const virtualPause = __virtualTrackControls?.pause;
+        const hadVirtual = !!(currentTrack?.isVirtual && virtualPause);
+        const previousSound = soundInstance;
+
         set({
           currentTrack: null,
           soundInstance: null,
+          isPlaying: false,
           queue: [],
           currentIndex: -1,
           originalQueue: [],
@@ -561,6 +583,30 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
           progress: 0,
           __virtualTrackControls: undefined,
         });
+
+        // Best-effort stop in the background (may hang on bad network AV items).
+        if (hadVirtual && virtualPause) {
+          Promise.resolve()
+            .then(() => virtualPause())
+            .catch((error) =>
+              console.warn("Error pausing virtual track on clear:", error)
+            );
+        }
+        if (previousSound) {
+          Promise.resolve()
+            .then(async () => {
+              try {
+                const status = await previousSound.getStatusAsync();
+                if (status.isLoaded) {
+                  if (status.isPlaying) await previousSound.pauseAsync();
+                  await previousSound.unloadAsync();
+                }
+              } catch (error) {
+                console.warn("Error unloading audio on clear:", error);
+              }
+            })
+            .catch(() => {});
+        }
       },
 
       setRepeatMode: (mode: "none" | "all" | "one") => {
@@ -636,7 +682,10 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       },
 
       // Internal setters
-      setPlaying: (playing: boolean) => set({ isPlaying: playing }),
+      setPlaying: (playing: boolean) => {
+        if (get().isPlaying === playing) return;
+        set({ isPlaying: playing });
+      },
       setLoading: (loading: boolean) => set({ isLoading: loading }),
       setPosition: (position: number) => {
         const { duration } = get();

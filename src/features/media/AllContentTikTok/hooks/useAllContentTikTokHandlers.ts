@@ -277,7 +277,12 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       const mediaType = detectMediaType(mediaItem || null);
       const isAudio = mediaType === "audio";
       const isCurrentlyPlaying = isAudio
-        ? playingAudioId === key || playingAudioId === contentKey
+        ? playingAudioId === key ||
+          playingAudioId === contentKey ||
+          playingAudioId === `music-${contentKey}` ||
+          (!!mediaItem?._id &&
+            (playingAudioId === String(mediaItem._id) ||
+              playingAudioId === `music-${mediaItem._id}`))
         : playingVideos[key] ?? playingVideos[contentKey] ?? false;
 
       if (isCurrentlyPlaying) {

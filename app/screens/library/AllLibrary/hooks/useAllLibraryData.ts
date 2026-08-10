@@ -2,7 +2,7 @@
  * useAllLibraryData - Data loading, filtering, and refresh for AllLibrary
  *
  * Instant-load strategy:
- * 1. Seed state synchronously from the MMKV bookmark cache (or the already
+ * 1. Seed state synchronously from the bookmark cache (or the already
  *    hydrated Zustand library store) so content paints on the first frame.
  * 2. Refresh from the API in the background without a blocking spinner.
  * 3. Persist fresh API results back to the cache for the next cold start.
@@ -17,6 +17,7 @@ import {
 import {
   cacheLibraryItems,
   getCachedLibraryItemsSync,
+  hydrateLibraryCache,
 } from "../utils/libraryCache";
 
 interface UseAllLibraryDataProps {
@@ -52,19 +53,19 @@ const deriveItemState = (items: any[]): DerivedItemState => {
   return { savedIds, likeState, likeCountState, overlayState };
 };
 
+const seedFromCaches = (contentType?: string): any[] => {
+  const apiContentType = mapContentTypeToAPI(contentType);
+  const cached = getCachedLibraryItemsSync(apiContentType);
+  if (cached && cached.length > 0) {
+    return cached.filter(isUserBookmark);
+  }
+  return useLibraryStore.getState().getAllSavedItems();
+};
+
 export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   const libraryStore = useLibraryStore();
 
-  // Synchronous seed: MMKV cache first (rich API payloads), then the Zustand
-  // store hydrated at app start. Runs once, before the first paint.
-  const [seed] = useState(() => {
-    const apiContentType = mapContentTypeToAPI(contentType);
-    const cached = getCachedLibraryItemsSync(apiContentType);
-    if (cached && cached.length > 0) {
-      return { items: cached.filter(isUserBookmark) };
-    }
-    return { items: useLibraryStore.getState().getAllSavedItems() };
-  });
+  const [seed] = useState(() => ({ items: seedFromCaches(contentType) }));
   const seedState = useMemo(() => deriveItemState(seed.items), [seed.items]);
 
   const [savedItems, setSavedItems] = useState<any[]>(seed.items);
@@ -85,21 +86,25 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   );
 
   const hasDataRef = useRef(seed.items.length > 0);
+  const lastFetchedTypeRef = useRef<string | undefined>(undefined);
+
+  const applyLocalItems = useCallback((localItems: any[]) => {
+    setSavedItems(localItems);
+    hasDataRef.current = localItems.length > 0;
+    const derived = deriveItemState(localItems);
+    setSavedItemIds(derived.savedIds);
+    setLikedItems(derived.likeState);
+    setLikeCounts(derived.likeCountState);
+    setShowOverlay(derived.overlayState);
+    setError(null);
+  }, []);
 
   const loadFromLocalStorage = useCallback(async () => {
     try {
       if (!libraryStore.isLoaded) {
         await libraryStore.loadSavedItems();
       }
-      const localItems = libraryStore.getAllSavedItems();
-      setSavedItems(localItems);
-      hasDataRef.current = localItems.length > 0;
-
-      const derived = deriveItemState(localItems);
-      setSavedItemIds(derived.savedIds);
-      setLikedItems(derived.likeState);
-      setLikeCounts(derived.likeCountState);
-      setError(null);
+      applyLocalItems(libraryStore.getAllSavedItems());
     } catch (localError) {
       console.error("Error loading from local storage:", localError);
       setSavedItems([]);
@@ -108,7 +113,7 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
       setLikeCounts({});
       setError("Failed to load library content from local storage.");
     }
-  }, [libraryStore]);
+  }, [libraryStore, applyLocalItems]);
 
   const parseApiItems = useCallback((response: any): any[] => {
     if (!response?.data) return [];
@@ -120,23 +125,18 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
     return [];
   }, []);
 
-  const applyItemsToState = useCallback((apiItems: any[]) => {
-    const userBookmarks = apiItems.filter(isUserBookmark);
+  const applyItemsToState = useCallback(
+    (apiItems: any[]) => {
+      const userBookmarks = apiItems.filter(isUserBookmark);
 
-    if (userBookmarks.length > 0) {
-      setSavedItems(userBookmarks);
-      hasDataRef.current = true;
-
-      const derived = deriveItemState(userBookmarks);
-      setShowOverlay(derived.overlayState);
-      setLikedItems(derived.likeState);
-      setLikeCounts(derived.likeCountState);
-      setSavedItemIds(derived.savedIds);
-      setError(null);
-      return true;
-    }
-    return false;
-  }, []);
+      if (userBookmarks.length > 0) {
+        applyLocalItems(userBookmarks);
+        return true;
+      }
+      return false;
+    },
+    [applyLocalItems]
+  );
 
   const fetchAndApply = useCallback(async () => {
     const apiContentType = mapContentTypeToAPI(contentType);
@@ -147,6 +147,10 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
       const applied = applyItemsToState(apiItems);
       if (applied) {
         cacheLibraryItems(apiItems, apiContentType);
+        // Only the unfiltered fetch should populate the "all" cache
+        if (!apiContentType) {
+          cacheLibraryItems(apiItems);
+        }
       } else {
         await loadFromLocalStorage();
       }
@@ -156,13 +160,24 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   }, [contentType, parseApiItems, applyItemsToState, loadFromLocalStorage]);
 
   const loadSavedItems = useCallback(async () => {
-    // Only block the UI with a spinner when there is nothing to show yet;
-    // otherwise refresh silently behind the seeded content.
-    if (!hasDataRef.current) setLoading(true);
+    // If sync seed was empty, hydrate disk cache once — often wins the race
+    // against a cold API call and lets us paint without a spinner.
+    if (!hasDataRef.current) {
+      await hydrateLibraryCache();
+      const hydrated = seedFromCaches(contentType);
+      if (hydrated.length > 0) {
+        applyLocalItems(hydrated);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
+
     setError(null);
 
     try {
       await fetchAndApply();
+      lastFetchedTypeRef.current = contentType;
     } catch (err) {
       console.error("Error loading saved items:", err);
       if (!hasDataRef.current) {
@@ -174,7 +189,7 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
     } finally {
       setLoading(false);
     }
-  }, [fetchAndApply, loadFromLocalStorage]);
+  }, [contentType, fetchAndApply, loadFromLocalStorage, applyLocalItems]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -189,8 +204,16 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   }, [fetchAndApply, loadFromLocalStorage]);
 
   useEffect(() => {
+    // Category switch: paint from sync cache immediately, then background refresh
+    if (lastFetchedTypeRef.current !== undefined) {
+      const cached = seedFromCaches(contentType);
+      if (cached.length > 0) {
+        applyLocalItems(cached);
+        setLoading(false);
+      }
+    }
     loadSavedItems();
-  }, [contentType, loadSavedItems]);
+  }, [contentType, loadSavedItems, applyLocalItems]);
 
   const filteredItems = useMemo(
     () => filterItemsByType(savedItems, contentType),
