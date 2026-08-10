@@ -1,11 +1,17 @@
 /**
- * AllLibraryMediaCard - Thumbnail-only grid card (no inline expo-av players).
- * Videos open in Reels on tap; audio uses the global player.
+ * AllLibraryMediaCard - Videos are live muted surfaces only (no poster thumbnails).
+ * One card plays; other on-screen videos freeze on a decoded frame.
+ * Audio/ebooks use images. Videos open in Reels on tap.
  */
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { AVPlaybackStatus, ResizeMode, Video } from "expo-av";
 import { Image } from "expo-image";
-import React, { memo } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  getBestVideoUrl,
+  getVideoUrlFromMedia,
+} from "../../../../../src/shared/utils/videoUrlManager";
 import {
   getContentTypeIcon,
   getThumbnailSource,
@@ -15,11 +21,22 @@ import {
 } from "../utils/libraryHelpers";
 
 const isValidUri = (u: any) =>
-  typeof u === "string" && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
+  typeof u === "string" &&
+  u.trim().length > 0 &&
+  (/^https?:\/\//.test(u.trim()) ||
+    u.trim().startsWith("file://") ||
+    u.trim().startsWith("/"));
+
+const FALLBACK_AUDIO_THUMB = require("../../../../../assets/images/image (12).png");
+const FALLBACK_BOOK_THUMB = require("../../../../../assets/images/image (13).png");
 
 export interface AllLibraryMediaCardProps {
   item: any;
   isAudioPlaying: boolean;
+  /** Keep Video mounted while the cell is on-screen */
+  isVisible?: boolean;
+  /** Only the single active preview should keep playing */
+  isActivePreview?: boolean;
   dotsRefs: React.MutableRefObject<Record<string, any>>;
   menuOpenId: string | null;
   setMenuOpenId: (id: string | null) => void;
@@ -40,6 +57,8 @@ export interface AllLibraryMediaCardProps {
 function AllLibraryMediaCardComponent({
   item,
   isAudioPlaying,
+  isVisible = true,
+  isActivePreview = false,
   dotsRefs,
   menuOpenId,
   setMenuOpenId,
@@ -67,9 +86,30 @@ function AllLibraryMediaCardComponent({
     item.contentType?.toLowerCase().includes("pdf") ||
     isEbookContent(item);
 
+  const videoUrl =
+    getVideoUrlFromMedia(item) ||
+    item.mediaUrl ||
+    item.fileUrl ||
+    item.playbackUrl ||
+    item.hlsUrl;
   const audioUrl = item.mediaUrl || item.fileUrl;
+  const safeVideoUri = isValidUri(videoUrl)
+    ? getBestVideoUrl(String(videoUrl).trim())
+    : "";
   const safeAudioUri = isValidUri(audioUrl) ? String(audioUrl).trim() : "";
-  const thumbSource = getThumbnailSource(item);
+
+  const resolvedThumb = useMemo(() => getThumbnailSource(item), [item]);
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const [hasFrame, setHasFrame] = useState(false);
+  const videoRef = useRef<Video | null>(null);
+
+  useEffect(() => {
+    setThumbFailed(false);
+    setHasFrame(false);
+  }, [itemId, safeVideoUri]);
+
+  const localFallback = isAudio ? FALLBACK_AUDIO_THUMB : FALLBACK_BOOK_THUMB;
+  const thumbSource = thumbFailed ? localFallback : resolvedThumb;
 
   const handleBookPress = () => {
     const pdfUrl = item.mediaUrl || item.fileUrl || "";
@@ -87,19 +127,57 @@ function AllLibraryMediaCardComponent({
     }
   };
 
-  const renderThumb = () => (
+  const markHasFrame = () => setHasFrame(true);
+
+  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
+    if (status.isPlaying || (status.positionMillis ?? 0) > 0) {
+      markHasFrame();
+    }
+  };
+
+  // No poster thumbnails on videos. Play until a real frame paints, then only
+  // the active card keeps playing; neighbors freeze on that live frame.
+  const shouldPlayPreview =
+    isVisible && !!safeVideoUri && (isActivePreview || !hasFrame);
+
+  const renderImageThumb = () => (
     <Image
       source={thumbSource}
-      style={{ width: "100%", height: "100%", borderRadius: 12 }}
+      style={styles.media}
       contentFit="cover"
       cachePolicy="memory-disk"
       recyclingKey={String(itemId)}
-      transition={0}
+      transition={120}
+      onError={() => setThumbFailed(true)}
     />
   );
 
+  const renderVideoPreview = () => (
+    <>
+      {!hasFrame ? <View style={[styles.media, styles.videoLoading]} /> : null}
+      {safeVideoUri ? (
+        <Video
+          ref={videoRef}
+          source={{ uri: safeVideoUri }}
+          style={styles.media}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={shouldPlayPreview}
+          isLooping={isActivePreview}
+          isMuted
+          useNativeControls={false}
+          progressUpdateIntervalMillis={400}
+          onReadyForDisplay={markHasFrame}
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+        />
+      ) : (
+        <View style={[styles.media, styles.videoLoading]} />
+      )}
+    </>
+  );
+
   const renderTitle = () => (
-    <View className="absolute bottom-2 left-2 right-2">
+    <View className="absolute bottom-2 left-2 right-8">
       <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
         {item.title}
       </Text>
@@ -118,7 +196,7 @@ function AllLibraryMediaCardComponent({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          {renderThumb()}
+          {renderVideoPreview()}
           <View className="absolute inset-0 justify-center items-center">
             <View className="bg-white/70 p-2 rounded-full">
               <Ionicons name="play" size={24} color="#FEA74E" />
@@ -132,7 +210,7 @@ function AllLibraryMediaCardComponent({
           className="w-full h-full"
           activeOpacity={0.9}
         >
-          {renderThumb()}
+          {renderImageThumb()}
           <View className="absolute inset-0 justify-center items-center">
             <View className="bg-black/60 p-3 rounded-full">
               <Ionicons
@@ -151,7 +229,7 @@ function AllLibraryMediaCardComponent({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          {renderThumb()}
+          {renderImageThumb()}
           {renderTitle()}
         </TouchableOpacity>
       ) : (
@@ -160,7 +238,7 @@ function AllLibraryMediaCardComponent({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          {renderThumb()}
+          {renderImageThumb()}
           {renderTitle()}
         </TouchableOpacity>
       )}
@@ -327,4 +405,30 @@ function AllLibraryMediaCardComponent({
   );
 }
 
-export const AllLibraryMediaCard = memo(AllLibraryMediaCardComponent);
+function propsAreEqual(
+  prev: AllLibraryMediaCardProps,
+  next: AllLibraryMediaCardProps
+) {
+  const prevId = prev.item?._id || prev.item?.id;
+  const nextId = next.item?._id || next.item?.id;
+  return (
+    prevId === nextId &&
+    prev.isAudioPlaying === next.isAudioPlaying &&
+    prev.isVisible === next.isVisible &&
+    prev.isActivePreview === next.isActivePreview &&
+    prev.menuOpenId === next.menuOpenId &&
+    prev.isOwner === next.isOwner
+  );
+}
+
+export const AllLibraryMediaCard = memo(AllLibraryMediaCardComponent, propsAreEqual);
+
+const styles = StyleSheet.create({
+  media: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 12,
+  },
+  videoLoading: {
+    backgroundColor: "#0B1220",
+  },
+});

@@ -4,4 +4,6 @@
  */
 
 export * from "./libraryHelpers";
+export * from "./libraryEnrichment";
+export * from "./libraryCache";
 

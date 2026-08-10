@@ -171,6 +171,38 @@ const isImageUri = (uri?: string | null): uri is string => {
   );
 };
 
+const pickImageCandidate = (...candidates: any[]): string | null => {
+  for (const candidate of candidates) {
+    const uri =
+      typeof candidate === "string"
+        ? candidate
+        : candidate && typeof candidate === "object"
+          ? candidate.uri
+          : null;
+    if (isImageUri(uri)) return uri.trim();
+  }
+  return null;
+};
+
+/**
+ * Cloudinary video → still-frame JPEG (same pattern used by VideoComponent).
+ * e.g. .../upload/v123/foo.mp4 → .../upload/so_1/v123/foo.mp4.jpg
+ */
+export const deriveCloudinaryPosterUrl = (
+  mediaUrl?: string | null
+): string | null => {
+  if (typeof mediaUrl !== "string" || !mediaUrl.includes("/upload/")) {
+    return null;
+  }
+  if (!/\.(mp4|mov|webm|m3u8)(\?|$)/i.test(mediaUrl) && !mediaUrl.includes("/video/")) {
+    return null;
+  }
+  const withFrame = mediaUrl.replace("/upload/", "/upload/so_1/");
+  if (/\.jpe?g(\?|$)/i.test(withFrame)) return withFrame;
+  const [base, query] = withFrame.split("?");
+  return query ? `${base}.jpg?${query}` : `${base}.jpg`;
+};
+
 const typeFallbackThumb = (contentType?: string): number => {
   const type = contentType?.toLowerCase() || "";
   switch (type) {
@@ -194,26 +226,55 @@ const typeFallbackThumb = (contentType?: string): number => {
 };
 
 /**
- * Thumbnail source with image-only fallbacks (never video/audio/pdf URLs).
+ * Thumbnail source with image-only fallbacks.
+ * Bookmark payloads often omit thumbnailUrl and only have the video file URL —
+ * derive a Cloudinary poster so library cards are not blank grey.
  */
 export const getThumbnailSource = (item: any): { uri: string } | number => {
-  const candidates = [
-    item.thumbnailUrl,
-    item.thumbnail,
-    typeof item.imageUrl === "string" ? item.imageUrl : item.imageUrl?.uri,
-    typeof item.coverImage === "string" ? item.coverImage : item.coverImage?.uri,
-  ];
-  for (const candidate of candidates) {
-    if (isImageUri(candidate)) return { uri: candidate.trim() };
-  }
-  return typeFallbackThumb(item.contentType);
+  const media = item?.media && typeof item.media === "object" ? item.media : null;
+
+  const direct = pickImageCandidate(
+    item?.thumbnailUrl,
+    item?.thumbnail,
+    item?.imageUrl,
+    item?.coverImage,
+    item?.cover,
+    item?.poster,
+    item?.posterUrl,
+    media?.thumbnailUrl,
+    media?.thumbnail,
+    media?.imageUrl,
+    media?.coverImage
+  );
+  if (direct) return { uri: direct };
+
+  const mediaUrl =
+    item?.mediaUrl ||
+    item?.fileUrl ||
+    item?.playbackUrl ||
+    item?.hlsUrl ||
+    item?.url ||
+    media?.mediaUrl ||
+    media?.fileUrl ||
+    media?.playbackUrl ||
+    null;
+  const poster = deriveCloudinaryPosterUrl(mediaUrl);
+  if (poster) return { uri: poster };
+
+  return typeFallbackThumb(item?.contentType || media?.contentType);
 };
 
 /**
  * Detect video content by URL, mime, or contentType
  */
 export const isVideoContent = (item: any): boolean => {
-  const url = (item.mediaUrl || item.fileUrl || "").toLowerCase();
+  const url = (
+    item.mediaUrl ||
+    item.fileUrl ||
+    item.playbackUrl ||
+    item.hlsUrl ||
+    ""
+  ).toLowerCase();
   const mime = String(item.mimeType || "").toLowerCase();
   const type = String(item.contentType || "").toLowerCase();
   const videoExts = [".mp4", ".mov", ".avi", ".mkv", ".m3u8", ".webm"];

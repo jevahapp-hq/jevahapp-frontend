@@ -4,8 +4,8 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { FlatList, Text, View, ViewToken } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
 import SuccessCard from "../../components/SuccessCard";
@@ -26,6 +26,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
 
   const data = useAllLibraryData({ contentType });
   const {
@@ -63,13 +64,63 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
 
   const { handleDownload } = handlers;
 
+  // Single muted preview: top-most visible row, then leftmost (grid index order).
+  const activePreviewId = useMemo(() => {
+    let bestId: string | null = null;
+    let bestIndex = Infinity;
+
+    filteredItems.forEach((item: any, index: number) => {
+      if (!isVideoContent(item)) return;
+      const id = String(item._id || item.id);
+      // Before viewability reports, fall back to the first video in the grid.
+      if (visibleIds.size > 0 && !visibleIds.has(id)) return;
+      if (index < bestIndex) {
+        bestIndex = index;
+        bestId = id;
+      }
+    });
+
+    return bestId;
+  }, [filteredItems, visibleIds]);
+
+  const viewabilityConfig = useMemo(
+    () => ({
+      itemVisiblePercentThreshold: 35,
+      minimumViewTime: 60,
+    }),
+    []
+  );
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const next = new Set<string>();
+      viewableItems.forEach((token) => {
+        if (!token.isViewable) return;
+        const id = token.item?._id || token.item?.id;
+        if (id) next.add(String(id));
+      });
+      setVisibleIds(next);
+    }
+  ).current;
+
   const renderMediaCard = useCallback(
     ({ item }: any) => {
       const itemId = item._id || item.id;
+      const idKey = String(itemId);
+      const isVideo = isVideoContent(item);
+      // Keep players alive for on-screen cells (and the active one) so frames
+      // stay live video, not static posters, while only one actually plays.
+      const isOnScreen =
+        !isVideo ||
+        visibleIds.size === 0 ||
+        visibleIds.has(idKey) ||
+        activePreviewId === idKey;
       return (
         <AllLibraryMediaCard
           item={item}
           isAudioPlaying={playingAudio === itemId}
+          isVisible={isOnScreen}
+          isActivePreview={isVideo && activePreviewId === idKey}
           dotsRefs={dotsRefs}
           menuOpenId={menuOpenId}
           setMenuOpenId={setMenuOpenId}
@@ -115,6 +166,8 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     },
     [
       playingAudio,
+      visibleIds,
+      activePreviewId,
       menuOpenId,
       toggleAudioPlay,
       handlers,
@@ -192,11 +245,13 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
           ListHeaderComponent={renderErrorBanner}
           contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 12 }}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           initialNumToRender={6}
           maxToRenderPerBatch={6}
           updateCellsBatchingPeriod={50}
-          windowSize={5}
+          windowSize={7}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
         />
       )}
 

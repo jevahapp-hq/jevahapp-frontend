@@ -9,7 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import allMediaAPI from "../../../../utils/allMediaAPI";
+import { useContentCacheStore } from "../../../../store/useContentCacheStore";
 import { useLibraryStore } from "../../../../store/useLibraryStore";
+import { useMediaStore } from "../../../../store/useUploadStore";
 import {
   filterItemsByType,
   mapContentTypeToAPI,
@@ -19,6 +21,7 @@ import {
   getCachedLibraryItemsSync,
   hydrateLibraryCache,
 } from "../utils/libraryCache";
+import { enrichLibraryItemsFromKnownMedia } from "../utils/libraryEnrichment";
 
 interface UseAllLibraryDataProps {
   contentType?: string;
@@ -56,10 +59,12 @@ const deriveItemState = (items: any[]): DerivedItemState => {
 const seedFromCaches = (contentType?: string): any[] => {
   const apiContentType = mapContentTypeToAPI(contentType);
   const cached = getCachedLibraryItemsSync(apiContentType);
-  if (cached && cached.length > 0) {
-    return cached.filter(isUserBookmark);
-  }
-  return useLibraryStore.getState().getAllSavedItems();
+  const raw =
+    cached && cached.length > 0
+      ? cached.filter(isUserBookmark)
+      : useLibraryStore.getState().getAllSavedItems();
+  // Reuse file/thumb URLs already loaded for the same items in ALL.
+  return enrichLibraryItemsFromKnownMedia(raw);
 };
 
 export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
@@ -89,9 +94,10 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   const lastFetchedTypeRef = useRef<string | undefined>(undefined);
 
   const applyLocalItems = useCallback((localItems: any[]) => {
-    setSavedItems(localItems);
-    hasDataRef.current = localItems.length > 0;
-    const derived = deriveItemState(localItems);
+    const enriched = enrichLibraryItemsFromKnownMedia(localItems);
+    setSavedItems(enriched);
+    hasDataRef.current = enriched.length > 0;
+    const derived = deriveItemState(enriched);
     setSavedItemIds(derived.savedIds);
     setLikedItems(derived.likeState);
     setLikeCounts(derived.likeCountState);
@@ -118,11 +124,29 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
   const parseApiItems = useCallback((response: any): any[] => {
     if (!response?.data) return [];
     const d = response.data;
-    if (d.data?.media) return d.data.media;
-    if (d.media) return d.media;
-    if (Array.isArray(d.data)) return d.data;
-    if (Array.isArray(d)) return d;
-    return [];
+    const raw =
+      d.data?.media ||
+      d.media ||
+      d.bookmarks ||
+      d.bookmarkedMedia ||
+      (Array.isArray(d.data) ? d.data : null) ||
+      (Array.isArray(d) ? d : null) ||
+      [];
+
+    if (!Array.isArray(raw)) return [];
+
+    // Bookmark API may wrap media as { media: {...} } — unwrap so thumbs/titles resolve
+    return raw.map((item: any) => {
+      if (item?.media && typeof item.media === "object" && (item.media._id || item.media.title)) {
+        return {
+          ...item.media,
+          bookmarkId: item._id || item.id,
+          isInLibrary: true,
+          isBookmarked: true,
+        };
+      }
+      return item;
+    });
   }, []);
 
   const applyItemsToState = useCallback(
@@ -214,6 +238,16 @@ export function useAllLibraryData({ contentType }: UseAllLibraryDataProps) {
     }
     loadSavedItems();
   }, [contentType, loadSavedItems, applyLocalItems]);
+
+  // When ALL/home finishes loading the same videos, pull their covers/URLs in.
+  const feedCache = useContentCacheStore((s) => s.cache);
+  const feedMediaList = useMediaStore((s) => s.mediaList);
+  useEffect(() => {
+    setSavedItems((prev) => {
+      if (!prev.length) return prev;
+      return enrichLibraryItemsFromKnownMedia(prev);
+    });
+  }, [feedCache, feedMediaList]);
 
   const filteredItems = useMemo(
     () => filterItemsByType(savedItems, contentType),

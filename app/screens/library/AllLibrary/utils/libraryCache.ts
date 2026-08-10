@@ -149,14 +149,34 @@ export const prefetchLibraryBookmarks = async (): Promise<void> => {
     if (!response.success || !response.data) return;
 
     const d = response.data;
-    const items =
+    const raw =
       d?.data?.media ||
       d?.media ||
+      d?.bookmarks ||
+      d?.bookmarkedMedia ||
       (Array.isArray(d?.data) ? d.data : null) ||
       (Array.isArray(d) ? d : null) ||
       [];
 
-    if (Array.isArray(items) && items.length > 0) {
+    const items = Array.isArray(raw)
+      ? raw.map((item: any) => {
+          if (
+            item?.media &&
+            typeof item.media === "object" &&
+            (item.media._id || item.media.title)
+          ) {
+            return {
+              ...item.media,
+              bookmarkId: item._id || item.id,
+              isInLibrary: true,
+              isBookmarked: true,
+            };
+          }
+          return item;
+        })
+      : [];
+
+    if (items.length > 0) {
       cacheLibraryItems(items);
     }
   } catch {
