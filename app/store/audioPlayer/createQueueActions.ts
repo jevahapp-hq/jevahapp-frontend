@@ -18,7 +18,26 @@ export function createQueueActions(
 > {
   return {
     next: async () => {
-      const { queue, currentIndex, setTrack, repeatMode } = get();
+      const { queue, currentIndex, setTrack, repeatMode, position } = get();
+
+      // Soft ranking skip if leaving early
+      try {
+        const current = queue[currentIndex];
+        if (current?.id && (position || 0) < 15000) {
+          const { enqueueFeedEvent } = await import(
+            "../../../src/shared/feed/feedRanker"
+          );
+          enqueueFeedEvent({
+            contentId: String(current.id),
+            contentType: "music",
+            eventType: "skip",
+            watchMs: Math.round(position || 0),
+            source: "music_for_you",
+          });
+        }
+      } catch {
+        // soft-fail
+      }
 
       // Handle repeat one: restart the same song
       if (repeatMode === "one") {

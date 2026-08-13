@@ -15,8 +15,8 @@ export const PERFORMANCE_CONFIG = {
 
   // Video optimization
   VIDEO: {
-    MAX_CONCURRENT: 4, // Warm more players ahead for instant first frame
-    PRELOAD_DISTANCE: 4, // Prefetch 4 videos ahead / behind
+    MAX_CONCURRENT: 2, // active + 1 neighbor
+    PRELOAD_DISTANCE: 2, // Prefetch budget: max 2 videos ahead/behind
     MEMORY_THRESHOLD: 0.85,
     CACHE_DURATION: 2 * 60 * 60 * 1000, // 2 hours — heavy client cache
     QUALITY: {
@@ -30,8 +30,8 @@ export const PERFORMANCE_CONFIG = {
   SCROLL: {
     THROTTLE_MS: 16, // 60fps
     VIRTUAL_SCROLL_THRESHOLD: 100, // Enable virtual scroll for 100+ items
-    BATCH_SIZE: 10, // Render 10 items per batch
-    WINDOW_SIZE: 10, // Viewport size multiplier
+    BATCH_SIZE: 3, // Render few full-bleed cards per batch
+    WINDOW_SIZE: 3, // Keep virtualization tight for TikTok-style cards
     UPDATE_INTERVAL: 50, // Update every 50ms
   },
 

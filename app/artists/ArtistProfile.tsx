@@ -11,12 +11,14 @@ import {
   Alert,
   FlatList,
   Image,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CopyrightFreeSongModal from "../components/CopyrightFreeSongModal";
+import type { ArtistRelease } from "../services/creators/releaseTypes";
 import {
   musicCatalogApi,
   type ArtistProfile,
@@ -39,6 +41,7 @@ export default function ArtistProfileScreen() {
 
   const [artist, setArtist] = useState<ArtistProfile | null>(null);
   const [tracks, setTracks] = useState<TrackCard[]>([]);
+  const [releases, setReleases] = useState<ArtistRelease[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,19 +66,30 @@ export default function ArtistProfileScreen() {
       else setLoading(true);
       setError(null);
       try {
-        const [profile, trackRes] = await Promise.all([
+        const profilePromise =
           nextPage === 1
             ? musicCatalogApi.getArtistBySlug(slug)
-            : Promise.resolve(artist),
+            : Promise.resolve(null as ArtistProfile | null);
+        const releasesPromise =
+          nextPage === 1
+            ? musicCatalogApi.getArtistReleases(slug, { limit: 30 })
+            : Promise.resolve({ releases: [] as ArtistRelease[] });
+
+        const [profile, trackRes, releaseRes] = await Promise.all([
+          profilePromise,
           musicCatalogApi.getArtistTracks(slug, {
             page: nextPage,
             limit: PAGE_SIZE,
           }),
+          releasesPromise,
         ]);
+
         if (nextPage === 1) {
-          setArtist(profile);
-          if (!profile) setError("Artist not found");
+          if (profile) setArtist(profile);
+          else setError("Artist not found");
+          setReleases(releaseRes.releases || []);
         }
+
         const artistOnly = trackRes.tracks.filter((t) => t.lane === "artist");
         setTracks((prev) => {
           if (!append) return artistOnly;
@@ -96,7 +110,7 @@ export default function ArtistProfileScreen() {
         setLoadingMore(false);
       }
     },
-    [slug, artist]
+    [slug]
   );
 
   useEffect(() => {
@@ -229,6 +243,83 @@ export default function ArtistProfileScreen() {
                   {artist.genres.join(" · ")}
                 </Text>
               ) : null}
+
+              {releases.length > 0 ? (
+                <View style={{ alignSelf: "stretch", marginTop: 24 }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: "#111",
+                      marginBottom: 12,
+                    }}
+                  >
+                    Discography
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 12 }}
+                  >
+                    {releases.map((r) => (
+                      <TouchableOpacity
+                        key={r.id}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/music/releases/[idOrSlug]",
+                            params: { idOrSlug: r.slug || r.id },
+                          })
+                        }
+                        style={{ width: 120 }}
+                        activeOpacity={0.8}
+                      >
+                        {r.coverUrl ? (
+                          <Image
+                            source={{ uri: r.coverUrl }}
+                            style={{
+                              width: 120,
+                              height: 120,
+                              borderRadius: 10,
+                            }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: 120,
+                              height: 120,
+                              borderRadius: 10,
+                              backgroundColor: "#E5E7EB",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Ionicons
+                              name="albums-outline"
+                              size={28}
+                              color="#9CA3AF"
+                            />
+                          </View>
+                        )}
+                        <Text
+                          style={{
+                            marginTop: 6,
+                            fontWeight: "600",
+                            color: "#111",
+                            fontSize: 13,
+                          }}
+                          numberOfLines={2}
+                        >
+                          {r.title}
+                        </Text>
+                        <Text style={{ color: "#9CA3AF", fontSize: 11 }}>
+                          {String(r.type).toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+
               <Text
                 style={{
                   alignSelf: "flex-start",

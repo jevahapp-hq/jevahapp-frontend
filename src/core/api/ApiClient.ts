@@ -21,7 +21,7 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`;
 
-    const defaultHeaders = {
+    const defaultHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",
     };
@@ -30,6 +30,15 @@ class ApiClient {
     const authToken = await this.getAuthToken();
     if (authToken) {
       defaultHeaders["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    try {
+      const { isLiteProfileActive } = await import("../../shared/lite/liteProfile");
+      if (isLiteProfileActive()) {
+        defaultHeaders["X-Jevah-Client"] = "lite";
+      }
+    } catch {
+      // optional
     }
 
     const config: RequestInit = {

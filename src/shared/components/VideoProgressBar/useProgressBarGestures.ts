@@ -1,22 +1,20 @@
 /**
- * Scrub gestures — refs keep PanResponder fresh (bar width, progress, seek callbacks).
- * Stale useRef(PanResponder.create) was seeking to 0% because barWidth froze at 0.
+ * Scrub gestures via RNGH Gesture.Pan so the bar wins over vertical FlatList
+ * (RN PanResponder loses to gesture-handler scroll views).
+ * Refs keep width / callbacks fresh for runOnJS handlers.
  */
-import { useEffect, useMemo, useRef } from "react";
-import { PanResponder } from "react-native";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { Gesture } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import type { ProgressBarConfig } from "./types";
 import { calculateProgressFromTouch, clamp, debugLog } from "./utils";
 
 export type ProgressBarGestureCallbacks = {
-  /** Latest external/display progress when a new drag starts (fallback if width unknown) */
   getStartProgress: () => number;
   onDragStart: (progress: number) => void;
   onDragMove: (progress: number) => void;
-  /** Always receives the final progress from an internal ref — never trust a React closure */
   onDragEnd: (finalProgress: number) => void;
-  /** Live scrub while dragging (throttled) */
   onLiveSeek: (progress: number) => void;
-  /** Tap-to-seek on short press without drag */
   onTapSeek: (progress: number) => void;
 };
 
@@ -31,6 +29,7 @@ export const useProgressBarGestures = (
   const dragProgressRef = useRef(0);
   const liveSeekLastRef = useRef(0);
   const movedRef = useRef(false);
+  const finishedRef = useRef(false);
   const debugRef = useRef(debug);
   const configRef = useRef(config);
   const callbacksRef = useRef(callbacks);
@@ -48,101 +47,120 @@ export const useProgressBarGestures = (
     callbacksRef.current = callbacks;
   }, [callbacks]);
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
-        // Keep scrubbing even if a parent scroll/tap wants the gesture
-        onPanResponderTerminationRequest: () => false,
-        onShouldBlockNativeResponder: () => true,
+  const handleBegin = useCallback((x: number) => {
+    finishedRef.current = false;
+    movedRef.current = false;
+    const width = barWidthRef.current;
+    const grant =
+      width > 0
+        ? clamp(x / width, 0, 1)
+        : callbacksRef.current.getStartProgress();
 
-        onPanResponderGrant: (evt) => {
-          movedRef.current = false;
-          const width = barWidthRef.current;
-          const grant =
-            width > 0
-              ? clamp(evt.nativeEvent.locationX / width, 0, 1)
-              : callbacksRef.current.getStartProgress();
+    grantProgressRef.current = grant;
+    dragProgressRef.current = grant;
+    liveSeekLastRef.current = 0;
 
-          grantProgressRef.current = grant;
-          dragProgressRef.current = grant;
-          liveSeekLastRef.current = 0;
+    debugLog(
+      "Drag started",
+      { locationX: x, width, grant },
+      debugRef.current
+    );
 
-          debugLog(
-            "Drag started",
-            { locationX: evt.nativeEvent.locationX, width, grant },
-            debugRef.current
-          );
+    callbacksRef.current.onDragStart(grant);
 
-          callbacksRef.current.onDragStart(grant);
+    if (configRef.current.seekDuringDrag) {
+      liveSeekLastRef.current = Date.now();
+      callbacksRef.current.onLiveSeek(grant);
+    }
+  }, []);
 
-          if (configRef.current.seekDuringDrag) {
-            liveSeekLastRef.current = Date.now();
-            callbacksRef.current.onLiveSeek(grant);
-          }
-        },
+  const handleUpdate = useCallback(
+    (x: number, translationX: number, translationY: number) => {
+      if (Math.abs(translationX) > 3 || Math.abs(translationY) > 3) {
+        movedRef.current = true;
+      }
 
-        onPanResponderMove: (evt, gestureState) => {
-          if (
-            Math.abs(gestureState.dx) > 3 ||
-            Math.abs(gestureState.dy) > 3
-          ) {
-            movedRef.current = true;
-          }
+      const width = barWidthRef.current;
+      const next = calculateProgressFromTouch(
+        x,
+        width,
+        grantProgressRef.current,
+        translationX,
+        translationY,
+        configRef.current.verticalScrub
+      );
 
-          const width = barWidthRef.current;
-          const next = calculateProgressFromTouch(
-            evt.nativeEvent.locationX,
-            width,
-            grantProgressRef.current,
-            gestureState.dx,
-            gestureState.dy,
-            configRef.current.verticalScrub
-          );
+      dragProgressRef.current = next;
+      callbacksRef.current.onDragMove(next);
 
-          dragProgressRef.current = next;
-          callbacksRef.current.onDragMove(next);
-
-          if (configRef.current.seekDuringDrag) {
-            const throttle = configRef.current.liveSeekThrottleMs ?? 48;
-            const now = Date.now();
-            if (now - liveSeekLastRef.current >= throttle) {
-              liveSeekLastRef.current = now;
-              callbacksRef.current.onLiveSeek(next);
-              debugLog("Live seek", { next }, debugRef.current);
-            }
-          }
-        },
-
-        onPanResponderRelease: (evt) => {
-          const width = barWidthRef.current;
-          // Short tap without meaningful drag → absolute seek from touch X
-          if (!movedRef.current && width > 0) {
-            const tapped = clamp(evt.nativeEvent.locationX / width, 0, 1);
-            dragProgressRef.current = tapped;
-            debugLog("Tap seek", { tapped, width }, debugRef.current);
-            callbacksRef.current.onTapSeek(tapped);
-            return;
-          }
-
-          const finalProgress = dragProgressRef.current;
-          debugLog("Drag ended", { finalProgress }, debugRef.current);
-          callbacksRef.current.onDragEnd(finalProgress);
-        },
-
-        onPanResponderTerminate: () => {
-          const finalProgress = dragProgressRef.current;
-          debugLog("Drag cancelled", { finalProgress }, debugRef.current);
-          callbacksRef.current.onDragEnd(finalProgress);
-        },
-      }),
+      if (configRef.current.seekDuringDrag) {
+        const throttle = configRef.current.liveSeekThrottleMs ?? 48;
+        const now = Date.now();
+        if (now - liveSeekLastRef.current >= throttle) {
+          liveSeekLastRef.current = now;
+          callbacksRef.current.onLiveSeek(next);
+          debugLog("Live seek", { next }, debugRef.current);
+        }
+      }
+    },
     []
   );
 
+  const handleEnd = useCallback((x: number) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+
+    const width = barWidthRef.current;
+    if (!movedRef.current && width > 0) {
+      const tapped = clamp(x / width, 0, 1);
+      dragProgressRef.current = tapped;
+      debugLog("Tap seek", { tapped, width }, debugRef.current);
+      callbacksRef.current.onTapSeek(tapped);
+      return;
+    }
+
+    const finalProgress = dragProgressRef.current;
+    debugLog("Drag ended", { finalProgress }, debugRef.current);
+    callbacksRef.current.onDragEnd(finalProgress);
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    const finalProgress = dragProgressRef.current;
+    debugLog("Drag cancelled", { finalProgress }, debugRef.current);
+    callbacksRef.current.onDragEnd(finalProgress);
+  }, []);
+
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        // Claim immediately so Reels FlatList cannot steal the touch
+        .manualActivation(true)
+        .onTouchesDown((_e, stateManager) => {
+          stateManager.activate();
+        })
+        .maxPointers(1)
+        .shouldCancelWhenOutside(false)
+        .onBegin((e) => {
+          runOnJS(handleBegin)(e.x);
+        })
+        .onUpdate((e) => {
+          runOnJS(handleUpdate)(e.x, e.translationX, e.translationY);
+        })
+        .onEnd((e) => {
+          runOnJS(handleEnd)(e.x);
+        })
+        .onFinalize((_e, success) => {
+          if (!success) {
+            runOnJS(handleCancel)();
+          }
+        }),
+    [handleBegin, handleUpdate, handleEnd, handleCancel]
+  );
+
   return {
-    panHandlers: panResponder.panHandlers,
+    gesture,
     dragProgressRef,
   };
 };

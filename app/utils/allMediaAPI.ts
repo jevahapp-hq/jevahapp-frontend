@@ -1,6 +1,12 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { getApiBaseUrl } from "./environmentManager";
+
+const apiLog = (...a: any[]) => {
+  if (__DEV__) console.log(...a);
+};
+const apiWarn = (...a: any[]) => {
+  if (__DEV__) console.warn(...a);
+};
 
 export interface AllMediaItem {
   _id: string;
@@ -47,18 +53,8 @@ class AllMediaAPI {
 
   private async getAuthHeaders(): Promise<HeadersInit> {
     try {
-      let token = await AsyncStorage.getItem("userToken");
-      if (!token) {
-        token = await AsyncStorage.getItem("token");
-      }
-      if (!token) {
-        try {
-          const { default: SecureStore } = await import("expo-secure-store");
-          token = await SecureStore.getItemAsync("jwt");
-        } catch (secureStoreError) {
-          console.log("SecureStore not available or no JWT token");
-        }
-      }
+      const TokenUtils = (await import("./tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
 
       if (token) {
         return {
@@ -202,8 +198,8 @@ class AllMediaAPI {
 
       const fullUrl = `${this.baseURL}${endpoint}`;
       if (__DEV__) {
-        console.log("🌐 Fetching default content from:", fullUrl);
-        console.log("📋 Request params:", params);
+        apiLog("🌐 Fetching default content from:", fullUrl);
+        apiLog("📋 Request params:", params);
       }
 
       const response = await fetch(fullUrl, {
@@ -212,7 +208,7 @@ class AllMediaAPI {
       });
 
       if (__DEV__) {
-        console.log("📡 Response status:", response.status);
+        apiLog("📡 Response status:", response.status);
       }
 
       if (!response.ok) {
@@ -224,7 +220,7 @@ class AllMediaAPI {
         // If the default endpoint doesn't exist (404 or 400), try the regular media endpoint
         if (response.status === 404 || response.status === 400) {
           if (__DEV__) {
-            console.log(
+            apiLog(
               "🔄 Default endpoint not found or invalid, trying regular media endpoint..."
             );
           }
@@ -238,7 +234,7 @@ class AllMediaAPI {
 
       const data = await response.json();
       if (__DEV__) {
-        console.log("✅ API Response data:", data);
+        apiLog("✅ API Response data:", data);
       }
 
       if (!data.success) {
@@ -270,7 +266,7 @@ class AllMediaAPI {
             setTimeout(() => {
               (global as any).__loggedNetworkErrors?.delete(errorKey);
             }, 10000); // 10 second throttle
-            console.warn("⚠️ Network error fetching default content (offline or server unreachable)");
+            apiWarn("⚠️ Network error fetching default content (offline or server unreachable)");
           }
         }
 
@@ -321,7 +317,7 @@ class AllMediaAPI {
   }> {
     try {
       if (__DEV__) {
-        console.log("🔄 Using fallback: trying latest media endpoint");
+        apiLog("🔄 Using fallback: trying latest media endpoint");
       }
 
       // Try getLatestMedia first (most likely to have content)
@@ -428,7 +424,7 @@ class AllMediaAPI {
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
-      console.warn("Server health check failed:", error);
+      apiWarn("Server health check failed:", error);
 
       return {
         isHealthy: false,
@@ -441,8 +437,8 @@ class AllMediaAPI {
   // Test method to check available endpoints
   async testAvailableEndpoints(): Promise<void> {
     if (__DEV__) {
-      console.log("🧪 Testing available endpoints...");
-      console.log("🌐 Base URL:", this.baseURL);
+      apiLog("🧪 Testing available endpoints...");
+      apiLog("🌐 Base URL:", this.baseURL);
     }
 
     try {
@@ -454,18 +450,18 @@ class AllMediaAPI {
       ];
 
       for (const endpoint of endpoints) {
-        console.log(`🔍 Testing ${endpoint}...`);
+        apiLog(`🔍 Testing ${endpoint}...`);
         const response = await fetch(
           `${this.baseURL}${endpoint}?page=1&limit=1`
         );
-        if (__DEV__) console.log(`📡 ${endpoint} status:`, response.status);
+        if (__DEV__) apiLog(`📡 ${endpoint} status:`, response.status);
 
         if (response.ok) {
           const data = await response.json();
-          console.log(`✅ ${endpoint} response:`, data);
+          apiLog(`✅ ${endpoint} response:`, data);
         } else {
           const error = await response.text();
-          if (__DEV__) console.log(`❌ ${endpoint} error:`, error);
+          if (__DEV__) apiLog(`❌ ${endpoint} error:`, error);
         }
       }
     } catch (error) {
@@ -483,12 +479,12 @@ class AllMediaAPI {
     error?: string;
   }> {
     try {
-      console.log("🌐 Fetching public all content...");
+      apiLog("🌐 Fetching public all content...");
 
       // First check if server is reachable
       const healthCheck = await this.checkServerHealth();
       if (!healthCheck.isHealthy) {
-        console.warn("⚠️ Server health check failed, proceeding with request anyway...");
+        apiWarn("⚠️ Server health check failed, proceeding with request anyway...");
       }
 
       const response = await fetch(
@@ -510,7 +506,7 @@ class AllMediaAPI {
       }
 
       const data = await response.json();
-      console.log("✅ Public all content response:", data);
+      apiLog("✅ Public all content response:", data);
 
       let mediaArr: any[] = [];
       let pagination: any = null;
@@ -591,7 +587,7 @@ class AllMediaAPI {
   }> {
     try {
       const headers = await this.getAuthHeaders();
-      console.log("🌐 Fetching authenticated all content...");
+      apiLog("🌐 Fetching authenticated all content...");
 
       const response = await fetch(`${this.baseURL}/api/media/all-content`, {
         method: "GET",
@@ -606,7 +602,7 @@ class AllMediaAPI {
       }
 
       const data = await response.json();
-      console.log("✅ Authenticated all content response:", data);
+      apiLog("✅ Authenticated all content response:", data);
 
       let mediaArr: any[] = [];
       let pagination: any = null;
@@ -883,15 +879,15 @@ class AllMediaAPI {
     error?: string;
   }> {
     try {
-      console.log("🔍 DEBUG: bookmarkContent API called");
-      console.log("🔍 DEBUG: Media ID:", mediaId);
-      console.log("🔍 DEBUG: Base URL:", this.baseURL);
+      apiLog("🔍 DEBUG: bookmarkContent API called");
+      apiLog("🔍 DEBUG: Media ID:", mediaId);
+      apiLog("🔍 DEBUG: Base URL:", this.baseURL);
 
       const headers = await this.getAuthHeaders();
-      console.log("🔍 DEBUG: Auth headers:", headers);
+      apiLog("🔍 DEBUG: Auth headers:", headers);
 
       const url = `${this.baseURL}/api/bookmark/${mediaId}/toggle`;
-      console.log("🔍 DEBUG: Full URL:", url);
+      apiLog("🔍 DEBUG: Full URL:", url);
 
       const response = await fetch(url, {
         method: "POST",
@@ -899,8 +895,8 @@ class AllMediaAPI {
         body: JSON.stringify({ contentType: "video" }),
       });
 
-      console.log("🔍 DEBUG: Response status:", response.status);
-      console.log("🔍 DEBUG: Response ok:", response.ok);
+      apiLog("🔍 DEBUG: Response status:", response.status);
+      apiLog("🔍 DEBUG: Response ok:", response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -927,16 +923,16 @@ class AllMediaAPI {
     error?: string;
   }> {
     try {
-      console.log("🔍 DEBUG: unbookmarkContent API called");
-      console.log("🔍 DEBUG: Media ID:", mediaId);
-      console.log("🔍 DEBUG: Base URL:", this.baseURL);
+      apiLog("🔍 DEBUG: unbookmarkContent API called");
+      apiLog("🔍 DEBUG: Media ID:", mediaId);
+      apiLog("🔍 DEBUG: Base URL:", this.baseURL);
 
       const headers = await this.getAuthHeaders();
-      console.log("🔍 DEBUG: Auth headers:", headers);
+      apiLog("🔍 DEBUG: Auth headers:", headers);
 
       // Use the correct endpoint that matches contentInteractionAPI
       const url = `${this.baseURL}/api/bookmark/${mediaId}/toggle`;
-      console.log("🔍 DEBUG: Full URL:", url);
+      apiLog("🔍 DEBUG: Full URL:", url);
 
       const response = await fetch(url, {
         method: "POST",
@@ -944,8 +940,8 @@ class AllMediaAPI {
         body: JSON.stringify({ contentType: "video" }),
       });
 
-      console.log("🔍 DEBUG: Response status:", response.status);
-      console.log("🔍 DEBUG: Response ok:", response.ok);
+      apiLog("🔍 DEBUG: Response status:", response.status);
+      apiLog("🔍 DEBUG: Response ok:", response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -975,7 +971,7 @@ class AllMediaAPI {
     data?: any;
     error?: string;
   }> {
-    console.log("🔍 AllMediaAPI: Getting saved content with params:", {
+    apiLog("🔍 AllMediaAPI: Getting saved content with params:", {
       page,
       limit,
       contentType,
@@ -990,7 +986,7 @@ class AllMediaAPI {
         ...(contentType && { contentType }),
       });
 
-      console.log("📡 AllMediaAPI: Using endpoint: /api/bookmark/user");
+      apiLog("📡 AllMediaAPI: Using endpoint: /api/bookmark/user");
       const response = await fetch(
         `${this.baseURL}/api/bookmark/user?${queryParams}`,
         {
@@ -999,7 +995,7 @@ class AllMediaAPI {
         }
       );
 
-      console.log(
+      apiLog(
         "📡 AllMediaAPI: Response status:",
         response.status,
         response.statusText
@@ -1011,7 +1007,7 @@ class AllMediaAPI {
 
         // Handle 500 errors gracefully
         if (response.status === 500) {
-          console.warn(
+          apiWarn(
             "⚠️ AllMediaAPI: Backend server error (500) - returning empty saved content"
           );
           return {
@@ -1027,11 +1023,11 @@ class AllMediaAPI {
       }
 
       const data = await response.json();
-      console.log(
+      apiLog(
         "📡 AllMediaAPI: API Response:",
         JSON.stringify(data, null, 2)
       );
-      console.log("✅ AllMediaAPI: Successfully got saved content");
+      apiLog("✅ AllMediaAPI: Successfully got saved content");
       return { success: true, data };
     } catch (error) {
       console.error("❌ AllMediaAPI: Error getting saved content:", error);

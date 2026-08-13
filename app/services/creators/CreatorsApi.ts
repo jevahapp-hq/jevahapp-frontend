@@ -160,6 +160,121 @@ class CreatorsApiClient extends BaseApiClient {
       { method: "DELETE", requireAuth: true }
     );
   }
+
+  // ── Releases (albums / EPs / mixtapes / singles) ─────────────────────────
+
+  async createRelease(body: Record<string, unknown>) {
+    return this.request<any>("/api/creators/releases", {
+      method: "POST",
+      requireAuth: true,
+      body,
+    });
+  }
+
+  async listMyReleases(params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.limit) q.set("limit", String(params.limit ?? 20));
+    const qs = q.toString() ? `?${q.toString()}` : "";
+    return this.request<any>(`/api/creators/releases${qs}`, {
+      method: "GET",
+      requireAuth: true,
+    });
+  }
+
+  async getMyRelease(releaseId: string) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}`,
+      { method: "GET", requireAuth: true }
+    );
+  }
+
+  async patchRelease(releaseId: string, body: Record<string, unknown>) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}`,
+      { method: "PATCH", requireAuth: true, body }
+    );
+  }
+
+  async deleteRelease(releaseId: string) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}`,
+      { method: "DELETE", requireAuth: true }
+    );
+  }
+
+  async createReleaseCoverUploadIntent(
+    releaseId: string,
+    body: {
+      contentType: string;
+      fileName?: string;
+      fileSizeBytes?: number;
+    }
+  ) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}/cover/upload-intent`,
+      {
+        method: "POST",
+        requireAuth: true,
+        body,
+        timeoutMs: 60000,
+      }
+    );
+  }
+
+  async finalizeReleaseCover(releaseId: string, body?: Record<string, unknown>) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}/cover/finalize`,
+      {
+        method: "POST",
+        requireAuth: true,
+        body: body ?? {},
+        timeoutMs: 60000,
+      }
+    );
+  }
+
+  async reorderReleaseTracks(
+    releaseId: string,
+    orderedTrackIds: string[]
+  ) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}/tracks/reorder`,
+      {
+        method: "POST",
+        requireAuth: true,
+        body: { orderedTrackIds },
+      }
+    );
+  }
+
+  /** Unlink track from release (BE contract — soft-fail if 404 until shipped). */
+  async unlinkReleaseTrack(releaseId: string, trackId: string) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}/tracks/${encodeURIComponent(trackId)}`,
+      { method: "DELETE", requireAuth: true }
+    );
+  }
+
+  async publishRelease(
+    releaseId: string,
+    body?: { scheduledAt?: string; skipTypeHints?: boolean }
+  ) {
+    return this.request<any>(
+      `/api/creators/releases/${encodeURIComponent(releaseId)}/publish`,
+      {
+        method: "POST",
+        requireAuth: true,
+        body: body ?? {},
+        timeoutMs: 60000,
+      }
+    );
+  }
 }
 
 export const creatorsApi = new CreatorsApiClient();

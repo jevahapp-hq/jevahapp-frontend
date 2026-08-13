@@ -90,6 +90,7 @@ class MediaApi {
     contentType?: string;
     sort?: string;
     order?: "asc" | "desc";
+    profile?: string;
   }): Promise<MediaApiResponse> {
     const params: Record<string, any> = {};
 
@@ -99,6 +100,7 @@ class MediaApi {
     if (options?.contentType && options.contentType !== "ALL") params.contentType = options.contentType;
     if (options?.sort) params.sort = options.sort;
     if (options?.order) params.order = options.order;
+    if (options?.profile) params.profile = options.profile;
 
     const response = await apiClient.get<any>(API_CONFIG.ENDPOINTS.ALL_CONTENT, Object.keys(params).length > 0 ? params : undefined);
 
@@ -127,6 +129,7 @@ class MediaApi {
     contentType?: string;
     sort?: string;
     order?: "asc" | "desc";
+    profile?: string;
   }): Promise<MediaApiResponse> {
     const params: Record<string, any> = {};
 
@@ -136,6 +139,7 @@ class MediaApi {
     if (options?.contentType && options.contentType !== "ALL") params.contentType = options.contentType;
     if (options?.sort) params.sort = options.sort;
     if (options?.order) params.order = options.order;
+    if (options?.profile) params.profile = options.profile;
 
     const response = await apiClient.get<any>(
       API_CONFIG.ENDPOINTS.ALL_CONTENT_AUTH,

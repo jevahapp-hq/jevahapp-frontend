@@ -20,6 +20,7 @@ import {
 } from "./commentMentions";
 import { EmojiTray } from "./EmojiTray";
 import { MentionSuggestions } from "./MentionSuggestions";
+import { resolveUserAvatarUrl } from "../../utils/defaultUserAvatar";
 import {
   COMMENT_COMPOSER_COLORS as C,
   COMMENT_MAX_LENGTH,
@@ -425,15 +426,10 @@ export function CommentComposer({
       ) : null}
 
       <View style={styles.composerRow}>
-        {myAvatar ? (
-          <Image source={{ uri: myAvatar }} style={styles.composerAvatar} />
-        ) : (
-          <View style={[styles.composerAvatar, styles.avatarFallback]}>
-            <Text style={styles.avatarInitial}>
-              {(myName || "G").charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <Image
+          source={{ uri: resolveUserAvatarUrl(myAvatar) }}
+          style={styles.composerAvatar}
+        />
 
         <TouchableOpacity
           activeOpacity={isAuthenticated ? 1 : 0.85}

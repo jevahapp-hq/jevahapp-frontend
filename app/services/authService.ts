@@ -228,8 +228,8 @@ class AuthService {
       // console.log("✅ Login response:", data);
 
       if (response.ok && data.token) {
-        await AsyncStorage.setItem("token", data.token);
-        // console.log("💾 Token stored in AsyncStorage");
+        const TokenUtils = (await import("../utils/tokenUtils")).default;
+        await TokenUtils.storeAuthToken(data.token);
 
         // Also store user data if available
         if (data.user) {
@@ -470,7 +470,8 @@ class AuthService {
   // Get current user data
   async fetchMe() {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const TokenUtils = (await import("../utils/tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
       const response = await fetch(`${this.baseURL}/me`, {
         headers: { Authorization: `Bearer ${token || ""}` },
       });
@@ -489,14 +490,13 @@ class AuthService {
     }
   }
 
-  // Logout - Clear stored token
+  // Logout - Clear all session storage slots
   async logout() {
     try {
-      await AsyncStorage.removeItem("token");
-      // console.log("🗑️ Token removed from AsyncStorage");
+      const { clearBackendSession } = await import("../utils/sessionAuth");
+      await clearBackendSession();
       return { success: true };
     } catch (error) {
-      // console.error("❌ Error in logout:", error);
       return { success: false };
     }
   }
@@ -504,14 +504,9 @@ class AuthService {
   // Get stored token
   async getToken() {
     try {
-      const token = await AsyncStorage.getItem("token");
-      // console.log(
-      //   "🔑 Retrieved token from AsyncStorage:",
-      //   token ? "exists" : "not found"
-      // );
-      return token;
+      const TokenUtils = (await import("../utils/tokenUtils")).default;
+      return await TokenUtils.getAuthToken();
     } catch (error) {
-      // console.error("❌ Error getting token:", error);
       return null;
     }
   }

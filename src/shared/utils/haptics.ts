@@ -42,10 +42,19 @@ export const triggerMediaPlayHaptic = (): void => {
 };
 
 /**
- * Trigger haptic feedback for success action
+ * Heart-like success (notification haptic when available).
  */
+export const triggerLikeHaptic = (): void => {
+  if (Platform.OS === "web") return;
+  try {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch {
+    triggerHapticFeedback("medium");
+  }
+};
+
 export const triggerSuccessHaptic = (): void => {
-  triggerHapticFeedback("medium");
+  triggerLikeHaptic();
 };
 
 /**

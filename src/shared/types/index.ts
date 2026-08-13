@@ -66,6 +66,13 @@ export interface MediaItem extends BaseEntity {
   processingStatus?: "ready" | "processing" | "pending" | "failed" | string;
   playbackUrl?: string; // HLS or processed playback URL from backend
   hlsUrl?: string; // Legacy HLS field
+  /** Compact feed playback hints when `profile=lite` */
+  lite?: {
+    preferHls?: boolean;
+    maxVideoHeight?: number;
+    prefetchCount?: number;
+    imageMaxEdge?: number;
+  };
   isHidden?: boolean;
   category?: string[];
   userId?: string;
@@ -130,7 +137,7 @@ export interface VideoCardProps {
   onDelete?: (item: MediaItem) => void;
   onModalToggle: (key: string | null) => void;
   modalVisible: string | null;
-  comments: Record<string, any[]>;
+  comments?: Record<string, any[]>;
   checkIfDownloaded: (id: string) => boolean;
   getContentKey: (item: MediaItem) => string;
   getTimeAgo: (createdAt: string) => string;
@@ -446,4 +453,6 @@ export interface UseMediaReturn {
   refreshDefaultContent: () => Promise<void>;
   loadMoreContent: () => Promise<void>;
   getFilteredContent: (filter: ContentFilter) => MediaItem[];
+  /** True when at least one page came from GET /feed/for-you */
+  serverRanked?: boolean;
 }

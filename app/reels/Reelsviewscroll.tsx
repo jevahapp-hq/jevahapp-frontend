@@ -3,7 +3,8 @@
  * Fully modularized and performance optimized.
  */
 import { memo, useCallback, useEffect, useRef } from "react";
-import { FlatList, StatusBar, View } from "react-native";
+import { StatusBar, View } from "react-native";
+import { FlatList } from "react-native-gesture-handler";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
 import { ReelsErrorView } from "./components/ReelsErrorView";
@@ -18,86 +19,98 @@ const ReelsView = () => {
   // Sync scroll position when list loads or index changes externally
   useEffect(() => {
     if (flatListRef.current && o.allVideos.length > 0) {
-      const timer = setTimeout(() => {
+      const index = o.reelsStore.currentIndex || 0;
+      requestAnimationFrame(() => {
         flatListRef.current?.scrollToIndex({
-          index: o.reelsStore.currentIndex || 0,
+          index,
           animated: false,
         });
-      }, 100);
-      return () => clearTimeout(timer);
+      });
     }
   }, [o.allVideos.length]);
 
-  const renderItem = useCallback(({ item, index }: { item: any, index: number }) => {
-    const isActive = index === o.currentIndex_state;
-    return (
-      <View style={{ height: o.responsive.screenHeight, width: "100%", backgroundColor: "#000000" }}>
-        <ReelsVideoItem
-          videoData={item}
-          index={index}
-          isActive={isActive}
-          videoRefs={o.videoRefs}
-          screenHeight={o.responsive.screenHeight}
-          screenWidth={o.responsive.screenWidth}
-          isIOS={o.responsive.isIOS}
-          currentIndex_state={o.currentIndex_state}
-          playingVideos={o.playingVideos}
-          mutedVideos={o.mutedVideos}
-          videoDuration={o.videoDuration}
-          videoPosition={o.videoPosition}
-          isDragging={o.isDragging}
-          showPauseOverlay={o.showPauseOverlay}
-          userHasManuallyPaused={o.userHasManuallyPaused}
-          modalKey={o.current.modalKey}
-          currentVideo={o.current.currentVideo}
-          video={o.current.video}
-          enrichedVideoData={o.current.currentVideo}
-          activeIsLiked={o.activeIsLiked}
-          activeLikesCount={o.activeLikesCount}
-          canUseBackendLikes={o.current.canUseBackendLikes}
-          videoStats={o.videoStats}
-          libraryStore={o.libraryStore}
-          getSpeakerName={o.current.getSpeakerName}
-          getResponsiveSize={o.responsive.getResponsiveSize}
-          getResponsiveSpacing={o.responsive.getResponsiveSpacing}
-          getResponsiveFontSize={o.responsive.getResponsiveFontSize}
-          getTouchTargetSize={o.responsive.getTouchTargetSize}
-          onToggleVideoPlay={o.toggleVideoPlay}
-          onSeek={o.playback.seekToPosition}
-          onToggleMute={o.playback.toggleMute}
-          onLike={o.handlers.handleLike}
-          onComment={o.handlers.handleComment}
-          onSave={o.handlers.handleSave}
-          onShare={o.handlers.handleShare}
-          onViewDetails={o.handlers.handleViewDetails}
-          onDownload={o.handlers.handleDownloadAction}
-          onDelete={o.handlers.openDeleteModal}
-          onReport={o.handlers.handleReport}
-          onMenuToggle={() => o.setMenuVisible((v) => !v)}
-          onMenuClose={() => o.setMenuVisible(false)}
-          setIsDragging={o.setIsDragging}
-          setVideoDuration={o.setVideoDuration}
-          setVideoPosition={o.setVideoPosition}
-          triggerHapticFeedback={o.triggerHapticFeedback}
-          formatTime={o.playback.formatTime}
-          globalVideoStore={o.globalVideoStore}
-          mediaStore={o.mediaStore}
-          source={o.params.source}
-          menuVisible={o.menuVisible}
-          isOwner={o.isOwner}
-          checkIfDownloaded={o.checkIfDownloaded}
-          currentUser={o.currentUser}
-          getAvatarUrl={o.getAvatarUrl}
-        />
-      </View>
-    );
-  }, [o]);
+  const renderItem = useCallback(
+    ({ item, index }: { item: any; index: number }) => {
+      const isActive = index === o.currentIndex_state;
+      return (
+        <View
+          style={{
+            height: o.responsive.screenHeight,
+            width: "100%",
+            backgroundColor: "#000000",
+          }}
+        >
+          <ReelsVideoItem
+            videoData={item}
+            index={index}
+            isActive={isActive}
+            videoRefs={o.videoRefs}
+            screenHeight={o.responsive.screenHeight}
+            screenWidth={o.responsive.screenWidth}
+            isIOS={o.responsive.isIOS}
+            currentIndex_state={o.currentIndex_state}
+            playingVideos={o.playingVideos}
+            mutedVideos={o.mutedVideos}
+            videoDuration={o.videoDuration}
+            videoPosition={o.videoPosition}
+            isDragging={o.isDragging}
+            showPauseOverlay={o.showPauseOverlay}
+            userHasManuallyPaused={o.userHasManuallyPaused}
+            modalKey={o.current.modalKey}
+            currentVideo={o.current.currentVideo}
+            video={o.current.video}
+            enrichedVideoData={o.current.currentVideo}
+            activeIsLiked={o.activeIsLiked}
+            activeLikesCount={o.activeLikesCount}
+            canUseBackendLikes={o.current.canUseBackendLikes}
+            videoStats={o.videoStats}
+            libraryStore={o.libraryStore}
+            getSpeakerName={o.current.getSpeakerName}
+            getResponsiveSize={o.responsive.getResponsiveSize}
+            getResponsiveSpacing={o.responsive.getResponsiveSpacing}
+            getResponsiveFontSize={o.responsive.getResponsiveFontSize}
+            getTouchTargetSize={o.responsive.getTouchTargetSize}
+            onToggleVideoPlay={o.toggleVideoPlay}
+            onSeek={o.playback.seekToPosition}
+            onToggleMute={o.playback.toggleMute}
+            onLike={o.handlers.handleLike}
+            onComment={o.handlers.handleComment}
+            onSave={o.handlers.handleSave}
+            onShare={o.handlers.handleShare}
+            onViewDetails={o.handlers.handleViewDetails}
+            onDownload={o.handlers.handleDownloadAction}
+            onDelete={o.handlers.openDeleteModal}
+            onReport={o.handlers.handleReport}
+            onMenuToggle={() => o.setMenuVisible((v) => !v)}
+            onMenuClose={() => o.setMenuVisible(false)}
+            setIsDragging={o.setIsDragging}
+            setVideoDuration={o.setVideoDuration}
+            setVideoPosition={o.setVideoPosition}
+            triggerHapticFeedback={o.triggerHapticFeedback}
+            formatTime={o.playback.formatTime}
+            globalVideoStore={o.globalVideoStore}
+            mediaStore={o.mediaStore}
+            source={o.params.source}
+            menuVisible={o.menuVisible}
+            isOwner={o.isOwner}
+            checkIfDownloaded={o.checkIfDownloaded}
+            currentUser={o.currentUser}
+            getAvatarUrl={o.getAvatarUrl}
+          />
+        </View>
+      );
+    },
+    [o]
+  );
 
   if (o.hasError) {
     return (
       <ReelsErrorView
         errorMessage={o.errorMessage}
-        onRetry={() => { o.setHasError(false); o.setErrorMessage(""); }}
+        onRetry={() => {
+          o.setHasError(false);
+          o.setErrorMessage("");
+        }}
         onGoBack={() => o.router.back()}
       />
     );
@@ -105,13 +118,18 @@ const ReelsView = () => {
 
   return (
     <ErrorBoundary>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
       <FlatList
         ref={flatListRef}
         data={o.allVideos}
         renderItem={renderItem}
         keyExtractor={(item, index) => `reel-${item._id || item.id || index}`}
         pagingEnabled
+        scrollEnabled={!o.isDragging}
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={o.scroll.onViewableItemsChanged}
         viewabilityConfig={o.scroll.viewabilityConfig}

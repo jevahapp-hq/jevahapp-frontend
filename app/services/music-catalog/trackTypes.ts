@@ -3,6 +3,9 @@
  * Never mix lanes in one shelf without an explicit curation product.
  */
 
+import type { ReleaseRef } from "../creators/releaseTypes";
+import { normalizeReleaseRef } from "../creators/releaseTypes";
+
 export type TrackLane = "curated" | "artist";
 
 export type TrackCard = {
@@ -21,6 +24,11 @@ export type TrackCard = {
   description?: string;
   artistSlug?: string;
   artistId?: string;
+  releaseId?: string;
+  albumId?: string;
+  trackNumber?: number;
+  discNumber?: number;
+  release?: ReleaseRef;
   raw?: unknown;
 };
 
@@ -133,6 +141,11 @@ export function normalizeTrackCard(
     description: raw.description,
     artistSlug: raw.artistSlug || raw.artist?.slug || undefined,
     artistId: raw.artistId || raw.artist?._id || raw.artist?.id || undefined,
+    releaseId: raw.releaseId || raw.release?.id || raw.release?._id || undefined,
+    albumId: raw.albumId || undefined,
+    trackNumber: Number(raw.trackNumber ?? raw.track_number) || undefined,
+    discNumber: Number(raw.discNumber ?? raw.disc_number) || undefined,
+    release: normalizeReleaseRef(raw),
     raw,
   };
 }
@@ -144,10 +157,12 @@ export function trackCardToAudioTrack(track: TrackCard) {
     title: track.title,
     artist: track.artistName,
     audioUrl: track.playbackUrl,
-    thumbnailUrl: track.thumbnailUrl || "",
+    thumbnailUrl: track.thumbnailUrl || track.release?.coverUrl || "",
     duration: track.durationSec || 0,
     category: track.category || track.lane,
     description: track.description,
+    release: track.release,
+    releaseTitle: track.release?.title,
   };
 }
 
@@ -169,6 +184,8 @@ export function trackCardToSongUi(track: TrackCard) {
     lane: track.lane,
     artistSlug: track.artistSlug,
     artistId: track.artistId,
+    releaseId: track.releaseId,
+    release: track.release,
     views: track.playCount,
     viewCount: track.playCount,
     playCount: track.playCount,

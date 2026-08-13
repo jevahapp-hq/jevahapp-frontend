@@ -79,6 +79,23 @@ export async function recordView(
         }
         return { totalViews: 0, counted: false };
       }
+      // Server bugs (often under_review media) — soft skip; don't throw red ERROR
+      if (response.status >= 500) {
+        recordViewThrottle.backoffUntil = Date.now() + 15_000;
+        if (__DEV__) {
+          let body = "";
+          try {
+            body = (await response.text()).slice(0, 200);
+          } catch {
+            // ignore
+          }
+          devWarn(
+            `⚠️ View post 500 for ${backendContentType}/${contentId}. Backing off 15s.`,
+            body || undefined
+          );
+        }
+        return { totalViews: 0, counted: false };
+      }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 

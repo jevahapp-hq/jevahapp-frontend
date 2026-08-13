@@ -3,13 +3,21 @@ import React, { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
+  Text,
   View,
 } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
+import { getLiteListWindow } from "../../../../shared/lite/liteProfile";
 import type { ContentType, MediaItem } from "../../../../shared/types";
-import { ContentFeedHeader } from "./ContentFeedHeader";
+import { LiveComingSoonCard } from "./LiveComingSoonCard";
 
 const FeedList = FlashList as any;
+
+export type FeedRow =
+  | { kind: "section"; id: string; title: string }
+  | { kind: "media"; id: string; item: MediaItem; mediaIndex: number }
+  | { kind: "livePromo"; id: "live-promo" }
+  | { kind: "spacer"; id: string; height: number };
 
 type Props = {
   activeTab: ContentType | "ALL";
@@ -17,7 +25,6 @@ type Props = {
   mostRecentItem: MediaItem | null;
   firstFour: MediaItem[];
   filteredMediaListLength: number;
-  currentlyVisibleVideo: string | null;
   getContentKey: (item: MediaItem) => string;
   renderContentByType: (
     item: MediaItem,
@@ -35,13 +42,104 @@ type Props = {
   scrollEnabled?: boolean;
 };
 
+function buildFeedRows(params: {
+  mostRecentItem: MediaItem | null;
+  firstFour: MediaItem[];
+  rest: MediaItem[];
+  activeTab: ContentType | "ALL";
+  filteredMediaListLength: number;
+  getContentKey: (item: MediaItem) => string;
+}): FeedRow[] {
+  const {
+    mostRecentItem,
+    firstFour,
+    rest,
+    activeTab,
+    filteredMediaListLength,
+    getContentKey,
+  } = params;
+  const rows: FeedRow[] = [];
+  let mediaIndex = 0;
+
+  if (mostRecentItem) {
+    rows.push({
+      kind: "section",
+      id: "section-most-recent",
+      title: "Most Recent",
+    });
+    rows.push({
+      kind: "media",
+      id: `media-${getContentKey(mostRecentItem)}`,
+      item: mostRecentItem,
+      mediaIndex: mediaIndex++,
+    });
+  }
+
+  const forYouTitle =
+    activeTab === "ALL"
+      ? `For You (${filteredMediaListLength})`
+      : `${activeTab} · For You (${filteredMediaListLength})`;
+
+  rows.push({
+    kind: "section",
+    id: "section-for-you",
+    title: forYouTitle,
+  });
+
+  for (const item of firstFour) {
+    rows.push({
+      kind: "media",
+      id: `media-${getContentKey(item)}`,
+      item,
+      mediaIndex: mediaIndex++,
+    });
+  }
+
+  if (activeTab === "ALL" || activeTab === "live") {
+    rows.push({ kind: "livePromo", id: "live-promo" });
+  }
+
+  rows.push({
+    kind: "spacer",
+    id: "spacer-after-promo",
+    height: UI_CONFIG.SPACING.XXL,
+  });
+
+  for (const item of rest) {
+    rows.push({
+      kind: "media",
+      id: `media-${getContentKey(item)}`,
+      item,
+      mediaIndex: mediaIndex++,
+    });
+  }
+
+  return rows;
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <Text
+      style={{
+        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
+        fontWeight: "600",
+        color: UI_CONFIG.COLORS.TEXT_PRIMARY,
+        paddingHorizontal: UI_CONFIG.SPACING.MD,
+        marginTop: UI_CONFIG.SPACING.LG,
+        marginBottom: UI_CONFIG.SPACING.MD,
+      }}
+    >
+      {title}
+    </Text>
+  );
+}
+
 export function AllContentTikTokList({
   activeTab,
   rest,
   mostRecentItem,
   firstFour,
   filteredMediaListLength,
-  currentlyVisibleVideo,
   getContentKey,
   renderContentByType,
   refreshing,
@@ -53,40 +151,45 @@ export function AllContentTikTokList({
   isFetchingNextPage,
   scrollEnabled = true,
 }: Props) {
-  const listHeaderComponent = useMemo(
-    () => (
-      <ContentFeedHeader
-        mostRecentItem={mostRecentItem}
-        contentType={activeTab}
-        filteredMediaListLength={filteredMediaListLength}
-        firstFour={firstFour}
-        currentlyVisibleVideo={currentlyVisibleVideo}
-        getContentKey={getContentKey}
-        renderContentByType={renderContentByType}
-      />
-    ),
+  const feedRows = useMemo(
+    () =>
+      buildFeedRows({
+        mostRecentItem,
+        firstFour,
+        rest,
+        activeTab,
+        filteredMediaListLength,
+        getContentKey,
+      }),
     [
       mostRecentItem,
+      firstFour,
+      rest,
       activeTab,
       filteredMediaListLength,
-      firstFour,
-      currentlyVisibleVideo,
       getContentKey,
-      renderContentByType,
     ]
   );
 
   const renderListItem = useCallback(
-    ({ item, index }: { item: MediaItem; index: number }) => {
-      return renderContentByType(item, index + firstFour.length + 1);
+    ({ item: row }: { item: FeedRow }) => {
+      if (row.kind === "section") {
+        return <SectionHeader title={row.title} />;
+      }
+      if (row.kind === "livePromo") {
+        return <LiveComingSoonCard />;
+      }
+      if (row.kind === "spacer") {
+        return <View style={{ height: row.height }} />;
+      }
+      return renderContentByType(row.item, row.mediaIndex);
     },
-    [renderContentByType, firstFour.length]
+    [renderContentByType]
   );
 
-  const keyExtractor = useCallback(
-    (item: MediaItem) => getContentKey(item),
-    [getContentKey]
-  );
+  const keyExtractor = useCallback((row: FeedRow) => row.id, []);
+
+  const getItemType = useCallback((row: FeedRow) => row.kind, []);
 
   const listFooterComponent = useMemo(() => {
     if (!isFetchingNextPage) return null;
@@ -97,13 +200,15 @@ export function AllContentTikTokList({
     );
   }, [isFetchingNextPage]);
 
+  const listWindow = getLiteListWindow();
+
   return (
     <View style={{ flex: 1 }} ref={setListHostRef} collapsable={false}>
       <FeedList
-        data={rest}
+        data={feedRows}
         renderItem={renderListItem}
         keyExtractor={keyExtractor}
-        ListHeaderComponent={listHeaderComponent}
+        getItemType={getItemType}
         ListFooterComponent={listFooterComponent}
         refreshControl={
           <RefreshControl
@@ -121,9 +226,9 @@ export function AllContentTikTokList({
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
         scrollEventThrottle={16}
-        estimatedItemSize={500}
+        estimatedItemSize={listWindow.estimatedItemSize}
         keyboardShouldPersistTaps="handled"
-        overscan={500}
+        drawDistance={listWindow.drawDistance}
       />
     </View>
   );

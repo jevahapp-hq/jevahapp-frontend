@@ -3,7 +3,10 @@
  * Memoized to prevent VirtualizedList "large list slow to update" - only re-renders
  * when this item's data changes, not when other items or global state changes.
  */
-import React from "react";
+import React, { useMemo } from "react";
+import {
+  useContentStats,
+} from "../../../../../app/store/useInteractionStore";
 import type { MediaItem } from "../../../../shared/types";
 import { detectMediaType, isAudioSermon } from "../../../../shared/utils";
 import EbookCard from "../../components/EbookCard";
@@ -11,22 +14,20 @@ import MusicCard from "../../components/MusicCard";
 import VideoCard from "../../components/VideoCard";
 import { ContentUnavailableState } from "./ContentFeedStates";
 
+/** Progress is owned by the player overlay — avoid feed-wide progress map churn */
+const EMPTY_PROGRESSES: Record<string, number> = {};
+
 export interface ContentItemRendererProps {
   item: MediaItem;
   index: number;
   getContentKey: (item: MediaItem) => string;
-  getUserLikeState: (contentId: string) => boolean;
-  getLikeCount: (contentId: string) => number;
-  contentStats: Record<string, any>;
   playingVideos: Record<string, boolean>;
   mutedVideos: Record<string, boolean>;
-  progresses: Record<string, number>;
   videoVolume: number;
   currentlyVisibleVideo: string | null;
   playingAudioId: string | null;
   audioProgressMap: Record<string, number>;
   modalVisible: string | null;
-  comments: any;
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
   onTogglePlay: (key: string) => void;
   onToggleMute: (key: string) => void;
@@ -60,18 +61,13 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     item,
     index,
     getContentKey: getKey,
-    getUserLikeState,
-    getLikeCount,
-    contentStats,
     playingVideos,
     mutedVideos,
-    progresses,
     videoVolume,
     currentlyVisibleVideo,
     playingAudioId,
     audioProgressMap,
     modalVisible,
-    comments,
     onVideoTap,
     onTogglePlay,
     onToggleMute,
@@ -98,6 +94,12 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
 
   const key = getKey(item);
   const contentId = item._id || key;
+  const itemStats = useContentStats(contentId);
+  const contentStats = useMemo(
+    () => (itemStats ? { [contentId]: itemStats } : {}),
+    [contentId, itemStats]
+  );
+
   const modalKey = key;
   const isAudioSermonValue = isAudioSermon(item);
   // File MIME/URL win over a wrong stored contentType (e.g. video titled "Book…")
@@ -118,8 +120,10 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     return null;
   };
 
-  const backendUserFavorites = { [key]: getUserLikeState(contentId) };
-  const backendGlobalFavoriteCounts = { [key]: getLikeCount(contentId) };
+  const liked = !!itemStats?.userInteractions?.liked;
+  const likeCount = itemStats?.likes || 0;
+  const backendUserFavorites = { [key]: liked };
+  const backendGlobalFavoriteCounts = { [key]: likeCount };
   const musicId = `music-${item._id || index}`;
 
   const videoCardProps = {
@@ -131,7 +135,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     globalFavoriteCounts: backendGlobalFavoriteCounts,
     playingVideos,
     mutedVideos,
-    progresses,
+    progresses: EMPTY_PROGRESSES,
     videoVolume,
     currentlyVisibleVideo,
     onVideoTap,
@@ -148,7 +152,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onShare: () => onShare(key, item),
     onModalToggle,
     modalVisible,
-    comments,
+    comments: undefined,
     checkIfDownloaded,
     getContentKey: getKey,
     getTimeAgo,
@@ -192,8 +196,8 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onSave: () => onSave(key, item),
     onShare: () => onShare(key, item),
     onDownload: () => onDownload(item),
-    checkIfDownloaded,
     onDelete,
+    checkIfDownloaded,
   };
 
   const rejected = rejectGate();
@@ -207,6 +211,9 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
   if (mediaKind === "video") {
     return <VideoCard key={key} {...videoCardProps} />;
   }
+  if (mediaKind === "gif") {
+    return <VideoCard key={key} {...videoCardProps} />;
+  }
   if (mediaKind === "audio") {
     return <MusicCard key={key} {...musicCardProps} />;
   }
@@ -216,9 +223,8 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
 
   // Ambiguous file: use stored contentType tokens only (never title text)
   switch (storedType) {
-    case "video":
-    case "videos":
-    case "live":
+    case "gif":
+    case "gifs":
       return <VideoCard key={key} {...videoCardProps} />;
     case "audio":
     case "music":
@@ -245,32 +251,21 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
   const nextKey = next.getContentKey(next.item);
   if (prevKey !== nextKey) return false;
 
-  const prevContentId = prev.item._id || prevKey;
-  const nextContentId = next.item._id || nextKey;
   const prevMusicId = `music-${prev.item._id || prev.index}`;
   const nextMusicId = `music-${next.item._id || next.index}`;
 
   return (
-    prev.getUserLikeState(prevContentId) === next.getUserLikeState(nextContentId) &&
-    prev.getLikeCount(prevContentId) === next.getLikeCount(nextContentId) &&
-    // Comment/save/view live in contentStats — must invalidate when they change
-    (prev.contentStats[prevContentId]?.comments ?? 0) ===
-      (next.contentStats[nextContentId]?.comments ?? 0) &&
-    (prev.contentStats[prevContentId]?.likes ?? 0) ===
-      (next.contentStats[nextContentId]?.likes ?? 0) &&
-    (prev.contentStats[prevContentId]?.saves ?? 0) ===
-      (next.contentStats[nextContentId]?.saves ?? 0) &&
-    (prev.contentStats[prevContentId]?.userInteractions?.liked ?? false) ===
-      (next.contentStats[nextContentId]?.userInteractions?.liked ?? false) &&
+    // contentStats subscribed inside via useContentStats(contentId)
     prev.playingVideos[prevKey] === next.playingVideos[nextKey] &&
     prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
-    prev.progresses[prevKey] === next.progresses[nextKey] &&
     (prev.currentlyVisibleVideo === prevKey) === (next.currentlyVisibleVideo === nextKey) &&
     (prev.shouldRenderPlayer ?? true) === (next.shouldRenderPlayer ?? true) &&
     (prev.playingAudioId === prevMusicId) === (next.playingAudioId === nextMusicId) &&
     (prev.audioProgressMap[prevMusicId] ?? 0) === (next.audioProgressMap[nextMusicId] ?? 0) &&
     (prev.modalVisible === prevKey) === (next.modalVisible === nextKey) &&
-    prev.currentUserId === next.currentUserId
+    prev.currentUserId === next.currentUserId &&
+    prev.videoVolume === next.videoVolume &&
+    prev.isAutoPlayEnabled === next.isAutoPlayEnabled
   );
 }
 

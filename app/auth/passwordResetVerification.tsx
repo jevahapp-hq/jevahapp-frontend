@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Platform,
   Animated as RNAnimated,
   Text,
@@ -18,6 +17,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { authToast } from "../components/auth/authToastBus";
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
@@ -187,7 +187,7 @@ export default function PasswordResetVerification() {
       }
     } catch (err) {
       console.error("❌ Error verifying reset code:", err);
-      Alert.alert("Server Error", "Unable to verify code. Try again later.");
+      authToast.error("Couldn’t verify code", "Unable to verify. Try again later.");
       triggerBounceDrop("failure");
     } finally {
       setIsVerifying(false);
@@ -212,17 +212,15 @@ export default function PasswordResetVerification() {
       const data = await response.json();
 
       if (data.success) {
-        Alert.alert(
-          "Code Resent",
-          "A new password reset code has been sent to your email."
-        );
+        authToast.resetCodeSent(emailAddress);
       } else {
         triggerBounceDrop("failure");
-        Alert.alert("Resend Failed", data.message || "Try again later.");
+        authToast.resetFailed(data.message || "Try again later.");
       }
     } catch (err) {
       console.error("❌ Error resending reset code:", err);
       triggerBounceDrop("failure");
+      authToast.resetFailed("Network error. Please try again.");
     } finally {
       setIsResending(false);
     }

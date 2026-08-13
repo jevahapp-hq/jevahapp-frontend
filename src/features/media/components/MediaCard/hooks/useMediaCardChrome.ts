@@ -1,6 +1,6 @@
 /**
  * Shared chrome for Video / Music / Ebook feed cards.
- * Single responsibility: deletion, action sheet, report/details, like-burst, admin.
+ * Single responsibility: deletion, action sheet, report/details, admin.
  */
 import { useCallback, useEffect, useState } from "react";
 import { isAdmin } from "../../../../../../app/utils/mediaDeleteAPI";
@@ -19,7 +19,6 @@ export function useMediaCardChrome(options: {
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [likeBurstKey, setLikeBurstKey] = useState(0);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
 
   const { isModalVisible, openModal, closeModal } = useContentActionModal();
@@ -63,8 +62,6 @@ export function useMediaCardChrome(options: {
     setShowReportModal,
     showDetailsModal,
     setShowDetailsModal,
-    likeBurstKey,
-    setLikeBurstKey,
     userIsAdmin,
     isOwner,
     showDeleteModal,

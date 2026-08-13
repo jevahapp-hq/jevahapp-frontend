@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isLiteProfileActive } from "../../../src/shared/lite/liteProfile";
 import type { CommentData } from "./types";
 import { transformComment } from "./commentTransform";
 
@@ -9,8 +10,23 @@ const commentsMemoryCache = new Map<
 >();
 /** Keep threads hot for long scrolling sessions */
 const MEMORY_TTL_MS = 45 * 60 * 1000;
-/** Disk survives process death / app restart */
-const DISK_TTL_MS = 24 * 60 * 60 * 1000;
+/** Disk survives process death — Lite 7d, full 48h */
+const DISK_TTL_MS = () =>
+  isLiteProfileActive() ? 7 * 24 * 60 * 60 * 1000 : 48 * 60 * 60 * 1000;
+/** Cap RAM entries on Lite; disk stays aggressive */
+const MAX_MEMORY_ENTRIES = () => (isLiteProfileActive() ? 12 : 40);
+
+function trimMemoryCache() {
+  const max = MAX_MEMORY_ENTRIES();
+  if (commentsMemoryCache.size <= max) return;
+  const entries = [...commentsMemoryCache.entries()].sort(
+    (a, b) => a[1].at - b[1].at
+  );
+  const drop = commentsMemoryCache.size - max;
+  for (let i = 0; i < drop; i++) {
+    commentsMemoryCache.delete(entries[i][0]);
+  }
+}
 
 function memoryKey(contentId: string, sortBy: string) {
   return `${contentId}:${sortBy}`;
@@ -46,6 +62,7 @@ export function putCachedComments(
     ...data,
     at: Date.now(),
   });
+  trimMemoryCache();
 }
 
 export async function writeDiskCommentsCache(
@@ -93,7 +110,7 @@ export async function hydrateCommentsCacheFromDisk(
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const ts = Number(parsed?.timestamp || 0);
-    if (!ts || Date.now() - ts > DISK_TTL_MS) {
+    if (!ts || Date.now() - ts > DISK_TTL_MS()) {
       void AsyncStorage.removeItem(diskCommentsCacheKey(contentId, sortBy));
       return null;
     }

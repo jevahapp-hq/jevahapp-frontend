@@ -1,20 +1,33 @@
 /**
- * Premium upload limits / guidelines plate
+ * Premium upload limits / guidelines plate — collapsible with measured height.
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import { Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import {
   getResponsiveFontSize,
   getResponsiveSpacing,
 } from "../../../../utils/responsive";
+import { useReduceMotion } from "../hooks/useReduceMotion";
 
 type UploadLimitsPlateProps = {
   selectedType: string;
 };
 
 type LimitRow = { icon: keyof typeof Ionicons.glyphMap; text: string };
-
 
 function getLimitRows(selectedType: string): LimitRow[] {
   if (selectedType === "music") {
@@ -55,103 +68,177 @@ function getLimitRows(selectedType: string): LimitRow[] {
 export function UploadLimitsPlate({ selectedType }: UploadLimitsPlateProps) {
   const rows = getLimitRows(selectedType);
   const pad = getResponsiveSpacing(14, 16, 18);
+  const [expanded, setExpanded] = useState(false);
+  const [bodyH, setBodyH] = useState(0);
+  const reduceMotion = useReduceMotion();
+  const open = useSharedValue(0);
+
+  useEffect(() => {
+    open.value = withTiming(expanded ? 1 : 0, {
+      duration: reduceMotion ? 0 : 280,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [expanded, open, reduceMotion]);
+
+  const onBodyLayout = (e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0 && Math.abs(h - bodyH) > 1) setBodyH(h);
+  };
+
+  const bodyStyle = useAnimatedStyle(() => ({
+    height: open.value * bodyH,
+    opacity: bodyH === 0 ? 0 : open.value,
+    overflow: "hidden" as const,
+  }));
+
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${open.value * 180}deg` }],
+  }));
 
   return (
-    <View
-      style={{
-        marginBottom: getResponsiveSpacing(18, 22, 26),
-        borderRadius: 18,
-        overflow: "hidden",
-        borderWidth: 1,
-        borderColor: "#E8EDF5",
-        backgroundColor: "#FBFCFD",
-      }}
-    >
+    <View style={styles.card}>
+      <Pressable
+        onPress={() => setExpanded((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel="Upload guidelines"
+        style={[
+          styles.header,
+          {
+            paddingHorizontal: pad,
+            paddingTop: pad,
+            paddingBottom: pad,
+          },
+        ]}
+      >
+        <View style={styles.iconWrap}>
+          <Ionicons name="shield-checkmark-outline" size={18} color="#0F172A" />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Upload guidelines</Text>
+          <Text style={styles.subtitle}>
+            {expanded
+              ? "Tap to collapse"
+              : "So your post clears checks the first time"}
+          </Text>
+        </View>
+        <Animated.View style={chevronStyle}>
+          <Ionicons name="chevron-down" size={18} color="#64748B" />
+        </Animated.View>
+      </Pressable>
+
+      {/* Measure natural height off-layout, drive animated clip from it */}
       <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: pad,
-          paddingTop: pad,
-          paddingBottom: getResponsiveSpacing(10, 12, 12),
-        }}
+        style={[styles.measure, { pointerEvents: "none" }]}
+        onLayout={onBodyLayout}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
       >
         <View
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            backgroundColor: "rgba(15, 23, 42, 0.06)",
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: 12,
+            paddingHorizontal: pad,
+            paddingBottom: pad,
+            gap: getResponsiveSpacing(8, 9, 10),
           }}
         >
-          <Ionicons name="shield-checkmark-outline" size={18} color="#0F172A" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              color: "#0F172A",
-              fontFamily: "Rubik-SemiBold",
-              fontSize: getResponsiveFontSize(13, 14, 15),
-            }}
-          >
-            Upload guidelines
-          </Text>
-          <Text
-            style={{
-              color: "#64748B",
-              fontFamily: "Rubik-Regular",
-              fontSize: getResponsiveFontSize(11, 12, 13),
-              marginTop: 2,
-            }}
-          >
-            So your post clears checks the first time
-          </Text>
+          {rows.map((row) => (
+            <View key={row.text} style={styles.row}>
+              <Ionicons
+                name={row.icon}
+                size={16}
+                color="#475569"
+                style={{ marginRight: 10 }}
+              />
+              <Text style={styles.rowText}>{row.text}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
-      <View
-        style={{
-          paddingHorizontal: pad,
-          paddingBottom: pad,
-          gap: getResponsiveSpacing(8, 9, 10),
-        }}
+      <Animated.View
+        style={[bodyStyle, { pointerEvents: expanded ? "auto" : "none" }]}
       >
-        {rows.map((row) => (
-          <View
-            key={row.text}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "#FFFFFF",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "#EEF2F7",
-              paddingVertical: getResponsiveSpacing(9, 10, 11),
-              paddingHorizontal: getResponsiveSpacing(10, 12, 12),
-            }}
-          >
-            <Ionicons
-              name={row.icon}
-              size={16}
-              color="#475569"
-              style={{ marginRight: 10 }}
-            />
-            <Text
-              style={{
-                flex: 1,
-                color: "#334155",
-                fontFamily: "Rubik-Medium",
-                fontSize: getResponsiveFontSize(11, 12, 13),
-              }}
-            >
-              {row.text}
-            </Text>
-          </View>
-        ))}
-      </View>
+        <View
+          style={{
+            paddingHorizontal: pad,
+            paddingBottom: pad,
+            gap: getResponsiveSpacing(8, 9, 10),
+          }}
+        >
+          {rows.map((row) => (
+            <View key={row.text} style={styles.row}>
+              <Ionicons
+                name={row.icon}
+                size={16}
+                color="#475569"
+                style={{ marginRight: 10 }}
+              />
+              <Text style={styles.rowText}>{row.text}</Text>
+            </View>
+          ))}
+        </View>
+      </Animated.View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    marginBottom: getResponsiveSpacing(18, 22, 26),
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E8EDF5",
+    backgroundColor: "#FBFCFD",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+  },
+  title: {
+    color: "#0F172A",
+    fontFamily: "Rubik-SemiBold",
+    fontSize: getResponsiveFontSize(13, 14, 15),
+  },
+  subtitle: {
+    color: "#64748B",
+    fontFamily: "Rubik-Regular",
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    marginTop: 2,
+  },
+  measure: {
+    position: "absolute",
+    opacity: 0,
+    left: 0,
+    right: 0,
+    zIndex: -1,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#EEF2F7",
+    paddingVertical: getResponsiveSpacing(9, 10, 11),
+    paddingHorizontal: getResponsiveSpacing(10, 12, 12),
+  },
+  rowText: {
+    flex: 1,
+    color: "#334155",
+    fontFamily: "Rubik-Medium",
+    fontSize: getResponsiveFontSize(11, 12, 13),
+  },
+});

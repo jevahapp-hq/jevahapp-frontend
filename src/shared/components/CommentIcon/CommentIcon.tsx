@@ -27,32 +27,36 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
   onPress,
   style,
   useAnimatedButton = true,
+  compact = false,
 }) => {
   const handlePress = () => {
     triggerHapticFeedback();
     if (onPress) {
       onPress();
     }
-    // Note: If contentId is provided but no onPress, the parent component
-    // should handle opening the comment modal. The app/components/CommentIcon.tsx
-    // wrapper handles this case for backward compatibility.
   };
 
   const isVertical = layout === "vertical";
   const iconSize =
     size ||
     (isVertical ? getResponsiveSize(28, 32, 36) : getResponsiveSize(24, 26, 28));
-  const padding = isVertical
-    ? getResponsiveSpacing(8, 10, 12)
-    : getResponsiveSpacing(6, 8, 10);
+  const padding = compact
+    ? 2
+    : isVertical
+      ? getResponsiveSpacing(8, 10, 12)
+      : getResponsiveSpacing(6, 8, 10);
 
   const containerStyle: ViewStyle = {
     flexDirection: isVertical ? "column" : "row",
     alignItems: "center",
     justifyContent: "center",
     padding,
-    minWidth: getTouchTargetSize(),
-    minHeight: getTouchTargetSize(),
+    ...(compact
+      ? {}
+      : {
+          minWidth: getTouchTargetSize(),
+          minHeight: getTouchTargetSize(),
+        }),
   };
 
   const textStyle = {
@@ -84,7 +88,7 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
   return (
     <ButtonComponent
       onPress={handlePress}
-      hitSlop={{ top: 24, bottom: 24, left: 24, right: 24 }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={[containerStyle, style]}
       accessibilityRole="button"
       accessibilityLabel="Open comments"

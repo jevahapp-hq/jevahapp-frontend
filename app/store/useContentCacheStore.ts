@@ -1,6 +1,11 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { mmkvZustandStorage } from "../../src/shared/cache/mmkvStorage";
+import { setFeedPageSync } from "../../src/shared/cache/feedMmkv";
+import {
+  getFeedStaleMs,
+  feedZustandFirstPageKey,
+} from "../../src/shared/config/feedCachePolicy";
 
 type ContentKey =
   | "ALL"
@@ -18,6 +23,8 @@ export interface CachedPage<T = any> {
   limit: number;
   total?: number;
   fetchedAt: number; // epoch ms
+  cursor?: string | null;
+  hasMore?: boolean;
 }
 
 interface ContentCacheState {
@@ -31,27 +38,51 @@ interface ContentCacheState {
   clear: () => void;
 }
 
-/** Aligned with src/shared/config/feedCachePolicy FEED_STALE_MS */
-const FEED_STALE_MS = 2 * 60 * 60 * 1000;
+function maybeWriteFeedMmkv(key: string, page: CachedPage): void {
+  // Write-through first-page keys (merged Lite lists still live under :first:)
+  // Keys: TYPE:first:auth|public[:lite|full]
+  const match = key.match(/^(.+):first:(auth|public)(?::(?:lite|full))?$/);
+  if (!match || !page.items?.length) return;
+  const contentType = match[1];
+  const useAuth = match[2] === "auth";
+  setFeedPageSync({
+    media: page.items,
+    total: page.total ?? page.items.length,
+    fetchedAt: page.fetchedAt || Date.now(),
+    contentType,
+    useAuth,
+    limit: page.limit || 12,
+    cursor: page.cursor,
+    hasMore: page.hasMore,
+  });
+}
 
 export const useContentCacheStore = create<ContentCacheState>()(
   persist(
     (set, get) => ({
       cache: {},
-      ttlMs: FEED_STALE_MS,
+      ttlMs: getFeedStaleMs(),
       setTTL: (ms) => set({ ttlMs: ms }),
       get: (key) => get().cache[key],
-      set: (key, page) => set((s) => ({ cache: { ...s.cache, [key]: page } })),
+      set: (key, page) => {
+        maybeWriteFeedMmkv(key, page);
+        set((s) => ({ cache: { ...s.cache, [key]: page } }));
+      },
       mergePage: (key, page) =>
         set((s) => {
           const prev = s.cache[key];
-          if (!prev) return { cache: { ...s.cache, [key]: page } };
+          if (!prev) {
+            maybeWriteFeedMmkv(key, page);
+            return { cache: { ...s.cache, [key]: page } };
+          }
           const mergedItems =
             page.page > 1 ? [...prev.items, ...page.items] : page.items;
+          const next = { ...page, items: mergedItems, fetchedAt: Date.now() };
+          maybeWriteFeedMmkv(key, next);
           return {
             cache: {
               ...s.cache,
-              [key]: { ...page, items: mergedItems, fetchedAt: Date.now() },
+              [key]: next,
             },
           };
         }),
@@ -59,11 +90,18 @@ export const useContentCacheStore = create<ContentCacheState>()(
     }),
     {
       name: "content-cache-store",
-      storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      storage: createJSONStorage(() => mmkvZustandStorage),
+      version: 3,
     }
   )
 );
+
+// Sync rehydrate from MMKV so first readSeededFirstPage is not empty
+try {
+  void useContentCacheStore.persist.rehydrate();
+} catch {
+  // ignore
+}
 
 export function isFresh(key: string): boolean {
   const { get, ttlMs } = useContentCacheStore.getState();
@@ -71,3 +109,6 @@ export function isFresh(key: string): boolean {
   if (!entry) return false;
   return Date.now() - entry.fetchedAt < ttlMs;
 }
+
+export type { ContentKey };
+export { feedZustandFirstPageKey };

@@ -1,19 +1,29 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
 import {
-  FEED_GC_MS,
-  FEED_PAGE_SIZE,
-  FEED_STALE_MS,
+  ensureFeedAuthors,
+  feedNeedsAuthorEnrichment,
+} from "../author";
+import {
   allContentQueryKey,
+  getFeedGcMs,
+  getFeedMaxPages,
+  getFeedPageSize,
+  getFeedStaleMs,
 } from "../config/feedCachePolicy";
+import { shouldFetchServerForYou } from "../feed/feedFeatureFlags";
+import { isLiteProfileActive } from "../lite/liteProfile";
 import type { MediaItem } from "../types";
 import {
   fetchAllContentPage,
   readSeededFirstPage,
+  seedContentCache,
   type AllContentPageResult,
 } from "./fetchAllContentPage";
 
 const EMPTY_MEDIA_LIST: MediaItem[] = [];
+
+type PageParam = number | string | null;
 
 export function useAllContentInfiniteQuery(options: {
   contentType: string;
@@ -23,13 +33,20 @@ export function useAllContentInfiniteQuery(options: {
 }) {
   const {
     contentType,
-    limit = FEED_PAGE_SIZE,
+    limit: limitOpt,
     useAuth = false,
     enabled = true,
   } = options;
 
-  const queryKey = allContentQueryKey(contentType, limit, useAuth);
+  const limit = limitOpt ?? getFeedPageSize();
+  const useForYou = shouldFetchServerForYou(contentType, useAuth);
+  const queryKey = allContentQueryKey(contentType, limit, useAuth, useForYou);
   const seeded = readSeededFirstPage(contentType, useAuth);
+  const seedFresh =
+    Boolean(seeded?.media?.length) &&
+    typeof seeded?.fetchedAt === "number" &&
+    Date.now() - seeded.fetchedAt <= getFeedStaleMs();
+
   const initialData = seeded?.media?.length
     ? {
         pages: [
@@ -38,24 +55,79 @@ export function useAllContentInfiniteQuery(options: {
             total: seeded.total,
             page: 1,
             limit,
+            source: (useForYou ? "for_you" : "all_content") as
+              | "for_you"
+              | "all_content",
+            cursor: seeded.cursor ?? null,
+            hasMore:
+              seeded.hasMore ??
+              (typeof seeded.total === "number"
+                ? seeded.total > seeded.media.length
+                : seeded.media.length >= limit),
           } satisfies AllContentPageResult,
         ],
-        pageParams: [1],
+        pageParams: [useForYou ? null : 1] as PageParam[],
       }
     : undefined;
 
+  const queryClient = useQueryClient();
+  const enrichPassRef = useRef(0);
+  const lastSuccessKeyRef = useRef("");
+
   const query = useInfiniteQuery({
     queryKey,
-    queryFn: async ({ pageParam = 1 }) => {
+    queryFn: async ({ pageParam }) => {
+      if (useForYou) {
+        const cursor =
+          pageParam === null || pageParam === undefined
+            ? null
+            : typeof pageParam === "string"
+              ? pageParam
+              : null;
+        const isFirst = cursor == null;
+        try {
+          const result = await fetchAllContentPage({
+            contentType,
+            page: isFirst ? 1 : 2,
+            limit,
+            useAuth,
+            cursor,
+          });
+          if (!result.media?.length && isFirst) {
+            const seed = readSeededFirstPage(contentType, useAuth);
+            if (seed?.media?.length) {
+              return {
+                media: seed.media,
+                total: seed.total,
+                page: 1,
+                limit,
+                source: "all_content" as const,
+              };
+            }
+          }
+          return result;
+        } catch {
+          // Soft fallback chronological by page index
+          return fetchAllContentPage({
+            contentType,
+            page: 1,
+            limit,
+            useAuth,
+            forceChronological: true,
+          });
+        }
+      }
+
+      const page = typeof pageParam === "number" ? pageParam : 1;
       const result = await fetchAllContentPage({
         contentType,
-        page: pageParam as number,
+        page,
         limit,
         useAuth,
+        forceChronological: true,
       });
 
-      // Flaky backends sometimes return success with []. Don't wipe a good feed.
-      if (!result.media?.length && (pageParam as number) === 1) {
+      if (!result.media?.length && page === 1) {
         const seed = readSeededFirstPage(contentType, useAuth);
         if (seed?.media?.length) {
           if (__DEV__) {
@@ -68,13 +140,18 @@ export function useAllContentInfiniteQuery(options: {
             total: seed.total,
             page: 1,
             limit,
+            source: "all_content" as const,
           };
         }
       }
       return result;
     },
-    initialPageParam: 1,
+    initialPageParam: (useForYou ? null : 1) as PageParam,
     getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.source === "for_you" && lastPage.cursor) {
+        if (lastPage.hasMore === false) return undefined;
+        return lastPage.cursor;
+      }
       const loaded = allPages.reduce(
         (sum, p) => sum + (p.media?.length ?? 0),
         0
@@ -82,18 +159,21 @@ export function useAllContentInfiniteQuery(options: {
       const total = lastPage.total ?? 0;
       if (total > 0 && loaded >= total) return undefined;
       if (!lastPage.media?.length) return undefined;
+      // Short last fetch means end of list (fat Lite seeds are > page size).
       if (lastPage.media.length < limit) return undefined;
-      return allPages.length + 1;
+      return Math.ceil(loaded / limit) + 1;
     },
     enabled,
     initialData,
     placeholderData: (prev) => prev ?? initialData,
-    staleTime: FEED_STALE_MS,
-    gcTime: FEED_GC_MS,
+    staleTime: getFeedStaleMs(),
+    gcTime: getFeedGcMs(),
+    maxPages: getFeedMaxPages(),
     retry: 1,
-    refetchOnMount: !initialData,
+    networkMode: isLiteProfileActive() ? "offlineFirst" : "online",
+    refetchOnMount: seedFresh ? false : !initialData ? true : "always",
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: seedFresh ? false : true,
   });
 
   const allContent = useMemo(() => {
@@ -112,12 +192,52 @@ export function useAllContentInfiniteQuery(options: {
     return flat;
   }, [query.data?.pages]);
 
+  // Media often has avatar without names. Resolve via src/shared/author, then patch RQ.
+  useEffect(() => {
+    if (!allContent.length || !feedNeedsAuthorEnrichment(allContent)) return;
+
+    const dedupeKey = allContent
+      .slice(0, 50)
+      .map((item) => String(item._id || ""))
+      .join("|");
+    // Retry until names land; only skip if last SUCCESS was for this key
+    if (lastSuccessKeyRef.current === dedupeKey) return;
+
+    const pass = ++enrichPassRef.current;
+    void ensureFeedAuthors(allContent).then((patched) => {
+      if (pass !== enrichPassRef.current) return;
+      if (!feedNeedsAuthorEnrichment(patched)) {
+        lastSuccessKeyRef.current = dedupeKey;
+      }
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old?.pages?.length) return old;
+        const byId = new Map(
+          patched.map((item) => [String(item._id || (item as any).id || ""), item])
+        );
+        const pages = old.pages.map((page: AllContentPageResult) => ({
+          ...page,
+          media: (page.media || []).map((item) => {
+            const id = String(item._id || (item as any).id || "");
+            return byId.get(id) || item;
+          }),
+        }));
+        const first = pages[0];
+        if (first?.media?.length) {
+          seedContentCache(contentType, useAuth, first);
+        }
+        return { ...old, pages };
+      });
+    });
+  }, [allContent, contentType, queryClient, queryKey, useAuth]);
+
   const total = query.data?.pages?.[0]?.total ?? 0;
+  const serverRanked = query.data?.pages?.some((p) => p.source === "for_you");
 
   return {
     query,
     allContent,
     total,
+    serverRanked: Boolean(serverRanked),
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: Boolean(query.hasNextPage),
     fetchNextPage: query.fetchNextPage,

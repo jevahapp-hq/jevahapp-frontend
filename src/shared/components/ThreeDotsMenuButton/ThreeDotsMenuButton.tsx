@@ -1,77 +1,70 @@
+/**
+ * Content actions ⋮ — large hit target, single press (no onPressIn double-fire).
+ */
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
-import { Pressable, StyleSheet } from "react-native";
+import React, { useRef } from "react";
+import { Pressable, StyleSheet, type ViewStyle } from "react-native";
 
-interface ThreeDotsMenuButtonProps {
+export interface ThreeDotsMenuButtonProps {
   onPress: () => void;
   size?: number;
   color?: string;
   hitSlop?: number;
-  className?: string;
-  style?: any;
+  style?: ViewStyle;
+  accessibilityLabel?: string;
 }
 
 export const ThreeDotsMenuButton: React.FC<ThreeDotsMenuButtonProps> = ({
   onPress,
-  size = 18,
-  color = "#9CA3AF",
-  hitSlop = 15,
-  className = "",
+  size = 20,
+  color = "#6B7280",
+  hitSlop = 12,
   style,
+  accessibilityLabel = "Content actions",
 }) => {
-  const [pressed, setPressed] = useState(false);
+  const lastPressAt = useRef(0);
 
-  const handlePressIn = () => {
-    setPressed(true);
-    // Call onPress immediately for better responsiveness
+  const handlePress = () => {
+    const now = Date.now();
+    // Guard against accidental double delivery on some Android firmwares
+    if (now - lastPressAt.current < 350) return;
+    lastPressAt.current = now;
     onPress();
-  };
-
-  const handlePressOut = () => {
-    setPressed(false);
   };
 
   return (
     <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      onPress={handlePress}
       hitSlop={{ top: hitSlop, bottom: hitSlop, left: hitSlop, right: hitSlop }}
-      style={[
+      style={({ pressed }) => [
         styles.button,
         style,
         pressed && styles.pressed,
-        className ? { className } : {},
       ]}
       android_ripple={{
-        color: "rgba(0, 0, 0, 0.1)",
+        color: "rgba(0, 0, 0, 0.08)",
         borderless: true,
-        radius: 20,
+        radius: 22,
       }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
     >
-      <Ionicons 
-        name="ellipsis-vertical" 
-        size={size} 
-        color={color}
-        style={pressed && { opacity: 0.7 }}
-      />
+      <Ionicons name="ellipsis-vertical" size={size} color={color} />
     </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   button: {
-    marginLeft: 8,
-    padding: 4,
-    minWidth: 32,
-    minHeight: 32,
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: 8,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1000,
   },
   pressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.95 }],
+    opacity: 0.65,
+    transform: [{ scale: 0.94 }],
   },
 });
 

@@ -3,6 +3,10 @@
  * Handles signed URL conversion and error detection
  */
 
+const urlLog = (...a: any[]) => {
+  if (__DEV__) console.log(...a);
+};
+
 export interface VideoUrlInfo {
   originalUrl: string;
   convertedUrl: string;
@@ -49,7 +53,7 @@ export const convertSignedToPublicUrl = (signedUrl: string): string => {
 
     const publicUrl = url.toString();
 
-    console.log(`🔗 URL Conversion: ${signedUrl.substring(0, 100)}... → ${publicUrl.substring(0, 100)}...`);
+    urlLog(`🔗 URL Conversion: ${signedUrl.substring(0, 100)}... → ${publicUrl.substring(0, 100)}...`);
 
     return publicUrl;
   } catch (error) {
@@ -168,6 +172,20 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
       // R2 / CDN keys often have no extension — treat fileUrl as progressive for videos
       (looksLikeVideoMime && u === fileUrl));
 
+  // Lite / server hint: ABR HLS (~360p) over fat progressive MP4
+  let preferHlsLite = media?.lite?.preferHls === true;
+  try {
+    // Lazy to avoid circular imports at module init
+    const { isLiteProfileActive } = require("../lite/liteProfile") as typeof import("../lite/liteProfile");
+    if (!preferHlsLite && isLiteProfileActive()) preferHlsLite = true;
+  } catch {
+    // ignore
+  }
+  if (preferHlsLite && !blockHlsPrimary && hlsUrl) return hlsUrl;
+  if (preferHlsLite && !blockHlsPrimary && playbackUrl && isHls(playbackUrl)) {
+    return playbackUrl;
+  }
+
   // Prefer progressive faststart MP4 (fileUrl / non-HLS playbackUrl) for seek.
   // HLS is fallback only when no MP4 — and never when duration is still unknown
   // on a ready card (incomplete playlist → player.duration=0 → seek broken).
@@ -213,7 +231,7 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
 
   // Handle local file URLs (downloaded content) - return immediately without validation
   if (originalUrl.startsWith('file://') || originalUrl.startsWith('/')) {
-    console.log(`📁 Using local file URL: ${originalUrl.substring(0, 100)}...`);
+    urlLog(`📁 Using local file URL: ${originalUrl.substring(0, 100)}...`);
     return originalUrl;
   }
 
@@ -223,7 +241,7 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
   if (urlInfo.isSignedUrl) {
     if (urlInfo.isExpired) {
       console.warn(`⚠️ Signed URL appears expired: ${originalUrl.substring(0, 100)}...`);
-      console.log(`🔧 Using converted URL: ${urlInfo.convertedUrl.substring(0, 100)}...`);
+      urlLog(`🔧 Using converted URL: ${urlInfo.convertedUrl.substring(0, 100)}...`);
       return urlInfo.convertedUrl;
     }
     // Signed URL is valid and NOT expired - use it as is!
@@ -260,12 +278,12 @@ export const handleVideoError = (error: any, videoUrl: string, videoTitle: strin
   // Provide specific guidance based on error type
   if (error?.error?.code === -1001 || error?.error?.domain === 'NSURLErrorDomain') {
     if (urlInfo.isSignedUrl) {
-      console.log(`💡 Root cause identified: Expired signed URL`);
-      console.log(`🔧 Solution: Use converted URL: ${urlInfo.convertedUrl}`);
-      console.log(`📋 Backend fix needed: Provide public URLs instead of signed URLs`);
+      urlLog(`💡 Root cause identified: Expired signed URL`);
+      urlLog(`🔧 Solution: Use converted URL: ${urlInfo.convertedUrl}`);
+      urlLog(`📋 Backend fix needed: Provide public URLs instead of signed URLs`);
     } else {
-      console.log(`💡 Root cause: Network timeout with public URL`);
-      console.log(`🔧 Solution: Check network connectivity or server status`);
+      urlLog(`💡 Root cause: Network timeout with public URL`);
+      urlLog(`🔧 Solution: Check network connectivity or server status`);
     }
   }
 

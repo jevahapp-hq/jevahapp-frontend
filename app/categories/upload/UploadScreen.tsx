@@ -2,8 +2,9 @@
  * Upload screen orchestrator — wires hooks + presentational pieces
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  InteractionManager,
   KeyboardAvoidingView,
   ScrollView,
   Text,
@@ -33,15 +34,25 @@ import { useAIDescription } from "./hooks/useAIDescription";
 import { useMediaPickers } from "./hooks/useMediaPickers";
 import { useUploadFlow } from "./hooks/useUploadFlow";
 import { useUploadFormState } from "./hooks/useUploadFormState";
+import { isUploadFormReady } from "./utils/eligibilityRules";
 
 export default function UploadScreen() {
   const form = useUploadFormState();
   const insets = useSafeAreaInsets();
+  /** Secondary chrome after first paint — keeps open transition snappy. */
+  const [deferChrome, setDeferChrome] = useState(true);
   const [toast, setToast] = useState<{
     visible: boolean;
     text: string;
     type: "success" | "error" | "info";
   }>({ visible: false, text: "", type: "info" });
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setDeferChrome(false);
+    });
+    return () => task.cancel();
+  }, []);
 
   const showSoftNotice = useCallback((text: string) => {
     setToast({ visible: true, text, type: "info" });
@@ -96,12 +107,32 @@ export default function UploadScreen() {
   const result = form.uploadResult;
   const isSuccess = result?.kind === "success";
 
+  const formReady = useMemo(
+    () =>
+      isUploadFormReady({
+        file: form.file,
+        title: form.title,
+        selectedCategory: form.selectedCategory,
+        selectedType: form.selectedType,
+        thumbnail: form.thumbnail,
+      }),
+    [
+      form.file,
+      form.title,
+      form.selectedCategory,
+      form.selectedType,
+      form.thumbnail,
+    ]
+  );
+
   return (
     <>
-      <UploadProgressModal
-        visible={form.loading}
-        uploadState={form.uploadState}
-      />
+      {form.loading ? (
+        <UploadProgressModal
+          visible={form.loading}
+          uploadState={form.uploadState}
+        />
+      ) : null}
 
       <KeyboardAvoidingView
         {...getKeyboardAdjustment()}
@@ -141,7 +172,9 @@ export default function UploadScreen() {
                 />
               </View>
 
-              <UploadLimitsPlate selectedType={form.selectedType} />
+              {!deferChrome ? (
+                <UploadLimitsPlate selectedType={form.selectedType} />
+              ) : null}
 
               <UploadFormFields
                 title={form.title}
@@ -176,7 +209,9 @@ export default function UploadScreen() {
               ) : null}
 
               <View className="items-center mt-6">
-                <AiVerificationPlate />
+                {!deferChrome ? (
+                  <AiVerificationPlate ready={formReady} />
+                ) : null}
 
                 <TouchableOpacity
                   onPress={async () => {
@@ -221,30 +256,32 @@ export default function UploadScreen() {
         onClose={() => setToast((t) => ({ ...t, visible: false }))}
       />
 
-      <UploadResultModal
-        result={result}
-        onPrimary={() => {
-          if (isSuccess) {
-            confirmSuccessNavigate();
-            return;
+      {result ? (
+        <UploadResultModal
+          result={result}
+          onPrimary={() => {
+            if (isSuccess) {
+              confirmSuccessNavigate();
+              return;
+            }
+            form.setUploadResult(null);
+          }}
+          onSecondary={
+            isSuccess
+              ? () => {
+                  cancelSuccessNavigate();
+                }
+              : undefined
           }
-          form.setUploadResult(null);
-        }}
-        onSecondary={
-          isSuccess
-            ? () => {
-                cancelSuccessNavigate();
-              }
-            : undefined
-        }
-        onDismiss={() => {
-          if (isSuccess) {
-            cancelSuccessNavigate();
-            return;
-          }
-          form.setUploadResult(null);
-        }}
-      />
+          onDismiss={() => {
+            if (isSuccess) {
+              cancelSuccessNavigate();
+              return;
+            }
+            form.setUploadResult(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }

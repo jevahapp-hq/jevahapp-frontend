@@ -196,6 +196,14 @@ export async function toggleLike(
         );
       }
 
+      // nginx 502/504 = gateway gave up; Node may still commit. Same Idempotency-Key.
+      if (response.status === 502 || response.status === 504) {
+        devWarn(
+          `⚠️ TOGGLE LIKE: Gateway ${response.status} — queueing retry with same Idempotency-Key`
+        );
+        return queueOfflineLike(contentId, contentType, options, idempotencyKey);
+      }
+
       // 5xx / LIKE_OPERATION_FAILED — server bug or corrupt content row.
       // Do NOT offline-queue (retries will keep failing and fake a success).
       if (

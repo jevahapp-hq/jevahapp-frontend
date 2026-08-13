@@ -40,22 +40,46 @@ export function useReelsVideoPlayback({
   playingVideos,
   userHasManuallyPaused,
 }: UseReelsVideoPlaybackParams) {
+  /**
+   * Seek active reel. `position` is 0–1 fraction (preferred).
+   * Values > 1 are treated as legacy 0–100 percent for older callers.
+   */
   const seekToPosition = useCallback(
     async (videoKey: string, position: number) => {
       const ref = videoRefs.current[videoKey];
-      if (!ref) return;
+      if (!ref) {
+        if (__DEV__) {
+          console.warn(
+            "[reels.seek] missing player ref",
+            videoKey,
+            Object.keys(videoRefs.current || {})
+          );
+        }
+        return;
+      }
       try {
         let duration = videoDuration;
         if (!(duration > 0)) {
           const status = await ref.getStatusAsync();
-          if (status.isLoaded && status.durationMillis)
+          if (status.isLoaded && status.durationMillis) {
             duration = status.durationMillis;
+            setVideoDuration(duration);
+          }
         }
-        if (!(duration > 0)) return;
+        if (!(duration > 0)) {
+          if (__DEV__) {
+            console.warn("[reels.seek] duration unknown", videoKey);
+          }
+          return;
+        }
 
+        const pct =
+          position > 1
+            ? Math.max(0, Math.min(100, position)) / 100
+            : Math.max(0, Math.min(1, position));
         const seekTime = Math.max(
           0,
-          Math.min((position / 100) * duration, Math.max(0, duration - 40))
+          Math.min(pct * duration, Math.max(0, duration - 40))
         );
         setVideoPosition(seekTime);
         await ref.setPositionAsync(seekTime);
@@ -70,7 +94,7 @@ export function useReelsVideoPlayback({
         }
       }
     },
-    [videoRefs, videoDuration, setVideoPosition]
+    [videoRefs, videoDuration, setVideoPosition, setVideoDuration]
   );
 
   const formatTime = useCallback((ms: number): string => {

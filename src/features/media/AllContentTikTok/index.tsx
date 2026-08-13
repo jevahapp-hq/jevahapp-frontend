@@ -1,47 +1,51 @@
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import { View } from "react-native";
 
 import { ContentType, MediaItem } from "../../../shared/types";
+import { shouldMountLitePlayer } from "../../../shared/lite/liteProfile";
 import {
-  getContentKey,
-  getTimeAgo,
-  getUserAvatarFromContent,
-  getUserDisplayNameFromContent,
-  isAudioSermon,
+    getContentKey,
+    getTimeAgo,
+    getUserAvatarFromContent,
+    getUserDisplayNameFromContent,
+    isAudioSermon,
 } from "../../../shared/utils";
 
-import { AllContentTikTokList } from "./components/AllContentTikTokList";
-import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
-import { ContentItemRenderer } from "./components/ContentItemRenderer";
-import {
-  useActiveMediaPlayback,
-  useAdjacentCommentsPrefetch,
-  useAdjacentVideoPrefetch,
-  useAllContentTikTokAudio,
-  useAllContentTikTokFeedData,
-  useAllContentTikTokFeedSource,
-  useAllContentTikTokHandlers,
-  useAllContentTikTokLifecycle,
-  useAllContentTikTokScroll,
-  useAllContentTikTokSocket,
-  useAllContentTikTokWarmup,
-  useContentStatsHelpers,
-  useFeedFocusLoop,
-} from "./hooks";
 import { ContentErrorBoundary } from "../../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../../app/components/SuccessCard";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { useUserProfile } from "../../../../app/hooks/useUserProfile";
+import { UserProfileCache } from "../../../../app/utils/cache/UserProfileCache";
+import { seedAuthorFromSession } from "../../../shared/author";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
 import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../../app/store/useInteractionStore";
+import { AllContentTikTokList } from "./components/AllContentTikTokList";
+import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
+import { ContentItemRenderer } from "./components/ContentItemRenderer";
+import {
+    useActiveMediaPlayback,
+    useAdjacentCommentsPrefetch,
+    useAdjacentVideoPrefetch,
+    useAllContentTikTokAudio,
+    useAllContentTikTokFeedData,
+    useAllContentTikTokFeedSource,
+    useAllContentTikTokHandlers,
+    useAllContentTikTokLifecycle,
+    useAllContentTikTokScroll,
+    useAllContentTikTokSocket,
+    useAllContentTikTokWarmup,
+    useContentStatsHelpers,
+    useFeedFocusLoop,
+} from "./hooks";
+import { useForYouFeedSignals } from "../../../shared/feed";
 
 export interface AllContentTikTokProps {
   contentType?: ContentType | "ALL";
@@ -55,6 +59,49 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 }) => {
   const { user } = useUserProfile();
   const currentUserId = user?._id || user?.id || null;
+
+  const resolveDisplayName = useCallback(
+    (item: MediaItem) => {
+      const name = getUserDisplayNameFromContent(item);
+      if (name && !/^(anonymous(\s+user)?|unknown)$/i.test(name.trim())) {
+        return name;
+      }
+      const ub = item.uploadedBy as any;
+      const authorId = String(
+        (typeof ub === "string" ? ub : ub?._id || ub?.id) ||
+          (item as any).authorInfo?._id ||
+          (item as any).authorInfo?.id ||
+          ""
+      );
+      if (
+        currentUserId &&
+        authorId &&
+        String(currentUserId) === authorId &&
+        user
+      ) {
+        const mine = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+        if (mine) return mine;
+        if (user.email) return String(user.email).split("@")[0];
+      }
+      return name;
+    },
+    [currentUserId, user]
+  );
+
+  useEffect(() => {
+    if (!currentUserId || !user) return;
+    const payload = {
+      _id: String(currentUserId),
+      id: String(currentUserId),
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      avatar: (user.avatar || user.avatarUpload || "") as string,
+      avatarUpload: (user.avatarUpload || user.avatar || "") as string,
+      email: user.email || "",
+    };
+    UserProfileCache.cacheUserProfile(String(currentUserId), payload as any);
+    seedAuthorFromSession(payload);
+  }, [currentUserId, user]);
   const { isVisible: isCommentSheetOpen } = useCommentModal();
 
   const {
@@ -67,6 +114,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     hasMorePages,
     isFetchingNextPage,
     handleDeleteSuccess,
+    serverRanked,
   } = useAllContentTikTokFeedSource({ activeTab, useAuthFeed });
 
   const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
@@ -76,7 +124,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
   const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
-  const progresses = useGlobalVideoStore((s) => s.progresses);
   const currentlyPlayingVideo = useGlobalVideoStore(
     (s) => s.currentlyPlayingVideo
   );
@@ -106,9 +153,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     playingVideos,
   });
 
-  const comments = useInteractionStore((s) => s.comments);
   const { loadDownloadedItems } = useDownloadStore();
-  const contentStats = useInteractionStore((s) => s.contentStats);
   const toggleLike = useInteractionStore((s) => s.toggleLike);
   const toggleSave = useInteractionStore((s) => s.toggleSave);
   const recordShare = useInteractionStore((s) => s.recordShare);
@@ -141,6 +186,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     setPreviouslyViewed,
     setIsLoadingContent,
     previouslyViewed,
+    serverRanked,
   });
 
   const orderedFeedKeys = useMemo(() => {
@@ -177,24 +223,24 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     focusedKey: currentlyVisibleVideo,
     items: filteredMediaList,
     getContentKey,
-    ahead: 4,
+    // omit ahead — network-quality aware default inside the hook
   });
 
   useAdjacentCommentsPrefetch({
     focusedKey: currentlyVisibleVideo,
     items: filteredMediaList,
     getContentKey,
-    radius: 1,
+    radius: 0,
+    idleOnly: true,
   });
 
   useAllContentTikTokWarmup(filteredMediaList);
 
   const {
-    getUserLikeState,
     getLikeCount,
     getUserSaveState,
     getCommentCount,
-  } = useContentStatsHelpers(contentStats);
+  } = useContentStatsHelpers();
 
   const pauseAllMedia = useCallback(() => {
     pauseAllVideosAction();
@@ -228,6 +274,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     isAudioItem: (item) => isAudioSermon(item),
   });
 
+  useForYouFeedSignals({
+    enabled: useAuthFeed && !isCommentSheetOpen,
+    focusedKey: currentlyVisibleVideo,
+    items: filteredMediaList,
+    getContentKey,
+    source: "for_you",
+  });
+
   const { handleScroll, handleScrollEnd, bindFocusRef } =
     useAllContentTikTokScroll({
       onScrollForFocus,
@@ -244,7 +298,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       if (idx < 0) return key === currentlyVisibleVideo;
       const candidate = orderedFeedKeys.indexOf(key);
       if (candidate < 0) return false;
-      return Math.abs(candidate - idx) <= 1;
+      return shouldMountLitePlayer(candidate, idx);
     },
     [currentlyVisibleVideo, orderedFeedKeys]
   );
@@ -268,7 +322,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     contentType: activeTab,
     filteredMediaList,
     categorizedContent,
-    contentStats,
     getContentKey,
     getTimeAgo,
     getLikeCount,
@@ -312,18 +365,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           item={item}
           index={index}
           getContentKey={getContentKey}
-          getUserLikeState={getUserLikeState}
-          getLikeCount={getLikeCount}
-          contentStats={contentStats}
           playingVideos={playingVideos}
           mutedVideos={mutedVideos}
-          progresses={progresses}
           videoVolume={videoVolume}
           currentlyVisibleVideo={currentlyVisibleVideo}
           playingAudioId={playingAudioId}
           audioProgressMap={audioProgressMap}
           modalVisible={modalVisible}
-          comments={comments}
           onVideoTap={handleVideoTap}
           onTogglePlay={togglePlay}
           onToggleMute={toggleVideoMute}
@@ -340,7 +388,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           pauseAllAudio={pauseAllAudio}
           checkIfDownloaded={checkIfDownloaded}
           getTimeAgo={getTimeAgo}
-          getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+          getUserDisplayNameFromContent={resolveDisplayName}
           getUserAvatarFromContent={getUserAvatarFromContent}
           isAutoPlayEnabled={isAutoPlayEnabled}
           currentUserId={currentUserId}
@@ -350,18 +398,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       );
     },
     [
-      getUserLikeState,
-      getLikeCount,
-      contentStats,
       playingVideos,
       mutedVideos,
-      progresses,
       videoVolume,
       currentlyVisibleVideo,
       playingAudioId,
       audioProgressMap,
       modalVisible,
-      comments,
       handleVideoTap,
       togglePlay,
       toggleVideoMute,
@@ -388,6 +431,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   if (error && !hasContent) return <ErrorState message={error} />;
   if (feedLoading && filteredMediaList.length === 0) {
+    // Only show skeletons when we truly have nothing cached to paint.
     return <LoadingState count={2} />;
   }
   if (filteredMediaList.length === 0) {
@@ -410,7 +454,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           mostRecentItem={mostRecentItem ?? null}
           firstFour={firstFour}
           filteredMediaListLength={filteredMediaList.length}
-          currentlyVisibleVideo={currentlyVisibleVideo}
           getContentKey={getContentKey}
           renderContentByType={renderContentByType}
           refreshing={refreshing}

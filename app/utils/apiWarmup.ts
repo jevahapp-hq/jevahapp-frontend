@@ -6,11 +6,14 @@ import { API_BASE_URL } from "./api";
  * Cold starts can take 30-90 seconds. This function "wakes up" the backend
  * by making a lightweight request before user actions.
  */
-export async function warmupBackend(): Promise<boolean> {
+/**
+ * @param timeoutMs Cap wait so cold start never blocks on a sleeping host.
+ * Default 3s — Render cold starts still benefit from fire-and-forget warmup.
+ */
+export async function warmupBackend(timeoutMs = 3000): Promise<boolean> {
   try {
-    // Make a lightweight health check request
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s max wait
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: "GET",
@@ -23,19 +26,22 @@ export async function warmupBackend(): Promise<boolean> {
     clearTimeout(timeoutId);
 
     if (response.ok || response.status === 404) {
-      // 404 means backend is up but no /health endpoint (still successful warmup)
-      console.log("✅ Backend warmed up successfully");
+      if (__DEV__) console.log("✅ Backend warmed up successfully");
       return true;
     }
 
-    console.warn("⚠️ Backend warmup returned non-200 status:", response.status);
+    if (__DEV__) {
+      console.warn("⚠️ Backend warmup returned non-200 status:", response.status);
+    }
     return false;
   } catch (error: any) {
     if (error.name === "AbortError") {
-      console.error("❌ Backend warmup timed out after 45 seconds");
+      if (__DEV__) {
+        console.warn(`⚠️ Backend warmup timed out after ${timeoutMs}ms`);
+      }
       return false;
     }
-    console.error("❌ Backend warmup failed:", error.message);
+    if (__DEV__) console.warn("❌ Backend warmup failed:", error.message);
     return false;
   }
 }

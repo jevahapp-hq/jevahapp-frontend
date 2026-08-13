@@ -2,7 +2,6 @@
  * useVideoCardInteractionStats - Derives like/save/comment/view counts from contentStats and video
  */
 import { useHydrateContentStats } from "../../../../../shared/hooks/useHydrateContentStats";
-import { useLoadingStats } from "../../../../../shared/hooks/useLoadingStats";
 import type { MediaItem } from "../../../../../shared/types";
 import {
   getCachedContentInteraction,
@@ -99,12 +98,6 @@ export function useVideoCardInteractionStats({
   const viewCount = Math.max(storeViews, fallbackViewCount);
 
   useHydrateContentStats(contentId, "media");
-  const rawLoading = useLoadingStats(contentId);
-  const isLoadingStats =
-    rawLoading &&
-    !stats &&
-    fallbackLikeCount === 0 &&
-    fallbackCommentCount === 0;
 
   return {
     likeCount,
@@ -113,6 +106,6 @@ export function useVideoCardInteractionStats({
     viewCount,
     userLikeState,
     userSaveState,
-    isLoadingStats,
+    isLoadingStats: false,
   };
 }

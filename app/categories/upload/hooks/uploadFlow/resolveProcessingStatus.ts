@@ -49,17 +49,23 @@ export function seedDurationCache(
 }
 
 export function snapshotToFeedPatch(
-  snapshot: SeekableMediaSnapshot
+  snapshot: SeekableMediaSnapshot,
+  options?: { includePlaybackUrls?: boolean }
 ): Partial<MediaItem> {
+  const includeUrls = options?.includePlaybackUrls !== false;
   const patch: Partial<MediaItem> = {
     processingStatus: snapshot.processingStatus,
   };
   if (typeof snapshot.duration === "number" && snapshot.duration > 0) {
     patch.duration = snapshot.duration;
   }
-  if (snapshot.fileUrl) patch.fileUrl = snapshot.fileUrl;
-  if (snapshot.playbackUrl) patch.playbackUrl = snapshot.playbackUrl;
-  if (snapshot.hlsUrl) patch.hlsUrl = snapshot.hlsUrl;
+  // Mid-poll URL swaps remount the feed player (black frame / "disappear").
+  // Only apply playback URLs once seekable / on final snapshot.
+  if (includeUrls) {
+    if (snapshot.fileUrl) patch.fileUrl = snapshot.fileUrl;
+    if (snapshot.playbackUrl) patch.playbackUrl = snapshot.playbackUrl;
+    if (snapshot.hlsUrl) patch.hlsUrl = snapshot.hlsUrl;
+  }
   if (snapshot.fileMimeType) {
     patch.fileMimeType = snapshot.fileMimeType;
     patch.mimeType = snapshot.fileMimeType;

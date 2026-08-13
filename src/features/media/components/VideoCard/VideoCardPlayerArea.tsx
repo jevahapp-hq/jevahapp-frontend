@@ -1,7 +1,9 @@
+import { Image as ExpoImage } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { useAdvancedAudioPlayer } from "../../../../../app/hooks/useAdvancedAudioPlayer";
 import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
@@ -9,7 +11,7 @@ import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
 import { TikTokProgressBar } from "../../../../shared/components/VideoProgressBar";
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon, isValidUri } from "../../../../shared/utils";
+import { isAudioSermon, isGifImage, isGifContent, isValidUri } from "../../../../shared/utils";
 import { PERF, perfMark, perfMeasure } from "../../../../shared/utils/perfMarks";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
@@ -39,10 +41,63 @@ export interface VideoCardPlayerAreaProps {
   getUserDisplayNameFromContent: (item: MediaItem) => string;
   getUserAvatarFromContent: (item: MediaItem) => any;
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
+  /** Comments open on this card — strip chrome, keep play + seek */
+  commentsFocused?: boolean;
 }
 
 export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
+  if (isGifImage(props.video)) {
+    return <GifImagePlayerContent {...props} />;
+  }
   return <ActiveVideoPlayerContent {...props} />;
+}
+
+function GifImagePlayerContent({
+  video,
+  contentKey: key,
+  index,
+  videoUrl,
+  onVideoTap,
+  commentsFocused = false,
+}: VideoCardPlayerAreaProps) {
+  const uri =
+    videoUrl ||
+    (typeof video.fileUrl === "string" ? video.fileUrl : null) ||
+    (typeof video.imageUrl === "string" ? video.imageUrl : null);
+
+  return (
+    <View className="w-full h-[400px] overflow-hidden relative bg-black">
+      <TouchableWithoutFeedback onPress={() => onVideoTap(key, video, index)}>
+        <View className="absolute inset-0">
+          {uri ? (
+            <ExpoImage
+              source={{ uri }}
+              style={{ width: "100%", height: "100%" }}
+              contentFit="cover"
+              cachePolicy="disk"
+              autoplay
+            />
+          ) : null}
+
+          {!commentsFocused &&
+          video.moderationStatus &&
+          video.moderationStatus !== "approved" ? (
+            <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
+              <ModerationBadge status={video.moderationStatus} />
+            </View>
+          ) : null}
+
+          {!commentsFocused ? (
+            <ContentTypeBadge
+              contentType={video.contentType || "gif"}
+              position="top-left"
+              size="medium"
+            />
+          ) : null}
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  );
 }
 
 function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
@@ -50,6 +105,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     video,
     contentKey: key,
     index,
+    isActive: _isActive,
     videoUrl,
     videoVolume,
     isMuted,
@@ -57,6 +113,7 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     onTogglePlay,
     onToggleMute,
     getContentKey,
+    commentsFocused = false,
   } = props;
 
   const contentId = video._id || getContentKey(video);
@@ -117,8 +174,8 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
         }
       : "",
     (p) => {
-      p.loop = false;
-      p.muted = isMuted;
+      p.loop = isGifContent(video) && !isGifImage(video);
+      p.muted = isMuted || isGifContent(video);
       p.volume = videoVolume;
       p.timeUpdateEventInterval = 0.1;
     }
@@ -245,6 +302,16 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     suppressAutoLoopRef,
   });
 
+  const isStillProcessing = ["processing", "pending"].includes(
+    String((video as any).processingStatus || "").toLowerCase()
+  );
+
+  // Incomplete/transcoding files often fire playToEnd early — looping looks like
+  // the video "vanishes" then flashes. Hold loop until processing is ready.
+  useEffect(() => {
+    if (isStillProcessing) suppressAutoLoopRef.current = true;
+  }, [isStillProcessing]);
+
   const handleScrubStart = useCallback(() => {
     suppressAutoLoopRef.current = true;
   }, []);
@@ -252,9 +319,9 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
   const handleScrubEnd = useCallback(() => {
     // Brief hold so timeUpdate doesn't fight the settle
     setTimeout(() => {
-      suppressAutoLoopRef.current = false;
+      if (!isStillProcessing) suppressAutoLoopRef.current = false;
     }, 350);
-  }, []);
+  }, [isStillProcessing]);
 
   const {
     handleVideoTap,
@@ -290,6 +357,14 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
     else onToggleMute(key);
   }, [onToggleMute, key, isAudioSermonValue, audioControls]);
 
+  const PLAYER_H = 400;
+  const { mediaPeekHeight, isVisible: commentSheetOpen } = useCommentModal();
+  // Use sheet-open (not per-card focus) — focus can flicker when chrome collapses
+  // and the bar would snap back under the sheet.
+  const progressTop = commentSheetOpen
+    ? Math.max(56, Math.min(PLAYER_H - 44, mediaPeekHeight - 52))
+    : undefined;
+
   return (
     <View className="w-full h-[400px] overflow-hidden relative bg-black">
       <TouchableWithoutFeedback onPress={handleVideoTap}>
@@ -308,7 +383,8 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
           )}
           {videoUrl && !isAudioSermonValue && player && (
             <VideoView
-              key={videoUrl || key}
+              // Stable key — URL patches during processing must not remount
+              key={key}
               player={player}
               style={{ width: "100%", height: "100%", position: "absolute", backgroundColor: "transparent" }}
               contentFit="cover"
@@ -318,71 +394,90 @@ function ActiveVideoPlayerContent(props: VideoCardPlayerAreaProps) {
             />
           )}
 
-          {video.moderationStatus && video.moderationStatus !== "approved" && (
+          {!commentsFocused && video.moderationStatus && video.moderationStatus !== "approved" && (
             <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
               <ModerationBadge status={video.moderationStatus} />
             </View>
           )}
 
-          <ContentTypeBadge contentType={video.contentType || "video"} position="top-left" size="medium" />
+          {!commentsFocused ? (
+            <ContentTypeBadge contentType={video.contentType || "video"} position="top-left" size="medium" />
+          ) : null}
 
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => onVideoTap(key, video, index)}
-            style={{ position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", zIndex: 10 }}
-          >
-            <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+          {!commentsFocused ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onVideoTap(key, video, index)}
+              style={{ position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", zIndex: 10 }}
+            >
+              <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : null}
 
           <MediaPlayButton
             isPlaying={isAudioSermonValue ? (audioState?.isPlaying ?? false) : isPlaying}
             onPress={() => handleTogglePlay(setIsPlayTogglePending)}
-            showOverlay={showOverlay}
+            showOverlay={commentsFocused || commentSheetOpen || showOverlay}
             size="medium"
             disabled={isPlayTogglePending}
+            offsetY={commentSheetOpen ? -36 : 0}
           />
 
-          <View style={{ position: "absolute", bottom: 64, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
-            <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", lineHeight: 16, textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
-              {video.title}
-            </Text>
-          </View>
+          {!commentsFocused ? (
+            <View style={{ position: "absolute", bottom: 64, left: 12, right: 12, paddingHorizontal: 10, paddingVertical: 6, pointerEvents: "none" }}>
+              <Text style={{ fontSize: 12, fontFamily: "Rubik_600SemiBold", color: "#FFFFFF", lineHeight: 16, textShadowColor: "rgba(0, 0, 0, 0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1} ellipsizeMode="tail">
+                {video.title}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </TouchableWithoutFeedback>
 
-      {/* Outside play-tap layer so pan wins — scrub owns this player */}
-      <TikTokProgressBar
-        progress={isAudioSermonValue ? (audioState?.progress ?? 0) : Math.max(0, Math.min(1, videoProgress || 0))}
-        isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
-        onToggleMute={handleToggleMuteInternal}
-        onSeekToPercent={seekToPercent}
-        onScrubStart={handleScrubStart}
-        onScrubEnd={handleScrubEnd}
-        currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
-        durationMs={
-          isAudioSermonValue
-            ? (audioState?.duration ?? 0)
-            : videoDurationMs ||
-              lastKnownDurationRef.current ||
-              mediaDurationMs ||
-              0
-        }
-        showControls={true}
-        debug={__DEV__ && false}
-        config={{
-          showFloatingLabel: true,
-          enlargeOnDrag: true,
-          knobSize: 8,
-          knobSizeDragging: 12,
-          trackHeight: 3,
-          trackHeightDragging: 8,
-          seekDuringDrag: true,
-          liveSeekThrottleMs: 48,
-          seekSyncTicks: 2,
-          seekMsTolerance: 250,
-          minProgressEpsilon: 0.005,
+      {/* Absolute overlay above VideoView native surface (zIndex alone is not enough) */}
+      <View
+        pointerEvents="box-none"
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          zIndex: 50,
+          elevation: 50,
         }}
-      />
+      >
+        <TikTokProgressBar
+          progress={isAudioSermonValue ? (audioState?.progress ?? 0) : Math.max(0, Math.min(1, videoProgress || 0))}
+          isMuted={isAudioSermonValue ? (audioState?.isMuted ?? false) : isMuted}
+          onToggleMute={handleToggleMuteInternal}
+          onSeekToPercent={seekToPercent}
+          onScrubStart={handleScrubStart}
+          onScrubEnd={handleScrubEnd}
+          currentMs={isAudioSermonValue ? (audioState?.position ?? 0) : videoPositionMs}
+          durationMs={
+            isAudioSermonValue
+              ? (audioState?.duration ?? 0)
+              : videoDurationMs ||
+                lastKnownDurationRef.current ||
+                mediaDurationMs ||
+                0
+          }
+          showControls={true}
+          top={progressTop}
+          bottomOffset={14}
+          debug={__DEV__ && false}
+          config={{
+            showFloatingLabel: true,
+            showTimeLabels: true,
+            enlargeOnDrag: true,
+            knobSize: 10,
+            knobSizeDragging: 14,
+            trackHeight: 4,
+            trackHeightDragging: 8,
+            seekDuringDrag: true,
+            liveSeekThrottleMs: 48,
+            seekSyncTicks: 2,
+            seekMsTolerance: 250,
+            minProgressEpsilon: 0.005,
+          }}
+        />
+      </View>
     </View>
   );
 }

@@ -16,9 +16,9 @@ export type CommentMediaAnchor = {
 export type CommentSheetLayoutLive = {
   /** Sheet top / dim height after open */
   peekHeight: number;
-  /** translateY applied to the feed so media bottom meets sheet top */
+  /** translateY applied to the feed so media sits in the peek */
   shiftY: number;
-  /** Scale feed content so player fits inside peek (1 = no scale) */
+  /** Scale feed content (1 = identity — avoid shrink-to-seam black band) */
   mediaScale: number;
 };
 
@@ -27,52 +27,51 @@ export function getWindowHeight(): number {
   return Dimensions.get("window").height;
 }
 
-function computeMediaScale(peekHeight: number, playerH: number): number {
-  if (playerH <= 0) return 1;
-  const fit = (peekHeight - 8) / playerH;
-  if (!Number.isFinite(fit) || fit >= 1) return 1;
-  // Don't shrink below a usable watch band
-  return Math.max(0.72, fit);
-}
-
 /**
- * Dock player bottom to sheet top.
- * Peek stays ~22–34% so the sheet is ~66–78% (more comments visible).
+ * Dock the watching video into a tall top peek so pause stays high and tappable.
+ * Biases the player upward (pause ~upper third of peek), sheet sits lower.
  */
 export function resolveCommentSheetLayout(
   anchor?: CommentMediaAnchor | null
 ): CommentSheetLayoutLive {
   const H = getWindowHeight();
-  const MIN_PEEK = Math.round(H * 0.22);
-  const MAX_PEEK = Math.round(H * 0.34);
-  const FALLBACK_PEEK = Math.round(H * 0.28);
+  // Taller peek = sheet lower = pause icon clearer
+  const MIN_PEEK = Math.max(220, Math.round(H * 0.46));
+  const MAX_PEEK = Math.round(H * 0.56);
+  const FALLBACK_PEEK = Math.round(H * 0.52);
+
+  const playerH =
+    anchor &&
+    Number.isFinite(anchor.mediaHeight) &&
+    (anchor.mediaHeight as number) > 0
+      ? Math.round(anchor.mediaHeight as number)
+      : DEFAULT_PLAYER_H;
+
+  const peekHeight = Math.max(
+    MIN_PEEK,
+    Math.min(MAX_PEEK, Math.round(H * 0.52))
+  );
 
   if (
     !anchor ||
     !Number.isFinite(anchor.mediaBottomY) ||
     anchor.mediaBottomY <= 0
   ) {
-    const peekHeight = FALLBACK_PEEK;
-    // Assume a typical mid-upper card bottom when we have no measure
-    const assumedBottom = Math.round(H * 0.55);
+    // Still lift so pause sits in the upper peek, not mid/low
+    const lift = Math.round(playerH * 0.22);
     return {
-      peekHeight,
-      shiftY: peekHeight - assumedBottom,
-      mediaScale: computeMediaScale(peekHeight, DEFAULT_PLAYER_H),
+      peekHeight: FALLBACK_PEEK,
+      shiftY: -lift,
+      mediaScale: 1,
     };
   }
 
-  const measured = Math.round(anchor.mediaBottomY);
-  const playerH =
-    Number.isFinite(anchor.mediaHeight) &&
-    (anchor.mediaHeight as number) > 0
-      ? Math.round(anchor.mediaHeight as number)
-      : DEFAULT_PLAYER_H;
+  const mediaBottomY = Math.round(anchor.mediaBottomY);
+  const mediaTopY = mediaBottomY - playerH;
+  // Place pause (center of player) near ~32% down the peek — high & clickable
+  const pauseInPlayerY = playerH / 2;
+  const targetPauseY = Math.round(peekHeight * 0.32);
+  const shiftY = targetPauseY - mediaTopY - pauseInPlayerY;
 
-  // Prefer flush-at-measure; clamp peek so sheet stays tall (~66%+)
-  const peekHeight = Math.max(MIN_PEEK, Math.min(MAX_PEEK, measured));
-  const shiftY = peekHeight - measured;
-  const mediaScale = computeMediaScale(peekHeight, playerH);
-
-  return { peekHeight, shiftY, mediaScale };
+  return { peekHeight, shiftY, mediaScale: 1 };
 }

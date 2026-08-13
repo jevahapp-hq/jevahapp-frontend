@@ -1,4 +1,5 @@
 import type { CommentData } from "./types";
+import { resolveUserAvatarUrl } from "../defaultUserAvatar";
 
 /** Path segment for comment routes — prefer `media` for feed types. */
 export function commentPathType(backendContentType: string): string {
@@ -60,12 +61,13 @@ export function transformComment(c: any, contentId: string): CommentData {
       c?.userId || c?.user?._id || c?.author?._id || c?.authorId || ""
     ),
     username,
-    userAvatar:
+    userAvatar: resolveUserAvatarUrl(
       c?.userAvatar ||
-      c?.user?.avatar ||
-      c?.user?.avatarUrl ||
-      c?.author?.avatar ||
-      "",
+        c?.user?.avatar ||
+        c?.user?.avatarUrl ||
+        c?.author?.avatar ||
+        ""
+    ),
     comment: String(c?.content || c?.comment || c?.text || ""),
     timestamp: String(
       c?.createdAt || c?.timestamp || new Date().toISOString()

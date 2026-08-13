@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import {
     GestureHandlerRootView,
     HandlerStateChangeEvent,
@@ -15,6 +15,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from "react-native-reanimated";
+import { authToast } from "../components/auth/authToastBus";
 import authService from "../services/authService";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -95,7 +96,7 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
     console.log("Okay, Got It button pressed, sending reset code for email:", emailAddress);
     
     if (!emailAddress || !emailAddress.trim()) {
-      Alert.alert("Error", "Email address is required");
+      authToast.validation("Email required", "We need your email to send a reset code.");
       return;
     }
     
@@ -107,6 +108,7 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
       
       if (result.success) {
         console.log("✅ Reset code sent successfully");
+        authToast.resetCodeSent(emailAddress);
         // Close the modal and navigate
         if (Platform.OS === 'android') {
           translateY.value = withTiming(SCREEN_HEIGHT, {
@@ -126,20 +128,12 @@ export default function EmailResetSeenModal({ isVisible, onClose, emailAddress }
       } else {
         console.log("❌ Failed to send reset code:", result.error || result.data?.message);
         const errorMessage = result.error || result.data?.message || "Failed to send reset code. Please try again.";
-        Alert.alert(
-          "Failed to Send Code",
-          errorMessage,
-          [{ text: "OK" }]
-        );
+        authToast.resetFailed(errorMessage);
       }
     } catch (error: any) {
       console.error("❌ Error sending reset code:", error);
       const errorMessage = error?.message || "Network error. Please check your connection and try again.";
-      Alert.alert(
-        "Error",
-        errorMessage,
-        [{ text: "OK" }]
-      );
+      authToast.error("Couldn’t send code", errorMessage);
     } finally {
       setIsSendingCode(false);
     }

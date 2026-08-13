@@ -27,6 +27,8 @@ export interface CommentIconProps {
   onPress?: () => void;
   style?: any;
   useAnimatedButton?: boolean;
+  /** Tight padding for dense feed footers */
+  compact?: boolean;
 }
 
 export interface CommentData {

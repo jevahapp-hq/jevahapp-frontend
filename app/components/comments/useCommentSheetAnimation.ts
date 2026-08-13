@@ -45,6 +45,7 @@ export function useCommentSheetAnimation(options: {
   const windowHShared = useSharedValue(windowH);
 
   useEffect(() => {
+    // Sync immediately so first paint / scale origin aren't one frame late
     peekShared.value = mediaPeekHeight;
   }, [mediaPeekHeight, peekShared]);
 
@@ -91,6 +92,8 @@ export function useCommentSheetAnimation(options: {
 
   useEffect(() => {
     if (isVisible) {
+      // Ensure peek is current before open animation (avoids full-bleed first frame)
+      peekShared.value = mediaPeekHeight;
       closingRef.current = false;
       translateY.value = sheetRestHeight;
       backdropOpacity.value = 0;
@@ -107,10 +110,12 @@ export function useCommentSheetAnimation(options: {
     }
   }, [
     isVisible,
+    mediaPeekHeight,
     sheetRestHeight,
     translateY,
     backdropOpacity,
     keyboardOffset,
+    peekShared,
     onClosedUiReset,
   ]);
 
@@ -161,11 +166,9 @@ export function useCommentSheetAnimation(options: {
 
   const sheetAnimatedStyle = useAnimatedStyle(() => {
     const kb = keyboardOffset.value;
-    const peek = peekShared.value;
-    const h = Math.max(280, windowHShared.value - peek - kb);
+    // Pin top via StyleSheet `top: peek`; only lift for keyboard + dismiss slide
     return {
       bottom: kb,
-      height: h,
       transform: [{ translateY: translateY.value }],
     };
   });

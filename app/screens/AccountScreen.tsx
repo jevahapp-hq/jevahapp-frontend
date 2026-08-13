@@ -1,8 +1,8 @@
 // AccountScreen.tsx
 import { useClerk } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccountHeader from "../components/account/AccountHeader";
 import ContentSection from "../components/account/ContentSection";
@@ -12,9 +12,9 @@ import ProfileSwitchModal from "../components/account/ProfileSwitchModal";
 import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useUserProfile } from "../hooks/useUserProfile";
 import EditProfileSlideOver from "../Profile/EditProfileSlideOver";
-import { authUtils } from "../utils/authUtils";
 import { navigateMainTab } from "../utils/navigation";
 import { useOptimizedButton } from "../utils/performance";
+import { clearBackendSession } from "../utils/sessionAuth";
 
 export default function AccountScreen() {
   const [activeTab, setActiveTab] = useState<string>("Account");
@@ -24,6 +24,13 @@ export default function AccountScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
   const { user, getAvatarUrl, getFullName, getUserSection, refreshUserProfile } = useUserProfile();
+
+  const isAdminUser = useMemo(() => {
+    const role = String(
+      (user as any)?.role || (user as any)?.userRole || ""
+    ).toLowerCase();
+    return role === "admin" || role === "moderator" || role === "superadmin";
+  }, [user]);
 
   // Normalize null -> undefined for consumers expecting undefined
   const getAvatarUrlAsUndef = (u: any) => getAvatarUrl(u) ?? undefined;
@@ -39,14 +46,12 @@ export default function AccountScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            // Clear all stored tokens and user data using authUtils
-            await authUtils.clearAuthData();
-
-            // Sign out from Clerk
-            await signOut();
-
-            // Navigate directly to the email/password Sign In screen
-            // and reset away from the authenticated stack
+            await clearBackendSession();
+            try {
+              await signOut();
+            } catch {
+              // Email/password users may have no Clerk session
+            }
             router.replace("/auth/login");
           } catch (error) {
             console.error("Logout error:", error);
@@ -77,6 +82,34 @@ export default function AccountScreen() {
           getUserSection={getUserSection}
           onPressProfile={handleProfilePress}
         />
+
+        {isAdminUser ? (
+          <TouchableOpacity
+            onPress={() => router.push("/admin")}
+            style={{
+              marginHorizontal: 16,
+              marginTop: 8,
+              marginBottom: 4,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              backgroundColor: "#0A332D",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                Admin console
+              </Text>
+              <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>
+                Reports · Releases
+              </Text>
+            </View>
+            <Text style={{ color: "#FEA74E", fontWeight: "700" }}>Open</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={{ flex: 1 }} className="bg-[#dcdfe418]">
           <View style={{ paddingHorizontal: 16 }}>

@@ -273,6 +273,25 @@ export default function CreatorHubScreen() {
               </View>
             )}
 
+            {me.capabilities.canUploadTracks || step === "manage_catalog" ? (
+              <TouchableOpacity
+                onPress={() => router.push("/creators/releases")}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#0A332D",
+                  borderRadius: 999,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: "#0A332D", fontWeight: "600", fontSize: 16 }}>
+                  Releases (albums / EPs)
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
             {(me.artist?.slug || me.capabilities.publicProfilePath) ? (
               <TouchableOpacity
                 onPress={openPublicProfile}

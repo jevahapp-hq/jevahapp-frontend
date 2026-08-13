@@ -3,8 +3,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useMedia } from "../../../../shared/hooks/useMedia";
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import {
-  refreshFeedAfterDelete,
-  removeMediaFromFeedCaches,
+    refreshFeedAfterDelete,
+    removeMediaFromFeedCaches,
 } from "../../../../shared/utils/removeMediaFromFeedCaches";
 
 export function useAllContentTikTokFeedSource(options: {
@@ -26,6 +26,7 @@ export function useAllContentTikTokFeedSource(options: {
     loadMoreAllContent,
     hasMorePages,
     isFetchingNextPage,
+    serverRanked,
   } = useMedia({
     immediate: true,
     contentType: activeTab,
@@ -70,5 +71,6 @@ export function useAllContentTikTokFeedSource(options: {
     hasMorePages: Boolean(hasMorePages),
     isFetchingNextPage: Boolean(isFetchingNextPage),
     handleDeleteSuccess,
+    serverRanked: Boolean(serverRanked),
   };
 }

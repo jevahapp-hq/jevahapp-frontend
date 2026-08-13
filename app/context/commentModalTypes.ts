@@ -42,6 +42,8 @@ export interface CommentModalContextType {
     creator?: CommentCreatorInfo | null,
     anchor?: CommentMediaAnchor | null
   ) => void;
+  /** Re-dock sheet after feed chrome (tabs/header) collapses while open */
+  updateCommentMediaLayout: (anchor: CommentMediaAnchor | null) => void;
   hideCommentModal: () => void;
   addComment: (comment: Comment) => void;
   updateComment: (commentId: string, updates: Partial<Comment>) => void;
@@ -72,6 +74,7 @@ export const COMMENT_MODAL_NOOP: CommentModalContextType = {
   mediaShiftY: 0,
   mediaScale: 1,
   showCommentModal: () => {},
+  updateCommentMediaLayout: () => {},
   hideCommentModal: () => {},
   addComment: () => {},
   updateComment: () => {},

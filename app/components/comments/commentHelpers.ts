@@ -1,4 +1,5 @@
 import { formatTimeAgo } from "../../../src/shared/utils";
+import { resolveUserAvatarUrl } from "../../utils/defaultUserAvatar";
 import type { CommentReply, CommentThreadItem } from "./types";
 
 export function countAllComments(
@@ -41,7 +42,7 @@ export function mapCachedComment(c: any): CommentThreadItem {
   return {
     id: String(c?.id || c?._id || ""),
     userName: c?.username || c?.userName || "User",
-    avatar: c?.userAvatar || c?.avatar || "",
+    avatar: resolveUserAvatarUrl(c?.userAvatar || c?.avatar),
     timestamp: c?.timestamp || c?.createdAt || new Date().toISOString(),
     comment: c?.comment || c?.content || c?.text || "",
     likes: Number(c?.likes || c?.likesCount || 0),

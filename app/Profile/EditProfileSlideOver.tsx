@@ -1,13 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { apiClient } from '../utils/dataFetching';
 import { getApiBaseUrl } from '../utils/api';
 import AuthHeader from '../components/AuthHeader';
 import * as ImagePicker from 'expo-image-picker';
+import {
+  getLiteMode,
+  hydrateLiteProfile,
+  isLiteProfileActive,
+  setLiteEnabled,
+  setLiteMode,
+  type LiteMode,
+} from '../../src/shared/lite/liteProfile';
 
 interface EditProfileSlideOverProps {
   visible: boolean;
@@ -38,6 +47,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function EditProfileSlideOver({ visible, onClose }: EditProfileSlideOverProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const translateX = useSharedValue(SCREEN_WIDTH);
   const { user, refreshUserProfile } = useUserProfile();
 
@@ -47,12 +57,22 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const [editingName, setEditingName] = useState(false);
   const [nameValues, setNameValues] = useState({ firstName: '', lastName: '' });
+  const [liteMode, setLiteModeState] = useState<LiteMode>('auto');
+  const [liteActive, setLiteActive] = useState(false);
+  const [liteUpdating, setLiteUpdating] = useState(false);
 
   // Fetch settings config when modal opens
   useEffect(() => {
     if (visible) {
       translateX.value = withTiming(0, { duration: 300 });
       fetchSettingsConfig();
+      void (async () => {
+        try {
+          await hydrateLiteProfile();
+        } catch {}
+        setLiteModeState(getLiteMode());
+        setLiteActive(isLiteProfileActive());
+      })();
     } else {
       translateX.value = withTiming(SCREEN_WIDTH, { duration: 250 });
       setConfig(null);
@@ -60,6 +80,40 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
       setEditingName(false);
     }
   }, [visible]);
+
+  const handleLiteToggle = async (enabled: boolean) => {
+    setLiteUpdating(true);
+    try {
+      await setLiteEnabled(enabled);
+      setLiteModeState(getLiteMode());
+      setLiteActive(isLiteProfileActive());
+      void queryClient.invalidateQueries({ queryKey: ["all-content"] });
+      Alert.alert(
+        enabled ? 'Lite mode on' : 'Lite mode off',
+        enabled
+          ? 'Smaller feeds, 360p streaming preference, and lower memory use.'
+          : 'Full quality and page sizes restored.'
+      );
+    } catch {
+      Alert.alert('Error', 'Could not update Lite mode');
+    } finally {
+      setLiteUpdating(false);
+    }
+  };
+
+  const handleLiteAuto = async () => {
+    setLiteUpdating(true);
+    try {
+      await setLiteMode('auto');
+      setLiteModeState(getLiteMode());
+      setLiteActive(isLiteProfileActive());
+      void queryClient.invalidateQueries({ queryKey: ["all-content"] });
+    } catch {
+      Alert.alert('Error', 'Could not reset Lite mode');
+    } finally {
+      setLiteUpdating(false);
+    }
+  };
 
   // Initialize local values from config
   useEffect(() => {
@@ -380,6 +434,51 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
                     </View>
                   )}
 
+                  {/* Data saver / Lite (client-only) */}
+                  <View
+                    className="bg-white rounded-2xl px-4 mb-4"
+                    style={{
+                      shadowColor: '#000',
+                      shadowOpacity: 0.03,
+                      shadowRadius: 8,
+                      minHeight: 67,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center flex-1 pr-2">
+                        <Ionicons name="phone-portrait-outline" size={18} color="#0A332D" />
+                        <View className="ml-3 flex-1">
+                          <Text className="text-[#111827] font-semibold">Lite mode / Data saver</Text>
+                          <Text className="text-[#6B7280] text-xs" numberOfLines={2}>
+                            {Platform.OS === 'android'
+                              ? liteMode === 'auto'
+                                ? `Auto · currently ${liteActive ? 'on' : 'off'} for this device`
+                                : liteActive
+                                  ? 'On · smaller feeds & lower memory'
+                                  : 'Off · full quality'
+                              : 'Primarily for low-RAM Android; you can still force it on'}
+                          </Text>
+                        </View>
+                      </View>
+                      {liteUpdating ? (
+                        <ActivityIndicator size="small" color="#0A332D" />
+                      ) : (
+                        <Switch
+                          value={liteActive}
+                          onValueChange={handleLiteToggle}
+                          trackColor={{ false: '#CBD5E1', true: '#0A332D' }}
+                          thumbColor="#ffffff"
+                        />
+                      )}
+                    </View>
+                    {liteMode !== 'auto' ? (
+                      <TouchableOpacity onPress={handleLiteAuto} className="mt-2 ml-8" disabled={liteUpdating}>
+                        <Text className="text-[#0A332D] text-xs font-medium">Use automatic detection</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
                   {/* Toggle Rows */}
                   {Object.entries(config)
                     .filter(([key]) => key !== 'profileImage' && key !== 'name')
@@ -446,6 +545,38 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
                 </>
               ) : (
                 <View className="items-center justify-center py-20">
+                  <View
+                    className="bg-white rounded-2xl px-4 mb-6 w-full"
+                    style={{
+                      shadowColor: '#000',
+                      shadowOpacity: 0.03,
+                      shadowRadius: 8,
+                      minHeight: 67,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center flex-1 pr-2">
+                        <Ionicons name="phone-portrait-outline" size={18} color="#0A332D" />
+                        <View className="ml-3 flex-1">
+                          <Text className="text-[#111827] font-semibold">Lite mode / Data saver</Text>
+                          <Text className="text-[#6B7280] text-xs">
+                            {liteActive ? 'On' : 'Off'} · works offline of profile API
+                          </Text>
+                        </View>
+                      </View>
+                      {liteUpdating ? (
+                        <ActivityIndicator size="small" color="#0A332D" />
+                      ) : (
+                        <Switch
+                          value={liteActive}
+                          onValueChange={handleLiteToggle}
+                          trackColor={{ false: '#CBD5E1', true: '#0A332D' }}
+                          thumbColor="#ffffff"
+                        />
+                      )}
+                    </View>
+                  </View>
                   <Text className="text-[#6B7280]">Failed to load settings</Text>
                   <TouchableOpacity
                     onPress={fetchSettingsConfig}

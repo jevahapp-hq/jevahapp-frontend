@@ -7,7 +7,6 @@ import {
   Alert,
   FlatList,
   Platform,
-  Pressable,
   StyleSheet,
   View,
 } from "react-native";
@@ -266,21 +265,32 @@ export default function CommentModalV2() {
 
   return (
     <View style={styles.overlayRoot} pointerEvents="box-none">
-      <Pressable
-        style={[styles.dimHitArea, { height: mediaPeekHeight }]}
-        onPress={anim.closeModal}
-        accessibilityRole="button"
-        accessibilityLabel="Close comments"
+      {/* Visual dim only on the upper peek — leave a clear band for scrubber */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.dimHitArea,
+          { height: Math.max(0, mediaPeekHeight - 56) },
+          anim.backdropStyle,
+        ]}
       >
-        <Animated.View style={[styles.dimFill, anim.backdropStyle]} />
-      </Pressable>
+        <View style={styles.dimFill} />
+      </Animated.View>
 
-          <Animated.View
-            pointerEvents="none"
+      <Animated.View
+        pointerEvents="none"
         style={[styles.keyboardBridge, anim.keyboardBridgeStyle]}
       />
 
-      <Animated.View style={[styles.sheet, anim.sheetAnimatedStyle]}>
+      <Animated.View
+        pointerEvents="auto"
+        style={[
+          styles.sheet,
+          // Static pin: sheet never fills the overlay before Reanimated applies
+          { top: mediaPeekHeight, bottom: 0 },
+          anim.sheetAnimatedStyle,
+        ]}
+      >
           <PanGestureHandler
             activeOffsetY={8}
           failOffsetX={[-24, 24]}
@@ -320,7 +330,7 @@ export default function CommentModalV2() {
           onEndReached={() => {
             void loadMoreComments();
           }}
-          onEndReachedThreshold={0.35}
+          onEndReachedThreshold={0.2}
         />
 
         <CommentTypingBanner users={typingUsers} />
@@ -422,7 +432,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   dimFill: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000000",
   },
   keyboardBridge: {
@@ -436,6 +446,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
+    // top + bottom pinned from props / keyboard — never unbound height
     backgroundColor: C.sheet,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,

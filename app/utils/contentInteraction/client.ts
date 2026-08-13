@@ -21,22 +21,8 @@ export function createClient(): ContentInteractionClient {
 
   const getAuthHeaders = async (): Promise<HeadersInit> => {
     try {
-      const userStr = await AsyncStorage.getItem("user");
-
-      // Try multiple token keys since your app uses different ones
-      let token = await AsyncStorage.getItem("userToken"); // From api.ts
-      if (!token) {
-        token = await AsyncStorage.getItem("token"); // From login.tsx, codeVerification.tsx
-      }
-      if (!token) {
-        // Try SecureStore for OAuth tokens
-        try {
-          const { default: SecureStore } = await import("expo-secure-store");
-          token = await SecureStore.getItemAsync("jwt"); // From OAuth flow
-        } catch (secureStoreError) {
-          devLog("SecureStore not available or no JWT token");
-        }
-      }
+      const TokenUtils = (await import("../tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
 
       if (token) {
         return {
@@ -46,13 +32,13 @@ export function createClient(): ContentInteractionClient {
         };
       }
 
-      devWarn("⚠️ No token found in AsyncStorage or SecureStore");
+      devWarn("⚠️ No session token found");
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
       };
     } catch (error) {
-      console.error("Error getting auth headers:", error);
+      if (__DEV__) console.error("Error getting auth headers:", error);
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,

@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Alert,
     Animated as RNAnimated,
     Text,
     TextInput,
@@ -17,6 +16,7 @@ import Animated, {
     withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { authToast } from "../components/auth/authToastBus";
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
@@ -184,7 +184,7 @@ export default function VerifyReset() {
       }
     } catch (err) {
       console.error("❌ Error verifying reset code:", err);
-      Alert.alert("Server Error", "Unable to verify code. Try again later.");
+      authToast.error("Couldn’t verify code", "Unable to verify. Try again later.");
       triggerBounceDrop("failure");
     } finally {
       setIsVerifying(false);
@@ -195,7 +195,7 @@ export default function VerifyReset() {
     console.log("🔄 Resend button pressed for email:", emailAddress);
     
     if (!emailAddress || !emailAddress.trim()) {
-      Alert.alert("Error", "Email address is required");
+      authToast.validation("Email required", "We need your email to resend the code.");
       return;
     }
 
@@ -209,32 +209,16 @@ export default function VerifyReset() {
 
       if (result.success) {
         console.log("✅ Resend successful");
-        // Show success message (even if user not found, for security)
-        const message = result.data?.message || "A new password reset code has been sent to your email. Please check your inbox and spam folder.";
-        Alert.alert(
-          "Code Resent",
-          message,
-          [{ text: "OK" }]
-        );
+        authToast.resetCodeSent(emailAddress);
       } else {
         console.log("❌ Resend failed:", result.error || result.data?.message);
         const errorMessage = result.error || result.data?.message || "Failed to resend code. Please try again later.";
-        
-        // Don't show failure card for resend - just show alert
-        Alert.alert(
-          "Resend Failed",
-          errorMessage,
-          [{ text: "OK" }]
-        );
+        authToast.resetFailed(errorMessage);
       }
     } catch (err: any) {
       console.error("❌ Error resending reset code:", err);
       const errorMessage = err?.message || "Network error. Please check your connection and try again.";
-      Alert.alert(
-        "Resend Failed",
-        errorMessage,
-        [{ text: "OK" }]
-      );
+      authToast.resetFailed(errorMessage);
     } finally {
       setIsResending(false);
     }

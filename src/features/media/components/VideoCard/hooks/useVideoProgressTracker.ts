@@ -168,7 +168,14 @@ export function useVideoProgressTracker({
     });
 
     const endSubscription = player.addListener?.("playToEnd", () => {
-      if (suppressAutoLoopRef?.current) return;
+      if (suppressAutoLoopRef?.current) {
+        try {
+          player.pause();
+        } catch {
+          // no-op
+        }
+        return;
+      }
       const pos = getPlayerPositionMs(player);
       if (pos >= 500) {
         commitDuration(

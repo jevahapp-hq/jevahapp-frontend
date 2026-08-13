@@ -7,7 +7,7 @@ import { detectFileType, type FileInfo } from "./fileTypeDetection";
 
 export type ResolvedUploadType = {
   /** Value sent to API + stored on MediaItem.contentType */
-  contentType: "videos" | "music" | "books" | "sermon";
+  contentType: "videos" | "music" | "books" | "sermon" | "gif";
   /** Home chip `defaultCategory` param */
   homeCategory: "videos" | "music" | "e-books" | "sermon" | "ALL";
   /** True when MIME/extension overruled a conflicting selectedType */
@@ -41,6 +41,14 @@ export function resolveUploadContentType(params: {
       contentType: "sermon",
       homeCategory: "sermon",
       correctedFromSelection: false,
+    };
+  }
+
+  if (selected === "gif" || detected === "gif") {
+    return {
+      contentType: "gif",
+      homeCategory: "videos",
+      correctedFromSelection: selected !== "gif" && selected !== "",
     };
   }
 

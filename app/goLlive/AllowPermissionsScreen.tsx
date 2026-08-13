@@ -1,5 +1,4 @@
- // components/AllowPermissionsScreen.tsx
-
+// components/AllowPermissionsScreen.tsx
 
 import React from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";

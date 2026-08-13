@@ -15,6 +15,7 @@ export const MAX_FILE_SIZE_BYTES = {
   books: 100 * 1024 * 1024,   // 100 MB
   ebook: 100 * 1024 * 1024,   // 100 MB
   podcasts: 100 * 1024 * 1024,
+  gif: 20 * 1024 * 1024,      // 20 MB
 } as Record<string, number>;
 
 export const getMaxFileSizeBytes = (contentType: string): number =>
@@ -32,6 +33,7 @@ export const categories = [
 export const contentTypes = [
   { label: "Music", value: "music" },
   { label: "Videos", value: "videos" },
+  { label: "GIF", value: "gif" },
   { label: "Books", value: "books" },
   { label: "Ebook", value: "ebook" },
   { label: "Podcasts", value: "podcasts" },

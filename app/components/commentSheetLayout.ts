@@ -4,15 +4,15 @@ import { Easing } from "react-native-reanimated";
 /** @deprecated Prefer getWindowHeight() — kept for module-load fallbacks */
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-/** Top band where media stays visible while comments are open (~28%) — taller sheet */
-export const MEDIA_PEEK_HEIGHT = Math.round(SCREEN_HEIGHT * 0.28);
+/** Top band where media stays visible while comments are open (~50%) */
+export const MEDIA_PEEK_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
 
 /** Resting sheet height (below the media peek) */
 export const SHEET_HEIGHT_REST = SCREEN_HEIGHT - MEDIA_PEEK_HEIGHT;
 
 /** Main comments sheet — fast + smooth (ease-out cubic bezier) */
 export const COMMENT_SHEET_IN = {
-  duration: 200,
+  duration: 140,
   easing: Easing.bezier(0.22, 1, 0.36, 1),
 } as const;
 

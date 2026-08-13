@@ -24,8 +24,8 @@ export class TokenUtils {
           if (typeof SecureStore.getItemAsync === "function") {
             token = await SecureStore.getItemAsync("jwt");
           }
-        } catch (secureStoreError) {
-          console.log("SecureStore not available or no JWT token");
+        } catch {
+          // SecureStore unavailable
         }
       }
 
@@ -123,9 +123,15 @@ export class TokenUtils {
         );
       }
 
-      console.log("✅ Auth token stored successfully");
+      if (__DEV__) console.log("✅ Auth token stored successfully");
+      try {
+        const { markBackendSessionPresent } = require("./sessionAuth");
+        markBackendSessionPresent();
+      } catch {
+        // no-op
+      }
     } catch (error) {
-      console.error("❌ Error storing auth token:", error);
+      if (__DEV__) console.error("❌ Error storing auth token:", error);
       throw error;
     }
   }
@@ -152,9 +158,15 @@ export class TokenUtils {
         );
       }
 
-      console.log("✅ Auth tokens cleared successfully");
+      if (__DEV__) console.log("✅ Auth tokens cleared successfully");
+      try {
+        const { clearBackendSessionPresent } = require("./sessionAuth");
+        clearBackendSessionPresent();
+      } catch {
+        // no-op
+      }
     } catch (error) {
-      console.error("❌ Error clearing auth tokens:", error);
+      if (__DEV__) console.error("❌ Error clearing auth tokens:", error);
       throw error;
     }
   }

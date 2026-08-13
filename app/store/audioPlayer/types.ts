@@ -11,6 +11,15 @@ export interface AudioTrack {
   category?: string;
   description?: string;
   isVirtual?: boolean; // If true, this track is played by an external player (e.g., useAdvancedAudioPlayer), don't load audio here
+  /** Nested release context for “Playing from …” */
+  release?: {
+    id: string;
+    title: string;
+    coverUrl?: string;
+    type?: string;
+    slug?: string;
+  };
+  releaseTitle?: string;
 }
 
 export interface VirtualTrackControls {

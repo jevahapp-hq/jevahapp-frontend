@@ -15,6 +15,40 @@ export interface UploadFormData {
   selectedType: string;
 }
 
+/** Content types that should have a cover before we treat the form as complete. */
+export const COVER_REQUIRED_TYPES = new Set([
+  "music",
+  "videos",
+  "podcasts",
+  "gif",
+  "sermon",
+]);
+
+/**
+ * Single source of truth for “form looks complete” (AI badge, etc.).
+ * Stricter than submit eligibility: does not run MIME/size checks.
+ */
+export function isUploadFormReady(input: {
+  file: unknown;
+  title: string;
+  selectedCategory: string;
+  selectedType: string;
+  thumbnail?: unknown;
+}): boolean {
+  if (
+    !input.file ||
+    !input.title.trim() ||
+    !input.selectedCategory ||
+    !input.selectedType
+  ) {
+    return false;
+  }
+  if (COVER_REQUIRED_TYPES.has(input.selectedType) && !input.thumbnail) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Format friendly rejection messages for moderation errors
  */
@@ -107,7 +141,10 @@ export const validateMediaEligibility = (
         errors.push(
           "Please select a content type. Detected an audio file; choose Music, Podcasts, or Sermon."
         );
-      } else if (actualFileType === "ebook") {
+      } else if (actualFileType === "gif") {
+        errors.push(
+          "Please select a content type. Detected a GIF; choose GIF."
+        );
         errors.push(
           "Please select a content type. Detected an ebook/PDF; choose Books or Ebook."
         );

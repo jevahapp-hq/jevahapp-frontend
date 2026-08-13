@@ -1,27 +1,28 @@
 import { useCallback, useMemo } from "react";
-import { FEED_PAGE_SIZE } from "../config/feedCachePolicy";
-import { fetchAllContentPublic } from "../media/fetchAllContentPage";
+import { FEED_PAGE_SIZE, getFeedPageSize } from "../config/feedCachePolicy";
 import { useAllContentInfiniteQuery } from "../media/useAllContentInfiniteQuery";
 import { useDefaultContentQuery } from "../media/useDefaultContentQuery";
 import {
-  ContentFilter,
-  UseMediaOptions,
-  UseMediaReturn,
+    ContentFilter,
+    UseMediaOptions,
+    UseMediaReturn,
 } from "../types";
 import { filterContentByType } from "../utils";
 
 export { fetchAllContentPublic } from "../media/fetchAllContentPage";
-export { useContentStats } from "../media/useContentStats";
 export { useContentItem } from "../media/useContentItem";
+export { useContentStats } from "../media/useContentStats";
 
 export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const {
     immediate = true,
     contentType = "ALL",
     page = 1,
-    limit = FEED_PAGE_SIZE,
+    limit: limitOpt,
     useAuth = false,
   } = options;
+
+  const limit = limitOpt ?? getFeedPageSize();
 
   const {
     query: allContentQuery,
@@ -31,6 +32,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     hasNextPage,
     fetchNextPage,
     refetch: refetchAllContent,
+    serverRanked,
   } = useAllContentInfiniteQuery({
     contentType,
     limit,
@@ -58,20 +60,22 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   });
 
   const hasAnyItems = allContent.length > 0 || defaultContent.length > 0;
+  // Never treat "background refetch with seeded data" as a loading screen.
   const allContentPending =
-    (allContentQuery.isLoading || allContentQuery.isFetching) &&
+    allContentQuery.isPending &&
     allContent.length === 0 &&
-    !isFetchingNextPage;
+    !allContentQuery.isFetchingNextPage &&
+    !allContentQuery.data;
   const defaultContentPending =
     shouldFetchDefault &&
-    (defaultContentQuery.isLoading ||
-      defaultContentQuery.isFetching ||
-      defaultContentQuery.isPending) &&
-    defaultContent.length === 0;
+    defaultContentQuery.isPending &&
+    defaultContent.length === 0 &&
+    !defaultContentQuery.data;
   const waitingOnFallback =
     shouldFetchDefault &&
     !defaultContentQuery.isFetched &&
-    defaultContent.length === 0;
+    defaultContent.length === 0 &&
+    !hasAnyItems;
   const loading =
     !hasAnyItems &&
     (allContentPending || defaultContentPending || waitingOnFallback);
@@ -141,6 +145,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       hasMorePages: hasNextPage,
       isFetchingNextPage,
       getFilteredContent,
+      serverRanked: Boolean(serverRanked),
     }),
     [
       allContent,
@@ -157,6 +162,7 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       hasNextPage,
       isFetchingNextPage,
       getFilteredContent,
+      serverRanked,
     ]
   );
 };

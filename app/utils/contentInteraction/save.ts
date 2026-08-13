@@ -69,6 +69,16 @@ export async function toggleSave(
       lastErrorText = await response.text();
       // Only retry on 404 media-not-found; other errors should fail fast
       if (response.status !== 404) {
+        // Soft-fail server bugs (often pending / under_review) — no throw / no ghost save
+        if (response.status >= 500) {
+          if (__DEV__) {
+            console.warn(
+              `⚠️ Bookmark toggle 500 for ${contentId} (${typeAttempt}). BE needs fix — see docs/BACKEND_BOOKMARK_PENDING_UNDER_REVIEW_500_HANDOFF.md`,
+              lastErrorText.slice(0, 200)
+            );
+          }
+          return fallbackGetSaveState(ctx, contentId);
+        }
         throw new Error(
           `HTTP error! status: ${response.status}, body: ${lastErrorText}`
         );

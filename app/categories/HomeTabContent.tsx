@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState, Suspense, lazy } from "react";
+import { ActivityIndicator, Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AllContentTikTok } from "../../src/features/media/AllContentTikTok";
@@ -10,14 +10,30 @@ import {
   getResponsiveTextStyle,
 } from "../../utils/responsive";
 import Header from "../components/Header";
+import { useCommentModal } from "../context/CommentModalContext";
 import { useAuth } from "../hooks/useAuth";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
-import Hymns from "./hymns";
-import LiveComponent from "./LiveComponent";
-import Music from "./music";
+
+const Music = lazy(() => import("./music"));
+const Hymns = lazy(() => import("./hymns"));
+const LiveComponent = lazy(() => import("./LiveComponent"));
+
+function CategorySuspense({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color="#090E24" />
+        </View>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 // NOTE: "HYMNS" requested as its own category, positioned between LIVE and SERMON.
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
@@ -92,7 +108,8 @@ const mapContentTypeToCategory = (contentType: string): string => {
 export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
+  const { isVisible: isCommentSheetOpen } = useCommentModal();
 
   // Handle defaultCategory as string or array (expo-router can return arrays)
   const defaultCategoryValue = Array.isArray(defaultCategory)
@@ -235,23 +252,35 @@ export default function HomeTabContent() {
   const renderContent = () => {
     // Music category should show copyright-free catalog (not user uploads)
     if (selectedCategory === "MUSIC") {
-      return <Music />;
+      return (
+        <CategorySuspense>
+          <Music />
+        </CategorySuspense>
+      );
     }
 
     // Hymns category should show hymns component
     if (selectedCategory === "HYMNS") {
-      return <Hymns />;
+      return (
+        <CategorySuspense>
+          <Hymns />
+        </CategorySuspense>
+      );
     }
 
     // Live category should show LiveComponent
     if (selectedCategory === "LIVE") {
-      return <LiveComponent />;
+      return (
+        <CategorySuspense>
+          <LiveComponent />
+        </CategorySuspense>
+      );
     }
 
     return (
       <AllContentTikTok
         contentType={mapCategoryToContentType(selectedCategory)}
-        useAuthFeed={!!user}
+        useAuthFeed={isAuthenticated}
       />
     );
 
@@ -261,102 +290,112 @@ export default function HomeTabContent() {
 
 
   return (
-    <View style={{ flex: 1, width: "100%" }}>
-      <Header />
+    <View style={{ flex: 1, width: "100%", backgroundColor: "#000" }}>
+      {/* Focus mode: only docked video + comment sheet — hide home chrome */}
+      {!isCommentSheetOpen ? <Header /> : null}
 
-      {/* Category Buttons with Padding */}
-      <View
-        style={{
-          paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
-          backgroundColor: "#FCFCFD",
-        }}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          scrollEnabled={true}
-          scrollEventThrottle={16}
-          removeClippedSubviews={false}
-          decelerationRate="fast"
-          snapToInterval={undefined}
-          disableIntervalMomentum={true}
-          keyboardShouldPersistTaps="handled"
+      {!isCommentSheetOpen ? (
+        <View
           style={{
-            paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-            marginTop: getResponsiveSpacing(20, 24, 28, 32),
-          }}
-          contentContainerStyle={{
-            paddingHorizontal: 0,
+            paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+            backgroundColor: "#FCFCFD",
           }}
         >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              onPress={() => {
-                // Immediate execution without fastPress wrapper to avoid debounce delays
-                handleCategoryPress(category);
-              }}
-              onLayout={(event) => {
-                const { x, width } = event.nativeEvent.layout;
-                buttonLayouts.current[category] = { x, width };
-              }}
-              activeOpacity={0.6}
-              delayPressIn={0}
-              delayPressOut={0}
-              hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-              style={{
-                paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
-                borderRadius: getResponsiveBorderRadius("medium"),
-                backgroundColor:
-                  selectedCategory === category ? "black" : "white",
-                borderWidth: selectedCategory === category ? 0 : 1,
-                borderColor:
-                  selectedCategory === category ? "transparent" : "#6B6E7C",
-                ...getResponsiveShadow(),
-                minWidth: 48,
-                minHeight: 44,
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 10,
-                elevation: 3,
-              }}
-            >
-              <View style={{ position: "relative" }}>
-                <Text
-                  style={[
-                    getResponsiveTextStyle("button"),
-                    {
-                      color:
-                        selectedCategory === category ? "white" : "#1D2939",
-                    },
-                  ]}
-                >
-                  {category}
-                </Text>
-                {category === "LIVE" && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -getResponsiveSpacing(4, 6, 8, 10),
-                      right: getResponsiveSpacing(4, 6, 8, 10),
-                      width: getResponsiveSpacing(4, 5, 6, 7),
-                      height: getResponsiveSpacing(4, 5, 6, 7),
-                      borderRadius: getResponsiveSpacing(2, 3, 4, 5),
-                      backgroundColor: "red",
-                    }}
-                  />
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={true}
+            scrollEventThrottle={16}
+            removeClippedSubviews={false}
+            decelerationRate="fast"
+            snapToInterval={undefined}
+            disableIntervalMomentum={true}
+            keyboardShouldPersistTaps="handled"
+            style={{
+              paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
+              marginTop: getResponsiveSpacing(20, 24, 28, 32),
+            }}
+            contentContainerStyle={{
+              paddingHorizontal: 0,
+            }}
+          >
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category}
+                onPress={() => {
+                  // Immediate execution without fastPress wrapper to avoid debounce delays
+                  handleCategoryPress(category);
+                }}
+                onLayout={(event) => {
+                  const { x, width } = event.nativeEvent.layout;
+                  buttonLayouts.current[category] = { x, width };
+                }}
+                activeOpacity={0.6}
+                delayPressIn={0}
+                delayPressOut={0}
+                hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                style={{
+                  paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                  paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                  marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
+                  borderRadius: getResponsiveBorderRadius("medium"),
+                  backgroundColor:
+                    selectedCategory === category ? "black" : "white",
+                  borderWidth: selectedCategory === category ? 0 : 1,
+                  borderColor:
+                    selectedCategory === category ? "transparent" : "#6B6E7C",
+                  ...getResponsiveShadow(),
+                  minWidth: 48,
+                  minHeight: 44,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  zIndex: 10,
+                  elevation: 3,
+                }}
+              >
+                <View style={{ position: "relative" }}>
+                  <Text
+                    style={[
+                      getResponsiveTextStyle("button"),
+                      {
+                        color:
+                          selectedCategory === category ? "white" : "#1D2939",
+                      },
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                  {category === "LIVE" && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: -getResponsiveSpacing(4, 6, 8, 10),
+                        right: getResponsiveSpacing(4, 6, 8, 10),
+                        width: getResponsiveSpacing(4, 5, 6, 7),
+                        height: getResponsiveSpacing(4, 5, 6, 7),
+                        borderRadius: getResponsiveSpacing(2, 3, 4, 5),
+                        backgroundColor: "red",
+                      }}
+                    />
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
 
       {/* Content without Padding - Let FlatList handle scrolling */}
-      <View style={{ flex: 1, width: "100%", backgroundColor: "#FCFCFD" }}>{renderContent()}</View>
+      <View
+        style={{
+          flex: 1,
+          width: "100%",
+          backgroundColor: isCommentSheetOpen ? "#000" : "#FCFCFD",
+        }}
+      >
+        {renderContent()}
+      </View>
     </View>
   );
 }

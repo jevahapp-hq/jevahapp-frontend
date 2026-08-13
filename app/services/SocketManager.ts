@@ -2,6 +2,13 @@ import io, { Socket } from "socket.io-client";
 import TokenUtils from "../utils/tokenUtils";
 import NotificationService from "./NotificationService";
 
+const sockLog = (...a: any[]) => {
+  if (__DEV__) console.log(...a);
+};
+const sockWarn = (...a: any[]) => {
+  if (__DEV__) console.warn(...a);
+};
+
 interface AuthenticatedUser {
   userId: string;
   email: string;
@@ -27,7 +34,7 @@ class SocketManager {
 
     // Validate configuration
     if (!this.serverUrl || !this.authToken) {
-      console.warn("⚠️ SocketManager: Invalid configuration", {
+      sockWarn("⚠️ SocketManager: Invalid configuration", {
         hasServerUrl: !!this.serverUrl,
         hasAuthToken: !!this.authToken,
         serverUrl: this.serverUrl,
@@ -40,7 +47,7 @@ class SocketManager {
     try {
       // Validate token before attempting connection
       if (!this.authToken || this.authToken.trim() === "") {
-        console.warn(
+        sockWarn(
           "⚠️ SocketManager: No valid auth token, skipping connection"
         );
         return;
@@ -48,14 +55,14 @@ class SocketManager {
 
       // Validate token format (should be a JWT)
       if (!TokenUtils.isValidJWTFormat(this.authToken)) {
-        console.warn(
+        sockWarn(
           "⚠️ SocketManager: Invalid token format, skipping connection",
           { tokenPreview: TokenUtils.getTokenPreview(this.authToken) }
         );
         return;
       }
 
-      console.log("🔌 SocketManager: Attempting to connect...", {
+      sockLog("🔌 SocketManager: Attempting to connect...", {
         serverUrl: this.serverUrl,
         hasToken: !!this.authToken,
         tokenLength: this.authToken?.length || 0,
@@ -86,11 +93,11 @@ class SocketManager {
       // Connect manually after setting up handlers
       this.socket.connect();
 
-      console.log("✅ SocketManager: Connection initiated");
+      sockLog("✅ SocketManager: Connection initiated");
     } catch (error) {
       console.error("❌ SocketManager: Failed to initiate connection:", error);
       // Don't throw error, just log it and continue without socket
-      console.log("⚠️ Continuing without real-time features...");
+      sockLog("⚠️ Continuing without real-time features...");
     }
   }
 
@@ -99,17 +106,17 @@ class SocketManager {
 
     // Connection events
     this.socket.on("connect", () => {
-      console.log("✅ Socket connected");
+      sockLog("✅ Socket connected");
       this.reconnectAttempts = 0;
     });
 
     this.socket.on("disconnect", (reason) => {
       // Don't log transport errors as disconnects (they're expected during connection attempts)
       if (reason === "transport error" || reason === "transport close") {
-        console.log("🔄 Transport disconnected, Socket.IO will retry...");
+        sockLog("🔄 Transport disconnected, Socket.IO will retry...");
         return; // Socket.IO will handle reconnection automatically
       }
-      console.log("❌ Socket disconnected:", reason);
+      sockLog("❌ Socket disconnected:", reason);
       this.handleReconnect();
     });
 
@@ -124,7 +131,7 @@ class SocketManager {
       if (isTransportError) {
         // Transport errors are expected - Socket.IO will automatically fallback to polling
         // Don't log as error, just as debug info
-        console.log(
+        sockLog(
           "🔄 WebSocket transport failed, Socket.IO will fallback to polling..."
         );
         return; // Let Socket.IO handle the fallback automatically
@@ -143,8 +150,8 @@ class SocketManager {
         error?.code === "FORBIDDEN";
 
       if (isAuthError) {
-        console.log("🔐 Authentication required - please log in to connect");
-        console.log("💡 App will continue without real-time features");
+        sockLog("🔐 Authentication required - please log in to connect");
+        sockLog("💡 App will continue without real-time features");
         this.reconnectAttempts = this.maxReconnectAttempts;
         this.socket?.disconnect();
         this.socket = null;
@@ -152,7 +159,7 @@ class SocketManager {
       }
 
       // Log other connection errors (non-authentication, non-transport)
-      console.warn("⚠️ Socket connection error:", error?.message || "Unknown error");
+      sockWarn("⚠️ Socket connection error:", error?.message || "Unknown error");
 
       // Don't reconnect on network errors that are likely permanent
       if (
@@ -161,10 +168,10 @@ class SocketManager {
         error?.message?.includes("ECONNREFUSED") ||
         (error as any)?.code === "NETWORK_ERROR"
       ) {
-        console.log(
+        sockLog(
           "🌐 Network error detected, stopping reconnection attempts"
         );
-        console.log("⚠️ App will continue without real-time features");
+        sockLog("⚠️ App will continue without real-time features");
         this.reconnectAttempts = this.maxReconnectAttempts;
         this.socket?.disconnect();
         this.socket = null;
@@ -177,12 +184,12 @@ class SocketManager {
 
     // Real-time content events
     this.socket.on("content-reaction", (data) => {
-      console.log("Real-time like received:", data);
+      sockLog("Real-time like received:", data);
       this.handleContentReaction(data);
     });
 
     this.socket.on("content-comment", (data) => {
-      console.log("Real-time comment received:", data);
+      sockLog("Real-time comment received:", data);
       this.handleContentComment(data);
     });
 
@@ -198,12 +205,12 @@ class SocketManager {
     );
 
     this.socket.on("count-update", (data) => {
-      console.log("Real-time count update:", data);
+      sockLog("Real-time count update:", data);
       this.handleCountUpdate(data);
     });
 
     this.socket.on("viewer-count-update", (data) => {
-      console.log("Real-time viewer count:", data);
+      sockLog("Real-time viewer count:", data);
       this.handleViewerCountUpdate(data);
     });
 
@@ -237,7 +244,7 @@ class SocketManager {
     // New production-grade view updates
     this.socket.on("view-updated", (data: any) => {
       try {
-        console.log("Real-time view updated:", data);
+        sockLog("Real-time view updated:", data);
         const { useInteractionStore } = require("../store/useInteractionStore");
         const store = useInteractionStore.getState();
         if (data?.contentId && typeof data?.viewCount === "number") {
@@ -252,12 +259,12 @@ class SocketManager {
 
     // Notifications
     this.socket.on("new-like-notification", (data: any) => {
-      console.log("New like notification:", data);
+      sockLog("New like notification:", data);
       this.handleLikeNotification(data);
     });
 
     this.socket.on("new-comment-notification", (data: any) => {
-      console.log("New comment notification:", data);
+      sockLog("New comment notification:", data);
       this.handleCommentNotification(data);
     });
 
@@ -276,7 +283,7 @@ class SocketManager {
       ) {
         // Only log as warning in development, suppress in production
         if (__DEV__) {
-          console.warn("⚠️ Socket reaction error (handled by fallback):", errorMessage);
+          sockWarn("⚠️ Socket reaction error (handled by fallback):", errorMessage);
         }
         return;
       }
@@ -298,7 +305,7 @@ class SocketManager {
         errorMessage.includes("not found")
       ) {
         if (__DEV__) {
-          console.warn("⚠️ Socket reaction error (handled by HTTP fallback):", errorMessage);
+          sockWarn("⚠️ Socket reaction error (handled by HTTP fallback):", errorMessage);
         }
         return;
       }
@@ -314,7 +321,7 @@ class SocketManager {
       const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
 
       setTimeout(() => {
-        console.log(
+        sockLog(
           `🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
         );
         this.connect();
@@ -326,14 +333,14 @@ class SocketManager {
   joinContentRoom(contentId: string, contentType: string): void {
     if (this.socket) {
       this.socket.emit("join-content", { contentId, contentType });
-      console.log(`📺 Joined content room: ${contentType}:${contentId}`);
+      sockLog(`📺 Joined content room: ${contentType}:${contentId}`);
     }
   }
 
   leaveContentRoom(contentId: string, contentType: string): void {
     if (this.socket) {
       this.socket.emit("leave-content", { contentId, contentType });
-      console.log(`📺 Left content room: ${contentType}:${contentId}`);
+      sockLog(`📺 Left content room: ${contentType}:${contentId}`);
     }
   }
 
@@ -349,17 +356,17 @@ class SocketManager {
           actionType: "like",
         });
         if (__DEV__) {
-          console.log(`❤️ Sent like via socket: ${contentType}:${contentId}`);
+          sockLog(`❤️ Sent like via socket: ${contentType}:${contentId}`);
         }
       } catch (error) {
         // Don't throw - this is a non-blocking real-time update
         // The HTTP API call will handle the like, so we can safely ignore socket errors
         if (__DEV__) {
-          console.warn("⚠️ Socket like send failed (HTTP will handle):", error);
+          sockWarn("⚠️ Socket like send failed (HTTP will handle):", error);
         }
       }
     } else if (__DEV__) {
-      console.log("📡 Socket not connected, skipping real-time like (HTTP will handle)");
+      sockLog("📡 Socket not connected, skipping real-time like (HTTP will handle)");
     }
   }
 
@@ -376,7 +383,7 @@ class SocketManager {
         content: comment,
         parentCommentId,
       });
-      console.log(`💬 Sent comment: ${contentType}:${contentId}`);
+      sockLog(`💬 Sent comment: ${contentType}:${contentId}`);
     }
   }
 
@@ -462,7 +469,7 @@ class SocketManager {
   }
 
   public handleLikeNotification(data: any): void {
-    console.log("Handling like notification:", data);
+    sockLog("Handling like notification:", data);
 
     // Create notification using NotificationService
     const notificationService = NotificationService.getInstance();
@@ -477,7 +484,7 @@ class SocketManager {
   }
 
   public handleCommentNotification(data: any): void {
-    console.log("Handling comment notification:", data);
+    sockLog("Handling comment notification:", data);
 
     // Create notification using NotificationService
     const notificationService = NotificationService.getInstance();
@@ -528,7 +535,7 @@ class SocketManager {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
-      console.log("🔌 Disconnected from real-time server");
+      sockLog("🔌 Disconnected from real-time server");
     }
   }
 
@@ -539,13 +546,13 @@ class SocketManager {
   // Method to refresh authentication token
   async refreshAuthToken(newToken: string): Promise<void> {
     if (!newToken || newToken.trim() === "") {
-      console.warn("⚠️ SocketManager: Invalid new token provided");
+      sockWarn("⚠️ SocketManager: Invalid new token provided");
       return;
     }
 
     // Validate token format
     if (!TokenUtils.isValidJWTFormat(newToken)) {
-      console.warn("⚠️ SocketManager: Invalid token format");
+      sockWarn("⚠️ SocketManager: Invalid token format");
       return;
     }
 
@@ -553,7 +560,7 @@ class SocketManager {
 
     // If socket exists, disconnect and reconnect with new token
     if (this.socket) {
-      console.log("🔄 SocketManager: Refreshing connection with new token");
+      sockLog("🔄 SocketManager: Refreshing connection with new token");
       this.socket.disconnect();
       this.socket = null;
       this.reconnectAttempts = 0;

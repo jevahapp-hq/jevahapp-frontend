@@ -1,6 +1,6 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Dimensions, View } from "react-native";
-import { useRouter } from "expo-router";
 import { useGlobalAudioPlayerStore } from "../../store/useGlobalAudioPlayerStore";
 import { ArtistsLaneBanner } from "./components/ArtistsLaneBanner";
 import { MusicDiscoverShelf } from "./components/MusicDiscoverShelf";
@@ -13,8 +13,8 @@ import { useMusicPlayPress } from "./hooks/useMusicPlayPress";
 import { useOpenArtistProfile } from "./hooks/useOpenArtistProfile";
 import { useSongModal } from "./hooks/useSongModal";
 import {
-  MusicLaneTabs,
-  type MusicLane,
+    MusicLaneTabs,
+    type MusicLane,
 } from "./MusicLaneTabs";
 import type { DisplayMode } from "./types";
 import { useMusicCatalog } from "./useMusicCatalog";
@@ -35,6 +35,7 @@ export default function Music() {
     categories,
     loadSongs,
     loadMoreArtists,
+    usingMusicForYou,
   } = useMusicCatalog(musicLane);
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("list");
@@ -91,7 +92,7 @@ export default function Music() {
       {musicLane === "copyright-free" ? (
         <MusicDiscoverShelf screenWidth={SCREEN_WIDTH} />
       ) : (
-        <ArtistsLaneBanner />
+        <ArtistsLaneBanner personalized={usingMusicForYou} />
       )}
 
       {showEmpty ? (
@@ -129,7 +130,7 @@ export default function Music() {
       />
 
       <MusicSongModal
-        visible={showSongModal}
+          visible={showSongModal}
         selectedSong={selectedSong}
         songModalInitialAction={songModalInitialAction}
         currentTrack={currentTrack}
@@ -139,7 +140,7 @@ export default function Music() {
         globalPosition={globalPosition}
         globalIsMuted={globalIsMuted}
         onClose={closeSongModal}
-        onPlay={handlePlayPress}
+          onPlay={handlePlayPress}
         onTogglePlayPause={togglePlayPause}
       />
     </View>

@@ -1,19 +1,17 @@
 /**
- * Media file + cover photo pickers with video preview
+ * Media (left) + cover thumbnail (right) — always side-by-side flex.
+ * Video preview is mounted only when a video is selected (keeps Upload TTFP light).
  */
 
 import { Feather } from "@expo/vector-icons";
-import { useVideoPlayer, VideoView } from "expo-video";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import {
-  getMediaPickerSize,
   getResponsiveFontSize,
   getResponsiveSize,
   getResponsiveSpacing,
-  getThumbnailSize,
-  isSmallScreen,
 } from "../../../../utils/responsive";
 import type { MediaFile } from "../types";
+import { MediaVideoPreview } from "./MediaVideoPreview";
 
 type MediaPickersProps = {
   file: MediaFile | null;
@@ -26,120 +24,102 @@ type MediaPickersProps = {
 export function MediaPickers({
   file,
   thumbnail,
-  orientation,
   onPickMedia,
   onPickThumbnail,
 }: MediaPickersProps) {
-  const previewVideoPlayer = useVideoPlayer(
-    file && file.mimeType?.startsWith("video") ? file.uri : "",
-    (player) => {
-      player.loop = false;
-      player.muted = false;
-    }
-  );
-
-  const mediaSize = getMediaPickerSize();
-  const thumbnailSize = getThumbnailSize();
-  const containerPadding = getResponsiveSpacing(16, 20, 24, 32);
-
-  const mediaContent = (
-    <TouchableOpacity
-      onPress={onPickMedia}
-      className={`bg-gray-200 rounded-xl items-center justify-center ${
-        isSmallScreen || orientation === "landscape" ? "mb-4" : "mr-3"
-      }`}
-      style={{
-        width: mediaSize.width,
-        height: mediaSize.height,
-      }}
-      activeOpacity={0.8}
-    >
-      {!file ? (
-        <View className="items-center">
-          <Feather
-            name="plus"
-            size={getResponsiveSize(30, 35, 40)}
-            color="gray"
-          />
-          <Text
-            className="text-gray-600 text-center mt-2"
-            style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
-          >
-            Select Media
-          </Text>
-        </View>
-      ) : file.mimeType.startsWith("video") && previewVideoPlayer ? (
-        <VideoView
-          player={previewVideoPlayer}
-          contentFit="cover"
-          nativeControls={true}
-          allowsFullscreen={false}
-          style={{ width: "100%", height: "100%", borderRadius: 12 }}
-        />
-      ) : (
-        <Text
-          className="px-4 text-gray-700 text-center"
-          style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
-        >
-          {file.name}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-
-  const thumbnailContent = (
-    <TouchableOpacity
-      onPress={onPickThumbnail}
-      className="bg-gray-100 rounded-lg items-center justify-center border-2 border-dashed border-gray-300"
-      style={{
-        width: thumbnailSize.width,
-        height: thumbnailSize.height,
-      }}
-      activeOpacity={0.8}
-    >
-      {!thumbnail ? (
-        <View className="items-center">
-          <Feather
-            name="image"
-            size={getResponsiveSize(25, 30, 35)}
-            color="gray"
-          />
-          <Text
-            className="text-gray-600 text-center mt-2"
-            style={{ fontSize: getResponsiveFontSize(10, 11, 12) }}
-          >
-            Select{"\n"}Cover Photo
-          </Text>
-        </View>
-      ) : (
-        <Image
-          source={{ uri: thumbnail.uri || undefined }}
-          style={{ width: "100%", height: "100%", borderRadius: 8 }}
-          resizeMode="cover"
-        />
-      )}
-    </TouchableOpacity>
-  );
-
-  if (isSmallScreen || orientation === "landscape") {
-    return (
-      <View
-        className="items-center"
-        style={{ paddingHorizontal: containerPadding }}
-      >
-        {mediaContent}
-        {thumbnailContent}
-      </View>
-    );
-  }
+  const pad = getResponsiveSpacing(16, 20, 24, 32);
+  const gap = getResponsiveSpacing(12, 16, 20, 24);
+  const iconSize = getResponsiveSize(26, 30, 34);
+  const labelSize = getResponsiveFontSize(11, 12, 13);
+  const isVideo = !!file?.mimeType?.startsWith("video");
 
   return (
-    <View
-      className="flex-row justify-center items-start"
-      style={{ paddingHorizontal: containerPadding }}
-    >
-      {mediaContent}
-      {thumbnailContent}
+    <View style={[styles.row, { paddingHorizontal: pad, gap }]}>
+      <TouchableOpacity
+        onPress={onPickMedia}
+        style={styles.tile}
+        activeOpacity={0.8}
+        accessibilityLabel="Select media"
+      >
+        {!file ? (
+          <View style={styles.placeholder}>
+            <Feather name="plus" size={iconSize} color="#6B7280" />
+            <Text style={[styles.label, { fontSize: labelSize }]}>
+              Select Media
+            </Text>
+          </View>
+        ) : isVideo ? (
+          <MediaVideoPreview uri={file.uri} />
+        ) : (
+          <Image
+            source={{ uri: file.uri }}
+            style={styles.fill}
+            resizeMode="cover"
+          />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onPickThumbnail}
+        style={[styles.tile, styles.thumbTile]}
+        activeOpacity={0.8}
+        accessibilityLabel="Select cover photo"
+      >
+        {!thumbnail ? (
+          <View style={styles.placeholder}>
+            <Feather name="image" size={iconSize} color="#6B7280" />
+            <Text style={[styles.label, { fontSize: labelSize }]}>
+              Cover Photo
+            </Text>
+          </View>
+        ) : (
+          <Image
+            source={{ uri: thumbnail.uri || undefined }}
+            style={styles.fill}
+            resizeMode="cover"
+          />
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-between",
+  },
+  tile: {
+    flex: 1,
+    aspectRatio: 1,
+    maxWidth: "50%",
+    backgroundColor: "#E5E7EB",
+    borderRadius: 16,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbTile: {
+    backgroundColor: "#F3F4F6",
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#D1D5DB",
+  },
+  placeholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  label: {
+    color: "#4B5563",
+    textAlign: "center",
+    marginTop: 8,
+    fontFamily: "Rubik-SemiBold",
+  },
+  fill: {
+    width: "100%",
+    height: "100%",
+  },
+});

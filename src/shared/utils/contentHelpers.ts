@@ -4,6 +4,7 @@
  */
 
 import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
+import { enrichContentWithAuthor, resolveAuthorName } from "../author";
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
 import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
 import { ContentType, MediaItem } from "../types";
@@ -20,20 +21,30 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
 
   try {
     // Enrich content with cached user data (fullname and avatar)
-    const enrichedItem = enrichContentWithUserData(item);
+    const enrichedItem = enrichContentWithAuthor(
+      enrichContentWithUserData(item)
+    );
+
+    const resolvedName = resolveAuthorName(enrichedItem, "");
 
     return {
       _id: enrichedItem._id || enrichedItem.id,
-      contentType: enrichedItem.contentType || "media",
+      contentType: (() => {
+        const raw = String(enrichedItem.contentType || "media").toLowerCase();
+        if (enrichedItem.isGif === true || raw === "gif" || raw === "gifs") {
+          return "gif";
+        }
+        return enrichedItem.contentType || "media";
+      })(),
       fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
       title: enrichedItem.title || "Untitled",
-      speaker: enrichedItem.speaker || enrichedItem.author?.firstName || enrichedItem.uploadedBy?.firstName,
+      speaker: resolvedName || undefined,
       // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string
       uploadedBy: typeof enrichedItem.uploadedBy === "object" && enrichedItem.uploadedBy !== null
         ? enrichedItem.uploadedBy  // Preserve the full object with all user data
         : enrichedItem.uploadedBy,  // Keep as string if it's a string ID
       description: enrichedItem.description || enrichedItem.title || "",
-      speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar,
+      speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar || enrichedItem.authorInfo?.avatar,
       views: enrichedItem.views || enrichedItem.viewCount || enrichedItem.totalViews || 0,
       sheared: enrichedItem.sheared || enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
       saved: enrichedItem.saved || enrichedItem.saves || 0,
@@ -112,7 +123,13 @@ export const filterContentByType = (
 
     // Handle aliases
     if (filterType === "video" || filterType === "videos") {
-      return itemType === "video" || itemType === "videos" || itemType === "sermon";
+      return (
+        itemType === "video" ||
+        itemType === "videos" ||
+        itemType === "sermon" ||
+        itemType === "gif" ||
+        itemType === "gifs"
+      );
     }
     if (filterType === "audio" || filterType === "music") {
       return itemType === "audio" || itemType === "music";
@@ -148,7 +165,7 @@ export const categorizeContent = (items: MediaItem[]) => {
   items.forEach((item) => {
     const contentType = (item.contentType || "").toLowerCase();
 
-    if (contentType === "video" || contentType === "videos") {
+    if (contentType === "video" || contentType === "videos" || contentType === "gif" || contentType === "gifs") {
       categorized.videos.push(item);
     } else if (contentType === "audio" || contentType === "music") {
       categorized.music.push(item);

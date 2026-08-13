@@ -27,7 +27,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onDelete,
   checkIfDownloaded,
 }) => {
-  const { showCommentModal } = useCommentModal();
+  const { showCommentModal, isVisible: commentsFocused } = useCommentModal();
   const contentId = ebook._id || `ebook-${index}`;
   const coverAnchorRef = useRef<View>(null);
 
@@ -43,28 +43,9 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const openEbook = useEbookOpen(ebook, chrome.setShowDetailsModal);
 
   const openComments = useCallback(() => {
-    const finish = (
-      anchor: { mediaBottomY: number; mediaHeight?: number } | null
-    ) => {
-      if (onComment) onComment(ebook, anchor);
-      else
-        showCommentModal([], String(contentId), "media", undefined, null, anchor);
-    };
-
-    const node = coverAnchorRef.current;
-    if (node && typeof (node as any).measureInWindow === "function") {
-      (node as any).measureInWindow(
-        (_x: number, y: number, _w: number, h: number) => {
-          const mediaBottomY =
-            Number.isFinite(y) && Number.isFinite(h) && h > 0 ? y + h : undefined;
-          finish(
-            mediaBottomY != null ? { mediaBottomY, mediaHeight: h } : null
-          );
-        }
-      );
-      return;
-    }
-    finish(null);
+    // Open immediately — don't wait on measureInWindow (was making comments feel laggy)
+    if (onComment) onComment(ebook, null);
+    else showCommentModal([], String(contentId), "media", undefined, null, null);
   }, [contentId, ebook, onComment, showCommentModal]);
 
   return (
@@ -73,28 +54,28 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         <EbookCardCoverArea ebook={ebook} onPress={openEbook} />
       </View>
 
-      <MediaCardFooter
-        item={ebook}
-        contentId={contentId}
-        viewCount={stats.viewCount}
-        userLikeState={stats.userLikeState}
-        likeCount={stats.likeCount}
-        likeBurstKey={chrome.likeBurstKey}
-        setLikeBurstKey={chrome.setLikeBurstKey}
-        onLike={() => onLike(ebook)}
-        onComment={openComments}
-        commentCount={stats.commentCount}
-        userSaveState={stats.userSaveState}
-        saveCount={stats.saveCount}
-        onSave={() => onSave(ebook)}
-        onShare={() => onShare(ebook)}
-        isLoadingStats={stats.isLoadingStats}
-        openModal={chrome.openModal}
-        likeColor="#FF1744"
-        showModerationBadge
-        footerClassName="flex-row items-center justify-between mt-1 px-2"
-        menuStyle={{ marginRight: 8 }}
-      />
+      {!commentsFocused ? (
+        <MediaCardFooter
+          item={ebook}
+          contentId={contentId}
+          viewCount={stats.viewCount}
+          userLikeState={stats.userLikeState}
+          likeCount={stats.likeCount}
+          onLike={() => onLike(ebook)}
+          onComment={openComments}
+          commentCount={stats.commentCount}
+          userSaveState={stats.userSaveState}
+          saveCount={stats.saveCount}
+          onSave={() => onSave(ebook)}
+          onShare={() => onShare(ebook)}
+          isLoadingStats={stats.isLoadingStats}
+          openModal={chrome.openModal}
+          likeColor="#FF1744"
+          showModerationBadge
+          footerClassName="flex-row items-center justify-between mt-1 px-2"
+          menuStyle={{ marginRight: 8 }}
+        />
+      ) : null}
 
       <MediaCardModals
         item={ebook}

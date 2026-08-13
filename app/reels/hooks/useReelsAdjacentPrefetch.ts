@@ -1,9 +1,11 @@
 /**
  * Prefetch next 1–2 Reels video URLs around the focused index.
+ * Lite: hard cap ahead=1 (disk/network warm, not extra players).
  */
 import { useEffect, useRef } from "react";
 import { detectNetworkQuality } from "../../utils/videoOptimization";
 import { PERFORMANCE_CONFIG } from "../../../src/shared/config/performance";
+import { getLitePrefetchAhead } from "../../../src/shared/lite/liteProfile";
 import {
   getBestVideoUrl,
   getVideoUrlFromMedia,
@@ -26,7 +28,8 @@ export function useReelsAdjacentPrefetch(options: {
     let cancelled = false;
 
     const run = async () => {
-      let ahead = options.ahead;
+      const liteAhead = getLitePrefetchAhead();
+      let ahead = options.ahead ?? liteAhead;
       if (ahead === undefined) {
         try {
           const quality = await detectNetworkQuality();

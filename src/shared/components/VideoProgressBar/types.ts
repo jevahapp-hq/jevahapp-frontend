@@ -47,6 +47,11 @@ export interface ProgressBarProps {
   showControls?: boolean;
   config?: Partial<ProgressBarConfig>;
   debug?: boolean;
+  /** Distance from player bottom (default 12). Ignored when `top` is set. */
+  bottomOffset?: number;
+  /** Pin from player top instead of bottom (use while comment sheet covers the bottom). */
+  top?: number;
+  style?: any;
 }
 
 export interface ProgressBarState {

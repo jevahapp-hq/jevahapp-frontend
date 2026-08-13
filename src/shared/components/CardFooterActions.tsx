@@ -1,10 +1,12 @@
+/**
+ * Engagement icons on one line — tight, even gaps; leaves room for trailing ⋮.
+ */
 import React from "react";
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { AnimatedButton } from "./AnimatedButton";
 import { CommentIcon } from "./CommentIcon";
-import LikeBurst from "./LikeBurst";
-import LikeButton from "./LikeButton";
+import { LikeHeartButton } from "./like";
 import SaveButton from "./SaveButton";
 import { CardFooterSkeleton } from "./Skeleton/CardFooterSkeleton";
 import { formatCount } from "../utils/formatCount";
@@ -14,7 +16,6 @@ type Props = {
   liked: boolean;
   likeCount: number;
   onLike: () => void;
-  likeBurstKey?: number;
   likeColor?: string;
   commentCount: number;
   onComment: () => void;
@@ -23,208 +24,149 @@ type Props = {
   onSave: () => void;
   onShare: () => void;
   commentColor?: string;
-  // New props for enhanced interaction components
   contentType?: string;
   contentId?: string;
   useEnhancedComponents?: boolean;
-  // Loading state for skeleton
   isLoading?: boolean;
 };
+
+const IDLE = "#98A2B3";
+const LIKED = "#D22A2A";
+const SAVED = "#FEA74E";
 
 function CardFooterActions({
   viewCount,
   liked,
   likeCount,
   onLike,
-  likeBurstKey = 0,
-  likeColor = "#D22A2A",
+  likeColor = LIKED,
   commentCount,
   onComment,
   saved,
   saveCount,
   onSave,
   onShare,
-  commentColor = "#98A2B3",
   contentType = "media",
   contentId,
   useEnhancedComponents = false,
   isLoading = false,
 }: Props) {
-  // ✅ Show skeleton for ALL icons when loading to prevent staggered appearance
-  // This ensures all icons appear together, not just comment and save icons first
   if (isLoading) {
     return <CardFooterSkeleton dark={false} />;
   }
 
-  // Use gray color scheme from audio-bible branch instead of green theme color
-  // Base gray color for inactive icons: #98A2B3 (matching audio-bible branch)
-  const baseGrayColor = "#98A2B3";
-  const mediumShade = baseGrayColor; // Gray for default/inactive state
-  // Active state colors from audio-bible branch
-  const likedActiveColor = "#D22A2A"; // Red for liked
-  const savedActiveColor = "#FEA74E"; // Orange for saved
-  const activeShade = likedActiveColor; // For like button active state
-  const darkShade = savedActiveColor; // For save button active state
-
   return (
-    <View className="flex-row items-center pl-4">
-      <View className="flex-row items-center mr-6" pointerEvents="box-none">
-        <MaterialIcons name="visibility" size={24} color={mediumShade} />
-        {viewCount > 0 && (
-          <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{formatCount(viewCount)}</Text>
-        )}
+    <View style={styles.row}>
+      <View style={styles.slot}>
+        <MaterialIcons name="visibility" size={22} color={IDLE} />
+        {viewCount > 0 ? (
+          <Text style={styles.count}>{formatCount(viewCount)}</Text>
+        ) : null}
       </View>
 
-      {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-6" pointerEvents="box-none">
-          <LikeButton
-            contentType={contentType}
-            contentId={contentId}
-            initialLiked={liked}
-            initialLikeCount={likeCount}
-            size={28}
-            color={mediumShade}
-            likedColor={likedActiveColor}
-            showCount={true}
-            onLikeChange={(newLiked, newCount) => {
-              // Trigger like burst animation
-              if (newLiked && !liked) {
-                // You can trigger the burst animation here if needed
-              }
-              onLike();
-            }}
-          />
-          <LikeBurst
-            triggerKey={likeBurstKey}
-            color={likedActiveColor}
-            size={14}
-            style={{ marginLeft: -6, marginTop: -8 }}
-          />
-        </View>
-      ) : (
-        <AnimatedLikeButton
+      <View style={styles.slot}>
+        <LikeHeartButton
           liked={liked}
-          likeColor={likedActiveColor}
           likeCount={likeCount}
-          likeBurstKey={likeBurstKey}
-          onLike={onLike}
-          defaultColor={mediumShade}
-          themeColor={baseGrayColor}
+          onPress={onLike}
+          size={24}
+          idleColor={IDLE}
+          likedColor={likeColor || LIKED}
+          countColor={IDLE}
+          compact
         />
-      )}
+      </View>
 
-      <CommentIcon
-        comments={[]}
-        size={26}
-        color={mediumShade}
-        showCount={true}
-        count={commentCount}
-        layout="horizontal"
-        onPress={onComment}
-        style={{ marginRight: 24 }}
-      />
+      <View style={styles.slot}>
+        <CommentIcon
+          comments={[]}
+          size={22}
+          color={IDLE}
+          showCount
+          count={commentCount}
+          layout="horizontal"
+          onPress={onComment}
+          useAnimatedButton={false}
+          compact
+        />
+      </View>
 
-      {useEnhancedComponents && contentId ? (
-        <View className="flex-row items-center mr-6" pointerEvents="box-none">
+      <View style={styles.slot}>
+        {useEnhancedComponents && contentId ? (
           <SaveButton
             contentId={contentId}
             contentType={contentType}
             initialSaved={saved}
             initialSaveCount={saveCount}
-            size={26}
-            color={mediumShade}
-            savedColor={savedActiveColor}
-            showCount={true}
-            onSaveChange={(newSaved, newCount) => {
-              onSave();
-            }}
+            size={22}
+            color={IDLE}
+            savedColor={SAVED}
+            showCount
+            onSaveChange={() => onSave()}
           />
-        </View>
-      ) : (
-        <TouchableOpacity
-          onPress={onSave}
-          className="flex-row items-center mr-6"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons
-            name={saved ? ("bookmark" as any) : ("bookmark-outline" as any)}
-            size={26}
-            color={saved ? savedActiveColor : mediumShade}
-          />
-          {saveCount > 0 && (
-            <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{formatCount(saveCount)}</Text>
-          )}
-        </TouchableOpacity>
-      )}
+        ) : (
+          <TouchableOpacity
+            onPress={onSave}
+            style={styles.slotInner}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? "Unsave" : "Save"}
+          >
+            <Ionicons
+              name={saved ? "bookmark" : "bookmark-outline"}
+              size={22}
+              color={saved ? SAVED : IDLE}
+            />
+            {saveCount > 0 ? (
+              <Text style={styles.count}>{formatCount(saveCount)}</Text>
+            ) : null}
+          </TouchableOpacity>
+        )}
+      </View>
 
-      <AnimatedShareButton onShare={onShare} />
-      <View style={{ width: 2 }} />
+      <View style={styles.slot}>
+        <AnimatedButton
+          onPress={onShare}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          style={styles.shareBtn}
+        >
+          <Feather name="send" size={22} color={IDLE} />
+        </AnimatedButton>
+      </View>
     </View>
   );
 }
 
 export default React.memo(CardFooterActions);
 
-// Optimized Like Button with instant scale feedback
-function AnimatedLikeButton({
-  liked,
-  likeColor,
-  likeCount,
-  likeBurstKey,
-  onLike,
-  defaultColor,
-  themeColor: passedThemeColor,
-}: {
-  liked: boolean;
-  likeColor: string;
-  likeCount: number;
-  likeBurstKey: number;
-  onLike: () => void;
-  defaultColor?: string;
-  themeColor?: string;
-}) {
-  // Use gray as base instead of green theme color (matching audio-bible branch)
-  const baseGrayColor = "#98A2B3";
-  const mediumShade = defaultColor || baseGrayColor;
-  // Use the passed likeColor (should be #D22A2A) or fallback to red
-  const activeColor = likeColor || "#D22A2A";
-  
-  return (
-    <AnimatedButton
-      className="flex-row items-center mr-6"
-      onPress={onLike}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-    >
-      <MaterialIcons
-        name={liked ? ("favorite" as any) : ("favorite-border" as any)}
-        size={28}
-        color={liked ? activeColor : mediumShade}
-      />
-      <LikeBurst
-        triggerKey={likeBurstKey}
-        color={activeColor}
-        size={14}
-        style={{ marginLeft: -6, marginTop: -8 }}
-      />
-      {likeCount > 0 && (
-        <Text className="text-[10px] ml-1" style={{ color: mediumShade }}>{formatCount(likeCount)}</Text>
-      )}
-    </AnimatedButton>
-  );
-}
-
-// Optimized Share Button with instant scale feedback
-function AnimatedShareButton({ onShare }: { onShare: () => void }) {
-  // Use gray color instead of green theme color (matching audio-bible branch)
-  const mediumShade = "#98A2B3";
-  
-  return (
-    <AnimatedButton
-      onPress={onShare}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      className="mr-2"
-    >
-      <Feather name="send" size={26} color={mediumShade} />
-    </AnimatedButton>
-  );
-}
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    gap: 12,
+    paddingVertical: 2,
+    paddingLeft: 0,
+  },
+  slot: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: 2,
+  },
+  slotInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  count: {
+    fontSize: 10,
+    color: IDLE,
+    marginLeft: 3,
+    fontFamily: "Rubik-SemiBold",
+  },
+  shareBtn: {
+    marginRight: 0,
+    padding: 2,
+  },
+});

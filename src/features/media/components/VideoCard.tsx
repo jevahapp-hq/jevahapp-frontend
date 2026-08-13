@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Image, TouchableOpacity, View } from "react-native";
 
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import { VideoCardProps } from "../../../shared/types";
 import { isAudioSermon, isValidUri } from "../../../shared/utils";
 import {
@@ -65,6 +66,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const isMuted = mutedVideos[key] ?? false;
   const isAudioSermonValue = isAudioSermon(video);
   const isFocused = currentlyVisibleVideo === key;
+  const { isVisible: commentsFocused, updateCommentMediaLayout } =
+    useCommentModal();
 
   const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
   const videoUrl =
@@ -99,26 +102,64 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const posterUri = useMemo(() => resolvePosterUri(video), [video]);
   const playerAnchorRef = useRef<View>(null);
 
+  const measureAnchor = useCallback(
+    (
+      onDone: (
+        anchor: { mediaBottomY: number; mediaHeight: number } | null
+      ) => void
+    ) => {
+      const node = playerAnchorRef.current;
+      if (node && typeof (node as any).measureInWindow === "function") {
+        (node as any).measureInWindow(
+          (_x: number, y: number, _w: number, h: number) => {
+            if (Number.isFinite(y) && Number.isFinite(h) && h > 0) {
+              onDone({ mediaBottomY: y + h, mediaHeight: h });
+              return;
+            }
+            onDone(null);
+          }
+        );
+        return;
+      }
+      onDone(null);
+    },
+    []
+  );
+
   const openComments = useCallback(() => {
-    const node = playerAnchorRef.current;
-    if (node && typeof (node as any).measureInWindow === "function") {
-      (node as any).measureInWindow(
-        (_x: number, y: number, _w: number, h: number) => {
-          const mediaBottomY =
-            Number.isFinite(y) && Number.isFinite(h) && h > 0 ? y + h : undefined;
-          onComment(
-            key,
-            video,
-            mediaBottomY != null
-              ? { mediaBottomY, mediaHeight: h }
-              : null
-          );
-        }
-      );
+    // Open immediately — never block the sheet on layout measure.
+    onComment(key, video, null);
+    requestAnimationFrame(() => {
+      measureAnchor((anchor) => {
+        if (anchor) updateCommentMediaLayout(anchor);
+      });
+    });
+  }, [key, measureAnchor, onComment, updateCommentMediaLayout, video]);
+
+  const didRedockRef = useRef(false);
+
+  // One remasure after chrome collapses — avoid layout feedback loops
+  useEffect(() => {
+    if (!commentsFocused || !isFocused) {
+      didRedockRef.current = false;
       return;
     }
-    onComment(key, video, null);
-  }, [key, onComment, video]);
+    if (didRedockRef.current) return;
+    didRedockRef.current = true;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        measureAnchor((anchor) => {
+          if (!cancelled) updateCommentMediaLayout(anchor);
+        });
+      });
+    }, 80);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [commentsFocused, isFocused, measureAnchor, updateCommentMediaLayout]);
 
   useEffect(() => {
     if (!__DEV__ || !shouldRenderPlayer || index > 2) return;
@@ -126,12 +167,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       id: contentId,
       duration: (video as any).duration,
       processingStatus: (video as any).processingStatus,
-      fileUrl: typeof (video as any).fileUrl === "string"
-        ? (video as any).fileUrl.slice(0, 80)
-        : (video as any).fileUrl,
-      hlsUrl: typeof (video as any).hlsUrl === "string"
-        ? (video as any).hlsUrl.slice(0, 80)
-        : (video as any).hlsUrl,
+      fileUrl:
+        typeof (video as any).fileUrl === "string"
+          ? (video as any).fileUrl.slice(0, 80)
+          : (video as any).fileUrl,
+      hlsUrl:
+        typeof (video as any).hlsUrl === "string"
+          ? (video as any).hlsUrl.slice(0, 80)
+          : (video as any).hlsUrl,
     });
   }, [contentId, video, shouldRenderPlayer, index]);
 
@@ -145,7 +188,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       }
     >
       {shouldRenderPlayer ? (
-        <View ref={playerAnchorRef} collapsable={false}>
+        <View
+          ref={playerAnchorRef}
+          collapsable={false}
+          style={
+            commentsFocused && isFocused
+              ? { zIndex: 20, elevation: 20 }
+              : undefined
+          }
+        >
           <VideoCardPlayerArea
             video={video}
             contentKey={key}
@@ -167,6 +218,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             getUserAvatarFromContent={getUserAvatarFromContent}
             onLayout={onLayout}
             onForceActive={() => {}}
+            commentsFocused={commentsFocused && isFocused}
           />
         </View>
       ) : (
@@ -176,47 +228,45 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             onPress={() => onVideoTap(key, video, index)}
             className="w-full h-[400px] overflow-hidden relative bg-black"
           >
-          {posterUri ? (
-            <Image
-              source={{ uri: posterUri }}
-              style={{ width: "100%", height: "100%" }}
-              resizeMode="cover"
-            />
-          ) : null}
+            {posterUri ? (
+              <Image
+                source={{ uri: posterUri }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+              />
+            ) : null}
           </TouchableOpacity>
         </View>
       )}
 
-      <MediaCardFooter
-        item={video}
-        contentId={contentId}
-        viewCount={viewCount}
-        userLikeState={userLikeState}
-        likeCount={likeCount}
-        likeBurstKey={chrome.likeBurstKey}
-        setLikeBurstKey={chrome.setLikeBurstKey}
-        onLike={() => onLike(key, video)}
-        onComment={openComments}
-        commentCount={commentCount}
-        userSaveState={userSaveState}
-        saveCount={saveCount}
-        onSave={() => onSave(modalKey, video)}
-        onShare={() => onShare(modalKey, video)}
-        isLoadingStats={isLoadingStats}
-        openModal={() => {
-          chrome.openModal();
-          onModalToggle?.(modalKey);
-        }}
-        getUserAvatarFromContent={getUserAvatarFromContent}
-        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-        getTimeAgo={getTimeAgo}
-      />
+      {!commentsFocused ? (
+        <MediaCardFooter
+          item={video}
+          contentId={contentId}
+          viewCount={viewCount}
+          userLikeState={userLikeState}
+          likeCount={likeCount}
+          onLike={() => onLike(key, video)}
+          onComment={openComments}
+          commentCount={commentCount}
+          userSaveState={userSaveState}
+          saveCount={saveCount}
+          onSave={() => onSave(modalKey, video)}
+          onShare={() => onShare(modalKey, video)}
+          isLoadingStats={isLoadingStats}
+          openModal={() => {
+            chrome.openModal();
+            onModalToggle?.(modalKey);
+          }}
+          getUserAvatarFromContent={getUserAvatarFromContent}
+          getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+          getTimeAgo={getTimeAgo}
+        />
+      ) : null}
 
       <MediaCardModals
         item={video}
-        isModalVisible={
-          chrome.isModalVisible || modalVisible === modalKey
-        }
+        isModalVisible={chrome.isModalVisible || modalVisible === modalKey}
         closeModal={chrome.closeModal}
         setShowDetailsModal={chrome.setShowDetailsModal}
         onSave={() => onSave(modalKey, video)}
@@ -237,4 +287,35 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   );
 };
 
-export default memo(VideoCard);
+function areVideoCardPropsEqual(
+  prev: VideoCardProps,
+  next: VideoCardProps
+): boolean {
+  if (prev.video._id !== next.video._id) return false;
+  if (prev.index !== next.index) return false;
+  if (prev.modalKey !== next.modalKey) return false;
+  if (prev.shouldRenderPlayer !== next.shouldRenderPlayer) return false;
+  if (prev.videoVolume !== next.videoVolume) return false;
+
+  const prevKey = prev.getContentKey(prev.video);
+  const nextKey = next.getContentKey(next.video);
+  if (prevKey !== nextKey) return false;
+
+  const prevId = prev.video._id || prevKey;
+  const nextId = next.video._id || nextKey;
+  const prevStats = prev.contentStats[prevId];
+  const nextStats = next.contentStats[nextId];
+
+  return (
+    prevStats === nextStats &&
+    prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
+    (prev.currentlyVisibleVideo === prevKey) ===
+      (next.currentlyVisibleVideo === nextKey) &&
+    (prev.modalVisible === prev.modalKey) ===
+      (next.modalVisible === next.modalKey) &&
+    prev.userFavorites[prevKey] === next.userFavorites[nextKey] &&
+    prev.globalFavoriteCounts[prevKey] === next.globalFavoriteCounts[nextKey]
+  );
+}
+
+export default memo(VideoCard, areVideoCardPropsEqual);

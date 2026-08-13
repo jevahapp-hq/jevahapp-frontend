@@ -1,19 +1,22 @@
-import {
-  AntDesign,
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
-import { Platform, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useState } from "react";
 import {
-  getBottomNavHeight,
+  InteractionManager,
+  Platform,
+  Pressable,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets, initialWindowMetrics as safeAreaInitialMetrics } from "react-native-safe-area-context";
+import { playNavTapSound } from "../../src/shared/utils/uiSounds";
+import {
   getFabSize,
   getIconSize,
   getResponsiveBorderRadius,
   getResponsiveShadow,
+  getResponsiveSize,
   getResponsiveSpacing,
   getResponsiveTextStyle,
 } from "../../utils/responsive";
@@ -21,277 +24,200 @@ import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import { useFastPerformance } from "../utils/fastPerformance";
+import {
+  prefetchCreateFlows,
+  prefetchGoLiveScreen,
+  prefetchUploadScreen,
+} from "../utils/prefetchUploadScreen";
+import { FabCreateActions } from "./FabCreateActions";
 
-// Bottom tab config
+/** Tab row height only — system inset is applied separately (avoids double-count + jump). */
+const NAV_CONTENT_HEIGHT = getResponsiveSize(80, 84, 88, 96);
+/** Last-known Android nav inset fallback when metrics briefly report 0. */
+const ANDROID_NAV_FALLBACK = 24;
+
 interface BottomNavProps {
   selectedTab: string;
   setSelectedTab: (tab: string) => void;
 }
 
+/** Single icon family (Ionicons) — already loaded in root useFonts. */
 const tabConfig: Record<
   string,
-  { IconComponent: React.ComponentType<any>; name: string; label: string }
+  { name: keyof typeof Ionicons.glyphMap; label: string }
 > = {
-  Home: { IconComponent: AntDesign, name: "home", label: "Home" },
-  Community: {
-    IconComponent: MaterialCommunityIcons,
-    name: "account-group-outline",
-    label: "Community",
-  },
-  Library: {
-    IconComponent: Ionicons,
-    name: "play-circle-outline",
-    label: "Library",
-  },
-  Bible: {
-    IconComponent: Ionicons,
-    name: "book-outline",
-    label: "Bible",
-  },
+  Home: { name: "home-outline", label: "Home" },
+  Community: { name: "people-outline", label: "Community" },
+  Library: { name: "play-circle-outline", label: "Library" },
+  Bible: { name: "book-outline", label: "Bible" },
 };
+
+const TAB_ORDER = ["Home", "Community", "Library", "Bible"] as const;
+
+function deferMediaCleanup(tab: string, prevTab: string) {
+  if (tab === prevTab) return;
+  InteractionManager.runAfterInteractions(() => {
+    try {
+      useMediaStore.getState().stopAudioFn?.();
+    } catch {
+      // no-op
+    }
+    try {
+      useGlobalVideoStore.getState().pauseAllVideos();
+    } catch {
+      // no-op
+    }
+    try {
+      if (tab === "Bible") {
+        void useGlobalAudioPlayerStore.getState().stop();
+      }
+    } catch {
+      // no-op
+    }
+  });
+}
 
 export default function BottomNav({
   selectedTab,
   setSelectedTab,
 }: BottomNavProps) {
   const [showActions, setShowActions] = useState(false);
+  /** Defer FAB sheet until first open — avoids BlurView cost on cold paint */
+  const [fabSheetMounted, setFabSheetMounted] = useState(false);
   const { fastPress } = useFastPerformance();
   const insets = useSafeAreaInsets();
-
-  // Dynamic bottom padding to raise above Android system nav keys
-  const safePadding = Platform.OS === "android" ? Math.max(insets.bottom, 16) : 0;
-  const navBarHeight = getBottomNavHeight() + safePadding;
+  // Prefer live insets; fall back to window metrics / platform default so we
+  // never paint with 0 then jump when Android edge-to-edge resolves.
+  const metricsBottom = safeAreaInitialMetrics?.insets?.bottom ?? 0;
+  const safePadding =
+    insets.bottom ||
+    metricsBottom ||
+    (Platform.OS === "android" ? ANDROID_NAV_FALLBACK : 0);
+  const navBarHeight = NAV_CONTENT_HEIGHT + safePadding;
 
   const handleFabToggle = useCallback(() => {
-    setShowActions(!showActions);
-  }, [showActions]);
+    setFabSheetMounted(true);
+    setShowActions((v) => {
+      const next = !v;
+      if (next) prefetchCreateFlows();
+      return next;
+    });
+  }, []);
 
   const handleUpload = useCallback(() => {
     setShowActions(false);
-    // Defer heavy operations to prevent blocking UI
-    requestAnimationFrame(() => {
+    // Navigate first — never block push on media cleanup / extra imports.
+    router.push("/categories/upload");
+    queueMicrotask(() => prefetchUploadScreen());
+    InteractionManager.runAfterInteractions(() => {
       try {
         useMediaStore.getState().stopAudioFn?.();
-      } catch (e) {
+      } catch {
+        // no-op
+      }
+      try {
+        useGlobalVideoStore.getState().pauseAllVideos();
+      } catch {
         // no-op
       }
     });
-    router.push("/categories/upload");
+  }, []);
+
+  // Idle warm: after first paint settles, pull Create flows into the JS cache
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      timeout = setTimeout(() => prefetchCreateFlows(), 1800);
+    });
+    return () => {
+      task.cancel();
+      if (timeout) clearTimeout(timeout);
+    };
   }, []);
 
   const handleGoLive = useCallback(() => {
     setShowActions(false);
-    // Defer heavy operations to prevent blocking UI
-    requestAnimationFrame(() => {
+    router.push("/goLlive/AllowPermissionsScreen");
+    queueMicrotask(() => prefetchGoLiveScreen());
+    InteractionManager.runAfterInteractions(() => {
       try {
         useMediaStore.getState().stopAudioFn?.();
-      } catch (e) {
+      } catch {
+        // no-op
+      }
+      try {
+        useGlobalVideoStore.getState().pauseAllVideos();
+      } catch {
         // no-op
       }
     });
-    router.push("/goLlive/AllowPermissionsScreen");
   }, []);
 
   const handleTabPress = useCallback(
     (tab: string) => {
-      // Immediate UI update
       setSelectedTab(tab);
-
-      // Only stop media if actually switching to a different tab
-      if (tab !== selectedTab) {
-        // Defer heavy operations to prevent blocking UI
-        requestAnimationFrame(() => {
-          try {
-            useMediaStore.getState().stopAudioFn?.();
-          } catch (e) {
-            // no-op
-          }
-          try {
-            useGlobalVideoStore.getState().pauseAllVideos();
-          } catch (e) {
-            // no-op
-          }
-          // For Bible tab, also stop the global audio player so
-          // the floating mini player disappears and audio stops.
-          try {
-            if (tab === "Bible") {
-              void useGlobalAudioPlayerStore.getState().stop();
-            }
-          } catch (e) {
-            // no-op
-          }
-        });
-      }
+      queueMicrotask(() => playNavTapSound());
+      deferMediaCleanup(tab, selectedTab);
     },
     [selectedTab, setSelectedTab]
   );
 
+  const renderTab = (tab: string) => {
+    const { name, label } = tabConfig[tab];
+    const isActive = selectedTab === tab;
+    return (
+      <Pressable
+        key={tab}
+        onPress={() => handleTabPress(tab)}
+        unstable_pressDelay={0}
+        android_disableSound
+        hitSlop={8}
+        style={({ pressed }) => ({
+          alignItems: "center",
+          justifyContent: "center",
+          minWidth: 48,
+          minHeight: 48,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Ionicons
+          name={name}
+          size={getIconSize("medium")}
+          color={isActive ? "#256E63" : "#000"}
+        />
+        <Text
+          style={[
+            getResponsiveTextStyle("caption"),
+            {
+              marginTop: getResponsiveSpacing(2, 3, 4, 5),
+              color: isActive ? "#256E63" : "#000",
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
     <>
-      {/* FAB Action Buttons */}
-      {showActions && (
-        <View
-          style={{
-            position: "absolute",
-            bottom:
-              navBarHeight -
-              getResponsiveSpacing(40, 44, 48, 52) +
-              getFabSize().size +
-              getResponsiveSpacing(8, 10, 12, 16),
-            left: "50%",
-            transform: [{ translateX: -140 }], // Half of wider width
-            width: 280,
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              borderRadius: getResponsiveBorderRadius("large"),
-              overflow: "hidden",
-              width: "100%",
-              height: 70,
-            }}
-          >
-            {Platform.OS !== "web" ? (
-              <BlurView
-                intensity={80}
-                tint="light"
-                style={{
-                  flexDirection: "row",
-                  width: "100%",
-                  height: "100%",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: getResponsiveSpacing(12, 16, 20, 24),
-                  // Glassmorphism orange background – soft, translucent
-                  backgroundColor: "rgba(255, 140, 0, 0.16)",
-                  overflow: "hidden",
-                }}
-              >
-                {/* Subtle shimmering highlight to draw attention */}
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    left: -80,
-                    top: 0,
-                    bottom: 0,
-                    width: 80,
-                    backgroundColor: "rgba(255, 255, 255, 0.22)",
-                    transform: [{ rotate: "-20deg" }],
-                  }}
-                />
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "#256E63",
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                    borderRadius: getResponsiveBorderRadius("round"),
-                    borderWidth: 4,
-                    borderColor: "white",
-                  }}
-                  onPress={handleUpload}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      getResponsiveTextStyle("button"),
-                      { color: "white" },
-                    ]}
-                  >
-                    Upload
-                  </Text>
-                </TouchableOpacity>
+      {fabSheetMounted ? (
+        <FabCreateActions
+          visible={showActions}
+          bottomOffset={
+            navBarHeight -
+            getResponsiveSpacing(40, 44, 48, 52) +
+            getFabSize().size +
+            getResponsiveSpacing(8, 10, 12, 16)
+          }
+          onUpload={handleUpload}
+          onGoLive={handleGoLive}
+          onUploadIntent={prefetchUploadScreen}
+          onGoLiveIntent={prefetchGoLiveScreen}
+        />
+      ) : null}
 
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "black",
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                    borderRadius: getResponsiveBorderRadius("round"),
-                    borderWidth: 4,
-                    borderColor: "white",
-                  }}
-                  onPress={handleGoLive}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      getResponsiveTextStyle("button"),
-                      { color: "white" },
-                    ]}
-                  >
-                    Go Live
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
-            ) : (
-              <View
-                style={{
-                  flexDirection: "row",
-                  width: "100%",
-                  height: "100%",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: getResponsiveSpacing(12, 16, 20, 24),
-                  backgroundColor: "rgba(255, 255, 255, 0.7)",
-                  paddingHorizontal: getResponsiveSpacing(8, 10, 12, 14),
-                  borderRadius: getResponsiveBorderRadius("large"),
-                }}
-              >
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "#256E63",
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                    borderRadius: getResponsiveBorderRadius("round"),
-                    borderWidth: 4,
-                    borderColor: "white",
-                  }}
-                  onPress={handleUpload}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      getResponsiveTextStyle("button"),
-                      { color: "white" },
-                    ]}
-                  >
-                    Upload
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "black",
-                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                    borderRadius: getResponsiveBorderRadius("round"),
-                    borderWidth: 4,
-                    borderColor: "white",
-                  }}
-                  onPress={handleGoLive}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      getResponsiveTextStyle("button"),
-                      { color: "white" },
-                    ]}
-                  >
-                    Go Live
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* Bottom Navigation Bar */}
       <View
         style={{
           position: "absolute",
@@ -308,88 +234,10 @@ export default function BottomNav({
           zIndex: 10,
         }}
       >
-        {/* First half of tabs */}
-        {Object.entries(tabConfig)
-          .slice(0, 2)
-          .map(([tab, { IconComponent, name, label }]) => {
-            const isActive = selectedTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={fastPress(() => handleTabPress(tab), {
-                  key: `tab_${tab}`,
-                  priority: "high",
-                })}
-                style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 48,
-                  minHeight: 48,
-                }}
-                activeOpacity={0.7}
-              >
-                <IconComponent
-                  name={name}
-                  size={getIconSize("medium")}
-                  color={isActive ? "#256E63" : "#000"}
-                />
-                <Text
-                  style={[
-                    getResponsiveTextStyle("caption"),
-                    {
-                      marginTop: getResponsiveSpacing(2, 3, 4, 5),
-                      color: isActive ? "#256E63" : "#000",
-                    },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-        {/* Second half of tabs */}
-        {Object.entries(tabConfig)
-          .slice(2)
-          .map(([tab, { IconComponent, name, label }]) => {
-            const isActive = selectedTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={fastPress(() => handleTabPress(tab), {
-                  key: `tab_${tab}`,
-                  priority: "high",
-                })}
-                style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 48,
-                  minHeight: 48,
-                }}
-                activeOpacity={0.7}
-              >
-                <IconComponent
-                  name={name}
-                  size={getIconSize("medium")}
-                  color={isActive ? "#256E63" : "#000"}
-                />
-                <Text
-                  style={[
-                    getResponsiveTextStyle("caption"),
-                    {
-                      marginTop: getResponsiveSpacing(2, 3, 4, 5),
-                      color: isActive ? "#256E63" : "#000",
-                    },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        {TAB_ORDER.slice(0, 2).map(renderTab)}
+        {TAB_ORDER.slice(2).map(renderTab)}
       </View>
 
-      {/* Floating Action Button - Positioned at middle of Community and Library tabs */}
       <View
         style={{
           position: "absolute",
@@ -420,8 +268,8 @@ export default function BottomNav({
           })}
           activeOpacity={0.7}
         >
-          <AntDesign
-            name={showActions ? "close" : "plus"}
+          <Ionicons
+            name={showActions ? "close" : "add"}
             size={getFabSize().iconSize}
             color="#256E63"
           />

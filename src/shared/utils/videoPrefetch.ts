@@ -7,12 +7,17 @@ import {
   markVideoPreloaded,
 } from "../../../app/utils/videoOptimization";
 import { PERFORMANCE_CONFIG, PERFORMANCE_FEATURES } from "../config/performance";
+import { isLiteProfileActive } from "../lite/liteProfile";
 import { PERF, recordSample } from "./perfMarks";
+import {
+  hasLiteVideoHead,
+  persistLiteVideoHead,
+} from "../cache/liteMediaDiskCache";
 
 const inflight = new Set<string>();
 const MAX_CONCURRENT = Math.min(
-  4,
-  PERFORMANCE_CONFIG.VIDEO.MAX_CONCURRENT || 4
+  2,
+  PERFORMANCE_CONFIG.VIDEO.MAX_CONCURRENT || 2
 );
 let active = 0;
 const queue: string[] = [];
@@ -26,6 +31,12 @@ async function warmUrl(url: string): Promise<void> {
   const started = Date.now();
 
   try {
+    if (isLiteProfileActive() && (await hasLiteVideoHead(url))) {
+      markVideoPreloaded(url);
+      recordSample(PERF.VIDEO_PREFETCH, Date.now() - started);
+      return;
+    }
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -34,7 +45,10 @@ async function warmUrl(url: string): Promise<void> {
     });
 
     try {
-      await response.arrayBuffer();
+      const buf = await response.arrayBuffer();
+      if (isLiteProfileActive()) {
+        void persistLiteVideoHead(url, buf);
+      }
     } catch {
       // Some hosts reject Range — partial failure still warms DNS/TLS.
     }

@@ -84,11 +84,39 @@ function fromLanNetworkPackage() {
   return null;
 }
 
-function resolveLanHostname() {
-  const fromEnv = (process.env.REACT_NATIVE_PACKAGER_HOSTNAME || "").trim();
-  if (isUsableLanIp(fromEnv)) return fromEnv;
+function localIpv4Set() {
+  const set = new Set();
+  const ifaces = os.networkInterfaces();
+  for (const entries of Object.values(ifaces)) {
+    for (const entry of entries || []) {
+      const isV4 = entry.family === "IPv4" || entry.family === 4;
+      if (isV4 && !entry.internal) set.add(entry.address);
+    }
+  }
+  return set;
+}
 
-  return fromOsInterfaces() || fromLanNetworkPackage();
+function resolveLanHostname() {
+  const live = fromOsInterfaces() || fromLanNetworkPackage();
+  const fromEnv = (process.env.REACT_NATIVE_PACKAGER_HOSTNAME || "").trim();
+
+  // Prefer a live Wi-Fi/Ethernet IP when .env is missing, unusable, or stale
+  // (common after router/DHCP change — stale IP → "site can't be reached").
+  if (live) {
+    if (!isUsableLanIp(fromEnv)) return live;
+    const local = localIpv4Set();
+    if (!local.has(fromEnv)) {
+      console.warn(
+        `REACT_NATIVE_PACKAGER_HOSTNAME=${fromEnv} is not on this machine.\n` +
+          `Using live LAN IP instead: ${live} (update .env to match).`
+      );
+      return live;
+    }
+    return fromEnv;
+  }
+
+  if (isUsableLanIp(fromEnv)) return fromEnv;
+  return null;
 }
 
 loadEnvFile();

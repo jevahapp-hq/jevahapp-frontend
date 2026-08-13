@@ -1,6 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useClerk } from "@clerk/clerk-expo";
 import { useCallback, useEffect, useState } from "react";
 import authService from "../services/authService";
+import {
+  clearBackendSession,
+  getSessionToken,
+  hasBackendSessionSync,
+  storeSessionToken,
+} from "../utils/sessionAuth";
 
 export interface AuthUser {
   _id: string;
@@ -12,17 +19,30 @@ export interface AuthUser {
   emailVerified?: boolean;
 }
 
+/**
+ * App session hook — backend JWT is the source of truth (not Clerk).
+ * `sessionLikely` is sync MMKV so Home can mount auth For You immediately.
+ */
 export function useAuth() {
+  const { signOut: clerkSignOut } = useClerk();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [sessionLikely, setSessionLikely] = useState(() =>
+    hasBackendSessionSync()
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const t = await AsyncStorage.getItem("token");
+      const t = await getSessionToken();
       const u = await AsyncStorage.getItem("user");
-      if (t) setToken(t);
+      if (t) {
+        setToken(t);
+        setSessionLikely(true);
+      } else {
+        setSessionLikely(false);
+      }
       if (u)
         try {
           setUser(JSON.parse(u));
@@ -55,9 +75,9 @@ export function useAuth() {
       const u = (res.data?.data?.user || res.data?.user) as AuthUser;
       setToken(t || null);
       setUser(u || null);
-      if (t) await AsyncStorage.setItem("token", t);
+      setSessionLikely(!!t);
+      if (t) await storeSessionToken(t);
       if (u) await AsyncStorage.setItem("user", JSON.stringify(u));
-      return res.data;
     } catch (e: any) {
       setError(e?.message || "Sign in failed");
       throw e;
@@ -121,19 +141,25 @@ export function useAuth() {
     setLoading(true);
     setError(null);
     try {
-      await authService.logout();
+      await clearBackendSession();
       setUser(null);
       setToken(null);
-      await AsyncStorage.removeItem("token");
-      await AsyncStorage.removeItem("user");
+      setSessionLikely(false);
+      try {
+        await clerkSignOut();
+      } catch {
+        // Email/password users may have no Clerk session
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [clerkSignOut]);
 
   return {
     user,
     token,
+    sessionLikely,
+    isAuthenticated: Boolean(token || user || sessionLikely),
     loading,
     error,
     signUp,

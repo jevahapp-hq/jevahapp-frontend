@@ -17,20 +17,46 @@ export class UserProfileCache {
     return this.cache.get(cacheKey) || null;
   }
 
+  /** True when cached profile has a usable display name */
+  static hasUsableName(user: UserData | null | undefined): boolean {
+    if (!user) return false;
+    const first = String((user as any).firstName || "").trim();
+    const last = String((user as any).lastName || "").trim();
+    const full = `${first} ${last}`.trim();
+    if (full && !/^(anonymous(\s+user)?|unknown)$/i.test(full)) return true;
+    return false;
+  }
+
+  private static needsProfileFetch(userId: string | null | undefined, hasName: boolean, hasAvatar: boolean): boolean {
+    if (!userId) return false;
+    if (hasName && hasAvatar) return false;
+    const cached = this.getUserProfile(String(userId));
+    if (cached && this.hasUsableName(cached) && (hasAvatar || cached.avatar || cached.avatarUpload)) {
+      return false;
+    }
+    // Missing name (or empty poisoned cache) → fetch
+    if (!hasName || (cached && !this.hasUsableName(cached))) return true;
+    return !hasAvatar && !cached?.avatar && !cached?.avatarUpload;
+  }
+
   /**
    * Fetch user profile from API by userId and cache it
    */
   static async fetchAndCacheUserProfile(userId: string): Promise<UserData | null> {
     if (!userId) return null;
 
-    // Check cache first
+    // Only treat cache as hit when it has a usable name (avatar-only must refetch)
     const cached = this.getUserProfile(userId);
-    if (cached) return cached;
+    if (cached && this.hasUsableName(cached)) return cached;
 
-    // Avoid duplicate requests
+    // Avoid duplicate requests — wait for in-flight properly
     if (this.fetchingUsers.has(userId)) {
-      // Wait a bit and check cache again
-      await new Promise(resolve => setTimeout(resolve, 100));
+      for (let i = 0; i < 20; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const again = this.getUserProfile(userId);
+        if (again && this.hasUsableName(again)) return again;
+        if (!this.fetchingUsers.has(userId)) break;
+      }
       return this.getUserProfile(userId);
     }
 
@@ -43,7 +69,8 @@ export class UserProfileCache {
         return null;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+      // FIX: API_BASE_URL already includes `/api` — was calling /api/api/users/:id
+      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -62,10 +89,16 @@ export class UserProfileCache {
       }
 
       const data = await response.json();
-      // Backend may return: { success, user } OR { success, data } where data IS the user (per spec)
-      let user = data?.user ?? data?.data;
-      if (user) {
-        user = this.normalizeUserData(user);
+      // Supported shapes:
+      // { user }, { success, user }, { data: user }, { data: { user } }
+      const rawUser =
+        data?.user ??
+        data?.data?.user ??
+        (data?.data && typeof data.data === "object" && !Array.isArray(data.data)
+          ? data.data
+          : null);
+      if (rawUser && typeof rawUser === "object") {
+        const user = this.normalizeUserData(rawUser);
         this.cacheUserProfile(userId, user);
         return user;
       }
@@ -80,14 +113,29 @@ export class UserProfileCache {
 
   /** Normalize API user (snake_case, name field) for consistent display */
   private static normalizeUserData(u: any): UserData {
-    const parts = (u.name || "").split(" ");
+    const full =
+      u.fullName ||
+      u.displayName ||
+      u.name ||
+      u.username ||
+      u.userName ||
+      "";
+    const parts = String(full).split(/\s+/).filter(Boolean);
     return {
       _id: u._id || u.id,
       id: u.id || u._id,
-      firstName: u.firstName || u.first_name || parts[0] || "",
-      lastName: u.lastName || u.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : "") || "",
-      avatar: u.avatar || u.avatarUpload || u.profileImage,
-      avatarUpload: u.avatarUpload || u.avatar || u.profileImage,
+      firstName:
+        u.firstName ||
+        u.first_name ||
+        parts[0] ||
+        "",
+      lastName:
+        u.lastName ||
+        u.last_name ||
+        (parts.length > 1 ? parts.slice(1).join(" ") : "") ||
+        "",
+      avatar: u.avatar || u.avatarUpload || u.profileImage || u.avatarUrl,
+      avatarUpload: u.avatarUpload || u.avatar || u.profileImage || u.avatarUrl,
       email: u.email,
     };
   }
@@ -99,6 +147,40 @@ export class UserProfileCache {
     if (!userId || !userData) return;
     const cacheKey = `user:${userId}`;
     this.cache.set(cacheKey, userData, AVATAR_CACHE_DURATION); // Cache for 30 minutes
+    // Keep the canonical author store in sync (feed name resolution)
+    try {
+      const { putAuthorProfile } = require("../../../src/shared/author");
+      putAuthorProfile(userId, userData as any);
+    } catch {
+      // optional during bootstrap
+    }
+  }
+
+  /** Pull names/avatars from a media item into the profile cache when present. */
+  private static seedCacheFromContent(content: any): void {
+    const candidates = [content?.authorInfo, content?.author, content?.uploadedBy];
+    for (const u of candidates) {
+      if (!u || typeof u !== "object") continue;
+      const id = String(u._id || u.id || "").trim();
+      if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) continue;
+      const firstName = u.firstName || u.first_name || "";
+      const lastName = u.lastName || u.last_name || "";
+      const fullName =
+        u.fullName || u.displayName || u.name || u.username || u.userName || "";
+      if (!firstName && !lastName && !fullName) continue;
+      const existing = this.getUserProfile(id);
+      if (existing?.firstName || existing?.lastName) continue;
+      const parts = String(fullName).split(/\s+/).filter(Boolean);
+      this.cacheUserProfile(id, {
+        _id: id,
+        id,
+        firstName: firstName || parts[0] || "",
+        lastName: lastName || (parts.length > 1 ? parts.slice(1).join(" ") : "") || "",
+        avatar: u.avatar || u.avatarUpload || u.profileImage || "",
+        avatarUpload: u.avatarUpload || u.avatar || "",
+        email: u.email || "",
+      } as UserData);
+    }
   }
 
   /**
@@ -107,6 +189,9 @@ export class UserProfileCache {
    */
   static enrichContentWithUserData(content: any): any {
     if (!content) return content;
+
+    // Seed profile cache from any already-populated author fields (feed paint + future lookups)
+    this.seedCacheFromContent(content);
 
     // Try to get userId from uploadedBy
     let userId: string | null = null;
@@ -147,16 +232,16 @@ export class UserProfileCache {
           }
         }
       } else if (typeof content.uploadedBy === 'string') {
-        // uploadedBy is just an ID string, try to enrich with cached user data
+        // uploadedBy is just an ID string — keep the string until we have real profile
+        // data. Converting to `{ firstName: "" }` made every card show "Anonymous User"
+        // and poisoned the MMKV feed cache.
         userId = content.uploadedBy.trim();
         const isObjectId = /^[0-9a-fA-F]{24}$/.test(userId);
         
         if (isObjectId) {
-          // It's a valid ObjectId, try to get from cache
           let cachedUser = this.getUserProfile(userId);
           
-          if (cachedUser) {
-            // Use cached user data - convert string ID to object
+          if (cachedUser && (cachedUser.firstName || cachedUser.lastName || cachedUser.email)) {
             const userObj = {
               _id: userId,
               id: userId,
@@ -166,47 +251,16 @@ export class UserProfileCache {
               email: cachedUser.email || "",
             };
             content.uploadedBy = userObj;
-            // Also set authorInfo (primary source for media) so name/avatar display works
             if (!content.authorInfo || (!content.authorInfo.firstName && !content.authorInfo.fullName)) {
-              content.authorInfo = { ...userObj, fullName: [userObj.firstName, userObj.lastName].filter(Boolean).join(" ").trim() };
+              content.authorInfo = {
+                ...userObj,
+                fullName: [userObj.firstName, userObj.lastName].filter(Boolean).join(" ").trim(),
+              };
             }
           } else {
-            // Not in cache - try to fetch (async, but create minimal object structure first)
-            // This ensures the structure is correct even if fetch fails
-            content.uploadedBy = {
-              _id: userId,
-              id: userId,
-              firstName: "",
-              lastName: "",
-              avatar: "",
-              email: "",
-            };
-            
-            // Fetch in background to update the object
-            this.fetchAndCacheUserProfile(userId).then((fetchedUser) => {
-              if (fetchedUser && content.uploadedBy && typeof content.uploadedBy === 'object') {
-                // Update the object with fetched data
-                content.uploadedBy.firstName = fetchedUser.firstName || "";
-                content.uploadedBy.lastName = fetchedUser.lastName || "";
-                content.uploadedBy.avatar = fetchedUser.avatar || fetchedUser.avatarUpload || "";
-                content.uploadedBy.email = fetchedUser.email || "";
-                // Also set authorInfo (primary source) so name display works
-                const fullName = [fetchedUser.firstName, fetchedUser.lastName].filter(Boolean).join(" ").trim();
-                content.authorInfo = content.authorInfo || {};
-                content.authorInfo._id = content.authorInfo._id || userId;
-                content.authorInfo.id = content.authorInfo.id || userId;
-                content.authorInfo.firstName = content.authorInfo.firstName || fetchedUser.firstName || "";
-                content.authorInfo.lastName = content.authorInfo.lastName || fetchedUser.lastName || "";
-                content.authorInfo.fullName = content.authorInfo.fullName || fullName;
-                content.authorInfo.avatar = content.authorInfo.avatar || fetchedUser.avatar || fetchedUser.avatarUpload || "";
-              }
-            }).catch(() => {
-              // Silently fail - object structure is already correct
-            });
+            // Fetch in background; leave uploadedBy as the ID string for now
+            void this.fetchAndCacheUserProfile(userId).catch(() => {});
           }
-        } else {
-          // Not an ObjectId, treat as a name string
-          // Keep as string (it's already a name)
         }
       }
     }
@@ -269,14 +323,24 @@ export class UserProfileCache {
       if (item.uploadedBy) {
         if (typeof item.uploadedBy === 'object') {
           const userId = item.uploadedBy._id || item.uploadedBy.id;
-          if (userId && (!item.uploadedBy.firstName || !item.uploadedBy.avatar)) {
-            if (!this.getUserProfile(userId)) {
-              userIdsToFetch.add(userId);
-            }
+          const hasName = Boolean(
+            item.uploadedBy.firstName ||
+              item.uploadedBy.lastName ||
+              item.uploadedBy.fullName ||
+              item.uploadedBy.displayName ||
+              item.uploadedBy.username
+          );
+          const hasAvatar = Boolean(
+            item.uploadedBy.avatar ||
+              item.uploadedBy.avatarUpload ||
+              item.uploadedBy.avatarUrl
+          );
+          if (this.needsProfileFetch(userId, hasName, hasAvatar)) {
+            userIdsToFetch.add(String(userId));
           }
         } else if (typeof item.uploadedBy === 'string') {
           const isObjectId = /^[0-9a-fA-F]{24}$/.test(item.uploadedBy.trim());
-          if (isObjectId && !this.getUserProfile(item.uploadedBy.trim())) {
+          if (isObjectId && this.needsProfileFetch(item.uploadedBy.trim(), false, false)) {
             userIdsToFetch.add(item.uploadedBy.trim());
           }
         }
@@ -285,20 +349,35 @@ export class UserProfileCache {
       // Check author
       if (item.author && typeof item.author === 'object') {
         const authorId = item.author._id || item.author.id;
-        if (authorId && (!item.author.firstName || !item.author.avatar)) {
-          if (!this.getUserProfile(authorId)) {
-            userIdsToFetch.add(authorId);
-          }
+        const hasName = Boolean(
+          item.author.firstName ||
+            item.author.lastName ||
+            item.author.fullName ||
+            item.author.displayName
+        );
+        const hasAvatar = Boolean(item.author.avatar || item.author.avatarUpload);
+        if (this.needsProfileFetch(authorId, hasName, hasAvatar)) {
+          userIdsToFetch.add(String(authorId));
         }
       }
       
       // Check authorInfo
       if (item.authorInfo && typeof item.authorInfo === 'object') {
         const authorId = item.authorInfo._id || item.authorInfo.id;
-        if (authorId && (!item.authorInfo.firstName || !item.authorInfo.avatar)) {
-          if (!this.getUserProfile(authorId)) {
-            userIdsToFetch.add(authorId);
-          }
+        const hasName = Boolean(
+          item.authorInfo.firstName ||
+            item.authorInfo.lastName ||
+            item.authorInfo.fullName ||
+            item.authorInfo.displayName ||
+            item.authorInfo.username
+        );
+        const hasAvatar = Boolean(
+          item.authorInfo.avatar ||
+            item.authorInfo.avatarUpload ||
+            item.authorInfo.avatarUrl
+        );
+        if (this.needsProfileFetch(authorId, hasName, hasAvatar)) {
+          userIdsToFetch.add(String(authorId));
         }
       }
     });

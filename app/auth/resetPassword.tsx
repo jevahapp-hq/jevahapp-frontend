@@ -3,13 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
   Image,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { authToast } from "../components/auth/authToastBus";
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
 
@@ -97,28 +97,34 @@ export default function ResetPassword() {
           <TouchableOpacity
             onPress={async () => {
               if (!password || !confirmPassword) {
-                Alert.alert("Error", "Please fill in all fields");
+                authToast.validation(
+                  "Missing fields",
+                  "Enter and confirm your new password."
+                );
                 return;
               }
 
               if (password !== confirmPassword) {
-                Alert.alert("Error", "Passwords do not match");
+                authToast.validation(
+                  "Passwords don’t match",
+                  "Make sure both password fields are the same."
+                );
                 return;
               }
 
               if (password.length < 6) {
-                Alert.alert(
-                  "Error",
-                  "Password must be at least 6 characters long"
+                authToast.validation(
+                  "Password too short",
+                  "Use at least 6 characters."
                 );
                 return;
               }
 
               // Additional password validation
               if (!/^(?=.*[A-Za-z])(?=.*\d)/.test(password)) {
-                Alert.alert(
-                  "Error",
-                  "Password must contain at least one letter and one number"
+                authToast.validation(
+                  "Stronger password needed",
+                  "Include at least one letter and one number."
                 );
                 return;
               }
@@ -140,9 +146,8 @@ export default function ResetPassword() {
                 console.log("Retrieved reset code (normalized):", resetCode);
 
                 if (!resetCode) {
-                  Alert.alert(
-                    "Error",
-                    "Reset code not found. Please try the reset process again."
+                  authToast.resetFailed(
+                    "Reset code not found. Start the reset process again."
                   );
                   return;
                 }
@@ -160,24 +165,16 @@ export default function ResetPassword() {
                 if (result.success) {
                   await AsyncStorage.removeItem("resetCode"); // Clean up
                   await AsyncStorage.removeItem("resetToken");
-                  Alert.alert("Success", "Password reset successfully!", [
-                    {
-                      text: "OK",
-                      onPress: () => router.replace("/auth/login"),
-                    },
-                  ]);
+                  authToast.passwordResetSuccess();
+                  setTimeout(() => router.replace("/auth/login"), 900);
                 } else {
-                  Alert.alert(
-                    "Error",
+                  authToast.resetFailed(
                     result.data?.message || "Failed to reset password"
                   );
                 }
               } catch (error) {
                 console.error("Error resetting password:", error);
-                Alert.alert(
-                  "Error",
-                  "Failed to reset password. Please try again."
-                );
+                authToast.resetFailed("Failed to reset password. Please try again.");
               } finally {
                 setIsSubmitting(false);
               }

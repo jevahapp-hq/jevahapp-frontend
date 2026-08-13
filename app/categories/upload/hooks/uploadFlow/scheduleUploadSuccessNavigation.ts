@@ -36,7 +36,10 @@ export function scheduleSeekableMediaPoll(params: {
     const snapshot = await pollMediaUntilSeekable(mediaId, {
       signal,
       onUpdate: (partial) => {
-        const patch = snapshotToFeedPatch(partial);
+        // Duration / status only while processing — URL swaps kill in-progress play
+        const patch = snapshotToFeedPatch(partial, {
+          includePlaybackUrls: false,
+        });
         patchMediaInFeedCaches(queryClient, mediaId, patch);
         if (typeof partial.duration === "number") {
           seedDurationCache(mediaId, partial.duration);
@@ -45,7 +48,9 @@ export function scheduleSeekableMediaPoll(params: {
     });
 
     if (!snapshot) return;
-    const patch = snapshotToFeedPatch(snapshot);
+    const patch = snapshotToFeedPatch(snapshot, {
+      includePlaybackUrls: true,
+    });
     patchMediaInFeedCaches(queryClient, mediaId, patch);
     if (typeof snapshot.duration === "number") {
       seedDurationCache(mediaId, snapshot.duration);

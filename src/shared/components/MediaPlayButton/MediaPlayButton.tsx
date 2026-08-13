@@ -11,6 +11,8 @@ interface MediaPlayButtonProps {
   iconColor?: string;
   showOverlay?: boolean;
   className?: string;
+  /** Nudge the icon up (e.g. while comment sheet is open) */
+  offsetY?: number;
 }
 
 const SIZE_CONFIG = {
@@ -28,6 +30,7 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
   iconColor = "#FEA74E",
   showOverlay = true,
   className = "",
+  offsetY = 0,
 }) => {
   if (!showOverlay) return null;
 
@@ -37,9 +40,9 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
   // and causes "must click twice" bug (first fires play, second fires pause on same tap).
   const handlePress = useCallback(
     (e: any) => {
-      e?.stopPropagation?.();
-      e?.preventDefault?.();
-      if (!disabled && onPress) onPress();
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
+    if (!disabled && onPress) onPress();
     },
     [disabled, onPress]
   );
@@ -49,11 +52,13 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
       style={[
         styles.container,
         {
-          // No dimming overlay - keep video bright and visible
           backgroundColor: "transparent",
+          zIndex: 60,
+          elevation: 60,
+          // Always a real array — `undefined`/`null` crashes processTransform
+          transform: [{ translateY: offsetY || 0 }],
         },
-        { pointerEvents: "box-none" as any },
-        className ? { className } : {},
+        { pointerEvents: "box-none" as const },
       ]}
     >
       <Pressable

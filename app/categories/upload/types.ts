@@ -46,7 +46,7 @@ export type EligibilityStatus = {
   warnings: string[];
 };
 
-export type DetectedFileType = "video" | "audio" | "ebook" | "unknown";
+export type DetectedFileType = "video" | "audio" | "ebook" | "gif" | "unknown";
 
 export type AuthStatus = {
   hasToken: boolean;

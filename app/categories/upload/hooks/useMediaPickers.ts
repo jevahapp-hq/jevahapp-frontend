@@ -3,11 +3,17 @@
  */
 
 import { Alert } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
-import { detectFileType, getMimeTypeFromName, isImage } from "../utils";
+import { detectFileType, getMimeTypeFromName, isGifFile, isImage } from "../utils";
 import { probeVideoDurationSec } from "../utils/probeVideoDuration";
 import type { DetectedFileType, EligibilityStatus, MediaFile } from "../types";
+
+/** Lazy native modules — kept off Upload first paint; warmed via prefetchCreateFlows. */
+async function loadImagePicker() {
+  return import("expo-image-picker");
+}
+async function loadDocumentPicker() {
+  return import("expo-document-picker");
+}
 
 type UseMediaPickersParams = {
   title: string;
@@ -33,7 +39,8 @@ function suggestContentType(
   current: string
 ): string | null {
   if (current === "sermon") return null; // keep intentional sermon choice
-  if (detected === "video" && current !== "videos") return "videos";
+  if (detected === "gif" && current !== "gif") return "gif";
+  if (detected === "video" && current !== "videos" && current !== "gif") return "videos";
   if (detected === "audio" && current !== "music" && current !== "podcasts") {
     return "music";
   }
@@ -59,13 +66,102 @@ export function useMediaPickers({
   setEligibilityStatus,
   validateMediaEligibilityLocal,
 }: UseMediaPickersParams) {
+  const pickGif = async () => {
+    try {
+      const ImagePicker = await loadImagePicker();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Allow photo library access to pick a GIF or a short clip."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: false,
+        quality: 1,
+        videoMaxDuration: 8,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const name =
+        asset.fileName ||
+        `gif_${Date.now()}.${asset.type === "video" ? "mp4" : "gif"}`;
+      const guessedMime =
+        asset.mimeType || getMimeTypeFromName(name) || "image/gif";
+      const gifFile = isGifFile(name, guessedMime);
+      const isVideo =
+        asset.type === "video" || guessedMime.startsWith("video/");
+
+      if (!gifFile && !isVideo) {
+        Alert.alert(
+          "GIF",
+          "Pick an animated GIF, or a short video (up to 8 seconds)."
+        );
+        return;
+      }
+
+      const selectedFile: MediaFile = {
+        uri: asset.uri,
+        name,
+        mimeType: gifFile ? "image/gif" : guessedMime,
+        size: asset.fileSize,
+      };
+
+      if (isVideo) {
+        const durationSec =
+          typeof asset.duration === "number" && asset.duration > 0
+            ? asset.duration > 100
+              ? asset.duration / 1000
+              : asset.duration
+            : await probeVideoDurationSec(asset.uri);
+        if (durationSec && durationSec > 8.5) {
+          Alert.alert(
+            "Clip too long",
+            "GIFs should be 8 seconds or shorter. Trim the clip and try again."
+          );
+          return;
+        }
+        if (durationSec && durationSec > 0) {
+          selectedFile.durationSec = durationSec;
+        }
+      }
+
+      setFile(selectedFile);
+      setDetectedFileType(detectFileType(selectedFile));
+      setSelectedType("gif");
+      setIsSermonContent(false);
+      setEligibilityStatus(
+        validateMediaEligibilityLocal({
+          file: selectedFile,
+          selectedType: "gif",
+          title,
+          selectedCategory,
+        })
+      );
+    } catch (e) {
+      console.error("Error picking GIF:", e);
+      Alert.alert("Error", "Could not pick that GIF.");
+    }
+  };
+
   const pickMedia = async () => {
+    if (selectedType === "gif") {
+      await pickGif();
+      return;
+    }
+    const DocumentPicker = await loadDocumentPicker();
     const result = await DocumentPicker.getDocumentAsync({
       type: [
         "video/mp4",
         "audio/mpeg",
         "application/pdf",
         "application/epub+zip",
+        "image/gif",
       ],
       copyToCacheDirectory: true,
       multiple: false,
@@ -77,8 +173,8 @@ export function useMediaPickers({
 
     const guessedMime = mimeType || getMimeTypeFromName(name);
 
-    if (isImage(name)) {
-      Alert.alert("Unsupported File", "Photos/images are not allowed.");
+    if (isImage(name) && !isGifFile(name, guessedMime)) {
+      Alert.alert("Unsupported File", "Photos/images are not allowed. Use GIF for animated clips.");
       return;
     }
 
@@ -103,6 +199,13 @@ export function useMediaPickers({
       const durationSec = await probeVideoDurationSec(uri);
       if (durationSec && durationSec > 0) {
         selectedFile.durationSec = durationSec;
+      }
+      if (selectedType === "gif" && durationSec && durationSec > 8.5) {
+        Alert.alert(
+          "Clip too long",
+          "GIFs should be 8 seconds or shorter. Trim the clip and try again."
+        );
+        return;
       }
     }
 
@@ -129,6 +232,7 @@ export function useMediaPickers({
 
   const pickThumbnail = async () => {
     try {
+      const ImagePicker = await loadImagePicker();
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 

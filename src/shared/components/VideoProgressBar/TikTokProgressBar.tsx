@@ -2,7 +2,7 @@
  * TikTok/IG-style scrubber.
  *
  * Seek pipeline (debug here first if scrub fails):
- *   PanResponder (useProgressBarGestures — refs, not frozen closures)
+ *   RNGH Gesture.Pan (useProgressBarGestures — refs + runOnJS)
  *   → onLiveSeek / onDragEnd / onTapSeek
  *   → onSeekToPercent(parent)
  *   → useVideoCardSeek / Reels seekToPosition
@@ -32,6 +32,9 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
   showControls = true,
   config: configOverride,
   debug = false,
+  bottomOffset = 12,
+  top,
+  style,
 }) => {
   const config: ProgressBarConfig = useMemo(
     () => ({ ...DEFAULT_CONFIG, ...configOverride }),
@@ -65,6 +68,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
       targetProgress: null,
       stableTicks: 0,
     });
+    // onScrubEnd already fired on finger-up in applySeek; keep for abort/timeout
     onScrubEnd?.();
   }, [updateState, onScrubEnd]);
 
@@ -93,6 +97,8 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
         stableTicks: 0,
       });
       animatedValue.setValue(clamped);
+      // Unlock parent scroll (Reels FlatList) as soon as finger lifts
+      onScrubEnd?.();
       onSeekToPercent(clamped);
       if (fromDragEnd && config.enableHaptics) triggerHaptic("medium");
       else if (config.enableHaptics) triggerHaptic("light");
@@ -100,6 +106,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
     [
       animatedValue,
       config.enableHaptics,
+      onScrubEnd,
       onSeekToPercent,
       triggerHaptic,
       updateState,
@@ -150,7 +157,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
     ]
   );
 
-  const { panHandlers } = useProgressBarGestures(
+  const { gesture } = useProgressBarGestures(
     barWidth,
     config,
     gestureCallbacks,
@@ -196,9 +203,26 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
 
   if (!showControls) return null;
 
+  const positionStyle =
+    typeof top === "number" ? { top } : { bottom: bottomOffset };
+
   return (
     <View
-      className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3"
+      style={[
+        {
+          position: "absolute",
+          left: 12,
+          right: 12,
+          zIndex: 50,
+          elevation: 50,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          paddingHorizontal: 12,
+        },
+        positionStyle,
+        style,
+      ]}
       // Block parent play/pause tap while interacting with the scrubber
       onStartShouldSetResponder={() => true}
       onMoveShouldSetResponder={() => true}
@@ -223,7 +247,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
           isDragging={isDragging}
           isSeeking={isSeeking}
           onLayout={handleLayout}
-          panHandlers={panHandlers}
+          gesture={gesture}
         />
 
         {config.showTimeLabels ? (

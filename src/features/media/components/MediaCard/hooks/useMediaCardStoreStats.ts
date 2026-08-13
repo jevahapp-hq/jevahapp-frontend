@@ -1,14 +1,12 @@
 /**
  * Shared engagement stats for Music / Ebook cards (interaction store).
  */
-import { useEffect } from "react";
 import {
   useContentCount,
   useContentStats,
   useUserInteraction,
 } from "../../../../../../app/store/useInteractionStore";
 import { useHydrateContentStats } from "../../../../../shared/hooks/useHydrateContentStats";
-import { useLoadingStats } from "../../../../../shared/hooks/useLoadingStats";
 import type { MediaItem } from "../../../../../shared/types";
 
 export function useMediaCardStoreStats(
@@ -28,23 +26,6 @@ export function useMediaCardStoreStats(
   const userLikeState = useUserInteraction(id, "liked");
 
   useHydrateContentStats(id, contentType);
-  const isLoadingStats = useLoadingStats(id);
-
-  useEffect(() => {
-    if (!contentId && !item._id) return;
-    try {
-      const {
-        useInteractionStore,
-      } = require("../../../../../../app/store/useInteractionStore");
-      const load = useInteractionStore.getState().loadContentStats as (
-        cid: string,
-        type?: string
-      ) => Promise<void>;
-      void load(id, contentType);
-    } catch {
-      // ignore
-    }
-  }, [id, contentType, contentId, item._id]);
 
   const feedComments = Number(
     (item as any).commentCount ?? item.comments ?? item.comment ?? 0
@@ -60,6 +41,6 @@ export function useMediaCardStoreStats(
     likeCount: likeCount || (item as any).likes || 0,
     userSaveState: !!userSaveState,
     userLikeState: !!userLikeState,
-    isLoadingStats,
+    isLoadingStats: false,
   };
 }

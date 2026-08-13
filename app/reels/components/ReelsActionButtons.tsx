@@ -1,6 +1,7 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { LikeHeartButton } from "../../../src/shared/components/like";
 import { formatCount } from "../../../src/shared/utils/formatCount";
 
 interface ReelsActionButtonsProps {
@@ -88,44 +89,16 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
         zIndex: 20,
       }}
     >
-      {/* Like Button */}
-      <TouchableOpacity
-        onPress={() => {
-          triggerHapticFeedback();
-          onLike();
-        }}
-        style={{
-          alignItems: "center",
-          justifyContent: "center",
-          padding: getResponsiveSpacing(8, 10, 12),
-          minWidth: getTouchTargetSize(),
-          minHeight: getTouchTargetSize(),
-        }}
-        activeOpacity={0.7}
-        accessibilityLabel={`${activeIsLiked ? "Unlike" : "Like"} this video`}
-        accessibilityRole="button"
-      >
-        <MaterialIcons
-          name={activeIsLiked ? "favorite" : "favorite-border"}
-          size={getResponsiveSize(28, 32, 36)}
-          color={activeIsLiked ? "#D22A2A" : "#FFFFFF"}
-        />
-        {likeDisplayCount > 0 && (
-            <Text
-              style={{
-                fontSize: getResponsiveFontSize(9, 10, 11),
-                color: "#FFFFFF",
-                marginTop: getResponsiveSpacing(2, 4, 5),
-                fontFamily: "Rubik-SemiBold",
-                textShadowColor: "rgba(0, 0, 0, 0.5)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 2,
-              }}
-            >
-              {formatCount(likeDisplayCount)}
-            </Text>
-          )}
-      </TouchableOpacity>
+      <LikeHeartButton
+        liked={activeIsLiked}
+        likeCount={likeDisplayCount}
+        onPress={onLike}
+        size={getResponsiveSize(28, 32, 36)}
+        idleColor="#FFFFFF"
+        likedColor="#FF2D55"
+        countColor="#FFFFFF"
+        layout="vertical"
+      />
 
       {/* Comment Button */}
       <TouchableOpacity

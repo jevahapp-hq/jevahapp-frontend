@@ -19,7 +19,7 @@ export type FeedRankOptions = {
 
 function contentFamily(item: MediaItem): string {
   const t = (item.contentType || "").toLowerCase().trim();
-  if (t === "video" || t === "videos" || t === "live") return "video";
+  if (t === "video" || t === "videos" || t === "live" || t === "gif" || t === "gifs") return "video";
   if (
     t === "audio" ||
     t === "music" ||
@@ -163,4 +163,46 @@ export function pickMostRecentItem(items: MediaItem[]): MediaItem | null {
 /** New seed for pull-to-refresh / remount — guarantees a new permutation */
 export function createFeedShuffleSeed(): number {
   return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0 || 1;
+}
+
+/**
+ * Keep already-shown cards in place when page 2+ arrives.
+ * Only append newcomers (in ranked order). Clear `pinnedIds` on seed rotate.
+ */
+export function stabilizeFeedOrder(
+  ranked: MediaItem[],
+  pinnedIds: string[]
+): { items: MediaItem[]; nextPinnedIds: string[] } {
+  if (!ranked.length) return { items: [], nextPinnedIds: [] };
+  if (!pinnedIds.length) {
+    const nextPinnedIds = ranked
+      .map((i) => String(i._id || ""))
+      .filter(Boolean);
+    return { items: ranked, nextPinnedIds };
+  }
+
+  const byId = new Map<string, MediaItem>();
+  for (const item of ranked) {
+    const id = String(item._id || "");
+    if (id) byId.set(id, item);
+  }
+
+  const seen = new Set<string>();
+  const pinned: MediaItem[] = [];
+  for (const id of pinnedIds) {
+    const item = byId.get(id);
+    if (item) {
+      pinned.push(item);
+      seen.add(id);
+    }
+  }
+
+  const newcomers = ranked.filter((item) => {
+    const id = String(item._id || "");
+    return id && !seen.has(id);
+  });
+
+  const items = [...pinned, ...newcomers];
+  const nextPinnedIds = items.map((i) => String(i._id || "")).filter(Boolean);
+  return { items, nextPinnedIds };
 }

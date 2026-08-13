@@ -1,5 +1,4 @@
 // Community API Client — shared base URL, auth, and helpers
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { API_BASE_URL } from "../api";
 import type { ApiResponse, Group } from "./types";
@@ -56,21 +55,8 @@ export class CommunityAPIClient {
   // Get authorization header with user token
   async getAuthHeaders(): Promise<HeadersInit> {
     try {
-      let token = await AsyncStorage.getItem("userToken");
-      if (!token) {
-        token = await AsyncStorage.getItem("token");
-      }
-      if (!token) {
-        token = await AsyncStorage.getItem("authToken");
-      }
-      if (!token) {
-        try {
-          const { default: SecureStore } = await import("expo-secure-store");
-          token = await SecureStore.getItemAsync("jwt");
-        } catch (secureStoreError) {
-          console.log("SecureStore not available or no JWT token");
-        }
-      }
+      const TokenUtils = (await import("../tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
 
       if (token) {
         return {
@@ -80,13 +66,15 @@ export class CommunityAPIClient {
         };
       }
 
-      console.warn("⚠️ No token found in AsyncStorage or SecureStore");
+      if (__DEV__) {
+        console.warn("⚠️ No token found in session storage");
+      }
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
       };
     } catch (error) {
-      console.error("Error getting auth headers:", error);
+      if (__DEV__) console.error("Error getting auth headers:", error);
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,

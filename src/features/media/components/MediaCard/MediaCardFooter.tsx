@@ -1,8 +1,9 @@
 /**
- * Shared footer chrome for all media cards (avatar, under-review, actions, menu).
+ * Shared footer chrome for all media cards.
+ * Meta on top; engagement + ⋮ on one evenly spaced row.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useFastPerformance } from "../../../../../app/utils/fastPerformance";
 import { AvatarWithInitialFallback } from "../../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../../shared/components/CardFooterActions";
@@ -21,8 +22,6 @@ export interface MediaCardFooterProps {
   viewCount: number;
   userLikeState: boolean;
   likeCount: number;
-  likeBurstKey: number;
-  setLikeBurstKey: (fn: (k: number) => number) => void;
   onLike: () => void;
   onComment: () => void;
   commentCount: number;
@@ -47,8 +46,6 @@ export function MediaCardFooter({
   viewCount,
   userLikeState,
   likeCount,
-  likeBurstKey,
-  setLikeBurstKey,
   onLike,
   onComment,
   commentCount,
@@ -63,20 +60,16 @@ export function MediaCardFooter({
   getUserAvatarFromContent = defaultGetAvatar,
   getUserDisplayNameFromContent = defaultGetName,
   getTimeAgo = defaultGetTimeAgo,
-  footerClassName = "flex-row items-center justify-between mt-2 px-2",
+  footerClassName,
   menuStyle,
 }: MediaCardFooterProps) {
   const { fastPress } = useFastPerformance();
   const displayName = getUserDisplayNameFromContent(item);
 
   return (
-    <View
-      className={footerClassName}
-      style={{ zIndex: 100 }}
-      pointerEvents="box-none"
-    >
-      <View className="flex flex-row items-center" pointerEvents="box-none">
-        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 overflow-hidden">
+    <View style={styles.root} className={footerClassName} pointerEvents="box-none">
+      <View style={styles.metaRow} pointerEvents="box-none">
+        <View style={styles.avatarWrap}>
           <AvatarWithInitialFallback
             imageSource={getUserAvatarFromContent(item) as any}
             name={displayName}
@@ -86,71 +79,160 @@ export function MediaCardFooter({
             textColor="#344054"
           />
         </View>
-        <View className="ml-3">
-          <View className="flex-row items-center">
-            <Text className="text-sm font-semibold text-gray-800">
+        <View style={styles.metaText}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
               {displayName}
             </Text>
-            <View className="flex flex-row mt-1 ml-2">
+            <View style={styles.timeRow}>
               <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-              <Text className="text-xs text-gray-500 ml-1">
-                {getTimeAgo(item.createdAt)}
-              </Text>
+              <Text style={styles.time}>{getTimeAgo(item.createdAt)}</Text>
             </View>
           </View>
 
-          {item.moderationStatus === "under_review" && (
-            <View className="mt-1 bg-orange-50 p-2 rounded-md border border-orange-100 mb-1">
+          {item.moderationStatus === "under_review" ? (
+            <View style={styles.reviewBox}>
               {showModerationBadge ? (
-                <View className="flex-row items-center mb-1">
+                <View style={styles.reviewBadge}>
                   <ModerationBadge status="under_review" />
                 </View>
               ) : null}
-              <Text className="text-[10px] text-orange-700 leading-3">
+              <Text style={styles.reviewText}>
                 This content is currently under review and is only visible to
                 you. It will be made public once approved.
               </Text>
             </View>
-          )}
+          ) : null}
 
-          <CardFooterActions
-            viewCount={viewCount}
-            liked={!!userLikeState}
-            likeCount={likeCount}
-            likeBurstKey={likeBurstKey}
-            likeColor={likeColor}
-            onLike={fastPress(
-              () => {
-                if (!userLikeState) setLikeBurstKey((k) => k + 1);
-                onLike();
-              },
-              { key: `like_${contentId}`, priority: "high" }
-            )}
-            commentCount={commentCount || item.comment || 0}
-            onComment={fastPress(() => onComment(), {
-              key: `comment_${contentId}`,
-              priority: "high",
-            })}
-            saved={!!userSaveState}
-            saveCount={saveCount || 0}
-            onSave={fastPress(() => onSave(), {
-              key: `save_${contentId}`,
-              priority: "high",
-            })}
-            isLoading={isLoadingStats}
-            contentType="media"
-            contentId={contentId}
-            onShare={fastPress(() => onShare(), {
-              key: `share_${contentId}`,
-              priority: "high",
-            })}
-            useEnhancedComponents={false}
-          />
+          {/* One line: views → share → ⋮ */}
+          <View style={styles.actionsLine} pointerEvents="box-none">
+            <View style={styles.actionsFlex}>
+              <CardFooterActions
+                viewCount={viewCount}
+                liked={!!userLikeState}
+                likeCount={likeCount}
+                likeColor={likeColor}
+                onLike={fastPress(() => onLike(), {
+                  key: `like_${contentId}`,
+                  priority: "high",
+                })}
+                commentCount={commentCount || item.comment || 0}
+                onComment={() => onComment()}
+                saved={!!userSaveState}
+                saveCount={saveCount || 0}
+                onSave={fastPress(() => onSave(), {
+                  key: `save_${contentId}`,
+                  priority: "high",
+                })}
+                isLoading={isLoadingStats}
+                contentType="media"
+                contentId={contentId}
+                onShare={fastPress(() => onShare(), {
+                  key: `share_${contentId}`,
+                  priority: "high",
+                })}
+                useEnhancedComponents={false}
+              />
+            </View>
+            <View style={styles.menuSlot}>
+              <ThreeDotsMenuButton
+                onPress={openModal}
+                size={18}
+                hitSlop={8}
+                style={menuStyle as any}
+              />
+            </View>
+          </View>
         </View>
-      </View>
-      <View style={{ zIndex: 1001 }}>
-        <ThreeDotsMenuButton onPress={openModal} style={menuStyle} />
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingBottom: 6,
+    zIndex: 100,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  avatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
+    marginTop: 2,
+    overflow: "hidden",
+  },
+  metaText: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 10,
+    paddingRight: 4,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 2,
+  },
+  name: {
+    fontSize: 14,
+    fontFamily: "Rubik-SemiBold",
+    color: "#1F2937",
+    maxWidth: "70%",
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  time: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginLeft: 4,
+  },
+  reviewBox: {
+    marginTop: 6,
+    marginBottom: 4,
+    backgroundColor: "#FFF7ED",
+    borderColor: "#FFEDD5",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+  },
+  reviewBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  reviewText: {
+    fontSize: 10,
+    color: "#C2410C",
+    lineHeight: 14,
+  },
+  actionsLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    minHeight: 40,
+  },
+  actionsFlex: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 4,
+  },
+  menuSlot: {
+    flexShrink: 0,
+    width: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

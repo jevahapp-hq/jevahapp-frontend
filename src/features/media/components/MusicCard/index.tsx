@@ -29,7 +29,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   onLayout,
   focusRef,
 }) => {
-  const { showCommentModal } = useCommentModal();
+  const { showCommentModal, isVisible: commentsFocused } = useCommentModal();
   const contentId = audio._id || `music-${index}`;
   const isSermon = audio.contentType === "sermon";
   const playerAnchorRef = useRef<View>(null);
@@ -72,27 +72,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   }, [playback]);
 
   const openComments = useCallback(() => {
-    const finish = (anchor: { mediaBottomY: number; mediaHeight?: number } | null) => {
-      if (onComment) onComment(audio, anchor);
-      else showCommentModal([], String(contentId), "media", undefined, null, anchor);
-    };
-
-    const node = playerAnchorRef.current;
-    if (node && typeof (node as any).measureInWindow === "function") {
-      (node as any).measureInWindow(
-        (_x: number, y: number, _w: number, h: number) => {
-          const mediaBottomY =
-            Number.isFinite(y) && Number.isFinite(h) && h > 0 ? y + h : undefined;
-          finish(
-            mediaBottomY != null
-              ? { mediaBottomY, mediaHeight: h }
-              : null
-          );
-        }
-      );
-      return;
-    }
-    finish(null);
+    // Open immediately — don't wait on measureInWindow (was making comments feel laggy)
+    if (onComment) onComment(audio, null);
+    else showCommentModal([], String(contentId), "media", undefined, null, null);
   }, [audio, contentId, onComment, showCommentModal]);
 
   return (
@@ -136,25 +118,25 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         />
       </View>
 
-      <MediaCardFooter
-        item={audio}
-        contentId={contentId}
-        viewCount={stats.viewCount}
-        userLikeState={stats.userLikeState}
-        likeCount={stats.likeCount}
-        likeBurstKey={chrome.likeBurstKey}
-        setLikeBurstKey={chrome.setLikeBurstKey}
-        onLike={() => onLike(audio)}
-        onComment={openComments}
-        commentCount={stats.commentCount}
-        userSaveState={stats.userSaveState}
-        saveCount={stats.saveCount}
-        onSave={() => onSave(audio)}
-        onShare={() => onShare(audio)}
-        isLoadingStats={stats.isLoadingStats}
-        openModal={chrome.openModal}
-        showModerationBadge
-      />
+      {!commentsFocused ? (
+        <MediaCardFooter
+          item={audio}
+          contentId={contentId}
+          viewCount={stats.viewCount}
+          userLikeState={stats.userLikeState}
+          likeCount={stats.likeCount}
+          onLike={() => onLike(audio)}
+          onComment={openComments}
+          commentCount={stats.commentCount}
+          userSaveState={stats.userSaveState}
+          saveCount={stats.saveCount}
+          onSave={() => onSave(audio)}
+          onShare={() => onShare(audio)}
+          isLoadingStats={stats.isLoadingStats}
+          openModal={chrome.openModal}
+          showModerationBadge
+        />
+      ) : null}
 
       <MediaCardModals
         item={audio}

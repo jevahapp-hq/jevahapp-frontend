@@ -62,6 +62,12 @@ export const LazyCommunityScreen = React.lazy(
 
 export const LazyBibleScreen = React.lazy(() => import("../screens/BibleScreen"));
 
+export const LazyMusicCategory = React.lazy(() => import("../categories/music"));
+export const LazyHymnsCategory = React.lazy(() => import("../categories/hymns"));
+export const LazyLiveCategory = React.lazy(
+  () => import("../categories/LiveComponent")
+);
+
 // Home tab content (AllContentTikTok, Music, Hymns, LiveComponent) — load only when Home tab is selected
 
 // Export wrapped components with Suspense
@@ -72,4 +78,7 @@ export const UploadScreenWithSuspense = withSuspense(LazyUploadScreen);
 export const ReelsviewscrollWithSuspense = withSuspense(LazyReelsviewscroll);
 export const CommunityScreenWithSuspense = withSuspense(LazyCommunityScreen);
 export const BibleScreenWithSuspense = withSuspense(LazyBibleScreen);
+export const MusicCategoryWithSuspense = withSuspense(LazyMusicCategory);
+export const HymnsCategoryWithSuspense = withSuspense(LazyHymnsCategory);
+export const LiveCategoryWithSuspense = withSuspense(LazyLiveCategory);
 

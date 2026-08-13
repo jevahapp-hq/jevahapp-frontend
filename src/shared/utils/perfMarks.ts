@@ -125,6 +125,7 @@ export function clearPerfMarks(): void {
 export const PERF = {
   APP_START: "app.cold_start",
   SPLASH_HIDE: "app.splash_hide",
+  FEED_SEED: "feed.mmkv_seed",
   FEED_FIRST_PAINT: "feed.first_paint",
   VIDEO_TTFF: "video.ttff",
   MUSIC_START: "music.start",

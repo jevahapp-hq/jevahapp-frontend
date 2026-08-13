@@ -26,7 +26,12 @@ const ContentLoadingFallback = () => (
 
 const categories = ["ALL", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "PLAYLISTS"];
 
-export default function LibraryScreen() {
+export default function LibraryScreen({
+  embedded = false,
+}: {
+  /** When true (Home keep-alive tab), hide nested BottomNav — parent owns chrome */
+  embedded?: boolean;
+}) {
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("Library");
@@ -216,13 +221,15 @@ export default function LibraryScreen() {
           {renderContent()}
         </View>
       )}
-      <BottomNavOverlay
-        selectedTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          navigateMainTab(tab as any);
-        }}
-      />
+      {!embedded ? (
+        <BottomNavOverlay
+          selectedTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            navigateMainTab(tab as any);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

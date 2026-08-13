@@ -112,6 +112,25 @@ export function validateMimeCompatibility(
     ) {
       errors.push("Invalid book format. Supported: PDF, EPUB");
     }
+  } else if (selectedType === "gif") {
+    if (actualFileType === "gif") {
+      // ok
+    } else if (actualFileType === "video") {
+      if (
+        !matchesFormatOrMime(
+          fileExtension,
+          mimeType,
+          VALID_VIDEO_FORMATS,
+          VALID_VIDEO_MIMES
+        )
+      ) {
+        errors.push("GIF clips must be MP4 (max 8 seconds) or an animated .gif");
+      }
+    } else {
+      errors.push(
+        "Pick an animated GIF or a short MP4 (up to 8 seconds) to post as a GIF."
+      );
+    }
   } else if (selectedType === "sermon") {
     // Sermons can be either audio or video
     if (actualFileType === "ebook") {

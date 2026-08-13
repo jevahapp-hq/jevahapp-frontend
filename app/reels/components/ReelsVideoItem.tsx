@@ -8,6 +8,7 @@ import {
 import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../src/shared/utils/videoUrlManager";
+import { getBottomNavHeight } from "../../utils/responsiveOptimized";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { ReelsActionButtons } from "./ReelsActionButtons";
 import { ReelsMenu } from "./ReelsMenu";
@@ -171,13 +172,12 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   // Track if we should render skeletons
   const showSkeletons = isActive && (!isPlaying || !localDuration);
 
-  // Sync with global props when active
+  // Sync with global props when active — skip position while scrubbing
   useEffect(() => {
-    if (isActive) {
-      setLocalPosition(videoPosition);
-      setLocalDuration(videoDuration);
-    }
-  }, [isActive, videoPosition, videoDuration]);
+    if (!isActive) return;
+    if (!isDragging) setLocalPosition(videoPosition);
+    setLocalDuration(videoDuration);
+  }, [isActive, videoPosition, videoDuration, isDragging]);
 
   if (!enriched || !enriched.title || !videoUrl) {
     return (
@@ -302,23 +302,33 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
         <VideoProgressBar
           progress={localDuration > 0 ? localPosition / localDuration : 0}
           currentMs={localPosition}
-          durationMs={localDuration}
+          durationMs={localDuration > 0 ? localDuration : videoDuration}
           isMuted={isMuted}
           onToggleMute={() => onToggleMute(videoKey)}
-          onSeekToPercent={(pct: number) => onSeek(videoKey, pct * 100)}
+          onSeekToPercent={(pct: number) => {
+            const clamped = Math.max(0, Math.min(1, pct));
+            const dur =
+              localDuration > 0
+                ? localDuration
+                : videoDuration > 0
+                  ? videoDuration
+                  : 0;
+            if (dur > 0) setLocalPosition(clamped * dur);
+            onSeek(videoKey, clamped);
+          }}
           onScrubStart={() => setIsDragging(true)}
           onScrubEnd={() => setIsDragging(false)}
-          showControls={true}
-          bottomOffset={getResponsiveSpacing(120, 135, 155)}
-          enlargeOnDrag={true}
-          knobSize={8}
-          knobSizeDragging={12}
-          trackHeights={{ normal: 2, dragging: 6 }}
-          seekDuringDrag={true}
-          liveSeekThrottleMs={48}
-          enableHaptics={true}
-          mutePosition="left"
-          style={{ zIndex: 100 }}
+          showControls
+          bottomOffset={getBottomNavHeight() + getResponsiveSpacing(6, 8, 10)}
+          enlargeOnDrag
+          knobSize={10}
+          knobSizeDragging={14}
+          trackHeights={{ normal: 3, dragging: 8 }}
+          seekDuringDrag
+          liveSeekThrottleMs={32}
+          enableHaptics
+          verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
+          style={{ zIndex: 200, elevation: 200 }}
         />
       ) : null}
     </View>

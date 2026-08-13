@@ -197,13 +197,21 @@ export function patchMediaInFeedCaches(
   }
 }
 
-/** Mark feed queries stale and refetch active ones after upload. */
+/** Mark feed queries stale after upload — do NOT force an immediate refetch.
+ * Forced refetch often drops a just-prepended under_review item before BE indexes it,
+ * which feels like the video "plays then disappears".
+ */
 export function refreshFeedAfterUpload(queryClient: QueryClient): void {
-  void queryClient.invalidateQueries({ queryKey: ["all-content"] });
-  void queryClient.invalidateQueries({ queryKey: ["default-content"] });
-  void queryClient.invalidateQueries({ queryKey: ["all-content-infinite"] });
-  void queryClient.refetchQueries({
+  void queryClient.invalidateQueries({
     queryKey: ["all-content"],
-    type: "active",
+    refetchType: "none",
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["default-content"],
+    refetchType: "none",
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["all-content-infinite"],
+    refetchType: "none",
   });
 }

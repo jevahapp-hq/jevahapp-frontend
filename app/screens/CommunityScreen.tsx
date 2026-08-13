@@ -62,7 +62,12 @@ const features = [
   },
 ];
 
-export default function CommunityScreen() {
+export default function CommunityScreen({
+  embedded = false,
+}: {
+  /** When true (Home keep-alive tab), hide nested BottomNav — parent owns chrome */
+  embedded?: boolean;
+}) {
   const [activeTab, setActiveTab] = useState<string>("Community");
   const router = useRouter();
 
@@ -144,13 +149,15 @@ export default function CommunityScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <BottomNavOverlay
-        selectedTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          navigateMainTab(tab as any);
-        }}
-      />
+      {!embedded ? (
+        <BottomNavOverlay
+          selectedTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            navigateMainTab(tab as any);
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

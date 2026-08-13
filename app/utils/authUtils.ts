@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import * as SecureStore from "expo-secure-store";
 import { Alert, Platform } from "react-native";
 import { getApiBaseUrl } from "./api";
 
@@ -250,21 +249,19 @@ export const authUtils = {
   },
 
   /**
-   * Store authentication tokens and user data
+   * Store authentication tokens and user data (backend JWT = session).
    */
   async storeAuthData(result: any, userInfo: UserInfo) {
-    // Store the JWT token from your backend
     if (result.token) {
-      await SecureStore.setItemAsync("jwt", result.token);
-      await AsyncStorage.setItem("token", result.token);
-      await AsyncStorage.setItem("userToken", result.token);
+      const TokenUtils = (await import("./tokenUtils")).default;
+      await TokenUtils.storeAuthToken(result.token);
     }
 
     // Store user data
     if (result.user) {
       if (result.user.firstName && result.user.lastName) {
         await AsyncStorage.setItem("user", JSON.stringify(result.user));
-        console.log("✅ User data saved from backend:", result.user);
+        if (__DEV__) console.log("✅ User data saved from backend:", result.user);
       } else {
         throw new Error("Incomplete user data from backend");
       }
@@ -277,7 +274,7 @@ export const authUtils = {
       };
       if (userData.firstName && userData.firstName !== "Unknown") {
         await AsyncStorage.setItem("user", JSON.stringify(userData));
-        console.log("✅ Fallback user data saved:", userData);
+        if (__DEV__) console.log("✅ Fallback user data saved:", userData);
       } else {
         throw new Error("Incomplete Clerk user data");
       }
@@ -289,10 +286,11 @@ export const authUtils = {
         "../store/useInteractionStore"
       );
       await useInteractionStore.getState().refreshAllStatsAfterLogin();
-      console.log("✅ Refreshed interaction stats after login");
+      if (__DEV__) console.log("✅ Refreshed interaction stats after login");
     } catch (error) {
-      console.warn("⚠️ Failed to refresh interaction stats after login:", error);
-      // Non-critical, continue with login
+      if (__DEV__) {
+        console.warn("⚠️ Failed to refresh interaction stats after login:", error);
+      }
     }
   },
 
@@ -300,20 +298,19 @@ export const authUtils = {
    * Clear all authentication data
    */
   async clearAuthData() {
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("userToken");
-    await AsyncStorage.removeItem("user");
-    await SecureStore.deleteItemAsync("jwt");
+    const { clearLocalSessionState } = await import("./sessionExpired");
+    await clearLocalSessionState();
 
-    // Clear user-specific interaction data
     try {
       const { useInteractionStore } = await import(
         "../store/useInteractionStore"
       );
       useInteractionStore.getState().clearCache();
-      console.log("✅ Cleared interaction cache on logout");
+      if (__DEV__) console.log("✅ Cleared interaction cache on logout");
     } catch (error) {
-      console.warn("⚠️ Failed to clear interaction cache:", error);
+      if (__DEV__) {
+        console.warn("⚠️ Failed to clear interaction cache:", error);
+      }
     }
   },
 
@@ -321,18 +318,8 @@ export const authUtils = {
    * Get stored token
    */
   async getStoredToken(): Promise<string | null> {
-    let token = await AsyncStorage.getItem("userToken");
-    if (!token) {
-      token = await AsyncStorage.getItem("token");
-    }
-    if (!token) {
-      try {
-        token = await SecureStore.getItemAsync("jwt");
-      } catch (error) {
-        console.error("Error getting token from SecureStore:", error);
-      }
-    }
-    return token;
+    const TokenUtils = (await import("./tokenUtils")).default;
+    return TokenUtils.getAuthToken();
   },
 
   /**

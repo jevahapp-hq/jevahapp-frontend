@@ -9,6 +9,7 @@ import type {
 import { CategoryTypeTags } from "./CategoryTypeTags";
 import { EligibilityBanner } from "./EligibilityBanner";
 import { FIELD_HELP, FieldLabel } from "./FieldLabel";
+import { FieldHelpTip } from "./FieldHelpTip";
 
 type CategoryTypeSectionProps = {
   file: MediaFile | null;
@@ -50,19 +51,10 @@ export function CategoryTypeSection({
         helpKey="category"
         openHelp={openHelp}
       />
-      {helpKey === "category" ? (
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(11, 12, 13),
-            color: "#64748B",
-            fontFamily: "Rubik-Regular",
-            marginBottom: 8,
-            lineHeight: 17,
-          }}
-        >
-          {FIELD_HELP.category}
-        </Text>
-      ) : null}
+      <FieldHelpTip
+        visible={helpKey === "category"}
+        text={FIELD_HELP.category}
+      />
       <View className="mb-4">
         <CategoryTypeTags
           items={categories.map((item) => ({ label: item, value: item }))}
@@ -80,19 +72,10 @@ export function CategoryTypeSection({
         helpKey="contentType"
         openHelp={openHelp}
       />
-      {helpKey === "contentType" ? (
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(11, 12, 13),
-            color: "#64748B",
-            fontFamily: "Rubik-Regular",
-            marginBottom: 8,
-            lineHeight: 17,
-          }}
-        >
-          {FIELD_HELP.contentType}
-        </Text>
-      ) : null}
+      <FieldHelpTip
+        visible={helpKey === "contentType"}
+        text={FIELD_HELP.contentType}
+      />
       {file && (
         <Text
           style={{

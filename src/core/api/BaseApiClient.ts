@@ -43,6 +43,17 @@ export class BaseApiClient {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
+      try {
+        const { isLiteProfileActive } = await import(
+          "../../shared/lite/liteProfile"
+        );
+        if (isLiteProfileActive()) {
+          headers["X-Jevah-Client"] = "lite";
+        }
+      } catch {
+        // optional
+      }
+
       return headers;
     } catch (error) {
       console.error("Error getting auth headers:", error);

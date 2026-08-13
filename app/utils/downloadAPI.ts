@@ -1,5 +1,4 @@
 // Download API Service
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { getApiBaseUrl } from "./api";
 
@@ -50,18 +49,8 @@ class DownloadAPI {
 
   private async getAuthHeaders(): Promise<HeadersInit> {
     try {
-      let token = await AsyncStorage.getItem("userToken");
-      if (!token) {
-        token = await AsyncStorage.getItem("token");
-      }
-      if (!token) {
-        try {
-          const { default: SecureStore } = await import("expo-secure-store");
-          token = await SecureStore.getItemAsync("jwt");
-        } catch (secureStoreError) {
-          console.log("SecureStore not available or no JWT token");
-        }
-      }
+      const TokenUtils = (await import("./tokenUtils")).default;
+      const token = await TokenUtils.getAuthToken();
 
       if (token) {
         return {
@@ -76,7 +65,7 @@ class DownloadAPI {
         "expo-platform": Platform.OS,
       };
     } catch (error) {
-      console.error("Error getting auth headers:", error);
+      if (__DEV__) console.error("Error getting auth headers:", error);
       return {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,

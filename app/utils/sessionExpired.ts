@@ -73,6 +73,13 @@ export async function clearLocalSessionState(): Promise<void> {
     }
 
     try {
+      const { clearBackendSessionPresent } = await import("./sessionAuth");
+      clearBackendSessionPresent();
+    } catch {
+      // continue
+    }
+
+    try {
       const SecureStore = await import("expo-secure-store");
       if (typeof SecureStore.deleteItemAsync === "function") {
         await SecureStore.deleteItemAsync("jwt");
@@ -96,6 +103,13 @@ export function notifySessionExpired(): void {
   notified = true;
 
   void clearLocalSessionState();
+
+  try {
+    const { authToast } = require("../components/auth/authToastBus");
+    authToast.sessionExpired();
+  } catch {
+    // optional UI
+  }
 
   listeners.forEach((listener) => {
     try {

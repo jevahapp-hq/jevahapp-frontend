@@ -2,6 +2,7 @@ import { useClerk, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { clearBackendSession } from '../utils/sessionAuth';
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -10,7 +11,12 @@ export default function HomeScreen() {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await clearBackendSession();
+      try {
+        await signOut();
+      } catch {
+        // email/password users may have no Clerk session
+      }
       router.replace('/');
     } catch (error) {
       console.error('Error signing out:', error);

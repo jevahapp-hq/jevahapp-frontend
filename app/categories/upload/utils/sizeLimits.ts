@@ -37,6 +37,11 @@ export function validateFileSizeLimits(
       errors.push("Audio file size exceeds 50MB limit");
     }
   }
+  else if (selectedType === "gif") {
+    if (file.size > 20 * 1024 * 1024) {
+      errors.push("GIF file size exceeds 20MB limit");
+    }
+  }
   // For books and ebook content types (should be ebooks)
   else if (selectedType === "books" || selectedType === "ebook") {
     if (file.size > MAX_BOOK_SIZE) {

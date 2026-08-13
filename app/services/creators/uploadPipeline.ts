@@ -22,6 +22,9 @@ export type UploadIntentRequest = {
   coverContentType?: string;
   coverFileName?: string;
   coverFileSizeBytes?: number;
+  /** Attach to artist release (album / EP / etc.) */
+  releaseId?: string;
+  trackNumber?: number;
 };
 
 export type UploadIntentResponse = {
@@ -31,6 +34,8 @@ export type UploadIntentResponse = {
   coverUploadUrl?: string;
   coverUploadHeaders?: Record<string, string>;
   expiresInSec?: number;
+  releaseId?: string;
+  trackNumber?: number;
 };
 
 function unwrap(payload: any): any {
@@ -59,6 +64,10 @@ export async function createUploadIntent(
     coverUploadUrl: data.coverUploadUrl || data.coverPutUrl,
     coverUploadHeaders: data.coverUploadHeaders,
     expiresInSec: data.expiresInSec || data.expiresIn,
+    releaseId: data.releaseId ? String(data.releaseId) : body.releaseId,
+    trackNumber:
+      Number(data.trackNumber) ||
+      (body.trackNumber != null ? Number(body.trackNumber) : undefined),
   };
 }
 
@@ -194,10 +203,22 @@ export async function uploadCreatorTrack(params: {
   audio: { uri: string; name: string; mimeType: string; size: number };
   cover?: { uri: string; name: string; mimeType: string; size: number } | null;
   publish?: boolean;
+  releaseId?: string;
+  trackNumber?: number;
   onProgress?: (phase: string) => void;
 }): Promise<TrackCard | null> {
-  const { audio, cover, title, artistName, genre, category, publish, onProgress } =
-    params;
+  const {
+    audio,
+    cover,
+    title,
+    artistName,
+    genre,
+    category,
+    publish,
+    releaseId,
+    trackNumber,
+    onProgress,
+  } = params;
 
   if (audio.size > 100 * 1024 * 1024) {
     throw new Error("Audio must be 100MB or smaller");
@@ -216,6 +237,8 @@ export async function uploadCreatorTrack(params: {
     contentType: audio.mimeType || "audio/mpeg",
     fileName: audio.name || "track.mp3",
     fileSizeBytes: audio.size || 1,
+    releaseId,
+    trackNumber,
     ...(cover
       ? {
           coverContentType: cover.mimeType || "image/jpeg",
@@ -243,17 +266,56 @@ export async function uploadCreatorTrack(params: {
     });
   }
 
+  // When attaching to a release, finalize without publishing the track alone —
+  // release publish is the gate.
   onProgress?.("Finalizing…");
   const finalized = await finalizeTrack(intent.trackId, {
-    publish: publish !== false,
+    publish: releaseId ? false : publish !== false,
   });
 
-  // Poll until ready + prefer duration > 0 before treating as seekable
   onProgress?.("Processing…");
   const ready = await pollCreatorTrackUntilReady(intent.trackId, {
     onProgress,
   });
   return ready || finalized;
+}
+
+/** Release cover: intent → R2 PUT → finalize */
+export async function uploadReleaseCover(params: {
+  releaseId: string;
+  cover: { uri: string; name: string; mimeType: string; size: number };
+  onProgress?: (phase: string) => void;
+}): Promise<void> {
+  const { releaseId, cover, onProgress } = params;
+  if (cover.size > CREATOR_UPLOAD_LIMITS.coverMaxBytes) {
+    throw new Error("Cover must be 5MB or smaller");
+  }
+  onProgress?.("Creating cover upload…");
+  const res = await creatorsApi.createReleaseCoverUploadIntent(releaseId, {
+    contentType: cover.mimeType || "image/jpeg",
+    fileName: cover.name || "cover.jpg",
+    fileSizeBytes: cover.size || 1,
+  });
+  if (!res.success) {
+    throw new Error(res.error || "Release cover upload not available yet");
+  }
+  const data = unwrap(res);
+  const uploadUrl = String(
+    data.uploadUrl || data.coverUploadUrl || data.putUrl || ""
+  );
+  if (!uploadUrl) throw new Error("Cover intent missing uploadUrl");
+  onProgress?.("Uploading cover…");
+  await putToPresignedUrl({
+    uploadUrl,
+    fileUri: cover.uri,
+    contentType: cover.mimeType || "image/jpeg",
+    headers: data.uploadHeaders || data.coverUploadHeaders,
+  });
+  onProgress?.("Saving cover…");
+  const fin = await creatorsApi.finalizeReleaseCover(releaseId);
+  if (!fin.success) {
+    throw new Error(fin.error || "Failed to finalize release cover");
+  }
 }
 
 /** Poll GET /api/creators/me/tracks until track is ready (and duration if available). */

@@ -1,4 +1,9 @@
 import { Dimensions, PixelRatio } from 'react-native';
+import {
+  getLiteImageMaxEdge,
+  getLiteImageQuality,
+  isLiteProfileActive,
+} from '../lite/liteProfile';
 
 /**
  * Image optimization utility for mobile data savings
@@ -17,7 +22,8 @@ export interface ImageSize {
  */
 export const getOptimalImageSize = (
   containerWidth: number,
-  containerHeight?: number
+  containerHeight?: number,
+  maxEdge?: number
 ): ImageSize => {
   const pixelRatio = PixelRatio.get();
   const screenWidth = Dimensions.get('window').width;
@@ -37,15 +43,21 @@ export const getOptimalImageSize = (
     optimalWidth = Math.min(optimalWidth, 600); // Max 600px for medium thumbnails
   }
 
+  const edgeCap = maxEdge ?? getLiteImageMaxEdge();
+  optimalWidth = Math.min(optimalWidth, edgeCap);
+
   // Calculate height if provided
   const optimalHeight = containerHeight
-    ? Math.min(containerHeight * pixelRatio, optimalWidth * (containerHeight / containerWidth))
+    ? Math.min(
+        containerHeight * Math.min(capPixelRatio, pixelRatio),
+        optimalWidth * (containerHeight / containerWidth)
+      )
     : optimalWidth;
 
   return {
     width: Math.round(optimalWidth),
-    height: Math.round(optimalHeight),
-    quality: 85, // Good balance between quality and file size
+    height: Math.round(Math.min(optimalHeight, edgeCap)),
+    quality: getLiteImageQuality(isLiteProfileActive() ? 72 : 85),
   };
 };
 
@@ -71,6 +83,8 @@ export const optimizeImageUrl = (
     quality?: number;
     format?: 'webp' | 'jpg' | 'png';
     blur?: boolean; // For placeholder blur effect
+    /** Honor backend item.lite.imageMaxEdge or Lite decode budget */
+    maxEdge?: number;
   }
 ): string | undefined => {
   if (!originalUrl) return undefined;
@@ -80,8 +94,12 @@ export const optimizeImageUrl = (
     return originalUrl;
   }
 
-  const { width, height, quality } = getOptimalImageSize(containerWidth, containerHeight);
-  const finalQuality = options?.quality || quality || 85;
+  const { width, height, quality } = getOptimalImageSize(
+    containerWidth,
+    containerHeight,
+    options?.maxEdge ?? getLiteImageMaxEdge()
+  );
+  const finalQuality = getLiteImageQuality(options?.quality || quality || 85);
   const format = options?.format || 'webp'; // WebP is 30% smaller than JPEG
 
   try {

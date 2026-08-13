@@ -1,6 +1,11 @@
 import { Image, ImageProps } from 'expo-image';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import {
+  getLiteImageCachePolicy,
+  getLiteImageMaxEdge,
+  getLiteImageQuality,
+} from '../../src/shared/lite/liteProfile';
 import { optimizeImageUrl } from '../../src/shared/utils/imageOptimizer';
 
 interface SafeImageProps extends Omit<ImageProps, 'source'> {
@@ -14,6 +19,8 @@ interface SafeImageProps extends Omit<ImageProps, 'source'> {
   containerWidth?: number;
   containerHeight?: number;
   size?: 'small' | 'medium' | 'large';
+  /** Backend item.lite.imageMaxEdge — caps decode on Lite */
+  imageMaxEdge?: number;
 }
 
 const isRemoteUri = (u: string) =>
@@ -29,6 +36,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   containerWidth,
   containerHeight,
   size = 'medium',
+  imageMaxEdge,
   style,
   ...props
 }) => {
@@ -55,15 +63,28 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   const optimize =
     optimizeProp !== undefined ? optimizeProp : (isValidUri && uri ? isRemoteUri(uri) : false);
 
+  const maxEdge = getLiteImageMaxEdge(imageMaxEdge);
   const optimizedUri = useMemo(() => {
     if (!optimize || !isValidUri || !uri) return uri;
+    const baseQ = size === 'small' ? 75 : size === 'large' ? 90 : 85;
     return (
       optimizeImageUrl(uri, extractedDimensions.width, extractedDimensions.height, {
-        quality: size === 'small' ? 75 : size === 'large' ? 90 : 85,
+        quality: getLiteImageQuality(baseQ),
         format: 'webp',
+        maxEdge,
       }) || uri
     );
-  }, [optimize, uri, isValidUri, extractedDimensions.width, extractedDimensions.height, size]);
+  }, [
+    optimize,
+    uri,
+    isValidUri,
+    extractedDimensions.width,
+    extractedDimensions.height,
+    size,
+    maxEdge,
+  ]);
+
+  const cachePolicy = getLiteImageCachePolicy();
 
   const handleLoadStart = () => {
     setIsLoading(true);
@@ -110,7 +131,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         source={{ uri: optimizedUri }}
         style={[{ width: '100%', height: '100%' }, style]}
         contentFit="cover"
-        cachePolicy="disk"
+        cachePolicy={cachePolicy}
         onLoadStart={handleLoadStart}
         onLoadEnd={handleLoadEnd}
         onError={handleError}

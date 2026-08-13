@@ -10,7 +10,7 @@ export const FIELD_HELP: Record<string, string> = {
   category:
     "The topic lane this post belongs in (Worship, Youth, Teachings, etc.).",
   contentType:
-    "The format of your file — Videos, Music, Books, Podcasts, or Sermons. Match the file you uploaded.",
+    "The format of your file — Videos, GIF, Music, Books, Podcasts, or Sermons. Match the file you uploaded.",
   cover:
     "A square image that represents your post. Required for a strong first impression.",
 };
@@ -65,7 +65,7 @@ export function FieldLabel({
           backgroundColor: "#F1F5F9",
         }}
       >
-        <Ionicons name="help" size={12} color="#64748B" />
+        <Ionicons name="help-circle-outline" size={14} color="#64748B" />
       </Pressable>
     </View>
   );

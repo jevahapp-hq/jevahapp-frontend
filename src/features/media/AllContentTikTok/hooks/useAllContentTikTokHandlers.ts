@@ -20,6 +20,7 @@ import {
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import { detectMediaType } from "../../../../shared/utils";
 import { recordFeedAffinity } from "../utils/feedAffinityStore";
+import { mirrorFeedEngagementEvent } from "../../../../shared/feed";
 
 let lastLikeRateLimitAlertAt = 0;
 
@@ -42,7 +43,6 @@ export interface UseAllContentTikTokHandlersParams {
     ebooks: MediaItem[];
     sermons: MediaItem[];
   };
-  contentStats: Record<string, any>;
   getContentKey: (item: MediaItem) => string;
   getTimeAgo: (date: string) => string;
   getLikeCount: (contentId: string) => number;
@@ -75,7 +75,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     contentType,
     filteredMediaList,
     categorizedContent,
-    contentStats,
     getContentKey: getKey,
     getTimeAgo,
     getLikeCount,
@@ -150,7 +149,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           video: video as any,
           index: finalIndex,
           allVideos: allVideoContent as any,
-          contentStats,
+          contentStats: useInteractionStore.getState().contentStats,
           globalFavoriteCounts: {},
           getContentKey: getKey,
           getTimeAgo,
@@ -164,7 +163,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       navigateToReels,
       categorizedContent.videos,
       categorizedContent.sermons,
-      contentStats,
       getKey,
       getTimeAgo,
       contentType,
@@ -210,6 +208,12 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         // Train on-device affinity when the heart ends liked
         if (result?.liked) {
           void recordFeedAffinity(item, 1.5);
+          mirrorFeedEngagementEvent(
+            contentId,
+            "like",
+            item.contentType || "media",
+            "for_you"
+          );
         }
       } catch (error) {
         console.error(`❌ Failed to toggle like for ${item.title}:`, error);
@@ -231,16 +235,32 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         typeof uploadedBy === "string"
           ? uploadedBy
           : String(uploadedBy?._id || uploadedBy?.id || "");
-      const creatorName =
-        item.speaker ||
-        (typeof uploadedBy === "object"
-          ? `${uploadedBy?.firstName || ""} ${uploadedBy?.lastName || ""}`.trim() ||
-            uploadedBy?.username
-          : "") ||
-        item.title ||
-        "";
+      const creatorName = (() => {
+        const fromAuthor =
+          (item as any).authorInfo?.fullName ||
+          [
+            (item as any).authorInfo?.firstName,
+            (item as any).authorInfo?.lastName,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+        const fromUploaded =
+          typeof uploadedBy === "object"
+            ? `${uploadedBy?.firstName || ""} ${uploadedBy?.lastName || ""}`.trim() ||
+              uploadedBy?.fullName ||
+              uploadedBy?.username ||
+              ""
+            : "";
+        const raw = fromAuthor || item.speaker || fromUploaded || "";
+        if (!raw || /^(anonymous(\s+user)?|unknown)$/i.test(String(raw).trim())) {
+          return "";
+        }
+        return String(raw).trim();
+      })();
       const creatorAvatar =
         item.speakerAvatar ||
+        (item as any).authorInfo?.avatar ||
         (typeof uploadedBy === "object"
           ? uploadedBy?.avatar || uploadedBy?.avatarUrl
           : undefined);
@@ -268,11 +288,34 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        const result = await toggleSave(contentId, contentType);
-        if (result?.authRequired) return;
+        const prevSaved = Boolean(
+          useInteractionStore.getState().contentStats[contentId]?.userInteractions
+            ?.saved
+        );
 
-        // Use API result — getUserSaveState can be stale until re-render
+        // Instant feedback — don't wait for API or AsyncStorage
+        setSuccessMessage(prevSaved ? "Removed from library!" : "Saved to library!");
+        setShowSuccessCard(true);
+        setModalVisible(null);
+
+        const result = await toggleSave(contentId, contentType);
+        if (result?.authRequired) {
+          setShowSuccessCard(false);
+          return;
+        }
+
+        // Correct toast if server flipped differently than optimistic guess
+        setSuccessMessage(
+          result.saved ? "Saved to library!" : "Removed from library!"
+        );
+
         if (result.saved) {
+          mirrorFeedEngagementEvent(
+            contentId,
+            "save",
+            contentType,
+            "for_you"
+          );
           const libraryItem = {
             id: contentId,
             contentType: item.contentType || "content",
@@ -303,19 +346,16 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
             })(),
             originalKey: key,
           };
-          await libraryStore.addToLibrary(libraryItem);
-          setSuccessMessage("Saved to library!");
+          void libraryStore.addToLibrary(libraryItem);
         } else {
-          await libraryStore.removeFromLibrary(contentId);
-          setSuccessMessage("Removed from library!");
+          void libraryStore.removeFromLibrary(contentId);
         }
-        setShowSuccessCard(true);
       } catch (error) {
         console.error("❌ Save error:", error);
         setSuccessMessage("Couldn't save — media may be unavailable");
         setShowSuccessCard(true);
+        setModalVisible(null);
       }
-      setModalVisible(null);
     },
     [
       toggleSave,
@@ -350,6 +390,12 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
             contentId,
             contentType,
             result.activityType || "generic"
+          );
+          mirrorFeedEngagementEvent(
+            contentId,
+            "share",
+            item.contentType || "media",
+            "for_you"
           );
         }
       } catch (err) {

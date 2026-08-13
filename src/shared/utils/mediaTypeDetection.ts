@@ -6,7 +6,7 @@
 
 import { MediaItem } from "../types";
 
-export type MediaType = "video" | "audio" | "ebook" | "unknown";
+export type MediaType = "video" | "audio" | "ebook" | "gif" | "unknown";
 
 /**
  * Video file extensions
@@ -63,6 +63,9 @@ export const detectMediaType = (item: MediaItem | null | undefined): MediaType =
 
   // Check MIME type first (most reliable)
   if (mimeType) {
+    if (mimeType === "image/gif" || mimeType.includes("image/gif")) {
+      return "gif";
+    }
     if (VIDEO_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix))) {
       return "video";
     }
@@ -78,13 +81,25 @@ export const detectMediaType = (item: MediaItem | null | undefined): MediaType =
   const hasVideoExtension = VIDEO_EXTENSIONS.some((ext) => fileUrl.includes(ext));
   const hasAudioExtension = AUDIO_EXTENSIONS.some((ext) => fileUrl.includes(ext));
   const hasEbookExtension = EBOOK_EXTENSIONS.some((ext) => fileUrl.includes(ext));
+  const hasGifExtension = fileUrl.includes(".gif");
 
+  if (hasGifExtension) return "gif";
   if (hasVideoExtension) return "video";
   if (hasAudioExtension) return "audio";
   if (hasEbookExtension) return "ebook";
 
   // Check contentType as fallback — exact tokens only (never title text;
   // "book" substring must not classify a video titled "Book of Enoch")
+  if (
+    contentType === "gif" ||
+    contentType === "gifs"
+  ) {
+    if (hasVideoExtension || VIDEO_MIME_PREFIXES.some((p) => mimeType.startsWith(p))) {
+      return "video";
+    }
+    return "gif";
+  }
+
   if (
     contentType === "video" ||
     contentType === "videos" ||
@@ -137,6 +152,19 @@ export const isAudio = (item: MediaItem | null | undefined): boolean => {
  */
 export const isEbook = (item: MediaItem | null | undefined): boolean => {
   return detectMediaType(item) === "ebook";
+};
+
+/** Animated GIF file (not a looping MP4 tagged as gif). */
+export const isGifImage = (item: MediaItem | null | undefined): boolean => {
+  return detectMediaType(item) === "gif";
+};
+
+/** GIF intent: animated image or short looping clip. */
+export const isGifContent = (item: MediaItem | null | undefined): boolean => {
+  if (!item) return false;
+  const t = (item.contentType || "").toLowerCase();
+  if (t === "gif" || t === "gifs") return true;
+  return isGifImage(item);
 };
 
 /**

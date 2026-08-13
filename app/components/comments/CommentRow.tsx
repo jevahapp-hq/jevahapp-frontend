@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { AnimatedButton } from "../../../src/shared/components/AnimatedButton";
 import { formatCount } from "../../../src/shared/utils/formatCount";
+import { resolveUserAvatarUrl } from "../../utils/defaultUserAvatar";
 import { shortCommentTime } from "./commentHelpers";
 import { RenderCommentBody } from "./renderCommentBody";
 import {
@@ -51,15 +52,10 @@ function CommentRowComponent({
         onLongPress={own ? () => onOpenOwnMenu(c) : undefined}
         delayLongPress={280}
       >
-        {c.avatar ? (
-          <Image source={{ uri: c.avatar }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarInitial}>
-              {(c.userName || "U").charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <Image
+          source={{ uri: resolveUserAvatarUrl(c.avatar) }}
+          style={styles.avatar}
+        />
 
         <View style={styles.commentBody}>
           <View style={styles.nameRow}>
@@ -135,20 +131,10 @@ function CommentRowComponent({
                     }
                     delayLongPress={280}
                   >
-                    {r.avatar ? (
-                      <Image
-                        source={{ uri: r.avatar }}
-                        style={styles.replyAvatar}
-                      />
-                    ) : (
-                      <View
-                        style={[styles.replyAvatar, styles.avatarFallback]}
-                      >
-                        <Text style={styles.replyAvatarInitial}>
-                          {(r.userName || "U").charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
+                    <Image
+                      source={{ uri: resolveUserAvatarUrl(r.avatar) }}
+                      style={styles.replyAvatar}
+                    />
                     <View style={{ flex: 1 }}>
                       <View style={styles.nameRow}>
                         <Text style={styles.replyUserName} numberOfLines={1}>

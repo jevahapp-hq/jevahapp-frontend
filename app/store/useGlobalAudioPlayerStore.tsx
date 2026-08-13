@@ -62,20 +62,20 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
         // Convert audioUrl and thumbnailUrl to strings if they're require() objects
         const persistedTrack = state.currentTrack
           ? {
-              id: state.currentTrack.id,
-              title: state.currentTrack.title,
-              artist: state.currentTrack.artist,
-              duration: state.currentTrack.duration,
-              category: state.currentTrack.category,
-              description: state.currentTrack.description,
-              // Convert require() objects to strings
+          id: state.currentTrack.id,
+          title: state.currentTrack.title,
+          artist: state.currentTrack.artist,
+          duration: state.currentTrack.duration,
+          category: state.currentTrack.category,
+          description: state.currentTrack.description,
+          // Convert require() objects to strings
               audioUrl:
                 typeof state.currentTrack.audioUrl === "string"
-                  ? state.currentTrack.audioUrl
+            ? state.currentTrack.audioUrl
                   : state.currentTrack.audioUrl?.uri || "",
               thumbnailUrl:
                 typeof state.currentTrack.thumbnailUrl === "string"
-                  ? state.currentTrack.thumbnailUrl
+            ? state.currentTrack.thumbnailUrl
                   : state.currentTrack.thumbnailUrl?.uri || "",
             }
           : null;
@@ -92,11 +92,11 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             description: track.description,
             audioUrl:
               typeof track.audioUrl === "string"
-                ? track.audioUrl
+              ? track.audioUrl
                 : track.audioUrl?.uri || "",
             thumbnailUrl:
               typeof track.thumbnailUrl === "string"
-                ? track.thumbnailUrl
+              ? track.thumbnailUrl
                 : track.thumbnailUrl?.uri || "",
           })),
           originalQueue: state.originalQueue.map((track) => ({
@@ -108,11 +108,11 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
             description: track.description,
             audioUrl:
               typeof track.audioUrl === "string"
-                ? track.audioUrl
+              ? track.audioUrl
                 : track.audioUrl?.uri || "",
             thumbnailUrl:
               typeof track.thumbnailUrl === "string"
-                ? track.thumbnailUrl
+              ? track.thumbnailUrl
                 : track.thumbnailUrl?.uri || "",
           })),
           currentIndex: state.currentIndex,

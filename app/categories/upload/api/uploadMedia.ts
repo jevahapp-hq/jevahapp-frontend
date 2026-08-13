@@ -58,7 +58,10 @@ export function buildUploadFormData({
     file,
     isSermonContent: selectedType === "sermon",
   });
-  formData.append("contentType", resolved.contentType);
+  formData.append("contentType", resolved.contentType === "gif" ? "videos" : resolved.contentType);
+  if (resolved.contentType === "gif" || selectedType === "gif") {
+    formData.append("isGif", "true");
+  }
   formData.append(
     "genre",
     JSON.stringify([selectedCategory.toLowerCase(), "All"])

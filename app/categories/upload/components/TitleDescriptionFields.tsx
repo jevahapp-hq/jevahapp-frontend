@@ -1,10 +1,10 @@
-import { Text, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import {
   getInputSize,
-  getResponsiveFontSize,
   getResponsiveSpacing,
 } from "../../../../utils/responsive";
 import { FIELD_HELP, FieldLabel } from "./FieldLabel";
+import { FieldHelpTip } from "./FieldHelpTip";
 
 type TitleDescriptionFieldsProps = {
   title: string;
@@ -32,19 +32,7 @@ export function TitleDescriptionFields({
         helpKey="title"
         openHelp={openHelp}
       />
-      {helpKey === "title" ? (
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(11, 12, 13),
-            color: "#64748B",
-            fontFamily: "Rubik-Regular",
-            marginBottom: 8,
-            lineHeight: 17,
-          }}
-        >
-          {FIELD_HELP.title}
-        </Text>
-      ) : null}
+      <FieldHelpTip visible={helpKey === "title"} text={FIELD_HELP.title} />
       <TextInput
         placeholder="Enter title..."
         value={title}
@@ -65,19 +53,10 @@ export function TitleDescriptionFields({
         helpKey="description"
         openHelp={openHelp}
       />
-      {helpKey === "description" ? (
-        <Text
-          style={{
-            fontSize: getResponsiveFontSize(11, 12, 13),
-            color: "#64748B",
-            fontFamily: "Rubik-Regular",
-            marginBottom: 8,
-            lineHeight: 17,
-          }}
-        >
-          {FIELD_HELP.description}
-        </Text>
-      ) : null}
+      <FieldHelpTip
+        visible={helpKey === "description"}
+        text={FIELD_HELP.description}
+      />
       <TextInput
         placeholder="Enter description..."
         value={description}

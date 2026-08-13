@@ -1,19 +1,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useState } from "react";
+import { hasBackendSession } from "../utils/sessionAuth";
 
 export default function AuthLayout() {
-  const [hasToken, setHasToken] = useState<boolean | null>(null);
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem("token").then((t) => setHasToken(!!t));
+    hasBackendSession().then(setHasSession);
   }, []);
 
-  // Still checking storage
-  if (hasToken === null) return null;
+  if (hasSession === null) return null;
 
-  // Already logged in — send to app
-  if (hasToken) {
+  if (hasSession) {
     return <Redirect href="/categories/HomeScreen" />;
   }
 

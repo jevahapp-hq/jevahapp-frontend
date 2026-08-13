@@ -2,6 +2,7 @@ import { Image, ImageProps } from 'expo-image';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
 import { useViewportAware } from '../hooks/useViewportAware';
+import { getLiteImageCachePolicy } from '../lite/liteProfile';
 import { optimizeImageUrl } from '../utils/imageOptimizer';
 
 interface OptimizedImageProps extends Omit<ImageProps, 'source'> {
@@ -163,7 +164,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
           onLoadStart={handleLoadStart}
           onLoad={handleLoad}
           onError={handleError}
-          cachePolicy="disk"
+          cachePolicy={getLiteImageCachePolicy()}
           transition={300}
         />
       </Animated.View>

@@ -1,7 +1,7 @@
 /**
  * useAllContentTikTokFeedData - Feed data, helpers, and hydration effects
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InteractionManager } from "react-native";
 import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
@@ -25,7 +25,12 @@ import {
   createFeedShuffleSeed,
   pickMostRecentItem,
   rankFeedForYou,
+  stabilizeFeedOrder,
 } from "../utils/rankFeedForYou";
+import {
+  CLIENT_RERANK,
+  SESSION_SHUFFLE,
+} from "../../../../shared/feed/feedFeatureFlags";
 
 export interface UseAllContentTikTokFeedDataParams {
   mediaList: MediaItem[];
@@ -33,6 +38,8 @@ export interface UseAllContentTikTokFeedDataParams {
   setPreviouslyViewed: (v: any[]) => void;
   setIsLoadingContent: (v: boolean) => void;
   previouslyViewed?: any[];
+  /** Server already ranked via /feed/for-you */
+  serverRanked?: boolean;
 }
 
 export function useAllContentTikTokFeedData(
@@ -44,6 +51,7 @@ export function useAllContentTikTokFeedData(
     setPreviouslyViewed,
     setIsLoadingContent,
     previouslyViewed = [],
+    serverRanked = false,
   } = params;
 
   const libraryIsLoaded = useLibraryStore((s) => s.isLoaded);
@@ -59,6 +67,8 @@ export function useAllContentTikTokFeedData(
   const [affinity, setAffinity] = useState<
     import("../utils/feedAffinityStore").FeedAffinityProfile | undefined
   >(undefined);
+  const pinnedOrderRef = useRef<string[]>([]);
+  const seedUsedRef = useRef(sessionSeed);
 
   // Load cross-session impressions + rotate seed once per cold start
   useEffect(() => {
@@ -104,23 +114,31 @@ export function useAllContentTikTokFeedData(
     return ids;
   }, [previouslyViewed]);
 
-  // For You ranking — wait for impression state so relaunch rotation is correct
+  // Session shuffle: random order each visit / PTR. Pin shown IDs so page 2 doesn't jump.
   const filteredMediaList = useMemo(() => {
-    if (!impressionsReady && filteredByType.length > 0) {
-      return rankFeedForYou(filteredByType, {
-        previouslyViewedIds,
-        sessionSeed,
-        lastSessionTopIds,
-        affinity,
-      });
+    if (!SESSION_SHUFFLE && (serverRanked || !CLIENT_RERANK)) {
+      return filteredByType;
     }
-    return rankFeedForYou(filteredByType, {
+
+    if (seedUsedRef.current !== sessionSeed) {
+      pinnedOrderRef.current = [];
+      seedUsedRef.current = sessionSeed;
+    }
+
+    const ranked = rankFeedForYou(filteredByType, {
       previouslyViewedIds,
-      seenTodayIds,
-      lastSessionTopIds,
+      seenTodayIds: impressionsReady ? seenTodayIds : undefined,
+      lastSessionTopIds: impressionsReady ? lastSessionTopIds : undefined,
       sessionSeed,
-      affinity,
+      affinity: CLIENT_RERANK ? affinity : undefined,
     });
+
+    const { items, nextPinnedIds } = stabilizeFeedOrder(
+      ranked,
+      pinnedOrderRef.current
+    );
+    pinnedOrderRef.current = nextPinnedIds;
+    return items;
   }, [
     filteredByType,
     previouslyViewedIds,
@@ -129,6 +147,7 @@ export function useAllContentTikTokFeedData(
     sessionSeed,
     impressionsReady,
     affinity,
+    serverRanked,
   ]);
 
   const categorizedContent = useMemo(
@@ -357,7 +376,9 @@ export function useAllContentTikTokFeedData(
   ]);
 
   const reshuffleFeed = useCallback(async () => {
+    pinnedOrderRef.current = [];
     const seed = await rotateSessionSeed();
+    seedUsedRef.current = seed;
     setSessionSeed(seed);
   }, []);
 
@@ -372,32 +393,38 @@ export function useAllContentTikTokFeedData(
   };
 }
 
-export function useContentStatsHelpers(contentStats: Record<string, any>) {
+/** Stable helpers — read latest store; do not subscribe the feed root to contentStats. */
+export function useContentStatsHelpers() {
   const getUserLikeState = useCallback(
     (contentId: string) =>
-      contentStats[contentId]?.userInteractions?.liked || false,
-    [contentStats]
+      useInteractionStore.getState().contentStats[contentId]?.userInteractions
+        ?.liked || false,
+    []
   );
 
   const getLikeCount = useCallback(
-    (contentId: string) => contentStats[contentId]?.likes || 0,
-    [contentStats]
+    (contentId: string) =>
+      useInteractionStore.getState().contentStats[contentId]?.likes || 0,
+    []
   );
 
   const getUserSaveState = useCallback(
     (contentId: string) =>
-      contentStats[contentId]?.userInteractions?.saved || false,
-    [contentStats]
+      useInteractionStore.getState().contentStats[contentId]?.userInteractions
+        ?.saved || false,
+    []
   );
 
   const getSaveCount = useCallback(
-    (contentId: string) => contentStats[contentId]?.saves || 0,
-    [contentStats]
+    (contentId: string) =>
+      useInteractionStore.getState().contentStats[contentId]?.saves || 0,
+    []
   );
 
   const getCommentCount = useCallback(
-    (contentId: string) => contentStats[contentId]?.comments || 0,
-    [contentStats]
+    (contentId: string) =>
+      useInteractionStore.getState().contentStats[contentId]?.comments || 0,
+    []
   );
 
   return {

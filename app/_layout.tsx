@@ -1,4 +1,5 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   Rubik_400Regular,
   Rubik_600SemiBold,
@@ -8,28 +9,40 @@ import {
 import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
-import { Slot, useRouter } from "expo-router";
+import { Slot } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics as safeAreaInitialMetrics,
+} from "react-native-safe-area-context";
 import { CommentMediaShift } from "./components/CommentMediaShift";
-import CommentModalV2 from "./components/CommentModalV2";
+import DeferredRootOverlays from "./components/DeferredRootOverlays";
 import ErrorBoundary from "./components/ErrorBoundary";
-import SessionExpiredOverlay from "./components/SessionExpiredOverlay";
-import FloatingAudioPlayer from "../src/shared/components/FloatingAudioPlayer";
 import LikeQueueBootstrap from "./components/LikeQueueBootstrap";
-import ServerUnavailableModalWrapper from "./components/ServerUnavailableModalWrapper";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
-import { useAuth } from "./hooks/useAuth";
 import { useArtistDeepLinks } from "./hooks/useArtistDeepLinks";
 import { useDownloadStore } from "./store/useDownloadStore";
 import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
+import { hydrateFallbackKvFromAsyncStorage, appMmkv } from "../src/shared/cache/mmkvStorage";
+import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
+import {
+  allContentQueryKey,
+  getFeedPageSize,
+  getFeedStaleMs,
+  getFeedMaxPages,
+} from "../src/shared/config/feedCachePolicy";
+import {
+  hydrateLiteProfile,
+  hydrateLiteProfileSync,
+} from "../src/shared/lite/liteProfile";
+import { hasBackendSessionSync } from "./utils/sessionAuth";
 import { PERF, getAllPerfSummaries, perfMark, perfMeasure } from "../src/shared/utils/perfMarks";
 import { warmupBackend } from "./utils/apiWarmup";
 import { PerformanceOptimizer } from "./utils/performance";
@@ -49,94 +62,80 @@ if (__DEV__) {
   };
 }
 
-// ✅ Initialize Sentry
+// Lean Sentry boot: no session replay / feedback at module load (expensive).
 Sentry.init({
   dsn: "https://70c2253e1290544381fe6dae9bfdd172@o4509865295020032.ingest.us.sentry.io/4509865711763457",
-  debug: __DEV__, // only log in development
-
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  debug: false,
   sendDefaultPii: true,
-  // Perf: 1.0 = 100% sampling causes significant overhead; use 0.1 in prod
-  tracesSampleRate: __DEV__ ? 1.0 : 0.1,
-  profilesSampleRate: __DEV__ ? 1.0 : 0.1,
-
-  // Configure Session Replay
-  replaysSessionSampleRate: __DEV__ ? 0.1 : 0.01,
-  replaysOnErrorSampleRate: 1,
-  integrations: [
-    Sentry.mobileReplayIntegration(),
-    Sentry.feedbackIntegration(),
-  ],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
+  tracesSampleRate: __DEV__ ? 0.2 : 0.1,
+  profilesSampleRate: 0,
+  replaysSessionSampleRate: 0,
+  replaysOnErrorSampleRate: 0,
+  integrations: [],
 });
-
-const API_BASE_URL =
-  Constants.expoConfig?.extra?.API_URL ||
-  process.env.EXPO_PUBLIC_API_URL_PRODUCTION ||
-  process.env.EXPO_PUBLIC_API_URL ||
-  "https://api.jevahapp.com";
 
 const publishableKey =
   Constants.expoConfig?.extra?.CLERK_KEY ||
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-  "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk"; // fallback
+  "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk";
 
-// ✅ Clerk token cache
 const tokenCache = {
   async getToken(key: string) {
     try {
       return await SecureStore.getItemAsync(key);
-    } catch (err) {
-      // console.error("Error getting token:", err);
+    } catch {
       return null;
     }
   },
   async saveToken(key: string, value: string) {
     try {
-      return await SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      // console.error("Error saving token:", err);
+      await SecureStore.setItemAsync(key, value);
+    } catch {
+      // ignore
     }
   },
 };
 
-// Keep native splash visible until we're ready (fonts + critical init)
-SplashScreen.preventAutoHideAsync().catch(() => { });
+SplashScreen.preventAutoHideAsync().catch(() => {});
 perfMark(PERF.APP_START);
 
-// Create React Query client with cache settings matching backend (15 minutes)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15 * 60 * 1000, // 15 minutes - matches backend cache
-      gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache after stale
-      retry: 1, // Retry once on failure
-      refetchOnWindowFocus: false, // Don't refetch on app focus (React Native)
-      refetchOnReconnect: true, // Refetch when network reconnects
-      refetchOnMount: false, // Use cache if available, don't refetch on mount
+      staleTime: 15 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      refetchOnMount: false,
     },
   },
 });
 
+// Sync Lite mode + MMKV → React Query before first Home paint
+try {
+  hydrateLiteProfileSync();
+  hydrateFeedQueryCache(queryClient);
+} catch {
+  // ignore corrupt cache
+}
+
 export default function RootLayout() {
-  const router = useRouter();
   useArtistDeepLinks();
   const [fontsLoaded, fontError] = useFonts({
     Rubik_400Regular,
     Rubik_600SemiBold,
     Rubik_700Bold,
+    ...Ionicons.font,
+    ...MaterialIcons.font,
+    ...Feather.font,
   });
 
-  // Suppress Clerk telemetry errors, video URL errors, network failures, and expected auth errors
   useEffect(() => {
+    if (__DEV__) return;
     const originalError = console.error;
     console.error = (...args) => {
       const errorMessage = args[0]?.toString() || "";
-
-      // Suppress non-critical errors that don't affect functionality
       if (
         args[0]?.includes?.("clerk/telemetry") ||
         args[0]?.includes?.("Clerk hooks not available") ||
@@ -157,121 +156,186 @@ export default function RootLayout() {
         errorMessage.includes("The request timed out") ||
         errorMessage.includes("NSURLErrorTimedOut") ||
         errorMessage.includes("error code -1001") ||
-        // Suppress "User not found" errors from password reset (expected behavior for security)
         errorMessage.includes("User not found") ||
         errorMessage.includes("Email not found") ||
         errorMessage.includes("Forgot password failed: User not found") ||
-        // Suppress categories API errors (graceful degradation - app works without categories)
         errorMessage.includes("Error fetching categories")
       ) {
-        // Only log network errors in development
-        if (__DEV__ && (errorMessage.includes("Network request failed") || errorMessage.includes("TypeError: Network request failed"))) {
-          // Log once per error type to avoid spam
-          const errorKey = `network_error_${Date.now()}`;
-          if (!(global as any).__loggedNetworkErrors) {
-            (global as any).__loggedNetworkErrors = new Set();
-          }
-          if (!(global as any).__loggedNetworkErrors.has(errorKey)) {
-            (global as any).__loggedNetworkErrors.add(errorKey);
-            // Clear the set after 5 seconds to allow new logs
-            setTimeout(() => {
-              (global as any).__loggedNetworkErrors?.delete(errorKey);
-            }, 5000);
-            originalError.apply(console, args);
-          }
-        }
-        return; // Suppress these specific errors in production
+        return;
       }
       originalError.apply(console, args);
     };
-
     return () => {
       console.error = originalError;
     };
   }, []);
+
   const [isInitialized, setIsInitialized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const loadPersistedMedia = useMediaStore((state) => state.loadPersistedMedia);
   const loadDownloadedItems = useDownloadStore(
     (state) => state.loadDownloadedItems
   );
   const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
-  const { signOut } = useAuth();
 
-  // Never leave users trapped on the native splash if font/native startup stalls.
+  // Never trap users on native splash — fail-open quickly
   useEffect(() => {
     const fallback = setTimeout(() => {
       SplashScreen.hideAsync()
-        .then(() => {
-          recordSplashHide();
-        })
+        .then(() => recordSplashHide())
         .catch(() => {});
-    }, 1800);
+    }, 400);
     return () => clearTimeout(fallback);
   }, []);
 
-  // Persisted media is useful, but must never block the app shell/splash.
+  // Hide splash as soon as fonts resolve OR on first paint of the shell
   useEffect(() => {
-    if (!fontsLoaded || isInitialized) return;
-
-    setIsInitialized(true);
-    void Promise.resolve(loadPersistedMedia()).catch(() => {
-      // Non-blocking; app works without persisted playback state.
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync()
+        .then(() => recordSplashHide())
+        .catch(() => {});
+      return;
+    }
+    // Don't wait on fonts forever — paint shell ASAP
+    const raf = requestAnimationFrame(() => {
+      SplashScreen.hideAsync()
+        .then(() => recordSplashHide())
+        .catch(() => {});
     });
-  }, [fontsLoaded, loadPersistedMedia, isInitialized]);
+    return () => cancelAnimationFrame(raf);
+  }, [fontsLoaded, fontError]);
 
-  // Deferred init: run after first paint so content appears faster
+  // Migrate legacy AsyncStorage onboarding → MMKV once (sync Redirect path)
   useEffect(() => {
-    if (!fontsLoaded || !isInitialized) return;
+    void (async () => {
+      try {
+        if (appMmkv.getString("onboardingSeen") === "1") return;
+        const seen = await (
+          await import("@react-native-async-storage/async-storage")
+        ).default.getItem("onboardingSeen");
+        if (seen === "true") {
+          appMmkv.set("onboardingSeen", "1");
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (isInitialized) return;
+    setIsInitialized(true);
+    void Promise.resolve(loadPersistedMedia()).catch(() => {});
+  }, [loadPersistedMedia, isInitialized]);
+
+  // Critical path: hydrate + warmup + feed prefetch (don't contend with Home paint)
+  useEffect(() => {
+    if (!isInitialized) return;
 
     const task = InteractionManager.runAfterInteractions(() => {
-      (async () => {
+      void (async () => {
         try {
-          await loadDownloadedItems();
-        } catch { }
+          await hydrateLiteProfile();
+        } catch {}
+
         try {
-          await loadSavedItems();
-        } catch { }
-        try {
-          await PerformanceOptimizer.getInstance().preloadCriticalData();
-        } catch { }
-        // Warm API then prefetch first page (same key as useMedia for cache hit)
-        await warmupBackend().catch(() => { });
-        await new Promise((r) => setTimeout(r, 800));
-        queryClient.prefetchInfiniteQuery({
-          queryKey: ["all-content", "ALL", 12, false],
-          queryFn: async ({ pageParam = 1 }) => {
-            const { fetchAllContentPage } = await import(
-              "../src/shared/media/fetchAllContentPage"
-            );
-            return fetchAllContentPage({
-              contentType: "ALL",
-              page: pageParam as number,
-              limit: 12,
-              useAuth: false,
-            });
-          },
-          initialPageParam: 1,
-          staleTime: 2 * 60 * 60 * 1000,
-        }).catch(() => { });
+          await hydrateFallbackKvFromAsyncStorage([
+            "content-cache-store",
+            "rq-all-content-seed",
+            "rq-all-content-seed:lite",
+            "rq-all-content-seed:full",
+            "feed-page:ALL:public",
+            "feed-page:ALL:auth",
+            "feed-page:ALL:public:lite",
+            "feed-page:ALL:auth:lite",
+            "feed-page:ALL:public:full",
+            "feed-page:ALL:auth:full",
+            "video-feed-data",
+          ]);
+          hydrateFeedQueryCache(queryClient);
+        } catch {}
+
+        void warmupBackend(3000).catch(() => {});
+
+        const pageSize = getFeedPageSize();
+        const useAuth = hasBackendSessionSync();
+        // Warm the key Home actually reads (auth For You when logged in)
+        queryClient
+          .prefetchInfiniteQuery({
+            queryKey: allContentQueryKey("ALL", pageSize, useAuth, useAuth),
+            queryFn: async ({ pageParam }) => {
+              const { fetchAllContentPage } = await import(
+                "../src/shared/media/fetchAllContentPage"
+              );
+              if (useAuth) {
+                const cursor =
+                  pageParam === null || pageParam === undefined
+                    ? null
+                    : typeof pageParam === "string"
+                      ? pageParam
+                      : null;
+                return fetchAllContentPage({
+                  contentType: "ALL",
+                  page: cursor == null ? 1 : 2,
+                  limit: pageSize,
+                  useAuth: true,
+                  cursor,
+                });
+              }
+              return fetchAllContentPage({
+                contentType: "ALL",
+                page: (pageParam as number) || 1,
+                limit: pageSize,
+                useAuth: false,
+                forceChronological: true,
+              });
+            },
+            initialPageParam: useAuth ? null : 1,
+            staleTime: getFeedStaleMs(),
+            maxPages: getFeedMaxPages(),
+          })
+          .catch(() => {});
       })();
     });
 
     return () => task.cancel();
-  }, [fontsLoaded, isInitialized, loadDownloadedItems, loadSavedItems]);
+  }, [isInitialized]);
 
-  // Hide as soon as fonts resolve; background hydration is not a launch gate.
+  // Secondary: downloads / library / misc preload — after first interactions settle
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync()
-        .then(() => {
-          recordSplashHide();
-        })
-        .catch(() => {});
-    }
-  }, [fontsLoaded, fontError]);
+    if (!isInitialized) return;
+    let cancelled = false;
+    let innerClear: (() => void) | undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      const t = setTimeout(() => {
+        if (cancelled) return;
+        void (async () => {
+          try {
+            await loadDownloadedItems();
+          } catch {}
+          try {
+            await loadSavedItems();
+          } catch {}
+          try {
+            await PerformanceOptimizer.getInstance().preloadCriticalData();
+          } catch {}
+          try {
+            const { preloadNavTapSound } = await import(
+              "../src/shared/utils/uiSounds"
+            );
+            preloadNavTapSound();
+          } catch {}
+        })();
+      }, 600);
+      innerClear = () => clearTimeout(t);
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+      innerClear?.();
+    };
+  }, [isInitialized, loadDownloadedItems, loadSavedItems]);
 
-  // Intercept Android hardware back to properly exit app instead of logging out
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const handler = () => {
@@ -280,39 +344,25 @@ export default function RootLayout() {
         {
           text: "Exit",
           style: "destructive",
-          onPress: () => {
-            // Properly exit the app without logging out
-            BackHandler.exitApp();
-          },
+          onPress: () => BackHandler.exitApp(),
         },
       ]);
-      return true; // prevent default exit
+      return true;
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", handler);
     return () => sub.remove();
   }, []);
 
-  // ✅ Fonts not loaded
-  if (!fontsLoaded && !fontError) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text>Loading fonts...</Text>
-      </View>
-    );
-  }
-
-  // ✅ Missing Clerk key
   if (!publishableKey) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <Text style={{ fontSize: 16, color: "red", textAlign: "center" }}>
-          ❌ Clerk key missing. Please configure EAS secrets.
+          Clerk key missing. Please configure EAS secrets.
         </Text>
       </View>
     );
   }
 
-  // ✅ Initialization error
   if (error) {
     return (
       <View
@@ -333,11 +383,11 @@ export default function RootLayout() {
     );
   }
 
-  // ✅ Normal app rendering
+  // Mount shell immediately (fonts apply when ready — do not block providers)
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <SafeAreaProvider>
+        <SafeAreaProvider initialMetrics={safeAreaInitialMetrics ?? undefined}>
           <ClerkProvider
             publishableKey={publishableKey}
             tokenCache={tokenCache}
@@ -352,10 +402,7 @@ export default function RootLayout() {
                     <CommentMediaShift>
                       <Slot />
                     </CommentMediaShift>
-                    <CommentModalV2 />
-                    <SessionExpiredOverlay />
-                    <FloatingAudioPlayer />
-                    <ServerUnavailableModalWrapper />
+                    <DeferredRootOverlays />
                   </CommentModalProvider>
                 </NotificationProvider>
               </PersistentNotificationProvider>

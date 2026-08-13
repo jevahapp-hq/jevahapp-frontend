@@ -17,6 +17,8 @@ type Track = {
   title: string;
   artist: string;
   thumbnailUrl: string | number;
+  releaseTitle?: string;
+  release?: { title?: string };
 };
 
 type FloatingMiniBarProps = {
@@ -101,8 +103,19 @@ export function FloatingMiniBar({
             {currentTrack.title}
           </Text>
           <Text style={styles.trackArtist} numberOfLines={1}>
-            {currentTrack.artist}
+            {currentTrack.releaseTitle || currentTrack.release?.title
+              ? `Playing from ${currentTrack.releaseTitle || currentTrack.release?.title}`
+              : currentTrack.artist}
           </Text>
+          {(currentTrack.releaseTitle || currentTrack.release?.title) &&
+          currentTrack.artist ? (
+            <Text
+              style={[styles.trackArtist, { fontSize: 11, opacity: 0.75 }]}
+              numberOfLines={1}
+            >
+              {currentTrack.artist}
+            </Text>
+          ) : null}
         </TouchableOpacity>
 
         <View style={styles.controls}>

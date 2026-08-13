@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { io, Socket } from "socket.io-client";
 import {
   Notification,
   notificationAPIService,
   NotificationResponse,
   NotificationStats,
 } from "../services/NotificationAPIService";
-import { API_BASE_URL } from "../utils/api";
-import { TokenUtils } from "../utils/tokenUtils";
+import {
+  acquireNotificationSocket,
+  getSharedNotificationSocket,
+  releaseNotificationSocket,
+} from "../services/notificationSocket";
 
 interface UseNotificationsReturn {
   notifications: Notification[];
@@ -25,7 +27,6 @@ interface UseNotificationsReturn {
 
 export const useNotifications = (): UseNotificationsReturn => {
   const queryClient = useQueryClient();
-  const [socket, setSocket] = useState<Socket | null>(null);
   
   // Use React Query for notifications with infinite scroll (0ms cache hits!)
   const {
@@ -83,137 +84,96 @@ export const useNotifications = (): UseNotificationsReturn => {
     : null;
   const hasMore = hasNextPage || false;
 
-  // Initialize socket connection
+  // Shared notification socket (deduped with badge)
   useEffect(() => {
-    const initializeSocket = async () => {
-      try {
-        const token = await TokenUtils.getAuthToken();
-        if (!token) return;
+    let mounted = true;
 
-        const newSocket = io(API_BASE_URL, {
-          // Provide token in multiple places to satisfy different backend expectations
-          auth: { token, Authorization: `Bearer ${token}` },
-          query: { token },
-          // Note: extraHeaders only works in Node; harmless on RN
-          extraHeaders: { Authorization: `Bearer ${token}` } as any,
-          // Allow fallback to polling to avoid TransportError on some networks
-          transports: ["websocket", "polling"],
-          // Robust reconnection settings
-          reconnection: true,
-          reconnectionAttempts: 10,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 10000,
-          timeout: 20000,
-          forceNew: true,
-        });
+    const onNew = (notification: Notification) => {
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: [
+            {
+              notifications: [notification, ...(old.pages[0]?.notifications || [])],
+              unreadCount: (old.pages[0]?.unreadCount || 0) + 1,
+              page: 1,
+              hasMore: old.pages[0]?.hasMore || false,
+            },
+            ...old.pages.slice(1),
+          ],
+        };
+      });
 
-        newSocket.on("connect", () => {
-          console.log("🔌 Connected to notification socket");
-        });
-
-        newSocket.on("disconnect", (reason) => {
-          console.log("🔌 Disconnected from notification socket:", reason);
-        });
-
-        newSocket.on("connect_error", (err: any) => {
-          const msg = (err?.message || err || "").toString();
-          const lower = msg.toLowerCase();
-          if (
-            lower.includes("timeout") ||
-            lower.includes("websocket error") ||
-            lower.includes("transport error")
-          ) {
-            // Suppress noisy expected errors; reconnection continues silently
-            return;
-          }
-          console.warn("Socket connect_error:", msg);
-        });
-
-        newSocket.on("new_notification", (notification: Notification) => {
-          console.log("🔔 New notification received:", notification);
-          
-          // Update React Query cache optimistically
-          queryClient.setQueryData(["notifications"], (old: any) => {
-            if (!old) return old;
-            return {
-              ...old,
-              pages: [
-                {
-                  notifications: [notification, ...(old.pages[0]?.notifications || [])],
-                  unreadCount: (old.pages[0]?.unreadCount || 0) + 1,
-                  page: 1,
-                  hasMore: old.pages[0]?.hasMore || false,
-                },
-                ...old.pages.slice(1),
-              ],
-            };
-          });
-
-          // Update stats cache
-          queryClient.setQueryData(["notification-stats"], (old: NotificationStats | undefined) => {
-            if (!old) return old;
-            return {
-              ...old,
-              unread: old.unread + 1,
-              total: old.total + 1,
-              byType: {
-                ...old.byType,
-                [notification.type]: (old.byType[notification.type] || 0) + 1,
-              },
-            };
-          });
-        });
-
-        newSocket.on("notification_read", (notificationId: string) => {
-          console.log("✅ Notification marked as read:", notificationId);
-          // Update React Query cache
-          queryClient.setQueryData(["notifications"], (old: any) => {
-            if (!old) return old;
-            return {
-              ...old,
-              pages: old.pages.map((page: any) => ({
-                ...page,
-                notifications: page.notifications.map((notif: Notification) =>
-                  notif._id === notificationId ? { ...notif, isRead: true } : notif
-                ),
-                unreadCount: page.page === 1 ? Math.max(0, (page.unreadCount || 0) - 1) : page.unreadCount,
-              })),
-            };
-          });
-        });
-
-        newSocket.on("notification_deleted", (notificationId: string) => {
-          console.log("🗑️ Notification deleted:", notificationId);
-          // Update React Query cache
-          queryClient.setQueryData(["notifications"], (old: any) => {
-            if (!old) return old;
-            return {
-              ...old,
-              pages: old.pages.map((page: any) => ({
-                ...page,
-                notifications: page.notifications.filter((notif: Notification) => notif._id !== notificationId),
-              })),
-            };
-          });
-        });
-
-        setSocket(newSocket);
-      } catch (error) {
-        console.error("Error initializing socket:", error);
-      }
+      queryClient.setQueryData(["notification-stats"], (old: NotificationStats | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          unread: old.unread + 1,
+          total: old.total + 1,
+          byType: {
+            ...old.byType,
+            [notification.type]: (old.byType[notification.type] || 0) + 1,
+          },
+        };
+      });
     };
 
-    initializeSocket();
+    const onRead = (notificationId: string) => {
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            notifications: page.notifications.map((notif: Notification) =>
+              notif._id === notificationId ? { ...notif, isRead: true } : notif
+            ),
+            unreadCount:
+              page.page === 1
+                ? Math.max(0, (page.unreadCount || 0) - 1)
+                : page.unreadCount,
+          })),
+        };
+      });
+    };
+
+    const onDeleted = (notificationId: string) => {
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            notifications: page.notifications.filter(
+              (notif: Notification) => notif._id !== notificationId
+            ),
+          })),
+        };
+      });
+    };
+
+    void (async () => {
+      try {
+        const newSocket = await acquireNotificationSocket();
+        if (!mounted || !newSocket) return;
+        newSocket.on("new_notification", onNew);
+        newSocket.on("notification_read", onRead);
+        newSocket.on("notification_deleted", onDeleted);
+      } catch (error) {
+        if (__DEV__) console.error("Error initializing socket:", error);
+      }
+    })();
 
     return () => {
-      if (socket) {
-        socket.close();
-      }
+      mounted = false;
+      const s = getSharedNotificationSocket();
+      s?.off("new_notification", onNew);
+      s?.off("notification_read", onRead);
+      s?.off("notification_deleted", onDeleted);
+      releaseNotificationSocket();
     };
-  }, []);
-
-  // React Query handles initial load automatically
-  // No need for manual useEffect - React Query will fetch on mount
+  }, [queryClient]);
 
   // Mark notification as read
   const markAsRead = useCallback(
@@ -328,57 +288,37 @@ export const useNotificationBadge = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     const loadUnreadCount = async () => {
       try {
         const stats = await notificationAPIService.getStats();
-        setUnreadCount(stats.unread);
+        if (mounted) setUnreadCount(stats.unread);
       } catch (error) {
-        console.error("Error loading notification count:", error);
+        if (__DEV__) console.error("Error loading notification count:", error);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
-    loadUnreadCount();
+    void loadUnreadCount();
 
-    // Set up socket for real-time updates
-    const initializeSocket = async () => {
-      try {
-        const token = await TokenUtils.getAuthToken();
-        if (!token) return;
+    const onNew = () => setUnreadCount((prev) => prev + 1);
+    const onRead = () => setUnreadCount((prev) => Math.max(0, prev - 1));
 
-        const socket = io(API_BASE_URL, {
-          auth: { token, Authorization: `Bearer ${token}` },
-          query: { token },
-          extraHeaders: { Authorization: `Bearer ${token}` } as any,
-          transports: ["websocket", "polling"],
-          reconnection: true,
-          reconnectionAttempts: 10,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 10000,
-          timeout: 20000,
-          forceNew: true,
-        });
-
-        socket.on("new_notification", () => {
-          setUnreadCount((prev) => prev + 1);
-        });
-
-        socket.on("notification_read", () => {
-          setUnreadCount((prev) => Math.max(0, prev - 1));
-        });
-
-        return socket;
-      } catch (error) {
-        console.error("Error initializing badge socket:", error);
-        return null;
-      }
-    };
-
-    const socket = initializeSocket();
+    void (async () => {
+      const socket = await acquireNotificationSocket();
+      if (!mounted || !socket) return;
+      socket.on("new_notification", onNew);
+      socket.on("notification_read", onRead);
+    })();
 
     return () => {
-      socket?.then((s) => s?.close());
+      mounted = false;
+      const s = getSharedNotificationSocket();
+      s?.off("new_notification", onNew);
+      s?.off("notification_read", onRead);
+      releaseNotificationSocket();
     };
   }, []);
 

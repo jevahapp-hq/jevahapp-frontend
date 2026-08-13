@@ -220,10 +220,30 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
             },
           } as ContentStats);
         const patch = fn(s) as any;
+        const next = { ...s, ...patch } as ContentStats;
+
+        // Bail out when nothing meaningful changed (socket spam)
+        const ui = s.userInteractions || ({} as any);
+        const nui = next.userInteractions || ui;
+        if (
+          state.contentStats[contentId] &&
+          s.likes === next.likes &&
+          s.saves === next.saves &&
+          s.shares === next.shares &&
+          s.views === next.views &&
+          s.comments === next.comments &&
+          !!ui.liked === !!nui.liked &&
+          !!ui.saved === !!nui.saved &&
+          !!ui.shared === !!nui.shared &&
+          !!ui.viewed === !!nui.viewed
+        ) {
+          return state;
+        }
+
         return {
           contentStats: {
             ...state.contentStats,
-            [contentId]: { ...s, ...patch },
+            [contentId]: next,
           },
         };
       });

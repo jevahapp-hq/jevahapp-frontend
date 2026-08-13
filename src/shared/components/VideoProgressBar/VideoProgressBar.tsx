@@ -1,9 +1,6 @@
 /**
- * VideoProgressBar — thin compatibility shim.
- * Canonical: TikTokProgressBar + modular seek hooks.
- *
  * Seek pipeline:
- *   gestures (useProgressBarGestures — refs) → onSeekToPercent
+ *   RNGH Gesture.Pan (useProgressBarGestures) → onSeekToPercent
  *   → useVideoCardSeek / Reels seek → expoVideoAdapter / setPositionAsync
  */
 import React from "react";
@@ -65,9 +62,9 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   enableHaptics = false,
   verticalScrub = { enabled: true, sensitivityBase: 60, maxSlowdown: 5 },
   debug = false,
-  bottomOffset: _bottomOffset,
+  bottomOffset = 12,
   mutePosition: _mutePosition,
-  style: _style,
+  style,
 }) => {
   const config: Partial<ProgressBarConfig> = {
     showFloatingLabel,
@@ -102,6 +99,8 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
       showControls={showControls}
       config={config}
       debug={debug}
+      bottomOffset={bottomOffset}
+      style={style}
     />
   );
 };

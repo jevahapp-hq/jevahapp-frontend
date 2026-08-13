@@ -5,13 +5,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Image,
     Text,
     TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
+import { authToast } from "../components/auth/authToastBus";
 import AuthHeader from "../components/AuthHeader";
 import { loginDebugger } from "../utils/loginDebugger";
 
@@ -40,10 +40,10 @@ export default function LoginScreen() {
         );
         resetSessionExpiredGate();
 
-        const [storedEmail, storedRemember, storedToken] = await Promise.all([
+        const [storedEmail, storedRemember, sessionToken] = await Promise.all([
           AsyncStorage.getItem("lastEmail"),
           AsyncStorage.getItem("rememberMe"),
-          AsyncStorage.getItem("token"),
+          (await import("../utils/sessionAuth")).getSessionToken(),
         ]);
 
         if (cancelled) return;
@@ -58,7 +58,7 @@ export default function LoginScreen() {
 
           // Only skip the form if the token is still valid on *this* API.
           // Stale prod tokens against local Mongo used to bounce users back in.
-          if (storedToken) {
+          if (sessionToken) {
             try {
               const { getApiBaseUrl } = await import(
                 "../utils/environmentManager"
@@ -66,7 +66,7 @@ export default function LoginScreen() {
               const meRes = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
                 method: "GET",
                 headers: {
-                  Authorization: `Bearer ${storedToken}`,
+                  Authorization: `Bearer ${sessionToken}`,
                   "Content-Type": "application/json",
                 },
               });
@@ -109,18 +109,25 @@ export default function LoginScreen() {
 
     if (!emailAddress.trim()) {
       setEmailError("Email is required");
+      authToast.validation("Email required", "Enter the email for your account.");
       isValid = false;
     } else if (!validateEmail(emailAddress.trim().toLowerCase())) {
       setEmailError("Invalid email format");
+      authToast.validation("Invalid email", "Use a valid email address to sign in.");
       isValid = false;
     }
 
     if (!password) {
       setPasswordError("Password is required");
+      authToast.validation("Password required", "Enter your password to continue.");
       isValid = false;
     } else if (!validatePassword(password)) {
       setPasswordError(
         "Password must be at least 6 characters with letters and numbers"
+      );
+      authToast.validation(
+        "Weak password",
+        "Use at least 6 characters with letters and numbers."
       );
       isValid = false;
     }
@@ -162,14 +169,20 @@ export default function LoginScreen() {
           ("data" in result && result.data?.message) ||
           result.error ||
           "Invalid email or password";
-        Alert.alert("Login Failed", errorMessage);
+        const lower = String(errorMessage).toLowerCase();
+        if (
+          lower.includes("password") ||
+          lower.includes("credentials") ||
+          lower.includes("invalid")
+        ) {
+          authToast.wrongPassword(errorMessage);
+        } else {
+          authToast.loginFailed(errorMessage);
+        }
       }
     } catch (error) {
       // console.error("❌ Login error:", error);
-      Alert.alert(
-        "Login Failed",
-        "An error occurred during login. Please try again."
-      );
+      authToast.loginFailed("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }

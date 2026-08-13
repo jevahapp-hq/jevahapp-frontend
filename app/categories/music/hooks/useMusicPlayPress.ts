@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import { musicCatalogApi } from "../../../services/music-catalog";
 import {
@@ -6,6 +6,7 @@ import {
   isTrackProcessing,
 } from "../../../services/music-catalog/trackTypes";
 import { useGlobalAudioPlayerStore } from "../../../store/useGlobalAudioPlayerStore";
+import { enqueueFeedEvent } from "../../../../src/shared/feed/feedRanker";
 
 /**
  * Handle play/pause for a song
@@ -16,7 +17,9 @@ export function useMusicPlayPress(songs: any[]) {
     isPlaying: globalIsPlaying,
     setTrack,
     togglePlayPause,
+    position,
   } = useGlobalAudioPlayerStore();
+  const playStartedAt = useRef<number>(0);
 
   const handlePlayPress = useCallback(
     async (song: any) => {
@@ -34,7 +37,31 @@ export function useMusicPlayPress(songs: any[]) {
       }
       if (currentTrack?.id === song.id && globalIsPlaying) {
         await togglePlayPause();
+        const watched = Date.now() - playStartedAt.current;
+        if (watched > 0) {
+          enqueueFeedEvent({
+            contentId: String(song.id),
+            contentType: "music",
+            eventType: "watch_time",
+            watchMs: watched,
+            progressPct: position,
+            source: "music_for_you",
+          });
+        }
       } else {
+        if (currentTrack?.id && currentTrack.id !== song.id) {
+          const watched = Date.now() - playStartedAt.current;
+          if (watched > 0 && watched < 15000) {
+            enqueueFeedEvent({
+              contentId: String(currentTrack.id),
+              contentType: "music",
+              eventType: "skip",
+              watchMs: watched,
+              source: "music_for_you",
+            });
+          }
+        }
+
         const songIndex = songs.findIndex((s) => s.id === song.id);
 
         if (songIndex !== -1) {
@@ -58,6 +85,14 @@ export function useMusicPlayPress(songs: any[]) {
           });
         }
 
+        playStartedAt.current = Date.now();
+        enqueueFeedEvent({
+          contentId: String(song.id),
+          contentType: "music",
+          eventType: "impression",
+          source: "music_for_you",
+        });
+
         await setTrack(
           {
             id: song.id,
@@ -77,7 +112,14 @@ export function useMusicPlayPress(songs: any[]) {
         }
       }
     },
-    [currentTrack, globalIsPlaying, setTrack, togglePlayPause, songs]
+    [
+      currentTrack,
+      globalIsPlaying,
+      setTrack,
+      togglePlayPause,
+      songs,
+      position,
+    ]
   );
 
   return handlePlayPress;

@@ -3,7 +3,7 @@
  * Extracted from upload.tsx for better modularity
  */
 
-export type FileType = "video" | "audio" | "ebook" | "unknown";
+export type FileType = "video" | "audio" | "ebook" | "gif" | "unknown";
 
 export interface FileInfo {
   name?: string;
@@ -23,6 +23,7 @@ export const getMimeTypeFromName = (filename: string): string => {
   if (filename.endsWith(".wav")) return "audio/wav";
   if (filename.endsWith(".pdf")) return "application/pdf";
   if (filename.endsWith(".epub")) return "application/epub+zip";
+  if (filename.endsWith(".gif")) return "image/gif";
   return "application/octet-stream";
 };
 
@@ -54,6 +55,9 @@ export const detectFileType = (file: FileInfo | null): FileType => {
 
   // Check by mime type first (more reliable)
   if (mimeType) {
+    if (mimeType.toLowerCase() === "image/gif") {
+      return "gif";
+    }
     if (videoMimes.some((mime) => mimeType.toLowerCase().startsWith(mime))) {
       return "video";
     }
@@ -66,6 +70,9 @@ export const detectFileType = (file: FileInfo | null): FileType => {
   }
 
   // Fallback to file extension
+  if (fileExtension === "gif") {
+    return "gif";
+  }
   if (videoFormats.includes(fileExtension)) {
     return "video";
   }
@@ -83,6 +90,11 @@ export const detectFileType = (file: FileInfo | null): FileType => {
  * Check if file is an image
  */
 export const isImage = (name: string): boolean => {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
+  return /\.(jpg|jpeg|png|webp)$/i.test(name);
+};
+
+export const isGifFile = (name?: string, mime?: string): boolean => {
+  if (mime && mime.toLowerCase().includes("image/gif")) return true;
+  return !!name && /\.gif$/i.test(name);
 };
 

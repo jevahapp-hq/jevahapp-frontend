@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   mapCachedComment,
   mapCommentsDeep,
@@ -23,6 +23,7 @@ import contentInteractionAPI, {
   writeDiskCommentsCache,
 } from "../../utils/contentInteractionAPI";
 import TokenUtils from "../../utils/tokenUtils";
+import { resolveUserAvatarUrl } from "../../utils/defaultUserAvatar";
 
 import type { CommentModalContextType, Comment, SubmitCommentInput, EditCommentInput } from "../../context/commentModalTypes";
 import { mapServerCommentsToSheet } from "./mapServerComment";
@@ -40,7 +41,9 @@ export function useCommentModalController(): CommentModalContextType {
     null
   );
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const hasMoreRef = useRef(false);
+  const loadingMoreRef = useRef(false);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "top">("newest");
   const loadGenRef = useRef(0);
   const [isOpening, setIsOpening] = useState(false);
@@ -116,7 +119,10 @@ export function useCommentModalController(): CommentModalContextType {
       setContentCreator(null);
     }
     setPage(1);
-    setHasMore(true);
+    // Gate pagination until page 1 resolves — prevents FlatList onEndReached
+    // spam of empty page=2 while the first request is still in flight.
+    setHasMore(false);
+    hasMoreRef.current = false;
 
     let instant: Comment[] = [];
     if (contentId) {
@@ -224,6 +230,22 @@ export function useCommentModalController(): CommentModalContextType {
       void joinRealtimeRoom(contentId, type).catch(() => {});
     }
   };
+
+  const updateCommentMediaLayout = useCallback(
+    (anchor: CommentMediaAnchor | null) => {
+      const layout = resolveCommentSheetLayout(anchor);
+      setMediaPeekHeight((prev) =>
+        Math.abs(prev - layout.peekHeight) < 2 ? prev : layout.peekHeight
+      );
+      setMediaShiftY((prev) =>
+        Math.abs(prev - layout.shiftY) < 2 ? prev : layout.shiftY
+      );
+      setMediaScale((prev) =>
+        Math.abs(prev - layout.mediaScale) < 0.01 ? prev : layout.mediaScale
+      );
+    },
+    []
+  );
 
   const hideCommentModal = () => {
     if (currentContentId && comments.length > 0) {
@@ -356,9 +378,7 @@ export function useCommentModalController(): CommentModalContextType {
         normalizeSubmitInput(replyTextOrPayload);
       if (!text.trim() && !localImage) return;
 
-      const token =
-        (await AsyncStorage.getItem("userToken")) ||
-        (await AsyncStorage.getItem("token"));
+      const token = await TokenUtils.getAuthToken();
 
       if (!token) return;
 
@@ -368,7 +388,7 @@ export function useCommentModalController(): CommentModalContextType {
         userName:
           `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() ||
           "You",
-        avatar: "",
+        avatar: resolveUserAvatarUrl(""),
         timestamp: new Date().toISOString(),
         comment: text.trim(),
         likes: 0,
@@ -434,9 +454,7 @@ export function useCommentModalController(): CommentModalContextType {
         normalizeSubmitInput(textOrPayload);
       if (!text.trim() && !localImage) return;
 
-      const token =
-        (await AsyncStorage.getItem("userToken")) ||
-        (await AsyncStorage.getItem("token"));
+      const token = await TokenUtils.getAuthToken();
 
       if (!token) return;
 
@@ -447,7 +465,7 @@ export function useCommentModalController(): CommentModalContextType {
         userName:
           `${currentUserFirstNameRef.current} ${currentUserLastNameRef.current}`.trim() ||
           "You",
-        avatar: "",
+        avatar: resolveUserAvatarUrl(""),
         timestamp: new Date().toISOString(),
         comment: trimmed,
         likes: 0,
@@ -480,7 +498,7 @@ export function useCommentModalController(): CommentModalContextType {
       const createdComment: Comment = {
         id: created.id,
         userName: created.username,
-        avatar: created.userAvatar || "",
+        avatar: resolveUserAvatarUrl(created.userAvatar),
         timestamp: created.timestamp,
         comment: created.comment,
         likes: created.likes || 0,
@@ -512,7 +530,7 @@ export function useCommentModalController(): CommentModalContextType {
                   id: created.id,
                   userName: created.username,
                   username: created.username,
-                  avatar: created.userAvatar || "",
+                  avatar: resolveUserAvatarUrl(created.userAvatar),
                   timestamp: created.timestamp,
                   comment: created.comment,
                   likes: created.likes || 0,
@@ -621,7 +639,7 @@ export function useCommentModalController(): CommentModalContextType {
           isEdited: updated.isEdited ?? true,
           editedAt: updated.editedAt || new Date().toISOString(),
           userName: updated.username || c.userName,
-          avatar: updated.userAvatar || c.avatar,
+          avatar: resolveUserAvatarUrl(updated.userAvatar || c.avatar),
         }))
       );
 
@@ -743,6 +761,7 @@ export function useCommentModalController(): CommentModalContextType {
         return merged;
       });
       setHasMore(nextHasMore);
+      hasMoreRef.current = nextHasMore;
       setPage(pageNum);
       setIsLoadingComments(false);
 
@@ -756,6 +775,7 @@ export function useCommentModalController(): CommentModalContextType {
         );
       } else if (mapped.length === 0) {
         setHasMore(false);
+        hasMoreRef.current = false;
       }
 
       if (mapped.length === 0 && total === 0 && replace) {
@@ -800,13 +820,20 @@ export function useCommentModalController(): CommentModalContextType {
   };
 
   const loadMoreComments = async () => {
-    if (!currentContentId || !hasMore) return;
-    await loadCommentsFromServer(
-      currentContentId,
-      currentContentType,
-      page + 1,
-      sortBy
-    );
+    if (!currentContentId || !hasMoreRef.current || loadingMoreRef.current) {
+      return;
+    }
+    loadingMoreRef.current = true;
+    try {
+      await loadCommentsFromServer(
+        currentContentId,
+        currentContentType,
+        page + 1,
+        sortBy
+      );
+    } finally {
+      loadingMoreRef.current = false;
+    }
   };
 
   const retryLoadComments = async () => {
@@ -879,6 +906,7 @@ export function useCommentModalController(): CommentModalContextType {
     mediaShiftY,
     mediaScale,
     showCommentModal,
+    updateCommentMediaLayout,
     hideCommentModal,
     addComment,
     updateComment,
