@@ -64,6 +64,7 @@ export function MediaCardFooter({
   menuStyle,
 }: MediaCardFooterProps) {
   const { fastPress } = useFastPerformance();
+  if (!item) return null;
   const displayName = getUserDisplayNameFromContent(item);
 
   return (

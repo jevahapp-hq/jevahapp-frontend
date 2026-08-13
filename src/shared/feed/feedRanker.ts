@@ -119,20 +119,18 @@ export async function fetchForYou(
   const token = await TokenUtils.getAuthToken();
   if (!token) throw new Error("for-you auth required");
 
-  const { getLiteRequestMeta } = await import("../lite/liteProfile");
-  const liteMeta = getLiteRequestMeta(limit ?? 20);
-  const pageLimit = liteMeta.lite ? liteMeta.limit : (limit ?? liteMeta.limit);
+  const { getLiteListRequestMeta } = await import("../lite/liteProfile");
+  const listMeta = getLiteListRequestMeta(limit ?? 20);
+  const pageLimit = listMeta.lite ? listMeta.limit : (limit ?? listMeta.limit);
 
   const q = new URLSearchParams({
     limit: String(pageLimit),
-    ...liteMeta.query,
   });
   if (cursor) q.set("cursor", cursor);
 
   const res = await fetch(`${apiRoot()}/feed/for-you?${q}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      ...liteMeta.headers,
     },
   });
   if (!res.ok) throw new Error(`for-you ${res.status}`);
@@ -159,23 +157,21 @@ export async function fetchMusicForYou(opts?: {
   const token = await TokenUtils.getAuthToken();
   if (!token) throw new Error("music-for-you auth required");
 
-  const { getLiteRequestMeta } = await import("../lite/liteProfile");
-  const liteMeta = getLiteRequestMeta(opts?.limit ?? 20);
-  const pageLimit = liteMeta.lite
-    ? liteMeta.limit
-    : (opts?.limit ?? liteMeta.limit);
+  const { getLiteListRequestMeta } = await import("../lite/liteProfile");
+  const listMeta = getLiteListRequestMeta(opts?.limit ?? 20);
+  const pageLimit = listMeta.lite
+    ? listMeta.limit
+    : (opts?.limit ?? listMeta.limit);
 
   const q = new URLSearchParams({
     limit: String(pageLimit),
     lane: opts?.lane ?? "artist",
-    ...liteMeta.query,
   });
   if (opts?.cursor) q.set("cursor", opts.cursor);
 
   const res = await fetch(`${apiRoot()}/feed/music-for-you?${q}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      ...liteMeta.headers,
     },
   });
   if (!res.ok) throw new Error(`music-for-you ${res.status}`);

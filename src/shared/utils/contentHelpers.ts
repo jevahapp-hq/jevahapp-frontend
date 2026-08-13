@@ -4,7 +4,7 @@
  */
 
 import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
-import { enrichContentWithAuthor, resolveAuthorName } from "../author";
+import { enrichContentWithAuthor, isObjectId, resolveAuthorName } from "../author";
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
 import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
 import { ContentType, MediaItem } from "../types";
@@ -26,6 +26,10 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
     );
 
     const resolvedName = resolveAuthorName(enrichedItem, "");
+    const originalSpeaker = enrichedItem.speaker;
+    const speaker =
+      resolvedName ||
+      (isObjectId(originalSpeaker) ? String(originalSpeaker).trim() : undefined);
 
     return {
       _id: enrichedItem._id || enrichedItem.id,
@@ -44,7 +48,7 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       hlsUrl: enrichedItem.hlsUrl,
       mimeType: enrichedItem.mimeType || enrichedItem.mimetype,
       title: enrichedItem.title || "Untitled",
-      speaker: resolvedName || undefined,
+      speaker,
       // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string
       uploadedBy: typeof enrichedItem.uploadedBy === "object" && enrichedItem.uploadedBy !== null
         ? enrichedItem.uploadedBy  // Preserve the full object with all user data
@@ -83,6 +87,8 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       comments: enrichedItem.comments || enrichedItem.commentCount || 0,
       authorInfo: enrichedItem.authorInfo || enrichedItem.author,
       author: enrichedItem.author || enrichedItem.authorInfo,
+      userId: enrichedItem.userId || enrichedItem.user_id,
+      artistName: enrichedItem.artistName,
       viewCount: enrichedItem.viewCount || enrichedItem.totalViews || enrichedItem.views || 0,
       totalViews: enrichedItem.totalViews || enrichedItem.viewCount || enrichedItem.views || 0,
       shareCount: enrichedItem.shareCount || enrichedItem.totalShares || enrichedItem.shares || 0,

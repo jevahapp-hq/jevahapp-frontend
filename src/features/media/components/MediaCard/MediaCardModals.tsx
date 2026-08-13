@@ -49,6 +49,8 @@ export function MediaCardModals({
   showDetailsModal,
   onParentModalClose,
 }: MediaCardModalsProps) {
+  if (!item) return null;
+
   const closeAll = () => {
     closeModal();
     onParentModalClose?.();

@@ -14,6 +14,7 @@ import { fetchForYou } from "../feed/feedRanker";
 import { isLiteProfileActive } from "../lite/liteProfile";
 import type { MediaItem } from "../types";
 import { transformApiResponseToMediaItem } from "../utils";
+import { mergeAuthorFieldsByMediaId } from "../author";
 import { syncMediaStatsToInteractionStore } from "./syncMediaStats";
 
 export type AllContentPageResult = {
@@ -169,6 +170,94 @@ export function readSeededFirstPage(
   return undefined;
 }
 
+function toMediaItems(raw: any[]): MediaItem[] {
+  if (!raw.length) return [];
+  return UserProfileCache.enrichContentArray(raw)
+    .map(transformApiResponseToMediaItem)
+    .filter((item): item is MediaItem => item !== null);
+}
+
+async function fetchChronologicalPage(options: {
+  contentType: string;
+  page: number;
+  limit: number;
+  useAuth: boolean;
+}): Promise<AllContentPageResult> {
+  const { contentType, page, limit, useAuth } = options;
+  const apiContentType = normalizeListContentType(contentType);
+  const listOpts = {
+    page,
+    limit,
+    contentType: apiContentType !== "ALL" ? apiContentType : undefined,
+  };
+
+  const response = useAuth
+    ? await mediaApi.getAllContentWithAuth(listOpts)
+    : await mediaApi.getAllContentPublic(listOpts);
+
+  if (!response.success) {
+    throw new Error(response.error || "Failed to fetch content");
+  }
+
+  const mediaArr = response.media || [];
+  const transformedMedia = toMediaItems(mediaArr);
+  const result: AllContentPageResult = {
+    media: transformedMedia,
+    total: response.total || response.pagination?.total || 0,
+    page,
+    limit,
+    source: "all_content",
+    hasMore:
+      transformedMedia.length >= limit &&
+      (response.total || 0) > page * limit,
+  };
+
+  syncMediaStatsToInteractionStore(result.media);
+  if (page === 1) {
+    seedContentCache(contentType, useAuth, result);
+  } else if (isLiteProfileActive() && result.media.length) {
+    seedContentCache(contentType, useAuth, result);
+  }
+  if (mediaArr.length > 0) {
+    void UserProfileCache.enrichContentArrayBatch(mediaArr).catch(() => {});
+  }
+  return result;
+}
+
+function finishForYouPage(
+  contentType: string,
+  useAuth: boolean,
+  page: number,
+  limit: number,
+  ranked: { media?: any[]; items?: any[]; cursor?: string | null; hasMore?: boolean },
+  donors: any[]
+): AllContentPageResult {
+  const raw = ranked.media?.length ? ranked.media : ranked.items || [];
+  let media = toMediaItems(raw);
+  if (donors.length) {
+    media = mergeAuthorFieldsByMediaId(donors, media);
+  }
+  const result: AllContentPageResult = {
+    media,
+    total: ranked.hasMore ? media.length + limit : media.length,
+    page,
+    limit,
+    cursor: ranked.cursor,
+    hasMore: ranked.hasMore,
+    source: "for_you",
+  };
+  syncMediaStatsToInteractionStore(result.media);
+  if (page === 1) {
+    seedContentCache(contentType, useAuth, result);
+  } else if (isLiteProfileActive() && result.media.length) {
+    seedContentCache(contentType, useAuth, result);
+  }
+  if (raw.length > 0) {
+    void UserProfileCache.enrichContentArrayBatch(raw).catch(() => {});
+  }
+  return result;
+}
+
 export async function fetchAllContentPage(options: {
   contentType?: string;
   page?: number;
@@ -189,105 +278,61 @@ export async function fetchAllContentPage(options: {
     shouldFetchServerForYou(contentType, useAuth) &&
     (page === 1 || options.cursor != null);
 
-  if (tryForYou) {
-    try {
-      const ranked = await fetchForYou(
-        page === 1 && options.cursor == null ? null : options.cursor ?? null,
-        limit
-      );
-      const raw = ranked.media?.length ? ranked.media : ranked.items;
-      // Sync enrich only — don't block first paint on profile network fetches
-      const enrichedMedia =
-        raw.length === 0 ? raw : UserProfileCache.enrichContentArray(raw);
-      const transformedMedia = enrichedMedia
-        .map(transformApiResponseToMediaItem)
-        .filter((item): item is MediaItem => item !== null);
+  const chronoPromise = fetchChronologicalPage({
+    contentType,
+    page: tryForYou && options.cursor ? 1 : page,
+    limit,
+    useAuth: tryForYou ? false : useAuth,
+  });
 
-      const result: AllContentPageResult = {
-        media: transformedMedia,
-        total: ranked.hasMore
-          ? transformedMedia.length + limit
-          : transformedMedia.length,
-        page,
-        limit,
-        cursor: ranked.cursor,
-        hasMore: ranked.hasMore,
-        source: "for_you",
-      };
+  if (!tryForYou) {
+    return chronoPromise;
+  }
 
-      syncMediaStatsToInteractionStore(result.media);
-      if (page === 1 && options.cursor == null) {
-        seedContentCache(contentType, useAuth, result);
-      } else if (isLiteProfileActive() && result.media.length) {
-        seedContentCache(contentType, useAuth, result);
-      }
-
-      // Background: fill missing avatars/names without delaying return
-      if (raw.length > 0) {
-        void UserProfileCache.enrichContentArrayBatch(raw).catch(() => {});
-      }
-
-      return result;
-    } catch (err) {
-      if (__DEV__) {
-        console.warn("⚠️ for-you failed; falling back to all-content", err);
-      }
-      // fall through to chronological
+  const fyPromise = fetchForYou(
+    page === 1 && options.cursor == null ? null : options.cursor ?? null,
+    limit
+  ).catch((err) => {
+    if (__DEV__) {
+      console.warn("⚠️ for-you failed; using chronological", err);
     }
+    return null;
+  });
+
+  // Don't wait on For You before painting — chrono has authorInfo and is enough.
+  const chrono = await chronoPromise.catch(() => null);
+  const fyWaitMs = chrono?.media?.length ? 280 : 2500;
+  const ranked = await Promise.race([
+    fyPromise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), fyWaitMs)),
+  ]);
+
+  if (ranked && (ranked.media?.length || ranked.items?.length)) {
+    return finishForYouPage(
+      contentType,
+      useAuth,
+      page,
+      limit,
+      ranked,
+      chrono?.media || []
+    );
   }
 
-  const apiContentType = normalizeListContentType(contentType);
-  const profile = isLiteProfileActive() ? "lite" : undefined;
-  const listOpts = {
-    page,
-    limit,
-    contentType: apiContentType !== "ALL" ? apiContentType : undefined,
-    ...(profile ? { profile } : {}),
-  };
-
-  const response = useAuth
-    ? await mediaApi.getAllContentWithAuth(listOpts)
-    : await mediaApi.getAllContentPublic(listOpts);
-
-  if (!response.success) {
-    throw new Error(response.error || "Failed to fetch content");
+  if (chrono?.media?.length) {
+    void fyPromise.then((late) => {
+      if (!late?.media?.length && !late?.items?.length) return;
+      // Ranking arrived late — names already on screen from chrono.
+    });
+    return chrono;
   }
 
-  const mediaArr = response.media || [];
-  // Sync enrich for instant list; batch fetch profiles in background
-  const enrichedMedia =
-    mediaArr.length === 0
-      ? mediaArr
-      : UserProfileCache.enrichContentArray(mediaArr);
-
-  const transformedMedia = enrichedMedia
-    .map(transformApiResponseToMediaItem)
-    .filter((item): item is MediaItem => item !== null);
-
-  const result: AllContentPageResult = {
-    media: transformedMedia,
-    total: response.total || response.pagination?.total || 0,
-    page,
-    limit,
-    source: "all_content",
-    hasMore:
-      transformedMedia.length >= limit &&
-      (response.total || 0) > page * limit,
-  };
-
-  syncMediaStatsToInteractionStore(result.media);
-
-  if (page === 1) {
-    seedContentCache(contentType, useAuth, result);
-  } else if (isLiteProfileActive() && result.media.length) {
-    seedContentCache(contentType, useAuth, result);
+  const late = await fyPromise;
+  if (late && (late.media?.length || late.items?.length)) {
+    return finishForYouPage(contentType, useAuth, page, limit, late, []);
   }
 
-  if (mediaArr.length > 0) {
-    void UserProfileCache.enrichContentArrayBatch(mediaArr).catch(() => {});
-  }
-
-  return result;
+  if (chrono) return chrono;
+  throw new Error("Failed to fetch content");
 }
 
 /** Warmup / public prefetch helper (page 1). */

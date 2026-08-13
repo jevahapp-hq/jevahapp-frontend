@@ -231,7 +231,25 @@ export function getLiteListWindow(): {
   };
 }
 
-/** Headers + query extras for For You / Music For You / media lists. */
+/**
+ * Backend `profile=lite` / `X-Jevah-Client: lite` strips `uploadedBy` and
+ * `authorInfo` from list JSON. Cards then have no author id and stay
+ * "Anonymous User". Keep client RAM caps; never send lite projection on
+ * feed lists.
+ */
+export function isFeedListPath(path: string): boolean {
+  const p = String(path || "").split("?")[0];
+  return (
+    /\/media\/public\/all-content\/?$/.test(p) ||
+    /\/media\/all-content\/?$/.test(p) ||
+    /\/media\/default\/?$/.test(p) ||
+    /\/feed\/for-you\/?$/.test(p) ||
+    /\/feed\/music-for-you\/?$/.test(p) ||
+    /\/music\/tracks\/?$/.test(p)
+  );
+}
+
+/** Headers + query extras for playback-oriented requests (not feed lists). */
 export function getLiteRequestMeta(limitFull = 20): {
   lite: boolean;
   limit: number;
@@ -244,6 +262,22 @@ export function getLiteRequestMeta(limitFull = 20): {
     limit: lite ? 8 : limitFull,
     headers: lite ? { "X-Jevah-Client": "lite" } : {},
     query: lite ? { profile: "lite" } : {},
+  };
+}
+
+/** Page size only — do not attach lite projection (strips author fields). */
+export function getLiteListRequestMeta(limitFull = 20): {
+  lite: boolean;
+  limit: number;
+  headers: Record<string, string>;
+  query: Record<string, string>;
+} {
+  const lite = isLiteProfileActive();
+  return {
+    lite,
+    limit: lite ? 8 : limitFull,
+    headers: {},
+    query: {},
   };
 }
 

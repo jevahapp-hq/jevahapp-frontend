@@ -9,6 +9,7 @@ import {
   isPlaceholderName,
 } from "./normalizeAuthor";
 import { resolveAuthorName, seedAuthorsFromItem } from "./resolveAuthor";
+import { hydrateAuthorsFromPublicIndex } from "./publicAuthorIndex";
 import type { AuthorCarrier } from "./types";
 
 function collectAuthorIds(items: AuthorCarrier[]): string[] {
@@ -33,17 +34,19 @@ export function applyAuthorsToMedia(items: MediaItem[]): MediaItem[] {
     const id = extractAuthorId(item);
     const profile = id ? getAuthorProfile(id) : null;
 
+    const speakerIsId =
+      typeof item.speaker === "string" &&
+      /^[0-9a-fA-F]{24}$/.test(item.speaker.trim());
+
     if (!profile || !hasUsableAuthorName(profile)) {
-      if (!isPlaceholderName(currentName) && !isPlaceholderName(item.speaker as any)) {
-        return item;
-      }
       return item;
     }
 
     if (
       !isPlaceholderName(currentName) &&
       currentName === profile.fullName &&
-      !isPlaceholderName(item.speaker as any)
+      !isPlaceholderName(item.speaker as any) &&
+      !speakerIsId
     ) {
       return item;
     }
@@ -86,9 +89,10 @@ export function applyAuthorsToMedia(items: MediaItem[]): MediaItem[] {
       ...item,
       uploadedBy,
       authorInfo,
-      speaker: isPlaceholderName(item.speaker as any)
-        ? profile.fullName
-        : item.speaker,
+      speaker:
+        isPlaceholderName(item.speaker as any) || speakerIsId
+          ? profile.fullName
+          : item.speaker,
       speakerAvatar: (item as any).speakerAvatar || profile.avatar,
     } as MediaItem;
   });
@@ -104,6 +108,22 @@ export function feedNeedsAuthorEnrichment(items: MediaItem[]): boolean {
 }
 
 /**
+ * Lite list JSON omits author ids entirely. Profile fetches cannot help —
+ * the feed page must be refetched without the lite projection.
+ */
+export function feedItemsNeedFullAuthorRefetch(items: MediaItem[]): boolean {
+  if (!items.length) return false;
+  let stripped = 0;
+  for (const item of items) {
+    if (!isPlaceholderName(resolveAuthorName(item)) || extractAuthorId(item)) {
+      continue;
+    }
+    stripped += 1;
+  }
+  return stripped >= Math.max(1, Math.ceil(items.length / 2));
+}
+
+/**
  * Fetch missing profiles then return patched media list.
  * Safe to call repeatedly — skips ids that already have usable names.
  */
@@ -116,7 +136,12 @@ export async function ensureFeedAuthors(
   if (missing.length) {
     await ensureAuthorProfiles(missing);
   }
-  return applyAuthorsToMedia(items);
+  let next = applyAuthorsToMedia(items);
+  if (next.some((item) => isPlaceholderName(resolveAuthorName(item)))) {
+    next = await hydrateAuthorsFromPublicIndex(next);
+    next = applyAuthorsToMedia(next);
+  }
+  return next;
 }
 
 /** Sync enrich for transform pipelines (uses store only, no network). */

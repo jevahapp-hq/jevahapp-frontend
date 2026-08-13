@@ -31,7 +31,7 @@ export class BaseApiClient {
   /**
    * Get authorization headers with token
    */
-  protected async getAuthHeaders(): Promise<HeadersInit> {
+  protected async getAuthHeaders(endpoint?: string): Promise<HeadersInit> {
     try {
       const token = await TokenUtils.getAuthToken();
       const headers: HeadersInit = {
@@ -44,10 +44,10 @@ export class BaseApiClient {
       }
 
       try {
-        const { isLiteProfileActive } = await import(
+        const { isFeedListPath, isLiteProfileActive } = await import(
           "../../shared/lite/liteProfile"
         );
-        if (isLiteProfileActive()) {
+        if (isLiteProfileActive() && !isFeedListPath(endpoint || "")) {
           headers["X-Jevah-Client"] = "lite";
         }
       } catch {
@@ -166,7 +166,7 @@ export class BaseApiClient {
 
     try {
       const authHeaders = requireAuth
-        ? await this.getAuthHeaders()
+        ? await this.getAuthHeaders(endpoint)
         : { "Content-Type": "application/json", "expo-platform": Platform.OS };
       const headers = { ...authHeaders, ...customHeaders };
 

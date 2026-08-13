@@ -20,6 +20,7 @@ export {
 } from "./normalizeAuthor";
 
 export {
+  clearAuthorFetchFailures,
   ensureAuthorProfile,
   ensureAuthorProfiles,
   getAuthorProfile,
@@ -37,5 +38,11 @@ export {
   applyAuthorsToMedia,
   enrichContentWithAuthor,
   ensureFeedAuthors,
+  feedItemsNeedFullAuthorRefetch,
   feedNeedsAuthorEnrichment,
 } from "./enrichFeedAuthors";
+
+export {
+  mergeAuthorFieldsByMediaId,
+  hydrateAuthorsFromPublicIndex,
+} from "./publicAuthorIndex";

@@ -33,8 +33,11 @@ class ApiClient {
     }
 
     try {
-      const { isLiteProfileActive } = await import("../../shared/lite/liteProfile");
-      if (isLiteProfileActive()) {
+      const { isFeedListPath, isLiteProfileActive } = await import(
+        "../../shared/lite/liteProfile"
+      );
+      // Lite list projection omits uploadedBy/authorInfo → Anonymous User
+      if (isLiteProfileActive() && !isFeedListPath(endpoint)) {
         defaultHeaders["X-Jevah-Client"] = "lite";
       }
     } catch {

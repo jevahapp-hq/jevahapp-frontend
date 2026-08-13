@@ -1,6 +1,6 @@
 import { CacheManager } from "./CacheManager";
 import { UserData, AVATAR_CACHE_DURATION } from "../api/types";
-import { API_BASE_URL } from "../api";
+import { getApiBaseUrl } from "../environmentManager";
 import { authUtils } from "../authUtils";
 
 // User profile cache and enrichment utilities
@@ -69,12 +69,16 @@ export class UserProfileCache {
         return null;
       }
 
-      // FIX: API_BASE_URL already includes `/api` — was calling /api/api/users/:id
-      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // getApiBaseUrl() is origin only — must include /api (do NOT use
+      // environmentManager's API_BASE_URL with a bare `/users/` path).
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/users/${userId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         if (__DEV__ && response.status === 404) {
@@ -379,6 +383,15 @@ export class UserProfileCache {
         if (this.needsProfileFetch(authorId, hasName, hasAvatar)) {
           userIdsToFetch.add(String(authorId));
         }
+      }
+
+      const speaker = typeof item.speaker === "string" ? item.speaker.trim() : "";
+      if (/^[0-9a-fA-F]{24}$/.test(speaker) && this.needsProfileFetch(speaker, false, false)) {
+        userIdsToFetch.add(speaker);
+      }
+      const extraId = String(item.userId || item.createdBy || "").trim();
+      if (/^[0-9a-fA-F]{24}$/.test(extraId) && this.needsProfileFetch(extraId, false, false)) {
+        userIdsToFetch.add(extraId);
       }
     });
 

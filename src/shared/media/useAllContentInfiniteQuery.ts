@@ -200,15 +200,16 @@ export function useAllContentInfiniteQuery(options: {
       .slice(0, 50)
       .map((item) => String(item._id || ""))
       .join("|");
-    // Retry until names land; only skip if last SUCCESS was for this key
+    // Skip only after a successful name resolve for this feed snapshot
     if (lastSuccessKeyRef.current === dedupeKey) return;
 
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 10;
     const pass = ++enrichPassRef.current;
-    void ensureFeedAuthors(allContent).then((patched) => {
-      if (pass !== enrichPassRef.current) return;
-      if (!feedNeedsAuthorEnrichment(patched)) {
-        lastSuccessKeyRef.current = dedupeKey;
-      }
+
+    const applyPatched = (patched: MediaItem[]) => {
       queryClient.setQueryData(queryKey, (old: any) => {
         if (!old?.pages?.length) return old;
         const byId = new Map(
@@ -227,7 +228,32 @@ export function useAllContentInfiniteQuery(options: {
         }
         return { ...old, pages };
       });
-    });
+    };
+
+    const run = async () => {
+      if (cancelled || pass !== enrichPassRef.current) return;
+      const patched = await ensureFeedAuthors(allContent);
+      if (cancelled || pass !== enrichPassRef.current) return;
+      applyPatched(patched);
+
+      if (!feedNeedsAuthorEnrichment(patched)) {
+        lastSuccessKeyRef.current = dedupeKey;
+        return;
+      }
+      if (attempts >= MAX_ATTEMPTS) return;
+      attempts += 1;
+      // Token often lands after first paint — retry with backoff
+      const delay = Math.min(8000, 800 * attempts);
+      timer = setTimeout(() => {
+        void run();
+      }, delay);
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [allContent, contentType, queryClient, queryKey, useAuth]);
 
   const total = query.data?.pages?.[0]?.total ?? 0;

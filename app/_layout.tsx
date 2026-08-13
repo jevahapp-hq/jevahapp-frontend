@@ -259,7 +259,7 @@ export default function RootLayout() {
 
         const pageSize = getFeedPageSize();
         const useAuth = hasBackendSessionSync();
-        // Warm the key Home actually reads (auth For You when logged in)
+        // Chronological public first — has authorInfo, no For You wait.
         queryClient
           .prefetchInfiniteQuery({
             queryKey: allContentQueryKey("ALL", pageSize, useAuth, useAuth),
@@ -267,26 +267,11 @@ export default function RootLayout() {
               const { fetchAllContentPage } = await import(
                 "../src/shared/media/fetchAllContentPage"
               );
-              if (useAuth) {
-                const cursor =
-                  pageParam === null || pageParam === undefined
-                    ? null
-                    : typeof pageParam === "string"
-                      ? pageParam
-                      : null;
-                return fetchAllContentPage({
-                  contentType: "ALL",
-                  page: cursor == null ? 1 : 2,
-                  limit: pageSize,
-                  useAuth: true,
-                  cursor,
-                });
-              }
               return fetchAllContentPage({
                 contentType: "ALL",
-                page: (pageParam as number) || 1,
+                page: typeof pageParam === "number" ? pageParam : 1,
                 limit: pageSize,
-                useAuth: false,
+                useAuth,
                 forceChronological: true,
               });
             },

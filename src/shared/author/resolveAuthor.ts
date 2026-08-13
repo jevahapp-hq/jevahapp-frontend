@@ -37,8 +37,15 @@ export function resolveAuthorName(
   const fromObjects =
     nameFromUserLike(item.authorInfo) ||
     nameFromUserLike(item.uploadedBy) ||
-    nameFromUserLike(item.author);
+    nameFromUserLike(item.author) ||
+    nameFromUserLike(item.user) ||
+    nameFromUserLike(item.createdBy);
   if (fromObjects) return fromObjects;
+
+  if (typeof item.artistName === "string" && !isPlaceholderName(item.artistName)) {
+    const artist = item.artistName.trim();
+    if (!/^[0-9a-fA-F]{24}$/.test(artist)) return artist;
+  }
 
   if (typeof item.speaker === "string" && !isPlaceholderName(item.speaker)) {
     const speaker = item.speaker.trim();
@@ -90,7 +97,13 @@ export function resolveAuthorAvatar(
 
 /** Seed store from any already-populated author fields on a media item. */
 export function seedAuthorsFromItem(item: AuthorCarrier): void {
-  for (const candidate of [item.authorInfo, item.author, item.uploadedBy]) {
+  for (const candidate of [
+    item.authorInfo,
+    item.author,
+    item.uploadedBy,
+    item.user,
+    item.createdBy,
+  ]) {
     if (!candidate || typeof candidate !== "object") continue;
     const profile = normalizeAuthorProfile(candidate as any);
     if (!profile) continue;

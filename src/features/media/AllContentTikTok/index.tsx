@@ -64,7 +64,7 @@ import SuccessCard from "../../../../app/components/SuccessCard";
 // Import original stores and hooks (these will be bridged)
 import { useUserProfile } from "../../../../app/hooks/useUserProfile";
 import { UserProfileCache } from "../../../../app/utils/cache/UserProfileCache";
-import { seedAuthorFromSession } from "../../../shared/author";
+import { extractAuthorId, seedAuthorFromSession, clearAuthorFetchFailures } from "../../../shared/author";
 import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
 import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
@@ -119,18 +119,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const currentUserId = user?._id || user?.id || null;
 
   const resolveDisplayName = useCallback(
-    (item: MediaItem) => {
+    (item?: MediaItem | null) => {
+      if (!item) return "Anonymous User";
       const name = getUserDisplayNameFromContent(item);
       if (name && !/^(anonymous(\s+user)?|unknown)$/i.test(name.trim())) {
         return name;
       }
-      const ub = item.uploadedBy as any;
-      const authorId = String(
-        (typeof ub === "string" ? ub : ub?._id || ub?.id) ||
-          (item as any).authorInfo?._id ||
-          (item as any).authorInfo?.id ||
-          ""
-      );
+      const authorId = extractAuthorId(item) || "";
       if (
         currentUserId &&
         authorId &&
@@ -159,6 +154,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     };
     UserProfileCache.cacheUserProfile(String(currentUserId), payload as any);
     seedAuthorFromSession(payload);
+    clearAuthorFetchFailures();
   }, [currentUserId, user]);
 
   // Media data from the new hook (useAuthFeed so newly uploaded content appears when logged in)

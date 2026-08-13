@@ -8,7 +8,9 @@ import { hasUsableAuthorName, normalizeAuthorProfile } from "./normalizeAuthor";
  */
 const profiles = new Map<AuthorId, AuthorProfile>();
 const inFlight = new Map<AuthorId, Promise<AuthorProfile | null>>();
-const failedIds = new Set<AuthorId>();
+/** Cooldown — never a permanent blacklist (token/404 can recover). */
+const failedUntil = new Map<AuthorId, number>();
+const FAIL_COOLDOWN_MS = 12_000;
 
 export function getAuthorProfile(userId: AuthorId): AuthorProfile | null {
   if (!userId) return null;
@@ -23,17 +25,23 @@ export function putAuthorProfile(
   if (!profile) return null;
   profiles.set(userId, profile);
   if (hasUsableAuthorName(profile)) {
-    failedIds.delete(userId);
+    failedUntil.delete(userId);
   }
   return profile;
 }
 
 export function markAuthorFetchFailed(userId: AuthorId): void {
-  if (userId) failedIds.add(userId);
+  if (userId) failedUntil.set(userId, Date.now() + FAIL_COOLDOWN_MS);
 }
 
 export function wasAuthorFetchFailed(userId: AuthorId): boolean {
-  return failedIds.has(userId);
+  const until = failedUntil.get(userId);
+  if (until == null) return false;
+  if (Date.now() >= until) {
+    failedUntil.delete(userId);
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -46,7 +54,7 @@ export async function ensureAuthorProfile(
 
   const cached = profiles.get(userId);
   if (cached && hasUsableAuthorName(cached)) return cached;
-  if (failedIds.has(userId)) return cached || null;
+  if (wasAuthorFetchFailed(userId)) return cached || null;
 
   const pending = inFlight.get(userId);
   if (pending) return pending;
@@ -56,11 +64,10 @@ export async function ensureAuthorProfile(
       const fetched = await fetchAuthorProfile(userId);
       if (fetched && hasUsableAuthorName(fetched)) {
         profiles.set(userId, fetched);
-        failedIds.delete(userId);
+        failedUntil.delete(userId);
         return fetched;
       }
       if (fetched) {
-        // Keep avatar-only if we had nothing, but allow retry later for names
         const existing = profiles.get(userId);
         profiles.set(userId, {
           ...(existing || {
@@ -74,13 +81,16 @@ export async function ensureAuthorProfile(
           fullName: fetched.fullName || existing?.fullName || "",
         });
       }
-      // Soft-fail: don't permanently block if response had no name (backend lag)
-      if (!fetched) {
-        failedIds.add(userId);
+      if (!hasUsableAuthorName(profiles.get(userId))) {
+        markAuthorFetchFailed(userId);
       }
       return profiles.get(userId) || null;
-    } catch {
-      failedIds.add(userId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err || "");
+      // Token not ready / 401 mid-refresh — do NOT cooldown; enrichment retries.
+      if (msg !== "AUTHOR_PROFILE_NO_TOKEN" && msg !== "AUTHOR_PROFILE_RETRY") {
+        markAuthorFetchFailed(userId);
+      }
       return profiles.get(userId) || null;
     } finally {
       inFlight.delete(userId);
@@ -98,6 +108,17 @@ export async function ensureAuthorProfiles(
     new Set(userIds.map((id) => String(id || "").trim()).filter(Boolean))
   );
   await Promise.all(unique.map((id) => ensureAuthorProfile(id)));
+}
+
+/** Clear hard-fail marks so enrichment can retry (e.g. after login). */
+export function clearAuthorFetchFailures(userIds?: AuthorId[]): void {
+  if (!userIds?.length) {
+    failedUntil.clear();
+    return;
+  }
+  for (const id of userIds) {
+    if (id) failedUntil.delete(id);
+  }
 }
 
 /** Bridge: seed from legacy UserProfileCache / login session. */

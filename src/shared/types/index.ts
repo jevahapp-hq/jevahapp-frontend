@@ -77,6 +77,7 @@ export interface MediaItem extends BaseEntity {
   isHidden?: boolean;
   category?: string[];
   userId?: string;
+  artistName?: string;
 }
 
 // Content type definitions
