@@ -1,35 +1,18 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { Image, TouchableOpacity, View } from "react-native";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import { View } from "react-native";
 
-import { useCommentModal } from "../../../../app/context/CommentModalContext";
+import { useMediaDeletion } from "../../../shared/hooks";
+import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { VideoCardProps } from "../../../shared/types";
 import { isAudioSermon, isValidUri } from "../../../shared/utils";
 import {
   getBestVideoUrl,
-  getVideoUrlFromMedia,
+  getVideoUrlFromMedia
 } from "../../../shared/utils/videoUrlManager";
-import {
-  MediaCardFooter,
-  MediaCardModals,
-  MediaCardShell,
-  useMediaCardChrome,
-} from "./MediaCard";
+import { VideoCardFooter } from "./VideoCard/VideoCardFooter";
+import { VideoCardModals } from "./VideoCard/VideoCardModals";
 import { VideoCardPlayerArea } from "./VideoCard/VideoCardPlayerArea";
 import { useVideoCardInteractionStats } from "./VideoCard/hooks/useVideoCardInteractionStats";
-
-function resolvePosterUri(video: VideoCardProps["video"]): string | null {
-  const raw =
-    (video as any).thumbnailUrl ??
-    (video as any).coverImageUrl ??
-    (video as any).imageUrl ??
-    null;
-  if (!raw) return null;
-  if (typeof raw === "string") return isValidUri(raw) ? raw : null;
-  if (typeof raw === "object" && typeof raw.uri === "string") {
-    return isValidUri(raw.uri) ? raw.uri : null;
-  }
-  return null;
-}
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -38,7 +21,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   contentStats,
   userFavorites,
   globalFavoriteCounts,
+  playingVideos,
   mutedVideos,
+  progresses,
   videoVolume,
   currentlyVisibleVideo,
   onVideoTap,
@@ -52,35 +37,76 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onDelete,
   onModalToggle,
   modalVisible,
+  comments,
   checkIfDownloaded,
   getContentKey,
   getTimeAgo,
   getUserDisplayNameFromContent,
   getUserAvatarFromContent,
   onLayout,
+  isAutoPlayEnabled = false,
   shouldRenderPlayer = false,
-  focusRef,
+  isFeedActive = true,
+  playbackKey,
 }) => {
   const contentId = video._id || getContentKey(video);
-  const key = getContentKey(video);
-  const isMuted = mutedVideos[key] ?? false;
+  const key = playbackKey ?? getContentKey(video);
+  const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
+
+  // ✅ Use centralized utility for media type detection
   const isAudioSermonValue = isAudioSermon(video);
-  const isFocused = currentlyVisibleVideo === key;
-  const { isVisible: commentsFocused, updateCommentMediaLayout } =
-    useCommentModal();
 
   const rawVideoUrl = !isAudioSermonValue ? getVideoUrlFromMedia(video) : null;
-  const videoUrl =
-    rawVideoUrl && isValidUri(rawVideoUrl)
-      ? getBestVideoUrl(rawVideoUrl)
-      : null;
+  const videoUrl = rawVideoUrl && isValidUri(rawVideoUrl)
+    ? getBestVideoUrl(rawVideoUrl)
+    : null;
 
-  const chrome = useMediaCardChrome({
-    item: video,
-    parentModalOpen: modalVisible === modalKey,
-    onDelete,
-    checkAdmin: false,
+  // Debug newly uploaded videos
+  useEffect(() => {
+    if (__DEV__ && video.title.includes('61 (HD)')) {
+      console.log(`🔍 [VideoCard] Tracking problematic upload: "${video.title}"`);
+      console.log(`   - rawVideoUrl: ${rawVideoUrl}`);
+      console.log(`   - videoUrl: ${videoUrl}`);
+      console.log(`   - shouldRenderPlayer: ${shouldRenderPlayer}`);
+    }
+  }, [video, videoUrl, shouldRenderPlayer]);
+
+  const [showReportModal, setShowReportModal] = useState(false);
+  const { isModalVisible, openModal, closeModal } = useContentActionModal();
+  const [likeBurstKey, setLikeBurstKey] = useState(0);
+  const storeRef = useRef<any>(null);
+
+  // Delete media functionality - using reusable hook
+  const {
+    isOwner,
+    showDeleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleDeleteConfirm: handleDeleteConfirmInternal,
+  } = useMediaDeletion({
+    mediaItem: video,
+    isModalVisible: isModalVisible || modalVisible === modalKey,
+    onDeleteSuccess: (deletedVideo) => {
+      closeModal();
+      if (onDelete) {
+        onDelete(deletedVideo);
+      }
+    },
   });
+
+  // Handle delete button press
+  const handleDeletePress = useCallback(() => {
+    openDeleteModal();
+  }, [openDeleteModal]);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    closeDeleteModal();
+    closeModal();
+    if (onDelete) {
+      onDelete(video);
+    }
+  }, [video, closeDeleteModal, closeModal, onDelete]);
 
   const {
     likeCount,
@@ -99,223 +125,132 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     globalFavoriteCounts,
   });
 
-  const posterUri = useMemo(() => resolvePosterUri(video), [video]);
-  const playerAnchorRef = useRef<View>(null);
-
-  const measureAnchor = useCallback(
-    (
-      onDone: (
-        anchor: { mediaBottomY: number; mediaHeight: number } | null
-      ) => void
-    ) => {
-      const node = playerAnchorRef.current;
-      if (node && typeof (node as any).measureInWindow === "function") {
-        (node as any).measureInWindow(
-          (_x: number, y: number, _w: number, h: number) => {
-            if (Number.isFinite(y) && Number.isFinite(h) && h > 0) {
-              onDone({ mediaBottomY: y + h, mediaHeight: h });
-              return;
-            }
-            onDone(null);
-          }
-        );
-        return;
-      }
-      onDone(null);
-    },
-    []
-  );
-
-  const openComments = useCallback(() => {
-    // Open immediately — never block the sheet on layout measure.
-    onComment(key, video, null);
-    requestAnimationFrame(() => {
-      measureAnchor((anchor) => {
-        if (anchor) updateCommentMediaLayout(anchor);
-      });
-    });
-  }, [key, measureAnchor, onComment, updateCommentMediaLayout, video]);
-
-  const didRedockRef = useRef(false);
-
-  // One remasure after chrome collapses — avoid layout feedback loops
-  useEffect(() => {
-    if (!commentsFocused || !isFocused) {
-      didRedockRef.current = false;
-      return;
-    }
-    if (didRedockRef.current) return;
-    didRedockRef.current = true;
-    let cancelled = false;
-    const t = setTimeout(() => {
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        measureAnchor((anchor) => {
-          if (!cancelled) updateCommentMediaLayout(anchor);
-        });
-      });
-    }, 80);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [commentsFocused, isFocused, measureAnchor, updateCommentMediaLayout]);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [surfaceReady, setSurfaceReady] = useState(false);
 
   useEffect(() => {
-    if (!__DEV__ || !shouldRenderPlayer || index > 2) return;
-    console.log("[feed-card]", {
-      id: contentId,
-      duration: (video as any).duration,
-      processingStatus: (video as any).processingStatus,
-      fileUrl:
-        typeof (video as any).fileUrl === "string"
-          ? (video as any).fileUrl.slice(0, 80)
-          : (video as any).fileUrl,
-      hlsUrl:
-        typeof (video as any).hlsUrl === "string"
-          ? (video as any).hlsUrl.slice(0, 80)
-          : (video as any).hlsUrl,
-    });
-  }, [contentId, video, shouldRenderPlayer, index]);
+    try {
+      const {
+        useInteractionStore,
+      } = require("../../../../app/store/useInteractionStore");
+      storeRef.current = useInteractionStore.getState();
+    } catch { }
+  }, []);
+
+  // Reset reveal when this cell switches video / leaves mount window.
+  useEffect(() => {
+    setSurfaceReady(false);
+  }, [key, videoUrl, shouldRenderPlayer]);
+
+  const handleSurfaceReadyChange = useCallback((ready: boolean) => {
+    setSurfaceReady(ready);
+  }, []);
+
+  // Always reserve footer layout for video posts — popping it in after the
+  // frame caused FlashList rows to stack/flash over each other.
+  const isVideoPost = !isAudioSermonValue && !!videoUrl;
+  const showFooterSlot = isAudioSermonValue || !videoUrl || isVideoPost;
+  const footerVisible = isAudioSermonValue || !videoUrl || surfaceReady;
 
   return (
-    <MediaCardShell
-      focusRef={focusRef}
+    <View
+      key={modalKey}
+      className="flex flex-col"
+      collapsable={false}
+      style={{
+        marginBottom: showFooterSlot ? 64 : 0,
+        overflow: "hidden",
+      }}
       onLayout={
         onLayout
           ? (event) => onLayout(event, key, "video", video.fileUrl)
           : undefined
       }
     >
-      {shouldRenderPlayer ? (
+      <VideoCardPlayerArea
+        video={video}
+        contentKey={key}
+        index={index}
+        isActive={true}
+        videoUrl={videoUrl}
+        videoVolume={videoVolume}
+        isMuted={isMuted}
+        onVideoTap={onVideoTap}
+        onTogglePlay={onTogglePlay}
+        onToggleMute={onToggleMute}
+        getContentKey={getContentKey}
+        onDelete={onDelete}
+        onModalToggle={onModalToggle}
+        modalVisible={modalVisible}
+        checkIfDownloaded={checkIfDownloaded}
+        getTimeAgo={getTimeAgo}
+        getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+        getUserAvatarFromContent={getUserAvatarFromContent}
+        onLayout={onLayout}
+        onForceActive={() => { }}
+        shouldRenderPlayer={shouldRenderPlayer}
+        isFeedActive={isFeedActive}
+        onSurfaceReadyChange={handleSurfaceReadyChange}
+      />
+
+      {showFooterSlot && (
         <View
-          ref={playerAnchorRef}
+          style={{ opacity: footerVisible ? 1 : 0 }}
+          pointerEvents={footerVisible ? "auto" : "none"}
           collapsable={false}
-          style={
-            commentsFocused && isFocused
-              ? { zIndex: 20, elevation: 20 }
-              : undefined
-          }
         >
-          <VideoCardPlayerArea
+          <VideoCardFooter
             video={video}
             contentKey={key}
-            index={index}
-            isActive={isFocused}
-            videoUrl={videoUrl}
-            videoVolume={videoVolume}
-            isMuted={isMuted}
-            onVideoTap={onVideoTap}
-            onTogglePlay={onTogglePlay}
-            onToggleMute={onToggleMute}
-            getContentKey={getContentKey}
-            onDelete={onDelete}
-            onModalToggle={onModalToggle}
-            modalVisible={modalVisible}
-            checkIfDownloaded={checkIfDownloaded}
-            getTimeAgo={getTimeAgo}
-            getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+            modalKey={modalKey}
+            contentId={contentId}
             getUserAvatarFromContent={getUserAvatarFromContent}
-            onLayout={onLayout}
-            onForceActive={() => {}}
-            commentsFocused={commentsFocused && isFocused}
+            getUserDisplayNameFromContent={getUserDisplayNameFromContent}
+            getTimeAgo={getTimeAgo}
+            viewCount={viewCount}
+            userLikeState={userLikeState}
+            likeCount={likeCount}
+            likeBurstKey={likeBurstKey}
+            setLikeBurstKey={setLikeBurstKey}
+            onLike={onLike}
+            onComment={onComment}
+            commentCount={commentCount}
+            userSaveState={userSaveState}
+            saveCount={saveCount}
+            onSave={onSave}
+            onShare={onShare}
+            isLoadingStats={isLoadingStats}
+            openModal={openModal}
+            onModalToggle={onModalToggle}
           />
-        </View>
-      ) : (
-        <View ref={playerAnchorRef} collapsable={false}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => onVideoTap(key, video, index)}
-            className="w-full h-[400px] overflow-hidden relative bg-black"
-          >
-            {posterUri ? (
-              <Image
-                source={{ uri: posterUri }}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
-            ) : null}
-          </TouchableOpacity>
         </View>
       )}
 
-      {!commentsFocused ? (
-        <MediaCardFooter
-          item={video}
-          contentId={contentId}
-          viewCount={viewCount}
-          userLikeState={userLikeState}
-          likeCount={likeCount}
-          onLike={() => onLike(key, video)}
-          onComment={openComments}
-          commentCount={commentCount}
-          userSaveState={userSaveState}
-          saveCount={saveCount}
-          onSave={() => onSave(modalKey, video)}
-          onShare={() => onShare(modalKey, video)}
-          isLoadingStats={isLoadingStats}
-          openModal={() => {
-            chrome.openModal();
-            onModalToggle?.(modalKey);
-          }}
-          getUserAvatarFromContent={getUserAvatarFromContent}
-          getUserDisplayNameFromContent={getUserDisplayNameFromContent}
-          getTimeAgo={getTimeAgo}
-        />
-      ) : null}
-
-      <MediaCardModals
-        item={video}
-        isModalVisible={chrome.isModalVisible || modalVisible === modalKey}
-        closeModal={chrome.closeModal}
-        setShowDetailsModal={chrome.setShowDetailsModal}
-        onSave={() => onSave(modalKey, video)}
-        onDownload={() => onDownload(video)}
-        isSaved={!!contentStats[contentId]?.userInteractions?.saved}
-        isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
-        handleDeletePress={chrome.handleDeletePress}
-        showDelete={chrome.isOwner}
-        showDeleteModal={chrome.showDeleteModal}
-        closeDeleteModal={chrome.closeDeleteModal}
-        handleDeleteConfirm={chrome.handleDeleteConfirm}
-        showReportModal={chrome.showReportModal}
-        setShowReportModal={chrome.setShowReportModal}
-        showDetailsModal={chrome.showDetailsModal}
-        onParentModalClose={() => onModalToggle?.(null)}
+      <VideoCardModals
+        isModalVisible={isModalVisible}
+        modalVisible={modalVisible}
+        modalKey={modalKey}
+        onModalToggle={onModalToggle}
+        closeModal={closeModal}
+        setShowDetailsModal={setShowDetailsModal}
+        onSave={onSave}
+        video={video}
+        contentStats={contentStats}
+        contentId={contentId}
+        checkIfDownloaded={checkIfDownloaded as any}
+        handleDeletePress={handleDeletePress}
+        userIsAdmin={false}
+        isOwner={isOwner}
+        showDeleteModal={showDeleteModal}
+        closeDeleteModal={closeDeleteModal}
+        handleDeleteConfirm={handleDeleteConfirm}
+        showReportModal={showReportModal}
+        setShowReportModal={setShowReportModal}
+        showDetailsModal={showDetailsModal}
+        onDownload={onDownload}
       />
-    </MediaCardShell>
+    </View>
   );
 };
 
-function areVideoCardPropsEqual(
-  prev: VideoCardProps,
-  next: VideoCardProps
-): boolean {
-  if (prev.video._id !== next.video._id) return false;
-  if (prev.index !== next.index) return false;
-  if (prev.modalKey !== next.modalKey) return false;
-  if (prev.shouldRenderPlayer !== next.shouldRenderPlayer) return false;
-  if (prev.videoVolume !== next.videoVolume) return false;
-
-  const prevKey = prev.getContentKey(prev.video);
-  const nextKey = next.getContentKey(next.video);
-  if (prevKey !== nextKey) return false;
-
-  const prevId = prev.video._id || prevKey;
-  const nextId = next.video._id || nextKey;
-  const prevStats = prev.contentStats[prevId];
-  const nextStats = next.contentStats[nextId];
-
-  return (
-    prevStats === nextStats &&
-    prev.mutedVideos[prevKey] === next.mutedVideos[nextKey] &&
-    (prev.currentlyVisibleVideo === prevKey) ===
-      (next.currentlyVisibleVideo === nextKey) &&
-    (prev.modalVisible === prev.modalKey) ===
-      (next.modalVisible === next.modalKey) &&
-    prev.userFavorites[prevKey] === next.userFavorites[nextKey] &&
-    prev.globalFavoriteCounts[prevKey] === next.globalFavoriteCounts[nextKey]
-  );
-}
-
-export default memo(VideoCard, areVideoCardPropsEqual);
+export default memo(VideoCard);

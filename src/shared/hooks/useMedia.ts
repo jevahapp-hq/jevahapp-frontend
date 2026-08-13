@@ -120,7 +120,13 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     }
   }, [fetchDefaultContent, defaultContentPagination, limit, contentType]);
 
-  const loadMoreContent = loadMoreDefaultContent;
+  const loadMoreContent = useCallback(async () => {
+    if (allContent.length > 0) {
+      await loadMoreAllContent();
+      return;
+    }
+    await loadMoreDefaultContent();
+  }, [allContent.length, loadMoreAllContent, loadMoreDefaultContent]);
 
   const getFilteredContent = useCallback(
     (filter: ContentFilter) => {
@@ -129,6 +135,17 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
     },
     [allContent, defaultContent]
   );
+
+  const defaultContentLoading =
+    shouldFetchDefault &&
+    defaultContentQuery.isPending &&
+    defaultContent.length === 0;
+  const isLoadingMore =
+    Boolean(isFetchingNextPage) ||
+    (defaultContentQuery.isFetching && defaultContent.length > 0);
+  const hasMoreDefaultPages =
+    Boolean(hasNextPage) ||
+    defaultContentPagination.page < defaultContentPagination.pages;
 
   return useMemo(
     (): UseMediaReturn => ({
@@ -146,6 +163,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       isFetchingNextPage,
       getFilteredContent,
       serverRanked: Boolean(serverRanked),
+      isLoadingMore,
+      hasMoreDefaultPages,
+      defaultContentLoading,
     }),
     [
       allContent,
@@ -163,6 +183,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       isFetchingNextPage,
       getFilteredContent,
       serverRanked,
+      isLoadingMore,
+      hasMoreDefaultPages,
+      defaultContentLoading,
     ]
   );
 };

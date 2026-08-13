@@ -1,66 +1,23 @@
 /**
  * ContentFeedStates - Loading, Error, Empty states for AllContentTikTok
+ * Loading avoids large white skeleton cards (looked like blank video stages).
  */
 import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
-import { FeedMediaCardSkeleton } from "./FeedMediaCardSkeleton";
 
-export function LoadingState({ count = 2 }: { count?: number }) {
-  const pageBg = UI_CONFIG.COLORS.BACKGROUND || "#FFFFFF";
+export function LoadingState() {
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: pageBg }}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 48, backgroundColor: pageBg }}
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "transparent",
+      }}
     >
-      {/* Most Recent */}
-      <View style={{ marginTop: UI_CONFIG.SPACING.LG }}>
-        <View
-          style={{
-            paddingHorizontal: UI_CONFIG.SPACING.MD,
-            marginBottom: UI_CONFIG.SPACING.MD,
-          }}
-        >
-          <View
-            style={{
-              height: 18,
-              width: 118,
-              borderRadius: 6,
-              backgroundColor: "#E8EAED",
-              opacity: 0.9,
-            }}
-          />
-        </View>
-        <FeedMediaCardSkeleton delay={40} />
-      </View>
-
-      {/* For You */}
-      <View style={{ marginTop: UI_CONFIG.SPACING.XL }}>
-        <View
-          style={{
-            paddingHorizontal: UI_CONFIG.SPACING.MD,
-            marginBottom: UI_CONFIG.SPACING.LG,
-          }}
-        >
-          <View
-            style={{
-              height: 18,
-              width: 86,
-              borderRadius: 6,
-              backgroundColor: "#E8EAED",
-              opacity: 0.9,
-            }}
-          />
-        </View>
-        {Array.from({ length: count }).map((_, i) => (
-          <FeedMediaCardSkeleton
-            key={`feed-skel-${i}`}
-            delay={120 + i * 90}
-          />
-        ))}
-      </View>
-    </ScrollView>
+      <ActivityIndicator size="small" color={UI_CONFIG.COLORS.PRIMARY} />
+    </View>
   );
 }
 

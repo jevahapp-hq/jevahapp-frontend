@@ -1,16 +1,18 @@
 /**
- * Live Coming Soon promo — rendered as a FlashList row so it stays virtualized.
+ * LiveComingSoonCard - Promo card for the upcoming Live Streaming feature.
+ * Extracted from ContentFeedHeader so it can be rendered as a regular row
+ * inside the feed's FlashList data (see index.tsx) instead of a separate,
+ * always-mounted header component.
  */
 import { Ionicons } from "@expo/vector-icons";
-import React, { memo } from "react";
+import React from "react";
 import { Text, View } from "react-native";
-import { UI_CONFIG } from "../../../../shared/constants";
 
-function LiveComingSoonCardInner() {
+export function LiveComingSoonCard() {
   return (
     <View
       style={{
-        marginHorizontal: UI_CONFIG.SPACING.MD,
+        marginHorizontal: 16,
         marginTop: 32,
         borderRadius: 24,
         overflow: "hidden",
@@ -159,14 +161,8 @@ function LiveComingSoonCardInner() {
 
         {[
           { icon: "videocam-outline", text: "HD live video streaming" },
-          {
-            icon: "chatbubble-ellipses-outline",
-            text: "Live chat & prayer requests",
-          },
-          {
-            icon: "notifications-outline",
-            text: "Event reminders & alerts",
-          },
+          { icon: "chatbubble-ellipses-outline", text: "Live chat & prayer requests" },
+          { icon: "notifications-outline", text: "Event reminders & alerts" },
         ].map((item) => (
           <View
             key={item.text}
@@ -205,4 +201,4 @@ function LiveComingSoonCardInner() {
   );
 }
 
-export const LiveComingSoonCard = memo(LiveComingSoonCardInner);
+export default LiveComingSoonCard;

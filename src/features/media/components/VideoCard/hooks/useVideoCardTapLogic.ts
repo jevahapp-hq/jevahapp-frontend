@@ -1,18 +1,9 @@
 /**
- * useVideoCardTapLogic — premium single/double tap for feed video cards.
- *
- * Product choice (Jevah):
- * - Double-tap → play / pause (decisive, haptic, store-driven)
- * - Single-tap → reveal controls overlay (never fights double-tap)
- * - Scan button remains the explicit expand / open affordance
+ * useVideoCardTapLogic - Single/double tap detection and play toggle
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
+import type { VideoPlayer } from "expo-video";
 import type { MediaItem } from "../../../../../shared/types";
-import { triggerMediaPlayHaptic } from "../../../../../shared/utils/haptics";
-import {
-  createMediaTapRecognizer,
-  type MediaTapRecognizer,
-} from "../gestures/createMediaTapRecognizer";
 
 export interface UseVideoCardTapLogicParams {
   key: string;
@@ -22,94 +13,83 @@ export interface UseVideoCardTapLogicParams {
   isAudioSermon: boolean;
   audioIsPlaying: boolean;
   onTogglePlay: (key: string) => void;
+  onVideoTap: (key: string, video: MediaItem, index: number) => void;
   audioControlsPause: () => void;
-  audioControlsPlay?: () => void;
   togglePlayback: () => void;
-  player: any;
+  videoRef: React.MutableRefObject<VideoPlayer | null>;
   showOverlayPermanently: () => void;
-  showOverlayTemporarily: () => void;
   hideOverlay: () => void;
 }
 
 export function useVideoCardTapLogic({
   key,
+  video,
+  index,
   isPlaying,
   isAudioSermon,
   audioIsPlaying,
   onTogglePlay,
+  onVideoTap,
   audioControlsPause,
-  audioControlsPlay,
+  togglePlayback,
+  videoRef,
   showOverlayPermanently,
-  showOverlayTemporarily,
   hideOverlay,
 }: UseVideoCardTapLogicParams) {
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTapRef = useRef<number>(0);
+  const tapCountRef = useRef<number>(0);
   const toggleProcessingRef = useRef(false);
-  const recognizerRef = useRef<MediaTapRecognizer | null>(null);
-
-  const playbackRef = useRef({
-    isPlaying,
-    isAudioSermon,
-    audioIsPlaying,
-  });
-  playbackRef.current = { isPlaying, isAudioSermon, audioIsPlaying };
-
-  /**
-   * One path for button + double-tap.
-   * Feed store (`onTogglePlay`) is source of truth; player syncs via shouldPlay.
-   */
-  const togglePlayPause = useCallback(() => {
-    const {
-      isPlaying: playing,
-      isAudioSermon: audio,
-      audioIsPlaying: audioPlaying,
-    } = playbackRef.current;
-    const isCurrentlyPlaying = playing || (audio && audioPlaying);
-
-    triggerMediaPlayHaptic();
-
-    if (audio) {
-      if (isCurrentlyPlaying) audioControlsPause();
-      else audioControlsPlay?.();
-    }
-
-    onTogglePlay(key);
-
-    if (isCurrentlyPlaying) showOverlayPermanently();
-    else hideOverlay();
-  }, [
-    key,
-    onTogglePlay,
-    audioControlsPause,
-    audioControlsPlay,
-    showOverlayPermanently,
-    hideOverlay,
-  ]);
-
-  const revealControls = useCallback(() => {
-    const {
-      isPlaying: playing,
-      isAudioSermon: audio,
-      audioIsPlaying: audioPlaying,
-    } = playbackRef.current;
-    const isCurrentlyPlaying = playing || (audio && audioPlaying);
-    if (isCurrentlyPlaying) showOverlayTemporarily();
-    else showOverlayPermanently();
-  }, [showOverlayTemporarily, showOverlayPermanently]);
-
-  useEffect(() => {
-    recognizerRef.current = createMediaTapRecognizer({
-      onSingleTap: revealControls,
-      onDoubleTap: togglePlayPause,
-    });
-    return () => {
-      recognizerRef.current?.dispose();
-      recognizerRef.current = null;
-    };
-  }, [revealControls, togglePlayPause]);
 
   const handleVideoTap = useCallback(() => {
-    recognizerRef.current?.onPress();
-  }, []);
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
+    const isCurrentlyPlaying = isPlaying || (isAudioSermon && audioIsPlaying);
+
+    if (timeSinceLastTap > 400) tapCountRef.current = 0;
+    tapCountRef.current += 1;
+    lastTapRef.current = now;
+
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+      tapTimeoutRef.current = null;
+    }
+
+    if (tapCountRef.current === 2 && timeSinceLastTap <= 400) {
+      tapCountRef.current = 0;
+      if (isCurrentlyPlaying) {
+        if (isAudioSermon) audioControlsPause();
+        else {
+          togglePlayback();
+          try {
+            videoRef.current?.pause();
+          } catch (error) {
+            console.error("❌ Pause failed:", error);
+          }
+        }
+      }
+      onVideoTap(key, video, index);
+      return;
+    }
+
+    tapTimeoutRef.current = setTimeout(() => {
+      if (tapCountRef.current === 1) onTogglePlay(key);
+      tapCountRef.current = 0;
+      tapTimeoutRef.current = null;
+    }, 200) as any;
+  }, [
+    isPlaying,
+    onTogglePlay,
+    key,
+    onVideoTap,
+    video,
+    index,
+    isAudioSermon,
+    audioControlsPause,
+    audioIsPlaying,
+    togglePlayback,
+    videoRef,
+  ]);
 
   const handleTogglePlay = useCallback(
     (setIsPlayTogglePending: (v: boolean) => void) => {
@@ -119,11 +99,22 @@ export function useVideoCardTapLogic({
         return;
       }
 
-      recognizerRef.current?.reset();
+      tapCountRef.current = 0;
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+        tapTimeoutRef.current = null;
+      }
       toggleProcessingRef.current = true;
 
       try {
-        togglePlayPause();
+        onTogglePlay(key);
+        if (isAudioSermon) {
+          if (audioIsPlaying) showOverlayPermanently();
+          else hideOverlay();
+        } else {
+          if (isPlaying) showOverlayPermanently();
+          else hideOverlay();
+        }
       } catch (error) {
         console.error("Error in handleTogglePlay:", error);
       } finally {
@@ -133,14 +124,20 @@ export function useVideoCardTapLogic({
         }, 50);
       }
     },
-    [togglePlayPause]
+    [
+      key,
+      isAudioSermon,
+      audioIsPlaying,
+      isPlaying,
+      onTogglePlay,
+      showOverlayPermanently,
+      hideOverlay,
+    ]
   );
 
   return {
     handleVideoTap,
     handleTogglePlay,
-    tapTimeoutRef: { current: null } as React.MutableRefObject<ReturnType<
-      typeof setTimeout
-    > | null>,
+    tapTimeoutRef,
   };
 }

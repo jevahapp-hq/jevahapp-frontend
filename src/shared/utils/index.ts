@@ -2,6 +2,7 @@ export * from "./audioPrefetch";
 export * from "./colorUtils";
 export * from "./contentHelpers";
 export * from "./formatCount";
+export * from "./buildStableFeedMediaList";
 export * from "./haptics";
 export * from "./imageOptimizer";
 export * from "./logger";

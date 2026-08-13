@@ -170,7 +170,7 @@ class MediaApi {
   ): Promise<MediaApiResponse> {
     const params = {
       page: filter.page || 1,
-      limit: filter.limit || 10,
+      limit: filter.limit || 40,
       contentType:
         filter.contentType !== "ALL" ? filter.contentType : undefined,
       search: filter.search,

@@ -1,45 +1,23 @@
 /**
  * useAllContentTikTokFeedData - Feed data, helpers, and hydration effects
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { InteractionManager } from "react-native";
 import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
-import { toBatchMetadataItem } from "../../../../../app/utils/engagementHelpers";
 import { getPersistedStats, getViewed } from "../../../../../app/utils/persistentStorage";
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import {
   categorizeContent,
   filterContentByType,
+  getMostRecentItem,
 } from "../../../../shared/utils/contentHelpers";
-import {
-  getFeedImpressions,
-  getLastSessionTopIds,
-  getOrCreateSessionSeed,
-  idsSeenToday,
-  markFeedImpressions,
-  rememberLastSessionTopIds,
-  rotateSessionSeed,
-} from "../utils/feedImpressionStore";
-import {
-  createFeedShuffleSeed,
-  pickMostRecentItem,
-  rankFeedForYou,
-  stabilizeFeedOrder,
-} from "../utils/rankFeedForYou";
-import {
-  CLIENT_RERANK,
-  SESSION_SHUFFLE,
-} from "../../../../shared/feed/feedFeatureFlags";
 
 export interface UseAllContentTikTokFeedDataParams {
   mediaList: MediaItem[];
   contentType: ContentType | "ALL";
   setPreviouslyViewed: (v: any[]) => void;
   setIsLoadingContent: (v: boolean) => void;
-  previouslyViewed?: any[];
-  /** Server already ranked via /feed/for-you */
-  serverRanked?: boolean;
 }
 
 export function useAllContentTikTokFeedData(
@@ -50,262 +28,109 @@ export function useAllContentTikTokFeedData(
     contentType,
     setPreviouslyViewed,
     setIsLoadingContent,
-    previouslyViewed = [],
-    serverRanked = false,
   } = params;
 
-  const libraryIsLoaded = useLibraryStore((s) => s.isLoaded);
-  const loadSavedItems = useLibraryStore((s) => s.loadSavedItems);
-  const [seenTodayIds, setSeenTodayIds] = useState<Set<string>>(new Set());
-  const [lastSessionTopIds, setLastSessionTopIds] = useState<Set<string>>(
-    new Set()
-  );
-  const [sessionSeed, setSessionSeed] = useState<number>(() =>
-    createFeedShuffleSeed()
-  );
-  const [impressionsReady, setImpressionsReady] = useState(false);
-  const [affinity, setAffinity] = useState<
-    import("../utils/feedAffinityStore").FeedAffinityProfile | undefined
-  >(undefined);
-  const pinnedOrderRef = useRef<string[]>([]);
-  const seedUsedRef = useRef(sessionSeed);
+  const libraryStore = useLibraryStore();
 
-  // Load cross-session impressions + rotate seed once per cold start
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { getFeedAffinity } = await import("../utils/feedAffinityStore");
-        const [map, seed, aff, lastTops] = await Promise.all([
-          getFeedImpressions(),
-          getOrCreateSessionSeed(),
-          getFeedAffinity(),
-          getLastSessionTopIds(),
-        ]);
-        if (cancelled) return;
-        setSeenTodayIds(idsSeenToday(map));
-        setSessionSeed(seed);
-        setAffinity(aff);
-        setLastSessionTopIds(lastTops);
-      } catch {
-        // no-op
-      } finally {
-        if (!cancelled) setImpressionsReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const filteredByType = useMemo(
-    () => filterContentByType(mediaList, contentType),
-    [mediaList, contentType]
-  );
-
-  const previouslyViewedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const entry of previouslyViewed || []) {
-      if (typeof entry === "string") ids.add(entry);
-      else if (entry?._id) ids.add(String(entry._id));
-      else if (entry?.id) ids.add(String(entry.id));
-      else if (entry?.contentId) ids.add(String(entry.contentId));
-    }
-    return ids;
-  }, [previouslyViewed]);
-
-  // Session shuffle: random order each visit / PTR. Pin shown IDs so page 2 doesn't jump.
   const filteredMediaList = useMemo(() => {
-    if (!SESSION_SHUFFLE && (serverRanked || !CLIENT_RERANK)) {
-      return filteredByType;
+    const filtered = filterContentByType(mediaList, contentType);
+    // Dedupe by id — duplicate rows silently disappear in FlashList under
+    // Coming Soon (same key twice → later cells dropped).
+    const seen = new Set<string>();
+    const unique: MediaItem[] = [];
+    for (const item of filtered) {
+      const id = String(item._id || (item as any).id || item.fileUrl || "");
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      unique.push(item);
     }
-
-    if (seedUsedRef.current !== sessionSeed) {
-      pinnedOrderRef.current = [];
-      seedUsedRef.current = sessionSeed;
-    }
-
-    const ranked = rankFeedForYou(filteredByType, {
-      previouslyViewedIds,
-      seenTodayIds: impressionsReady ? seenTodayIds : undefined,
-      lastSessionTopIds: impressionsReady ? lastSessionTopIds : undefined,
-      sessionSeed,
-      affinity: CLIENT_RERANK ? affinity : undefined,
-    });
-
-    const { items, nextPinnedIds } = stabilizeFeedOrder(
-      ranked,
-      pinnedOrderRef.current
-    );
-    pinnedOrderRef.current = nextPinnedIds;
-    return items;
-  }, [
-    filteredByType,
-    previouslyViewedIds,
-    seenTodayIds,
-    lastSessionTopIds,
-    sessionSeed,
-    impressionsReady,
-    affinity,
-    serverRanked,
-  ]);
+    return unique;
+  }, [mediaList, contentType]);
 
   const categorizedContent = useMemo(
-    () => categorizeContent(filteredByType),
-    [filteredByType]
+    () => categorizeContent(filteredMediaList),
+    [filteredMediaList]
   );
 
-  // Shelf: newest upload stays "Most Recent"; ranked list powers For You
-  const mostRecentItem = useMemo(
-    () => pickMostRecentItem(filteredByType),
-    [filteredByType]
-  );
+  const mostRecentItem = useMemo(() => {
+    const allItems = [
+      ...categorizedContent.videos,
+      ...categorizedContent.music,
+      ...categorizedContent.ebooks,
+      ...categorizedContent.sermons,
+    ];
+    return getMostRecentItem(allItems);
+  }, [categorizedContent]);
+
+  // Sticky most-recent for this contentType session so Coming Soon `rest`
+  // doesn't reshuffle when the feed order jitters on refetch.
+  const stickyMostRecentIdRef = useRef<string | null>(null);
+  const stickyContentTypeRef = useRef(contentType);
+  if (stickyContentTypeRef.current !== contentType) {
+    stickyContentTypeRef.current = contentType;
+    stickyMostRecentIdRef.current = null;
+  }
+  const incomingMostRecentId =
+    mostRecentItem?._id || (mostRecentItem as any)?.id || null;
+  if (!stickyMostRecentIdRef.current && incomingMostRecentId) {
+    stickyMostRecentIdRef.current = String(incomingMostRecentId);
+  }
+  const stickyMostRecentId = stickyMostRecentIdRef.current;
+
+  const stableMostRecentItem = useMemo(() => {
+    if (!stickyMostRecentId) return mostRecentItem;
+    const match = (filteredMediaList || []).find(
+      (item) => String(item._id || (item as any).id || "") === stickyMostRecentId
+    );
+    return match || mostRecentItem;
+  }, [filteredMediaList, mostRecentItem, stickyMostRecentId]);
 
   const { firstFour, nextFour, rest } = useMemo(() => {
-    const remaining = (filteredMediaList || []).filter(
-      (item) => !mostRecentItem || item._id !== mostRecentItem._id
-    );
+    const mostRecentId =
+      stableMostRecentItem?._id ||
+      (stableMostRecentItem as any)?.id ||
+      stickyMostRecentId ||
+      null;
+    const remaining = (filteredMediaList || []).filter((item) => {
+      if (!mostRecentId) return true;
+      const id = item._id || (item as any).id;
+      return String(id || "") !== String(mostRecentId);
+    });
     return {
       firstFour: remaining.slice(0, 4),
-      nextFour: [] as MediaItem[],
+      nextFour: [],
       rest: remaining.slice(4),
     };
-  }, [filteredMediaList, mostRecentItem]);
+  }, [filteredMediaList, stableMostRecentItem, stickyMostRecentId]);
 
-  // Persist impressions for next launch — do not mutate seenTodayIds mid-session
-  // (that would re-rank and jump the feed while the user is scrolling).
+  // Hydrate liked/saved from feed
   useEffect(() => {
-    const ids = [
-      mostRecentItem?._id,
-      ...firstFour.map((i) => i._id),
-      ...rest.slice(0, 6).map((i) => i._id),
-    ]
-      .filter(Boolean)
-      .map(String);
-
-    if (ids.length === 0) return;
-
-    const timer = setTimeout(() => {
-      void markFeedImpressions(ids);
-    }, 2800);
-
-    return () => clearTimeout(timer);
-  }, [mostRecentItem?._id, firstFour, rest]);
-
-  // Remember this session's top cards for next cold start rotation
-  useEffect(() => {
-    const topIds = [
-      mostRecentItem?._id,
-      ...firstFour.map((i) => i._id),
-    ]
-      .filter(Boolean)
-      .map(String)
-      .slice(0, 5);
-
-    return () => {
-      if (topIds.length > 0) {
-        void rememberLastSessionTopIds(topIds);
-      }
-    };
-  }, [mostRecentItem?._id, firstFour]);
-
-  // Hydrate liked/saved + counts from feed immediately (no InteractionManager delay).
-  // Fingerprint deps — not filteredMediaList identity — so ranking remounts don't loop.
-  const feedInteractionFingerprint = useMemo(() => {
-    return (filteredMediaList || [])
-      .slice(0, 40)
-      .map((i) => {
-        if (!i._id) return "";
-        const likes = i.likeCount ?? i.totalLikes ?? i.likes ?? i.favorite ?? 0;
-        const saves = i.saves ?? i.saved ?? 0;
-        const comments = i.commentCount ?? i.comments ?? i.comment ?? 0;
-        const views = i.viewCount ?? i.totalViews ?? i.views ?? 0;
-        return `${i._id}:${i.hasLiked ? 1 : 0}:${i.hasBookmarked ? 1 : 0}:${likes}:${saves}:${comments}:${views}`;
-      })
-      .filter(Boolean)
-      .join("|");
-  }, [filteredMediaList]);
-
-  useEffect(() => {
-    const items = (filteredMediaList || []).slice(0, 40);
+    const items = (filteredMediaList || []).slice(0, 50);
     if (items.length === 0) return;
-
     const withInteractions = items
-      .filter((i) => i._id)
+      .filter((i) => i._id && (i.hasLiked === true || i.hasBookmarked === true))
       .map((i) => ({
         contentId: i._id!,
         hasLiked: i.hasLiked,
         hasBookmarked: i.hasBookmarked,
-        likes: i.likeCount ?? i.totalLikes ?? i.likes ?? i.favorite ?? 0,
-        saves: i.saves ?? i.saved ?? 0,
-        comments: i.commentCount ?? i.comments ?? i.comment ?? 0,
-        views: i.viewCount ?? i.totalViews ?? i.views ?? 0,
       }));
-
     if (withInteractions.length > 0) {
       useInteractionStore
         .getState()
         .hydrateUserInteractionsFromFeed(withInteractions);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint tracks meaningful feed interaction fields
-  }, [feedInteractionFingerprint]);
-
-  // Restore persisted like/save flags ASAP so relaunch doesn't flash gray then red
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const {
-          getPersistedContentInteractions,
-        } = await import(
-          "../../../../../app/utils/contentInteractionPersist"
-        );
-        const map = await getPersistedContentInteractions();
-        if (cancelled || !map || Object.keys(map).length === 0) return;
-
-        const items = Object.entries(map).map(([contentId, v]) => ({
-          contentId,
-          hasLiked: v.liked,
-          hasBookmarked: v.saved,
-          likes: v.likes,
-          saves: v.saves,
-          comments: v.comments,
-          views: v.views,
-        }));
-        useInteractionStore.getState().hydrateUserInteractionsFromFeed(items);
-      } catch {
-        // no-op
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [filteredMediaList]);
 
   // Load content stats (runs async, doesn't block rendering)
   useEffect(() => {
-    const items = (filteredMediaList || []).slice(0, 8);
+    const items = (filteredMediaList || []).slice(0, 16);
     if (items.length === 0) return;
-
-    const knownStats = useInteractionStore.getState().contentStats;
-    const batchItems = items
-      // Feed responses already include counts. Only hit metadata for genuinely
-      // missing records instead of re-querying the DB on every feed mount.
-      .filter((item) => item._id && !knownStats[item._id])
-      .map((item) =>
-        item._id
-          ? toBatchMetadataItem(item._id, item.contentType || "media")
-          : null
-      )
-      .filter(Boolean) as ReturnType<typeof toBatchMetadataItem>[];
-
-    if (batchItems.length === 0) return;
-
-    const task = InteractionManager.runAfterInteractions(async () => {
+    const ids = items.map((i) => i._id).filter(Boolean) as string[];
+    InteractionManager.runAfterInteractions(async () => {
       try {
         await useInteractionStore
           .getState()
-          .loadBatchContentStats(batchItems);
+          .loadBatchContentStats(ids, "media");
       } catch (e) {
         if (__DEV__)
           console.warn(
@@ -314,117 +139,71 @@ export function useAllContentTikTokFeedData(
           );
       }
     });
-    return () => task.cancel();
   }, [filteredMediaList]);
 
-  // Load persisted data off the critical path
+  // Load persisted data
   useEffect(() => {
-    let cancelled = false;
     const loadAllData = async () => {
       setIsLoadingContent(true);
       try {
-        const [, viewed] = await Promise.all([
+        const [stats, viewed] = await Promise.all([
           getPersistedStats(),
           getViewed(),
-          libraryIsLoaded ? Promise.resolve() : loadSavedItems(),
+          libraryStore.isLoaded
+            ? Promise.resolve()
+            : libraryStore.loadSavedItems(),
         ]);
-        if (cancelled) return;
-        const next = viewed || [];
-        setPreviouslyViewed((prev) => {
-          if (
-            prev.length === next.length &&
-            prev.every((p, i) => {
-              const a =
-                typeof p === "string"
-                  ? p
-                  : String(p?._id || p?.id || p?.contentId || "");
-              const b = next[i];
-              const bId =
-                typeof b === "string"
-                  ? b
-                  : String(b?._id || b?.id || b?.contentId || "");
-              return a === bId;
-            })
-          ) {
-            return prev;
-          }
-          return next;
-        });
+        setPreviouslyViewed(viewed || []);
       } catch (error) {
         if (__DEV__) console.error("❌ Error loading AllContent data:", error);
       } finally {
-        if (!cancelled) setIsLoadingContent(false);
+        setIsLoadingContent(false);
       }
     };
 
     if (mediaList.length > 0) {
-      InteractionManager.runAfterInteractions(() => {
-        void loadAllData();
-      });
+      InteractionManager.runAfterInteractions(() => loadAllData());
     } else {
       setIsLoadingContent(false);
     }
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    mediaList.length,
-    setPreviouslyViewed,
-    setIsLoadingContent,
-    libraryIsLoaded,
-    loadSavedItems,
-  ]);
-
-  const reshuffleFeed = useCallback(async () => {
-    pinnedOrderRef.current = [];
-    const seed = await rotateSessionSeed();
-    seedUsedRef.current = seed;
-    setSessionSeed(seed);
-  }, []);
+  }, [mediaList.length, setPreviouslyViewed, setIsLoadingContent, libraryStore]);
 
   return {
     filteredMediaList,
     categorizedContent,
-    mostRecentItem,
+    mostRecentItem: stableMostRecentItem,
     firstFour,
     nextFour,
     rest,
-    reshuffleFeed,
   };
 }
 
-/** Stable helpers — read latest store; do not subscribe the feed root to contentStats. */
-export function useContentStatsHelpers() {
+export function useContentStatsHelpers(contentStats: Record<string, any>) {
   const getUserLikeState = useCallback(
     (contentId: string) =>
-      useInteractionStore.getState().contentStats[contentId]?.userInteractions
-        ?.liked || false,
-    []
+      contentStats[contentId]?.userInteractions?.liked || false,
+    [contentStats]
   );
 
   const getLikeCount = useCallback(
-    (contentId: string) =>
-      useInteractionStore.getState().contentStats[contentId]?.likes || 0,
-    []
+    (contentId: string) => contentStats[contentId]?.likes || 0,
+    [contentStats]
   );
 
   const getUserSaveState = useCallback(
     (contentId: string) =>
-      useInteractionStore.getState().contentStats[contentId]?.userInteractions
-        ?.saved || false,
-    []
+      contentStats[contentId]?.userInteractions?.saved || false,
+    [contentStats]
   );
 
   const getSaveCount = useCallback(
-    (contentId: string) =>
-      useInteractionStore.getState().contentStats[contentId]?.saves || 0,
-    []
+    (contentId: string) => contentStats[contentId]?.saves || 0,
+    [contentStats]
   );
 
   const getCommentCount = useCallback(
-    (contentId: string) =>
-      useInteractionStore.getState().contentStats[contentId]?.comments || 0,
-    []
+    (contentId: string) => contentStats[contentId]?.comments || 0,
+    [contentStats]
   );
 
   return {

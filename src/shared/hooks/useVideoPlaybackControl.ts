@@ -1,21 +1,26 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { VideoPlayer } from "expo-video";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
 
 export const useVideoPlaybackControl = ({
   videoKey,
   videoRef,
   enableAutoPlay = false,
+  /**
+   * When false, skip imperative play/pause sync and treat store-driven
+   * pause() as a no-op so muted first-frame pre-roll can finish decoding.
+   */
+  playbackReady = true,
 }: {
   videoKey: string;
   videoRef: { current: any } | { current: VideoPlayer | null };
   enableAutoPlay?: boolean;
+  playbackReady?: boolean;
 }) => {
   const {
     playingVideos,
     currentlyPlayingVideo,
-    playVideo,
     pauseVideo,
     setOverlayVisible,
     registerVideoPlayer,
@@ -34,7 +39,9 @@ export const useVideoPlaybackControl = ({
     } else {
       deactivateKeepAwake(tag);
     }
-    return () => { deactivateKeepAwake(tag); };
+    return () => {
+      deactivateKeepAwake(tag);
+    };
   }, [shouldPlayThisVideo, videoKey]);
 
   // Register/unregister player for imperative control
@@ -45,7 +52,10 @@ export const useVideoPlaybackControl = ({
       return;
     }
 
-    const isExpoVideo = typeof p.play === "function" && typeof p.pause === "function" && !p.pauseAsync;
+    const isExpoVideo =
+      typeof p.play === "function" &&
+      typeof p.pause === "function" &&
+      !p.pauseAsync;
 
     const playerRef = {
       pause: async () => {
@@ -54,6 +64,10 @@ export const useVideoPlaybackControl = ({
         try {
           if (isExpoVideo) {
             current.pause();
+            // Always silence non-active players — prevents echo when multiple
+            // feed panes or neighbors are mounted with the same content.
+            current.muted = true;
+            current.volume = 0;
           } else {
             await current.pauseAsync();
           }
@@ -62,27 +76,13 @@ export const useVideoPlaybackControl = ({
           // no-op
         }
       },
+      // expo-video: imperative play/pause. expo-av Reels still rely on
+      // declarative `shouldPlay` for start; only pause is imperative there.
       play: async () => {
         if (!videoRef.current) return;
         try {
           if (isExpoVideo) {
             videoRef.current.play();
-          } else {
-            const status = await videoRef.current.getStatusAsync();
-            if (status?.isLoaded) {
-              return videoRef.current.playAsync();
-            }
-            return new Promise((resolve) => {
-              const check = async () => {
-                const s = await videoRef.current.getStatusAsync();
-                if (s?.isLoaded) {
-                  videoRef.current.playAsync().then(resolve).catch(resolve);
-                } else {
-                  setTimeout(check, 30);
-                }
-              };
-              check();
-            });
           }
         } catch {
           // no-op
@@ -93,15 +93,30 @@ export const useVideoPlaybackControl = ({
     };
 
     registerVideoPlayer(videoKey, playerRef);
-    return () => { unregisterVideoPlayer(videoKey); };
-  }, [videoKey, videoRef, registerVideoPlayer, unregisterVideoPlayer, setOverlayVisible]);
+    return () => {
+      unregisterVideoPlayer(videoKey);
+    };
+  }, [
+    videoKey,
+    videoRef,
+    playbackReady,
+    registerVideoPlayer,
+    unregisterVideoPlayer,
+    setOverlayVisible,
+  ]);
 
-  // Direct imperative sync: if this is the playing video, play it; otherwise pause
+  // Direct imperative sync: if this is the playing video, play it; otherwise pause.
+  // Skipped during pre-roll so neighbors can decode a frozen first frame.
   useEffect(() => {
+    if (!playbackReady) return;
+
     const p = videoRef.current;
     if (!p) return;
 
-    const isExpoVideo = typeof p.play === "function" && typeof p.pause === "function" && !p.pauseAsync;
+    const isExpoVideo =
+      typeof p.play === "function" &&
+      typeof p.pause === "function" &&
+      !p.pauseAsync;
 
     if (shouldPlayThisVideo) {
       if (isExpoVideo) {
@@ -109,13 +124,21 @@ export const useVideoPlaybackControl = ({
       }
     } else {
       if (isExpoVideo) {
+        p.muted = true;
+        p.volume = 0;
         if (p.playing) {
           p.pause();
           setOverlayVisible(videoKey, true);
         }
       }
     }
-  }, [shouldPlayThisVideo, videoKey, videoRef, setOverlayVisible]);
+  }, [
+    shouldPlayThisVideo,
+    videoKey,
+    videoRef,
+    playbackReady,
+    setOverlayVisible,
+  ]);
 
   const play = useCallback(() => {
     playVideoGlobally(videoKey);
