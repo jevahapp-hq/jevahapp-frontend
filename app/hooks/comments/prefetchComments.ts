@@ -5,6 +5,7 @@
 import contentInteractionAPI, {
   peekCachedComments,
   putCachedComments,
+  writeDiskCommentsCache,
 } from "../../utils/contentInteractionAPI";
 
 const inflight = new Set<string>();
@@ -29,11 +30,13 @@ export async function prefetchComments(
       sortBy
     );
     if (res?.comments?.length) {
-      putCachedComments(contentId, sortBy, {
+      const payload = {
         comments: res.comments,
         totalComments: res.totalComments || res.comments.length,
         hasMore: Boolean(res.hasMore),
-      });
+      };
+      putCachedComments(contentId, sortBy, payload);
+      void writeDiskCommentsCache(contentId, sortBy, payload);
     }
   } catch {
     // non-blocking warm

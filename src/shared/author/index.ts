@@ -24,9 +24,13 @@ export {
   ensureAuthorProfile,
   ensureAuthorProfiles,
   getAuthorProfile,
+  hydrateAuthorProfilesSync,
   putAuthorProfile,
   seedAuthorFromSession,
+  useAuthorStoreVersion,
 } from "./authorProfileStore";
+
+export { AUTHOR_DISK_KEY } from "./authorDiskCache";
 
 export {
   resolveAuthorAvatar,
@@ -40,6 +44,7 @@ export {
   ensureFeedAuthors,
   feedItemsNeedFullAuthorRefetch,
   feedNeedsAuthorEnrichment,
+  paintAuthorsFromCache,
 } from "./enrichFeedAuthors";
 
 export {

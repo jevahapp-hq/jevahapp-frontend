@@ -50,7 +50,7 @@ export interface SermonVideoCardProps {
   setViewCounted: React.Dispatch<
     React.SetStateAction<Record<string, boolean>>
   >;
-  showCommentModal: (comments: any[], contentId: string) => void;
+  handleComment: (key: string, item: any) => void;
 }
 
 export default function SermonVideoCard({
@@ -74,7 +74,7 @@ export default function SermonVideoCard({
   setModalVisible,
   setVideoErrors,
   setViewCounted,
-  showCommentModal,
+  handleComment,
 }: SermonVideoCardProps) {
   const globalVideoStore = useGlobalVideoStore();
 
@@ -285,12 +285,7 @@ export default function SermonVideoCard({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
-                console.log(
-                  "🔄 Comment button clicked for sermon:",
-                  video.title
-                );
-                const contentId = video._id || key;
-                showCommentModal([], contentId);
+                handleComment(key, video);
               }}
               className="flex-col justify-center items-center mt-6"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

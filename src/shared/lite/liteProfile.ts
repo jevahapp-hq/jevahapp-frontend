@@ -169,7 +169,7 @@ export function getLitePrefetchAhead(): number | undefined {
 
 /** Adjacent-card Range prefetch (players stay current+next). */
 export function getLiteWarmupUrlCount(): number {
-  return isLiteProfileActive() ? 1 : 2;
+  return isLiteProfileActive() ? 1 : 3;
 }
 
 /**
@@ -177,7 +177,7 @@ export function getLiteWarmupUrlCount(): number {
  * Queued at MAX_CONCURRENT=2 — not extra native players.
  */
 export function getLiteDiskWarmupCount(): number {
-  return isLiteProfileActive() ? 8 : 2;
+  return isLiteProfileActive() ? 8 : 8;
 }
 
 /**

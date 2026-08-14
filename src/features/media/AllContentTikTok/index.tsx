@@ -33,6 +33,7 @@ import {
 // Feature-specific imports
 import { useQueryClient } from "@tanstack/react-query";
 import { useMedia } from "../../../shared/hooks/useMedia";
+import { feedQueryContentType } from "./hooks/useAllContentTikTokFeedSource";
 import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 import { FeedSectionTitle } from "./components/FeedSectionTitle";
@@ -51,10 +52,13 @@ import {
 } from "../video-feed";
 
 import {
+  useAdjacentCommentsPrefetch,
+  useAdjacentVideoPrefetch,
   useAllContentTikTokAudio,
   useAllContentTikTokFeedData,
   useAllContentTikTokHandlers,
   useAllContentTikTokSocket,
+  useAllContentTikTokWarmup,
   useContentStatsHelpers,
 } from "./hooks";
 // Component imports (app is at project root, sibling to src - need 4 levels up)
@@ -64,12 +68,19 @@ import SuccessCard from "../../../../app/components/SuccessCard";
 // Import original stores and hooks (these will be bridged)
 import { useUserProfile } from "../../../../app/hooks/useUserProfile";
 import { UserProfileCache } from "../../../../app/utils/cache/UserProfileCache";
-import { extractAuthorId, seedAuthorFromSession, clearAuthorFetchFailures } from "../../../shared/author";
+import { extractAuthorId, seedAuthorFromSession, clearAuthorFetchFailures, useAuthorStoreVersion } from "../../../shared/author";
 import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
 import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../../app/store/useInteractionStore";
+import { useCommentModal } from "../../../../app/context/CommentModalContext";
+import {
+  getLiteListWindow,
+  getLitePlayerNeighborRadius,
+  isLiteProfileActive,
+  shouldMountLitePlayer,
+} from "../../../shared/lite/liteProfile";
 
 export interface AllContentTikTokProps {
   contentType?: ContentType | "ALL";
@@ -107,7 +118,6 @@ type FeedRow =
  * Soft ceiling is enforced by pruning oldest mounts (see mount effect).
  * Exceeding hardware decoder limits hangs Android / freezes iOS.
  */
-const HARD_MAX_PLAYERS = FEED_HARD_MAX_PLAYERS;
 
 export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   contentType: activeTab = "ALL",
@@ -117,6 +127,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 }) => {
   const { user } = useUserProfile();
   const currentUserId = user?._id || user?.id || null;
+  const authorStoreVersion = useAuthorStoreVersion();
+  const liteActive = isLiteProfileActive();
+  const listWindow = getLiteListWindow();
+  const maxPlayers = liteActive ? 2 : FEED_HARD_MAX_PLAYERS;
 
   const resolveDisplayName = useCallback(
     (item?: MediaItem | null) => {
@@ -138,7 +152,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       }
       return name;
     },
-    [currentUserId, user]
+    [currentUserId, user, authorStoreVersion]
   );
 
   useEffect(() => {
@@ -170,7 +184,11 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     hasMoreDefaultPages,
     getFilteredContent,
     hasContent,
-  } = useMedia({ immediate: true, contentType: activeTab, useAuth: useAuthFeed });
+  } = useMedia({
+    immediate: true,
+    contentType: feedQueryContentType(activeTab),
+    useAuth: useAuthFeed,
+  });
 
   const queryClient = useQueryClient();
   const handleDeleteSuccess = useCallback(() => {
@@ -195,6 +213,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     (s) => s.currentlyPlayingVideo
   );
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
+  const { isVisible: commentsOpen } = useCommentModal();
 
   // Create functions to match what components expect
   const playMedia = useCallback((key: string, type: "video" | "audio") => {
@@ -255,8 +274,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const [videoVolume, setVideoVolume] = useState<number>(1.0);
   const [currentlyVisibleVideo, setCurrentlyVisibleVideo] = useState<string | null>(null);
   const currentlyVisibleVideoRef = useRef<string | null>(null);
+  const [focusedFeedKey, setFocusedFeedKey] = useState<string | null>(null);
   const isFeedActiveRef = useRef(isFeedActive);
   const isAutoPlayEnabledRef = useRef(isAutoPlayEnabled);
+  const commentsOpenRef = useRef(commentsOpen);
   const wasFeedActiveRef = useRef(isFeedActive);
 
   useEffect(() => {
@@ -268,6 +289,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   useEffect(() => {
     isAutoPlayEnabledRef.current = isAutoPlayEnabled;
   }, [isAutoPlayEnabled]);
+  useEffect(() => {
+    commentsOpenRef.current = commentsOpen;
+  }, [commentsOpen]);
 
   useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
 
@@ -327,6 +351,21 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     (item: MediaItem) => `${activeTab}::${getContentKey(item)}`,
     [activeTab, getContentKey]
   );
+
+  useAllContentTikTokWarmup(filteredMediaList);
+  useAdjacentVideoPrefetch({
+    focusedKey: currentlyVisibleVideo,
+    items: filteredMediaList,
+    getContentKey: getFeedPlaybackKey,
+    ahead: liteActive ? 1 : 2,
+  });
+  useAdjacentCommentsPrefetch({
+    focusedKey: focusedFeedKey || currentlyVisibleVideo,
+    items: filteredMediaList,
+    getContentKey: getFeedPlaybackKey,
+    radius: getLitePlayerNeighborRadius(),
+    idleOnly: false,
+  });
 
   const pauseAllMedia = useCallback(() => {
     pauseAllVideosAction();
@@ -666,6 +705,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       // Hidden category panes can still fire viewability — ignore so they
       // don't steal playback from the active feed (keep-alive panes).
       if (!isFeedActiveRef.current) return;
+      // Opening comments shifts the feed; ignore viewability so playback
+      // isn't stolen/paused while the user is reading.
+      if (commentsOpenRef.current) return;
 
       hasDeterminedVisibilityRef.current = true;
 
@@ -712,11 +754,31 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // signal instead of onLayout math).
   const handleAudioViewabilityImpl = useCallback(
     (info: { viewableItems: Array<{ item: FeedRow; isViewable: boolean }> }) => {
-      const activeAudioKey = playingAudioIdRef.current;
-      if (!activeAudioKey) return;
-      const stillVisible = info.viewableItems.some(
-        (token) => token.item?.rowType === "media" && token.item.key === activeAudioKey
-      );
+      let activeKeys: string[] = [];
+      try {
+        const { useGlobalMediaStore } =
+          require("../../../../app/store/useGlobalMediaStore");
+        const playing = useGlobalMediaStore.getState().playingAudio || {};
+        activeKeys = Object.keys(playing).filter((k) => playing[k]);
+      } catch {
+        activeKeys = [];
+      }
+      const feedAudioId = playingAudioIdRef.current;
+      if (feedAudioId) activeKeys.push(feedAudioId);
+      if (activeKeys.length === 0) return;
+
+      const stillVisible = info.viewableItems.some((token) => {
+        if (token.item?.rowType !== "media") return false;
+        const item = token.item.item;
+        const id = item?._id ? String(item._id) : "";
+        return activeKeys.some(
+          (key) =>
+            key === token.item.key ||
+            key === id ||
+            key === `music-${id}` ||
+            (id && key.includes(id))
+        );
+      });
       if (!stillVisible) {
         pauseAllAudioRef.current();
       }
@@ -731,6 +793,29 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const onAudioViewableItemsChanged = useCallback((info: any) => {
     handleAudioViewabilityRef.current(info);
+  }, []);
+
+  const handleRowFocusImpl = useCallback(
+    (info: { viewableItems: Array<{ item: FeedRow; isViewable: boolean }> }) => {
+      if (!isFeedActiveRef.current) return;
+      if (commentsOpenRef.current) return;
+      let topKey: string | null = null;
+      for (const token of info.viewableItems) {
+        const row = token.item;
+        if (!row || row.rowType !== "media") continue;
+        topKey = row.key;
+        break;
+      }
+      setFocusedFeedKey((prev) => (prev === topKey ? prev : topKey));
+    },
+    []
+  );
+  const handleRowFocusRef = useRef(handleRowFocusImpl);
+  useEffect(() => {
+    handleRowFocusRef.current = handleRowFocusImpl;
+  }, [handleRowFocusImpl]);
+  const onRowFocusViewableItemsChanged = useCallback((info: any) => {
+    handleRowFocusRef.current(info);
   }, []);
 
   // itemVisiblePercentThreshold is intentionally lower than the audio
@@ -752,9 +837,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     minimumViewTime: 200,
   }).current;
 
+  const rowFocusViewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 35,
+    minimumViewTime: 120,
+  }).current;
+
   const viewabilityConfigCallbackPairs = useRef([
     { viewabilityConfig: videoViewabilityConfig, onViewableItemsChanged: onVideoViewableItemsChanged },
     { viewabilityConfig: audioViewabilityConfig, onViewableItemsChanged: onAudioViewableItemsChanged },
+    { viewabilityConfig: rowFocusViewabilityConfig, onViewableItemsChanged: onRowFocusViewableItemsChanged },
   ]).current;
 
   // ---------------------------------------------------------------------
@@ -792,19 +883,23 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     ) {
       const activeSeq = seqByKey[currentlyVisibleVideo];
       hot.add(currentlyVisibleVideo);
-      for (let d = 1; d <= FEED_PRELOAD_NEIGHBOR_DISTANCE; d++) {
+      const neighbor = liteActive ? 1 : FEED_PRELOAD_NEIGHBOR_DISTANCE;
+      for (let d = 1; d <= neighbor; d++) {
         const before = keyBySeq[activeSeq - d];
         const after = keyBySeq[activeSeq + d];
-        if (before) hot.add(before);
-        if (after) hot.add(after);
+        if (after && shouldMountLitePlayer(activeSeq + d, activeSeq)) {
+          hot.add(after);
+        }
+        if (!liteActive && before) hot.add(before);
       }
-      warmSeqRange(activeSeq, FEED_PRELOAD_WARM_DISTANCE);
+      warmSeqRange(activeSeq, liteActive ? 1 : FEED_PRELOAD_WARM_DISTANCE);
     } else if (!hasDeterminedVisibilityRef.current) {
-      for (let i = 0; i < FEED_INITIAL_MOUNT_COUNT; i++) {
+      const initial = liteActive ? 2 : FEED_INITIAL_MOUNT_COUNT;
+      for (let i = 0; i < initial; i++) {
         const k = keyBySeq[i];
         if (k) hot.add(k);
       }
-      warmSeqRange(0, FEED_PRELOAD_WARM_DISTANCE);
+      warmSeqRange(0, liteActive ? 1 : FEED_PRELOAD_WARM_DISTANCE);
     }
 
     if (hot.size === 0) return;
@@ -833,7 +928,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
       // Prune oldest mounts outside the hot window so we never exceed the
       // hardware decoder budget (this was hanging the app).
-      while (next.size > HARD_MAX_PLAYERS) {
+      while (next.size > maxPlayers) {
         const order = visitOrderRef.current;
         const oldest = order.find((k) => next.has(k) && !hot.has(k));
         if (!oldest) break;
@@ -851,6 +946,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     warmSeqRange,
     isFeedActive,
     keepVideoDecoders,
+    liteActive,
+    maxPlayers,
   ]);
 
   const getItemType = useCallback((row: FeedRow) => {
@@ -925,12 +1022,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       primed: mountedPlayerSig,
       playing: currentlyPlayingVideo,
       active: isFeedActive,
+      authors: authorStoreVersion,
     }),
     [
       currentlyVisibleVideo,
       mountedPlayerSig,
       currentlyPlayingVideo,
       isFeedActive,
+      authorStoreVersion,
     ]
   );
 
@@ -942,11 +1041,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // Coming Soon sits after the first four — keep loading until that section
   // has a real list of items (cold start often only had page 1 above the card).
   useEffect(() => {
+    if (liteActive) return;
     if (activeTab !== "ALL" && activeTab !== "live") return;
     if (rest.length >= 12) return;
     if (!hasMoreDefaultPages || isLoadingMore) return;
     loadMoreContent();
   }, [
+    liteActive,
     activeTab,
     rest.length,
     hasMoreDefaultPages,
@@ -995,6 +1096,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const waitingForComingSoonBackbone =
     isFeedActive &&
     (activeTab === "ALL" || activeTab === "live") &&
+    filteredMediaList.length === 0 &&
     defaultContent.length === 0 &&
     defaultContentLoading;
 
@@ -1037,17 +1139,17 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             />
           }
           showsVerticalScrollIndicator={true}
+          scrollEnabled={!commentsOpen}
           viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
           scrollEventThrottle={16}
-          estimatedItemSize={FEED_VIDEO_ROW_SIZE}
+          estimatedItemSize={listWindow.estimatedItemSize || FEED_VIDEO_ROW_SIZE}
           keyboardShouldPersistTaps="handled"
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.75}
-          // Keep off-screen video cells alive. FlashList recycling remounts
-          // <Video> and paints the black blank stage on scroll-back.
-          removeClippedSubviews={false}
-          overscan={800}
-          drawDistance={1600}
+          // Lite: clip off-screen cells (OOM). Full: keep surfaces to avoid black flash.
+          removeClippedSubviews={liteActive}
+          overscan={liteActive ? 120 : 800}
+          drawDistance={liteActive ? listWindow.drawDistance : 1600}
         />
       </View>
     </ContentErrorBoundary>

@@ -12,6 +12,7 @@ export type { TypingUser } from "./CommentTypingBanner";
 export { CommentRow } from "./CommentRow";
 export { CommentListEmpty } from "./CommentListEmpty";
 export { CommentSheetHeader } from "./CommentSheetHeader";
+export { CommentPeekPlaybackHud } from "./CommentPeekPlaybackHud";
 export { useCommentSheetAnimation } from "./useCommentSheetAnimation";
 export { useCommentSheetUiState } from "./useCommentSheetUiState";
 export * from "./types";

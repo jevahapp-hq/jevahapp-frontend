@@ -32,6 +32,7 @@ import { useLibraryStore } from "./store/useLibraryStore";
 import { useMediaStore } from "./store/useUploadStore";
 import { hydrateFallbackKvFromAsyncStorage, appMmkv } from "../src/shared/cache/mmkvStorage";
 import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
+import { AUTHOR_DISK_KEY } from "../src/shared/author";
 import {
   allContentQueryKey,
   getFeedPageSize,
@@ -240,6 +241,7 @@ export default function RootLayout() {
 
         try {
           await hydrateFallbackKvFromAsyncStorage([
+            AUTHOR_DISK_KEY,
             "content-cache-store",
             "rq-all-content-seed",
             "rq-all-content-seed:lite",

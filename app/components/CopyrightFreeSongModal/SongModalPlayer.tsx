@@ -1,5 +1,6 @@
 import React from "react";
 import { View } from "react-native";
+import { GestureDetector } from "react-native-gesture-handler";
 import { UI_CONFIG } from "../../../src/shared/constants";
 import { PlayerArtwork } from "./components/PlayerArtwork";
 import { PlayerBackground } from "./components/PlayerBackground";
@@ -40,6 +41,7 @@ export interface SongModalPlayerProps {
   onToggleShuffle: () => void;
   onOpenPlaylistView: () => void;
   onShare?: () => void;
+  dismissGesture?: any;
 }
 
 export function SongModalPlayer({
@@ -72,6 +74,7 @@ export function SongModalPlayer({
   onToggleShuffle,
   onOpenPlaylistView,
   onShare,
+  dismissGesture,
 }: SongModalPlayerProps) {
   const { durationMs, displayProgress, displayPositionMs } = usePlayerSeek({
     song,
@@ -82,10 +85,14 @@ export function SongModalPlayer({
     audioPosition,
   });
 
-  return (
+  const header = (
+    <PlayerHeader onClose={onClose} onOptionsPress={onOptionsPress} />
+  );
+
+  const body = (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       <PlayerBackground imageSource={imageSource} />
-      <PlayerHeader onClose={onClose} onOptionsPress={onOptionsPress} />
+      {header}
 
       <View
         style={{
@@ -137,4 +144,8 @@ export function SongModalPlayer({
       </View>
     </View>
   );
+
+  if (!dismissGesture) return body;
+
+  return <GestureDetector gesture={dismissGesture}>{body}</GestureDetector>;
 }

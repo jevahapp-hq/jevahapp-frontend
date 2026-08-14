@@ -1,34 +1,21 @@
-import { useState } from "react";
+import { useCopyrightFreeOverlayStore } from "../../../store/useCopyrightFreeOverlayStore";
 
 export function useSongModal() {
-  const [showSongModal, setShowSongModal] = useState(false);
-  const [selectedSong, setSelectedSong] = useState<any>(null);
-  const [songModalInitialAction, setSongModalInitialAction] = useState<
-    "options" | "playlist" | null
-  >(null);
-
   const openSongPlayer = (item: any) => {
-    setSelectedSong(item);
-    setSongModalInitialAction(null);
-    setShowSongModal(true);
+    useCopyrightFreeOverlayStore.getState().open(item);
   };
 
   const openSongOptions = (item: any) => {
-    setSelectedSong(item);
-    setSongModalInitialAction("options");
-    setShowSongModal(true);
+    useCopyrightFreeOverlayStore.getState().open(item, {
+      initialAction: "options",
+    });
   };
 
   const closeSongModal = () => {
-    setShowSongModal(false);
-    setSelectedSong(null);
-    setSongModalInitialAction(null);
+    useCopyrightFreeOverlayStore.getState().close();
   };
 
   return {
-    showSongModal,
-    selectedSong,
-    songModalInitialAction,
     openSongPlayer,
     openSongOptions,
     closeSongModal,

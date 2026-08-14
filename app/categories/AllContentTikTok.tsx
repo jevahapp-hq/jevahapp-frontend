@@ -20,6 +20,7 @@ import LiveComponent from "./LiveComponent";
 import Music from "./music";
 
 const categories = ["ALL", "SERMON", "LIVE", "MUSIC", "E-BOOKS", "VIDEO", "HYMNS"];
+const FEED_KEEP_ALIVE = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
 
 // Map category labels to the ContentType expected by AllContentTikTok
 const mapCategoryToContentType = (
@@ -63,6 +64,16 @@ export default function AllContentTikTokWrapper({
   };
 
   const [selectedCategory, setSelectedCategory] = useState(getInitialCategory);
+  const [mountedFeeds, setMountedFeeds] = useState<Partial<Record<string, boolean>>>(
+    () => {
+      const initial = getInitialCategory();
+      const next: Partial<Record<string, boolean>> = { ALL: true };
+      if ((FEED_KEEP_ALIVE as readonly string[]).includes(initial)) {
+        next[initial] = true;
+      }
+      return next;
+    }
+  );
   const scrollViewRef = useRef<ScrollView>(null);
   const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>(
     {}
@@ -114,18 +125,40 @@ export default function AllContentTikTokWrapper({
 
   const handleCategoryPress = useCallback((category: string) => {
     setSelectedCategory(category);
+    if ((FEED_KEEP_ALIVE as readonly string[]).includes(category)) {
+      setMountedFeeds((prev) =>
+        prev[category] ? prev : { ...prev, [category]: true }
+      );
+    }
   }, []);
 
   const renderContent = () => {
-    if (selectedCategory === "MUSIC") return <Music />;
-    if (selectedCategory === "HYMNS") return <Hymns />;
-    if (selectedCategory === "LIVE") return <LiveComponent />;
-
     return (
-      <ModularAllContentTikTok
-        contentType={mapCategoryToContentType(selectedCategory)}
-        useAuthFeed={useAuthFeed}
-      />
+      <View style={{ flex: 1 }}>
+        {FEED_KEEP_ALIVE.map((cat) => {
+          if (!mountedFeeds[cat]) return null;
+          const active = selectedCategory === cat;
+          return (
+            <View
+              key={cat}
+              collapsable={false}
+              pointerEvents={active ? "auto" : "none"}
+              style={
+                active ? { flex: 1 } : { height: 0, overflow: "hidden" }
+              }
+            >
+              <ModularAllContentTikTok
+                contentType={mapCategoryToContentType(cat)}
+                useAuthFeed={useAuthFeed}
+                isFeedActive={active}
+              />
+            </View>
+          );
+        })}
+        {selectedCategory === "MUSIC" ? <Music /> : null}
+        {selectedCategory === "HYMNS" ? <Hymns /> : null}
+        {selectedCategory === "LIVE" ? <LiveComponent /> : null}
+      </View>
     );
   };
 

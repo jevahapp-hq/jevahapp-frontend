@@ -122,7 +122,7 @@ export const useAdvancedAudioPlayer = (
             isPlaying: status.isPlaying || false,
             isLoading: false,
             isMuted: status.isMuted || false,
-            progress: duration > 0 ? position / duration : 0,
+            progress: duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0,
             duration,
             position,
             error: null,
@@ -131,6 +131,10 @@ export const useAdvancedAudioPlayer = (
           return newState;
         });
         if (status.didJustFinish) {
+          if (statusUpdateIntervalRef.current) {
+            clearInterval(statusUpdateIntervalRef.current);
+            statusUpdateIntervalRef.current = null;
+          }
           setState((prev) => ({
             ...prev,
             isPlaying: false,
@@ -215,7 +219,7 @@ export const useAdvancedAudioPlayer = (
               isPlaying: status.isPlaying || false,
               isLoading: false,
               isMuted: status.isMuted || false,
-              progress: duration > 0 ? position / duration : 0,
+              progress: duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0,
               duration,
               position,
               error: null,
@@ -224,6 +228,10 @@ export const useAdvancedAudioPlayer = (
             return newState;
           });
           if (status.didJustFinish) {
+            if (statusUpdateIntervalRef.current) {
+              clearInterval(statusUpdateIntervalRef.current);
+              statusUpdateIntervalRef.current = null;
+            }
             setState((prev) => ({
               ...prev,
               isPlaying: false,
@@ -310,7 +318,14 @@ export const useAdvancedAudioPlayer = (
         // no-op - global audio store might not be available
       }
 
-      useGlobalMediaStore.getState().playMediaGlobally(audioKey, "audio");
+      try {
+        const videoStoreModule = require("../store/useGlobalVideoStore");
+        const videoStore = videoStoreModule.useGlobalVideoStore.getState();
+        videoStore.pauseAllVideosImperatively?.();
+      } catch {
+        // no-op
+      }
+      useGlobalMediaStore.getState().playAudio(audioKey);
       await soundRef.current.playAsync();
       setState((prev) => ({ ...prev, isPlaying: true, isLoading: false }));
       startStatusUpdates();

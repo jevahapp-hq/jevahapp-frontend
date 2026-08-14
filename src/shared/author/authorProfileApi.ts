@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "../../../app/utils/environmentManager";
 import { authUtils } from "../../../app/utils/authUtils";
+import { isLiteProfileActive } from "../lite/liteProfile";
 import type { AuthorId, AuthorProfile } from "./types";
 import { hasUsableAuthorName, normalizeAuthorProfile } from "./normalizeAuthor";
 
@@ -101,6 +102,10 @@ export async function fetchAuthorProfile(
       userId
     );
     if (hasUsableAuthorName(profile)) return profile;
+  }
+
+  if (isLiteProfileActive()) {
+    return hasUsableAuthorName(profile) ? profile : null;
   }
 
   const media = await getJson(

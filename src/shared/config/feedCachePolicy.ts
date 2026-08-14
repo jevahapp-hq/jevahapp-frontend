@@ -11,7 +11,7 @@ import {
 export const FEED_PAGE_SIZE = 12;
 export const FEED_PAGE_SIZE_LITE = 8;
 /** Baseline stale (full profile / legacy callers). Prefer getFeedStaleMs(). */
-export const FEED_STALE_MS = 2 * 60 * 60 * 1000; // 2h
+export const FEED_STALE_MS = 24 * 60 * 60 * 1000; // 24h — list JSON is tiny
 export const FEED_GC_MS = 24 * 60 * 60 * 1000; // 24h
 /** Lite keeps first-page disk seeds hotter for cold start. */
 export const FEED_STALE_MS_LITE = 24 * 60 * 60 * 1000; // 24h fresh
@@ -19,9 +19,9 @@ export const FEED_STALE_MS_LITE = 24 * 60 * 60 * 1000; // 24h fresh
 export const FEED_DISK_MAX_MS_LITE = 7 * 24 * 60 * 60 * 1000; // 7d
 /** Lite RQ heap: shorter GC + maxPages; disk still long via MMKV. */
 export const FEED_GC_MS_LITE = 4 * 60 * 60 * 1000; // 4h
-/** How many feed items to keep on disk (Lite ≈ 3 pages of 8). */
+/** How many feed items to keep on disk. */
 export const FEED_DISK_ITEMS_LITE = 24;
-export const FEED_DISK_ITEMS_FULL = 12;
+export const FEED_DISK_ITEMS_FULL = 48;
 
 export function getFeedPageSize(): number {
   return isLiteProfileActive() ? FEED_PAGE_SIZE_LITE : FEED_PAGE_SIZE;

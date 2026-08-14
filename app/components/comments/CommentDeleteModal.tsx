@@ -51,7 +51,7 @@ export function CommentDeleteModal({
         ) : null}
 
         <TouchableOpacity
-          style={[styles.primaryBtn, busy && styles.btnDisabled]}
+          style={[styles.primaryBtn, busy ? styles.btnDisabled : undefined]}
           onPress={onConfirm}
           disabled={!!busy}
           activeOpacity={0.85}

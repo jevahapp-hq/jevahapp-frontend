@@ -7,6 +7,24 @@ import {
     removeMediaFromFeedCaches,
 } from "../../../../shared/utils/removeMediaFromFeedCaches";
 
+/** Home chips share the ALL infinite query, then filter locally (instant tab switch). */
+export function feedQueryContentType(tab: ContentType | "ALL"): ContentType | "ALL" {
+  const t = String(tab || "ALL").toLowerCase();
+  if (
+    t === "all" ||
+    t === "video" ||
+    t === "videos" ||
+    t === "sermon" ||
+    t === "e-books" ||
+    t === "ebook" ||
+    t === "ebooks" ||
+    t === "books"
+  ) {
+    return "ALL";
+  }
+  return tab;
+}
+
 export function useAllContentTikTokFeedSource(options: {
   activeTab: ContentType | "ALL";
   useAuthFeed: boolean;
@@ -29,7 +47,7 @@ export function useAllContentTikTokFeedSource(options: {
     serverRanked,
   } = useMedia({
     immediate: true,
-    contentType: activeTab,
+    contentType: feedQueryContentType(activeTab),
     useAuth: useAuthFeed,
   });
 

@@ -11,7 +11,7 @@ import {
   ANONYMOUS_AUTHOR_LABEL,
   type AuthorCarrier,
 } from "./types";
-import { extractAuthorId } from "./extractAuthorId";
+import { extractAuthorId, isObjectId } from "./extractAuthorId";
 import { DEFAULT_USER_AVATAR_SOURCE } from "../../../app/utils/defaultUserAvatar";
 
 /**
@@ -29,9 +29,14 @@ export function resolveAuthorName(
     "authorName",
     "displayName",
     "creatorName",
+    "fullName",
+    "username",
+    "userName",
   ] as const) {
     const v = item[key];
-    if (typeof v === "string" && !isPlaceholderName(v)) return v.trim();
+    if (typeof v === "string" && !isPlaceholderName(v) && !isObjectId(v)) {
+      return v.trim();
+    }
   }
 
   const fromObjects =
@@ -39,7 +44,9 @@ export function resolveAuthorName(
     nameFromUserLike(item.uploadedBy) ||
     nameFromUserLike(item.author) ||
     nameFromUserLike(item.user) ||
-    nameFromUserLike(item.createdBy);
+    nameFromUserLike(item.createdBy) ||
+    nameFromUserLike(item.owner) ||
+    nameFromUserLike(item.creator);
   if (fromObjects) return fromObjects;
 
   if (typeof item.artistName === "string" && !isPlaceholderName(item.artistName)) {
@@ -103,6 +110,8 @@ export function seedAuthorsFromItem(item: AuthorCarrier): void {
     item.uploadedBy,
     item.user,
     item.createdBy,
+    item.owner,
+    item.creator,
   ]) {
     if (!candidate || typeof candidate !== "object") continue;
     const profile = normalizeAuthorProfile(candidate as any);

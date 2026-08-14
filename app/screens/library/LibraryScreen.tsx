@@ -10,9 +10,8 @@ import {
 } from "../../../utils/responsive";
 import CopyrightFreeSongs from "../../components/CopyrightFreeSongs";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
-import { useFastPerformance } from "../../utils/fastPerformance";
-import { navigateMainTab } from "../../utils/navigation";
 import { AllLibraryWithSuspense } from "../../utils/lazyImports";
+import { navigateMainTab } from "../../utils/navigation";
 import PlaylistsLibrary from "./PlaylistsLibrary";
 import Music from "../../categories/music";
 import { Suspense } from "react";
@@ -36,7 +35,6 @@ export default function LibraryScreen({
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("Library");
   const router = useRouter();
-  const { fastPress } = useFastPerformance();
   const scrollViewRef = useRef<ScrollView>(null);
   const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
 
@@ -167,10 +165,8 @@ export default function LibraryScreen({
           {categories.map((category) => (
             <TouchableOpacity
               key={category}
-              onPress={fastPress(() => handleCategoryPress(category), {
-                key: `category_${category}`,
-                priority: "high",
-              })}
+              onPress={() => handleCategoryPress(category)}
+              delayPressIn={0}
               onLayout={(event) => {
                 const { x, width } = event.nativeEvent.layout;
                 buttonLayouts.current[category] = { x, width };

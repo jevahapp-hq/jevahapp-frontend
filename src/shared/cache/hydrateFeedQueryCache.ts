@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { hydrateAuthorProfilesSync, paintAuthorsFromCache } from "../author";
 import {
   allContentQueryKey,
   getFeedPageSize,
@@ -17,6 +18,7 @@ import { getFeedPageSync, getRqFeedSeedSync } from "./feedMmkv";
  */
 export function hydrateFeedQueryCache(queryClient: QueryClient): void {
   perfMark(PERF.FEED_SEED);
+  hydrateAuthorProfilesSync();
   const candidates: Array<{ contentType: string; useAuth: boolean }> = [
     { contentType: "ALL", useAuth: false },
     { contentType: "ALL", useAuth: true },
@@ -30,14 +32,15 @@ export function hydrateFeedQueryCache(queryClient: QueryClient): void {
       getFeedPageSync(contentType, useAuth) ||
       (contentType === "ALL" ? getRqFeedSeedSync() : null);
     if (!page?.media?.length) continue;
-    syncMediaStatsToInteractionStore(page.media);
+    const media = paintAuthorsFromCache(page.media);
+    syncMediaStatsToInteractionStore(media);
 
     const storedLimit = page.limit || liveLimit;
     const limits = new Set<number>([liveLimit, storedLimit]);
 
     for (const limit of limits) {
       const result: AllContentPageResult = {
-        media: page.media,
+        media,
         total: page.total,
         page: 1,
         limit,

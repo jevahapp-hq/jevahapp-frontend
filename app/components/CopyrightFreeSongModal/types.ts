@@ -18,4 +18,6 @@ export interface CopyrightFreeSongModalProps {
   formatTime?: (ms: number) => string;
   variant?: "player" | "options";
   initialAction?: "options" | "playlist" | null;
+  /** `overlay` = in-tree full-screen (TikTok/IG). `modal` = native RN Modal. */
+  presentation?: "modal" | "overlay";
 }

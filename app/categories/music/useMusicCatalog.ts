@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mmkvGetJson, mmkvSetJson } from "../../../src/shared/cache/mmkvStorage";
 import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
 import { musicCatalogApi } from "../../services/music-catalog";
 import {
@@ -16,9 +17,32 @@ function artistsPageSize(): number {
   return getLiteFeedLimit(20);
 }
 
+const MUSIC_CACHE_TTL_MS = 10 * 60 * 1000;
+type MusicCatalogCache = { timestamp: number; songs: any[] };
+
+function musicCacheKey(lane: MusicLane) {
+  return `music-catalog-v1:${lane}`;
+}
+
+function readMusicCache(lane: MusicLane): any[] | null {
+  const disk = mmkvGetJson<MusicCatalogCache>(musicCacheKey(lane));
+  if (
+    Array.isArray(disk?.songs) &&
+    typeof disk?.timestamp === "number" &&
+    Date.now() - disk.timestamp < MUSIC_CACHE_TTL_MS
+  ) {
+    return disk.songs;
+  }
+  return null;
+}
+
+function writeMusicCache(lane: MusicLane, songs: any[]) {
+  mmkvSetJson(musicCacheKey(lane), { timestamp: Date.now(), songs });
+}
+
 export function useMusicCatalog(musicLane: MusicLane) {
-  const [songs, setSongs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [songs, setSongs] = useState<any[]>(() => readMusicCache(musicLane) ?? []);
+  const [loading, setLoading] = useState(() => !readMusicCache(musicLane)?.length);
   const [loadingMore, setLoadingMore] = useState(false);
   const [artistsCursor, setArtistsCursor] = useState<string | null>(null);
   const [artistsHasMore, setArtistsHasMore] = useState(false);
@@ -39,17 +63,24 @@ export function useMusicCatalog(musicLane: MusicLane) {
     ) => {
       const page = opts?.page ?? 1;
       const append = opts?.append === true;
+      const browsing = Boolean(search?.trim()) || Boolean(category?.trim());
       setError(null);
       if (append) {
         setLoadingMore(true);
+      } else if (!browsing) {
+        const cached = readMusicCache(lane);
+        if (cached?.length) {
+          setSongs(cached);
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
       } else {
         setLoading(true);
       }
 
       try {
         if (lane === "artists") {
-          const browsing =
-            Boolean(search?.trim()) || Boolean(category?.trim());
           const token = browsing ? null : await getSessionToken();
           const preferForYou =
             USE_MUSIC_FOR_YOU && !!token && !browsing;
@@ -74,6 +105,7 @@ export function useMusicCatalog(musicLane: MusicLane) {
             setArtistsHasMore(hasMore);
             setUsingMusicForYou(source === "music_for_you");
             setArtistsPage(page);
+            if (!append && !browsing) writeMusicCache(lane, mapped);
             return;
           }
 
@@ -100,6 +132,7 @@ export function useMusicCatalog(musicLane: MusicLane) {
           } else {
             setArtistsHasMore(artistOnly.length >= pageLimit);
           }
+          if (!append && !browsing) writeMusicCache(lane, mapped);
           return;
         }
 
@@ -129,6 +162,7 @@ export function useMusicCatalog(musicLane: MusicLane) {
               return !ct || ct === "copyright-free-music" || ct === "curated";
             });
           setSongs(transformedSongs);
+          if (!append && !browsing) writeMusicCache(lane, transformedSongs);
         } else {
           setSongs([]);
         }

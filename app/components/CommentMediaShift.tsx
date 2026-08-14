@@ -1,6 +1,6 @@
 /**
- * Lifts the app feed into the comment peek when the sheet opens so the
- * watching video fills the top band (pause / seek stay usable).
+ * Lifts the watching video into the comment peek and clips everything else.
+ * Peek height matches the player frame so likes / avatar stay under the sheet.
  */
 import { useEffect, useRef, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
@@ -41,15 +41,14 @@ export function CommentMediaShift({ children }: { children: ReactNode }) {
 
   const animatedStyle = useAnimatedStyle(() => ({
     flex: 1,
-    // Top-align only — no scale-about-seam (that emptied the peek to black)
-    transform: [
-      { translateY: shiftY.value },
-      { scale: scale.value },
-    ],
+    transform: [{ translateY: shiftY.value }, { scale: scale.value }],
   }));
 
   return (
-    <View style={styles.clip} pointerEvents="auto">
+    <View
+      style={styles.clip}
+      pointerEvents="auto"
+    >
       <Animated.View style={animatedStyle}>{children}</Animated.View>
     </View>
   );

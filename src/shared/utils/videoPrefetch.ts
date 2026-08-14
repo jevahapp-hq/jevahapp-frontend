@@ -7,7 +7,6 @@ import {
   markVideoPreloaded,
 } from "../../../app/utils/videoOptimization";
 import { PERFORMANCE_CONFIG, PERFORMANCE_FEATURES } from "../config/performance";
-import { isLiteProfileActive } from "../lite/liteProfile";
 import { PERF, recordSample } from "./perfMarks";
 import {
   hasLiteVideoHead,
@@ -31,7 +30,7 @@ async function warmUrl(url: string): Promise<void> {
   const started = Date.now();
 
   try {
-    if (isLiteProfileActive() && (await hasLiteVideoHead(url))) {
+    if ((await hasLiteVideoHead(url))) {
       markVideoPreloaded(url);
       recordSample(PERF.VIDEO_PREFETCH, Date.now() - started);
       return;
@@ -40,15 +39,13 @@ async function warmUrl(url: string): Promise<void> {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        Range: "bytes=0-524287", // ~512KB — faster first-frame readiness
+        Range: "bytes=0-1048575", // ~1MB — first GOP + audio init
       },
     });
 
     try {
       const buf = await response.arrayBuffer();
-      if (isLiteProfileActive()) {
-        void persistLiteVideoHead(url, buf);
-      }
+      void persistLiteVideoHead(url, buf);
     } catch {
       // Some hosts reject Range — partial failure still warms DNS/TLS.
     }

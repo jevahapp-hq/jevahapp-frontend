@@ -5,9 +5,9 @@ import {
   Modal,
   Platform,
   StatusBar,
+  StyleSheet,
   View,
 } from "react-native";
-import { GestureDetector } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 
 import { SongModalCreatePlaylist } from "./SongModalCreatePlaylist";
@@ -26,17 +26,10 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
 
   if (!m.song) return null;
 
-  return (
-    <>
-      <Modal
-        visible={props.visible}
-        transparent
-        animationType="none"
-        onRequestClose={m.onClose}
-        statusBarTranslucent
-      >
-        <StatusBar barStyle="light-content" />
-        <View style={{ flex: 1 }}>
+  const isOverlay = props.presentation === "overlay";
+
+  const player = (
+        <View style={{ flex: 1 }} pointerEvents={props.visible || isOverlay ? "auto" : "none"}>
           <Animated.View
             collapsable={false}
             style={[
@@ -49,8 +42,6 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
             ]}
           >
             <View collapsable={false} style={{ flex: 1 }}>
-              <GestureDetector gesture={m.gesture}>
-                <View collapsable={false} style={{ flex: 1 }}>
                   <SongModalPlayer
                     song={m.song}
                     albumArtSize={m.albumArtSize}
@@ -83,13 +74,38 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
                     onToggleShuffle={m.toggleShuffle}
                     onOpenPlaylistView={() => m.setShowPlaylistView(true)}
                     onShare={m.handleShare}
+                    dismissGesture={m.gesture}
                   />
-                </View>
-              </GestureDetector>
             </View>
           </Animated.View>
         </View>
-      </Modal>
+  );
+
+  return (
+    <>
+      {isOverlay ? (
+        <View
+          style={[
+            overlayStyles.root,
+            props.visible ? overlayStyles.rootOpen : overlayStyles.rootIdle,
+          ]}
+          pointerEvents={props.visible ? "auto" : "none"}
+        >
+          {props.visible ? <StatusBar barStyle="light-content" /> : null}
+          {player}
+        </View>
+      ) : (
+        <Modal
+          visible={props.visible}
+          transparent
+          animationType="none"
+          onRequestClose={m.onClose}
+          statusBarTranslucent
+        >
+          <StatusBar barStyle="light-content" />
+          {player}
+        </Modal>
+      )}
 
       <SongModalPlaylistView
         visible={m.showPlaylistView}
@@ -172,3 +188,20 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
     </>
   );
 }
+
+const overlayStyles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  rootOpen: {
+    zIndex: 2000,
+    elevation: 2000,
+    opacity: 1,
+  },
+  rootIdle: {
+    zIndex: -1,
+    elevation: 0,
+    opacity: 0,
+  },
+});
+

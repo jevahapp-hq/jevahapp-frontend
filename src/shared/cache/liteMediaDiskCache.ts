@@ -85,7 +85,6 @@ export async function persistLiteVideoHead(
   url: string,
   bytes: ArrayBuffer
 ): Promise<void> {
-  if (!isLiteProfileActive()) return;
   if (!url || !bytes || bytes.byteLength < MIN_VALID) return;
   try {
     await ensureDir();
@@ -139,14 +138,15 @@ export function prefetchLiteFeedPosters(
   items: MediaItem[],
   limit = 8
 ): void {
-  if (!isLiteProfileActive() || !items?.length) return;
+  if (!items?.length) return;
   const slice = items.slice(0, limit);
   const posters = slice.map(posterUri).filter((u): u is string => Boolean(u));
   const avatars = slice.map(avatarUri).filter((u): u is string => Boolean(u));
+  const posterPolicy = isLiteProfileActive() ? "disk" : "memory-disk";
   if (posters.length) {
-    void Image.prefetch(posters, "disk").catch(() => {});
+    void Image.prefetch(posters, posterPolicy).catch(() => {});
   }
   if (avatars.length) {
-    void Image.prefetch(avatars, "memory-disk").catch(() => {});
+    void Image.prefetch(avatars, posterPolicy).catch(() => {});
   }
 }

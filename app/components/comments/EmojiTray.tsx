@@ -71,10 +71,13 @@ function EmojiTrayInner({ visible, onSelect, onClose }: Props) {
             <TouchableOpacity
               key={c.id}
               onPress={() => setCatId(c.id)}
-              style={[styles.tab, catId === c.id && styles.tabActive]}
+              style={[styles.tab, catId === c.id ? styles.tabActive : undefined]}
             >
               <Text
-                style={[styles.tabText, catId === c.id && styles.tabTextActive]}
+                style={[
+                  styles.tabText,
+                  catId === c.id ? styles.tabTextActive : undefined,
+                ]}
               >
                 {c.label}
               </Text>

@@ -1,8 +1,9 @@
 /**
  * Music playback + global floating-player sync for MusicCard.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAdvancedAudioPlayer } from "../../../../../../app/hooks/useAdvancedAudioPlayer";
+import { useGlobalMediaStore } from "../../../../../../app/store/useGlobalMediaStore";
 import {
   useGlobalAudioPlayerStore,
   type AudioTrack,
@@ -13,13 +14,29 @@ import {
   isValidUri,
 } from "../../../../../shared/utils";
 
+function resolveMusicUrl(audio: MediaItem): string {
+  const candidates = [
+    audio.fileUrl,
+    (audio as any).audioUrl,
+    (audio as any).playbackUrl,
+    (audio as any).mediaUrl,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && isValidUri(raw)) return raw.trim();
+  }
+  return "";
+}
+
 export function useMusicCardPlayback(audio: MediaItem, index: number) {
   const [attemptedPlay, setAttemptedPlay] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
 
-  const audioUrl = typeof audio.fileUrl === "string" ? audio.fileUrl : "";
+  const audioUrl = resolveMusicUrl(audio);
   const audioKey = `music-${audio._id || index}`;
   const audioId = audio._id || `music-${index}`;
+  const globallyAllowed = useGlobalMediaStore(
+    (s) => !!s.playingAudio[audioKey]
+  );
 
   const [playerState, controls] = useAdvancedAudioPlayer(
     isValidUri(audioUrl) ? audioUrl : null,
@@ -31,60 +48,58 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
     }
   );
 
-  const globalAudioStore = useGlobalAudioPlayerStore();
-  const isCurrentTrack = globalAudioStore.currentTrack?.id === audioId;
-  const isVirtualTrack =
-    isCurrentTrack && !!globalAudioStore.currentTrack?.isVirtual;
+  const globalIsPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const globalProgress = useGlobalAudioPlayerStore((s) => s.progress);
+  const globalIsMuted = useGlobalAudioPlayerStore((s) => s.isMuted);
+  const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
+  const currentTrackVirtual = useGlobalAudioPlayerStore(
+    (s) => !!s.currentTrack?.isVirtual
+  );
+  const isCurrentTrack = currentTrackId === audioId;
+  const isVirtualTrack = isCurrentTrack && currentTrackVirtual;
   const isPlayingFromGlobal = isVirtualTrack
-    ? globalAudioStore.isPlaying
+    ? globalIsPlaying
     : playerState.isPlaying;
+
+  const controlsRef = useRef(controls);
+  controlsRef.current = controls;
 
   useEffect(() => {
     if (!isVirtualTrack) return;
-    if (globalAudioStore.isPlaying !== playerState.isPlaying) {
-      globalAudioStore.setPlaying(playerState.isPlaying);
-    }
-  }, [
-    playerState.isPlaying,
-    isVirtualTrack,
-    globalAudioStore,
-  ]);
-
-  useEffect(() => {
     const store = useGlobalAudioPlayerStore.getState();
-    if (
-      store.currentTrack?.id !== audioId ||
-      !store.currentTrack?.isVirtual
-    ) {
-      return;
-    }
     if (store.isPlaying !== playerState.isPlaying) {
       store.setPlaying(playerState.isPlaying);
     }
-    if (playerState.duration > 0) {
-      const positionMs = playerState.position || 0;
-      const durationMs = playerState.duration || 0;
-      const progress = positionMs / durationMs;
-      if (Math.abs(store.position - positionMs) > 500) {
-        store.setPosition(positionMs);
-      }
-      if (Math.abs(store.progress - progress) > 0.01) {
-        store.setProgressValue(progress);
-      }
-      if (store.duration !== durationMs) {
-        store.setDuration(durationMs);
-      }
+  }, [isVirtualTrack, playerState.isPlaying]);
+
+  useEffect(() => {
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.id !== audioId || !store.currentTrack?.isVirtual) {
+      return;
     }
-  }, [
-    playerState.isPlaying,
-    playerState.position,
-    playerState.duration,
-    playerState.progress,
-    audioId,
-  ]);
+    if (playerState.duration <= 0) return;
+    const positionMs = playerState.position || 0;
+    const durationMs = playerState.duration || 0;
+    const progress = durationMs > 0 ? positionMs / durationMs : 0;
+    if (Math.abs(store.position - positionMs) > 500) {
+      store.setPosition(positionMs);
+    }
+    if (Math.abs(store.progress - progress) > 0.01) {
+      store.setProgressValue(progress);
+    }
+    if (store.duration !== durationMs) {
+      store.setDuration(durationMs);
+    }
+  }, [playerState.position, playerState.duration, playerState.progress, audioId]);
+
+  useEffect(() => {
+    if (!globallyAllowed && playerState.isPlaying) {
+      void controlsRef.current.pause();
+    }
+  }, [globallyAllowed, playerState.isPlaying]);
 
   const handlePlayPress = useCallback(
-    async (onPlay?: (uri: string, id: string) => void) => {
+    async (_onPlay?: (uri: string, id: string) => void) => {
       if (!audioUrl || !isValidUri(audioUrl)) return;
       if (playerState.isLoading) return;
 
@@ -158,8 +173,6 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
             console.warn("MusicCard: Failed to sync with global audio:", err);
           }
         }, 100);
-
-        onPlay?.(audioUrl, audio._id || `music-${index}`);
       } catch (err) {
         console.warn("MusicCard play toggle failed:", err);
       }
@@ -169,7 +182,6 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
       controls,
       audio,
       audioId,
-      index,
       playerState.isLoading,
       playerState.isPlaying,
       playerState.duration,
@@ -205,10 +217,11 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
     audioId,
     playerState,
     controls,
-    globalAudioStore,
     isCurrentTrack,
     isVirtualTrack,
     isPlayingFromGlobal,
+    globalProgress,
+    globalIsMuted,
     attemptedPlay,
     showOverlay,
     setShowOverlay,

@@ -32,6 +32,9 @@ export function extractAuthorId(item: AuthorCarrier | null | undefined): AuthorI
     idFromUnknown(item.owner) ||
     idFromUnknown(item.userId) ||
     idFromUnknown(item.uploaderId) ||
+    idFromUnknown(item.authorId) ||
+    idFromUnknown(item.uploadedByUserId) ||
+    idFromUnknown(item.creatorId) ||
     // Some payloads put the uploader ObjectId in `speaker` when name is missing
     idFromUnknown(item.speaker) ||
     null

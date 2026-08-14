@@ -3,6 +3,10 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
+import {
+  mmkvGetJson,
+  mmkvSetJson,
+} from "../../../../src/shared/cache/mmkvStorage";
 import copyrightFreeMusicAPI, {
   CopyrightFreeSongResponse,
 } from "../../../services/copyrightFreeMusicAPI";
@@ -10,6 +14,28 @@ import { transformBackendSong } from "../../CopyrightFreeSongModal/utils/transfo
 
 const CACHE_KEY = "copyrightFreeSongsCache_v1";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+type SongsCache = { timestamp: number; songs: any[] };
+let memorySongs: any[] | null = null;
+
+function readInstantCache(): any[] | null {
+  if (memorySongs?.length) return memorySongs;
+  const disk = mmkvGetJson<SongsCache>(CACHE_KEY);
+  if (
+    Array.isArray(disk?.songs) &&
+    typeof disk?.timestamp === "number" &&
+    Date.now() - disk.timestamp < CACHE_TTL_MS
+  ) {
+    memorySongs = disk.songs;
+    return disk.songs;
+  }
+  return null;
+}
+
+function writeInstantCache(songs: any[]) {
+  memorySongs = songs;
+  mmkvSetJson(CACHE_KEY, { timestamp: Date.now(), songs });
+}
 
 const FALLBACK_THUMBNAIL = require("../../../../assets/images/Rectangle.svg");
 
@@ -116,8 +142,8 @@ function getFallbackSongs(): any[] {
 }
 
 export function useCopyrightFreeSongsData() {
-  const [songs, setSongs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [songs, setSongs] = useState<any[]>(() => readInstantCache() ?? []);
+  const [loading, setLoading] = useState(() => !readInstantCache()?.length);
   const [error, setError] = useState<string | null>(null);
 
   const transformSong = useCallback((backendSong: CopyrightFreeSongResponse) => {
@@ -130,24 +156,31 @@ export function useCopyrightFreeSongsData() {
       let usedCache = false;
 
       if (useCacheFirst) {
-        try {
-          const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
-          if (cachedRaw) {
-            const parsed = JSON.parse(cachedRaw);
-            const { timestamp, songs: cachedSongs } = parsed || {};
-            if (
-              Array.isArray(cachedSongs) &&
-              typeof timestamp === "number" &&
-              Date.now() - timestamp < CACHE_TTL_MS
-            ) {
-              setSongs(cachedSongs);
-              setLoading(false);
-              usedCache = true;
+        const instant = readInstantCache();
+        if (instant?.length) {
+          setSongs(instant);
+          setLoading(false);
+          usedCache = true;
+        } else {
+          try {
+            const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
+            if (cachedRaw) {
+              const parsed = JSON.parse(cachedRaw);
+              const { timestamp, songs: cachedSongs } = parsed || {};
+              if (
+                Array.isArray(cachedSongs) &&
+                typeof timestamp === "number" &&
+                Date.now() - timestamp < CACHE_TTL_MS
+              ) {
+                writeInstantCache(cachedSongs);
+                setSongs(cachedSongs);
+                setLoading(false);
+                usedCache = true;
+              }
+              void AsyncStorage.removeItem(CACHE_KEY);
             }
-          }
-        } catch (cacheError) {
-          if (__DEV__) {
-            console.warn("⚠️ Failed to read copyright-free songs cache:", cacheError);
+          } catch {
+            // ignore stale cache
           }
         }
       }
@@ -165,21 +198,8 @@ export function useCopyrightFreeSongsData() {
 
         if (response.success && response.data?.songs?.length) {
           const transformedSongs = response.data.songs.map(transformSong);
+          writeInstantCache(transformedSongs);
           setSongs(transformedSongs);
-
-          try {
-            await AsyncStorage.setItem(
-              CACHE_KEY,
-              JSON.stringify({
-                timestamp: Date.now(),
-                songs: transformedSongs,
-              })
-            );
-          } catch (cacheWriteError) {
-            if (__DEV__) {
-              console.warn("⚠️ Failed to cache copyright-free songs:", cacheWriteError);
-            }
-          }
         } else {
           if (__DEV__) {
             console.warn("⚠️ No songs from backend, using local copyright-free set");

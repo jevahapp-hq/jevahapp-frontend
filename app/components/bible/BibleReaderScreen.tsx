@@ -184,8 +184,8 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
 
       <View style={styles.headerTitleContainer}>
         <Text style={styles.headerTitle}>
-          {viewMode === "books" && "Select Book"}
-          {viewMode === "chapters" && `Chapters in ${selectedBook?.name}`}
+          {viewMode === "books" && "Bible"}
+          {viewMode === "chapters" && selectedBook?.name}
           {viewMode === "reader" &&
             `${selectedBook?.name} ${selectedChapter?.chapterNumber}`}
           {viewMode === "search" && "Search Bible"}
@@ -223,6 +223,7 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         return selectedBook ? (
           <BibleChapterSelector
             bookName={selectedBook.name}
+            chapterCount={selectedBook.chapterCount || chapters.length}
             onChapterSelect={handleChapterSelect}
             selectedChapter={selectedChapter}
           />

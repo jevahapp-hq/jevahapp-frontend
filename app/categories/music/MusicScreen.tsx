@@ -1,13 +1,12 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dimensions, View } from "react-native";
-import { useGlobalAudioPlayerStore } from "../../store/useGlobalAudioPlayerStore";
+import { useCopyrightFreeOverlayStore } from "../../store/useCopyrightFreeOverlayStore";
 import { ArtistsLaneBanner } from "./components/ArtistsLaneBanner";
 import { MusicDiscoverShelf } from "./components/MusicDiscoverShelf";
 import { MusicEmptyState } from "./components/MusicEmptyState";
 import { MusicFilterModal } from "./components/MusicFilterModal";
 import { MusicHeader } from "./components/MusicHeader";
-import { MusicSongModal } from "./components/MusicSongModal";
 import { MusicSongsList } from "./components/MusicSongsList";
 import { useMusicPlayPress } from "./hooks/useMusicPlayPress";
 import { useOpenArtistProfile } from "./hooks/useOpenArtistProfile";
@@ -43,26 +42,16 @@ export default function Music() {
 
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-  const {
-    currentTrack,
-    isPlaying: globalIsPlaying,
-    togglePlayPause,
-    progress: globalProgress,
-    duration: globalDuration,
-    position: globalPosition,
-    isMuted: globalIsMuted,
-  } = useGlobalAudioPlayerStore();
-
   const openArtistProfile = useOpenArtistProfile();
   const handlePlayPress = useMusicPlayPress(songs);
-  const {
-    showSongModal,
-    selectedSong,
-    songModalInitialAction,
-    openSongPlayer,
-    openSongOptions,
-    closeSongModal,
-  } = useSongModal();
+  const { openSongPlayer, openSongOptions } = useSongModal();
+
+  useEffect(() => {
+    useCopyrightFreeOverlayStore.getState().setQueue(songs);
+    if (songs[0]) {
+      useCopyrightFreeOverlayStore.getState().warm(songs[0]);
+    }
+  }, [songs]);
 
   const showEmpty = loading || !!error || songs.length === 0;
 
@@ -127,21 +116,6 @@ export default function Music() {
         selectedCategory={selectedCategory}
         onClose={() => setShowFilterModal(false)}
         onSelectCategory={setSelectedCategory}
-      />
-
-      <MusicSongModal
-          visible={showSongModal}
-        selectedSong={selectedSong}
-        songModalInitialAction={songModalInitialAction}
-        currentTrack={currentTrack}
-        globalIsPlaying={globalIsPlaying}
-        globalProgress={globalProgress}
-        globalDuration={globalDuration}
-        globalPosition={globalPosition}
-        globalIsMuted={globalIsMuted}
-        onClose={closeSongModal}
-          onPlay={handlePlayPress}
-        onTogglePlayPause={togglePlayPause}
       />
     </View>
   );

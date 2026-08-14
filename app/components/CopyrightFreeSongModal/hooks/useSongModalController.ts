@@ -106,6 +106,23 @@ export function useSongModalController({
     if (song) setHasTrackedView(false);
   }, [song]);
 
+  useEffect(() => {
+    if (!visible) {
+      setShowOptionsModal(false);
+      setShowPlaylistModal(false);
+      setShowCreatePlaylist(false);
+      setShowPlaylistView(false);
+      setShowPlaylistDetail(false);
+      return;
+    }
+    if (initialAction === "options" || variant === "options") {
+      setShowOptionsModal(true);
+    }
+    if (initialAction === "playlist") {
+      setShowPlaylistModal(true);
+    }
+  }, [visible, initialAction, variant]);
+
   useCopyrightFreeSongViewTracking({
     visible,
     song,

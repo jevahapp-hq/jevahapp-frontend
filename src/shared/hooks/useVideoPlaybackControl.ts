@@ -90,6 +90,34 @@ export const useVideoPlaybackControl = ({
       },
       showOverlay: () => setOverlayVisible(videoKey, true),
       key: videoKey,
+      seekToPercent: (percent: number) => {
+        const current = videoRef.current;
+        if (!current || !isExpoVideo) return;
+        const durationSec = Number(current.duration) || 0;
+        if (durationSec <= 0) return;
+        try {
+          current.currentTime =
+            Math.max(0, Math.min(1, percent)) * durationSec;
+        } catch {
+          // no-op
+        }
+      },
+      getSnapshot: () => {
+        const current = videoRef.current;
+        if (!current || !isExpoVideo) {
+          return { progress: 0, currentMs: 0, durationMs: 0 };
+        }
+        const durationSec = Number(current.duration) || 0;
+        const currentSec = Number(current.currentTime) || 0;
+        return {
+          currentMs: currentSec * 1000,
+          durationMs: durationSec * 1000,
+          progress:
+            durationSec > 0
+              ? Math.max(0, Math.min(1, currentSec / durationSec))
+              : 0,
+        };
+      },
     };
 
     registerVideoPlayer(videoKey, playerRef);

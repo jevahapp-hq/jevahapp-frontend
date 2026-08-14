@@ -14,6 +14,8 @@ import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon } from "../../../../shared/utils";
+import { useCommentModal } from "@/app/context/CommentModalContext";
+import { useGlobalVideoStore } from "@/app/store/useGlobalVideoStore";
 import {
   FEED_VIDEO_PLAYER_HEIGHT,
   FeedVideoSurface,
@@ -130,6 +132,7 @@ function VideoCardPlayerInner(
   } = props;
 
   const contentId = video._id || getContentKey(video);
+  const { isVisible: commentsOpen } = useCommentModal();
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [, setVideoLoaded] = useState(false);
   const videoLoadedRef = useRef(false);
@@ -195,7 +198,12 @@ function VideoCardPlayerInner(
       player.muted = true;
       player.volume = 0;
       if (player.playing) player.pause();
-      freezeOnFirstFrame();
+      // Hold the watching video's frame (comments peek + user pause).
+      // Only rewind off-screen neighbors back to the poster frame.
+      const store = useGlobalVideoStore.getState();
+      const isWatching =
+        commentsOpen || key === store.currentlyVisibleVideo || key === store.currentlyPlayingVideo;
+      if (!isWatching) freezeOnFirstFrame();
     }
   }, [
     shouldPlayThisVideo,
@@ -205,6 +213,7 @@ function VideoCardPlayerInner(
     isMuted,
     videoVolume,
     freezeOnFirstFrame,
+    commentsOpen,
   ]);
 
   const showOverlayTemporarily = useCallback(() => {
@@ -335,7 +344,7 @@ function VideoCardPlayerInner(
           onFirstFrameRender={handleFirstFrameRender}
         />
 
-        {showChrome &&
+        {showChrome && !commentsOpen &&
           video.moderationStatus &&
           video.moderationStatus !== "approved" && (
             <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
@@ -343,7 +352,7 @@ function VideoCardPlayerInner(
             </View>
           )}
 
-        {showChrome && (
+        {showChrome && !commentsOpen && (
           <ContentTypeBadge
             contentType={video.contentType || "video"}
             position="top-left"
@@ -351,7 +360,7 @@ function VideoCardPlayerInner(
           />
         )}
 
-        {showChrome && (
+        {showChrome && !commentsOpen && (
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => onVideoTap(key, video, index)}
@@ -372,7 +381,7 @@ function VideoCardPlayerInner(
           </TouchableOpacity>
         )}
 
-        {showChrome && (
+        {showChrome && !commentsOpen && (
           <MediaPlayButton
             isPlaying={isPlaying}
             onPress={() => handleTogglePlay(setIsPlayTogglePending)}
@@ -382,7 +391,7 @@ function VideoCardPlayerInner(
           />
         )}
 
-        {showChrome && (
+        {showChrome && !commentsOpen && (
           <View
             style={{
               position: "absolute",
@@ -412,7 +421,7 @@ function VideoCardPlayerInner(
           </View>
         )}
 
-        {showChrome && (
+        {showChrome && !commentsOpen && (
           <VideoProgressBar
             progress={Math.max(0, Math.min(1, videoProgress || 0))}
             isMuted={isMuted}

@@ -78,7 +78,10 @@ export function PlayerTransport({
       >
         <TouchableOpacity
           onPress={onToggleShuffle}
-          style={[styles.miniControl, isShuffled && styles.miniControlActive]}
+          style={[
+            styles.miniControl,
+            isShuffled ? styles.miniControlActive : undefined,
+          ]}
         >
           <Ionicons
             name="shuffle"
@@ -89,7 +92,10 @@ export function PlayerTransport({
 
         <TouchableOpacity
           onPress={onRepeatCycle}
-          style={[styles.miniControl, repeatMode !== "none" && styles.miniControlActive]}
+          style={[
+            styles.miniControl,
+            repeatMode !== "none" ? styles.miniControlActive : undefined,
+          ]}
         >
           <Ionicons
             name="repeat"

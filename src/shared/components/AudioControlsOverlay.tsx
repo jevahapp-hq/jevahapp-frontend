@@ -1,16 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useRef } from "react";
-import { PanResponder, Text, TouchableOpacity, View } from "react-native";
+import { PanResponder, TouchableOpacity, View } from "react-native";
 
 type Props = {
   progress: number; // 0..1
   isMuted?: boolean;
   onToggleMute?: () => void;
-  onSeekRelative: (seconds: number) => void; // +/- seconds
+  onSeekRelative?: (seconds: number) => void;
   onSeekToPercent: (percent: number) => void; // 0..1
   barColor?: string;
-  /** Show ±N second skip buttons (default 10). Set 0 to hide. */
-  skipSeconds?: number;
   seekEnabled?: boolean;
 };
 
@@ -18,10 +16,8 @@ export default function AudioControlsOverlay({
   progress,
   isMuted = false,
   onToggleMute,
-  onSeekRelative,
   onSeekToPercent,
   barColor = "#FEA74E",
-  skipSeconds = 10,
   seekEnabled = true,
 }: Props) {
   const barWidthRef = useRef(1);
@@ -49,33 +45,6 @@ export default function AudioControlsOverlay({
 
   return (
     <View className="absolute bottom-4 left-3 right-3" pointerEvents="box-none">
-      {skipSeconds > 0 && (
-        <View className="flex-row justify-center items-center mb-2 gap-6">
-          <TouchableOpacity
-            onPress={() => seekEnabled && onSeekRelative(-skipSeconds)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={!seekEnabled}
-            style={{ opacity: seekEnabled ? 1 : 0.4 }}
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="play-back" size={22} color="#FFFFFF" />
-              <Text className="text-white text-[10px] ml-0.5">{skipSeconds}</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => seekEnabled && onSeekRelative(skipSeconds)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={!seekEnabled}
-            style={{ opacity: seekEnabled ? 1 : 0.4 }}
-          >
-            <View className="flex-row items-center">
-              <Text className="text-white text-[10px] mr-0.5">{skipSeconds}</Text>
-              <Ionicons name="play-forward" size={22} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
-
       <View className="flex-row items-center">
         {/* Add left spacing to separate play icon from the progress bar */}
         <View style={{ width: 36 }} />

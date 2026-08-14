@@ -18,16 +18,27 @@ export function createStateSetters(
   | "setVirtualTrackControls"
 > {
   return {
-    setPlaying: (playing: boolean) => set({ isPlaying: playing }),
-    setLoading: (loading: boolean) => set({ isLoading: loading }),
+    setPlaying: (playing: boolean) => {
+      if (get().isPlaying === playing) return;
+      set({ isPlaying: playing });
+    },
+    setLoading: (loading: boolean) => {
+      if (get().isLoading === loading) return;
+      set({ isLoading: loading });
+    },
     setPosition: (position: number) => {
-      const { duration } = get();
+      const { duration, position: prev } = get();
+      if (Math.abs(prev - position) < 40) return;
       const progress = duration > 0 ? position / duration : 0;
       set({ position, progress });
     },
-    setDuration: (duration: number) => set({ duration }),
+    setDuration: (duration: number) => {
+      if (get().duration === duration) return;
+      set({ duration });
+    },
     setProgressValue: (progress: number) => {
-      const { duration } = get();
+      const { duration, progress: prev } = get();
+      if (Math.abs(prev - progress) < 0.002) return;
       const position = duration * progress;
       set({ progress, position });
     },

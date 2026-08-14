@@ -1,9 +1,16 @@
+import { useSyncExternalStore } from "react";
+import { isLiteProfileActive } from "../lite/liteProfile";
 import type { AuthorId, AuthorProfile } from "./types";
 import { fetchAuthorProfile } from "./authorProfileApi";
+import {
+  readAuthorProfilesFromDisk,
+  schedulePersistAuthorProfiles,
+} from "./authorDiskCache";
 import { hasUsableAuthorName, normalizeAuthorProfile } from "./normalizeAuthor";
 
 /**
  * In-memory author profile store (single responsibility).
+ * Disk-backed so cold start paints real names (TikTok/IG identity cache).
  * Never treats a nameless entry as a successful cache hit for name resolution.
  */
 const profiles = new Map<AuthorId, AuthorProfile>();
@@ -11,6 +18,64 @@ const inFlight = new Map<AuthorId, Promise<AuthorProfile | null>>();
 /** Cooldown — never a permanent blacklist (token/404 can recover). */
 const failedUntil = new Map<AuthorId, number>();
 const FAIL_COOLDOWN_MS = 12_000;
+const MAX_IN_MEMORY = 80;
+
+let storeVersion = 0;
+const storeListeners = new Set<() => void>();
+let bumpTimer: ReturnType<typeof setTimeout> | null = null;
+
+function bumpStore(): void {
+  if (bumpTimer) return;
+  bumpTimer = setTimeout(() => {
+    bumpTimer = null;
+    storeVersion += 1;
+    storeListeners.forEach((fn) => {
+      try {
+        fn();
+      } catch {
+        // no-op
+      }
+    });
+  }, 16);
+}
+
+function trimProfiles(): void {
+  while (profiles.size > MAX_IN_MEMORY) {
+    const oldest = profiles.keys().next().value;
+    if (!oldest) break;
+    profiles.delete(oldest);
+  }
+}
+
+export function getAuthorStoreVersion(): number {
+  return storeVersion;
+}
+
+export function subscribeAuthorStore(onStoreChange: () => void): () => void {
+  storeListeners.add(onStoreChange);
+  return () => {
+    storeListeners.delete(onStoreChange);
+  };
+}
+
+/** Re-render feed chrome when a cached name lands (no React Query patch needed). */
+export function useAuthorStoreVersion(): number {
+  return useSyncExternalStore(
+    subscribeAuthorStore,
+    getAuthorStoreVersion,
+    getAuthorStoreVersion
+  );
+}
+
+/** Sync disk → RAM. Call before first feed paint. */
+export function hydrateAuthorProfilesSync(): void {
+  const rows = readAuthorProfilesFromDisk();
+  if (!rows.length) return;
+  for (const row of rows) {
+    profiles.set(row.id, row);
+  }
+  bumpStore();
+}
 
 export function getAuthorProfile(userId: AuthorId): AuthorProfile | null {
   if (!userId) return null;
@@ -23,9 +88,18 @@ export function putAuthorProfile(
 ): AuthorProfile | null {
   const profile = normalizeAuthorProfile(raw as any, userId);
   if (!profile) return null;
+  const prev = profiles.get(userId);
+  profiles.delete(userId);
   profiles.set(userId, profile);
+  trimProfiles();
   if (hasUsableAuthorName(profile)) {
     failedUntil.delete(userId);
+    const nameChanged = prev?.fullName !== profile.fullName;
+    const avatarChanged = prev?.avatar !== profile.avatar;
+    if (nameChanged || avatarChanged || !prev) {
+      schedulePersistAuthorProfiles(profiles);
+      bumpStore();
+    }
   }
   return profile;
 }
@@ -63,23 +137,11 @@ export async function ensureAuthorProfile(
     try {
       const fetched = await fetchAuthorProfile(userId);
       if (fetched && hasUsableAuthorName(fetched)) {
-        profiles.set(userId, fetched);
-        failedUntil.delete(userId);
+        putAuthorProfile(userId, fetched);
         return fetched;
       }
       if (fetched) {
-        const existing = profiles.get(userId);
-        profiles.set(userId, {
-          ...(existing || {
-            id: userId,
-            firstName: "",
-            lastName: "",
-            fullName: "",
-            avatar: "",
-          }),
-          ...fetched,
-          fullName: fetched.fullName || existing?.fullName || "",
-        });
+        putAuthorProfile(userId, fetched);
       }
       if (!hasUsableAuthorName(profiles.get(userId))) {
         markAuthorFetchFailed(userId);
@@ -107,7 +169,20 @@ export async function ensureAuthorProfiles(
   const unique = Array.from(
     new Set(userIds.map((id) => String(id || "").trim()).filter(Boolean))
   );
-  await Promise.all(unique.map((id) => ensureAuthorProfile(id)));
+  const lite = isLiteProfileActive();
+  const capped = lite ? unique.slice(0, 8) : unique;
+  const concurrency = lite ? 2 : 3;
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < capped.length) {
+      const id = capped[cursor];
+      cursor += 1;
+      await ensureAuthorProfile(id);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, capped.length) }, () => worker())
+  );
 }
 
 /** Clear hard-fail marks so enrichment can retry (e.g. after login). */

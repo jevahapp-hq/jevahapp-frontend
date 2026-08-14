@@ -29,6 +29,8 @@ export function SongCard({
     <View className="mr-4 w-[154px] flex-col items-center">
       <TouchableOpacity
         onPress={() => onCardPress(song)}
+        delayPressIn={0}
+        delayPressOut={0}
         className="w-full h-[232px] rounded-2xl overflow-hidden relative"
         activeOpacity={0.9}
       >

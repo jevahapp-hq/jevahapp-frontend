@@ -30,6 +30,7 @@ export {
   peekCachedComments,
   putCachedComments,
   hydrateCommentsCacheFromDisk,
+  peekDiskComments,
   writeDiskCommentsCache,
   invalidateDiskCommentsCache,
   diskCommentsCacheKey,

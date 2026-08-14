@@ -19,6 +19,7 @@ import contentInteractionAPI, {
   hydrateCommentsCacheFromDisk,
   invalidateDiskCommentsCache,
   peekCachedComments,
+  peekDiskComments,
   putCachedComments,
   writeDiskCommentsCache,
 } from "../../utils/contentInteractionAPI";
@@ -65,6 +66,8 @@ export function useCommentModalController(): CommentModalContextType {
   );
   const currentContentIdRef = useRef("");
   const currentContentTypeRef = useRef<"media" | "devotional">("media");
+  const isVisibleRef = useRef(false);
+  isVisibleRef.current = isVisible;
 
   const typing = useCommentTyping({
     getContentId: () => currentContentIdRef.current,
@@ -96,6 +99,14 @@ export function useCommentModalController(): CommentModalContextType {
     setMediaPeekHeight(layout.peekHeight);
     setMediaShiftY(layout.shiftY);
     setMediaScale(layout.mediaScale);
+
+    if (
+      contentId &&
+      isVisibleRef.current &&
+      currentContentIdRef.current === contentId
+    ) {
+      return;
+    }
 
     // Paint sheet IMMEDIATELY — no awaits on open path
     setIsVisible(true);
@@ -129,23 +140,28 @@ export function useCommentModalController(): CommentModalContextType {
       const mem = peekCachedComments(contentId, sortBy);
       if (mem?.comments?.length) {
         instant = mem.comments.map(mapCachedComment).filter((c) => c.id);
-      } else if (
-        lastSheetRef.current?.contentId === contentId &&
-        lastSheetRef.current.comments.length
-      ) {
-        instant = lastSheetRef.current.comments;
       } else {
-        try {
-          const storeComments =
-            useInteractionStore.getState().comments[contentId];
-          if (Array.isArray(storeComments) && storeComments.length > 0) {
-            instant = storeComments
-              .slice(0, 20)
-              .map(mapCachedComment)
-              .filter((c) => c.id);
+        const disk = peekDiskComments(contentId, sortBy);
+        if (disk?.comments?.length) {
+          instant = disk.comments.map(mapCachedComment).filter((c) => c.id);
+        } else if (
+          lastSheetRef.current?.contentId === contentId &&
+          lastSheetRef.current.comments.length
+        ) {
+          instant = lastSheetRef.current.comments;
+        } else {
+          try {
+            const storeComments =
+              useInteractionStore.getState().comments[contentId];
+            if (Array.isArray(storeComments) && storeComments.length > 0) {
+              instant = storeComments
+                .slice(0, 20)
+                .map(mapCachedComment)
+                .filter((c) => c.id);
+            }
+          } catch {
+            // no-op
           }
-        } catch {
-          // no-op
         }
       }
     }
@@ -905,6 +921,7 @@ export function useCommentModalController(): CommentModalContextType {
     mediaPeekHeight,
     mediaShiftY,
     mediaScale,
+    contentId: currentContentId || undefined,
     showCommentModal,
     updateCommentMediaLayout,
     hideCommentModal,

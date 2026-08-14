@@ -3,7 +3,7 @@
  */
 import React, { memo, useCallback, useRef } from "react";
 import { View } from "react-native";
-import { useCommentModal } from "../../../../../app/context/CommentModalContext";
+import { useGlobalAudioPlayerStore } from "../../../../../app/store/useGlobalAudioPlayerStore";
 import { MusicCardProps } from "../../../../shared/types";
 import {
   MediaCardFooter,
@@ -65,11 +65,11 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 
   const handleMute = useCallback(() => {
     if (playback.isVirtualTrack && playback.isCurrentTrack) {
-      playback.globalAudioStore.toggleMute();
+      void useGlobalAudioPlayerStore.getState().toggleMute();
     } else {
-      playback.controls.toggleMute();
+      void playback.controls.toggleMute();
     }
-  }, [playback]);
+  }, [playback.isVirtualTrack, playback.isCurrentTrack, playback.controls]);
 
   const openComments = useCallback(() => {
     // Open immediately — don't wait on measureInWindow (was making comments feel laggy)
@@ -101,12 +101,12 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           hasDuration={!!playback.playerState.duration}
           progress={
             playback.isVirtualTrack
-              ? playback.globalAudioStore.progress || 0
+              ? playback.globalProgress || 0
               : playback.playerState.progress || 0
           }
           isMuted={
             playback.isVirtualTrack
-              ? playback.globalAudioStore.isMuted || false
+              ? playback.globalIsMuted || false
               : playback.playerState.isMuted || false
           }
           isPlaying={playback.isPlayingFromGlobal}

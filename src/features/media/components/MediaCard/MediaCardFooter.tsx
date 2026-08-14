@@ -4,7 +4,6 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
-import { useFastPerformance } from "../../../../../app/utils/fastPerformance";
 import { AvatarWithInitialFallback } from "../../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../../shared/components/CardFooterActions";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
@@ -63,7 +62,6 @@ export function MediaCardFooter({
   footerClassName,
   menuStyle,
 }: MediaCardFooterProps) {
-  const { fastPress } = useFastPerformance();
   if (!item) return null;
   const displayName = getUserDisplayNameFromContent(item);
 
@@ -113,25 +111,16 @@ export function MediaCardFooter({
                 liked={!!userLikeState}
                 likeCount={likeCount}
                 likeColor={likeColor}
-                onLike={fastPress(() => onLike(), {
-                  key: `like_${contentId}`,
-                  priority: "high",
-                })}
+                onLike={onLike}
                 commentCount={commentCount || item.comment || 0}
                 onComment={() => onComment()}
                 saved={!!userSaveState}
                 saveCount={saveCount || 0}
-                onSave={fastPress(() => onSave(), {
-                  key: `save_${contentId}`,
-                  priority: "high",
-                })}
+                onSave={onSave}
                 isLoading={isLoadingStats}
                 contentType="media"
                 contentId={contentId}
-                onShare={fastPress(() => onShare(), {
-                  key: `share_${contentId}`,
-                  priority: "high",
-                })}
+                onShare={onShare}
                 useEnhancedComponents={false}
               />
             </View>

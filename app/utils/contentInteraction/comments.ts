@@ -4,6 +4,7 @@ export {
   putCachedComments,
   writeDiskCommentsCache,
   hydrateCommentsCacheFromDisk,
+  peekDiskComments,
   invalidateDiskCommentsCache,
   diskCommentsCacheKey,
 } from "./commentCache";

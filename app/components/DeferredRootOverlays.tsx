@@ -11,6 +11,7 @@ import {
 } from "../../src/shared/feed";
 import AuthGlassToastHost from "./auth/AuthGlassToastHost";
 import CommentModalV2 from "./CommentModalV2";
+import CopyrightFreeSongOverlayHost from "./CopyrightFreeSongOverlayHost";
 
 const SessionExpiredOverlay = React.lazy(
   () => import("./SessionExpiredOverlay")
@@ -46,6 +47,7 @@ export default function DeferredRootOverlays() {
     <>
       <AuthGlassToastHost />
       <CommentModalV2 />
+      <CopyrightFreeSongOverlayHost />
       {ready ? (
         <Suspense fallback={null}>
           <SessionExpiredOverlay />

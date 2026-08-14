@@ -60,6 +60,8 @@ let donorInflight: Promise<any[]> | null = null;
 
 /** Public all-content (no lite projection) — known to include authorInfo. */
 export async function loadPublicAuthorDonors(): Promise<any[]> {
+  const { isLiteProfileActive } = await import("../lite/liteProfile");
+  if (isLiteProfileActive()) return donorCache;
   if (donorCache.length && Date.now() - donorFetchedAt < TTL_MS) {
     return donorCache;
   }

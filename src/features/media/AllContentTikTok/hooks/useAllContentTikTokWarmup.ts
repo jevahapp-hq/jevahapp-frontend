@@ -3,7 +3,6 @@ import { prefetchLiteFeedPosters } from "../../../../shared/cache/liteMediaDiskC
 import {
   getLiteDiskWarmupCount,
   getLiteWarmupUrlCount,
-  isLiteProfileActive,
 } from "../../../../shared/lite/liteProfile";
 import type { MediaItem } from "../../../../shared/types";
 import { PERF, perfMark, perfMeasure } from "../../../../shared/utils/perfMarks";
@@ -22,9 +21,7 @@ export function useAllContentTikTokWarmup(filteredMediaList: MediaItem[]) {
     if (headId && warmedIdRef.current === headId) return;
     warmedIdRef.current = headId || "anon";
 
-    if (isLiteProfileActive()) {
-      prefetchLiteFeedPosters(filteredMediaList, getLiteDiskWarmupCount());
-    }
+    prefetchLiteFeedPosters(filteredMediaList, getLiteDiskWarmupCount());
     // Video Range heads stay tiny (1–2) so avatars/icons are not starved.
     const urls = filteredMediaList
       .slice(0, getLiteWarmupUrlCount())

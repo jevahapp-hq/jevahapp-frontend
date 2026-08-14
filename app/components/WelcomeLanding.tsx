@@ -15,7 +15,6 @@ import {
 import OptimizedImage from "../../src/shared/components/OptimizedImage";
 import AnimatedLogoIntro from "./AnimatedLogoIntro";
 import { useFastLogin } from "../hooks/useFastLogin";
-import { useFastPerformance } from "../utils/fastPerformance";
 
 const { width } = Dimensions.get("window");
 
@@ -59,7 +58,6 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
   const currentIndexRef = useRef(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const { isLoading: loginLoading, error: loginError, login } = useFastLogin();
-  const { fastPress } = useFastPerformance();
 
   useEffect(() => {
     if (showIntro) return;
@@ -134,10 +132,7 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
 
           <View className="flex-row mt-12 gap-[16px]">
             <TouchableOpacity
-              onPress={fastPress(() => handleSignIn("facebook"), {
-                key: "facebook_login",
-                priority: "high",
-              })}
+              onPress={() => handleSignIn("facebook")}
               activeOpacity={0.7}
               style={{
                 minWidth: 48,
@@ -153,10 +148,7 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
               />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={fastPress(() => handleSignIn("google"), {
-                key: "google_login",
-                priority: "high",
-              })}
+              onPress={() => handleSignIn("google")}
               activeOpacity={0.7}
               style={{
                 minWidth: 48,
@@ -172,10 +164,7 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
               />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={fastPress(() => handleSignIn("apple"), {
-                key: "apple_login",
-                priority: "high",
-              })}
+              onPress={() => handleSignIn("apple")}
               activeOpacity={0.7}
               style={{
                 minWidth: 48,
@@ -207,10 +196,7 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
           </View>
 
           <TouchableOpacity
-            onPress={fastPress(() => router.push("/auth/signup"), {
-              key: "signup_button",
-              priority: "high",
-            })}
+            onPress={() => router.push("/auth/signup")}
             activeOpacity={0.8}
             style={{
               width: "90%",
@@ -229,10 +215,7 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={fastPress(() => router.push("/auth/login"), {
-              key: "signin_button",
-              priority: "high",
-            })}
+            onPress={() => router.push("/auth/login")}
             className="mt-9"
           >
             <Text className="text-[#344054] text-sm font-medium">Sign In</Text>

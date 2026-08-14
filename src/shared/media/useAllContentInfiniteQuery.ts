@@ -73,6 +73,7 @@ export function useAllContentInfiniteQuery(options: {
   const queryClient = useQueryClient();
   const enrichPassRef = useRef(0);
   const lastSuccessKeyRef = useRef("");
+  const attemptsByKeyRef = useRef<Map<string, number>>(new Map());
 
   const query = useInfiniteQuery({
     queryKey,
@@ -170,8 +171,8 @@ export function useAllContentInfiniteQuery(options: {
     gcTime: getFeedGcMs(),
     maxPages: getFeedMaxPages(),
     retry: 1,
-    networkMode: isLiteProfileActive() ? "offlineFirst" : "online",
-    refetchOnMount: seedFresh ? false : !initialData ? true : "always",
+    networkMode: "offlineFirst",
+    refetchOnMount: initialData ? false : true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: seedFresh ? false : true,
   });
@@ -192,7 +193,8 @@ export function useAllContentInfiniteQuery(options: {
     return flat;
   }, [query.data?.pages]);
 
-  // Media often has avatar without names. Resolve via src/shared/author, then patch RQ.
+  // Resolve missing names once per feed snapshot. Do NOT reset attempts when
+  // setQueryData rebuilds `allContent` — that loop OOMs Lite devices.
   useEffect(() => {
     if (!allContent.length || !feedNeedsAuthorEnrichment(allContent)) return;
 
@@ -200,13 +202,14 @@ export function useAllContentInfiniteQuery(options: {
       .slice(0, 50)
       .map((item) => String(item._id || ""))
       .join("|");
-    // Skip only after a successful name resolve for this feed snapshot
     if (lastSuccessKeyRef.current === dedupeKey) return;
 
+    const lite = isLiteProfileActive();
+    const maxAttempts = lite ? 1 : 3;
+    const used = attemptsByKeyRef.current.get(dedupeKey) ?? 0;
+    if (used >= maxAttempts) return;
+
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 10;
     const pass = ++enrichPassRef.current;
 
     const applyPatched = (patched: MediaItem[]) => {
@@ -215,13 +218,20 @@ export function useAllContentInfiniteQuery(options: {
         const byId = new Map(
           patched.map((item) => [String(item._id || (item as any).id || ""), item])
         );
+        let changed = false;
         const pages = old.pages.map((page: AllContentPageResult) => ({
           ...page,
           media: (page.media || []).map((item) => {
             const id = String(item._id || (item as any).id || "");
-            return byId.get(id) || item;
+            const next = byId.get(id);
+            if (next && next !== item) {
+              changed = true;
+              return next;
+            }
+            return item;
           }),
         }));
+        if (!changed) return old;
         const first = pages[0];
         if (first?.media?.length) {
           seedContentCache(contentType, useAuth, first);
@@ -230,29 +240,20 @@ export function useAllContentInfiniteQuery(options: {
       });
     };
 
-    const run = async () => {
+    attemptsByKeyRef.current.set(dedupeKey, used + 1);
+
+    void (async () => {
       if (cancelled || pass !== enrichPassRef.current) return;
       const patched = await ensureFeedAuthors(allContent);
       if (cancelled || pass !== enrichPassRef.current) return;
-      applyPatched(patched);
-
+      if (patched !== allContent) applyPatched(patched);
       if (!feedNeedsAuthorEnrichment(patched)) {
         lastSuccessKeyRef.current = dedupeKey;
-        return;
       }
-      if (attempts >= MAX_ATTEMPTS) return;
-      attempts += 1;
-      // Token often lands after first paint — retry with backoff
-      const delay = Math.min(8000, 800 * attempts);
-      timer = setTimeout(() => {
-        void run();
-      }, delay);
-    };
+    })();
 
-    void run();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
     };
   }, [allContent, contentType, queryClient, queryKey, useAuth]);
 

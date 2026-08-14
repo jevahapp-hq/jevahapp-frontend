@@ -17,7 +17,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import CopyrightFreeSongModal from "../components/CopyrightFreeSongModal";
 import type { ArtistRelease } from "../services/creators/releaseTypes";
 import {
   musicCatalogApi,
@@ -31,6 +30,7 @@ import {
   type TrackCard,
 } from "../services/music-catalog/trackTypes";
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { useCopyrightFreeOverlayStore } from "../store/useCopyrightFreeOverlayStore";
 
 const PAGE_SIZE = 30;
 
@@ -47,8 +47,6 @@ export default function ArtistProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [selected, setSelected] = useState<any>(null);
 
   const { setTrack, currentTrack, isPlaying, togglePlayPause } =
     useGlobalAudioPlayerStore();
@@ -140,8 +138,8 @@ export default function ArtistProfileScreen() {
     });
     await setTrack(trackCardToAudioTrack(track), true);
     void musicCatalogApi.recordPlay(track.id);
-    setSelected(song);
-    setShowModal(true);
+    const queueUi = playable.map(trackCardToSongUi);
+    useCopyrightFreeOverlayStore.getState().open(song, { queue: queueUi });
   };
 
   return (
@@ -405,21 +403,6 @@ export default function ArtistProfileScreen() {
           }}
         />
       )}
-
-      {selected ? (
-        <CopyrightFreeSongModal
-          visible={showModal}
-          song={selected}
-          onClose={() => {
-            setShowModal(false);
-            setSelected(null);
-          }}
-          onPlay={async (song) => {
-            const track = tracks.find((t) => t.id === song.id);
-            if (track) await play(track);
-          }}
-        />
-      ) : null}
     </SafeAreaView>
   );
 }

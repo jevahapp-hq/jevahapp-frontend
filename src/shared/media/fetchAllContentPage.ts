@@ -14,7 +14,7 @@ import { fetchForYou } from "../feed/feedRanker";
 import { isLiteProfileActive } from "../lite/liteProfile";
 import type { MediaItem } from "../types";
 import { transformApiResponseToMediaItem } from "../utils";
-import { mergeAuthorFieldsByMediaId } from "../author";
+import { mergeAuthorFieldsByMediaId, paintAuthorsFromCache } from "../author";
 import { syncMediaStatsToInteractionStore } from "./syncMediaStats";
 
 export type AllContentPageResult = {
@@ -51,7 +51,6 @@ export function seedContentCache(
   let items = result.media;
 
   if (
-    isLiteProfileActive() &&
     incomingPage > 1 &&
     existing?.items?.length
   ) {
@@ -105,8 +104,8 @@ export function readSeededFirstPage(
   const store = useContentCacheStore.getState();
   const primary = store.get(feedZustandFirstPageKey(contentType, useAuth));
   if (primary?.items?.length && isPaintableSeed(primary.fetchedAt)) {
-    const media = UserProfileCache.enrichContentArray(
-      sanitizeFeedMedia(primary.items)
+    const media = paintAuthorsFromCache(
+      UserProfileCache.enrichContentArray(sanitizeFeedMedia(primary.items))
     );
     return {
       media,
@@ -145,7 +144,9 @@ export function readSeededFirstPage(
   const mmkv = getFeedPageSync(contentType, useAuth);
   if (mmkv?.media?.length) {
     return {
-      media: UserProfileCache.enrichContentArray(mmkv.media),
+      media: paintAuthorsFromCache(
+        UserProfileCache.enrichContentArray(mmkv.media)
+      ),
       total: mmkv.total,
       fetchedAt: mmkv.fetchedAt,
       cursor: mmkv.cursor,
@@ -172,9 +173,11 @@ export function readSeededFirstPage(
 
 function toMediaItems(raw: any[]): MediaItem[] {
   if (!raw.length) return [];
-  return UserProfileCache.enrichContentArray(raw)
-    .map(transformApiResponseToMediaItem)
-    .filter((item): item is MediaItem => item !== null);
+  return paintAuthorsFromCache(
+    UserProfileCache.enrichContentArray(raw)
+      .map(transformApiResponseToMediaItem)
+      .filter((item): item is MediaItem => item !== null)
+  );
 }
 
 async function fetchChronologicalPage(options: {
@@ -218,7 +221,7 @@ async function fetchChronologicalPage(options: {
   } else if (isLiteProfileActive() && result.media.length) {
     seedContentCache(contentType, useAuth, result);
   }
-  if (mediaArr.length > 0) {
+  if (mediaArr.length > 0 && !isLiteProfileActive()) {
     void UserProfileCache.enrichContentArrayBatch(mediaArr).catch(() => {});
   }
   return result;
@@ -252,7 +255,7 @@ function finishForYouPage(
   } else if (isLiteProfileActive() && result.media.length) {
     seedContentCache(contentType, useAuth, result);
   }
-  if (raw.length > 0) {
+  if (raw.length > 0 && !isLiteProfileActive()) {
     void UserProfileCache.enrichContentArrayBatch(raw).catch(() => {});
   }
   return result;
@@ -299,36 +302,15 @@ export async function fetchAllContentPage(options: {
     return null;
   });
 
-  // Don't wait on For You before painting — chrono has authorInfo and is enough.
+  // Chrono is enough to paint. Don't stall first frame on For You ranking.
   const chrono = await chronoPromise.catch(() => null);
-  const fyWaitMs = chrono?.media?.length ? 280 : 2500;
-  const ranked = await Promise.race([
-    fyPromise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), fyWaitMs)),
-  ]);
-
-  if (ranked && (ranked.media?.length || ranked.items?.length)) {
-    return finishForYouPage(
-      contentType,
-      useAuth,
-      page,
-      limit,
-      ranked,
-      chrono?.media || []
-    );
-  }
-
   if (chrono?.media?.length) {
-    void fyPromise.then((late) => {
-      if (!late?.media?.length && !late?.items?.length) return;
-      // Ranking arrived late — names already on screen from chrono.
-    });
     return chrono;
   }
 
-  const late = await fyPromise;
-  if (late && (late.media?.length || late.items?.length)) {
-    return finishForYouPage(contentType, useAuth, page, limit, late, []);
+  const ranked = await fyPromise;
+  if (ranked && (ranked.media?.length || ranked.items?.length)) {
+    return finishForYouPage(contentType, useAuth, page, limit, ranked, []);
   }
 
   if (chrono) return chrono;

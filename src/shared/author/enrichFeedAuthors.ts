@@ -137,11 +137,22 @@ export async function ensureFeedAuthors(
     await ensureAuthorProfiles(missing);
   }
   let next = applyAuthorsToMedia(items);
-  if (next.some((item) => isPlaceholderName(resolveAuthorName(item)))) {
+  const { isLiteProfileActive } = await import("../lite/liteProfile");
+  if (
+    !isLiteProfileActive() &&
+    next.some((item) => isPlaceholderName(resolveAuthorName(item)))
+  ) {
     next = await hydrateAuthorsFromPublicIndex(next);
     next = applyAuthorsToMedia(next);
   }
   return next;
+}
+
+/** Sync: seed store from payload + overlay cached names. Safe for first paint. */
+export function paintAuthorsFromCache(items: MediaItem[]): MediaItem[] {
+  if (!items.length) return items;
+  items.forEach((item) => seedAuthorsFromItem(item));
+  return applyAuthorsToMedia(items);
 }
 
 /** Sync enrich for transform pipelines (uses store only, no network). */

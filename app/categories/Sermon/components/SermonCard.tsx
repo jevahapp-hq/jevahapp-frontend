@@ -35,6 +35,7 @@ export interface SermonCardProps {
     React.SetStateAction<Record<string, boolean>>
   >;
   showCommentModal: (comments: any[], contentId: string) => void;
+  handleComment: (key: string, item: any) => void;
   onDownloadSuccess: (message: string) => void;
 }
 
@@ -65,6 +66,7 @@ export default function SermonCard({
   setVideoErrors,
   setViewCounted,
   showCommentModal,
+  handleComment,
   onDownloadSuccess,
 }: SermonCardProps) {
   if (isSermonVideo(item)) {
@@ -90,7 +92,7 @@ export default function SermonCard({
         setModalVisible={setModalVisible}
         setVideoErrors={setVideoErrors}
         setViewCounted={setViewCounted}
-        showCommentModal={showCommentModal}
+        handleComment={handleComment}
       />
     );
   }

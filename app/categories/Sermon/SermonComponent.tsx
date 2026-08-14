@@ -59,6 +59,7 @@ export default function SermonComponent() {
     handleSave,
     handleFavorite,
     incrementView,
+    handleComment,
   } = useSermonInteractions({ videoRefs });
 
   useSermonVideoSync(videoRefs);
@@ -105,6 +106,7 @@ export default function SermonComponent() {
     setVideoErrors,
     setViewCounted,
     showCommentModal,
+    handleComment,
     onDownloadSuccess,
   };
 

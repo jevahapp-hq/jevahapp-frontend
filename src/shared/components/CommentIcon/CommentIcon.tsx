@@ -83,7 +83,11 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
   const ButtonComponent = useAnimatedButton ? AnimatedButton : TouchableOpacity;
   const buttonProps = useAnimatedButton
     ? {}
-    : { activeOpacity: 0.7 };
+    : {
+        activeOpacity: 0.7,
+        delayPressIn: 0,
+        delayPressOut: 0,
+      };
 
   return (
     <ButtonComponent

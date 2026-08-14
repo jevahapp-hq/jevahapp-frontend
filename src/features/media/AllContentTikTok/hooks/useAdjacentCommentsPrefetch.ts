@@ -19,7 +19,7 @@ export function useAdjacentCommentsPrefetch(options: {
   getContentKey: (item: MediaItem) => string;
   /** Focused + this many neighbors each side (0 = focused only) */
   radius?: number;
-  /** Defer until after interactions / scroll settles */
+  /** Defer until after interactions / scroll settles. False = warm the focused item immediately. */
   idleOnly?: boolean;
 }) {
   const {

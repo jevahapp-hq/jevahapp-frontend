@@ -34,6 +34,8 @@ export interface CommentModalContextType {
   mediaShiftY: number;
   /** Scale applied to feed while sheet is open (1 = identity) */
   mediaScale: number;
+  /** Media `_id` the sheet is open on — used to bind peek playback HUD. */
+  contentId?: string;
   showCommentModal: (
     comments: Comment[],
     contentId?: string,
@@ -73,6 +75,7 @@ export const COMMENT_MODAL_NOOP: CommentModalContextType = {
   mediaPeekHeight: MEDIA_PEEK_HEIGHT,
   mediaShiftY: 0,
   mediaScale: 1,
+  contentId: undefined,
   showCommentModal: () => {},
   updateCommentMediaLayout: () => {},
   hideCommentModal: () => {},

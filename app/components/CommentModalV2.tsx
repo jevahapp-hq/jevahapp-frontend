@@ -2,10 +2,11 @@
  * CommentModalV2 — thin composition shell (TikTok / IG same-window overlay).
  * Row UI, animation, overlays, and composer live under ./comments/*.
  */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
+  InteractionManager,
   Platform,
   StyleSheet,
   View,
@@ -23,6 +24,7 @@ import {
   CommentComposer,
   CommentDeleteModal,
   CommentListEmpty,
+  CommentPeekPlaybackHud,
   CommentRow,
   CommentSheetHeader,
   CommentSortModal,
@@ -36,6 +38,7 @@ import {
   type SubmitCommentPayload,
 } from "./comments";
 import { COMMENT_COMPOSER_COLORS as C } from "./comments/types";
+import { COMMENT_PEEK_HUD_STRIP } from "./commentSheetLayout";
 
 export default function CommentModalV2() {
   const {
@@ -58,6 +61,7 @@ export default function CommentModalV2() {
     typingUsers,
     setLocalTyping,
     mediaPeekHeight,
+    contentId,
   } = useCommentModal();
 
   const { user, getAvatarUrl, getFullName } = useUserProfile();
@@ -68,6 +72,20 @@ export default function CommentModalV2() {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<CommentThreadItem>>(null);
   const lastCountRef = useRef(0);
+  // Keep the sheet in the tree after idle / first open so tap 1 isn't a JS mount.
+  const [shellReady, setShellReady] = useState(false);
+  useEffect(() => {
+    if (isVisible) {
+      setShellReady(true);
+      return;
+    }
+    const task = InteractionManager.runAfterInteractions(() => setShellReady(true));
+    const fallback = setTimeout(() => setShellReady(true), 500);
+    return () => {
+      task.cancel();
+      clearTimeout(fallback);
+    };
+  }, [isVisible]);
 
   const ui = useCommentSheetUiState();
   const anim = useCommentSheetAnimation({
@@ -258,24 +276,37 @@ export default function CommentModalV2() {
   const composerBottomPad =
     anim.keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 10);
 
-  if (!isVisible) return null;
+  if (!isVisible && !shellReady) return null;
 
   const headerLabel =
     totalCount === 1 ? "1 comment" : `${formatCount(totalCount)} comments`;
 
   return (
-    <View style={styles.overlayRoot} pointerEvents="box-none">
-      {/* Visual dim only on the upper peek — leave a clear band for scrubber */}
+    <View
+      style={[
+        styles.overlayRoot,
+        !isVisible ? styles.overlayRootIdle : undefined,
+      ]}
+      pointerEvents={isVisible ? "box-none" : "none"}
+    >
+      {/* Light dim — leave the HUD strip undimmed for seek */}
       <Animated.View
         pointerEvents="none"
         style={[
           styles.dimHitArea,
-          { height: Math.max(0, mediaPeekHeight - 56) },
+          { height: Math.max(0, mediaPeekHeight - COMMENT_PEEK_HUD_STRIP) },
           anim.backdropStyle,
         ]}
       >
         <View style={styles.dimFill} />
       </Animated.View>
+
+      {isVisible ? (
+        <CommentPeekPlaybackHud
+          peekHeight={mediaPeekHeight}
+          contentId={contentId}
+        />
+      ) : null}
 
       <Animated.View
         pointerEvents="none"
@@ -423,6 +454,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
     elevation: 1000,
+  },
+  overlayRootIdle: {
+    zIndex: -1,
+    elevation: 0,
   },
   dimHitArea: {
     position: "absolute",

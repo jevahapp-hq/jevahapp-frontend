@@ -23,7 +23,6 @@ import {
 import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
-import { useFastPerformance } from "../utils/fastPerformance";
 import {
   prefetchCreateFlows,
   prefetchGoLiveScreen,
@@ -84,7 +83,6 @@ export default function BottomNav({
   const [showActions, setShowActions] = useState(false);
   /** Defer FAB sheet until first open — avoids BlurView cost on cold paint */
   const [fabSheetMounted, setFabSheetMounted] = useState(false);
-  const { fastPress } = useFastPerformance();
   const insets = useSafeAreaInsets();
   // Prefer live insets; fall back to window metrics / platform default so we
   // never paint with 0 then jump when Android edge-to-edge resolves.
@@ -262,10 +260,8 @@ export default function BottomNav({
             zIndex: 100,
             elevation: 15,
           }}
-          onPress={fastPress(handleFabToggle, {
-            key: "fab_toggle",
-            priority: "high",
-          })}
+          onPress={handleFabToggle}
+          delayPressIn={0}
           activeOpacity={0.7}
         >
           <Ionicons

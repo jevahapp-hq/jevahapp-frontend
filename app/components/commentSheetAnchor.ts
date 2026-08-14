@@ -28,18 +28,13 @@ export function getWindowHeight(): number {
 }
 
 /**
- * Dock the watching video into a tall top peek so pause stays high and tappable.
- * Biases the player upward (pause ~upper third of peek), sheet sits lower.
+ * Dock the watching video into a peek that matches the player frame.
+ * Sheet sits on the player bottom so avatar / likes / comments stay covered.
  */
 export function resolveCommentSheetLayout(
   anchor?: CommentMediaAnchor | null
 ): CommentSheetLayoutLive {
   const H = getWindowHeight();
-  // Taller peek = sheet lower = pause icon clearer
-  const MIN_PEEK = Math.max(220, Math.round(H * 0.46));
-  const MAX_PEEK = Math.round(H * 0.56);
-  const FALLBACK_PEEK = Math.round(H * 0.52);
-
   const playerH =
     anchor &&
     Number.isFinite(anchor.mediaHeight) &&
@@ -47,31 +42,25 @@ export function resolveCommentSheetLayout(
       ? Math.round(anchor.mediaHeight as number)
       : DEFAULT_PLAYER_H;
 
-  const peekHeight = Math.max(
-    MIN_PEEK,
-    Math.min(MAX_PEEK, Math.round(H * 0.52))
-  );
+  // Exact video frame (never taller than ~58% so comments still have room)
+  const peekHeight = Math.max(180, Math.min(playerH, Math.round(H * 0.58)));
 
   if (
     !anchor ||
     !Number.isFinite(anchor.mediaBottomY) ||
     anchor.mediaBottomY <= 0
   ) {
-    // Still lift so pause sits in the upper peek, not mid/low
-    const lift = Math.round(playerH * 0.22);
     return {
-      peekHeight: FALLBACK_PEEK,
-      shiftY: -lift,
+      peekHeight,
+      shiftY: 0,
       mediaScale: 1,
     };
   }
 
   const mediaBottomY = Math.round(anchor.mediaBottomY);
   const mediaTopY = mediaBottomY - playerH;
-  // Place pause (center of player) near ~32% down the peek — high & clickable
-  const pauseInPlayerY = playerH / 2;
-  const targetPauseY = Math.round(peekHeight * 0.32);
-  const shiftY = targetPauseY - mediaTopY - pauseInPlayerY;
+  // Player top → window top. Anything above (tabs/header) clips off-screen.
+  const shiftY = -mediaTopY;
 
   return { peekHeight, shiftY, mediaScale: 1 };
 }

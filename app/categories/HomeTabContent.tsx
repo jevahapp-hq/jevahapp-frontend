@@ -1,11 +1,31 @@
-import { useCallback, useEffect, useRef, useState, Suspense, lazy } from "react";
-import { ActivityIndicator, Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  Suspense,
+  lazy,
+  type ReactNode,
+} from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AllContentTikTok } from "../../src/features/media/AllContentTikTok";
 import {
   getResponsiveBorderRadius,
-  getResponsiveShadow,
   getResponsiveSpacing,
   getResponsiveTextStyle,
 } from "../../utils/responsive";
@@ -21,7 +41,10 @@ const Music = lazy(() => import("./music"));
 const Hymns = lazy(() => import("./hymns"));
 const LiveComponent = lazy(() => import("./LiveComponent"));
 
-function CategorySuspense({ children }: { children: React.ReactNode }) {
+const TAB_EASE = Easing.bezier(0.22, 1, 0.36, 1);
+const TAB_MS = 220;
+
+function CategorySuspense({ children }: { children: ReactNode }) {
   return (
     <Suspense
       fallback={
@@ -35,10 +58,9 @@ function CategorySuspense({ children }: { children: React.ReactNode }) {
   );
 }
 
-// NOTE: "HYMNS" requested as its own category, positioned between LIVE and SERMON.
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
+const FEED_KEEP_ALIVE = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
 
-// Map uppercase category names to ContentType format expected by AllContentTikTok
 const mapCategoryToContentType = (
   category: string
 ):
@@ -55,8 +77,7 @@ const mapCategoryToContentType = (
   | "teachings"
   | "e-books"
   | "hymns" => {
-  const categoryUpper = category.toUpperCase();
-  switch (categoryUpper) {
+  switch (category.toUpperCase()) {
     case "VIDEO":
       return "videos";
     case "MUSIC":
@@ -69,332 +90,356 @@ const mapCategoryToContentType = (
       return "e-books";
     case "LIVE":
       return "live";
-    case "ALL":
     default:
       return "ALL";
   }
 };
 
-// Map ContentType values back to uppercase category names for UI
 const mapContentTypeToCategory = (contentType: string): string => {
-  const contentTypeLower = contentType.toLowerCase();
-  // Map ContentType values to uppercase category names
-  if (contentTypeLower === "videos" || contentTypeLower === "video") {
-    return "VIDEO";
-  }
-  if (contentTypeLower === "music" || contentTypeLower === "audio") {
-    return "MUSIC";
-  }
-  if (contentTypeLower === "sermon" || contentTypeLower === "teachings") {
-    return "SERMON";
-  }
-  if (contentTypeLower === "hymns" || contentTypeLower === "hyms") {
-    return "HYMNS";
-  }
-  if (contentTypeLower === "e-books" || contentTypeLower === "ebook" || contentTypeLower === "books") {
-    return "E-BOOKS";
-  }
-  if (contentTypeLower === "live") {
-    return "LIVE";
-  }
-  // If it's already uppercase and matches a category, return it
-  const contentTypeUpper = contentType.toUpperCase();
-  if (categories.includes(contentTypeUpper)) {
-    return contentTypeUpper;
-  }
-  return "ALL";
+  const t = contentType.toLowerCase();
+  if (t === "videos" || t === "video") return "VIDEO";
+  if (t === "music" || t === "audio") return "MUSIC";
+  if (t === "sermon" || t === "teachings") return "SERMON";
+  if (t === "hymns" || t === "hyms") return "HYMNS";
+  if (t === "e-books" || t === "ebook" || t === "books") return "E-BOOKS";
+  if (t === "live") return "LIVE";
+  const upper = contentType.toUpperCase();
+  return categories.includes(upper) ? upper : "ALL";
 };
+
+function AnimatedFeedPane({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: ReactNode;
+}) {
+  const progress = useSharedValue(active ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(active ? 1 : 0, {
+      duration: TAB_MS,
+      easing: TAB_EASE,
+    });
+  }, [active, progress]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateX: (1 - progress.value) * 18 }],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents={active ? "auto" : "none"}
+      style={[
+        {
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function HomeTabContent() {
   const { defaultCategory } = useLocalSearchParams();
   const router = useRouter();
-  const { user, token, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { isVisible: isCommentSheetOpen } = useCommentModal();
 
-  // Handle defaultCategory as string or array (expo-router can return arrays)
   const defaultCategoryValue = Array.isArray(defaultCategory)
     ? defaultCategory[0]
     : defaultCategory;
 
   const [selectedCategory, setSelectedCategory] = useState(() => {
     if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
-      const mapped = mapContentTypeToCategory(defaultCategoryValue);
-      // console.log(`🏠 HomeTabContent: Initial category from param "${defaultCategoryValue}" mapped to "${mapped}"`);
-      return mapped;
+      return mapContentTypeToCategory(defaultCategoryValue);
     }
     return "ALL";
   });
+  const selectedRef = useRef(selectedCategory);
+  const [mountedFeeds, setMountedFeeds] = useState<
+    Partial<Record<string, boolean>>
+  >(() => {
+    const initial =
+      defaultCategoryValue && typeof defaultCategoryValue === "string"
+        ? mapContentTypeToCategory(defaultCategoryValue)
+        : "ALL";
+    return { ALL: true, [initial]: true };
+  });
 
-  // Update selected category when defaultCategory param changes
-  // This ensures that when navigating back from reels with a specific category,
-  // the category is properly restored instead of defaulting to "ALL"
-  useEffect(() => {
-    if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
-      const mappedCategory = mapContentTypeToCategory(defaultCategoryValue);
-      // console.log(`🏠 HomeTabContent: Category param changed "${defaultCategoryValue}" -> "${mappedCategory}"`);
-      if (categories.includes(mappedCategory)) {
-        setSelectedCategory(mappedCategory);
-        // console.log(`🏠 HomeTabContent: Updated selectedCategory to "${mappedCategory}"`);
-      } else {
-        // console.warn(`🏠 HomeTabContent: Mapped category "${mappedCategory}" not in categories list`);
-      }
-    } else {
-      // console.log(`🏠 HomeTabContent: No valid defaultCategory param, keeping current category`);
-    }
-  }, [defaultCategoryValue]);
-
+  const pillX = useSharedValue(0);
+  const pillY = useSharedValue(0);
+  const pillW = useSharedValue(64);
+  const pillH = useSharedValue(40);
+  const buttonLayouts = useRef<{
+    [key: string]: { x: number; y: number; width: number; height: number };
+  }>({});
   const scrollViewRef = useRef<ScrollView>(null);
-  const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
 
-  // Scroll to selected category button when category changes
+  const movePillTo = useCallback(
+    (category: string, instant = false) => {
+      const layout = buttonLayouts.current[category];
+      if (!layout) return;
+      const cfg = instant
+        ? { duration: 0 }
+        : { duration: TAB_MS, easing: TAB_EASE };
+      pillX.value = withTiming(layout.x, cfg);
+      pillY.value = withTiming(layout.y, cfg);
+      pillW.value = withTiming(layout.width, cfg);
+      pillH.value = withTiming(layout.height, cfg);
+    },
+    [pillH, pillW, pillX, pillY]
+  );
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: pillX.value },
+      { translateY: pillY.value },
+    ],
+    width: pillW.value,
+    height: pillH.value,
+  }));
+
   useEffect(() => {
-    if (selectedCategory && scrollViewRef.current) {
-      // Small delay to ensure layout is complete
-      setTimeout(() => {
-        const selectedIndex = categories.indexOf(selectedCategory);
-        if (selectedIndex !== -1 && scrollViewRef.current) {
-          const scrollView = scrollViewRef.current;
-          const screenWidth = Dimensions.get('window').width;
-          const parentPadding = getResponsiveSpacing(16, 20, 24, 32);
-          const scrollViewWidth = screenWidth - parentPadding * 2;
-
-          // Try to use stored position if available
-          if (buttonLayouts.current[selectedCategory]) {
-            const buttonLayout = buttonLayouts.current[selectedCategory];
-            // Calculate scroll position to center the button in the viewport
-            // buttonLayout.x is the position relative to ScrollView content
-            // We want to center it: scroll to (buttonX - viewportCenter) + (buttonWidth / 2)
-            const buttonCenter = buttonLayout.x + (buttonLayout.width / 2);
-            const viewportCenter = scrollViewWidth / 2;
-            const scrollPosition = buttonCenter - viewportCenter;
-
-            scrollView.scrollTo({
-              x: Math.max(0, scrollPosition),
-              animated: true,
-            });
-          } else {
-            // Fallback: scroll based on approximate position
-            const buttonWidth = 100; // Approximate button width including padding
-            const buttonMargin = getResponsiveSpacing(4, 6, 8, 10) * 2; // Left + right margin
-
-            // Calculate approximate button position
-            let accumulatedWidth = 0;
-            for (let i = 0; i < selectedIndex; i++) {
-              accumulatedWidth += buttonWidth + buttonMargin;
-            }
-
-            // Center the button
-            const scrollPosition = accumulatedWidth - (scrollViewWidth / 2) + (buttonWidth / 2) - parentPadding;
-
-            scrollView.scrollTo({
-              x: Math.max(0, scrollPosition),
-              animated: true,
-            });
-          }
-        }
-      }, 200);
-    }
-  }, [selectedCategory]);
+    const id = setTimeout(() => {
+      setMountedFeeds((prev) => ({
+        ...prev,
+        SERMON: true,
+        VIDEO: true,
+        "E-BOOKS": true,
+      }));
+      void import("./music");
+      void import("./hymns");
+      void import("./LiveComponent");
+    }, 600);
+    return () => clearTimeout(id);
+  }, []);
 
   const handleCategoryPress = useCallback(
     (category: string) => {
-      // CRITICAL: Immediate state update for instant visual feedback
-      // Don't wait for anything - update state first
+      if (category === selectedRef.current) return;
+      selectedRef.current = category;
       setSelectedCategory(category);
+      setMountedFeeds((prev) =>
+        prev[category] ? prev : { ...prev, [category]: true }
+      );
+      movePillTo(category);
 
-      // Update route params asynchronously (non-blocking)
-      // Use setTimeout with 0 delay to defer without blocking UI
+      const layout = buttonLayouts.current[category];
+      if (layout && scrollViewRef.current) {
+        const screenWidth = Dimensions.get("window").width;
+        const parentPadding = getResponsiveSpacing(16, 20, 24, 32);
+        const viewport = screenWidth - parentPadding * 2;
+        scrollViewRef.current.scrollTo({
+          x: Math.max(0, layout.x + layout.width / 2 - viewport / 2),
+          animated: true,
+        });
+      }
+
       setTimeout(() => {
         try {
-          const contentTypeParam = mapCategoryToContentType(category);
-          router.setParams({ defaultCategory: contentTypeParam });
-        } catch (error) {
-          // Silently fail - route param update is not critical for UI
+          router.setParams({
+            defaultCategory: mapCategoryToContentType(category),
+          });
+        } catch {
+          // not required for UI
         }
-      }, 0);
-
-      // Only stop media if actually switching to a different category
-      // Defer to next tick to avoid blocking the state update
-      if (category !== selectedCategory) {
-        // Use setTimeout instead of requestAnimationFrame for better responsiveness
-        setTimeout(() => {
+        try {
+          useMediaStore.getState().stopAudioFn?.();
+        } catch {
+          // no-op
+        }
+        if (category === "HYMNS") {
           try {
-            useMediaStore.getState().stopAudioFn?.();
-          } catch (e) {
+            GlobalAudioInstanceManager.getInstance().stopAllAudio?.();
+          } catch {
             // no-op
           }
-          // HYMNS: ensure global audio mini-players are cleared so they don't show on hymns browsing.
-          if (category === "HYMNS") {
-            try {
-              // Stop any legacy audio instances
-              GlobalAudioInstanceManager.getInstance().stopAllAudio?.();
-            } catch (e) {
-              // no-op
-            }
-            try {
-              // Clear the global floating player store
-              useGlobalAudioPlayerStore.getState().clear?.();
-            } catch (e) {
-              // no-op
-            }
-          }
           try {
-            useGlobalVideoStore.getState().pauseAllVideos();
-          } catch (e) {
+            useGlobalAudioPlayerStore.getState().clear?.();
+          } catch {
             // no-op
           }
-        }, 0);
-      }
+        }
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos();
+        } catch {
+          // no-op
+        }
+      }, 80);
     },
-    [selectedCategory, router]
+    [movePillTo, router]
   );
 
-  const renderContent = () => {
-    // Music category should show copyright-free catalog (not user uploads)
-    if (selectedCategory === "MUSIC") {
-      return (
-        <CategorySuspense>
-          <Music />
-        </CategorySuspense>
-      );
-    }
-
-    // Hymns category should show hymns component
-    if (selectedCategory === "HYMNS") {
-      return (
-        <CategorySuspense>
-          <Hymns />
-        </CategorySuspense>
-      );
-    }
-
-    // Live category should show LiveComponent
-    if (selectedCategory === "LIVE") {
-      return (
-        <CategorySuspense>
-          <LiveComponent />
-        </CategorySuspense>
-      );
-    }
+  const renderPane = (category: string) => {
+    if (!mountedFeeds[category]) return null;
+    const active = selectedCategory === category;
+    const isFeed = (FEED_KEEP_ALIVE as readonly string[]).includes(category);
 
     return (
-      <AllContentTikTok
-        contentType={mapCategoryToContentType(selectedCategory)}
-        useAuthFeed={isAuthenticated}
-      />
+      <AnimatedFeedPane key={category} active={active}>
+        {isFeed ? (
+          <AllContentTikTok
+            contentType={mapCategoryToContentType(category)}
+            useAuthFeed={isAuthenticated}
+            isFeedActive={active}
+          />
+        ) : null}
+        {category === "MUSIC" ? (
+          <CategorySuspense>
+            <Music />
+          </CategorySuspense>
+        ) : null}
+        {category === "HYMNS" ? (
+          <CategorySuspense>
+            <Hymns />
+          </CategorySuspense>
+        ) : null}
+        {category === "LIVE" ? (
+          <CategorySuspense>
+            <LiveComponent />
+          </CategorySuspense>
+        ) : null}
+      </AnimatedFeedPane>
     );
-
-
   };
 
-
+  const chipRadius = getResponsiveBorderRadius("medium");
 
   return (
     <View style={{ flex: 1, width: "100%", backgroundColor: "#000" }}>
-      {/* Focus mode: only docked video + comment sheet — hide home chrome */}
-      {!isCommentSheetOpen ? <Header /> : null}
+      <View
+        pointerEvents={isCommentSheetOpen ? "none" : "auto"}
+        accessibilityElementsHidden={isCommentSheetOpen}
+        importantForAccessibility={
+          isCommentSheetOpen ? "no-hide-descendants" : "auto"
+        }
+        style={isCommentSheetOpen ? { opacity: 0 } : undefined}
+      >
+        <Header />
+      </View>
 
-      {!isCommentSheetOpen ? (
-        <View
+      <View
+        pointerEvents={isCommentSheetOpen ? "none" : "auto"}
+        collapsable={false}
+        style={{
+          zIndex: 20,
+          elevation: 0,
+          paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
+          backgroundColor: "#FCFCFD",
+          opacity: isCommentSheetOpen ? 0 : 1,
+        }}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+          directionalLockEnabled
+          nestedScrollEnabled
           style={{
-            paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
-            backgroundColor: "#FCFCFD",
+            marginTop: getResponsiveSpacing(20, 24, 28, 32),
+          }}
+          contentContainerStyle={{
+            paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
           }}
         >
-          <ScrollView
-            ref={scrollViewRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            scrollEnabled={true}
-            scrollEventThrottle={16}
-            removeClippedSubviews={false}
-            decelerationRate="fast"
-            snapToInterval={undefined}
-            disableIntervalMomentum={true}
-            keyboardShouldPersistTaps="handled"
-            style={{
-              paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-              marginTop: getResponsiveSpacing(20, 24, 28, 32),
-            }}
-            contentContainerStyle={{
-              paddingHorizontal: 0,
-            }}
-          >
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category}
-                onPress={() => {
-                  // Immediate execution without fastPress wrapper to avoid debounce delays
-                  handleCategoryPress(category);
-                }}
-                onLayout={(event) => {
-                  const { x, width } = event.nativeEvent.layout;
-                  buttonLayouts.current[category] = { x, width };
-                }}
-                activeOpacity={0.6}
-                delayPressIn={0}
-                delayPressOut={0}
-                hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                style={{
-                  paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
-                  paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
-                  marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
-                  borderRadius: getResponsiveBorderRadius("medium"),
-                  backgroundColor:
-                    selectedCategory === category ? "black" : "white",
-                  borderWidth: selectedCategory === category ? 0 : 1,
-                  borderColor:
-                    selectedCategory === category ? "transparent" : "#6B6E7C",
-                  ...getResponsiveShadow(),
-                  minWidth: 48,
-                  minHeight: 44,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  zIndex: 10,
-                  elevation: 3,
-                }}
-              >
-                <View style={{ position: "relative" }}>
-                  <Text
-                    style={[
-                      getResponsiveTextStyle("button"),
-                      {
-                        color:
-                          selectedCategory === category ? "white" : "#1D2939",
-                      },
-                    ]}
-                  >
-                    {category}
-                  </Text>
-                  {category === "LIVE" && (
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: -getResponsiveSpacing(4, 6, 8, 10),
-                        right: getResponsiveSpacing(4, 6, 8, 10),
-                        width: getResponsiveSpacing(4, 5, 6, 7),
-                        height: getResponsiveSpacing(4, 5, 6, 7),
-                        borderRadius: getResponsiveSpacing(2, 3, 4, 5),
-                        backgroundColor: "red",
-                      }}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                {
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  zIndex: 0,
+                  backgroundColor: "#000",
+                  borderRadius: chipRadius,
+                },
+                pillStyle,
+              ]}
+            />
+            {categories.map((category) => {
+              const selected = selectedCategory === category;
+              return (
+                <TouchableOpacity
+                  key={category}
+                  activeOpacity={0.85}
+                  delayPressIn={0}
+                  onPressIn={() => handleCategoryPress(category)}
+                  onPress={() => handleCategoryPress(category)}
+                  hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+                  onLayout={(event) => {
+                    const { x, y, width, height } = event.nativeEvent.layout;
+                    const prev = buttonLayouts.current[category];
+                    buttonLayouts.current[category] = { x, y, width, height };
+                    if (category !== selectedRef.current) return;
+                    if (!prev) {
+                      movePillTo(category, true);
+                    }
+                  }}
+                  style={{
+                    zIndex: 1,
+                    marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
+                    paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
+                    paddingVertical: getResponsiveSpacing(6, 8, 10, 12),
+                    borderRadius: chipRadius,
+                    borderWidth: 1,
+                    borderColor: selected ? "transparent" : "#6B6E7C",
+                    backgroundColor: selected ? "transparent" : "#FFFFFF",
+                    minWidth: 48,
+                    minHeight: 44,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <View>
+                    <Text
+                      style={[
+                        getResponsiveTextStyle("button"),
+                        { color: selected ? "#FFFFFF" : "#1D2939" },
+                      ]}
+                    >
+                      {category}
+                    </Text>
+                    {category === "LIVE" ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: -getResponsiveSpacing(4, 6, 8, 10),
+                          right: getResponsiveSpacing(4, 6, 8, 10),
+                          width: getResponsiveSpacing(4, 5, 6, 7),
+                          height: getResponsiveSpacing(4, 5, 6, 7),
+                          borderRadius: getResponsiveSpacing(2, 3, 4, 5),
+                          backgroundColor: "red",
+                        }}
+                      />
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
 
-      {/* Content without Padding - Let FlatList handle scrolling */}
       <View
         style={{
           flex: 1,
+          zIndex: 0,
+          overflow: "hidden",
           width: "100%",
           backgroundColor: isCommentSheetOpen ? "#000" : "#FCFCFD",
         }}
       >
-        {renderContent()}
+        {categories.map((category) => renderPane(category))}
       </View>
     </View>
   );

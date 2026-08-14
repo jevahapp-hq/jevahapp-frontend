@@ -54,6 +54,12 @@ export function useAllContentTikTokAudio({
         }
       }
       setPlayingAudioId(null);
+      try {
+        const { useGlobalMediaStore } = require("../../../../../app/store/useGlobalMediaStore");
+        useGlobalMediaStore.getState().pauseAllAudio();
+      } catch {
+        // no-op
+      }
     } catch (error) {
       console.warn("⚠️ Error in pauseAllAudio:", error);
     }

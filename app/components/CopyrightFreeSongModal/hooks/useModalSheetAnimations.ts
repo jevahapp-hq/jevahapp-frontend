@@ -5,7 +5,6 @@ import {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 
@@ -28,8 +27,8 @@ export function useModalSheetAnimations({
   const dragY = useSharedValue(0);
 
   const gesture = Gesture.Pan()
-    .activeOffsetY([0, 10])
-    .failOffsetX([-20, 20])
+    .activeOffsetY(20)
+    .failOffsetX([-18, 18])
     .onUpdate((event) => {
       if (event.translationY > 0) {
         dragY.value = event.translationY;
@@ -41,40 +40,24 @@ export function useModalSheetAnimations({
           runOnJS(onClose)();
         });
       } else {
-        dragY.value = withSpring(0, { damping: 20, stiffness: 200 });
+        dragY.value = withTiming(0, { duration: 140 });
       }
     });
 
   useEffect(() => {
     if (showPlaylistView) {
-      playlistViewTranslateY.value = withSpring(0, {
-        damping: 30,
-        stiffness: 300,
-        mass: 0.8,
-        overshootClamping: true,
-      });
+      playlistViewTranslateY.value = withTiming(0, { duration: 180 });
     } else {
-      playlistViewTranslateY.value = withSpring(SCREEN_HEIGHT, {
-        damping: 30,
-        stiffness: 300,
-        mass: 0.8,
-      });
+      playlistViewTranslateY.value = withTiming(SCREEN_HEIGHT, { duration: 160 });
     }
   }, [showPlaylistView, playlistViewTranslateY]);
 
   useEffect(() => {
     if (showPlaylistDetail) {
-      playlistDetailTranslateY.value = withSpring(0, {
-        damping: 30,
-        stiffness: 300,
-        mass: 0.8,
-        overshootClamping: true,
-      });
+      playlistDetailTranslateY.value = withTiming(0, { duration: 180 });
     } else {
-      playlistDetailTranslateY.value = withSpring(SCREEN_HEIGHT, {
-        damping: 30,
-        stiffness: 300,
-        mass: 0.8,
+      playlistDetailTranslateY.value = withTiming(SCREEN_HEIGHT, {
+        duration: 160,
       });
     }
   }, [showPlaylistDetail, playlistDetailTranslateY]);
@@ -82,18 +65,9 @@ export function useModalSheetAnimations({
   useEffect(() => {
     if (visible) {
       dragY.value = 0;
-      translateY.value = withSpring(0, {
-        damping: 30,
-        stiffness: 300,
-        mass: 0.8,
-        overshootClamping: true,
-      });
+      translateY.value = withTiming(0, { duration: 140 });
     } else {
-      translateY.value = withSpring(SCREEN_HEIGHT, {
-        damping: 30,
-        stiffness: 300,
-        mass: 0.8,
-      });
+      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 160 });
     }
   }, [visible, translateY, dragY]);
 

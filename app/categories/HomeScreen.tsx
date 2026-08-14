@@ -80,7 +80,7 @@ export default function HomeScreen() {
       <View
         style={[
           styles.navWrap,
-          isCommentSheetOpen && styles.navHidden,
+          isCommentSheetOpen ? styles.navHidden : undefined,
           { pointerEvents: isCommentSheetOpen ? "none" : "auto" },
         ]}
         accessibilityElementsHidden={isCommentSheetOpen}

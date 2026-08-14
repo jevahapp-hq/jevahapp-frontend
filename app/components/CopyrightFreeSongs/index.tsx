@@ -12,8 +12,6 @@ import {
   View,
 } from "react-native";
 import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
-import { useGlobalAudioPlayerStore } from "../../store/useGlobalAudioPlayerStore";
-import CopyrightFreeSongModal from "../CopyrightFreeSongModal";
 import { transformBackendSong } from "../CopyrightFreeSongModal/utils/transformBackendSong";
 import { useCopyrightFreeSongsData } from "./hooks/useCopyrightFreeSongsData";
 import { useCopyrightFreeSongsPlayback } from "./hooks/useCopyrightFreeSongsPlayback";
@@ -25,19 +23,7 @@ export interface CopyrightFreeSongsProps {
   showAsLibrary?: boolean;
 }
 
-const formatTime = (milliseconds: number) => {
-  const seconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-};
-
-export default function CopyrightFreeSongs({
-  onSongSelect,
-  showAsLibrary = false,
-}: CopyrightFreeSongsProps) {
-  const [showSongModal, setShowSongModal] = useState(false);
-  const [selectedSong, setSelectedSong] = useState<any>(null);
+export default function CopyrightFreeSongs(_props: CopyrightFreeSongsProps) {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [optionsSong, setOptionsSong] = useState<any | null>(null);
   const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
@@ -49,17 +35,8 @@ export default function CopyrightFreeSongs({
     handleCardPress,
     currentTrack,
     globalIsPlaying,
-    togglePlayPause,
-    globalProgress,
-    globalDuration,
-    globalPosition,
-    globalIsMuted,
   } = useCopyrightFreeSongsPlayback({
     songs,
-    selectedSong,
-    setSelectedSong,
-    showSongModal,
-    setShowSongModal,
   });
 
   useEffect(() => {
@@ -119,7 +96,7 @@ export default function CopyrightFreeSongs({
         )}
       </View>
 
-      {loading ? (
+      {loading && songs.length === 0 ? (
         <View className="flex-1 justify-center items-center py-20">
           <ActivityIndicator size="large" color="#256E63" />
           <Text className="text-sm text-gray-500 mt-4 font-rubik">
@@ -153,53 +130,6 @@ export default function CopyrightFreeSongs({
           )}
         </ScrollView>
       )}
-
-      <CopyrightFreeSongModal
-        visible={showSongModal}
-        song={selectedSong}
-        onClose={() => {
-          setShowSongModal(false);
-          setSelectedSong(null);
-        }}
-        onPlay={handlePlayIconPress}
-        isPlaying={
-          !!selectedSong && currentTrack?.id === selectedSong.id && globalIsPlaying
-        }
-        audioProgress={
-          selectedSong && currentTrack?.id === selectedSong.id ? globalProgress : 0
-        }
-        audioDuration={
-          selectedSong && currentTrack?.id === selectedSong.id
-            ? globalDuration
-            : (selectedSong?.duration ?? 0) * 1000 || 0
-        }
-        audioPosition={
-          selectedSong && currentTrack?.id === selectedSong.id ? globalPosition : 0
-        }
-        isMuted={
-          selectedSong && currentTrack?.id === selectedSong.id ? globalIsMuted : false
-        }
-        onTogglePlay={async () => {
-          if (selectedSong) {
-            if (currentTrack?.id === selectedSong.id) {
-              await togglePlayPause();
-            } else {
-              await handlePlayIconPress(selectedSong);
-            }
-          }
-        }}
-        onToggleMute={async () => {
-          if (selectedSong && currentTrack?.id === selectedSong.id) {
-            await useGlobalAudioPlayerStore.getState().toggleMute();
-          }
-        }}
-        onSeek={async (progress) => {
-          if (selectedSong && currentTrack?.id === selectedSong.id) {
-            await useGlobalAudioPlayerStore.getState().seekToProgress(progress);
-          }
-        }}
-        formatTime={formatTime}
-      />
 
       <SongOptionsModal
         visible={showOptionsModal}

@@ -57,14 +57,14 @@ export function CommentSortModal({
         return (
           <TouchableOpacity
             key={opt.key}
-            style={[styles.row, active && styles.rowActive]}
+            style={[styles.row, active ? styles.rowActive : undefined]}
             onPress={() => {
               onChange(opt.key);
               onClose();
             }}
             activeOpacity={0.75}
           >
-            <View style={[styles.iconBox, active && styles.iconBoxActive]}>
+            <View style={[styles.iconBox, active ? styles.iconBoxActive : undefined]}>
               <Ionicons
                 name={opt.icon}
                 size={20}
@@ -72,7 +72,7 @@ export function CommentSortModal({
               />
             </View>
             <View style={styles.copy}>
-              <Text style={[styles.label, active && styles.labelActive]}>
+              <Text style={[styles.label, active ? styles.labelActive : undefined]}>
                 {opt.label}
               </Text>
               <Text style={styles.hint}>{opt.hint}</Text>

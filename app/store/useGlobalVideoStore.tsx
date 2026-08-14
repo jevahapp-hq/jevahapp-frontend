@@ -6,15 +6,56 @@ import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 // Please use the unified store for new components.
 // This store will be removed once all components are migrated.
 
+export type VideoPlaybackSnapshot = {
+  progress: number;
+  currentMs: number;
+  durationMs: number;
+};
+
 // Professional video player registry - stores refs to all active video players
 type VideoPlayerRef = {
   pause: () => Promise<void>;
   play?: () => void | Promise<void>; // Optional play method for imperative control
   showOverlay: () => void;
   key: string;
+  seekToPercent?: (percent: number) => void;
+  getSnapshot?: () => VideoPlaybackSnapshot;
 };
 
 const videoPlayerRegistry = new Map<string, VideoPlayerRef>();
+
+function keyMatchesContent(key: string, contentId: string): boolean {
+  return key === contentId || key.endsWith(`::${contentId}`);
+}
+
+/** Snapshot from the live player (not Zustand progress, which can lag). */
+export function getVideoPlaybackSnapshot(
+  key: string
+): VideoPlaybackSnapshot | null {
+  return videoPlayerRegistry.get(key)?.getSnapshot?.() ?? null;
+}
+
+/** Map a media `_id` (comment sheet) onto the registered feed player key. */
+export function resolveRegisteredVideoKey(
+  contentId?: string | null
+): string | null {
+  const state = useGlobalVideoStore.getState();
+  const hints = [
+    state.currentlyPlayingVideo,
+    state.currentlyVisibleVideo,
+  ].filter(Boolean) as string[];
+
+  if (contentId) {
+    for (const hint of hints) {
+      if (keyMatchesContent(hint, contentId)) return hint;
+    }
+    for (const key of videoPlayerRegistry.keys()) {
+      if (keyMatchesContent(key, contentId)) return key;
+    }
+  }
+
+  return hints[0] ?? null;
+}
 
 interface VideoPlayerState {
   // Global video state - only one video can play at a time
@@ -39,6 +80,7 @@ interface VideoPlayerState {
   setVideoProgress: (videoKey: string, progress: number) => void;
   setVideoCompleted: (videoKey: string, completed: boolean) => void;
   setOverlayVisible: (videoKey: string, visible: boolean) => void;
+  seekVideo: (videoKey: string, percent: number) => void;
 
   // Video player registry - professional imperative control
   registerVideoPlayer: (key: string, player: VideoPlayerRef) => void;
@@ -169,6 +211,11 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
       set((state) => ({
         showOverlay: { ...state.showOverlay, [videoKey]: visible },
       }));
+    },
+
+    seekVideo: (videoKey: string, percent: number) => {
+      const player = videoPlayerRegistry.get(videoKey);
+      player?.seekToPercent?.(Math.max(0, Math.min(1, percent)));
     },
 
     // Video player registry management
