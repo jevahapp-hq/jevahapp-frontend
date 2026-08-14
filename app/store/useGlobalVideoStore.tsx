@@ -1,10 +1,5 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
-
-// ⚠️ DEPRECATED: This store is being replaced by useMediaPlaybackStore.tsx
-// Please use the unified store for new components.
-// This store will be removed once all components are migrated.
 
 export type VideoPlaybackSnapshot = {
   progress: number;
@@ -55,6 +50,18 @@ export function resolveRegisteredVideoKey(
   }
 
   return hints[0] ?? null;
+}
+
+function pauseSessionAudioWhenVideoStarts() {
+  try {
+    const { useGlobalAudioPlayerStore } = require("./useGlobalAudioPlayerStore");
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.isPlaying) {
+      store.pause().catch(() => {});
+    }
+  } catch {
+    // no-op
+  }
 }
 
 interface VideoPlayerState {
@@ -112,24 +119,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
     // Individual video actions
     playVideo: (videoKey: string) => {
-      // Stop all audio when video starts
-      const audioManager = GlobalAudioInstanceManager.getInstance();
-      audioManager.stopAllAudio().catch((_err: any) => {
-        console.warn("⚠️ Failed to stop all audio when video started:", _err);
-      });
-
-      // Stop global audio player store (like CopyrightFreeSongs does)
-      try {
-        const globalAudioModule = require("./useGlobalAudioPlayerStore");
-        const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
-        if (globalAudioStore && globalAudioStore.clear) {
-          globalAudioStore.clear().catch((_err: any) => {
-            console.warn("⚠️ Failed to stop global audio player when video started:", _err);
-          });
-        }
-      } catch (error) {
-        console.warn("⚠️ Failed to access global audio player store:", error);
-      }
+      pauseSessionAudioWhenVideoStarts();
 
       set((state) => ({
         currentlyPlayingVideo: videoKey,
@@ -254,18 +244,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
 
     // ✅ Global play function - INSTANT IMPERATIVE CONTROL (like TikTok)
     playVideoGlobally: (videoKey: string) => {
-      // Stop ALL audio
-      const audioManager = GlobalAudioInstanceManager.getInstance();
-      audioManager.stopAllAudio().catch(() => {});
-      try {
-        const globalAudioModule = require("./useGlobalAudioPlayerStore");
-        const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
-        if (globalAudioStore && globalAudioStore.clear) {
-          globalAudioStore.clear().catch(() => {});
-        }
-      } catch (error) {
-        // no-op
-      }
+      pauseSessionAudioWhenVideoStarts();
 
       // Update state immediately (UI reacts instantly)
       set((state) => {
@@ -319,25 +298,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             showOverlay: { ...state.showOverlay, [videoKey]: true },
           };
         } else {
-          // If video is paused, play it - stop all audio first
-          // Stop all audio when video starts
-          const audioManager = GlobalAudioInstanceManager.getInstance();
-          audioManager.stopAllAudio().catch((err) => {
-            console.warn("⚠️ Failed to stop all audio when video started:", err);
-          });
-
-          // Stop global audio player store (like CopyrightFreeSongs does)
-          try {
-            const globalAudioModule = require("./useGlobalAudioPlayerStore");
-            const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
-            if (globalAudioStore && globalAudioStore.clear) {
-              globalAudioStore.clear().catch((_err2: any) => {
-                console.warn("⚠️ Failed to stop global audio player when video started:", _err2);
-              });
-            }
-          } catch (error) {
-            console.warn("⚠️ Failed to access global audio player store:", error);
-          }
+          pauseSessionAudioWhenVideoStarts();
 
           // Use the same logic as playVideoGlobally
           const newPlayingVideos: Record<string, boolean> = {};
@@ -418,42 +379,7 @@ export const useGlobalVideoStore = create<VideoPlayerState>()(
             showOverlay: newShowOverlay,
           };
         } else {
-          // A new video is visible, pause all others and play this one
-          // Stop all audio when video auto-plays
-          const audioManager = GlobalAudioInstanceManager.getInstance();
-          audioManager.stopAllAudio().catch((err) => {
-            console.warn("⚠️ Failed to stop all audio when video auto-played:", err);
-          });
-
-          // Stop global audio player store (like CopyrightFreeSongs does)
-          try {
-            const globalAudioModule = require("./useGlobalAudioPlayerStore");
-            const globalAudioStore = globalAudioModule.useGlobalAudioPlayerStore.getState();
-            if (globalAudioStore && globalAudioStore.clear) {
-              globalAudioStore.clear().catch((err2: any) => {
-                console.warn("⚠️ Failed to stop global audio player when video started:", err2);
-              });
-            }
-          } catch (error) {
-            console.warn("⚠️ Failed to access global audio player store:", error);
-          }
-
-          // Also pause all audio via global media store (for normal songs using useAdvancedAudioPlayer)
-          try {
-            const globalMediaModule = require("./useGlobalMediaStore");
-            const globalMediaStore = globalMediaModule.useGlobalMediaStore;
-            if (globalMediaStore) {
-              const state = globalMediaStore.getState();
-              // Pause all audio that's currently playing
-              Object.keys(state.playingAudio || {}).forEach((audioKey) => {
-                if (state.playingAudio[audioKey]) {
-                  state.pauseAudio(audioKey);
-                }
-              });
-            }
-          } catch (error) {
-            // no-op - global media store might not be available
-          }
+          pauseSessionAudioWhenVideoStarts();
 
           const newPlayingVideos: Record<string, boolean> = {};
           const newShowOverlay: Record<string, boolean> = {};

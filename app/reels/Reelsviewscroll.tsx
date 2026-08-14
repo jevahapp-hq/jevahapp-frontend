@@ -49,8 +49,6 @@ const ReelsView = () => {
             screenWidth={o.responsive.screenWidth}
             isIOS={o.responsive.isIOS}
             currentIndex_state={o.currentIndex_state}
-            playingVideos={o.playingVideos}
-            mutedVideos={o.mutedVideos}
             videoDuration={o.videoDuration}
             videoPosition={o.videoPosition}
             isDragging={o.isDragging}
@@ -89,7 +87,6 @@ const ReelsView = () => {
             triggerHapticFeedback={o.triggerHapticFeedback}
             formatTime={o.playback.formatTime}
             globalVideoStore={o.globalVideoStore}
-            mediaStore={o.mediaStore}
             source={o.params.source}
             menuVisible={o.menuVisible}
             isOwner={o.isOwner}

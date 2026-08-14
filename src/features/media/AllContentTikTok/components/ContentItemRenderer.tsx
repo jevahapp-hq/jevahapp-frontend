@@ -19,9 +19,6 @@ export interface ContentItemRendererProps {
   getUserLikeState: (contentId: string) => boolean;
   getLikeCount: (contentId: string) => number;
   contentStats: Record<string, any>;
-  playingVideos: Record<string, boolean>;
-  mutedVideos: Record<string, boolean>;
-  progresses: Record<string, number>;
   videoVolume: number;
   currentlyVisibleVideo: string | null;
   playingAudioId: string | null;
@@ -61,9 +58,6 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     getUserLikeState,
     getLikeCount,
     contentStats,
-    playingVideos,
-    mutedVideos,
-    progresses,
     videoVolume,
     currentlyVisibleVideo,
     playingAudioId,
@@ -111,9 +105,6 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     contentStats,
     userFavorites: backendUserFavorites,
     globalFavoriteCounts: backendGlobalFavoriteCounts,
-    playingVideos,
-    mutedVideos,
-    progresses,
     videoVolume,
     currentlyVisibleVideo,
     onVideoTap,
@@ -240,9 +231,6 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
   return (
     prev.getUserLikeState(prevContentId) === next.getUserLikeState(nextContentId) &&
     prev.getLikeCount(prevContentId) === next.getLikeCount(nextContentId) &&
-    prev.playingVideos[prevPlaybackKey] === next.playingVideos[nextPlaybackKey] &&
-    prev.mutedVideos[prevPlaybackKey] === next.mutedVideos[nextPlaybackKey] &&
-    prev.progresses[prevPlaybackKey] === next.progresses[nextPlaybackKey] &&
     (prev.currentlyVisibleVideo === prevPlaybackKey) ===
       (next.currentlyVisibleVideo === nextPlaybackKey) &&
     (prev.playingAudioId === prevMusicId) === (next.playingAudioId === nextMusicId) &&

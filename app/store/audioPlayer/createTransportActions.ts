@@ -9,17 +9,11 @@ export function createTransportActions(
   set: AudioPlayerSet
 ): Pick<
   GlobalAudioPlayerState,
-  "play" | "pause" | "togglePlayPause" | "setMuted" | "toggleMute" | "stop"
+  "play" | "pause" | "togglePlayPause" | "setMuted" | "toggleMute" | "setRate" | "stop"
 > {
   return {
     play: async () => {
-      const { soundInstance, currentTrack, __virtualTrackControls } = get();
-      // If this is a virtual track, use the external player's controls
-      if (currentTrack?.isVirtual && __virtualTrackControls) {
-        await __virtualTrackControls.play();
-        return;
-      }
-      // Otherwise use the global player's controls
+      const { soundInstance } = get();
       if (soundInstance) {
         try {
           // Check if already playing to avoid unnecessary operations
@@ -39,13 +33,7 @@ export function createTransportActions(
     },
 
     pause: async () => {
-      const { soundInstance, currentTrack, __virtualTrackControls } = get();
-      // If this is a virtual track, use the external player's controls
-      if (currentTrack?.isVirtual && __virtualTrackControls) {
-        await __virtualTrackControls.pause();
-        return;
-      }
-      // Otherwise use the global player's controls
+      const { soundInstance } = get();
       if (soundInstance) {
         try {
           await soundInstance.pauseAsync();
@@ -57,21 +45,7 @@ export function createTransportActions(
     },
 
     togglePlayPause: async () => {
-      const { isPlaying, play, pause, currentTrack, __virtualTrackControls } =
-        get();
-      // If this is a virtual track, use the external player's controls
-      if (currentTrack?.isVirtual && __virtualTrackControls) {
-        await __virtualTrackControls.togglePlayPause();
-        // ✅ Sync playing state after toggle for virtual tracks
-        // The external player will update its state, but we need to sync it here
-        // We'll rely on the MusicCard's useEffect to sync, but also update optimistically
-        setTimeout(() => {
-          // The actual state will be synced by MusicCard's useEffect
-          // This is just for immediate UI feedback
-        }, 50);
-        return;
-      }
-      // Otherwise use the global player's controls
+      const { isPlaying, play, pause } = get();
       if (isPlaying) {
         await pause();
       } else {
@@ -96,6 +70,18 @@ export function createTransportActions(
     toggleMute: async () => {
       const { isMuted, setMuted } = get();
       await setMuted(!isMuted);
+    },
+
+    setRate: async (rate: number) => {
+      const { soundInstance } = get();
+      const next = Math.max(0.5, Math.min(2, rate));
+      if (soundInstance) {
+        try {
+          await soundInstance.setRateAsync(next, true);
+        } catch (error) {
+          console.warn("Error setting playback rate:", error);
+        }
+      }
     },
 
     stop: async () => {

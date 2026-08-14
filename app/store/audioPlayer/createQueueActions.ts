@@ -118,7 +118,7 @@ export function createQueueActions(
         position: 0,
         duration: 0,
         progress: 0,
-        __virtualTrackControls: undefined,
+        __completionTimeout: false,
       });
     },
 

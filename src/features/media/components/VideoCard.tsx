@@ -9,6 +9,7 @@ import {
   getBestVideoUrl,
   getVideoUrlFromMedia
 } from "../../../shared/utils/videoUrlManager";
+import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import { VideoCardFooter } from "./VideoCard/VideoCardFooter";
 import { VideoCardModals } from "./VideoCard/VideoCardModals";
 import { VideoCardPlayerArea } from "./VideoCard/VideoCardPlayerArea";
@@ -21,11 +22,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   contentStats,
   userFavorites,
   globalFavoriteCounts,
-  playingVideos,
-  mutedVideos,
-  progresses,
   videoVolume,
-  currentlyVisibleVideo,
+  currentlyVisibleVideo: _currentlyVisibleVideo,
   onVideoTap,
   onTogglePlay,
   onToggleMute,
@@ -51,7 +49,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 }) => {
   const contentId = video._id || getContentKey(video);
   const key = playbackKey ?? getContentKey(video);
-  const isMuted = mutedVideos[key] ?? false; // Ensure boolean, never undefined
+  const isMuted = useGlobalVideoStore((s) => s.mutedVideos[key] ?? false);
 
   // ✅ Use centralized utility for media type detection
   const isAudioSermonValue = isAudioSermon(video);

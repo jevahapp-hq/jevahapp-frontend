@@ -32,10 +32,8 @@ import {
 import Header from "../components/Header";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useAuth } from "../hooks/useAuth";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
-import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
 
 const Music = lazy(() => import("./music"));
 const Hymns = lazy(() => import("./hymns"));
@@ -59,7 +57,7 @@ function CategorySuspense({ children }: { children: ReactNode }) {
 }
 
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
-const FEED_KEEP_ALIVE = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
+const FEED_CATEGORIES = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
 
 const mapCategoryToContentType = (
   category: string
@@ -209,12 +207,6 @@ export default function HomeTabContent() {
 
   useEffect(() => {
     const id = setTimeout(() => {
-      setMountedFeeds((prev) => ({
-        ...prev,
-        SERMON: true,
-        VIDEO: true,
-        "E-BOOKS": true,
-      }));
       void import("./music");
       void import("./hymns");
       void import("./LiveComponent");
@@ -256,18 +248,6 @@ export default function HomeTabContent() {
         } catch {
           // no-op
         }
-        if (category === "HYMNS") {
-          try {
-            GlobalAudioInstanceManager.getInstance().stopAllAudio?.();
-          } catch {
-            // no-op
-          }
-          try {
-            useGlobalAudioPlayerStore.getState().clear?.();
-          } catch {
-            // no-op
-          }
-        }
         try {
           useGlobalVideoStore.getState().pauseAllVideos();
         } catch {
@@ -281,7 +261,7 @@ export default function HomeTabContent() {
   const renderPane = (category: string) => {
     if (!mountedFeeds[category]) return null;
     const active = selectedCategory === category;
-    const isFeed = (FEED_KEEP_ALIVE as readonly string[]).includes(category);
+    const isFeed = (FEED_CATEGORIES as readonly string[]).includes(category);
 
     return (
       <AnimatedFeedPane key={category} active={active}>

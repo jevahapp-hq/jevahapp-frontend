@@ -4,10 +4,10 @@
  */
 
 import { AntDesign, Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import {
+  Image,
   ScrollView,
   Share,
   Text,
@@ -15,7 +15,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../../src/shared/utils/videoUrlManager";
 import { MiniCardSkeleton } from "../../../../src/shared/components/Skeleton";
 import { getVideoKey } from "../utils";
 import { RecommendedItem } from "../types";
@@ -86,12 +85,15 @@ export function VideoComponentMiniCards({
 }: VideoComponentMiniCardsProps) {
   const router = useRouter();
 
-  const getVideoSource = (item: RecommendedItem) => {
-    const videoUrl = getVideoUrlFromMedia(item);
-    const url = videoUrl && videoUrl.trim() !== "https://example.com/placeholder.mp4"
-      ? videoUrl.trim()
-      : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-    return getBestVideoUrl(url);
+  const getPoster = (item: RecommendedItem) => {
+    const url =
+      (item as any).thumbnailUrl ||
+      (item as any).imageUrl ||
+      item.fileUrl;
+    if (typeof url === "string" && url.trim().length > 0) {
+      return { uri: url };
+    }
+    return require("../../../../assets/images/image (10).png");
   };
 
   const handleShare = async (item: RecommendedItem) => {
@@ -156,12 +158,7 @@ export function VideoComponentMiniCards({
         ) : (
           items.map((item, index) => {
             const key = getVideoKey(item.fileUrl);
-            const isPlaying = playingState[key] ?? false;
             const views = viewsState[key] ?? item.views;
-
-            const togglePlay = () => {
-              onMiniCardPlay(key, item, setViewsState, setPlayingState, setHasPlayed, setHasCompleted);
-            };
 
             return (
               <View key={key} className="mr-4 w-[154px] flex-col items-center">
@@ -170,68 +167,24 @@ export function VideoComponentMiniCards({
                   className="w-full h-[232px] rounded-2xl overflow-hidden relative"
                   activeOpacity={0.9}
                 >
-                  <Video
-                    ref={(ref) => { if (ref) miniCardRefs.current[key] = ref; }}
-                    source={{
-                      uri: getVideoSource(item),
-                      headers: { "User-Agent": "JevahApp/1.0", Accept: "video/*" },
-                    }}
+                  <Image
+                    source={getPoster(item)}
                     style={{ width: "100%", height: "100%", position: "absolute" }}
-                    resizeMode={ResizeMode.COVER}
-                    isMuted={globalVideoStore.mutedVideos[key] ?? false}
-                    volume={globalVideoStore.mutedVideos[key] ? 0.0 : videoVolume}
-                    shouldPlay={isPlaying}
-                    useNativeControls={false}
-                    onError={() => {
-                      setVideoErrors((prev) => ({ ...prev, [key]: true }));
-                      setPlayingState((prev) => ({ ...prev, [key]: false }));
-                      setShowOverlayMini((prev) => ({ ...prev, [key]: true }));
-                    }}
-                    onLoad={() => {
-                      setVideoErrors((prev) => ({ ...prev, [key]: false }));
-                    }}
-                    onPlaybackStatusUpdate={(status) => {
-                      if (!status.isLoaded) return;
-                      if (status.didJustFinish) {
-                        setPlayingState((prev) => ({ ...prev, [key]: false }));
-                        setHasCompleted((prev) => ({ ...prev, [key]: true }));
-                        setShowOverlayMini((prev) => ({ ...prev, [key]: true }));
-                      }
-                    }}
+                    resizeMode="cover"
                   />
-                  {!isPlaying && showOverlayMini[key] && (
-                    <>
-                      {videoErrors[key] ? (
-                        <TouchableOpacity
-                          onPress={() => onVideoReload(key)}
-                          className="absolute inset-0 justify-center items-center"
-                          activeOpacity={0.9}
-                        >
-                          <View className="bg-red-500/80 p-3 rounded-full">
-                            <Ionicons name="refresh" size={32} color="#FFFFFF" />
-                          </View>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={togglePlay}
-                          className="absolute inset-0 justify-center items-center"
-                          activeOpacity={0.9}
-                        >
-                          <View className="bg-white/70 p-3 rounded-full">
-                            <Ionicons name="play" size={32} color="#FEA74E" />
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                      <View className="absolute bottom-2 left-2 right-2">
-                        <Text
-                          className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
-                          numberOfLines={2}
-                        >
-                          {item.title}
-                        </Text>
-                      </View>
-                    </>
-                  )}
+                  <View className="absolute inset-0 justify-center items-center">
+                    <View className="bg-white/70 p-3 rounded-full">
+                      <Ionicons name="play" size={32} color="#FEA74E" />
+                    </View>
+                  </View>
+                  <View className="absolute bottom-2 left-2 right-2">
+                    <Text
+                      className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                      numberOfLines={2}
+                    >
+                      {item.title}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
                 {modalIndex === index && (
                   <>

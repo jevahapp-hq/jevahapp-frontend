@@ -1,14 +1,14 @@
 /**
  * useReelsVideoPlayback
- * Video seeking, formatTime, mute, and playback lifecycle effects.
- * Isolates playback logic for easier debugging.
+ * Seek, mute, and session lifecycle for Reels (expo-video).
  */
-import { Video } from "expo-av";
+import type { VideoPlayer } from "expo-video";
 import { RefObject, useCallback, useEffect } from "react";
 import { audioConfig } from "../../utils/audioConfig";
+import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 
 export interface UseReelsVideoPlaybackParams {
-  videoRefs: RefObject<Record<string, Video>>;
+  videoRefs: RefObject<Record<string, VideoPlayer>>;
   videoDuration: number;
   modalKey: string;
   setVideoDuration: (d: number) => void;
@@ -19,9 +19,13 @@ export interface UseReelsVideoPlaybackParams {
   screenWidth: number;
   setIsDragging: (v: boolean) => void;
   globalVideoStore: any;
-  mediaStore: any;
-  playingVideos: Record<string, boolean>;
   userHasManuallyPaused: boolean;
+}
+
+function durationMsOf(player: VideoPlayer | undefined, knownMs: number): number {
+  if (knownMs > 0) return knownMs;
+  const sec = Number(player?.duration) || 0;
+  return sec > 0 ? sec * 1000 : 0;
 }
 
 export function useReelsVideoPlayback({
@@ -33,11 +37,7 @@ export function useReelsVideoPlayback({
   setShowPauseOverlay,
   setUserHasManuallyPaused,
   setMenuVisible,
-  screenWidth,
-  setIsDragging,
   globalVideoStore,
-  mediaStore,
-  playingVideos,
   userHasManuallyPaused,
 }: UseReelsVideoPlaybackParams) {
   /**
@@ -46,8 +46,8 @@ export function useReelsVideoPlayback({
    */
   const seekToPosition = useCallback(
     async (videoKey: string, position: number) => {
-      const ref = videoRefs.current[videoKey];
-      if (!ref) {
+      const player = videoRefs.current[videoKey];
+      if (!player) {
         if (__DEV__) {
           console.warn(
             "[reels.seek] missing player ref",
@@ -58,14 +58,8 @@ export function useReelsVideoPlayback({
         return;
       }
       try {
-        let duration = videoDuration;
-        if (!(duration > 0)) {
-          const status = await ref.getStatusAsync();
-          if (status.isLoaded && status.durationMillis) {
-            duration = status.durationMillis;
-            setVideoDuration(duration);
-          }
-        }
+        let duration = durationMsOf(player, videoDuration);
+        if (duration > 0) setVideoDuration(duration);
         if (!(duration > 0)) {
           if (__DEV__) {
             console.warn("[reels.seek] duration unknown", videoKey);
@@ -77,18 +71,17 @@ export function useReelsVideoPlayback({
           position > 1
             ? Math.max(0, Math.min(100, position)) / 100
             : Math.max(0, Math.min(1, position));
-        const seekTime = Math.max(
+        const seekTimeMs = Math.max(
           0,
           Math.min(pct * duration, Math.max(0, duration - 40))
         );
-        setVideoPosition(seekTime);
-        await ref.setPositionAsync(seekTime);
+        setVideoPosition(seekTimeMs);
+        player.currentTime = seekTimeMs / 1000;
       } catch (e) {
         console.error("❌ Error seeking video:", e);
         try {
-          const status = await ref.getStatusAsync();
-          if (status.isLoaded && status.positionMillis !== undefined)
-            setVideoPosition(status.positionMillis);
+          const sec = Number(player.currentTime) || 0;
+          setVideoPosition(sec * 1000);
         } catch {
           // no-op
         }
@@ -113,62 +106,38 @@ export function useReelsVideoPlayback({
     [globalVideoStore]
   );
 
-  // Cleanup on unmount - pause videos, keep refs for faster resume
   useEffect(() => {
     return () => {
-      Object.values(videoRefs.current).forEach((ref) => {
-        if (ref) {
-          try {
-            ref.pauseAsync();
-          } catch { }
+      Object.values(videoRefs.current).forEach((player) => {
+        try {
+          player.pause();
+          player.muted = true;
+          player.volume = 0;
+        } catch {
+          // no-op
         }
       });
     };
-  }, []);
+  }, [videoRefs]);
 
-  // Audio session for video playback
   useEffect(() => {
     audioConfig.configureForVideoPlayback().catch((e) =>
       console.error("❌ ReelsView: Failed to init audio:", e)
     );
   }, []);
 
-  // Periodic cache cleanup
-  useEffect(() => {
-    const id = setInterval(() => mediaStore.cleanupVideoCache(), 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [mediaStore]);
-
-  // Play active video when modalKey changes
   useEffect(() => {
     if (!modalKey) return;
     setVideoDuration(0);
     setVideoPosition(0);
     setShowPauseOverlay(false);
     setUserHasManuallyPaused(false);
-    mediaStore.updateLastAccessed(modalKey);
-
-    const videoRef = videoRefs.current[modalKey];
-    if (videoRef) {
-      globalVideoStore.registerVideoPlayer(modalKey, {
-        pause: async () => {
-          try {
-            await videoRef.pauseAsync();
-            globalVideoStore.setOverlayVisible(modalKey, true);
-          } catch (err) {
-            console.warn(`Failed to pause ${modalKey}:`, err);
-          }
-        },
-        showOverlay: () => globalVideoStore.setOverlayVisible(modalKey, true),
-        key: modalKey,
-      });
-    }
+    useGlobalVideoStore.setState({ currentlyVisibleVideo: modalKey });
 
     globalVideoStore.pauseAllVideos();
     const play = () => {
       try {
         globalVideoStore.playVideoGlobally(modalKey);
-        videoRef?.playAsync().catch(() => { });
       } catch (e) {
         console.error("Error playing video:", e);
       }
@@ -179,13 +148,12 @@ export function useReelsVideoPlayback({
     return () => clearTimeout(timeoutId);
   }, [modalKey]);
 
-  // Ensure video plays on initial mount when not manually paused
+  const isThisPlaying = useGlobalVideoStore(
+    (s) => (modalKey ? s.playingVideos[modalKey] ?? false : false)
+  );
+
   useEffect(() => {
-    if (
-      modalKey &&
-      !playingVideos[modalKey] &&
-      !userHasManuallyPaused
-    ) {
+    if (modalKey && !isThisPlaying && !userHasManuallyPaused) {
       const id = setTimeout(() => {
         try {
           globalVideoStore.playVideoGlobally(modalKey);
@@ -195,7 +163,7 @@ export function useReelsVideoPlayback({
       }, 200);
       return () => clearTimeout(id);
     }
-  }, [modalKey, playingVideos, userHasManuallyPaused, globalVideoStore]);
+  }, [modalKey, isThisPlaying, userHasManuallyPaused, globalVideoStore]);
 
   return {
     seekToPosition,

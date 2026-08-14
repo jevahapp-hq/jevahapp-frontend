@@ -4,7 +4,6 @@ import {
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
 import { MutableRefObject } from "react";
 import {
   Image,
@@ -13,12 +12,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import {
-  getBestVideoUrl,
-  getVideoUrlFromMedia,
-} from "../../../../src/shared/utils/videoUrlManager";
-import { useGlobalVideoStore } from "../../../store/useGlobalVideoStore";
-import { qualifiesPlaybackView } from "../../../utils/contentInteraction/viewQualification";
+import { useVideoNavigation } from "../../../hooks/useVideoNavigation";
 import {
   getUserAvatarFromContent,
   getUserDisplayNameFromContent,
@@ -57,216 +51,51 @@ export default function SermonVideoCard({
   video,
   index,
   sectionId,
-  videoRefs,
   contentStats,
   userFavorites,
   globalFavoriteCounts,
   modalVisible,
-  videoErrors,
-  viewCounted,
-  videoVolume,
   handleFavorite,
   handleSave,
   handleShare,
-  handleVideoTap,
-  handleVideoReload,
-  incrementView,
   setModalVisible,
-  setVideoErrors,
-  setViewCounted,
   handleComment,
 }: SermonVideoCardProps) {
-  const globalVideoStore = useGlobalVideoStore();
-
+  const { navigateToReels } = useVideoNavigation();
   const modalKey = `${sectionId}-${index}`;
   const key = `${video.contentType}-${video._id || video.fileUrl || index}`;
   const stats = contentStats[key] || {};
 
-  const rawVideoUrl = getVideoUrlFromMedia(video);
-  const isValidUri = (u: any) =>
-    typeof u === "string" &&
-    u.trim().length > 0 &&
-    /^https?:\/\//.test(u.trim());
-  const safeVideoUri =
-    rawVideoUrl && isValidUri(rawVideoUrl)
-      ? getBestVideoUrl(rawVideoUrl)
-      : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+  const poster =
+    typeof video.thumbnailUrl === "string" && video.thumbnailUrl
+      ? { uri: video.thumbnailUrl }
+      : typeof video.imageUrl === "string" && video.imageUrl
+        ? { uri: video.imageUrl }
+        : require("../../../../assets/images/image (10).png");
 
-  console.log(`🎬 Sermon video URL for ${video?.title}:`, {
-    original: rawVideoUrl?.substring(0, 100),
-    processed: safeVideoUri?.substring(0, 100),
-  });
+  const openReels = () => {
+    navigateToReels({
+      video,
+      index: 0,
+      allVideos: [video],
+      contentStats,
+      globalFavoriteCounts,
+      getContentKey: (v: any) => String(v._id || v.id || ""),
+      getTimeAgo,
+      getDisplayName: () => getUserDisplayNameFromContent(video),
+      source: "SermonComponent",
+      category: "sermon",
+    });
+  };
 
   return (
     <View className="flex flex-col">
       <View key={modalKey} className="mr-4 w-full h-[436px]">
-        <View className="w-full h-[393px] overflow-hidden relative">
-          <Video
-            ref={(ref) => {
-              if (ref) {
-                console.log(
-                  `📹 Registering sermon video player for key: ${modalKey}`
-                );
-                videoRefs.current[modalKey] = ref;
-                // ✅ CRITICAL: Register player with global store for imperative control
-                globalVideoStore.registerVideoPlayer(modalKey, {
-                  pause: async () => {
-                    try {
-                      console.log(
-                        `⏸️ Registered pause called for sermon video: ${modalKey}`
-                      );
-                      await ref.pauseAsync();
-                      globalVideoStore.setOverlayVisible(modalKey, true);
-                    } catch (err) {
-                      console.warn(`Failed to pause ${modalKey}:`, err);
-                    }
-                  },
-                  play: async () => {
-                    try {
-                      console.log(
-                        `▶️ Registered play function called for sermon video: ${modalKey}`
-                      );
-                      const status = await ref.getStatusAsync();
-                      const isLoaded = status.isLoaded;
-                      console.log(`📊 Sermon video ${modalKey} status:`, {
-                        isLoaded,
-                        isPlaying: isLoaded ? status.isPlaying : false,
-                      });
-                      if (isLoaded) {
-                        console.log(
-                          `✅ Sermon video ${modalKey} is loaded, calling playAsync`
-                        );
-                        const result = await ref.playAsync();
-                        console.log(
-                          `🎉 Sermon video ${modalKey} playAsync result:`,
-                          result
-                        );
-                      } else {
-                        console.log(
-                          `⏳ Sermon video ${modalKey} not loaded yet, waiting...`
-                        );
-                        await new Promise<void>((resolve, reject) => {
-                          let attempts = 0;
-                          const maxAttempts = 40;
-                          const checkStatus = async () => {
-                            attempts++;
-                            const s = await ref.getStatusAsync();
-                            console.log(
-                              `🔄 Check ${attempts}: Sermon video ${modalKey} status - isLoaded: ${s?.isLoaded}`
-                            );
-                            if (s?.isLoaded) {
-                              console.log(
-                                `✅ Sermon video ${modalKey} loaded after ${attempts} attempts, playing now`
-                              );
-                              try {
-                                await ref.playAsync();
-                                resolve();
-                              } catch (e) {
-                                reject(e);
-                              }
-                            } else if (attempts < maxAttempts) {
-                              setTimeout(checkStatus, 50);
-                            } else {
-                              console.warn(
-                                `⚠️ Sermon video ${modalKey} failed to load after ${maxAttempts} attempts`
-                              );
-                              reject(
-                                new Error(
-                                  `Video ${modalKey} failed to load after ${maxAttempts} attempts`
-                                )
-                              );
-                            }
-                          };
-                          checkStatus();
-                        });
-                      }
-                    } catch (err) {
-                      console.error(
-                        `❌ Registered play function failed for sermon video ${modalKey}:`,
-                        err
-                      );
-                      throw err;
-                    }
-                  },
-                  showOverlay: () => {
-                    globalVideoStore.setOverlayVisible(modalKey, true);
-                  },
-                  key: modalKey,
-                });
-                console.log(
-                  `✅ Sermon video player registered successfully for key: ${modalKey}`
-                );
-              } else {
-                console.log(
-                  `🗑️ Unregistering sermon video player for key: ${modalKey}`
-                );
-                delete videoRefs.current[modalKey];
-                globalVideoStore.unregisterVideoPlayer(modalKey);
-              }
-            }}
-            source={{ uri: safeVideoUri }}
+        <View className="w-full h-[393px] overflow-hidden relative bg-black">
+          <Image
+            source={poster}
             style={{ width: "100%", height: "100%", position: "absolute" }}
-            resizeMode={ResizeMode.COVER}
-            isMuted={globalVideoStore.mutedVideos[modalKey] ?? false}
-            volume={
-              globalVideoStore.mutedVideos[modalKey] ? 0.0 : videoVolume
-            }
-            shouldPlay={globalVideoStore.playingVideos[modalKey] ?? false}
-            useNativeControls={false}
-            onError={(e) => {
-              console.warn(
-                "Video failed to load in SermonComponent:",
-                video?.title,
-                e
-              );
-              setVideoErrors((prev) => ({ ...prev, [modalKey]: true }));
-              globalVideoStore.pauseVideo(modalKey);
-            }}
-            onLoad={() => {
-              console.log(
-                `✅ Sermon video loaded successfully: ${video?.title}`
-              );
-              setVideoErrors((prev) => ({ ...prev, [modalKey]: false }));
-            }}
-            onPlaybackStatusUpdate={(status) => {
-              if (!status.isLoaded) return;
-              const positionMs = status.positionMillis || 0;
-              const durationMs = status.durationMillis || 0;
-              const progress =
-                durationMs > 0 ? positionMs / durationMs : 0;
-              const pct = progress * 100;
-              globalVideoStore.setVideoProgress(modalKey, pct);
-              const ref = videoRefs.current[modalKey];
-
-              if (
-                status.isPlaying &&
-                !viewCounted[modalKey] &&
-                durationMs > 0
-              ) {
-                const { qualifies, finished } = qualifiesPlaybackView({
-                  family: "video",
-                  isPlaying: true,
-                  positionMs,
-                  progress,
-                  durationMs,
-                });
-                if (qualifies || finished || status.didJustFinish) {
-                  void incrementView(modalKey, video, {
-                    durationMs: finished || status.didJustFinish
-                      ? durationMs
-                      : positionMs,
-                    progressPct: Math.round(pct),
-                    isComplete: Boolean(finished || status.didJustFinish),
-                  });
-                }
-              }
-
-              if (status.didJustFinish) {
-                ref?.setPositionAsync(0);
-                globalVideoStore.pauseVideo(modalKey);
-                globalVideoStore.setVideoCompleted(modalKey, true);
-              }
-            }}
+            resizeMode="cover"
           />
 
           <View className="flex-col absolute mt-[170px] right-4">
@@ -284,9 +113,7 @@ export default function SermonVideoCard({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => {
-                handleComment(key, video);
-              }}
+              onPress={() => handleComment(key, video)}
               className="flex-col justify-center items-center mt-6"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
@@ -316,88 +143,20 @@ export default function SermonVideoCard({
           </View>
 
           <View className="absolute inset-0 justify-center items-center">
-            {videoErrors[modalKey] ? (
-              <TouchableOpacity onPress={() => handleVideoReload(modalKey)}>
-                <View className="bg-red-500/80 p-4 rounded-full">
-                  <Ionicons name="refresh" size={40} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={() => handleVideoTap(modalKey, video, index)}
-              >
-                <View
-                  className={`${
-                    globalVideoStore.playingVideos[modalKey]
-                      ? "bg-black/30"
-                      : "bg-white/70"
-                  } p-4 rounded-full`}
-                >
-                  <Ionicons
-                    name={
-                      globalVideoStore.playingVideos[modalKey]
-                        ? "pause"
-                        : "play"
-                    }
-                    size={40}
-                    color={
-                      globalVideoStore.playingVideos[modalKey]
-                        ? "#FFFFFF"
-                        : "#FEA74E"
-                    }
-                  />
-                </View>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity onPress={openReels}>
+              <View className="bg-white/70 p-4 rounded-full">
+                <Ionicons name="play" size={40} color="#FEA74E" />
+              </View>
+            </TouchableOpacity>
           </View>
 
-          {!globalVideoStore.playingVideos[modalKey] && (
-            <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
-              <Text
-                className="text-white font-semibold text-[14px]"
-                numberOfLines={2}
-              >
-                {video.title}
-              </Text>
-            </View>
-          )}
-
-          <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
-            <View className="flex-1 h-1 bg-white/30 rounded-full relative">
-              <View
-                className="h-full bg-[#FEA74E] rounded-full"
-                style={{
-                  width: `${globalVideoStore.progresses[modalKey] ?? 0}%`,
-                }}
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  left: `${globalVideoStore.progresses[modalKey] ?? 0}%`,
-                  transform: [{ translateX: -6 }],
-                  top: -5,
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: "#FFFFFF",
-                  borderWidth: 1,
-                  borderColor: "#FEA74E",
-                }}
-              />
-            </View>
-            <TouchableOpacity
-              onPress={() => globalVideoStore.toggleVideoMute(modalKey)}
+          <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
+            <Text
+              className="text-white font-semibold text-[14px]"
+              numberOfLines={2}
             >
-              <Ionicons
-                name={
-                  globalVideoStore.mutedVideos[modalKey]
-                    ? "volume-mute"
-                    : "volume-high"
-                }
-                size={20}
-                color="#FEA74E"
-              />
-            </TouchableOpacity>
+              {video.title}
+            </Text>
           </View>
         </View>
 
@@ -477,11 +236,7 @@ export default function SermonVideoCard({
                 <Text className="text-[#1D2939] font-rubik ml-2">
                   Save to Library
                 </Text>
-                <MaterialIcons
-                  name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
-                  size={22}
-                  color={stats.saved === 1 ? "#1D2939" : "#1D2939"}
-                />
+                <MaterialIcons name="bookmark-border" size={22} color="#1D2939" />
               </TouchableOpacity>
             </View>
           </>

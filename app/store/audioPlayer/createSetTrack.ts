@@ -1,5 +1,4 @@
 import { Audio } from "expo-av";
-import GlobalAudioInstanceManager from "../../utils/globalAudioInstanceManager";
 import { normalizeAudioSource } from "./normalizeAudioSource";
 import {
   resolveAudioDurationMs,
@@ -50,32 +49,6 @@ export function createSetTrack(
         }
       }
 
-      if (!track.isVirtual) {
-        try {
-          await GlobalAudioInstanceManager.getInstance().stopAllAudio();
-        } catch (error) {
-          console.warn(
-            "Error stopping legacy audio manager before global track:",
-            error
-          );
-        }
-
-        try {
-          const globalMediaStore =
-            require("../useGlobalMediaStore").useGlobalMediaStore;
-          if (globalMediaStore) {
-            const state = globalMediaStore.getState();
-            Object.keys(state.playingAudio || {}).forEach((audioKey) => {
-              if (state.playingAudio[audioKey]) {
-                state.pauseAudio(audioKey);
-              }
-            });
-          }
-        } catch {
-          // no-op
-        }
-      }
-
       if (soundInstance) {
         try {
           await soundInstance.unloadAsync();
@@ -86,17 +59,13 @@ export function createSetTrack(
 
       set({
         currentTrack: track,
-        isPlaying: track.isVirtual ? shouldPlayImmediately : false,
-        isLoading: track.isVirtual ? false : true,
+        isPlaying: false,
+        isLoading: true,
         position: 0,
         progress: 0,
         duration: trackDurationToMs(track.duration),
         soundInstance: null,
       });
-
-      if (track.isVirtual) {
-        return;
-      }
 
       try {
         await Audio.setAudioModeAsync({
@@ -106,6 +75,14 @@ export function createSetTrack(
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
         });
+
+        try {
+          const videoStore =
+            require("../useGlobalVideoStore").useGlobalVideoStore.getState();
+          videoStore.pauseAllVideosImperatively?.();
+        } catch {
+          // no-op
+        }
 
         const source = normalizeAudioSource(track.audioUrl);
 

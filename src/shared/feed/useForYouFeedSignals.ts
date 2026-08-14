@@ -29,8 +29,12 @@ export function useForYouFeedSignals(options: {
   const focusStartedAt = useRef<number>(0);
   const impressedKeys = useRef<Set<string>>(new Set());
   const lastWatchTickAt = useRef<number>(0);
-  const progresses = useGlobalVideoStore((s) => s.progresses);
-  const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
+  const isPlayingFocused = useGlobalVideoStore((s) =>
+    focusedKey ? s.playingVideos[focusedKey] ?? false : false
+  );
+  const focusedProgress = useGlobalVideoStore((s) =>
+    focusedKey ? s.progresses[focusedKey] ?? 0 : 0
+  );
 
   // Impression after ≥300ms dwell on focused card
   useEffect(() => {
@@ -76,13 +80,12 @@ export function useForYouFeedSignals(options: {
     if (!contentId) return;
 
     const tick = () => {
-      const playing = !!playingVideos[focusedKey];
-      if (!playing) return;
+      if (!isPlayingFocused) return;
       const now = Date.now();
       const delta = now - lastWatchTickAt.current;
       if (delta < WATCH_TICK_MS - 200) return;
       lastWatchTickAt.current = now;
-      const progressPct = Number(progresses[focusedKey] ?? 0);
+      const progressPct = Number(focusedProgress ?? 0);
       enqueueFeedEvent({
         contentId,
         contentType: String(item?.contentType || "media"),
@@ -101,8 +104,8 @@ export function useForYouFeedSignals(options: {
     items,
     getContentKey,
     source,
-    playingVideos,
-    progresses,
+    isPlayingFocused,
+    focusedProgress,
   ]);
 }
 

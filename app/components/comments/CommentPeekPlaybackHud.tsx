@@ -37,8 +37,6 @@ export function CommentPeekPlaybackHud({
   const currentlyVisibleVideo = useGlobalVideoStore(
     (s) => s.currentlyVisibleVideo
   );
-  const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
-  const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
   const playVideoGlobally = useGlobalVideoStore((s) => s.playVideoGlobally);
   const pauseVideo = useGlobalVideoStore((s) => s.pauseVideo);
   const toggleVideoMute = useGlobalVideoStore((s) => s.toggleVideoMute);
@@ -52,13 +50,16 @@ export function CommentPeekPlaybackHud({
     lastKeyRef.current ||
     "";
   const videoKey = resolved;
+  const isPlaying = useGlobalVideoStore(
+    (s) => (videoKey ? s.playingVideos[videoKey] ?? false : false)
+  );
+  const isMuted = useGlobalVideoStore(
+    (s) => (videoKey ? s.mutedVideos[videoKey] ?? false : false)
+  );
 
   useEffect(() => {
     if (resolved) lastKeyRef.current = resolved;
   }, [resolved]);
-
-  const isPlaying = !!(videoKey && playingVideos[videoKey]);
-  const isMuted = !!(videoKey && mutedVideos[videoKey]);
 
   const [snap, setSnap] = useState<VideoPlaybackSnapshot>(EMPTY_SNAP);
 

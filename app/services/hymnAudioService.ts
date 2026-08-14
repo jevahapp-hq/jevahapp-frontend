@@ -1,118 +1,79 @@
-import { Audio } from "expo-av";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 
 export interface HymnAudio {
   id: string;
   title: string;
   audioUrl: string;
   duration: number;
+  artist?: string;
+  thumbnailUrl?: string;
+}
+
+function hymnToTrack(hymn: HymnAudio) {
+  return {
+    id: hymn.id,
+    title: hymn.title,
+    artist: hymn.artist || "Traditional Hymn",
+    audioUrl: hymn.audioUrl,
+    thumbnailUrl: hymn.thumbnailUrl || "",
+    duration: hymn.duration,
+    category: "hymn",
+    source: "hymn" as const,
+  };
 }
 
 class HymnAudioService {
-  private sound: Audio.Sound | null = null;
-  private currentHymnId: string | null = null;
-  private isPlaying: boolean = false;
-
-  /**
-   * Play a hymn audio file
-   */
   async playHymn(hymn: HymnAudio): Promise<void> {
-    try {
-      // Stop current audio if playing
-      if (this.sound) {
-        await this.sound.unloadAsync();
-      }
-
-      // Load and play new hymn
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: hymn.audioUrl },
-        { shouldPlay: true }
-      );
-
-      this.sound = sound;
-      this.currentHymnId = hymn.id;
-      this.isPlaying = true;
-
-      // Set up playback status update
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          this.isPlaying = false;
-          this.currentHymnId = null;
-        }
-      });
-    } catch (error) {
-      console.error("Error playing hymn:", error);
+    if (!hymn?.audioUrl) {
       throw new Error("Failed to play hymn audio");
     }
+    await playOrToggleTrack(hymnToTrack(hymn));
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.id === hymn.id && !store.isPlaying) {
+      await store.play();
+    }
   }
 
-  /**
-   * Pause current hymn
-   */
   async pauseHymn(): Promise<void> {
-    if (this.sound && this.isPlaying) {
-      await this.sound.pauseAsync();
-      this.isPlaying = false;
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.source === "hymn" && store.isPlaying) {
+      await store.pause();
     }
   }
 
-  /**
-   * Resume current hymn
-   */
   async resumeHymn(): Promise<void> {
-    if (this.sound && !this.isPlaying) {
-      await this.sound.playAsync();
-      this.isPlaying = true;
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.source === "hymn" && !store.isPlaying) {
+      await store.play();
     }
   }
 
-  /**
-   * Stop current hymn
-   */
   async stopHymn(): Promise<void> {
-    if (this.sound) {
-      await this.sound.stopAsync();
-      await this.sound.unloadAsync();
-      this.sound = null;
-      this.currentHymnId = null;
-      this.isPlaying = false;
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.source === "hymn") {
+      await store.stop();
     }
   }
 
-  /**
-   * Toggle play/pause
-   */
   async togglePlayPause(hymn: HymnAudio): Promise<void> {
-    if (this.currentHymnId === hymn.id) {
-      if (this.isPlaying) {
-        await this.pauseHymn();
-      } else {
-        await this.resumeHymn();
-      }
-    } else {
-      await this.playHymn(hymn);
-    }
+    await playOrToggleTrack(hymnToTrack(hymn));
   }
 
-  /**
-   * Get current playback state
-   */
   getPlaybackState(): { isPlaying: boolean; currentHymnId: string | null } {
+    const { currentTrack, isPlaying } = useGlobalAudioPlayerStore.getState();
+    const isHymn = currentTrack?.source === "hymn";
     return {
-      isPlaying: this.isPlaying,
-      currentHymnId: this.currentHymnId,
+      isPlaying: isHymn && isPlaying,
+      currentHymnId: isHymn ? currentTrack?.id ?? null : null,
     };
   }
 
-  /**
-   * Clean up resources
-   */
   async cleanup(): Promise<void> {
-    if (this.sound) {
-      await this.sound.unloadAsync();
-      this.sound = null;
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.source === "hymn") {
+      await store.pause();
     }
-    this.currentHymnId = null;
-    this.isPlaying = false;
   }
 }
 

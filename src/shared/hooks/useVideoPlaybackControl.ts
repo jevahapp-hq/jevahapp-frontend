@@ -18,17 +18,20 @@ export const useVideoPlaybackControl = ({
   enableAutoPlay?: boolean;
   playbackReady?: boolean;
 }) => {
-  const {
-    playingVideos,
-    currentlyPlayingVideo,
-    pauseVideo,
-    setOverlayVisible,
-    registerVideoPlayer,
-    unregisterVideoPlayer,
-    playVideoGlobally,
-  } = useGlobalVideoStore();
+  const isPlaying = useGlobalVideoStore(
+    (s) => s.playingVideos[videoKey] ?? false
+  );
+  const currentlyPlayingVideo = useGlobalVideoStore(
+    (s) => s.currentlyPlayingVideo
+  );
+  const pauseVideo = useGlobalVideoStore((s) => s.pauseVideo);
+  const setOverlayVisible = useGlobalVideoStore((s) => s.setOverlayVisible);
+  const registerVideoPlayer = useGlobalVideoStore((s) => s.registerVideoPlayer);
+  const unregisterVideoPlayer = useGlobalVideoStore(
+    (s) => s.unregisterVideoPlayer
+  );
+  const playVideoGlobally = useGlobalVideoStore((s) => s.playVideoGlobally);
 
-  const isPlaying = playingVideos[videoKey] || false;
   const shouldPlayThisVideo = currentlyPlayingVideo === videoKey && isPlaying;
 
   // Keep-awake management
@@ -76,8 +79,7 @@ export const useVideoPlaybackControl = ({
           // no-op
         }
       },
-      // expo-video: imperative play/pause. expo-av Reels still rely on
-      // declarative `shouldPlay` for start; only pause is imperative there.
+      // expo-video: imperative play/pause for feed and Reels.
       play: async () => {
         if (!videoRef.current) return;
         try {

@@ -50,7 +50,10 @@ export default function HomeScreen() {
     if (!tabList.includes(tab as MainShellTab)) return;
     const next = tab as MainShellTab;
     setSelectedTab(next);
-    setMounted((prev) => (prev[next] ? prev : { ...prev, [next]: true }));
+    setMounted({
+      Home: true,
+      ...(next !== "Home" ? { [next]: true } : {}),
+    });
   }, []);
 
   useEffect(() => {

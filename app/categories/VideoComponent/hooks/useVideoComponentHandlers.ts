@@ -33,7 +33,6 @@ interface UseVideoComponentHandlersProps {
   setGlobalFavoriteCounts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   libraryStore: any;
   globalVideoStore: any;
-  globalMediaStore: any;
   showCommentModal: (comments: any[], contentId: string) => void;
   comments: Record<string, any[]>;
   handleDownload: (item: any) => Promise<{ success: boolean }>;
@@ -64,7 +63,6 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
     setGlobalFavoriteCounts,
     libraryStore,
     globalVideoStore,
-    globalMediaStore,
     showCommentModal,
     comments,
     handleDownload,
@@ -385,7 +383,7 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
       incrementView(key, video);
       globalVideoStore.setVideoCompleted(key, false);
     }
-    globalMediaStore.playMediaGlobally(key, "video");
+    globalVideoStore.playVideoGlobally(key);
   };
 
   const handleVideoTapWrapper = (key: string, _video: MediaItem) => {

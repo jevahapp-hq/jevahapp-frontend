@@ -36,15 +36,7 @@ export function createSeekActions(
     },
 
     seekToProgress: async (progress: number) => {
-      const { currentTrack, __virtualTrackControls, duration, seek } = get();
-      // ✅ If this is a virtual track, use the external player's seek controls
-      if (currentTrack?.isVirtual && __virtualTrackControls) {
-        // Check if virtual controls have seek method
-        if (__virtualTrackControls.seekToProgress) {
-          await __virtualTrackControls.seekToProgress(progress);
-          return;
-        }
-      }
+      const { duration, seek, currentTrack } = get();
       const effectiveDuration = resolveAudioDurationMs({
         playerDurationMs: duration,
         trackDurationSec: currentTrack?.duration,

@@ -7,7 +7,6 @@ export interface UseReelsScrollOptions {
   allVideos: any[];
   getSpeakerName: (videoData: any, fallback?: string) => string;
   userHasManuallyPaused: boolean;
-  mediaStore: any;
   globalVideoStore: any;
 }
 
@@ -20,7 +19,6 @@ export function useReelsScroll({
   allVideos,
   getSpeakerName,
   userHasManuallyPaused,
-  mediaStore,
   globalVideoStore,
 }: UseReelsScrollOptions) {
 
@@ -51,7 +49,6 @@ export function useReelsScroll({
 
             // Track access and auto-play if not manually paused
             try {
-              mediaStore.updateLastAccessed(videoKey);
               if (!userHasManuallyPaused) {
                 globalVideoStore.playVideoGlobally(videoKey);
               }
@@ -62,7 +59,7 @@ export function useReelsScroll({
         }
       }
     },
-    [currentIndex, allVideos, getSpeakerName, userHasManuallyPaused, mediaStore, globalVideoStore, setCurrentIndex]
+    [currentIndex, allVideos, getSpeakerName, userHasManuallyPaused, globalVideoStore, setCurrentIndex]
   );
 
   return {

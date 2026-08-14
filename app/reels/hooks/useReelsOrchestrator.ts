@@ -1,6 +1,6 @@
-import { Video } from "expo-av";
+import type { VideoPlayer } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMediaDeletion } from "../../../src/shared/hooks/useMediaDeletion";
 import {
@@ -10,9 +10,8 @@ import {
 import { useCommentModal } from "../../context/CommentModalContext";
 import { useUserProfile } from "../../hooks/useUserProfile";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
-import { useContentCount, useInteractionStore, useUserInteraction } from "../../store/useInteractionStore";
+import { useInteractionStore, useContentCount, useUserInteraction } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
-import { useMediaPlaybackStore } from "../../store/useMediaPlaybackStore";
 import { useReelsStore } from "../../store/useReelsStore";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { useDownloadHandler } from "../../utils/downloadUtils";
@@ -35,7 +34,7 @@ import { useReelsAdjacentPrefetch } from "./useReelsAdjacentPrefetch";
 export function useReelsOrchestrator() {
     const params = useLocalSearchParams() as any;
     const router = useRouter();
-    const videoRefs = useRef<Record<string, Video>>({});
+    const videoRefs = useRef<Record<string, VideoPlayer>>({});
 
     // State
     const [hasError, setHasError] = useState(false);
@@ -52,8 +51,21 @@ export function useReelsOrchestrator() {
     const [showReportModal, setShowReportModal] = useState(false);
 
     // Stores & Context
-    const globalVideoStore = useGlobalVideoStore();
-    const mediaStore = useMediaPlaybackStore();
+    const pauseVideo = useGlobalVideoStore((s) => s.pauseVideo);
+    const playVideoGlobally = useGlobalVideoStore((s) => s.playVideoGlobally);
+    const pauseAllVideos = useGlobalVideoStore((s) => s.pauseAllVideos);
+    const toggleVideoMute = useGlobalVideoStore((s) => s.toggleVideoMute);
+    const setVideoProgress = useGlobalVideoStore((s) => s.setVideoProgress);
+    const globalVideoStore = useMemo(
+        () => ({
+            pauseVideo,
+            playVideoGlobally,
+            pauseAllVideos,
+            toggleVideoMute,
+            setVideoProgress,
+        }),
+        [pauseVideo, playVideoGlobally, pauseAllVideos, toggleVideoMute, setVideoProgress]
+    );
     const reelsStore = useReelsStore();
     const { user: currentUser, getFullName, getAvatarUrl } = useUserProfile();
     const { showCommentModal } = useCommentModal();
@@ -62,8 +74,6 @@ export function useReelsOrchestrator() {
 
     const toggleLike = useInteractionStore((s: any) => s.toggleLike);
     const loadContentStats = useInteractionStore((s: any) => s.loadContentStats);
-    const playingVideos = globalVideoStore.playingVideos;
-    const mutedVideos = globalVideoStore.mutedVideos;
 
     // Type-safe download wrapper
     const handleDownload = useCallback(async (item: any) => {
@@ -206,7 +216,7 @@ export function useReelsOrchestrator() {
     });
 
     const playback = useReelsVideoPlayback({
-        videoRefs: videoRefs as RefObject<Record<string, Video>>,
+        videoRefs: videoRefs as RefObject<Record<string, VideoPlayer>>,
         videoDuration,
         modalKey: current.modalKey,
         setVideoDuration,
@@ -217,8 +227,6 @@ export function useReelsOrchestrator() {
         screenWidth: responsive.screenWidth,
         setIsDragging,
         globalVideoStore,
-        mediaStore,
-        playingVideos,
         userHasManuallyPaused,
     });
 
@@ -228,24 +236,23 @@ export function useReelsOrchestrator() {
         allVideos: parsedVideoList,
         getSpeakerName: current.getSpeakerName,
         userHasManuallyPaused,
-        mediaStore,
         globalVideoStore,
     });
 
     const toggleVideoPlay = useCallback(() => {
-        const isPlaying = playingVideos[current.modalKey] ?? false;
-        mediaStore.updateLastAccessed(current.modalKey);
+        const key = current.modalKey;
+        const isPlaying = useGlobalVideoStore.getState().playingVideos[key] ?? false;
         if (isPlaying) {
-            globalVideoStore.pauseVideo(current.modalKey);
+            pauseVideo(key);
             setUserHasManuallyPaused(true);
             setShowPauseOverlay(true);
             setTimeout(() => setShowPauseOverlay(false), 1000);
         } else {
-            globalVideoStore.playVideoGlobally(current.modalKey);
+            playVideoGlobally(key);
             setUserHasManuallyPaused(false);
             setShowPauseOverlay(false);
         }
-    }, [playingVideos, current.modalKey, mediaStore, globalVideoStore]);
+    }, [current.modalKey, pauseVideo, playVideoGlobally]);
 
     const allVideos = parsedVideoList.length > 0 ? parsedVideoList : [current.currentVideo];
 
@@ -285,13 +292,10 @@ export function useReelsOrchestrator() {
 
         // Stores/Context
         globalVideoStore,
-        mediaStore,
         reelsStore,
         currentUser,
         getAvatarUrl,
         libraryStore,
-        playingVideos,
-        mutedVideos,
 
         // Orchestrated Hooks
         responsive,

@@ -71,7 +71,6 @@ import { UserProfileCache } from "../../../../app/utils/cache/UserProfileCache";
 import { extractAuthorId, seedAuthorFromSession, clearAuthorFetchFailures, useAuthorStoreVersion } from "../../../shared/author";
 import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "../../../../app/store/useDownloadStore";
-import { useGlobalMediaStore } from "../../../../app/store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../../app/store/useInteractionStore";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
@@ -197,30 +196,22 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   // Get global video state - FIX: Read from the same store we write to with REACTIVE SUBSCRIPTIONS
   // Using specific selectors for stability
-  const playMediaGlobally = useGlobalMediaStore((s) => s.playMediaGlobally);
-  const pauseAllMediaGlobally = useGlobalMediaStore((s) => s.pauseAllMedia);
-
   const pauseVideoAction = useGlobalVideoStore((s) => s.pauseVideo);
   const pauseAllVideosAction = useGlobalVideoStore((s) => s.pauseAllVideos);
   const toggleVideoMuteAction = useGlobalVideoStore((s) => s.toggleVideoMute);
   const enableAutoPlayAction = useGlobalVideoStore((s) => s.enableAutoPlay);
-
-  const playingVideos = useGlobalVideoStore((s) => s.playingVideos);
-  const mutedVideos = useGlobalVideoStore((s) => s.mutedVideos);
-  const progresses = useGlobalVideoStore((s) => s.progresses);
-  const showOverlay = useGlobalVideoStore((s) => s.showOverlay);
+  const playVideoGlobally = useGlobalVideoStore((s) => s.playVideoGlobally);
   const currentlyPlayingVideo = useGlobalVideoStore(
     (s) => s.currentlyPlayingVideo
   );
   const isAutoPlayEnabled = useGlobalVideoStore((s) => s.isAutoPlayEnabled);
   const { isVisible: commentsOpen } = useCommentModal();
 
-  // Create functions to match what components expect
   const playMedia = useCallback((key: string, type: "video" | "audio") => {
-    // ✅ Use unified media store for both video and audio to handle mutual pausing
-    // This ensures video pauses audio and audio pauses video
-    playMediaGlobally(key, type);
-  }, [playMediaGlobally]);
+    if (type === "video") {
+      playVideoGlobally(key);
+    }
+  }, [playVideoGlobally]);
 
   const pauseMedia = useCallback((key: string) => {
     pauseVideoAction(key);
@@ -236,10 +227,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     audioProgressMap,
     playAudio,
     pauseAllAudio,
-  } = useAllContentTikTokAudio({
-    playMedia,
-    playingVideos,
-  });
+  } = useAllContentTikTokAudio();
 
   const { comments } = useInteractionStore();
   const { loadDownloadedItems } = useDownloadStore();
@@ -282,6 +270,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   useEffect(() => {
     currentlyVisibleVideoRef.current = currentlyVisibleVideo;
+    useGlobalVideoStore.setState({ currentlyVisibleVideo });
   }, [currentlyVisibleVideo]);
   useEffect(() => {
     isFeedActiveRef.current = isFeedActive;
@@ -294,18 +283,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   }, [commentsOpen]);
 
   useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
-
-  // Helper functions to get state for specific keys
-  const getVideoState = (key: string) => ({
-    isPlaying: playingVideos[key] ?? false,
-    isMuted: mutedVideos[key] ?? false,
-    progress: progresses[key] ?? 0,
-    showOverlay: showOverlay[key] ?? false,
-  });
-  const isVideoPlaying = (key: string) => playingVideos[key] ?? false;
-  const isVideoMuted = (key: string) => mutedVideos[key] ?? false;
-  const getVideoProgress = (key: string) => progresses[key] ?? 0;
-  const getVideoOverlay = (key: string) => showOverlay[key] ?? false;
 
   // Merge both sources instead of picking one. `allContent` (the
   // authenticated feed) is always capped at a single page of 20 items and
@@ -394,7 +371,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     getLikeCount,
     getCommentCount,
     getUserSaveState,
-    playingVideos,
     playingAudioId,
     playMedia,
     pauseMedia,
@@ -427,9 +403,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         getUserLikeState={getUserLikeState}
         getLikeCount={getLikeCount}
         contentStats={contentStats}
-        playingVideos={playingVideos}
-        mutedVideos={mutedVideos}
-        progresses={progresses}
         videoVolume={videoVolume}
         currentlyVisibleVideo={currentlyVisibleVideo}
         playingAudioId={playingAudioId}
@@ -464,9 +437,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       getUserLikeState,
       getLikeCount,
       contentStats,
-      playingVideos,
-      mutedVideos,
-      progresses,
       videoVolume,
       currentlyVisibleVideo,
       playingAudioId,
@@ -673,9 +643,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // autoplay firing for the wrong video, or never firing at all below the
   // Coming Soon card).
   // ---------------------------------------------------------------------
-  const playingVideosRef = useRef(playingVideos);
-  useEffect(() => { playingVideosRef.current = playingVideos; }, [playingVideos]);
-
   const playingAudioIdRef = useRef(playingAudioId);
   useEffect(() => { playingAudioIdRef.current = playingAudioId; }, [playingAudioId]);
 
@@ -724,7 +691,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
       const prevKey = currentlyVisibleVideoRef.current;
       if (topVideoKey !== prevKey) {
-        if (prevKey && playingVideosRef.current[prevKey]) {
+        if (prevKey && useGlobalVideoStore.getState().playingVideos[prevKey]) {
           pauseMediaRef.current(prevKey);
         }
         setCurrentlyVisibleVideo(topVideoKey);
@@ -754,17 +721,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   // signal instead of onLayout math).
   const handleAudioViewabilityImpl = useCallback(
     (info: { viewableItems: Array<{ item: FeedRow; isViewable: boolean }> }) => {
-      let activeKeys: string[] = [];
-      try {
-        const { useGlobalMediaStore } =
-          require("../../../../app/store/useGlobalMediaStore");
-        const playing = useGlobalMediaStore.getState().playingAudio || {};
-        activeKeys = Object.keys(playing).filter((k) => playing[k]);
-      } catch {
-        activeKeys = [];
-      }
       const feedAudioId = playingAudioIdRef.current;
-      if (feedAudioId) activeKeys.push(feedAudioId);
+      const activeKeys = feedAudioId ? [feedAudioId] : [];
       if (activeKeys.length === 0) return;
 
       const stillVisible = info.viewableItems.some((token) => {

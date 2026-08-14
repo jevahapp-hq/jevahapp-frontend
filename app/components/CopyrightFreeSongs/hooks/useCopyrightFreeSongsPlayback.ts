@@ -17,20 +17,13 @@ function mapSongToTrack(song: any) {
     duration: song.duration,
     category: song.category,
     description: song.description,
+    source: "copyright-free" as const,
   };
 }
 
 /** Fire-and-forget play — never block the overlay paint on audio teardown. */
 export async function playCopyrightFreeSong(song: any, songs: any[]) {
   if (!song) return;
-
-  try {
-    const audioManagerModule = require("../../../utils/globalAudioInstanceManager");
-    const audioManager = audioManagerModule.default.getInstance();
-    void audioManager.stopAllAudio().catch(() => {});
-  } catch {
-    // manager not available
-  }
 
   try {
     const state = useGlobalAudioPlayerStore.getState();

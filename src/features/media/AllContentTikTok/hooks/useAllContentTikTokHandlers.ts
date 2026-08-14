@@ -11,6 +11,7 @@ import {
   resolveLikedFlag,
 } from "../../../../../app/utils/contentInteractionPersist";
 import { useVideoNavigation } from "../../../../../app/hooks/useVideoNavigation";
+import { useGlobalVideoStore } from "../../../../../app/store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
 import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
 import {
@@ -43,12 +44,12 @@ export interface UseAllContentTikTokHandlersParams {
     ebooks: MediaItem[];
     sermons: MediaItem[];
   };
+  contentStats: Record<string, any>;
   getContentKey: (item: MediaItem) => string;
   getTimeAgo: (date: string) => string;
   getLikeCount: (contentId: string) => number;
   getCommentCount: (contentId: string) => number;
   getUserSaveState: (contentId: string) => boolean;
-  playingVideos: Record<string, boolean>;
   playingAudioId: string | null;
   playMedia: (key: string, type: "video" | "audio") => void;
   pauseMedia: (key: string) => void;
@@ -80,7 +81,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     getLikeCount,
     getCommentCount,
     getUserSaveState,
-    playingVideos,
     playingAudioId,
     playMedia,
     pauseMedia,
@@ -437,8 +437,14 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       const mediaType = detectMediaType(mediaItem || null);
       const isAudio = mediaType === "audio";
       const isCurrentlyPlaying = isAudio
-        ? playingAudioId === key || playingAudioId === contentKey
-        : playingVideos[key] ?? playingVideos[contentKey] ?? false;
+        ? playingAudioId === key ||
+          playingAudioId === contentKey ||
+          playingAudioId === mediaItem?._id ||
+          (!!playingAudioId &&
+            (key.includes(playingAudioId) || contentKey.includes(playingAudioId)))
+        : useGlobalVideoStore.getState().playingVideos[key] ??
+          useGlobalVideoStore.getState().playingVideos[contentKey] ??
+          false;
 
       if (isCurrentlyPlaying) {
         if (isAudio) pauseAllAudio();
@@ -455,7 +461,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       playMedia,
       pauseMedia,
       pauseAllAudio,
-      playingVideos,
       playingAudioId,
       setCurrentlyVisibleVideo,
     ]

@@ -163,6 +163,7 @@ export function trackCardToAudioTrack(track: TrackCard) {
     description: track.description,
     release: track.release,
     releaseTitle: track.release?.title,
+    source: "library" as const,
   };
 }
 

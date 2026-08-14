@@ -33,7 +33,7 @@ export interface SermonAudioCardProps {
   globalFavoriteCounts: Record<string, number>;
   modalVisible: string | null;
   comments: Record<string, any[]>;
-  playAudio: (uri: string, id: string) => void;
+  playAudio: (uri: string, id: string, title?: string) => void;
   handleFavorite: (key: string, item: any) => void;
   handleSave: (key: string, item: any) => void;
   handleShare: (key: string, item: any) => void;
@@ -71,8 +71,9 @@ export default function SermonAudioCard({
     : audio?.thumbnailUrl
     ? { uri: audio.thumbnailUrl }
     : { uri: audio.fileUrl };
-  const isPlaying = playingAudioId === modalKey;
-  const currentProgress = audioProgressMap[modalKey] || 0;
+  const sermonId = audio._id || modalKey;
+  const isPlaying = playingAudioId === sermonId;
+  const currentProgress = audioProgressMap[sermonId] || 0;
 
   const contentId = audio._id || modalKey;
   const currentComments = comments[contentId] || [];
@@ -131,7 +132,9 @@ export default function SermonAudioCard({
 
         <View className="absolute inset-0 justify-center items-center">
           <TouchableOpacity
-            onPress={() => playAudio(audio.fileUrl, modalKey)}
+            onPress={() =>
+              playAudio(audio.fileUrl, audio._id || modalKey, audio.title)
+            }
             className="bg-white/70 p-2 rounded-full"
             activeOpacity={0.9}
           >
@@ -196,7 +199,9 @@ export default function SermonAudioCard({
 
         <View className="absolute bottom-3 left-3 right-3 flex-row items-center gap-2 px-3">
           <TouchableOpacity
-            onPress={() => playAudio(audio.fileUrl, modalKey)}
+            onPress={() =>
+              playAudio(audio.fileUrl, audio._id || modalKey, audio.title)
+            }
           >
             <Ionicons
               name={isPlaying ? "pause" : "play"}

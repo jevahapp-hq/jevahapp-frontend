@@ -1,5 +1,4 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { Audio, ResizeMode, Video } from "expo-av";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,8 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import SuccessCard from "../components/SuccessCard";
 import unifiedSearchAPI, { UnifiedSearchItem } from "../services/unifiedSearchAPI";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useDownloadStore } from "../store/useDownloadStore";
 import { MediaItem, useMediaStore } from "../store/useUploadStore";
+import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
     addToSearchHistory,
@@ -46,17 +47,13 @@ export default function ExploreSearch() {
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   
-  // Audio playback state
-  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
-  const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
-  const [audioDuration, setAudioDuration] = useState<Record<string, number>>({});
-  const [audioPosition, setAudioPosition] = useState<Record<string, number>>({});
-  const audioRefs = useRef<Record<string, Audio.Sound>>({});
-  
-  // Video playback state
-  const [playingVideos, setPlayingVideos] = useState<Record<string, boolean>>({});
-  const [showVideoOverlay, setShowVideoOverlay] = useState<Record<string, boolean>>({});
-  const videoRefs = useRef<Record<string, Video>>({});
+  const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
+  const sessionPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const sessionProgress = useGlobalAudioPlayerStore((s) => s.progress);
+  const sessionDuration = useGlobalAudioPlayerStore((s) => s.duration);
+  const sessionPosition = useGlobalAudioPlayerStore((s) => s.position);
+  const playingAudio =
+    currentTrackId && sessionPlaying ? currentTrackId : null;
   
   // Get all media from store
   const { mediaList } = useMediaStore();
@@ -88,18 +85,6 @@ export default function ExploreSearch() {
       setIsLoadingHistory(false);
     }
   };
-
-  // Cleanup audio and video on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(audioRefs.current).forEach(sound => {
-        sound.unloadAsync();
-      });
-      // Video refs don't need explicit cleanup, but we can clear the state
-      setPlayingVideos({});
-      setShowVideoOverlay({});
-    };
-  }, []);
 
   // Transform unified search item to MediaItem format
   const transformSearchItem = (item: UnifiedSearchItem): MediaItem => {
@@ -238,70 +223,22 @@ export default function ExploreSearch() {
     await handleSearch(keyword);
   };
 
-  // Video playback functions
-  const toggleVideoPlayback = async (itemId: string) => {
-    try {
-      const isCurrentlyPlaying = playingVideos[itemId] ?? false;
-      
-      if (isCurrentlyPlaying) {
-        // Pause current video
-        setPlayingVideos(prev => ({ ...prev, [itemId]: false }));
-        setShowVideoOverlay(prev => ({ ...prev, [itemId]: true }));
-      } else {
-        // Pause all other videos first
-        setPlayingVideos({ [itemId]: true });
-        setShowVideoOverlay({ [itemId]: false });
-      }
-    } catch (error) {
-      console.error('Error toggling video playback:', error);
-    }
-  };
-
-  // Audio playback functions
-  const toggleAudioPlayback = async (itemId: string, fileUrl: string) => {
-    try {
-      if (playingAudio === itemId) {
-        // Stop current audio
-        if (audioRefs.current[itemId]) {
-          await audioRefs.current[itemId].pauseAsync();
-        }
-        setPlayingAudio(null);
-      } else {
-        // Stop any other playing audio first
-        if (playingAudio && audioRefs.current[playingAudio]) {
-          await audioRefs.current[playingAudio].pauseAsync();
-        }
-        
-        // Start new audio
-        if (!audioRefs.current[itemId]) {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: fileUrl },
-            { shouldPlay: true },
-            (status) => {
-              if (status.isLoaded && status.durationMillis && status.positionMillis) {
-                const duration = status.durationMillis;
-                const position = status.positionMillis;
-                setAudioProgress(prev => ({ ...prev, [itemId]: position / duration }));
-                setAudioPosition(prev => ({ ...prev, [itemId]: position }));
-                setAudioDuration(prev => ({ ...prev, [itemId]: duration }));
-                
-                if (status.didJustFinish) {
-                  setPlayingAudio(null);
-                  setAudioProgress(prev => ({ ...prev, [itemId]: 0 }));
-                  setAudioPosition(prev => ({ ...prev, [itemId]: 0 }));
-                }
-              }
-            }
-          );
-          audioRefs.current[itemId] = sound;
-        } else {
-          await audioRefs.current[itemId].playAsync();
-        }
-        setPlayingAudio(itemId);
-      }
-    } catch (error) {
-      console.error('Error toggling audio playback:', error);
-    }
+  const toggleAudioPlayback = async (item: MediaItem) => {
+    const itemId = item._id || item.fileUrl;
+    const fileUrl = item.fileUrl || (item as any).audioUrl;
+    if (!itemId || !fileUrl) return;
+    await playOrToggleTrack({
+      id: String(itemId),
+      title: item.title || "Audio",
+      artist: String(item.speaker || item.uploadedBy || ""),
+      audioUrl: fileUrl,
+      thumbnailUrl:
+        typeof item.thumbnailUrl === "string"
+          ? item.thumbnailUrl
+          : (item as any).imageUrl || "",
+      duration: Number(item.duration) || 0,
+      source: "feed",
+    });
   };
 
   // Video navigation function
@@ -402,60 +339,25 @@ export default function ExploreSearch() {
     const isMusic = item.contentType === 'music';
     const itemId = item._id || item.fileUrl || `item-${index}`;
     const isAudioPlaying = playingAudio === itemId;
-    const isVideoPlaying = playingVideos[itemId] ?? false;
-    const showVideoOverlayState = showVideoOverlay[itemId] ?? true;
-    
-    // Safe video URI validation
-    const isValidUri = (uri: any) => typeof uri === 'string' && uri.trim().length > 0 && /^https?:\/\//.test(uri.trim());
-    const safeVideoUri = isValidUri(item.fileUrl) 
-      ? String(item.fileUrl).trim() 
-      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
     return (
       <View className="w-[48%] mb-4 h-[232px] rounded-xl overflow-hidden bg-gray-100">
         {isVideo ? (
-          // Video content - show actual video with play controls
           <TouchableOpacity
-            onPress={() => toggleVideoPlayback(itemId)}
+            onPress={() => navigateToReels(item, index)}
             className="w-full h-full"
             activeOpacity={0.9}
           >
-            <Video
-              ref={(ref) => {
-                if (ref) {
-                  videoRefs.current[itemId] = ref;
-                }
-              }}
-              source={{ uri: safeVideoUri }}
-              style={{ width: "100%", height: "100%", position: "absolute" }}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={isVideoPlaying}
-              isLooping={false}
-              isMuted={true} // Muted by default for better UX in search
-              useNativeControls={false}
-              onError={(e) => {
-                console.warn('Video failed to load in ExploreSearch:', item?.title, e);
-                setPlayingVideos(prev => ({ ...prev, [itemId]: false }));
-                setShowVideoOverlay(prev => ({ ...prev, [itemId]: true }));
-              }}
-              onPlaybackStatusUpdate={(status) => {
-                if (!status.isLoaded) return;
-                if (status.didJustFinish) {
-                  setPlayingVideos(prev => ({ ...prev, [itemId]: false }));
-                  setShowVideoOverlay(prev => ({ ...prev, [itemId]: true }));
-                  console.log(`🎬 Search video completed: ${item.title}`);
-                }
-              }}
+            <Image
+              source={getThumbnailSource(item)}
+              className="h-full w-full rounded-xl"
+              resizeMode="cover"
             />
-            
-            {/* Play/Pause overlay for videos */}
-            {!isVideoPlaying && showVideoOverlayState && (
             <View className="absolute inset-0 justify-center items-center">
               <View className="bg-black/50 rounded-full p-3">
                 <Ionicons name="play" size={24} color="white" />
               </View>
             </View>
-            )}
           </TouchableOpacity>
         ) : (
           // Non-video content (music, books, etc.) - show thumbnail
@@ -481,7 +383,7 @@ export default function ExploreSearch() {
             <View className="p-2">
               <View className="flex-row items-center justify-between mb-1">
                 <TouchableOpacity
-                  onPress={() => toggleAudioPlayback(itemId, item.fileUrl)}
+                  onPress={() => toggleAudioPlayback(item)}
                   className="bg-white/20 rounded-full p-1"
                 >
                   <Ionicons 
@@ -500,20 +402,20 @@ export default function ExploreSearch() {
               </View>
               
               {/* Progress bar for audio */}
-              {audioDuration[itemId] && (
+              {playingAudio === itemId && sessionDuration > 0 && (
                 <View className="w-full">
                   <View className="w-full h-1 bg-white/30 rounded-full">
                     <View 
                       className="h-1 bg-white rounded-full" 
-                      style={{ width: `${(audioProgress[itemId] || 0) * 100}%` }}
+                      style={{ width: `${(sessionProgress || 0) * 100}%` }}
                     />
                   </View>
                   <View className="flex-row justify-between mt-1">
                     <Text className="text-white text-xs font-rubik">
-                      {formatTime(audioPosition[itemId] || 0)}
+                      {formatTime(sessionPosition || 0)}
                     </Text>
                     <Text className="text-white text-xs font-rubik">
-                      {formatTime(audioDuration[itemId] || 0)}
+                      {formatTime(sessionDuration || 0)}
                     </Text>
                   </View>
                 </View>

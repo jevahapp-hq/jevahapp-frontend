@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Audio, ResizeMode, Video } from "expo-av";
 import { Pause, Play, Search, Volume2, X } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Dimensions,
     Image,
@@ -28,8 +27,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import AuthHeader from "../components/AuthHeader";
+import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 import { useVideoNavigation } from "../hooks/useVideoNavigation";
 import { DownloadItem, useDownloadStore } from "../store/useDownloadStore";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { API_BASE_URL } from "../utils/api";
 import { authUtils } from "../utils/authUtils";
 import type { MediaItem } from "../types/media";
@@ -593,43 +594,45 @@ interface MediaPreviewModalProps {
 }
 
 const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, onOpenFull }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const videoRef = useRef<Video>(null);
-  const audioRef = useRef<Audio.Sound | null>(null);
   const isVideo = item.contentType === 'video' || item.contentType === 'videos';
   const isAudio = item.contentType === 'audio' || item.contentType === 'music';
   const isEbook = item.contentType === 'ebook';
   const mediaUrl = item.localPath || item.fileUrl || "";
+  const audioId = String((item as any).id || (item as any)._id || mediaUrl || "download");
 
-  // Cleanup on unmount
+  const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
+  const sessionPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const sessionMuted = useGlobalAudioPlayerStore((s) => s.isMuted);
+
+  const isPlaying = isAudio && currentTrackId === audioId && sessionPlaying;
+  const isMuted =
+    isAudio && currentTrackId === audioId ? sessionMuted : false;
+
   useEffect(() => {
     return () => {
-      if (videoRef.current) {
-        videoRef.current.unloadAsync().catch(() => {});
-      }
-      if (audioRef.current) {
-        audioRef.current.unloadAsync().catch(() => {});
+      const store = useGlobalAudioPlayerStore.getState();
+      if (store.currentTrack?.id === audioId && store.currentTrack?.source === "library") {
+        store.pause().catch(() => {});
       }
     };
-  }, []);
+  }, [audioId]);
 
   const handlePlayPause = async () => {
     try {
-      if (isVideo && videoRef.current) {
-        if (isPlaying) {
-          await videoRef.current.pauseAsync();
-        } else {
-          await videoRef.current.playAsync();
-        }
-        setIsPlaying(!isPlaying);
-      } else if (isAudio && audioRef.current) {
-        if (isPlaying) {
-          await audioRef.current.pauseAsync();
-        } else {
-          await audioRef.current.playAsync();
-        }
-        setIsPlaying(!isPlaying);
+      if (isVideo) {
+        onOpenFull();
+        return;
+      }
+      if (isAudio && mediaUrl) {
+        await playOrToggleTrack({
+          id: audioId,
+          title: item.title || "Download",
+          artist: "",
+          audioUrl: mediaUrl,
+          thumbnailUrl: item.thumbnailUrl || "",
+          duration: 0,
+          source: "library",
+        });
       }
     } catch (error) {
       console.error("Error toggling playback:", error);
@@ -638,35 +641,13 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, on
 
   const handleToggleMute = async () => {
     try {
-      if (isVideo && videoRef.current) {
-        await videoRef.current.setIsMutedAsync(!isMuted);
-        setIsMuted(!isMuted);
-      } else if (isAudio && audioRef.current) {
-        await audioRef.current.setVolumeAsync(isMuted ? 1 : 0);
-        setIsMuted(!isMuted);
+      if (isAudio && currentTrackId === audioId) {
+        await useGlobalAudioPlayerStore.getState().toggleMute();
       }
     } catch (error) {
       console.error("Error toggling mute:", error);
     }
   };
-
-  // Initialize audio player for audio files
-  useEffect(() => {
-    if (isAudio && mediaUrl) {
-      const loadAudio = async () => {
-        try {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: mediaUrl },
-            { shouldPlay: false }
-          );
-          audioRef.current = sound;
-        } catch (error) {
-          console.error("Error loading audio:", error);
-        }
-      };
-      loadAudio();
-    }
-  }, [isAudio, mediaUrl]);
 
   return (
     <View 
@@ -698,51 +679,30 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, on
         style={{ zIndex: 10001 }}
         pointerEvents="box-none"
       >
-        {isVideo && mediaUrl ? (
+        {isVideo ? (
           <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
             <View className="w-full max-w-md aspect-video rounded-xl overflow-hidden bg-black" style={{ zIndex: 10001 }}>
-            <Video
-              ref={videoRef}
-              source={{ uri: mediaUrl }}
+            <Image
+              source={
+                item.thumbnailUrl
+                  ? { uri: item.thumbnailUrl }
+                  : require("../../assets/images/image (10).png")
+              }
               style={{ width: "100%", height: "100%" }}
-              resizeMode={ResizeMode.CONTAIN}
-              useNativeControls={false}
-              isMuted={isMuted}
-              shouldPlay={isPlaying}
-              onPlaybackStatusUpdate={(status) => {
-                if (status.isLoaded) {
-                  setIsPlaying(status.isPlaying);
-                }
-              }}
+              resizeMode="cover"
             />
-            {/* Video controls overlay */}
             <View className="absolute inset-0 items-center justify-center" pointerEvents="box-none">
               <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation();
-                  handlePlayPause();
+                  onOpenFull();
                 }}
                 className="bg-white/20 rounded-full p-4"
                 activeOpacity={0.7}
               >
-                {isPlaying ? (
-                  <Pause size={32} color="white" fill="white" />
-                ) : (
-                  <Play size={32} color="white" fill="white" />
-                )}
+                <Play size={32} color="white" fill="white" />
               </TouchableOpacity>
             </View>
-            {/* Mute button */}
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                handleToggleMute();
-              }}
-              className="absolute bottom-4 right-4 bg-white/20 rounded-full p-2"
-              activeOpacity={0.7}
-            >
-              <Volume2 size={20} color="white" />
-            </TouchableOpacity>
           </View>
           </TouchableWithoutFeedback>
         ) : isAudio ? (

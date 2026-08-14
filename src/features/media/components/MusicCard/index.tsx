@@ -1,9 +1,10 @@
 /**
  * MusicCard — thin composition shell (media slot + shared chrome).
+ * Playback is the app-wide session; this card only commands and displays it.
  */
 import React, { memo, useCallback, useRef } from "react";
 import { View } from "react-native";
-import { useGlobalAudioPlayerStore } from "../../../../../app/store/useGlobalAudioPlayerStore";
+import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { MusicCardProps } from "../../../../shared/types";
 import {
   MediaCardFooter,
@@ -25,7 +26,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   onShare,
   onDownload,
   onDelete,
-  onPlay,
   onLayout,
   focusRef,
 }) => {
@@ -51,10 +51,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   useMusicViewTracking({
     contentId: String(audio._id || ""),
     contentType: audio.contentType || "media",
-    isPlaying: playback.playerState.isPlaying,
-    positionMs: playback.playerState.position || 0,
-    progress: playback.playerState.progress || 0,
-    durationMs: playback.playerState.duration || 0,
+    isPlaying: playback.isPlaying,
+    positionMs: playback.position || 0,
+    progress: playback.progress || 0,
+    durationMs: playback.duration || 0,
   });
 
   const thumbnailSource = audio?.imageUrl || audio?.thumbnailUrl;
@@ -63,16 +63,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
       ? thumbnailSource
       : (thumbnailSource as any)?.uri;
 
-  const handleMute = useCallback(() => {
-    if (playback.isVirtualTrack && playback.isCurrentTrack) {
-      void useGlobalAudioPlayerStore.getState().toggleMute();
-    } else {
-      void playback.controls.toggleMute();
-    }
-  }, [playback.isVirtualTrack, playback.isCurrentTrack, playback.controls]);
-
   const openComments = useCallback(() => {
-    // Open immediately — don't wait on measureInWindow (was making comments feel laggy)
     if (onComment) onComment(audio, null);
     else showCommentModal([], String(contentId), "media", undefined, null, null);
   }, [audio, contentId, onComment, showCommentModal]);
@@ -98,23 +89,15 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           thumbnailUri={thumbnailUri}
           isSermon={isSermon}
           attemptedPlay={playback.attemptedPlay}
-          hasDuration={!!playback.playerState.duration}
-          progress={
-            playback.isVirtualTrack
-              ? playback.globalProgress || 0
-              : playback.playerState.progress || 0
-          }
-          isMuted={
-            playback.isVirtualTrack
-              ? playback.globalIsMuted || false
-              : playback.playerState.isMuted || false
-          }
-          isPlaying={playback.isPlayingFromGlobal}
+          hasDuration={playback.hasDuration}
+          progress={playback.progress}
+          isMuted={playback.isMuted}
+          isPlaying={playback.isPlaying}
           onToggleOverlay={() => playback.setShowOverlay((v) => !v)}
-          onToggleMute={handleMute}
+          onToggleMute={() => void playback.toggleMute()}
           onSeekRelative={playback.seekBySeconds}
           onSeekToPercent={playback.onSeekToPercent}
-          onPlayPress={() => void playback.handlePlayPress(onPlay)}
+          onPlayPress={() => void playback.handlePlayPress()}
         />
       </View>
 

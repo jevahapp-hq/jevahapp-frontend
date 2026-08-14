@@ -2,7 +2,6 @@ import type {
   AudioPlayerGet,
   AudioPlayerSet,
   GlobalAudioPlayerState,
-  VirtualTrackControls,
 } from "./types";
 
 export function createStateSetters(
@@ -15,7 +14,6 @@ export function createStateSetters(
   | "setPosition"
   | "setDuration"
   | "setProgressValue"
-  | "setVirtualTrackControls"
 > {
   return {
     setPlaying: (playing: boolean) => {
@@ -42,7 +40,5 @@ export function createStateSetters(
       const position = duration * progress;
       set({ progress, position });
     },
-    setVirtualTrackControls: (controls: VirtualTrackControls | null) =>
-      set({ __virtualTrackControls: controls || undefined }),
   };
 }

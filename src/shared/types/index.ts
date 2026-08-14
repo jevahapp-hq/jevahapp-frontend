@@ -119,9 +119,6 @@ export interface VideoCardProps {
   contentStats: Record<string, any>;
   userFavorites: Record<string, boolean>;
   globalFavoriteCounts: Record<string, number>;
-  playingVideos: Record<string, boolean>;
-  mutedVideos: Record<string, boolean>;
-  progresses: Record<string, number>;
   videoVolume: number;
   currentlyVisibleVideo: string | null;
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
@@ -169,7 +166,7 @@ export interface MusicCardProps {
   onShare: (item: MediaItem) => void;
   onDownload: (item: MediaItem) => void;
   onDelete?: (item: MediaItem) => void;
-  onPlay: (uri: string, id: string) => void;
+  onPlay?: (uri: string, id: string) => void;
   isPlaying?: boolean;
   progress?: number;
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;

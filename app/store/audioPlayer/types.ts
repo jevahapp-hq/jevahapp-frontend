@@ -10,7 +10,8 @@ export interface AudioTrack {
   duration: number;
   category?: string;
   description?: string;
-  isVirtual?: boolean; // If true, this track is played by an external player (e.g., useAdvancedAudioPlayer), don't load audio here
+  /** Where this track was started from — feed scroll only pauses `feed` audio. */
+  source?: "feed" | "copyright-free" | "library" | "hymn" | "ebook";
   /** Nested release context for “Playing from …” */
   release?: {
     id: string;
@@ -20,13 +21,6 @@ export interface AudioTrack {
     slug?: string;
   };
   releaseTitle?: string;
-}
-
-export interface VirtualTrackControls {
-  togglePlayPause: () => Promise<void>;
-  pause: () => Promise<void>;
-  play: () => Promise<void>;
-  seekToProgress?: (progress: number) => Promise<void>; // Optional seek support
 }
 
 export interface GlobalAudioPlayerState {
@@ -60,6 +54,7 @@ export interface GlobalAudioPlayerState {
   seekToProgress: (progress: number) => Promise<void>; // progress 0-1
   setMuted: (muted: boolean) => Promise<void>;
   toggleMute: () => Promise<void>;
+  setRate: (rate: number) => Promise<void>;
   stop: () => Promise<void>;
   next: () => Promise<void>;
   previous: () => Promise<void>;
@@ -80,10 +75,6 @@ export interface GlobalAudioPlayerState {
   __completionTimeout?: boolean;
   __completionTimeoutId?: any;
   __lastStatusUpdateTs?: number;
-
-  // Callback for virtual tracks (played by external players)
-  __virtualTrackControls?: VirtualTrackControls;
-  setVirtualTrackControls: (controls: VirtualTrackControls | null) => void;
 }
 
 export type AudioPlayerGet = () => GlobalAudioPlayerState;

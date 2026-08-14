@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, type MutableRefObject } from "react";
 import {
   Image,
   Text,
@@ -8,28 +8,25 @@ import {
 import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../src/shared/utils/videoUrlManager";
+import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { getBottomNavHeight } from "../../utils/responsiveOptimized";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { ReelsActionButtons } from "./ReelsActionButtons";
 import { ReelsMenu } from "./ReelsMenu";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
 import ReelsVideoPlayer from "./ReelsVideoPlayer";
-
-import { Video } from "expo-av";
-import { MutableRefObject } from "react";
+import type { VideoPlayer } from "expo-video";
 
 export interface ReelsVideoItemProps {
   videoData: any;
   index: number;
   isActive: boolean;
   passedVideoKey?: string;
-  videoRefs: MutableRefObject<Record<string, Video>>;
+  videoRefs: MutableRefObject<Record<string, VideoPlayer>>;
   screenHeight: number;
   screenWidth: number;
   isIOS: boolean;
   currentIndex_state: number;
-  playingVideos: Record<string, boolean>;
-  mutedVideos: Record<string, boolean>;
   videoDuration: number;
   videoPosition: number;
   isDragging: boolean;
@@ -68,7 +65,6 @@ export interface ReelsVideoItemProps {
   triggerHapticFeedback: () => void;
   formatTime: (ms: number) => string;
   globalVideoStore: any;
-  mediaStore: any;
   source?: string;
   menuVisible: boolean;
   isOwner: boolean;
@@ -90,8 +86,6 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     screenHeight,
     isIOS,
     currentIndex_state,
-    playingVideos,
-    mutedVideos,
     videoDuration,
     videoPosition,
     isDragging,
@@ -128,7 +122,6 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     setVideoPosition,
     triggerHapticFeedback,
     globalVideoStore,
-    mediaStore,
     source,
     menuVisible,
     isOwner,
@@ -153,8 +146,12 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     return raw ? getBestVideoUrl(raw) : null;
   }, [enriched]);
 
-  const isPlaying = playingVideos[videoKey] ?? false;
-  const isMuted = mutedVideos[videoKey] ?? false;
+  const isPlaying = useGlobalVideoStore(
+    (s) => s.playingVideos[videoKey] ?? false
+  );
+  const isMuted = useGlobalVideoStore(
+    (s) => s.mutedVideos[videoKey] ?? false
+  );
   // Mount active + ±1 so swipe-in doesn't wait on cold native player alloc.
   const shouldMountPlayer = Math.abs(index - currentIndex_state) <= 1;
 
@@ -206,17 +203,13 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
               setVideoPosition={setVideoPosition}
               setLocalPosition={setLocalPosition}
               setLocalDuration={setLocalDuration}
-              setIsDragging={setIsDragging}
               isDragging={isDragging}
               localDuration={localDuration}
               videoPosition={videoPosition}
               globalVideoStore={globalVideoStore}
-              mediaStore={mediaStore}
-              userHasManuallyPaused={userHasManuallyPaused}
               showPauseOverlay={showPauseOverlay}
               getResponsiveSize={getResponsiveSize}
               triggerHapticFeedback={triggerHapticFeedback}
-              isIOS={isIOS}
             />
           ) : (
             <View style={{ width: "100%", height: "100%", backgroundColor: "#000" }}>

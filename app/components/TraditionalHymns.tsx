@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import hymnAudioService from "../services/hymnAudioService";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 
 interface Hymn {
   id: string;
@@ -31,16 +32,14 @@ interface TraditionalHymnsProps {
 export default function TraditionalHymns({ onClose }: TraditionalHymnsProps) {
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
+  const currentSource = useGlobalAudioPlayerStore((s) => s.currentTrack?.source);
+  const sessionPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const currentPlayingId = currentSource === "hymn" ? currentTrackId : null;
+  const isPlaying = currentSource === "hymn" && sessionPlaying;
 
   useEffect(() => {
     loadTraditionalHymns();
-
-    // Cleanup audio when component unmounts
-    return () => {
-      hymnAudioService.cleanup();
-    };
   }, []);
 
   const loadTraditionalHymns = () => {
@@ -231,26 +230,14 @@ export default function TraditionalHymns({ onClose }: TraditionalHymnsProps) {
 
   const handlePlayHymn = async (hymn: Hymn) => {
     try {
-      if (currentPlayingId === hymn.id && isPlaying) {
-        // Pause if currently playing
-        await hymnAudioService.pauseHymn();
-        setIsPlaying(false);
-      } else if (currentPlayingId === hymn.id && !isPlaying) {
-        // Resume if paused
-        await hymnAudioService.resumeHymn();
-        setIsPlaying(true);
-      } else {
-        // Play new hymn
-        setCurrentPlayingId(hymn.id);
-        setIsPlaying(true);
-
-        await hymnAudioService.playHymn({
-          id: hymn.id,
-          title: hymn.title,
-          audioUrl: hymn.audioUrl || "",
-          duration: hymn.duration,
-        });
-      }
+      await hymnAudioService.togglePlayPause({
+        id: hymn.id,
+        title: hymn.title,
+        audioUrl: hymn.audioUrl || "",
+        duration: hymn.duration,
+        artist: hymn.composer,
+        thumbnailUrl: hymn.thumbnailUrl,
+      });
     } catch (error) {
       console.error("Error playing hymn:", error);
       Alert.alert(

@@ -19,8 +19,8 @@ export const FEED_PRELOAD_WARM_DISTANCE = 3;
 export const FEED_INITIAL_MOUNT_COUNT = 2;
 /** Hidden category panes: keep at most this many paused decoders warm. */
 export const FEED_WARM_IDLE_MOUNT_COUNT = 1;
-/** Hard ceiling — prune oldest mounts beyond this. */
-export const FEED_HARD_MAX_PLAYERS = 4;
+/** Hard ceiling — 1 audible + 1 preload (TikTok-style). */
+export const FEED_HARD_MAX_PLAYERS = 2;
 
 /** Viewability: start autoplay once ~30% of the card is visible. */
 export const FEED_VIDEO_VISIBLE_PERCENT = 30;

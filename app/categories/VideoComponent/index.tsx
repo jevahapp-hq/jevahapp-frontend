@@ -11,7 +11,6 @@ import { VideoCardSkeleton } from "../../../src/shared/components/Skeleton";
 import SuccessCard from "../../components/SuccessCard";
 import { useCommentModal } from "../../context/CommentModalContext";
 import { useDownloadStore } from "../../store/useDownloadStore";
-import { useGlobalMediaStore } from "../../store/useGlobalMediaStore";
 import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../store/useInteractionStore";
 import { useLibraryStore } from "../../store/useLibraryStore";
@@ -38,7 +37,6 @@ export default function VideoComponent() {
   const { loadDownloadedItems } = useDownloadStore();
   const mediaStore = useMediaStore();
   const globalVideoStore = useGlobalVideoStore();
-  const globalMediaStore = useGlobalMediaStore();
   const libraryStore = useLibraryStore();
   const contentStats = useInteractionStore((s) => s.contentStats);
   const loadBatchContentStats = useInteractionStore((s) => s.loadBatchContentStats);
@@ -140,7 +138,6 @@ export default function VideoComponent() {
     setGlobalFavoriteCounts,
     libraryStore,
     globalVideoStore,
-    globalMediaStore,
     showCommentModal,
     comments,
     handleDownload,
@@ -202,24 +199,6 @@ export default function VideoComponent() {
       setShowOverlayMini((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
     });
   }, [uploadedVideos, trendingItems, previouslyViewedState]);
-
-  useEffect(() => {
-    Object.keys(videoRefs.current).forEach(async (key) => {
-      const videoRef = videoRefs.current[key];
-      const shouldBePlaying = globalVideoStore.playingVideos[key] ?? false;
-      if (videoRef) {
-        try {
-          const status = await videoRef.getStatusAsync();
-          if (status.isLoaded) {
-            if (shouldBePlaying && !status.isPlaying) await videoRef.playAsync();
-            else if (!shouldBePlaying && status.isPlaying) await videoRef.pauseAsync();
-          }
-        } catch (error) {
-          console.error("Error syncing video playback:", error);
-        }
-      }
-    });
-  }, [globalVideoStore.playingVideos]);
 
   useEffect(() => {
     const init = async () => {
@@ -288,9 +267,6 @@ export default function VideoComponent() {
         contentStats={contentStats}
         userFavorites={userFavorites}
         globalFavoriteCounts={globalFavoriteCounts}
-        playingVideos={globalVideoStore.playingVideos}
-        mutedVideos={globalVideoStore.mutedVideos}
-        progresses={globalVideoStore.progresses}
         videoVolume={1.0}
         currentlyVisibleVideo={globalVideoStore.currentlyVisibleVideo}
         onVideoTap={handleVideoTapWrapper}

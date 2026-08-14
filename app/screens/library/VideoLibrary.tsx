@@ -1,8 +1,8 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FlatList,
+  Image,
   ScrollView,
   Share,
   Text,
@@ -82,9 +82,7 @@ export default function VideoLibrary() {
   // Navigation for Reels
   const { navigateToReels } = useVideoNavigation();
 
-  // Overlay state
   const [showOverlay, setShowOverlay] = useState<Record<string, boolean>>({});
-  const videoRefs = useRef<Record<string, any>>({});
 
   useEffect(() => {
     const loadSavedVideos = async () => {
@@ -147,15 +145,13 @@ export default function VideoLibrary() {
 
   const renderMediaCard = ({ item, index }: any) => {
     const itemId = item._id || item.id;
-    const isPlaying = false;
     const showVideoOverlay = showOverlay[itemId] ?? true;
-    const isValidUri = (u: any) =>
-      typeof u === "string" &&
-      u.trim().length > 0 &&
-      /^https?:\/\//.test(u.trim());
-    const safeVideoUri = isValidUri(item.fileUrl)
-      ? String(item.fileUrl).trim()
-      : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+    const poster =
+      typeof item.thumbnailUrl === "string" && item.thumbnailUrl
+        ? { uri: item.thumbnailUrl }
+        : typeof item.imageUrl === "string" && item.imageUrl
+          ? { uri: item.imageUrl }
+          : item.image || require("../../../assets/images/image (10).png");
 
     return (
       <View className="w-[48%] mb-6 h-[232px] rounded-xl overflow-hidden bg-[#E5E5EA]">
@@ -164,37 +160,12 @@ export default function VideoLibrary() {
           className="w-full h-full"
           activeOpacity={0.9}
         >
-          <Video
-            ref={(ref) => {
-              if (ref) {
-                videoRefs.current[itemId] = ref;
-              }
-            }}
-            source={{ uri: safeVideoUri }}
+          <Image
+            source={poster}
             style={{ width: "100%", height: "100%", position: "absolute" }}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            isMuted={false}
-            useNativeControls={false}
-            onError={(e) => {
-              console.warn(
-                "Video failed to load in VideoLibrary:",
-                item?.title,
-                e
-              );
-              setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
-            }}
-            onPlaybackStatusUpdate={(status) => {
-              if (!status.isLoaded) return;
-              if (status.didJustFinish) {
-                setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
-                console.log(`🎬 Library video completed: ${item.title}`);
-              }
-            }}
+            resizeMode="cover"
           />
 
-          {/* Play/Pause Overlay */}
           {showVideoOverlay && (
             <>
               <View className="absolute inset-0 justify-center items-center">

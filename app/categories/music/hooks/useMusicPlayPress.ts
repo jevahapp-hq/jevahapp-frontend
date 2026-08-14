@@ -76,6 +76,10 @@ export function useMusicPlayPress(songs: any[]) {
               duration: s.duration,
               category: s.category,
               description: s.description,
+              source:
+                s?.lane === "artist" || s?.contentType === "artist-music"
+                  ? ("library" as const)
+                  : ("copyright-free" as const),
             }));
 
           const queueIndex = mappedQueue.findIndex((s) => s.id === song.id);
@@ -103,6 +107,10 @@ export function useMusicPlayPress(songs: any[]) {
             duration: song.duration,
             category: song.category,
             description: song.description,
+            source:
+              song?.lane === "artist" || song?.contentType === "artist-music"
+                ? "library"
+                : "copyright-free",
           },
           true
         );

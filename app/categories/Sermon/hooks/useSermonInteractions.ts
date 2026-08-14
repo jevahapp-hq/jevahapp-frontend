@@ -1,8 +1,6 @@
 import { MutableRefObject, useState } from "react";
 import { Share } from "react-native";
 import { useCommentModal } from "../../../context/CommentModalContext";
-import { useGlobalMediaStore } from "../../../store/useGlobalMediaStore";
-import { useGlobalVideoStore } from "../../../store/useGlobalVideoStore";
 import { useInteractionStore } from "../../../store/useInteractionStore";
 import { useLibraryStore } from "../../../store/useLibraryStore";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
@@ -16,8 +14,6 @@ interface UseSermonInteractionsParams {
 export function useSermonInteractions({
   videoRefs,
 }: UseSermonInteractionsParams) {
-  const globalVideoStore = useGlobalVideoStore();
-  const globalMediaStore = useGlobalMediaStore();
   const libraryStore = useLibraryStore();
   const { showCommentModal } = useCommentModal();
   const { comments } = useInteractionStore();
@@ -44,44 +40,8 @@ export function useSermonInteractions({
     }
   };
 
-  const handleVideoTap = async (key: string, video: any, _index: number) => {
-    console.log(`🎮 Sermon video tap - key: ${key}, video: ${video?.title}`);
-    const isCurrentlyPlaying = globalVideoStore.playingVideos[key] ?? false;
-    console.log(`🎮 Currently playing: ${isCurrentlyPlaying}`);
-    if (isCurrentlyPlaying) {
-      console.log(`⏸️ Pausing sermon video: ${key}`);
-      globalVideoStore.pauseVideo(key);
-    } else {
-      console.log(`▶️ Playing sermon video: ${key}`);
-      // ✅ Use unified media store for consistent playback
-      globalMediaStore.playMediaGlobally(key, "video");
-
-      // ✅ Also directly call playAsync as a backup
-      const videoRef = videoRefs.current[key];
-      if (videoRef) {
-        try {
-          console.log(`🎬 Direct play attempt for sermon video: ${key}`);
-          const status = await videoRef.getStatusAsync();
-          if (status.isLoaded) {
-            await videoRef.playAsync();
-            console.log(`✅ Direct play successful for sermon video: ${key}`);
-          } else {
-            console.log(
-              `⏳ Sermon video ${key} not loaded yet, will play when loaded`
-            );
-          }
-        } catch (error) {
-          console.error(
-            `❌ Direct play failed for sermon video ${key}:`,
-            error
-          );
-        }
-      } else {
-        console.warn(
-          `⚠️ No video ref found for ${key}, relying on registered player`
-        );
-      }
-    }
+  const handleVideoTap = async (_key: string, _video: any, _index: number) => {
+    // SermonVideoCard opens Reels; do not spawn a private player here.
   };
 
   const handleComment = (key: string, audio: any) => {

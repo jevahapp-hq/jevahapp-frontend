@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface UseInstantFeedVideoPlayerOptions {
   source: string | null;
+  /** Reels loop; feed cards do not. */
+  loop?: boolean;
+  /** Seconds between timeUpdate events. */
+  timeUpdateEventInterval?: number;
 }
 
 /**
@@ -12,6 +16,8 @@ export interface UseInstantFeedVideoPlayerOptions {
  */
 export function useInstantFeedVideoPlayer({
   source,
+  loop = false,
+  timeUpdateEventInterval = 0.5,
 }: UseInstantFeedVideoPlayerOptions) {
   const [firstFrameReady, setFirstFrameReady] = useState(false);
   const firstFrameReadyRef = useRef(false);
@@ -21,10 +27,10 @@ export function useInstantFeedVideoPlayer({
   const videoSource = source ? { uri: source, useCaching: true } : null;
 
   const player = useVideoPlayer(videoSource, (p) => {
-    p.loop = false;
+    p.loop = loop;
     p.muted = true;
     p.volume = 0;
-    p.timeUpdateEventInterval = 0.5;
+    p.timeUpdateEventInterval = timeUpdateEventInterval;
     if (source) {
       try {
         p.play();
@@ -33,6 +39,10 @@ export function useInstantFeedVideoPlayer({
       }
     }
   });
+
+  useEffect(() => {
+    if (player) player.loop = loop;
+  }, [player, loop]);
 
   const markReady = useCallback(() => {
     if (!isMountedRef.current || firstFrameReadyRef.current) return;

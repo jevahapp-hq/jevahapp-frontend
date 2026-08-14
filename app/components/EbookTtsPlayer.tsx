@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
-import { Audio } from "expo-av";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import {
@@ -8,7 +7,8 @@ import {
   generateEbookTts,
   getEbookTts,
 } from "../services/ebookTtsApi";
-import GlobalAudioInstanceManager from "../utils/globalAudioInstanceManager";
+import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 
 type Props = {
   ebookId: string;
@@ -37,10 +37,15 @@ export default function EbookTtsPlayer({
   const [voicePreset, setVoicePreset] = useState<EbookTtsVoicePreset>("female");
   const [speed, setSpeed] = useState(1.0);
 
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [durationMs, setDurationMs] = useState<number>(0);
-  const [positionMs, setPositionMs] = useState<number>(0);
+  const ttsId = `ebook-tts-${ebookId}`;
+  const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
+  const sessionPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const sessionDuration = useGlobalAudioPlayerStore((s) => s.duration);
+  const sessionPosition = useGlobalAudioPlayerStore((s) => s.position);
+  const isCurrent = currentTrackId === ttsId;
+  const isPlaying = isCurrent && sessionPlaying;
+  const durationMs = isCurrent ? sessionDuration : 0;
+  const positionMs = isCurrent ? sessionPosition : 0;
 
   // Text sync highlighting (segments.v1)
   const [segments, setSegments] = useState<TtsSegment[]>([]);
@@ -116,63 +121,30 @@ export default function EbookTtsPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ebookId]);
 
-  // cleanup audio
   useEffect(() => {
     return () => {
-      soundRef.current?.unloadAsync().catch(() => {});
-      soundRef.current = null;
-    };
-  }, []);
-
-  const ensureSoundLoaded = async (): Promise<Audio.Sound> => {
-    if (!audioUrl) {
-      throw new Error("No audio URL");
-    }
-
-    if (soundRef.current) {
-      return soundRef.current;
-    }
-
-    // Ensure no other audio is playing (global player, etc.)
-    try {
-      await GlobalAudioInstanceManager.getInstance().stopAllAudio();
-    } catch {}
-
-    // Configure audio mode for smoother playback
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-    } catch {}
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: audioUrl },
-      { shouldPlay: false, rate: speed, shouldCorrectPitch: true },
-      (status) => {
-        if (!status.isLoaded) return;
-        setIsPlaying(status.isPlaying);
-        setDurationMs(status.durationMillis ?? 0);
-        setPositionMs(status.positionMillis ?? 0);
+      const store = useGlobalAudioPlayerStore.getState();
+      if (store.currentTrack?.id === ttsId) {
+        store.pause().catch(() => {});
       }
-    );
-    soundRef.current = sound;
-    return sound;
-  };
+    };
+  }, [ttsId]);
 
   const togglePlay = async () => {
     try {
       setError(null);
-      const sound = await ensureSoundLoaded();
-      const status = await sound.getStatusAsync();
-      if (!status.isLoaded) return;
-      if (status.isPlaying) {
-        await sound.pauseAsync();
-      } else {
-        await sound.playAsync();
+      if (!audioUrl) throw new Error("No audio URL");
+      await playOrToggleTrack({
+        id: ttsId,
+        title,
+        artist: "Ebook",
+        audioUrl,
+        thumbnailUrl: "",
+        duration: 0,
+        source: "ebook",
+      });
+      if (speed !== 1) {
+        await useGlobalAudioPlayerStore.getState().setRate(speed);
       }
     } catch (e: any) {
       setError(e?.message || "Playback error");
@@ -180,29 +152,26 @@ export default function EbookTtsPlayer({
   };
 
   const stop = async () => {
-    try {
-      const sound = soundRef.current;
-      if (!sound) return;
-      await sound.stopAsync();
-      await sound.setPositionAsync(0);
-    } catch {}
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.id !== ttsId) return;
+    await store.stop();
   };
 
   const seekToPct = async (pct: number) => {
-    const sound = soundRef.current;
-    if (!sound || !durationMs) return;
-    const nextPos = Math.floor((pct / 100) * durationMs);
-    await sound.setPositionAsync(nextPos);
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.id !== ttsId || !durationMs) return;
+    await store.seekToProgress(Math.max(0, Math.min(1, pct / 100)));
   };
 
   const seekToMs = async (ms: number) => {
-    const sound = soundRef.current;
-    if (!sound) return;
     try {
-      await sound.setPositionAsync(Math.max(0, ms));
-      if (!isPlaying) {
-        await sound.playAsync();
+      const store = useGlobalAudioPlayerStore.getState();
+      if (store.currentTrack?.id !== ttsId) {
+        await togglePlay();
       }
+      await useGlobalAudioPlayerStore.getState().seek(Math.max(0, ms));
+      const next = useGlobalAudioPlayerStore.getState();
+      if (!next.isPlaying) await next.play();
     } catch (e: any) {
       setError(e?.message || "Seek failed");
     }
@@ -210,19 +179,18 @@ export default function EbookTtsPlayer({
 
   const applySpeed = async (next: number) => {
     setSpeed(next);
-    const sound = soundRef.current;
-    if (sound) {
-      try {
-        await sound.setRateAsync(next, true);
-      } catch {}
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.id === ttsId) {
+      await store.setRate(next);
     }
   };
 
   const regenerate = async () => {
-    // Force regenerate (different voice/speed). Backend may cache by voice; if not, this still works.
     setAudioUrl(null);
-    soundRef.current?.unloadAsync().catch(() => {});
-    soundRef.current = null;
+    const store = useGlobalAudioPlayerStore.getState();
+    if (store.currentTrack?.id === ttsId) {
+      await store.clear();
+    }
     await loadOrGenerate();
   };
 

@@ -60,61 +60,34 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       partialize: (state): any => {
         // Only persist minimal state - don't persist soundInstance
         // Convert audioUrl and thumbnailUrl to strings if they're require() objects
-        const persistedTrack = state.currentTrack
-          ? {
-          id: state.currentTrack.id,
-          title: state.currentTrack.title,
-          artist: state.currentTrack.artist,
-          duration: state.currentTrack.duration,
-          category: state.currentTrack.category,
-          description: state.currentTrack.description,
-          // Convert require() objects to strings
-              audioUrl:
-                typeof state.currentTrack.audioUrl === "string"
-            ? state.currentTrack.audioUrl
-                  : state.currentTrack.audioUrl?.uri || "",
-              thumbnailUrl:
-                typeof state.currentTrack.thumbnailUrl === "string"
-            ? state.currentTrack.thumbnailUrl
-                  : state.currentTrack.thumbnailUrl?.uri || "",
-            }
-          : null;
+        const persistTrack = (track: typeof state.currentTrack) =>
+          track
+            ? {
+                id: track.id,
+                title: track.title,
+                artist: track.artist,
+                duration: track.duration,
+                category: track.category,
+                description: track.description,
+                source: track.source,
+                audioUrl:
+                  typeof track.audioUrl === "string"
+                    ? track.audioUrl
+                    : track.audioUrl?.uri || "",
+                thumbnailUrl:
+                  typeof track.thumbnailUrl === "string"
+                    ? track.thumbnailUrl
+                    : track.thumbnailUrl?.uri || "",
+              }
+            : null;
+
+        const persistedTrack = persistTrack(state.currentTrack);
 
         return {
           currentTrack: persistedTrack,
           isMuted: state.isMuted,
-          queue: state.queue.map((track) => ({
-            id: track.id,
-            title: track.title,
-            artist: track.artist,
-            duration: track.duration,
-            category: track.category,
-            description: track.description,
-            audioUrl:
-              typeof track.audioUrl === "string"
-              ? track.audioUrl
-                : track.audioUrl?.uri || "",
-            thumbnailUrl:
-              typeof track.thumbnailUrl === "string"
-              ? track.thumbnailUrl
-                : track.thumbnailUrl?.uri || "",
-          })),
-          originalQueue: state.originalQueue.map((track) => ({
-            id: track.id,
-            title: track.title,
-            artist: track.artist,
-            duration: track.duration,
-            category: track.category,
-            description: track.description,
-            audioUrl:
-              typeof track.audioUrl === "string"
-              ? track.audioUrl
-                : track.audioUrl?.uri || "",
-            thumbnailUrl:
-              typeof track.thumbnailUrl === "string"
-              ? track.thumbnailUrl
-                : track.thumbnailUrl?.uri || "",
-          })),
+          queue: state.queue.map((track) => persistTrack(track)!),
+          originalQueue: state.originalQueue.map((track) => persistTrack(track)!),
           currentIndex: state.currentIndex,
           repeatMode: state.repeatMode,
           isShuffled: state.isShuffled,

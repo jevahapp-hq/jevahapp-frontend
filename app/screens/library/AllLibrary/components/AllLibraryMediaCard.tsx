@@ -2,7 +2,6 @@
  * AllLibraryMediaCard - Renders video, audio, or book card for library grid
  */
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
 import React from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import {
@@ -15,8 +14,6 @@ import {
 
 const isValidUri = (u: any) =>
   typeof u === "string" && u.trim().length > 0 && /^https?:\/\//.test(u.trim());
-const DEFAULT_VIDEO_URI =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
 export interface AllLibraryMediaCardProps {
   item: any;
@@ -29,7 +26,7 @@ export interface AllLibraryMediaCardProps {
   setMenuOpenId: (id: string | null) => void;
   setMenuPos: (pos: { x: number; y: number } | null) => void;
   onTogglePlay: (itemId: string) => void;
-  onToggleAudioPlay: (itemId: string, fileUrl: string) => void;
+  onToggleAudioPlay: (itemId: string, fileUrl: string, title?: string) => void;
   onOpenBook: (book: any) => void;
   onOpenBookInPdfViewer: (book: any) => void;
   onCheckOwnership: (item: any) => void;
@@ -45,10 +42,7 @@ export interface AllLibraryMediaCardProps {
 
 export function AllLibraryMediaCard({
   item,
-  isPlaying,
   isAudioPlaying,
-  showVideoOverlay,
-  videoRefs,
   dotsRefs,
   menuOpenId,
   setMenuOpenId,
@@ -63,8 +57,6 @@ export function AllLibraryMediaCard({
   onRemoveFromLibrary,
   onDeletePress,
   isOwner,
-  setPlayingVideos,
-  setShowOverlay,
   router,
 }: AllLibraryMediaCardProps) {
   const itemId = item._id || item.id;
@@ -79,9 +71,7 @@ export function AllLibraryMediaCard({
     item.contentType?.toLowerCase().includes("pdf") ||
     isEbookContent(item);
 
-  const videoUrl = item.mediaUrl || item.fileUrl;
   const audioUrl = item.mediaUrl || item.fileUrl;
-  const safeVideoUri = isValidUri(videoUrl) ? String(videoUrl).trim() : DEFAULT_VIDEO_URI;
   const safeAudioUri = isValidUri(audioUrl) ? String(audioUrl).trim() : "";
 
   const handleBookPress = () => {
@@ -112,52 +102,27 @@ export function AllLibraryMediaCard({
           activeOpacity={0.9}
           style={{ borderRadius: 12, overflow: "hidden" }}
         >
-          <Video
-            ref={(ref) => {
-              if (ref) videoRefs.current[itemId] = ref;
-            }}
-            source={{ uri: safeVideoUri }}
-            style={{
-              width: "100%",
-              height: "100%",
-              position: "absolute",
-              borderRadius: 12,
-            }}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            isMuted={false}
-            useNativeControls={false}
-            onError={() => {
-              setPlayingVideos((prev) => ({ ...prev, [itemId]: false }));
-              setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
-            }}
-            onPlaybackStatusUpdate={(status) => {
-              if (!status.isLoaded) return;
-              if (status.didJustFinish) {
-                setPlayingVideos((prev) => ({ ...prev, [itemId]: false }));
-                setShowOverlay((prev) => ({ ...prev, [itemId]: true }));
-              }
-            }}
+          <Image
+            source={getThumbnailSource(item)}
+            className="h-full w-full rounded-xl"
+            resizeMode="cover"
           />
-          {!isPlaying && showVideoOverlay && (
-            <>
-              <View className="absolute inset-0 justify-center items-center">
-                <View className="bg-white/70 p-2 rounded-full">
-                  <Ionicons name="play" size={24} color="#FEA74E" />
-                </View>
-              </View>
-              <View className="absolute bottom-2 left-2 right-2">
-                <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
-                  {item.title}
-                </Text>
-              </View>
-            </>
-          )}
+          <View className="absolute inset-0 justify-center items-center">
+            <View className="bg-white/70 p-2 rounded-full">
+              <Ionicons name="play" size={24} color="#FEA74E" />
+            </View>
+          </View>
+          <View className="absolute bottom-2 left-2 right-2">
+            <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+              {item.title}
+            </Text>
+          </View>
         </TouchableOpacity>
       ) : isAudio ? (
         <TouchableOpacity
-          onPress={() => safeAudioUri && onToggleAudioPlay(itemId, safeAudioUri)}
+          onPress={() =>
+            safeAudioUri && onToggleAudioPlay(itemId, safeAudioUri, item.title)
+          }
           className="w-full h-full"
           activeOpacity={0.9}
         >
