@@ -253,10 +253,19 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       const normalizedUser = normalizeUserData(user);
       logUserDataStatus(user, "Media Upload");
 
-      // Create complete media item with validated user data
+      const userId = String(user?._id || user?.id || "").trim();
       const completeMediaItem: MediaItem = {
         ...item,
-        uploadedBy: normalizedUser.fullName,
+        uploadedBy: userId
+          ? {
+              _id: userId,
+              firstName: normalizedUser.firstName,
+              lastName: normalizedUser.lastName,
+              email: normalizedUser.email,
+              avatar: normalizedUser.avatar,
+              name: normalizedUser.fullName,
+            }
+          : normalizedUser.fullName,
         speaker: normalizedUser.fullName,
         speakerAvatar:
           normalizedUser.avatar || require("../../assets/images/Avatar-1.png"),

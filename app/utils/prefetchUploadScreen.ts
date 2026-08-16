@@ -7,6 +7,8 @@
  * 3) Chip press (last chance before push)
  */
 
+import { isLiteProfileActive } from "../../src/shared/lite/liteProfile";
+
 let uploadWarmed = false;
 let goLiveWarmed = false;
 let pickersWarmed = false;
@@ -24,6 +26,7 @@ function warmPickers(): void {
 
 /** Route entry + screen graph for Upload. */
 export function prefetchUploadScreen(): void {
+  if (isLiteProfileActive()) return;
   warmPickers();
   if (uploadWarmed) return;
   uploadWarmed = true;
@@ -37,6 +40,7 @@ export function prefetchUploadScreen(): void {
 
 /** Permissions → coming-soon chain for Go Live. */
 export function prefetchGoLiveScreen(): void {
+  if (isLiteProfileActive()) return;
   if (goLiveWarmed) return;
   goLiveWarmed = true;
   void import("../goLlive/AllowPermissionsScreen").catch(() => {

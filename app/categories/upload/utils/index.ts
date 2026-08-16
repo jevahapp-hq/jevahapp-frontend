@@ -9,5 +9,5 @@ export * from "./timeAgo";
 export * from "./authStatus";
 export * from "./resolveUploadContentType";
 export * from "./probeVideoDuration";
-export * from "./pollMediaUntilSeekable";
+export * from "./uploadDraft";
 

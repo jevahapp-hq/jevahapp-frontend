@@ -40,6 +40,7 @@ export default function FloatingAudioPlayer() {
       dragY={dragY}
       panHandlers={panResponder.panHandlers}
       onOpenFullPlayer={() => {
+        if (currentTrack.source !== "copyright-free") return;
         useCopyrightFreeOverlayStore.getState().open(currentTrack);
       }}
       onPrevious={previous}

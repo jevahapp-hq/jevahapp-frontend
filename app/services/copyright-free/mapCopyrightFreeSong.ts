@@ -100,6 +100,6 @@ export function mapCopyrightFreeSong(raw: any): MappedCopyrightFreeSong {
     shareUrl: raw?.shareUrl ? String(raw.shareUrl) : undefined,
     isPublicDomain: raw?.isPublicDomain !== undefined ? Boolean(raw.isPublicDomain) : true,
     processingStatus: raw?.processingStatus || raw?.status,
-    source: raw?.source,
+    source: raw?.source || "copyright-free",
   };
 }

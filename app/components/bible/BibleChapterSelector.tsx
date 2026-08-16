@@ -14,6 +14,7 @@ interface BibleChapterSelectorProps {
   chapterCount?: number;
   onChapterSelect: (chapter: BibleChapter) => void;
   selectedChapter?: BibleChapter | null;
+  translationId?: string;
 }
 
 function chaptersFromCount(bookName: string, count: number): BibleChapter[] {
@@ -31,6 +32,7 @@ export default function BibleChapterSelector({
   chapterCount = 0,
   onChapterSelect,
   selectedChapter,
+  translationId,
 }: BibleChapterSelectorProps) {
   const seed = useMemo(
     () => chaptersFromCount(bookName, chapterCount),
@@ -65,7 +67,7 @@ export default function BibleChapterSelector({
     return () => {
       cancelled = true;
     };
-  }, [bookName, seed.length]);
+  }, [bookName, seed.length, translationId]);
 
   const renderChapterItem = ({ item }: { item: BibleChapter }) => {
     const isSelected = selectedChapter?.chapterNumber === item.chapterNumber;

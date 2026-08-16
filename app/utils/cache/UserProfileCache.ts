@@ -24,19 +24,17 @@ export class UserProfileCache {
     const last = String((user as any).lastName || "").trim();
     const full = `${first} ${last}`.trim();
     if (full && !/^(anonymous(\s+user)?|unknown)$/i.test(full)) return true;
-    return false;
+    const named = String((user as any).name || (user as any).fullName || (user as any).displayName || "").trim();
+    return Boolean(named && !/^(anonymous(\s+user)?|unknown)$/i.test(named));
   }
 
-  private static needsProfileFetch(userId: string | null | undefined, hasName: boolean, hasAvatar: boolean): boolean {
+  private static needsProfileFetch(userId: string | null | undefined, hasName: boolean, _hasAvatar: boolean): boolean {
     if (!userId) return false;
-    if (hasName && hasAvatar) return false;
+    // List JSON already has a name — never stall cards on GET /api/users/:id
+    if (hasName) return false;
     const cached = this.getUserProfile(String(userId));
-    if (cached && this.hasUsableName(cached) && (hasAvatar || cached.avatar || cached.avatarUpload)) {
-      return false;
-    }
-    // Missing name (or empty poisoned cache) → fetch
-    if (!hasName || (cached && !this.hasUsableName(cached))) return true;
-    return !hasAvatar && !cached?.avatar && !cached?.avatarUpload;
+    if (cached && this.hasUsableName(cached)) return false;
+    return true;
   }
 
   /**
@@ -152,6 +150,7 @@ export class UserProfileCache {
     const cacheKey = `user:${userId}`;
     this.cache.set(cacheKey, userData, AVATAR_CACHE_DURATION); // Cache for 30 minutes
     // Keep the canonical author store in sync (feed name resolution)
+    if (!this.hasUsableName(userData)) return;
     try {
       const { putAuthorProfile } = require("../../../src/shared/author");
       putAuthorProfile(userId, userData as any);
@@ -205,7 +204,14 @@ export class UserProfileCache {
         userId = content.uploadedBy._id || content.uploadedBy.id || null;
         
         // If uploadedBy is already populated but missing firstName/lastName/avatar, try to enrich
-        if (userId && (!content.uploadedBy.firstName || !content.uploadedBy.avatar)) {
+        const hasName = Boolean(
+          content.uploadedBy.firstName ||
+            content.uploadedBy.lastName ||
+            content.uploadedBy.fullName ||
+            content.uploadedBy.name ||
+            content.uploadedBy.username
+        );
+        if (userId && !hasName) {
           let cachedUser = this.getUserProfile(userId);
           
           // If not in cache, try to fetch from API (async, but we'll update cache for next time)
@@ -332,7 +338,8 @@ export class UserProfileCache {
               item.uploadedBy.lastName ||
               item.uploadedBy.fullName ||
               item.uploadedBy.displayName ||
-              item.uploadedBy.username
+              item.uploadedBy.username ||
+              item.uploadedBy.name
           );
           const hasAvatar = Boolean(
             item.uploadedBy.avatar ||
@@ -373,7 +380,8 @@ export class UserProfileCache {
             item.authorInfo.lastName ||
             item.authorInfo.fullName ||
             item.authorInfo.displayName ||
-            item.authorInfo.username
+            item.authorInfo.username ||
+            item.authorInfo.name
         );
         const hasAvatar = Boolean(
           item.authorInfo.avatar ||

@@ -78,7 +78,13 @@ export function hasUsableAuthorName(
 
 /** Pull a displayable name from a nested user-like object (no network). */
 export function nameFromUserLike(user: unknown): string | null {
-  const profile = normalizeAuthorProfile(user as any);
+  if (typeof user === "string") {
+    const t = user.trim();
+    if (!t || isPlaceholderName(t) || /^[0-9a-fA-F]{24}$/.test(t)) return null;
+    return t;
+  }
+  // "_" lets populated { firstName, name } objects resolve even without _id.
+  const profile = normalizeAuthorProfile(user as any, "_");
   if (!profile) return null;
   return hasUsableAuthorName(profile) ? profile.fullName : null;
 }

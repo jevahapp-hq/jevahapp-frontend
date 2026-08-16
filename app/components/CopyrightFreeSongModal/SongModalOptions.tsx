@@ -20,6 +20,7 @@ export interface SongModalOptionsProps {
   isTogglingSave?: boolean;
   optionsSongData: any | null;
   loadingOptionsSong: boolean;
+  bottomInset?: number;
   onClose: () => void;
   onAddToPlaylist: () => void;
   onToggleSave?: () => void;
@@ -34,6 +35,7 @@ export function SongModalOptions({
   isTogglingSave = false,
   optionsSongData,
   loadingOptionsSong,
+  bottomInset = 0,
   onClose,
   onAddToPlaylist,
   onToggleSave,
@@ -66,7 +68,7 @@ export function SongModalOptions({
             borderTopRightRadius: 24,
             paddingHorizontal: 20,
             paddingTop: 16,
-            paddingBottom: 28,
+            paddingBottom: 16 + bottomInset,
           }}
         >
           <View

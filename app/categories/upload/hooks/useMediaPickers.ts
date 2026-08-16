@@ -6,6 +6,10 @@ import { Alert } from "react-native";
 import { detectFileType, getMimeTypeFromName, isGifFile, isImage } from "../utils";
 import { probeVideoDurationSec } from "../utils/probeVideoDuration";
 import type { DetectedFileType, EligibilityStatus, MediaFile } from "../types";
+import {
+  shouldCopyUploadToCache,
+  shouldProbeUploadDuration,
+} from "../../../../src/shared/lite/liteProfile";
 
 /** Lazy native modules — kept off Upload first paint; warmed via prefetchCreateFlows. */
 async function loadImagePicker() {
@@ -118,7 +122,9 @@ export function useMediaPickers({
             ? asset.duration > 100
               ? asset.duration / 1000
               : asset.duration
-            : await probeVideoDurationSec(asset.uri);
+            : shouldProbeUploadDuration()
+              ? await probeVideoDurationSec(asset.uri)
+              : undefined;
         if (durationSec && durationSec > 8.5) {
           Alert.alert(
             "Clip too long",
@@ -163,7 +169,7 @@ export function useMediaPickers({
         "application/epub+zip",
         "image/gif",
       ],
-      copyToCacheDirectory: true,
+      copyToCacheDirectory: shouldCopyUploadToCache(),
       multiple: false,
     });
 
@@ -195,7 +201,7 @@ export function useMediaPickers({
       size: fileSize,
     };
 
-    if (guessedMime.startsWith("video/")) {
+    if (guessedMime.startsWith("video/") && shouldProbeUploadDuration()) {
       const durationSec = await probeVideoDurationSec(uri);
       if (durationSec && durationSec > 0) {
         selectedFile.durationSec = durationSec;

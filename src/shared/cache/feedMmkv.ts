@@ -12,11 +12,8 @@ import {
 import { isLiteProfileActive } from "../lite/liteProfile";
 import { appMmkv, mmkvGetJson, mmkvSetJson } from "./mmkvStorage";
 
-const FEED_PAGE_PREFIX = "feed-page-v2:";
-const RQ_FEED_KEY = "rq-all-content-seed-v2";
-/** Pre-v2 keys (may contain poisoned Anonymous User speakers). */
-const LEGACY_FEED_PAGE_PREFIX = "feed-page:";
-const LEGACY_RQ_FEED_KEY = "rq-all-content-seed";
+const FEED_PAGE_PREFIX = "feed-page-v3:";
+const RQ_FEED_KEY = "rq-all-content-seed-v3";
 
 export type FeedPageSeed = {
   media: MediaItem[];
@@ -57,6 +54,41 @@ function isPlaceholderSpeaker(name?: string | null): boolean {
   return /^(anonymous(\s+user)?|unknown|no speaker|user)$/i.test(t);
 }
 
+function itemHasUsableAuthor(item: MediaItem): boolean {
+  const ub = (item as any)?.uploadedBy;
+  if (ub && typeof ub === "object") {
+    if (ub.firstName || ub.lastName || ub.fullName || ub.name || ub.username) {
+      return true;
+    }
+  }
+  const info = (item as any)?.authorInfo || (item as any)?.author;
+  if (info && typeof info === "object") {
+    if (info.firstName || info.lastName || info.fullName || info.name) {
+      return true;
+    }
+  }
+  const stamped = (item as any)?.uploadedByName;
+  if (typeof stamped === "string" && !isPlaceholderSpeaker(stamped)) return true;
+  const speaker = (item as any)?.speaker;
+  if (
+    typeof speaker === "string" &&
+    !isPlaceholderSpeaker(speaker) &&
+    !/^[0-9a-fA-F]{24}$/.test(speaker.trim())
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function seedHasUsableAuthors(media: MediaItem[]): boolean {
+  if (!media.length) return false;
+  let named = 0;
+  for (const item of media) {
+    if (itemHasUsableAuthor(item)) named += 1;
+  }
+  return named >= Math.max(1, Math.ceil(media.length / 2));
+}
+
 /** Strip poisoned author fields from disk seeds (empty uploadedBy / Anonymous speaker). */
 export function sanitizeFeedMedia(media: MediaItem[]): MediaItem[] {
   return media.map((item) => {
@@ -87,18 +119,15 @@ export function getFeedPageSync(
   useAuth: boolean
 ): FeedPageSeed | null {
   const profile = profileTag();
+  // Do not fall back to v2 seeds — they painted "Anonymous User" for 24h.
   const entry =
     mmkvGetJson<FeedPageSeed>(pageKey(contentType, useAuth, profile)) ||
-    mmkvGetJson<FeedPageSeed>(legacyPageKey(contentType, useAuth)) ||
-    mmkvGetJson<FeedPageSeed>(
-      `${LEGACY_FEED_PAGE_PREFIX}${contentType}:${useAuth ? "auth" : "public"}:${profile}`
-    ) ||
-    mmkvGetJson<FeedPageSeed>(
-      `${LEGACY_FEED_PAGE_PREFIX}${contentType}:${useAuth ? "auth" : "public"}`
-    );
+    mmkvGetJson<FeedPageSeed>(legacyPageKey(contentType, useAuth));
   if (!entry?.media?.length) return null;
   if (!isPaintable(entry.fetchedAt)) return null;
-  return { ...entry, media: sanitizeFeedMedia(entry.media) };
+  const media = sanitizeFeedMedia(entry.media);
+  if (!seedHasUsableAuthors(media)) return null;
+  return { ...entry, media };
 }
 
 export function setFeedPageSync(seed: FeedPageSeed): void {
@@ -118,12 +147,12 @@ export function getRqFeedSeedSync(): FeedPageSeed | null {
   const profile = profileTag();
   const entry =
     mmkvGetJson<FeedPageSeed>(`${RQ_FEED_KEY}:${profile}`) ||
-    mmkvGetJson<FeedPageSeed>(RQ_FEED_KEY) ||
-    mmkvGetJson<FeedPageSeed>(`${LEGACY_RQ_FEED_KEY}:${profile}`) ||
-    mmkvGetJson<FeedPageSeed>(LEGACY_RQ_FEED_KEY);
+    mmkvGetJson<FeedPageSeed>(RQ_FEED_KEY);
   if (!entry?.media?.length) return null;
   if (!isPaintable(entry.fetchedAt)) return null;
-  return { ...entry, media: sanitizeFeedMedia(entry.media) };
+  const media = sanitizeFeedMedia(entry.media);
+  if (!seedHasUsableAuthors(media)) return null;
+  return { ...entry, media };
 }
 
 /** Legacy instant-on video list helpers (compat). */

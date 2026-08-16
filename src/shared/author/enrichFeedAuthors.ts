@@ -16,6 +16,7 @@ function collectAuthorIds(items: AuthorCarrier[]): string[] {
   const ids: string[] = [];
   for (const item of items) {
     seedAuthorsFromItem(item);
+    if (!isPlaceholderName(resolveAuthorName(item, ""))) continue;
     const id = extractAuthorId(item);
     if (!id) continue;
     const cached = getAuthorProfile(id);

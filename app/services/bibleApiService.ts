@@ -2,6 +2,35 @@
 // Connects to your backend Bible endpoints
 
 import { BaseService } from "../../src/core/services/BaseService";
+import {
+  getCachedBooks,
+  getCachedChapters,
+  getCachedVerses,
+  setCachedBooks,
+  setCachedChapters,
+  setCachedVerses,
+} from "./bibleCache";
+import {
+  getPackBookChapters,
+  getPackBooks,
+  getPackChapterVerses,
+  installPackFromManifest,
+  isPackInstalled,
+  type PackInstallResult,
+} from "./biblePack";
+import {
+  DEFAULT_TRANSLATION_ID,
+  getSelectedTranslationId,
+  isTranslationQueryEnabled,
+  parseTranslationCatalog,
+  parsePackManifest,
+  setCachedCatalog,
+  clearCatalogAvailability,
+  canDownloadPack,
+  type BiblePackManifest,
+  type BibleTranslation,
+  type BibleTranslationCatalog,
+} from "./bibleTranslations";
 
 export interface BibleBook {
   _id: string;
@@ -77,6 +106,13 @@ interface BibleApiResponse<T> {
 }
 
 class BibleApiService extends BaseService {
+  private translationQuery(path: string): string {
+    if (!isTranslationQueryEnabled()) return path;
+    const id = getSelectedTranslationId() || DEFAULT_TRANSLATION_ID;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}translation=${encodeURIComponent(id)}`;
+  }
+
   private async makeRequest<T>(endpoint: string): Promise<BibleApiResponse<T>> {
     console.log(`📖 Bible API Request: ${endpoint}`);
     
@@ -102,36 +138,70 @@ class BibleApiService extends BaseService {
 
   // Books endpoints
   async getAllBooks(): Promise<BibleBook[]> {
-    const response = await this.makeRequest<BibleBook[]>("/api/bible/books");
+    const translationId = getSelectedTranslationId();
+    if (isPackInstalled(translationId)) {
+      const packed = await getPackBooks(translationId);
+      if (packed?.length) return packed;
+    }
+    const cached = getCachedBooks(translationId);
+    if (cached) {
+      void this.fetchAllBooks().catch(() => {});
+      return cached;
+    }
+    return this.fetchAllBooks();
+  }
+
+  private async fetchAllBooks(): Promise<BibleBook[]> {
+    const response = await this.makeRequest<BibleBook[]>(
+      this.translationQuery("/api/bible/books")
+    );
+    setCachedBooks(response.data, getSelectedTranslationId());
     return response.data;
   }
 
   async getOldTestamentBooks(): Promise<BibleBook[]> {
     const response = await this.makeRequest<BibleBook[]>(
-      "/api/bible/books/testament/old"
+      this.translationQuery("/api/bible/books/testament/old")
     );
     return response.data;
   }
 
   async getNewTestamentBooks(): Promise<BibleBook[]> {
     const response = await this.makeRequest<BibleBook[]>(
-      "/api/bible/books/testament/new"
+      this.translationQuery("/api/bible/books/testament/new")
     );
     return response.data;
   }
 
   async getBook(bookName: string): Promise<BibleBook> {
     const response = await this.makeRequest<BibleBook>(
-      `/api/bible/books/${encodeURIComponent(bookName)}`
+      this.translationQuery(`/api/bible/books/${encodeURIComponent(bookName)}`)
     );
     return response.data;
   }
 
   // Chapters endpoints
   async getBookChapters(bookName: string): Promise<BibleChapter[]> {
+    const translationId = getSelectedTranslationId();
+    if (isPackInstalled(translationId)) {
+      const packed = await getPackBookChapters(translationId, bookName);
+      if (packed?.length) return packed;
+    }
+    const cached = getCachedChapters(bookName, translationId);
+    if (cached) {
+      void this.fetchBookChapters(bookName).catch(() => {});
+      return cached;
+    }
+    return this.fetchBookChapters(bookName);
+  }
+
+  private async fetchBookChapters(bookName: string): Promise<BibleChapter[]> {
     const response = await this.makeRequest<BibleChapter[]>(
-      `/api/bible/books/${encodeURIComponent(bookName)}/chapters`
+      this.translationQuery(
+        `/api/bible/books/${encodeURIComponent(bookName)}/chapters`
+      )
     );
+    setCachedChapters(bookName, response.data, getSelectedTranslationId());
     return response.data;
   }
 
@@ -139,12 +209,31 @@ class BibleApiService extends BaseService {
     bookName: string,
     chapterNumber: number
   ): Promise<BibleChapter & { actualVerseCount?: number }> {
+    const translationId = getSelectedTranslationId();
+    if (isPackInstalled(translationId)) {
+      const verses = await getPackChapterVerses(
+        translationId,
+        bookName,
+        chapterNumber
+      );
+      if (verses?.length) {
+        return {
+          _id: `${bookName}-${chapterNumber}`,
+          bookName,
+          chapterNumber,
+          verseCount: verses.length,
+          actualVerseCount: verses.length,
+        };
+      }
+    }
     const response = await this.makeRequest<
       BibleChapter & { actualVerseCount?: number }
     >(
-      `/api/bible/books/${encodeURIComponent(
-        bookName
-      )}/chapters/${chapterNumber}`
+      this.translationQuery(
+        `/api/bible/books/${encodeURIComponent(
+          bookName
+        )}/chapters/${chapterNumber}`
+      )
     );
     return response.data;
   }
@@ -154,10 +243,39 @@ class BibleApiService extends BaseService {
     bookName: string,
     chapterNumber: number
   ): Promise<BibleVerse[]> {
+    const translationId = getSelectedTranslationId();
+    if (isPackInstalled(translationId)) {
+      const packed = await getPackChapterVerses(
+        translationId,
+        bookName,
+        chapterNumber
+      );
+      if (packed?.length) return packed;
+    }
+    const cached = getCachedVerses(bookName, chapterNumber, translationId);
+    if (cached) {
+      void this.fetchChapterVerses(bookName, chapterNumber).catch(() => {});
+      return cached;
+    }
+    return this.fetchChapterVerses(bookName, chapterNumber);
+  }
+
+  private async fetchChapterVerses(
+    bookName: string,
+    chapterNumber: number
+  ): Promise<BibleVerse[]> {
     const response = await this.makeRequest<BibleVerse[]>(
-      `/api/bible/books/${encodeURIComponent(
-        bookName
-      )}/chapters/${chapterNumber}/verses`
+      this.translationQuery(
+        `/api/bible/books/${encodeURIComponent(
+          bookName
+        )}/chapters/${chapterNumber}/verses`
+      )
+    );
+    setCachedVerses(
+      bookName,
+      chapterNumber,
+      response.data,
+      getSelectedTranslationId()
     );
     return response.data;
   }
@@ -168,9 +286,11 @@ class BibleApiService extends BaseService {
     verseNumber: number
   ): Promise<BibleVerse> {
     const response = await this.makeRequest<BibleVerse>(
-      `/api/bible/books/${encodeURIComponent(
-        bookName
-      )}/chapters/${chapterNumber}/verses/${verseNumber}`
+      this.translationQuery(
+        `/api/bible/books/${encodeURIComponent(
+          bookName
+        )}/chapters/${chapterNumber}/verses/${verseNumber}`
+      )
     );
     return response.data;
   }
@@ -186,7 +306,7 @@ class BibleApiService extends BaseService {
     try {
       const encodedReference = encodeURIComponent(reference);
       const response = await this.makeRequest<VerseRangeResponse>(
-        `/api/bible/verses/range/${encodedReference}`
+        this.translationQuery(`/api/bible/verses/range/${encodedReference}`)
       );
 
       // Return full response including metadata (count, reference info)
@@ -234,7 +354,7 @@ class BibleApiService extends BaseService {
     });
 
     const response = await this.makeRequest<SearchResult>(
-      `/api/bible/search?${params}`
+      this.translationQuery(`/api/bible/search?${params}`)
     );
 
     // Map response data to SearchResult format
@@ -273,7 +393,7 @@ class BibleApiService extends BaseService {
       });
 
       const response = await this.makeRequest<AdvancedSearchResult>(
-        `/api/bible/search/advanced?${params}`
+        this.translationQuery(`/api/bible/search/advanced?${params}`)
       );
 
       return response;
@@ -288,28 +408,30 @@ class BibleApiService extends BaseService {
 
   async getRandomVerse(): Promise<BibleVerse> {
     const response = await this.makeRequest<BibleVerse>(
-      "/api/bible/verses/random"
+      this.translationQuery("/api/bible/verses/random")
     );
     return response.data;
   }
 
   async getDailyVerse(): Promise<BibleVerse> {
     const response = await this.makeRequest<BibleVerse>(
-      "/api/bible/verses/daily"
+      this.translationQuery("/api/bible/verses/daily")
     );
     return response.data;
   }
 
   async getPopularVerses(limit: number = 10): Promise<BibleVerse[]> {
     const response = await this.makeRequest<BibleVerse[]>(
-      `/api/bible/verses/popular?limit=${limit}`
+      this.translationQuery(`/api/bible/verses/popular?limit=${limit}`)
     );
     return response.data;
   }
 
   // Statistics
   async getBibleStats(): Promise<any> {
-    const response = await this.makeRequest<any>("/api/bible/stats");
+    const response = await this.makeRequest<any>(
+      this.translationQuery("/api/bible/stats")
+    );
     return response.data;
   }
 
@@ -320,9 +442,11 @@ class BibleApiService extends BaseService {
     verseNumber: number
   ): Promise<any> {
     const response = await this.makeRequest<any>(
-      `/api/bible/books/${encodeURIComponent(
-        bookName
-      )}/chapters/${chapterNumber}/verses/${verseNumber}/cross-references`
+      this.translationQuery(
+        `/api/bible/books/${encodeURIComponent(
+          bookName
+        )}/chapters/${chapterNumber}/verses/${verseNumber}/cross-references`
+      )
     );
     return response.data;
   }
@@ -333,11 +457,98 @@ class BibleApiService extends BaseService {
     verseNumber: number
   ): Promise<any> {
     const response = await this.makeRequest<any>(
-      `/api/bible/books/${encodeURIComponent(
-        bookName
-      )}/chapters/${chapterNumber}/verses/${verseNumber}/commentary`
+      this.translationQuery(
+        `/api/bible/books/${encodeURIComponent(
+          bookName
+        )}/chapters/${chapterNumber}/verses/${verseNumber}/commentary`
+      )
     );
     return response.data;
+  }
+
+  /**
+   * Public catalog. 404/500 → hide picker and omit `?translation=`
+   * (live corpus is WEB). Parses `data.defaultId` + `data.translations[]`.
+   */
+  async getTranslations(): Promise<BibleTranslationCatalog | null> {
+    try {
+      const response = await this.get<unknown>(
+        "/api/bible/translations",
+        undefined,
+        { requireAuth: false }
+      );
+      if (!response.success) {
+        clearCatalogAvailability();
+        return null;
+      }
+      const catalog = parseTranslationCatalog(response.data);
+      if (!catalog) {
+        clearCatalogAvailability();
+        return null;
+      }
+      setCachedCatalog(catalog);
+      return catalog;
+    } catch {
+      clearCatalogAvailability();
+      return null;
+    }
+  }
+
+  async getPackManifest(
+    translationId: string
+  ): Promise<BiblePackManifest | null> {
+    const result = await this.fetchPackManifest(translationId);
+    return result.ok ? result.manifest : null;
+  }
+
+  async fetchPackManifest(
+    translationId: string
+  ): Promise<
+    | { ok: true; manifest: BiblePackManifest }
+    | PackInstallResult & { ok: false }
+  > {
+    try {
+      const response = await this.get<unknown>(
+        `/api/bible/translations/${encodeURIComponent(translationId)}/manifest`,
+        undefined,
+        { requireAuth: false }
+      );
+      if (!response.success) {
+        const err = String(response.error || "");
+        if (/requires license/i.test(err)) {
+          return { ok: false, reason: "licensed" };
+        }
+        if (/too large for lite/i.test(err)) {
+          return { ok: false, reason: "too-large" };
+        }
+        if (/pack unavailable|unknown translation/i.test(err)) {
+          return { ok: false, reason: "unavailable" };
+        }
+        return { ok: false, reason: "unavailable" };
+      }
+      const manifest = parsePackManifest(response.data);
+      if (!manifest) return { ok: false, reason: "unavailable" };
+      return { ok: true, manifest };
+    } catch {
+      return { ok: false, reason: "unavailable" };
+    }
+  }
+
+  async downloadTranslationPack(
+    translation: BibleTranslation
+  ): Promise<PackInstallResult> {
+    if (translation.license === "licensed") {
+      return { ok: false, reason: "licensed" };
+    }
+    if (!canDownloadPack(translation)) {
+      return {
+        ok: false,
+        reason: translation.offline ? "too-large" : "unavailable",
+      };
+    }
+    const fetched = await this.fetchPackManifest(translation.id);
+    if (!fetched.ok) return fetched;
+    return installPackFromManifest(fetched.manifest);
   }
 }
 

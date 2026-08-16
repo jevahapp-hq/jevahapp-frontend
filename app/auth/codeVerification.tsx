@@ -126,6 +126,9 @@ export default function CodeVerification() {
       }).start(() => {
         if (type === "success") {
           setTimeout(() => {
+            void import("../components/loginTour/loginTourStorage").then(
+              ({ markLoginTourPending }) => markLoginTourPending()
+            );
             router.replace("/Profile/profileSetUp");
           }, 600);
         }

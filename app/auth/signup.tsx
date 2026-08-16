@@ -118,6 +118,10 @@ export default function SignUpScreen() {
       console.log("✅ Registration result:", result);
 
       if (result.success) {
+        const { markLoginTourPending } = await import(
+          "../components/loginTour/loginTourStorage"
+        );
+        markLoginTourPending();
         // Show success modal and proceed to verification
         setShowModal(true);
       } else {

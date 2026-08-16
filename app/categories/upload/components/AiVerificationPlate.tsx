@@ -15,6 +15,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { isLiteProfileActive } from "../../../../src/shared/lite/liteProfile";
 import { getResponsiveFontSize } from "../../../../utils/responsive";
 import { useReduceMotion } from "../hooks/useReduceMotion";
 
@@ -66,7 +67,7 @@ export function AiVerificationPlate({ ready }: Props) {
 
     setMounted(true);
 
-    if (reduceMotion) {
+    if (reduceMotion || isLiteProfileActive()) {
       reveal.value = 1;
       check.value = 1;
       setTitleTyped(TITLE);

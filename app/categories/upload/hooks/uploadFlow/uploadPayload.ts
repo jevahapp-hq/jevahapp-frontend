@@ -1,4 +1,5 @@
 import { Alert } from "react-native";
+import { getLiteMaxVideoUploadBytes } from "../../../../../src/shared/lite/liteProfile";
 import { getMaxFileSizeBytes } from "../../constants";
 import type { MediaFile } from "../../types";
 import { buildUploadFormData } from "../../api/uploadMedia";
@@ -7,7 +8,9 @@ export function validateUploadFileSize(
   file: MediaFile,
   selectedType: string
 ): { ok: true } | { ok: false } {
-  const maxBytes = getMaxFileSizeBytes(selectedType || "videos");
+  const maxBytes = getLiteMaxVideoUploadBytes(
+    getMaxFileSizeBytes(selectedType || "videos")
+  );
   const fileSize = file.size ?? 0;
   if (fileSize <= maxBytes) return { ok: true };
 
@@ -15,7 +18,7 @@ export function validateUploadFileSize(
   const fileMB = (fileSize / (1024 * 1024)).toFixed(1);
   Alert.alert(
     "File too large",
-    `This file is ${fileMB} MB. Maximum allowed is ${maxMB} MB for ${selectedType || "this type"}. Please choose a smaller file or compress it.`
+    `This file is ${fileMB} MB. Maximum allowed is ${maxMB} MB for ${selectedType || "this type"} on this device. Compress it and try again.`
   );
   return { ok: false };
 }

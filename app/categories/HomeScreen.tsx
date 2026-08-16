@@ -1,6 +1,6 @@
 import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   InteractionManager,
@@ -8,12 +8,18 @@ import {
   View,
 } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
+import { setMiniPlayerSuppressed } from "../../src/shared/audio/miniPlayerGate";
+import { useNewUserLoginTour } from "../components/loginTour/useNewUserLoginTour";
 import {
   BibleScreenWithSuspense,
   CommunityScreenWithSuspense,
   LibraryScreenWithSuspense,
 } from "../utils/lazyImports";
 import HomeTabContent from "./HomeTabContent";
+
+const NewUserLoginTour = lazy(
+  () => import("../components/loginTour/NewUserLoginTour")
+);
 
 const TabLoadingFallback = () => (
   <View
@@ -41,6 +47,7 @@ export default function HomeScreen() {
     { Home: true }
   );
   const { isVisible: isCommentSheetOpen } = useCommentModal();
+  const loginTour = useNewUserLoginTour();
   const { default: defaultTabParamRaw } = useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
@@ -50,10 +57,15 @@ export default function HomeScreen() {
     if (!tabList.includes(tab as MainShellTab)) return;
     const next = tab as MainShellTab;
     setSelectedTab(next);
+    setMiniPlayerSuppressed(next === "Bible");
     setMounted({
       Home: true,
       ...(next !== "Home" ? { [next]: true } : {}),
     });
+  }, []);
+
+  useEffect(() => {
+    return () => setMiniPlayerSuppressed(false);
   }, []);
 
   useEffect(() => {
@@ -84,7 +96,11 @@ export default function HomeScreen() {
         style={[
           styles.navWrap,
           isCommentSheetOpen ? styles.navHidden : undefined,
-          { pointerEvents: isCommentSheetOpen ? "none" : "auto" },
+          loginTour.elevateNav ? styles.navElevated : undefined,
+          {
+            pointerEvents:
+              isCommentSheetOpen || loginTour.elevateNav ? "none" : "auto",
+          },
         ]}
         accessibilityElementsHidden={isCommentSheetOpen}
         importantForAccessibility={
@@ -155,6 +171,16 @@ export default function HomeScreen() {
           </View>
         ) : null}
       </View>
+
+      {loginTour.visible ? (
+        <Suspense fallback={null}>
+          <NewUserLoginTour
+            firstName={loginTour.firstName}
+            onSpotlightChange={loginTour.setElevateNav}
+            onDone={loginTour.dismiss}
+          />
+        </Suspense>
+      ) : null}
     </View>
   );
 }
@@ -181,6 +207,10 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: "#fff",
     zIndex: 20,
+  },
+  navElevated: {
+    zIndex: 90,
+    elevation: 90,
   },
   navHidden: {
     opacity: 0,

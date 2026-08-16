@@ -24,6 +24,8 @@ type Props = {
   onDismiss: () => void;
 };
 
+const BRAND = "#256E63";
+
 const THEME: Record<
   UploadResultState["kind"],
   {
@@ -35,27 +37,27 @@ const THEME: Record<
 > = {
   success: {
     icon: "checkmark-circle",
-    ring: "#E8F8EF",
-    accent: "#0B7A3B",
-    btn: "#0B7A3B",
+    ring: "#E7F3F1",
+    accent: BRAND,
+    btn: BRAND,
   },
   error: {
     icon: "cloud-offline-outline",
-    ring: "#FFF0F3",
-    accent: "#FE2C55",
-    btn: "#FE2C55",
+    ring: "#E7F3F1",
+    accent: BRAND,
+    btn: BRAND,
   },
   moderation: {
     icon: "bulb-outline",
-    ring: "#FFF4E5",
-    accent: "#C45C00",
-    btn: "#C45C00",
+    ring: "#E7F3F1",
+    accent: BRAND,
+    btn: BRAND,
   },
   review: {
     icon: "time-outline",
-    ring: "#FFF8E1",
-    accent: "#A67C00",
-    btn: "#A67C00",
+    ring: "#E7F3F1",
+    accent: BRAND,
+    btn: BRAND,
   },
 };
 

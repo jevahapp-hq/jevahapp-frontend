@@ -22,6 +22,7 @@ export interface SongModalPlaylistDetailProps {
   visible: boolean;
   playlist: Playlist | null;
   animatedStyle: any;
+  bottomInset?: number;
   onClose: () => void;
   onBack: () => void;
   onPlaySong: (song: any) => void;
@@ -31,6 +32,7 @@ export function SongModalPlaylistDetail({
   visible,
   playlist,
   animatedStyle,
+  bottomInset = 0,
   onClose,
   onBack,
   onPlaySong,
@@ -121,7 +123,7 @@ export function SongModalPlaylistDetail({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
               padding: UI_CONFIG.SPACING.MD,
-              paddingBottom: UI_CONFIG.SPACING.XL,
+              paddingBottom: UI_CONFIG.SPACING.XL + bottomInset,
             }}
           >
             {!playlist || playlist.songs.length === 0 ? (

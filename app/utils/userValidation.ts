@@ -3,10 +3,17 @@
  */
 
 export interface UserData {
+  _id?: string;
+  id?: string;
   firstName?: string;
   lastName?: string;
   first_name?: string;
   last_name?: string;
+  fullName?: string;
+  displayName?: string;
+  username?: string;
+  userName?: string;
+  name?: string;
   avatar?: string;
   imageUrl?: string;
   profileImage?: string;
@@ -35,14 +42,38 @@ export function normalizeUserData(user: UserData | null): NormalizedUser {
     };
   }
 
-  const firstName = user.firstName || user.first_name || "Anonymous";
-  const lastName = user.lastName || user.last_name || "User";
+  const firstName = String(user.firstName || user.first_name || "").trim();
+  const lastName = String(user.lastName || user.last_name || "").trim();
+  const extra = String(
+    user.fullName ||
+      user.displayName ||
+      user.username ||
+      user.userName ||
+      user.name ||
+      ""
+  ).trim();
+  const emailPrefix = user.email ? String(user.email).split("@")[0].trim() : "";
   const avatar = user.avatar || user.imageUrl || user.profileImage || "";
 
+  let fullName = `${firstName} ${lastName}`.trim();
+  if (!fullName) fullName = extra;
+  if (!fullName) fullName = emailPrefix;
+
+  if (!fullName) {
+    return {
+      firstName: "Anonymous",
+      lastName: "User",
+      fullName: "Anonymous User",
+      avatar,
+      email: user.email,
+    };
+  }
+
+  const parts = fullName.split(/\s+/).filter(Boolean);
   return {
-    firstName,
-    lastName,
-    fullName: `${firstName} ${lastName}`.trim(),
+    firstName: firstName || parts[0] || fullName,
+    lastName: lastName || (parts.length > 1 ? parts.slice(1).join(" ") : ""),
+    fullName,
     avatar,
     email: user.email,
   };
@@ -85,7 +116,14 @@ export function validateUserForUpload(user: UserData | null): {
  * Gets display name for content attribution
  */
 export function getDisplayName(speaker?: string, uploadedBy?: string, fallback = "Anonymous User"): string {
-  return speaker || uploadedBy || fallback;
+  const placeholder = /^(anonymous(\s+user)?|unknown|no speaker|user)$/i;
+  if (speaker && speaker.trim() && !placeholder.test(speaker.trim()) && !/^[0-9a-fA-F]{24}$/.test(speaker.trim())) {
+    return speaker.trim();
+  }
+  if (uploadedBy && uploadedBy.trim() && !placeholder.test(uploadedBy.trim()) && !/^[0-9a-fA-F]{24}$/.test(uploadedBy.trim())) {
+    return uploadedBy.trim();
+  }
+  return fallback;
 }
 
 /**

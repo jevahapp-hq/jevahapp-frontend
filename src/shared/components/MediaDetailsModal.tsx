@@ -94,8 +94,14 @@ export default function MediaDetailsModal({
       const currentUserIdStr = String(currentUserId).trim();
       const authorIdStr = String(authorId).trim();
       if (currentUserIdStr === authorIdStr) {
-        return "you";
+        const mine = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+        return mine || "you";
       }
+    }
+
+    if (moderationStatus === "under_review" && user) {
+      const mine = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      if (mine) return mine;
     }
 
     // If uploadedBy is an object with firstName/lastName, use that
@@ -122,7 +128,7 @@ export default function MediaDetailsModal({
 
     // Fallback to "Unknown"
     return "Unknown";
-  }, [uploadedBy, userId, speaker, user, mediaItem, currentUserIdFromStorage]);
+  }, [uploadedBy, userId, speaker, user, mediaItem, currentUserIdFromStorage, moderationStatus]);
 
   const displayViews = viewCount ?? views;
   const displayLikes = likeCount ?? likes;

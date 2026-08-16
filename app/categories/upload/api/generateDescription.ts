@@ -4,6 +4,7 @@
 
 import { getApiBaseUrl } from "../../../utils/api";
 import TokenUtils from "../../../utils/tokenUtils";
+import { shouldAttachFileToAiDescription } from "../../../../src/shared/lite/liteProfile";
 import type { MediaFile } from "../types";
 
 export type GenerateDescriptionParams = {
@@ -38,17 +39,20 @@ export async function generateDescription(
   }
 
   const fileSizeMB = file.size ? file.size / (1024 * 1024) : 0;
-  if (fileSizeMB > 50) {
+  const attachFile = shouldAttachFileToAiDescription();
+  if (!attachFile || fileSizeMB > 50) {
     console.warn(
-      `File too large (${fileSizeMB.toFixed(1)}MB) for AI analysis. Backend will handle it.`
+      `Skipping file bytes for AI analysis (${fileSizeMB.toFixed(1)}MB).`
     );
   }
-  formData.append("file", {
-    uri: file.uri,
-    type: file.mimeType,
-    name: file.name,
-    size: file.size,
-  } as any);
+  if (attachFile && fileSizeMB <= 50) {
+    formData.append("file", {
+      uri: file.uri,
+      type: file.mimeType,
+      name: file.name,
+      size: file.size,
+    } as any);
+  }
 
   formData.append("thumbnail", {
     uri: thumbnail.uri,

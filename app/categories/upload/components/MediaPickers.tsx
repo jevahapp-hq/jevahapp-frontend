@@ -1,6 +1,6 @@
 /**
  * Media (left) + cover thumbnail (right) — always side-by-side flex.
- * Video preview is mounted only when a video is selected (keeps Upload TTFP light).
+ * Video is a poster, not a decoder (2GB devices OOM if both preview and Post run).
  */
 
 import { Feather } from "@expo/vector-icons";
@@ -49,7 +49,10 @@ export function MediaPickers({
             </Text>
           </View>
         ) : isVideo ? (
-          <MediaVideoPreview uri={file.uri} />
+          <MediaVideoPreview
+            uri={file.uri}
+            coverUri={thumbnail?.uri || null}
+          />
         ) : (
           <Image
             source={{ uri: file.uri }}

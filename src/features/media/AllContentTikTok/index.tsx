@@ -139,14 +139,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         return name;
       }
       const authorId = extractAuthorId(item) || "";
-      if (
-        currentUserId &&
-        authorId &&
-        String(currentUserId) === authorId &&
-        user
-      ) {
+      const isMine =
+        (currentUserId &&
+          authorId &&
+          String(currentUserId) === authorId) ||
+        item.moderationStatus === "under_review";
+      if (isMine && user) {
         const mine = `${user.firstName || ""} ${user.lastName || ""}`.trim();
-        if (mine) return mine;
+        if (mine && !/^(anonymous(\s+user)?|unknown)$/i.test(mine)) {
+          return mine;
+        }
         if (user.email) return String(user.email).split("@")[0];
       }
       return name;

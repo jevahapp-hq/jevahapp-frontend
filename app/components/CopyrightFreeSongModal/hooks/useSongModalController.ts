@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, InteractionManager, Share, View } from "react-native";
+import { Dimensions, InteractionManager, Platform, Share, StatusBar, View } from "react-native";
+import {
+  initialWindowMetrics as safeAreaInitialMetrics,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { isCopyrightFreeSong } from "../../../../src/shared/audio";
 import copyrightFreeMusicAPI from "../../../services/copyrightFreeMusicAPI";
 import { useGlobalAudioPlayerStore } from "../../../store/useGlobalAudioPlayerStore";
 import { usePlaylistStore, type Playlist } from "../../../store/usePlaylistStore";
@@ -53,6 +58,18 @@ export function useSongModalController({
   const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
   const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
   const [hasTrackedView, setHasTrackedView] = useState(false);
+
+  const insets = useSafeAreaInsets();
+  const metricsBottom = safeAreaInitialMetrics?.insets?.bottom ?? 0;
+  const metricsTop = safeAreaInitialMetrics?.insets?.top ?? 0;
+  const safeBottom =
+    insets.bottom ||
+    metricsBottom ||
+    (Platform.OS === "android" ? 48 : 0);
+  const safeTop =
+    insets.top ||
+    metricsTop ||
+    (Platform.OS === "android" ? StatusBar.currentHeight || 24 : 44);
 
   const {
     isLiked,
@@ -123,8 +140,10 @@ export function useSongModalController({
     }
   }, [visible, initialAction, variant]);
 
+  const isCfSong = isCopyrightFreeSong(song);
+
   useCopyrightFreeSongViewTracking({
-    visible,
+    visible: visible && isCfSong,
     song,
     isPlaying,
     audioProgress,
@@ -137,8 +156,8 @@ export function useSongModalController({
   });
 
   useCopyrightFreeSongRealtime({
-    visible,
-    songId: song?._id || song?.id || null,
+    visible: visible && isCfSong,
+    songId: isCfSong ? song?._id || song?.id || null : null,
     setLikeCount,
     setViewCount,
     setIsLiked,
@@ -170,7 +189,7 @@ export function useSongModalController({
   }, [song]);
 
   useEffect(() => {
-    if (!visible || !song) return;
+    if (!visible || !song || !isCopyrightFreeSong(song)) return;
     const songId = song.id || song._id;
     if (!songId) return;
 
@@ -197,7 +216,7 @@ export function useSongModalController({
   }, [visible, song?._id, song?.id, setIsLiked, setLikeCount, setViewCount]);
 
   useEffect(() => {
-    if (!showOptionsModal || !song) return;
+    if (!showOptionsModal || !song || !isCopyrightFreeSong(song)) return;
     const songId = song.id || song._id;
     if (!songId) return;
 
@@ -231,7 +250,7 @@ export function useSongModalController({
     try {
       // Prefer BE shareUrl (detail); fall back to fetch if list omitted it
       let shareUrl = song.shareUrl as string | undefined;
-      if (!shareUrl) {
+      if (!shareUrl && isCopyrightFreeSong(song)) {
         try {
           const detail = await copyrightFreeMusicAPI.getSongById(songId);
           if (detail.success && detail.data) {
@@ -302,8 +321,9 @@ export function useSongModalController({
   const albumArtSize = useMemo(() => {
     const screenWidth = Dimensions.get("window").width;
     const screenHeight = Dimensions.get("window").height;
-    return Math.min(screenWidth * 0.65, screenHeight * 0.35, 280);
-  }, []);
+    const usable = screenHeight - safeTop - safeBottom - 240;
+    return Math.min(screenWidth * 0.65, screenHeight * 0.35, Math.max(usable, 140), 280);
+  }, [safeTop, safeBottom]);
 
   const handleRepeatCycle = useCallback(() => {
     if (repeatMode === "none") setRepeatMode("all");
@@ -372,6 +392,8 @@ export function useSongModalController({
     handleClosePlaylistModal,
     imageSource,
     albumArtSize,
+    safeTop,
+    safeBottom,
     onClose,
     onPlay,
     onTogglePlay,

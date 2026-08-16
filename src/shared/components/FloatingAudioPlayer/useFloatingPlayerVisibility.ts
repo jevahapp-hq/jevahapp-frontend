@@ -1,6 +1,10 @@
 import { usePathname, useSegments } from "expo-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated } from "react-native";
+import {
+  isMiniPlayerSuppressed,
+  subscribeMiniPlayerGate,
+} from "../../audio/miniPlayerGate";
 import type { AudioTrack } from "../../../../app/store/useGlobalAudioPlayerStore";
 
 type Params = {
@@ -18,8 +22,14 @@ export function useFloatingPlayerVisibility({ currentTrack, stop }: Params) {
   const segments = useSegments();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
+  const [bibleTabHidden, setBibleTabHidden] = useState(isMiniPlayerSuppressed());
+
+  useEffect(() => subscribeMiniPlayerGate(() => {
+    setBibleTabHidden(isMiniPlayerSuppressed());
+  }), []);
 
   const shouldShowPlayer = useMemo(() => {
+    if (bibleTabHidden) return false;
     const authRouteSegments = [
       "auth",
       "login",
@@ -75,23 +85,9 @@ export function useFloatingPlayerVisibility({ currentTrack, stop }: Params) {
 
     // Show whenever a track is loaded (auth is enforced elsewhere)
     return !!currentTrack;
-  }, [pathname, segments, currentTrack]);
+  }, [pathname, segments, currentTrack, bibleTabHidden]);
 
   useEffect(() => {
-    const bibleRouteSegments = [
-      "bible",
-      "biblescreen",
-      "bibleonboarding",
-      "reader",
-    ];
-    const inBibleRoute = segments.some((seg) =>
-      bibleRouteSegments.includes(seg.toLowerCase())
-    );
-    if (inBibleRoute && currentTrack) {
-      stop();
-      return;
-    }
-
     if (currentTrack && shouldShowPlayer) {
       Animated.parallel([
         Animated.timing(fadeAnim, {

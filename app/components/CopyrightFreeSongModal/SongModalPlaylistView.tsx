@@ -23,6 +23,7 @@ export interface SongModalPlaylistViewProps {
   playlists: Playlist[];
   isLoadingPlaylists: boolean;
   animatedStyle: any;
+  bottomInset?: number;
   onClose: () => void;
   onSelectPlaylist: (playlist: Playlist) => void;
 }
@@ -32,6 +33,7 @@ export function SongModalPlaylistView({
   playlists,
   isLoadingPlaylists,
   animatedStyle,
+  bottomInset = 0,
   onClose,
   onSelectPlaylist,
 }: SongModalPlaylistViewProps) {
@@ -104,7 +106,7 @@ export function SongModalPlaylistView({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
               padding: UI_CONFIG.SPACING.MD,
-              paddingBottom: UI_CONFIG.SPACING.XL,
+              paddingBottom: UI_CONFIG.SPACING.XL + bottomInset,
             }}
           >
             {playlists.length === 0 ? (

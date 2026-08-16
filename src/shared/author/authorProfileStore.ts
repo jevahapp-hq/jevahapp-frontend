@@ -89,17 +89,31 @@ export function putAuthorProfile(
   const profile = normalizeAuthorProfile(raw as any, userId);
   if (!profile) return null;
   const prev = profiles.get(userId);
+
+  // Never replace a usable list-payload name with a nameless /users/:id result.
+  if (!hasUsableAuthorName(profile)) {
+    if (prev && hasUsableAuthorName(prev)) {
+      if (profile.avatar && profile.avatar !== prev.avatar) {
+        const merged = { ...prev, avatar: profile.avatar };
+        profiles.set(userId, merged);
+        schedulePersistAuthorProfiles(profiles);
+        bumpStore();
+        return merged;
+      }
+      return prev;
+    }
+    return prev || null;
+  }
+
   profiles.delete(userId);
   profiles.set(userId, profile);
   trimProfiles();
-  if (hasUsableAuthorName(profile)) {
-    failedUntil.delete(userId);
-    const nameChanged = prev?.fullName !== profile.fullName;
-    const avatarChanged = prev?.avatar !== profile.avatar;
-    if (nameChanged || avatarChanged || !prev) {
-      schedulePersistAuthorProfiles(profiles);
-      bumpStore();
-    }
+  failedUntil.delete(userId);
+  const nameChanged = prev?.fullName !== profile.fullName;
+  const avatarChanged = prev?.avatar !== profile.avatar;
+  if (nameChanged || avatarChanged || !prev) {
+    schedulePersistAuthorProfiles(profiles);
+    bumpStore();
   }
   return profile;
 }
@@ -139,9 +153,6 @@ export async function ensureAuthorProfile(
       if (fetched && hasUsableAuthorName(fetched)) {
         putAuthorProfile(userId, fetched);
         return fetched;
-      }
-      if (fetched) {
-        putAuthorProfile(userId, fetched);
       }
       if (!hasUsableAuthorName(profiles.get(userId))) {
         markAuthorFetchFailed(userId);

@@ -105,7 +105,7 @@ export const getHeaderHeight = () => {
   return getResponsiveSize(56, 60, 64, 72) + safeAreaTop;
 };
 
-// Bottom navigation responsive sizing
+// Bottom navigation height
 export const getBottomNavHeight = () => {
   return getResponsiveSize(80, 84, 88, 96) + safeAreaBottom;
 };

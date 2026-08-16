@@ -4,7 +4,7 @@
  */
 
 import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
-import { enrichContentWithAuthor, isObjectId, resolveAuthorName } from "../author";
+import { enrichContentWithAuthor, resolveAuthorName, stampPayloadAuthor } from "../author";
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
 import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
 import { ContentType, MediaItem } from "../types";
@@ -25,55 +25,50 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       enrichContentWithUserData(item)
     );
 
-    const resolvedName = resolveAuthorName(enrichedItem, "");
-    const originalSpeaker = enrichedItem.speaker;
-    const speaker =
-      resolvedName ||
-      (isObjectId(originalSpeaker) ? String(originalSpeaker).trim() : undefined);
+    const stamped = stampPayloadAuthor(enrichedItem);
+    const resolvedName = resolveAuthorName(stamped, "");
+    const speaker = resolvedName || undefined;
 
     return {
-      _id: enrichedItem._id || enrichedItem.id,
+      _id: stamped._id || stamped.id,
       contentType: (() => {
-        const raw = String(enrichedItem.contentType || "media").toLowerCase();
-        if (enrichedItem.isGif === true || raw === "gif" || raw === "gifs") {
+        const raw = String(stamped.contentType || "media").toLowerCase();
+        if (stamped.isGif === true || raw === "gif" || raw === "gifs") {
           return "gif";
         }
-        return enrichedItem.contentType || "media";
+        return stamped.contentType || "media";
       })(),
-      fileUrl: enrichedItem.fileUrl || enrichedItem.file || enrichedItem.url || "",
+      fileUrl: stamped.fileUrl || stamped.file || stamped.url || "",
       // Preserve backend streaming hints so the player can pick the fastest
       // startable source (e.g. HLS) instead of always falling back to the
       // raw fileUrl, and so media-type detection has mimeType to work with.
-      playbackUrl: enrichedItem.playbackUrl,
-      hlsUrl: enrichedItem.hlsUrl,
-      mimeType: enrichedItem.mimeType || enrichedItem.mimetype,
-      title: enrichedItem.title || "Untitled",
+      playbackUrl: stamped.playbackUrl,
+      hlsUrl: stamped.hlsUrl,
+      mimeType: stamped.mimeType || stamped.mimetype,
+      title: stamped.title || "Untitled",
       speaker,
+      uploadedByName: resolvedName || stamped.uploadedByName,
       // Preserve the full uploadedBy object if it exists (with firstName, lastName, etc.), otherwise keep as string
-      uploadedBy: typeof enrichedItem.uploadedBy === "object" && enrichedItem.uploadedBy !== null
-        ? enrichedItem.uploadedBy  // Preserve the full object with all user data
-        : enrichedItem.uploadedBy,  // Keep as string if it's a string ID
-      description: enrichedItem.description || enrichedItem.title || "",
-      speakerAvatar: enrichedItem.speakerAvatar || enrichedItem.author?.avatar || enrichedItem.uploadedBy?.avatar || enrichedItem.authorInfo?.avatar,
-      views: enrichedItem.views || enrichedItem.viewCount || enrichedItem.totalViews || 0,
-      sheared: enrichedItem.sheared || enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
-      saved: enrichedItem.saved || enrichedItem.saves || 0,
-      comment: enrichedItem.comment || enrichedItem.comments || enrichedItem.commentCount || 0,
-      favorite: enrichedItem.favorite || enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
-      imageUrl: enrichedItem.imageUrl || enrichedItem.thumbnailUrl || enrichedItem.fileUrl,
-      thumbnailUrl: enrichedItem.thumbnailUrl || enrichedItem.imageUrl,
-      createdAt: enrichedItem.createdAt || enrichedItem.created_at || new Date().toISOString(),
-      duration: enrichedItem.duration,
-      // Playback URLs + MIME — required for MP4-over-HLS seek preference
-      playbackUrl: enrichedItem.playbackUrl,
-      hlsUrl: enrichedItem.hlsUrl,
-      fileMimeType: enrichedItem.fileMimeType || enrichedItem.mimeType,
-      mimeType: enrichedItem.mimeType || enrichedItem.fileMimeType,
-      moderationStatus: enrichedItem.moderationStatus,
+      uploadedBy: typeof stamped.uploadedBy === "object" && stamped.uploadedBy !== null
+        ? stamped.uploadedBy  // Preserve the full object with all user data
+        : stamped.uploadedBy,  // Keep as string if it's a string ID
+      description: stamped.description || stamped.title || "",
+      speakerAvatar: stamped.speakerAvatar || stamped.author?.avatar || stamped.uploadedBy?.avatar || stamped.authorInfo?.avatar,
+      views: stamped.views || stamped.viewCount || stamped.totalViews || 0,
+      sheared: stamped.sheared || stamped.shares || stamped.shareCount || stamped.totalShares || 0,
+      saved: stamped.saved || stamped.saves || 0,
+      comment: stamped.comment || stamped.comments || stamped.commentCount || 0,
+      favorite: stamped.favorite || stamped.likes || stamped.likeCount || stamped.totalLikes || 0,
+      imageUrl: stamped.imageUrl || stamped.thumbnailUrl || stamped.fileUrl,
+      thumbnailUrl: stamped.thumbnailUrl || stamped.imageUrl,
+      createdAt: stamped.createdAt || stamped.created_at || new Date().toISOString(),
+      duration: stamped.duration,
+      fileMimeType: stamped.fileMimeType || stamped.mimeType,
+      moderationStatus: stamped.moderationStatus,
       processingStatus: (() => {
         const raw =
-          enrichedItem.processingStatus ||
-          enrichedItem.status ||
+          stamped.processingStatus ||
+          stamped.status ||
           undefined;
         if (raw == null || raw === "") return undefined;
         const s = String(raw).toLowerCase();
@@ -81,26 +76,26 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
         return s;
       })(),
       // Additional fields
-      likes: enrichedItem.likes || enrichedItem.likeCount || enrichedItem.totalLikes || 0,
-      shares: enrichedItem.shares || enrichedItem.shareCount || enrichedItem.totalShares || 0,
-      saves: enrichedItem.saves || 0,
-      comments: enrichedItem.comments || enrichedItem.commentCount || 0,
-      authorInfo: enrichedItem.authorInfo || enrichedItem.author,
-      author: enrichedItem.author || enrichedItem.authorInfo,
-      userId: enrichedItem.userId || enrichedItem.user_id,
-      artistName: enrichedItem.artistName,
-      viewCount: enrichedItem.viewCount || enrichedItem.totalViews || enrichedItem.views || 0,
-      totalViews: enrichedItem.totalViews || enrichedItem.viewCount || enrichedItem.views || 0,
-      shareCount: enrichedItem.shareCount || enrichedItem.totalShares || enrichedItem.shares || 0,
-      totalShares: enrichedItem.totalShares || enrichedItem.shareCount || enrichedItem.shares || 0,
-      likeCount: enrichedItem.likeCount || enrichedItem.totalLikes || enrichedItem.likes || 0,
-      totalLikes: enrichedItem.totalLikes || enrichedItem.likeCount || enrichedItem.likes || 0,
-      commentCount: enrichedItem.commentCount || enrichedItem.comments || 0,
+      likes: stamped.likes || stamped.likeCount || stamped.totalLikes || 0,
+      shares: stamped.shares || stamped.shareCount || stamped.totalShares || 0,
+      saves: stamped.saves || 0,
+      comments: stamped.comments || stamped.commentCount || 0,
+      authorInfo: stamped.authorInfo || stamped.author,
+      author: stamped.author || stamped.authorInfo,
+      userId: stamped.userId || stamped.user_id,
+      artistName: stamped.artistName,
+      viewCount: stamped.viewCount || stamped.totalViews || stamped.views || 0,
+      totalViews: stamped.totalViews || stamped.viewCount || stamped.views || 0,
+      shareCount: stamped.shareCount || stamped.totalShares || stamped.shares || 0,
+      totalShares: stamped.totalShares || stamped.shareCount || stamped.shares || 0,
+      likeCount: stamped.likeCount || stamped.totalLikes || stamped.likes || 0,
+      totalLikes: stamped.totalLikes || stamped.likeCount || stamped.likes || 0,
+      commentCount: stamped.commentCount || stamped.comments || 0,
       // Preserve user interaction flags from API so likes/saves persist after login (VideoCard uses these as fallback)
-      hasLiked: Boolean(enrichedItem.hasLiked ?? enrichedItem.userInteraction?.hasLiked ?? false),
-      hasBookmarked: Boolean(enrichedItem.hasBookmarked ?? enrichedItem.hasSaved ?? enrichedItem.userInteraction?.hasBookmarked ?? false),
-      hasViewed: Boolean(enrichedItem.hasViewed ?? enrichedItem.userInteraction?.hasViewed ?? false),
-      hasShared: Boolean(enrichedItem.hasShared ?? enrichedItem.userInteraction?.hasShared ?? false),
+      hasLiked: Boolean(stamped.hasLiked ?? stamped.userInteraction?.hasLiked ?? false),
+      hasBookmarked: Boolean(stamped.hasBookmarked ?? stamped.hasSaved ?? stamped.userInteraction?.hasBookmarked ?? false),
+      hasViewed: Boolean(stamped.hasViewed ?? stamped.userInteraction?.hasViewed ?? false),
+      hasShared: Boolean(stamped.hasShared ?? stamped.userInteraction?.hasShared ?? false),
     };
   } catch (error) {
     // Log error but return null instead of crashing

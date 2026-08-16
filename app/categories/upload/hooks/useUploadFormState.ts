@@ -6,6 +6,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Dimensions } from "react-native";
 import { getOrientation } from "../../../../utils/responsive";
 import { detectFileType, validateMediaEligibility } from "../utils";
+import {
+  clearUploadDraft,
+  detectedTypeFromDraft,
+  hydrateUploadDraft,
+} from "../utils/uploadDraft";
 import type {
   DetectedFileType,
   EligibilityStatus,
@@ -49,6 +54,26 @@ export function useUploadFormState() {
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
     getOrientation()
   );
+  const [restoredDraft, setRestoredDraft] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateUploadDraft().then((draft) => {
+      if (cancelled || !draft) return;
+      setTitle(draft.title || "");
+      setDescription(draft.description || "");
+      setSelectedCategory(draft.selectedCategory || "");
+      setSelectedType(draft.selectedType || "");
+      setIsSermonContent(Boolean(draft.isSermonContent));
+      setFile(draft.file);
+      setThumbnail(draft.thumbnail);
+      setDetectedFileType(detectedTypeFromDraft(draft.file));
+      setRestoredDraft(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener("change", ({ window }) => {
@@ -123,7 +148,7 @@ export function useUploadFormState() {
     validateMediaEligibilityLocal,
   ]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setTitle("");
     setDescription("");
     setSelectedCategory("");
@@ -135,7 +160,9 @@ export function useUploadFormState() {
     setUploadResult(null);
     setEligibilityStatus(null);
     setUploadState({ status: "idle", progress: 0, message: "" });
-  };
+    setRestoredDraft(false);
+    clearUploadDraft();
+  }, []);
 
   return {
     file,
@@ -165,6 +192,7 @@ export function useUploadFormState() {
     detectedFileType,
     setDetectedFileType,
     orientation,
+    restoredDraft,
     validateMediaEligibilityLocal,
     resetForm,
   };

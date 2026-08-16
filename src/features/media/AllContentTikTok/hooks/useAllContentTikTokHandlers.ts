@@ -108,6 +108,8 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       const buildDisplayName = (speaker?: string, uploadedBy?: string | object) => {
         const isObjectId = (s: string) =>
           typeof s === "string" && /^[0-9a-fA-F]{24}$/.test(s.trim());
+        const isPlaceholder = (s?: string) =>
+          !s || /^(anonymous(\s+user)?|unknown|no speaker|user)$/i.test(s.trim());
         let uploadedByName = "";
         if (uploadedBy && typeof uploadedBy === "object") {
           const u = uploadedBy as any;
@@ -118,7 +120,8 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         } else if (
           uploadedBy &&
           typeof uploadedBy === "string" &&
-          !isObjectId(uploadedBy)
+          !isObjectId(uploadedBy) &&
+          !isPlaceholder(uploadedBy)
         ) {
           uploadedByName = uploadedBy;
         }
@@ -126,7 +129,8 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           speaker &&
           typeof speaker === "string" &&
           speaker.trim().length > 0 &&
-          !isObjectId(speaker)
+          !isObjectId(speaker) &&
+          !isPlaceholder(speaker)
         )
           return speaker;
         if (uploadedByName) return uploadedByName;

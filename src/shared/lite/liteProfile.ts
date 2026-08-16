@@ -216,6 +216,28 @@ export function getLiteImageCachePolicy(): "disk" | "memory-disk" {
   return isLiteProfileActive() ? "disk" : "memory-disk";
 }
 
+/** 2GB cannot hold a 300MB multipart + feed players. Same upload screen, smaller cap. */
+const LITE_MAX_VIDEO_UPLOAD_BYTES = 64 * 1024 * 1024;
+
+export function getLiteMaxVideoUploadBytes(fullBytes: number): number {
+  return isLiteProfileActive()
+    ? Math.min(fullBytes, LITE_MAX_VIDEO_UPLOAD_BYTES)
+    : fullBytes;
+}
+
+export function shouldCopyUploadToCache(): boolean {
+  return !isLiteProfileActive();
+}
+
+export function shouldProbeUploadDuration(): boolean {
+  return !isLiteProfileActive();
+}
+
+/** Don't re-send the video to AI on Lite — title + cover is enough. */
+export function shouldAttachFileToAiDescription(): boolean {
+  return !isLiteProfileActive();
+}
+
 export function getLiteDrawDistance(full = 480): number {
   return isLiteProfileActive() ? 220 : full;
 }

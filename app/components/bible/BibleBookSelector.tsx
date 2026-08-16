@@ -13,11 +13,13 @@ import { bibleApiService, BibleBook } from "../../services/bibleApiService";
 interface BibleBookSelectorProps {
   onBookSelect: (book: BibleBook) => void;
   selectedBook?: BibleBook | null;
+  translationId?: string;
 }
 
 export default function BibleBookSelector({
   onBookSelect,
   selectedBook,
+  translationId,
 }: BibleBookSelectorProps) {
   const [books, setBooks] = useState<BibleBook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,7 @@ export default function BibleBookSelector({
 
   useEffect(() => {
     loadBooks();
-  }, []);
+  }, [translationId]);
 
   useEffect(() => {
     filterBooks();

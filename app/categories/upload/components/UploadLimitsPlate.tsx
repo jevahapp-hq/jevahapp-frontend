@@ -21,6 +21,7 @@ import {
   getResponsiveFontSize,
   getResponsiveSpacing,
 } from "../../../../utils/responsive";
+import { isLiteProfileActive } from "../../../../src/shared/lite/liteProfile";
 import { useReduceMotion } from "../hooks/useReduceMotion";
 
 type UploadLimitsPlateProps = {
@@ -30,6 +31,8 @@ type UploadLimitsPlateProps = {
 type LimitRow = { icon: keyof typeof Ionicons.glyphMap; text: string };
 
 function getLimitRows(selectedType: string): LimitRow[] {
+  const lite = isLiteProfileActive();
+  const videoCap = lite ? "Up to 64 MB per video on this device" : "Up to 300 MB per video";
   if (selectedType === "music") {
     return [
       { icon: "cloud-upload-outline", text: "Up to 50 MB per song" },
@@ -39,7 +42,7 @@ function getLimitRows(selectedType: string): LimitRow[] {
   }
   if (selectedType === "sermon" || selectedType === "videos") {
     return [
-      { icon: "cloud-upload-outline", text: "Up to 300 MB per video" },
+      { icon: "cloud-upload-outline", text: videoCap },
       { icon: "film-outline", text: "Library cap: 30 videos" },
       { icon: "time-outline", text: "Max 10 uploads per hour" },
     ];
@@ -59,7 +62,7 @@ function getLimitRows(selectedType: string): LimitRow[] {
     ];
   }
   return [
-    { icon: "videocam-outline", text: "Videos up to 300 MB" },
+    { icon: "videocam-outline", text: lite ? "Videos up to 64 MB on this device" : "Videos up to 300 MB" },
     { icon: "musical-note-outline", text: "Music up to 50 MB" },
     { icon: "book-outline", text: "Books up to 100 MB" },
   ];

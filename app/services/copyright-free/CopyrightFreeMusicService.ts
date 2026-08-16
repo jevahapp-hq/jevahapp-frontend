@@ -127,6 +127,9 @@ class CopyrightFreeMusicAPI {
 
       const response = await fetch(`${this.baseUrl}/${songId}`, { method: "GET", headers });
 
+      if (response.status === 404) {
+        return { success: false, data: {} as CopyrightFreeSongResponse };
+      }
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       let result: any;

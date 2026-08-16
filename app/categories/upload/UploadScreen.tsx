@@ -4,14 +4,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  BackHandler,
   InteractionManager,
   KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router, useFocusEffect } from "expo-router";
+import {
+  initialWindowMetrics as safeAreaInitialMetrics,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import {
   getButtonSize,
   getKeyboardAdjustment,
@@ -22,10 +28,13 @@ import {
 } from "../../../utils/responsive";
 import AuthHeader from "../../components/AuthHeader";
 import TopToast from "../../components/TopToast";
+import { pausePlaybackSession } from "../../../src/shared/audio/playOrToggleTrack";
+import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
 import { useMediaStore } from "../../store/useUploadStore";
 import { AiVerificationPlate } from "./components/AiVerificationPlate";
 import { MediaPickers } from "./components/MediaPickers";
 import { ModerationErrorInline } from "./components/ModerationErrorModal";
+import { UploadDraftPrompt } from "./components/UploadDraftPrompt";
 import { UploadFormFields } from "./components/UploadFormFields";
 import { UploadLimitsPlate } from "./components/UploadLimitsPlate";
 import { UploadProgressModal } from "./components/UploadProgressModal";
@@ -35,12 +44,21 @@ import { useMediaPickers } from "./hooks/useMediaPickers";
 import { useUploadFlow } from "./hooks/useUploadFlow";
 import { useUploadFormState } from "./hooks/useUploadFormState";
 import { isUploadFormReady } from "./utils/eligibilityRules";
+import {
+  isUploadFormDirty,
+  saveUploadDraft,
+} from "./utils/uploadDraft";
 
 export default function UploadScreen() {
   const form = useUploadFormState();
   const insets = useSafeAreaInsets();
+  const navClearance =
+    insets.bottom ||
+    safeAreaInitialMetrics?.insets?.bottom ||
+    (Platform.OS === "android" ? 24 : 0);
   /** Secondary chrome after first paint — keeps open transition snappy. */
   const [deferChrome, setDeferChrome] = useState(true);
+  const [draftPromptVisible, setDraftPromptVisible] = useState(false);
   const [toast, setToast] = useState<{
     visible: boolean;
     text: string;
@@ -57,6 +75,85 @@ export default function UploadScreen() {
   const showSoftNotice = useCallback((text: string) => {
     setToast({ visible: true, text, type: "info" });
   }, []);
+
+  useEffect(() => {
+    if (!form.restoredDraft) return;
+    showSoftNotice("Draft restored");
+  }, [form.restoredDraft, showSoftNotice]);
+
+  const formDirty = isUploadFormDirty({
+    file: form.file,
+    thumbnail: form.thumbnail,
+    title: form.title,
+    description: form.description,
+    selectedCategory: form.selectedCategory,
+    selectedType: form.selectedType,
+  });
+
+  const leaveUpload = useCallback(() => {
+    setDraftPromptVisible(false);
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
+  }, []);
+
+  const handleCloseAttempt = useCallback(() => {
+    if (form.loading) return;
+    if (draftPromptVisible) return;
+    if (!formDirty) {
+      leaveUpload();
+      return;
+    }
+    setDraftPromptVisible(true);
+  }, [form.loading, draftPromptVisible, formDirty, leaveUpload]);
+
+  const handleSaveDraft = useCallback(() => {
+    saveUploadDraft({
+      file: form.file,
+      thumbnail: form.thumbnail,
+      title: form.title,
+      description: form.description,
+      selectedCategory: form.selectedCategory,
+      selectedType: form.selectedType,
+      isSermonContent: form.isSermonContent,
+    });
+    leaveUpload();
+  }, [
+    form.file,
+    form.thumbnail,
+    form.title,
+    form.description,
+    form.selectedCategory,
+    form.selectedType,
+    form.isSermonContent,
+    leaveUpload,
+  ]);
+
+  const handleDiscardDraft = useCallback(() => {
+    form.resetForm();
+    leaveUpload();
+  }, [form.resetForm, leaveUpload]);
+
+  useFocusEffect(
+    useCallback(() => {
+      try {
+        useGlobalVideoStore.getState().pauseAllVideosImperatively?.();
+      } catch {
+        // no-op
+      }
+      void pausePlaybackSession();
+
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (form.loading) return true;
+        if (draftPromptVisible) {
+          setDraftPromptVisible(false);
+          return true;
+        }
+        handleCloseAttempt();
+        return true;
+      });
+      return () => sub.remove();
+    }, [form.loading, draftPromptVisible, handleCloseAttempt])
+  );
 
   const { pickMedia, pickThumbnail } = useMediaPickers({
     title: form.title,
@@ -145,7 +242,11 @@ export default function UploadScreen() {
               paddingTop: getResponsiveSpacing(16, 20, 24, 32),
             }}
           >
-            <AuthHeader title="New Upload" />
+            <AuthHeader
+              title="New Upload"
+              onBackPress={handleCloseAttempt}
+              onCancelPress={handleCloseAttempt}
+            />
           </View>
 
           <ScrollView
@@ -208,13 +309,26 @@ export default function UploadScreen() {
                 />
               ) : null}
 
-              <View className="items-center mt-6">
+              <View
+                className="items-center mt-6"
+                style={{ paddingBottom: navClearance }}
+              >
                 {!deferChrome ? (
                   <AiVerificationPlate ready={formReady} />
                 ) : null}
 
                 <TouchableOpacity
                   onPress={async () => {
+                    try {
+                      useGlobalVideoStore.getState().pauseAllVideosImperatively?.();
+                    } catch {
+                      // no-op
+                    }
+                    try {
+                      await pausePlaybackSession();
+                    } catch {
+                      // no-op
+                    }
                     const stopAudio = useMediaStore.getState().stopAudioFn;
                     if (stopAudio) await stopAudio();
                     handleUpload();
@@ -247,6 +361,13 @@ export default function UploadScreen() {
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      <UploadDraftPrompt
+        visible={draftPromptVisible}
+        onSaveDraft={handleSaveDraft}
+        onDiscard={handleDiscardDraft}
+        onKeepEditing={() => setDraftPromptVisible(false)}
+      />
 
       <TopToast
         visible={toast.visible}

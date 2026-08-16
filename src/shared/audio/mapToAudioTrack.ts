@@ -4,6 +4,27 @@ import { getUserDisplayNameFromContent, isValidUri } from "../utils";
 
 export type PlaybackSource = "feed" | "copyright-free" | "library" | "hymn" | "ebook";
 
+/** Copyright-free catalog only — never treat feed / library / artist audio as a CF song. */
+export function isCopyrightFreeSong(song: any): boolean {
+  if (!song || typeof song !== "object") return false;
+  const source = song.source;
+  if (
+    source === "feed" ||
+    source === "library" ||
+    source === "hymn" ||
+    source === "ebook"
+  ) {
+    return false;
+  }
+  if (source === "copyright-free") return true;
+  if (song.lane === "artist") return false;
+  const ct = String(song.contentType || "");
+  if (ct === "artist-music") return false;
+  if (ct === "copyright-free-music" || ct === "copyright-free") return true;
+  if (song.trackType === "copyrightFree") return true;
+  return false;
+}
+
 export function resolveMediaAudioUrl(item: MediaItem | Record<string, unknown>): string {
   const candidates = [
     (item as any).fileUrl,

@@ -3,7 +3,6 @@
  */
 import {
   Modal,
-  Platform,
   StatusBar,
   StyleSheet,
   View,
@@ -35,8 +34,8 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
             style={[
               {
                 flex: 1,
-                paddingTop: Platform.OS === "ios" ? 50 : 40,
-                paddingBottom: Platform.OS === "ios" ? 40 : 30,
+                paddingTop: m.safeTop + 8,
+                paddingBottom: m.safeBottom + 12,
               },
               m.modalAnimatedStyle,
             ]}
@@ -112,6 +111,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
         playlists={m.playlists}
         isLoadingPlaylists={m.isLoadingPlaylists}
         animatedStyle={m.playlistViewAnimatedStyle}
+        bottomInset={m.safeBottom}
         onClose={() => m.setShowPlaylistView(false)}
         onSelectPlaylist={(playlist) => {
           m.setSelectedPlaylistForDetail(playlist);
@@ -153,6 +153,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
         visible={m.showPlaylistDetail}
         playlist={m.selectedPlaylistForDetail}
         animatedStyle={m.playlistDetailAnimatedStyle}
+        bottomInset={m.safeBottom}
         onClose={() => {
           m.setShowPlaylistDetail(false);
           m.setSelectedPlaylistForDetail(null);
@@ -174,6 +175,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
         isTogglingSave={m.isTogglingSave}
         optionsSongData={m.optionsSongData}
         loadingOptionsSong={m.loadingOptionsSong}
+        bottomInset={m.safeBottom}
         onClose={() => {
           m.setShowOptionsModal(false);
           m.setOptionsSongData(null);

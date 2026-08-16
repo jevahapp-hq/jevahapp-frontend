@@ -1,5 +1,8 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMediaStore } from "../../../../store/useUploadStore";
+import { stampPayloadAuthor } from "../../../../../src/shared/author";
 import type { MediaItem } from "../../../../../src/shared/types";
+import { normalizeUserData } from "../../../../utils/userValidation";
 import { getTimeAgo } from "../../utils";
 import { resolveUploadContentType } from "../../utils/resolveUploadContentType";
 import type { MediaFile } from "../../types";
@@ -8,6 +11,44 @@ import {
   seedDurationCache,
   type UploadedMedia,
 } from "./resolveProcessingStatus";
+
+async function sessionAuthorStamp(): Promise<Partial<MediaItem>> {
+  try {
+    const raw = await AsyncStorage.getItem("user");
+    const user = raw ? JSON.parse(raw) : null;
+    const n = normalizeUserData(user);
+    const id = String(user?._id || user?.id || "").trim();
+    const name =
+      n.fullName && n.fullName !== "Anonymous User" ? n.fullName : "";
+    if (!id && !name) return {};
+    return {
+      speaker: name || undefined,
+      uploadedByName: name || undefined,
+      userId: id || undefined,
+      uploadedBy: id
+        ? {
+            _id: id,
+            firstName: n.firstName !== "Anonymous" ? n.firstName : undefined,
+            lastName: n.lastName !== "User" ? n.lastName : undefined,
+            email: n.email,
+            avatar: n.avatar || undefined,
+            name: name || undefined,
+          }
+        : name,
+      authorInfo: id
+        ? {
+            _id: id,
+            firstName:
+              n.firstName !== "Anonymous" ? n.firstName : n.fullName || "",
+            lastName: n.lastName !== "User" ? n.lastName : "",
+            avatar: n.avatar || undefined,
+          }
+        : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
 
 /** @deprecated Prefer resolveUploadContentType */
 export function mapUploadTypeToHomeCategory(selectedType: string): string {
@@ -88,7 +129,11 @@ export async function persistUploadedMedia(params: {
   selectedType?: string;
 }): Promise<MediaItem> {
   const { uploaded, file } = params;
-  const feedItem = buildFeedMediaItem(params);
+  const author = await sessionAuthorStamp();
+  const feedItem = stampPayloadAuthor({
+    ...buildFeedMediaItem(params),
+    ...author,
+  }) as MediaItem;
   const now = new Date();
 
   await useMediaStore.getState().addMediaWithUserValidation({
@@ -107,6 +152,7 @@ export async function persistUploadedMedia(params: {
     imageUrl: uploaded.thumbnailUrl || uploaded.imageUrl || "",
     duration: feedItem.duration,
     processingStatus: feedItem.processingStatus,
+    moderationStatus: feedItem.moderationStatus,
     viewCount: 0,
     listenCount: 0,
     readCount: 0,

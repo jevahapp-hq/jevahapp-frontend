@@ -91,7 +91,8 @@ export const useContentCacheStore = create<ContentCacheState>()(
     {
       name: "content-cache-store",
       storage: createJSONStorage(() => mmkvZustandStorage),
-      version: 3,
+      version: 4,
+      migrate: () => ({ cache: {}, ttlMs: getFeedStaleMs() }),
     }
   )
 );

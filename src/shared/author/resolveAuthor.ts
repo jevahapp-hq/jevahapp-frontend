@@ -115,7 +115,33 @@ export function seedAuthorsFromItem(item: AuthorCarrier): void {
   ]) {
     if (!candidate || typeof candidate !== "object") continue;
     const profile = normalizeAuthorProfile(candidate as any);
-    if (!profile) continue;
+    if (!profile || !hasUsableAuthorName(profile)) continue;
     putAuthorProfile(profile.id, profile);
   }
+}
+
+/**
+ * Copy the list-payload name onto speaker/uploadedByName in the same tick as
+ * title — no /users/:id round-trip.
+ */
+export function stampPayloadAuthor<T extends AuthorCarrier>(item: T): T {
+  seedAuthorsFromItem(item);
+  const name = resolveAuthorName(item, "");
+  if (!name) return item;
+
+  const next: T = { ...item, speaker: name, uploadedByName: name };
+  if (typeof next.uploadedBy === "object" && next.uploadedBy) {
+    next.uploadedBy = {
+      ...(next.uploadedBy as Record<string, any>),
+      name: (next.uploadedBy as any).name || name,
+    };
+  }
+  if (typeof next.authorInfo === "object" && next.authorInfo) {
+    next.authorInfo = {
+      ...next.authorInfo,
+      fullName: next.authorInfo.fullName || name,
+      name: next.authorInfo.name || name,
+    };
+  }
+  return next;
 }

@@ -123,6 +123,20 @@ export const useFastLogin = () => {
         );
         await authUtils.storeAuthData(backendAuthResult, userInfo);
 
+        const createdAt = backendAuthResult?.user?.createdAt;
+        const { isNewAccount, markLoginTourPending, hasSeenLoginTour } =
+          await import("../components/loginTour/loginTourStorage");
+        const uid = String(
+          backendAuthResult?.user?._id || backendAuthResult?.user?.id || ""
+        );
+        const fresh =
+          isNewAccount(createdAt) ||
+          backendAuthResult?.user?.isProfileComplete === false ||
+          backendAuthResult?.isNewUser === true;
+        if (!hasSeenLoginTour(uid) && fresh) {
+          markLoginTourPending(uid || undefined);
+        }
+
         // Navigate immediately on success
         router.replace("/categories/HomeScreen");
       } catch (error: any) {

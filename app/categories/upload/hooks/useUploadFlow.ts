@@ -106,6 +106,14 @@ export function useUploadFlow(deps: UploadFlowDeps) {
 
       normalizeUploadUser(auth.user);
 
+      try {
+        require("../../../store/useGlobalVideoStore")
+          .useGlobalVideoStore.getState()
+          .pauseAllVideosImperatively?.();
+      } catch {
+        // no-op
+      }
+
       const formData = buildUploadPayload({
         file,
         thumbnail,

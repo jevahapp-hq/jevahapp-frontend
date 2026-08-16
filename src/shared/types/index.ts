@@ -11,6 +11,7 @@ export interface MediaItem extends BaseEntity {
   fileUrl: string;
   title: string;
   speaker?: string;
+  uploadedByName?: string;
   /** Optional MIME from upload / API — preferred over title for type detection */
   mimeType?: string;
   fileMimeType?: string;

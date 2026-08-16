@@ -36,6 +36,7 @@ export {
   resolveAuthorAvatar,
   resolveAuthorName,
   seedAuthorsFromItem,
+  stampPayloadAuthor,
 } from "./resolveAuthor";
 
 export {

@@ -13,11 +13,23 @@ import {
     BibleChapter,
     BibleVerse,
 } from "../../services/bibleApiService";
+import { getLastRead, setLastRead } from "../../services/bibleCache";
+import {
+  getCachedCatalog,
+  getInstalledPacks,
+  getSelectedTranslationId,
+  resolveTranslationId,
+  setSelectedTranslationId,
+  type BibleTranslation,
+  type BibleTranslationCatalog,
+} from "../../services/bibleTranslations";
+import { useNotification } from "../../context/NotificationContext";
 import BibleBookSelector from "./BibleBookSelector";
 import BibleChapterSelector from "./BibleChapterSelector";
 import BibleFloatingNav, { BibleFloatingNavRef } from "./BibleFloatingNav";
 import BibleReader from "./BibleReader";
 import BibleSearch from "./BibleSearch";
+import BibleTranslationPicker from "./BibleTranslationPicker";
 
 type ViewMode = "books" | "chapters" | "reader" | "search";
 
@@ -32,14 +44,76 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     null
   );
   const [chapters, setChapters] = useState<BibleChapter[]>([]);
+  const [catalog, setCatalog] = useState<BibleTranslationCatalog | null>(
+    getCachedCatalog
+  );
+  const [translationId, setTranslationId] = useState(
+    getSelectedTranslationId
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [installedIds, setInstalledIds] = useState<string[]>(() =>
+    getInstalledPacks().map((p) => p.translationId)
+  );
+  const [packRevision, setPackRevision] = useState(0);
+  const { showNotification } = useNotification();
   const floatingNavRef = useRef<BibleFloatingNavRef>(null);
+  const restoredRef = useRef(false);
 
-  // Load chapters when book is selected
+  const persistPlace = (
+    bookName: string,
+    chapterNumber: number,
+    extra?: Partial<BibleBook>
+  ) => {
+    setLastRead({
+      bookName,
+      chapterNumber,
+      testament: extra?.testament,
+      chapterCount: extra?.chapterCount,
+      translationId,
+    });
+  };
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const last = getLastRead(translationId);
+    if (!last) return;
+    setSelectedBook({
+      _id: last.bookName,
+      name: last.bookName,
+      testament: last.testament || "old",
+      chapterCount: last.chapterCount || 0,
+      verseCount: 0,
+    });
+    setSelectedChapter({
+      _id: `${last.bookName}-${last.chapterNumber}`,
+      bookName: last.bookName,
+      chapterNumber: last.chapterNumber,
+      verseCount: 0,
+    });
+    setViewMode("reader");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const nextCatalog = await bibleApiService.getTranslations();
+      if (cancelled) return;
+      setCatalog(nextCatalog);
+      setTranslationId(resolveTranslationId(nextCatalog));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load chapters when book or translation changes
   useEffect(() => {
     if (selectedBook) {
       loadChapters();
     }
-  }, [selectedBook]);
+  }, [selectedBook, translationId, packRevision]);
 
   const loadChapters = async () => {
     if (!selectedBook) return;
@@ -74,6 +148,9 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
   const handleChapterSelect = (chapter: BibleChapter) => {
     setSelectedChapter(chapter);
     setViewMode("reader");
+    if (selectedBook) {
+      persistPlace(selectedBook.name, chapter.chapterNumber, selectedBook);
+    }
   };
 
   const handleVerseSelect = (verse: BibleVerse) => {
@@ -95,6 +172,7 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     setSelectedBook(book);
     setSelectedChapter(chapter);
     setViewMode("reader");
+    persistPlace(verse.bookName, verse.chapterNumber);
   };
 
   const handleNavigateChapter = async (direction: "prev" | "next") => {
@@ -156,6 +234,71 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
       `✅ Navigating to ${selectedBook.name} ${newChapterNumber} (${verseCount} verses)`
     );
     setSelectedChapter(newChapter);
+    persistPlace(selectedBook.name, newChapterNumber, selectedBook);
+  };
+
+  const handleTranslationSelect = (id: string) => {
+    setSelectedTranslationId(id);
+    setTranslationId(id);
+    setPickerOpen(false);
+    if (selectedBook && selectedChapter) {
+      setLastRead({
+        bookName: selectedBook.name,
+        chapterNumber: selectedChapter.chapterNumber,
+        testament: selectedBook.testament,
+        chapterCount: selectedBook.chapterCount,
+        translationId: id,
+      });
+    }
+  };
+
+  const handlePackDownload = async (translation: BibleTranslation) => {
+    if (downloadingId) return;
+    setDownloadingId(translation.id);
+    try {
+      const result = await bibleApiService.downloadTranslationPack(translation);
+      if (result.ok) {
+        setInstalledIds(getInstalledPacks().map((p) => p.translationId));
+        setPackRevision((n) => n + 1);
+        showNotification({
+          type: "success",
+          title: translation.abbreviation,
+          message: "Available offline",
+        });
+        return;
+      }
+      if (result.reason === "hash") {
+        showNotification({
+          type: "error",
+          title: translation.abbreviation,
+          message: "Download again",
+        });
+        return;
+      }
+      if (result.reason === "licensed") {
+        showNotification({
+          type: "info",
+          title: translation.abbreviation,
+          message: "This translation stays online",
+        });
+        return;
+      }
+      if (result.reason === "too-large") {
+        showNotification({
+          type: "info",
+          title: translation.abbreviation,
+          message: "Pack too large for this device",
+        });
+        return;
+      }
+      showNotification({
+        type: "info",
+        title: translation.abbreviation,
+        message: "Pack unavailable — reading online",
+      });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const canNavigatePrev = selectedChapter ? selectedChapter.chapterNumber > 1 : false;
@@ -200,12 +343,27 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         )}
       </View>
 
-      <TouchableOpacity
-        style={styles.searchButton}
-        onPress={() => setViewMode("search")}
-      >
-        <Ionicons name="search-outline" size={24} color="#256E63" />
-      </TouchableOpacity>
+      <View style={styles.headerActions}>
+        {catalog?.translations?.length ? (
+          <TouchableOpacity
+            style={styles.translationChip}
+            onPress={() => setPickerOpen(true)}
+            accessibilityLabel="Choose Bible translation"
+          >
+            <Text style={styles.translationChipText}>
+              {catalog.translations.find((t) => t.id === translationId)
+                ?.abbreviation || translationId.toUpperCase()}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color="#256E63" />
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={() => setViewMode("search")}
+        >
+          <Ionicons name="search-outline" size={24} color="#256E63" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -214,18 +372,22 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
       case "books":
         return (
           <BibleBookSelector
+            key={`${translationId}:${packRevision}`}
             onBookSelect={handleBookSelect}
             selectedBook={selectedBook}
+            translationId={translationId}
           />
         );
 
       case "chapters":
         return selectedBook ? (
           <BibleChapterSelector
+            key={`${translationId}:${packRevision}:${selectedBook.name}`}
             bookName={selectedBook.name}
             chapterCount={selectedBook.chapterCount || chapters.length}
             onChapterSelect={handleChapterSelect}
             selectedChapter={selectedChapter}
+            translationId={translationId}
           />
         ) : null;
 
@@ -235,6 +397,8 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
             <BibleReader
               bookName={selectedBook.name}
               chapterNumber={selectedChapter.chapterNumber}
+              translationId={translationId}
+              packRevision={packRevision}
               onNavigateChapter={handleNavigateChapter}
               canNavigatePrev={canNavigatePrev}
               canNavigateNext={canNavigateNext}
@@ -258,7 +422,12 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         ) : null;
 
       case "search":
-        return <BibleSearch onVerseSelect={handleVerseSelect} />;
+        return (
+          <BibleSearch
+            key={translationId}
+            onVerseSelect={handleVerseSelect}
+          />
+        );
 
       default:
         return null;
@@ -362,6 +531,18 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
         <View style={styles.content}>{renderContent()}</View>
         {renderBottomNavigation()}
       </SafeAreaView>
+      {catalog?.translations?.length ? (
+        <BibleTranslationPicker
+          visible={pickerOpen}
+          selectedId={translationId}
+          translations={catalog.translations}
+          installedIds={installedIds}
+          downloadingId={downloadingId}
+          onSelect={handleTranslationSelect}
+          onDownload={handlePackDownload}
+          onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -411,18 +592,39 @@ const styles = StyleSheet.create({
   },
   searchButton: {
     padding: 8,
-    marginLeft: 8,
+    marginLeft: 4,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  translationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginRight: 2,
+    gap: 2,
+  },
+  translationChipText: {
+    fontSize: 12,
+    fontFamily: "Rubik_600SemiBold",
+    color: "#256E63",
   },
   content: {
     flex: 1,
   },
   bottomNav: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -435,6 +637,7 @@ const styles = StyleSheet.create({
   navItem: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
@@ -447,6 +650,8 @@ const styles = StyleSheet.create({
     fontFamily: "Rubik_500Medium",
     color: "#9CA3AF",
     marginTop: 4,
+    textAlign: "center",
+    width: "100%",
   },
   activeNavItemText: {
     color: "#256E63",

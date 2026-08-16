@@ -1,7 +1,7 @@
 import { useContentCacheStore } from "../../../app/store/useContentCacheStore";
 import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 import { mediaApi } from "../../core/api/MediaApi";
-import { getFeedPageSync, getRqFeedSeedSync, sanitizeFeedMedia } from "../cache/feedMmkv";
+import { getFeedPageSync, getRqFeedSeedSync, sanitizeFeedMedia, seedHasUsableAuthors } from "../cache/feedMmkv";
 import {
   FEED_PAGE_SIZE,
   LEGACY_ALL_FIRST_KEY,
@@ -91,6 +91,22 @@ function isPaintableSeed(fetchedAt?: number): boolean {
   return Date.now() - fetchedAt <= getFeedDiskMaxMs();
 }
 
+function paintNamedSeed(
+  items: MediaItem[],
+  extra: {
+    total: number;
+    fetchedAt?: number;
+    cursor?: string | null;
+    hasMore?: boolean;
+  }
+) {
+  const media = paintAuthorsFromCache(
+    UserProfileCache.enrichContentArray(sanitizeFeedMedia(items))
+  );
+  if (!seedHasUsableAuthors(media)) return undefined;
+  return { media, ...extra };
+}
+
 export function readSeededFirstPage(
   contentType: string,
   useAuth: boolean
@@ -104,68 +120,36 @@ export function readSeededFirstPage(
   const store = useContentCacheStore.getState();
   const primary = store.get(feedZustandFirstPageKey(contentType, useAuth));
   if (primary?.items?.length && isPaintableSeed(primary.fetchedAt)) {
-    const media = paintAuthorsFromCache(
-      UserProfileCache.enrichContentArray(sanitizeFeedMedia(primary.items))
-    );
-    return {
-      media,
+    const painted = paintNamedSeed(primary.items, {
       total: primary.total ?? 0,
       fetchedAt: primary.fetchedAt,
       cursor: primary.cursor,
       hasMore: primary.hasMore,
-    };
+    });
+    if (painted) return painted;
   }
-  // Legacy unpartitioned keys (pre lite|full suffix)
-  const legacyAuth = store.get(
-    `${contentType || "ALL"}:first:${useAuth ? "auth" : "public"}`
-  );
-  if (legacyAuth?.items?.length && isPaintableSeed(legacyAuth.fetchedAt)) {
-    return {
-      media: UserProfileCache.enrichContentArray(
-        sanitizeFeedMedia(legacyAuth.items)
-      ),
-      total: legacyAuth.total ?? 0,
-      fetchedAt: legacyAuth.fetchedAt,
-    };
-  }
-  if (contentType === "ALL") {
-    const legacy = store.get(LEGACY_ALL_FIRST_KEY);
-    if (legacy?.items?.length && isPaintableSeed(legacy.fetchedAt)) {
-      return {
-        media: UserProfileCache.enrichContentArray(
-          sanitizeFeedMedia(legacy.items)
-        ),
-        total: legacy.total ?? 0,
-        fetchedAt: legacy.fetchedAt,
-      };
-    }
-  }
-  // Sync MMKV fallback (instant-on path) if Zustand hydrate raced
   const mmkv = getFeedPageSync(contentType, useAuth);
   if (mmkv?.media?.length) {
-    return {
-      media: paintAuthorsFromCache(
-        UserProfileCache.enrichContentArray(mmkv.media)
-      ),
+    const painted = paintNamedSeed(mmkv.media, {
       total: mmkv.total,
       fetchedAt: mmkv.fetchedAt,
       cursor: mmkv.cursor,
       hasMore: mmkv.hasMore,
-    };
+    });
+    if (painted) return painted;
   }
-  // Prefer any paintable seed over a blank LoadingState (auth/public mismatch).
   if (useAuth) {
     const pub =
       getFeedPageSync(contentType, false) ||
       (contentType === "ALL" ? getRqFeedSeedSync() : null);
     if (pub?.media?.length) {
-      return {
-        media: UserProfileCache.enrichContentArray(pub.media),
+      const painted = paintNamedSeed(pub.media, {
         total: pub.total,
         fetchedAt: pub.fetchedAt,
         cursor: pub.cursor,
         hasMore: pub.hasMore,
-      };
+      });
+      if (painted) return painted;
     }
   }
   return undefined;

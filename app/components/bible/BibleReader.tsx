@@ -19,6 +19,8 @@ import { BibleVerse, bibleApiService } from "../../services/bibleApiService";
 interface BibleReaderProps {
   bookName: string;
   chapterNumber: number;
+  translationId?: string;
+  packRevision?: number;
   onNavigateChapter: (direction: "prev" | "next") => void;
   canNavigatePrev: boolean;
   canNavigateNext: boolean;
@@ -34,6 +36,8 @@ interface WordPosition {
 export default function BibleReader({
   bookName,
   chapterNumber,
+  translationId,
+  packRevision,
   onNavigateChapter,
   canNavigatePrev,
   canNavigateNext,
@@ -49,8 +53,8 @@ export default function BibleReader({
 
   // Slide controls
   const screenWidth = Dimensions.get("window").width;
-  const topSlideX = useRef(new Animated.Value(0)).current;
-  const [isTopHidden, setIsTopHidden] = useState(false);
+  const topSlideX = useRef(new Animated.Value(screenWidth)).current;
+  const [isTopHidden, setIsTopHidden] = useState(true);
 
   const slideTop = (hide: boolean) => {
     setIsTopHidden(hide);
@@ -119,7 +123,7 @@ export default function BibleReader({
     };
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookName, chapterNumber]);
+  }, [bookName, chapterNumber, translationId, packRevision]);
 
   // Build word mapping when verses change
   useEffect(() => {
@@ -138,6 +142,12 @@ export default function BibleReader({
       setAllWords(words);
     }
   }, [verses]);
+
+  useEffect(() => {
+    if (isSpeaking || isPaused) {
+      slideTop(false);
+    }
+  }, [isSpeaking, isPaused]);
 
   // Auto-scroll to verse helper
   const scrollToVerse = (verseIndex: number) => {
@@ -175,10 +185,12 @@ export default function BibleReader({
         chapterNumber
       );
       setVerses(chapterVerses);
-      // Update verse count from loaded verses if not already set
       if (chapterVerses.length > 0 && verseCount === 0) {
         setVerseCount(chapterVerses.length);
       }
+      void bibleApiService
+        .getChapterVerses(bookName, chapterNumber + 1)
+        .catch(() => {});
     } catch (err) {
       setError("Failed to load verses. Please try again.");
       console.error("Error loading verses:", err);

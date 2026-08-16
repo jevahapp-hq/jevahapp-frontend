@@ -3,24 +3,22 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   InteractionManager,
-  Platform,
   Pressable,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets, initialWindowMetrics as safeAreaInitialMetrics } from "react-native-safe-area-context";
 import { playNavTapSound } from "../../src/shared/utils/uiSounds";
+import { pausePlaybackSession } from "../../src/shared/audio/playOrToggleTrack";
 import {
+  getBottomNavHeight,
   getFabSize,
   getIconSize,
   getResponsiveBorderRadius,
   getResponsiveShadow,
-  getResponsiveSize,
   getResponsiveSpacing,
   getResponsiveTextStyle,
 } from "../../utils/responsive";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
 import { useMediaStore } from "../store/useUploadStore";
 import {
@@ -29,11 +27,6 @@ import {
   prefetchUploadScreen,
 } from "../utils/prefetchUploadScreen";
 import { FabCreateActions } from "./FabCreateActions";
-
-/** Tab row height only — system inset is applied separately (avoids double-count + jump). */
-const NAV_CONTENT_HEIGHT = getResponsiveSize(80, 84, 88, 96);
-/** Last-known Android nav inset fallback when metrics briefly report 0. */
-const ANDROID_NAV_FALLBACK = 24;
 
 interface BottomNavProps {
   selectedTab: string;
@@ -68,7 +61,7 @@ function deferMediaCleanup(tab: string, prevTab: string) {
     }
     try {
       if (tab === "Bible") {
-        void useGlobalAudioPlayerStore.getState().stop();
+        void pausePlaybackSession();
       }
     } catch {
       // no-op
@@ -83,15 +76,7 @@ export default function BottomNav({
   const [showActions, setShowActions] = useState(false);
   /** Defer FAB sheet until first open — avoids BlurView cost on cold paint */
   const [fabSheetMounted, setFabSheetMounted] = useState(false);
-  const insets = useSafeAreaInsets();
-  // Prefer live insets; fall back to window metrics / platform default so we
-  // never paint with 0 then jump when Android edge-to-edge resolves.
-  const metricsBottom = safeAreaInitialMetrics?.insets?.bottom ?? 0;
-  const safePadding =
-    insets.bottom ||
-    metricsBottom ||
-    (Platform.OS === "android" ? ANDROID_NAV_FALLBACK : 0);
-  const navBarHeight = NAV_CONTENT_HEIGHT + safePadding;
+  const navBarHeight = getBottomNavHeight();
 
   const handleFabToggle = useCallback(() => {
     setFabSheetMounted(true);
@@ -223,7 +208,6 @@ export default function BottomNav({
           left: 0,
           right: 0,
           height: navBarHeight,
-          paddingBottom: safePadding,
           backgroundColor: "white",
           flexDirection: "row",
           justifyContent: "space-around",
@@ -232,8 +216,7 @@ export default function BottomNav({
           zIndex: 10,
         }}
       >
-        {TAB_ORDER.slice(0, 2).map(renderTab)}
-        {TAB_ORDER.slice(2).map(renderTab)}
+        {TAB_ORDER.map(renderTab)}
       </View>
 
       <View
