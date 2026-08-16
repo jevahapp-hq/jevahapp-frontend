@@ -170,7 +170,13 @@ export function useAllContentInfiniteQuery(options: {
     staleTime: getFeedStaleMs(),
     gcTime: getFeedGcMs(),
     maxPages: getFeedMaxPages(),
-    retry: 1,
+    retry: (failureCount, error) => {
+      const msg = String((error as Error)?.message || "");
+      if (msg.includes("429") || msg.toLowerCase().includes("too many")) {
+        return false;
+      }
+      return failureCount < 1;
+    },
     networkMode: "offlineFirst",
     refetchOnMount: initialData ? false : true,
     refetchOnWindowFocus: false,

@@ -124,7 +124,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   });
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [surfaceReady, setSurfaceReady] = useState(false);
 
   useEffect(() => {
     try {
@@ -135,20 +134,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     } catch { }
   }, []);
 
-  // Reset reveal when this cell switches video / leaves mount window.
-  useEffect(() => {
-    setSurfaceReady(false);
-  }, [key, videoUrl, shouldRenderPlayer]);
-
-  const handleSurfaceReadyChange = useCallback((ready: boolean) => {
-    setSurfaceReady(ready);
-  }, []);
+  const handleSurfaceReadyChange = useCallback((_ready: boolean) => {}, []);
 
   // Always reserve footer layout for video posts — popping it in after the
   // frame caused FlashList rows to stack/flash over each other.
-  const isVideoPost = !isAudioSermonValue && !!videoUrl;
-  const showFooterSlot = isAudioSermonValue || !videoUrl || isVideoPost;
-  const footerVisible = isAudioSermonValue || !videoUrl || surfaceReady;
+  const showFooterSlot = true;
+  const footerVisible = true;
 
   return (
     <View

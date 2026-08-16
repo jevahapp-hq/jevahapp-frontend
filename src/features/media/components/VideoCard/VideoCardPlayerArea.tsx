@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  StyleSheet,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -18,6 +19,7 @@ import { useCommentModal } from "@/app/context/CommentModalContext";
 import { useGlobalVideoStore } from "@/app/store/useGlobalVideoStore";
 import {
   FEED_VIDEO_PLAYER_HEIGHT,
+  FeedVideoPoster,
   FeedVideoSurface,
   useInstantFeedVideoPlayer,
 } from "../../video-feed";
@@ -61,8 +63,8 @@ export interface VideoCardPlayerAreaProps {
   onSurfaceReadyChange?: (ready: boolean) => void;
 }
 
-/** Empty clipped slot — same size as a live player (stops FlashList overlap). */
-function VideoPlayerSlot() {
+/** Same size as a live player, with a poster so the row is never a white hole. */
+function VideoPlayerSlot({ video }: { video?: MediaItem }) {
   return (
     <View
       collapsable={false}
@@ -70,9 +72,11 @@ function VideoPlayerSlot() {
         height: FEED_VIDEO_PLAYER_HEIGHT,
         width: "100%",
         overflow: "hidden",
-        backgroundColor: "transparent",
+        backgroundColor: "#121212",
       }}
-    />
+    >
+      <FeedVideoPoster item={video} />
+    </View>
   );
 }
 
@@ -96,12 +100,12 @@ export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
     }
   }, [shouldRenderPlayer, videoUrl, video, onSurfaceReadyChange]);
 
-  if (isAudioSermon(video) || !videoUrl) {
+  if (isAudioSermon(video)) {
     return <View style={{ height: 0 }} />;
   }
 
-  if (!shouldRenderPlayer) {
-    return <VideoPlayerSlot />;
+  if (!shouldRenderPlayer || !videoUrl) {
+    return <VideoPlayerSlot video={video} />;
   }
 
   return (
@@ -321,7 +325,7 @@ function VideoCardPlayerInner(
   }, [onToggleMute, key]);
 
   if (failedVideoLoad || !player) {
-    return <VideoPlayerSlot />;
+    return <VideoPlayerSlot video={video} />;
   }
 
   const showChrome = firstFrameReady;
@@ -333,16 +337,24 @@ function VideoCardPlayerInner(
         collapsable={false}
         style={{
           height: FEED_VIDEO_PLAYER_HEIGHT,
-          backgroundColor: "transparent",
+          backgroundColor: "#121212",
           overflow: "hidden",
-          opacity: firstFrameReady ? 1 : 0,
         }}
       >
-        <FeedVideoSurface
-          player={player}
-          visible={firstFrameReady}
-          onFirstFrameRender={handleFirstFrameRender}
-        />
+        <FeedVideoPoster item={video} />
+        <View
+          pointerEvents="none"
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            opacity: firstFrameReady ? 1 : 0,
+          }}
+        >
+          <FeedVideoSurface
+            player={player}
+            visible={firstFrameReady}
+            onFirstFrameRender={handleFirstFrameRender}
+          />
+        </View>
 
         {showChrome && !commentsOpen &&
           video.moderationStatus &&

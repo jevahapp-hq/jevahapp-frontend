@@ -91,7 +91,13 @@ export function useDefaultContentQuery(options: {
     placeholderData: (prev) => prev,
     staleTime: FEED_STALE_MS,
     gcTime: FEED_GC_MS,
-    retry: 1,
+    retry: (failureCount, error) => {
+      const msg = String((error as Error)?.message || "");
+      if (msg.includes("429") || msg.toLowerCase().includes("too many")) {
+        return false;
+      }
+      return failureCount < 1;
+    },
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,

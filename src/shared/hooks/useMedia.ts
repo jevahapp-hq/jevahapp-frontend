@@ -41,8 +41,17 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   });
 
   const allContentEarly = allContent;
+  const allContentStatus =
+    (allContentQuery.error as { status?: number } | null)?.status ??
+    Number(
+      String((allContentQuery.error as Error | null)?.message || "").match(
+        /\b(429)\b/
+      )?.[1] || 0
+    );
+  const rateLimited = allContentStatus === 429;
   const shouldFetchDefault =
     immediate &&
+    !rateLimited &&
     (allContentQuery.isError ||
       (allContentQuery.isFetched && allContentEarly.length === 0));
 

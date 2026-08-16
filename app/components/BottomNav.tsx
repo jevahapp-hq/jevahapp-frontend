@@ -145,41 +145,60 @@ export default function BottomNav({
     [selectedTab, setSelectedTab]
   );
 
+  const tabPadH = getResponsiveSpacing(4, 6, 8, 10);
+  const tabPadV = getResponsiveSpacing(6, 8, 10, 12);
+  const fabSlotWidth =
+    getFabSize().size +
+    getResponsiveSpacing(2, 3, 4, 5) * 2 +
+    getResponsiveSpacing(16, 20, 24, 28);
+
   const renderTab = (tab: string) => {
     const { name, label } = tabConfig[tab];
     const isActive = selectedTab === tab;
     return (
-      <Pressable
-        key={tab}
-        onPress={() => handleTabPress(tab)}
-        unstable_pressDelay={0}
-        android_disableSound
-        hitSlop={8}
-        style={({ pressed }) => ({
-          alignItems: "center",
-          justifyContent: "center",
-          minWidth: 48,
-          minHeight: 48,
-          opacity: pressed ? 0.7 : 1,
-        })}
-      >
-        <Ionicons
-          name={name}
-          size={getIconSize("medium")}
-          color={isActive ? "#256E63" : "#000"}
-        />
-        <Text
-          style={[
-            getResponsiveTextStyle("caption"),
-            {
-              marginTop: getResponsiveSpacing(2, 3, 4, 5),
-              color: isActive ? "#256E63" : "#000",
-            },
-          ]}
+      <View key={tab} style={{ flex: 1 }}>
+        <Pressable
+          onPress={() => handleTabPress(tab)}
+          unstable_pressDelay={0}
+          android_disableSound
+          style={({ pressed }) => ({
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: tabPadH,
+            paddingVertical: tabPadV,
+            minHeight: 48,
+            opacity: pressed ? 0.7 : 1,
+          })}
         >
-          {label}
-        </Text>
-      </Pressable>
+          <View style={{ alignItems: "center", justifyContent: "center" }}>
+            <Ionicons
+              name={name}
+              size={getIconSize("medium")}
+              color={isActive ? "#256E63" : "#000"}
+            />
+          </View>
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              marginTop: getResponsiveSpacing(2, 3, 4, 5),
+            }}
+          >
+            <Text
+              style={[
+                getResponsiveTextStyle("caption"),
+                {
+                  color: isActive ? "#256E63" : "#000",
+                  textAlign: "center",
+                },
+              ]}
+            >
+              {label}
+            </Text>
+          </View>
+        </Pressable>
+      </View>
     );
   };
 
@@ -208,15 +227,19 @@ export default function BottomNav({
           left: 0,
           right: 0,
           height: navBarHeight,
+          paddingTop: getResponsiveSpacing(8, 10, 12, 14),
+          paddingBottom: getResponsiveSpacing(8, 10, 12, 14),
+          paddingHorizontal: getResponsiveSpacing(8, 12, 16, 20),
           backgroundColor: "white",
           flexDirection: "row",
-          justifyContent: "space-around",
-          alignItems: "center",
+          alignItems: "stretch",
           ...getResponsiveShadow(),
           zIndex: 10,
         }}
       >
-        {TAB_ORDER.map(renderTab)}
+        {TAB_ORDER.slice(0, 2).map(renderTab)}
+        <View style={{ width: fabSlotWidth }} />
+        {TAB_ORDER.slice(2).map(renderTab)}
       </View>
 
       <View

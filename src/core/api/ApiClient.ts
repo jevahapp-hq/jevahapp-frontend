@@ -119,10 +119,11 @@ class ApiClient {
       if (!response.ok) {
         const errorText = await response.text();
         const isServerError = response.status >= 500;
+        const isRateLimited = response.status === 429;
         const isAuth =
           response.status === 401 || response.status === 402;
 
-        if (isServerError || isAuth) {
+        if (isServerError || isAuth || isRateLimited) {
           if (__DEV__) {
             console.warn(
               `⚠️ API ${response.status}: ${options.method || "GET"} ${endpoint}`,

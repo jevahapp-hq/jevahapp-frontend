@@ -267,16 +267,23 @@ export async function fetchAllContentPage(options: {
 
   const chronoPromise = fetchChronologicalPage({
     contentType,
-    page: tryForYou && options.cursor ? 1 : page,
+    page,
     limit,
-    useAuth: tryForYou ? false : useAuth,
+    useAuth,
   });
 
   if (!tryForYou) {
     return chronoPromise;
   }
 
-  const fyPromise = fetchForYou(
+  // One list call first. For You is a fallback only — firing both at boot
+  // 429s a single user against the media rate limiter.
+  const chrono = await chronoPromise.catch(() => null);
+  if (chrono?.media?.length) {
+    return chrono;
+  }
+
+  const ranked = await fetchForYou(
     page === 1 && options.cursor == null ? null : options.cursor ?? null,
     limit
   ).catch((err) => {
@@ -285,14 +292,6 @@ export async function fetchAllContentPage(options: {
     }
     return null;
   });
-
-  // Chrono is enough to paint. Don't stall first frame on For You ranking.
-  const chrono = await chronoPromise.catch(() => null);
-  if (chrono?.media?.length) {
-    return chrono;
-  }
-
-  const ranked = await fyPromise;
   if (ranked && (ranked.media?.length || ranked.items?.length)) {
     return finishForYouPage(contentType, useAuth, page, limit, ranked, []);
   }

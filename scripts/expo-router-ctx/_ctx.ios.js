@@ -1,10 +1,10 @@
 /**
  * App-local Expo Router context (ios).
- * Excludes co-located non-route folders under app/ from the route map.
+ * Excludes co-located non-route folders and helper files under app/.
  */
 export const ctx = require.context(
   process.env.EXPO_ROUTER_APP_ROOT,
   true,
-  /^(?:\.\/)(?!(?:.*\/)?(?:utils|hooks|services|store|components|context|types|api|lib|constants|helpers|styles)\/)(?!(?:(?:(?:.*\+api)|(?:\+html)|(?:\+middleware)))\.[tj]sx?$).*(?:\.android|\.web)?\.[tj]sx?$/,
+  /^(?:\.\/)(?!(?:.*\/)?(?:utils|hooks|services|store|components|context|types|api|lib|constants|helpers|styles)\/)(?!(?:.*\/)?(?:types|constants|styles)\.[tj]sx?$)(?!(?:.*\/)?use[A-Z][^/]*\.[tj]sx?$)(?!(?:.*\/)[^/]*(?:Formatters|transform)[^/]*\.[tj]sx?$)(?!(?:.*\/)(?:LegalDocument|MusicLaneTabs)\.[tj]sx?$)(?!(?:(?:(?:.*\+api)|(?:\+html)|(?:\+middleware)))\.[tj]sx?$).*(?:\.android|\.web)?\.[tj]sx?$/,
   process.env.EXPO_ROUTER_IMPORT_MODE
 );

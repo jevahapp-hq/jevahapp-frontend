@@ -9,5 +9,6 @@ export {
   FEED_VIDEO_VISIBLE_PERCENT,
   FEED_WARM_IDLE_MOUNT_COUNT,
 } from "./feedVideoConfig";
+export { FeedVideoPoster, posterUriFromMedia } from "./FeedVideoPoster";
 export { FeedVideoSurface } from "./FeedVideoSurface";
 export { useInstantFeedVideoPlayer } from "./useInstantFeedVideoPlayer";
