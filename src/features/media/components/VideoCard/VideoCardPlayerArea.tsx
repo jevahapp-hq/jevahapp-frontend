@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { VideoPlayer } from "expo-video";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { ContentTypeBadge } from "../../../../shared/components/ContentTypeBadge";
+import { FeedMediaTypeOverlay } from "../../../../shared/components/FeedMediaTypeOverlay";
 import { MediaPlayButton } from "../../../../shared/components/MediaPlayButton";
 import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
 import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
@@ -16,13 +16,17 @@ import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlayba
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon } from "../../../../shared/utils";
 import { useCommentModal } from "@/app/context/CommentModalContext";
-import { useGlobalVideoStore } from "@/app/store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import {
   FEED_VIDEO_PLAYER_HEIGHT,
   FeedVideoPoster,
   FeedVideoSurface,
   useInstantFeedVideoPlayer,
 } from "../../video-feed";
+import { normalizeDurationMs } from "../../../../shared/media/normalizeDurationMs";
+import { getCachedDurationMs } from "./player/durationCache";
+import { getPlayerDurationMs } from "./player/expoVideoAdapter";
+import { useHealMissingDuration } from "./hooks/useHealMissingDuration";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
@@ -136,16 +140,34 @@ function VideoCardPlayerInner(
   } = props;
 
   const contentId = video._id || getContentKey(video);
-  const { isVisible: commentsOpen } = useCommentModal();
+  const { isVisible: commentsOpen, isClosing } = useCommentModal();
+  const hideChrome = commentsOpen || isClosing;
   const [failedVideoLoad, setFailedVideoLoad] = useState(false);
   const [, setVideoLoaded] = useState(false);
   const videoLoadedRef = useRef(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
+  const [localPosition, setLocalPosition] = useState(0);
+  const [localDuration, setLocalDuration] = useState(0);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
+
+  /**
+   * Declared here, above every hook that reads `isMountedRef`, because React
+   * runs all cleanups in declaration order and then all setups in declaration
+   * order. When this lived below `useVideoCardPlayback`, a remount ran this
+   * cleanup (ref -> false) before that hook's setup, so the hook saw a false
+   * ref and skipped attaching its listeners for good.
+   */
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const videoRef = useRef<VideoPlayer | null>(null);
 
@@ -156,6 +178,7 @@ function VideoCardPlayerInner(
     freezeOnFirstFrame,
   } = useInstantFeedVideoPlayer({
     source: videoUrl,
+    timeUpdateEventInterval: 0.25,
   });
 
   useEffect(() => {
@@ -265,6 +288,25 @@ function VideoCardPlayerInner(
     }
   }, []);
 
+  /**
+   * Best duration we know before the player loads. The upload flow probes the
+   * file locally and calls `seedDurationCache`; we also heal from media detail
+   * when the feed item is missing a length (fresh Most Recent uploads).
+   */
+  const healedDurationMs = useHealMissingDuration({
+    mediaId: contentId,
+    durationSec: (video as any)?.duration,
+    processingStatus: (video as any)?.processingStatus,
+  });
+
+  const knownDurationMs = useMemo(
+    () =>
+      getCachedDurationMs(contentId) ||
+      healedDurationMs ||
+      normalizeDurationMs((video as any)?.duration),
+    [contentId, healedDurationMs, (video as any)?.duration]
+  );
+
   const {
     lastKnownDurationRef,
     videoDurationMs,
@@ -274,6 +316,7 @@ function VideoCardPlayerInner(
     isAudioSermon: false,
     contentId,
     player,
+    initialDurationMs: knownDurationMs,
     handleVideoError,
     setFailedVideoLoad,
     setVideoLoaded,
@@ -284,14 +327,33 @@ function VideoCardPlayerInner(
     isMountedRef,
   });
 
+  /**
+   * Reels-style local playhead: the player writes here every tick, and seek
+   * updates it immediately so the timer doesn't wait on the next event.
+   *
+   * Do not depend on `isDragging` — lifting the finger would copy a stale
+   * parent position over the optimistic seek we just applied.
+   */
+  useEffect(() => {
+    if (isDragging) return;
+    if (Math.abs(localPosition - videoPositionMs) < 80) return;
+    setLocalPosition(videoPositionMs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoPositionMs]);
+
+  useEffect(() => {
+    const next = videoDurationMs > 0 ? videoDurationMs : knownDurationMs;
+    if (!(next > 0) || Math.abs(next - localDuration) < 40) return;
+    setLocalDuration(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoDurationMs, knownDurationMs]);
+
   const { seekToPercent } = useVideoCardSeek({
     isAudioSermon: false,
     videoRef,
     videoPositionMs,
     lastKnownDurationRef,
-    backendDurationMs: (video as any).duration
-      ? (video as any).duration * 1000
-      : 0,
+    backendDurationMs: knownDurationMs,
   });
 
   const { handleVideoTap, handleTogglePlay, tapTimeoutRef } =
@@ -312,9 +374,7 @@ function VideoCardPlayerInner(
     });
 
   useEffect(() => {
-    isMountedRef.current = true;
     return () => {
-      isMountedRef.current = false;
       if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
       if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
     };
@@ -331,135 +391,159 @@ function VideoCardPlayerInner(
   const showChrome = firstFrameReady;
 
   return (
-    <TouchableWithoutFeedback onPress={handleVideoTap}>
-      <View
-        className="w-full relative"
-        collapsable={false}
-        style={{
-          height: FEED_VIDEO_PLAYER_HEIGHT,
-          backgroundColor: "#121212",
-          overflow: "hidden",
-        }}
-      >
-        <FeedVideoPoster item={video} />
-        <View
-          pointerEvents="none"
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            opacity: firstFrameReady ? 1 : 0,
-          }}
-        >
-          <FeedVideoSurface
-            player={player}
-            visible={firstFrameReady}
-            onFirstFrameRender={handleFirstFrameRender}
-          />
-        </View>
+    <View
+      className="w-full relative"
+      collapsable={false}
+      style={{
+        height: FEED_VIDEO_PLAYER_HEIGHT,
+        backgroundColor: "#121212",
+        overflow: "hidden",
+      }}
+    >
+      <TouchableWithoutFeedback onPress={handleVideoTap}>
+        <View style={{ flex: 1 }}>
+          <FeedVideoPoster item={video} />
+          <View
+            pointerEvents="none"
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              opacity: firstFrameReady ? 1 : 0,
+            }}
+          >
+            <FeedVideoSurface
+              player={player}
+              visible={firstFrameReady}
+              onFirstFrameRender={handleFirstFrameRender}
+            />
+          </View>
 
-        {showChrome && !commentsOpen &&
-          video.moderationStatus &&
-          video.moderationStatus !== "approved" && (
-            <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
-              <ModerationBadge status={video.moderationStatus} />
-            </View>
+          {showChrome && !hideChrome &&
+            video.moderationStatus &&
+            video.moderationStatus !== "approved" && (
+              <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
+                <ModerationBadge status={video.moderationStatus} />
+              </View>
+            )}
+
+          {showChrome && !hideChrome && (
+            <FeedMediaTypeOverlay
+              item={video}
+              contentType={video.contentType || "video"}
+              showCenter={false}
+            />
           )}
 
-        {showChrome && !commentsOpen && (
-          <ContentTypeBadge
-            contentType={video.contentType || "video"}
-            position="top-left"
-            size="medium"
-          />
-        )}
-
-        {showChrome && !commentsOpen && (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => onVideoTap(key, video, index)}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 6,
-              flexDirection: "row",
-              alignItems: "center",
-              zIndex: 10,
-            }}
-          >
-            <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
-
-        {showChrome && !commentsOpen && (
-          <MediaPlayButton
-            isPlaying={isPlaying}
-            onPress={() => handleTogglePlay(setIsPlayTogglePending)}
-            showOverlay={showOverlay}
-            size="medium"
-            disabled={isPlayTogglePending}
-          />
-        )}
-
-        {showChrome && !commentsOpen && (
-          <View
-            style={{
-              position: "absolute",
-              bottom: 64,
-              left: 12,
-              right: 12,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              pointerEvents: "none",
-            }}
-          >
-            <Text
+          {showChrome && !hideChrome && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onVideoTap(key, video, index)}
               style={{
-                fontSize: 12,
-                fontFamily: "Rubik_600SemiBold",
-                color: "#FFFFFF",
-                lineHeight: 16,
-                textShadowColor: "rgba(0, 0, 0, 0.75)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 3,
+                position: "absolute",
+                top: 12,
+                right: 12,
+                backgroundColor: "rgba(0,0,0,0.6)",
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                zIndex: 10,
               }}
-              numberOfLines={1}
-              ellipsizeMode="tail"
             >
-              {video.title}
-            </Text>
-          </View>
-        )}
+              <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
 
-        {showChrome && !commentsOpen && (
-          <VideoProgressBar
-            progress={Math.max(0, Math.min(1, videoProgress || 0))}
-            isMuted={isMuted}
-            onToggleMute={handleToggleMuteInternal}
-            onSeekToPercent={seekToPercent}
-            mutePosition="right"
-            bottomOffset={24}
-            currentMs={videoPositionMs}
-            durationMs={
-              videoDurationMs ||
-              lastKnownDurationRef.current ||
-              (video as any).duration * 1000 ||
-              0
+          {showChrome && !hideChrome && (
+            <MediaPlayButton
+              isPlaying={isPlaying}
+              onPress={() => handleTogglePlay(setIsPlayTogglePending)}
+              showOverlay={showOverlay}
+              size="medium"
+              disabled={isPlayTogglePending}
+            />
+          )}
+
+          {showChrome && !hideChrome && (
+            <View
+              style={{
+                position: "absolute",
+                bottom: 64,
+                left: 12,
+                right: 12,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                pointerEvents: "none",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  color: "#FFFFFF",
+                  lineHeight: 16,
+                  textShadowColor: "rgba(0, 0, 0, 0.75)",
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 3,
+                }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {video.title}
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableWithoutFeedback>
+
+      {showChrome && !hideChrome ? (
+        <VideoProgressBar
+          progress={
+            localDuration > 0
+              ? localPosition / localDuration
+              : Math.max(0, Math.min(1, videoProgress || 0))
+          }
+          currentMs={localPosition}
+          durationMs={
+            localDuration > 0
+              ? localDuration
+              : videoDurationMs || lastKnownDurationRef.current || knownDurationMs
+          }
+          isMuted={isMuted}
+          onToggleMute={handleToggleMuteInternal}
+          onSeekToPercent={(pct: number) => {
+            const clamped = Math.max(0, Math.min(1, pct));
+            const dur =
+              localDuration > 0
+                ? localDuration
+                : videoDurationMs > 0
+                  ? videoDurationMs
+                  : knownDurationMs > 0
+                    ? knownDurationMs
+                    : getPlayerDurationMs(videoRef.current, 0);
+            if (dur > 0) {
+              setLocalPosition(clamped * dur);
+              if (!(lastKnownDurationRef.current > 0)) {
+                lastKnownDurationRef.current = dur;
+              }
             }
-            showControls={true}
-            showFloatingLabel={true}
-            enlargeOnDrag={true}
-            knobSize={8}
-            knobSizeDragging={10}
-            trackHeights={{ normal: 4, dragging: 8 }}
-            seekSyncTicks={4}
-            seekMsTolerance={200}
-            minProgressEpsilon={0.005}
-          />
-        )}
-      </View>
-    </TouchableWithoutFeedback>
+            seekToPercent(clamped);
+          }}
+          onScrubStart={() => setIsDragging(true)}
+          onScrubEnd={() => setIsDragging(false)}
+          showControls
+          bottomOffset={24}
+          enlargeOnDrag
+          knobSize={10}
+          knobSizeDragging={14}
+          trackHeights={{ normal: 3, dragging: 8 }}
+          seekDuringDrag
+          liveSeekThrottleMs={32}
+          enableHaptics
+          verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
+          style={{ zIndex: 200, elevation: 200 }}
+        />
+      ) : null}
+    </View>
   );
 }

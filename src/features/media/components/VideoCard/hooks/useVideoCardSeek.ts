@@ -1,8 +1,6 @@
-/**
- * useVideoCardSeek - Seek handlers for video (expo-video) and audio
- */
-import React, { useCallback } from "react";
 import type { VideoPlayer } from "expo-video";
+import React, { useCallback } from "react";
+import { getPlayerDurationMs } from "../player/expoVideoAdapter";
 
 export interface UseVideoCardSeekParams {
   isAudioSermon: boolean;
@@ -38,8 +36,11 @@ export function useVideoCardSeek({
           console.warn("Audio seekBySeconds failed", e);
         }
       } else {
-        const durationMs = lastKnownDurationRef.current || backendDurationMs || 0;
         const player = videoRef.current;
+        const durationMs =
+          lastKnownDurationRef.current ||
+          backendDurationMs ||
+          getPlayerDurationMs(player, 0);
         if (!player || durationMs <= 0) return;
         const currentMs = Math.max(0, Math.min(videoPositionMs, durationMs));
         const nextMs = Math.max(0, Math.min(currentMs + deltaSec * 1000, durationMs));
@@ -74,8 +75,11 @@ export function useVideoCardSeek({
           console.warn("Audio seekToPercent failed", e);
         }
       } else {
-        const durationMs = lastKnownDurationRef.current || 0;
         const player = videoRef.current;
+        const durationMs =
+          lastKnownDurationRef.current ||
+          backendDurationMs ||
+          getPlayerDurationMs(player, 0);
         if (!player || durationMs <= 0) return;
         const clamped = Math.max(0, Math.min(percent, 1));
         try {
@@ -85,7 +89,14 @@ export function useVideoCardSeek({
         }
       }
     },
-    [isAudioSermon, audioState?.duration, audioControls, videoRef, lastKnownDurationRef]
+    [
+      isAudioSermon,
+      audioState?.duration,
+      audioControls,
+      videoRef,
+      lastKnownDurationRef,
+      backendDurationMs,
+    ]
   );
 
   return { seekBySeconds, seekToPercent };

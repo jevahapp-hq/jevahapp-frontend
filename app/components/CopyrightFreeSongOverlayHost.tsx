@@ -3,9 +3,9 @@
  * In-tree overlay — no native Modal window on first tap.
  */
 import { useCallback, useEffect } from "react";
-import { useCopyrightFreeOverlayStore } from "../store/useCopyrightFreeOverlayStore";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import CopyrightFreeSongModal from "./CopyrightFreeSongModal";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import CopyrightFreeSongModal from "@/components/CopyrightFreeSongModal";
 import { playCopyrightFreeSong } from "./CopyrightFreeSongs/hooks/useCopyrightFreeSongsPlayback";
 
 const formatTime = (milliseconds: number) => {
@@ -40,18 +40,18 @@ export default function CopyrightFreeSongOverlayHost() {
     useCopyrightFreeOverlayStore.getState().close();
   }, []);
 
-  const handleSeek = useCallback(
-    async (progressValue: number) => {
-      const store = useGlobalAudioPlayerStore.getState();
-      const songId = song?.id || song?._id;
-      const isSame = !!songId && store.currentTrack?.id === songId;
-      if (!isSame) {
-        await playCopyrightFreeSong(song, songs);
-      }
-      await useGlobalAudioPlayerStore.getState().seekToProgress(progressValue);
-    },
-    [song, songs]
-  );
+  const handleSeek = useCallback((progressValue: number) => {
+    const store = useGlobalAudioPlayerStore.getState();
+    const songId = song?.id || song?._id;
+    const isSame = !!songId && store.currentTrack?.id === songId;
+    if (!isSame) {
+      void playCopyrightFreeSong(song, songs).then(() => {
+        void useGlobalAudioPlayerStore.getState().seekToProgress(progressValue);
+      });
+      return;
+    }
+    void store.seekToProgress(progressValue);
+  }, [song, songs]);
 
   useEffect(() => {
     if (!visible || !currentTrack) return;
@@ -63,7 +63,18 @@ export default function CopyrightFreeSongOverlayHost() {
     }
   }, [visible, currentTrack?.id, songs, song?.id, song?._id]);
 
-  if (!song) return null;
+  /**
+   * Two surfaces, one session:
+   *   visible  → full player overlay
+   *   !visible → FloatingAudioPlayer (Now Playing mini bar)
+   *
+   * Never keep the full-screen black sheet mounted while idle. `warm()` leaves
+   * `song` set so the next open has data, but painting that sheet at opacity 0
+   * still shows a black rectangle on Android (Reanimated children ignore the
+   * parent's opacity). Unmounting is the Spotify-style handoff: swipe down
+   * dismisses the player, audio keeps going, mini bar takes over.
+   */
+  if (!song || !visible) return null;
 
   const songId = song.id || song._id;
   const isCurrent = !!songId && currentTrack?.id === songId;

@@ -1,6 +1,6 @@
 import type { VideoPlayer } from "expo-video";
 import { useVideoPlayer } from "expo-video";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export interface UseInstantFeedVideoPlayerOptions {
   source: string | null;
@@ -24,7 +24,10 @@ export function useInstantFeedVideoPlayer({
   const isMountedRef = useRef(true);
   const loadedSourceRef = useRef<string | null>(null);
 
-  const videoSource = source ? { uri: source, useCaching: true } : null;
+  const videoSource = useMemo(
+    () => (source ? { uri: source, useCaching: true } : null),
+    [source]
+  );
 
   const player = useVideoPlayer(videoSource, (p) => {
     p.loop = loop;

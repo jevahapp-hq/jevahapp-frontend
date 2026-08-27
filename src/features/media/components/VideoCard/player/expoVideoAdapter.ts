@@ -25,6 +25,8 @@ export function getPlayerDurationMs(player: any, fallbackMs = 0): number {
   const fromSec = (sec: unknown): number => {
     const n = typeof sec === "number" ? sec : Number(sec);
     if (!Number.isFinite(n) || n <= 0) return 0;
+    // sourceLoad / some devices report milliseconds already
+    if (n > 86400) return Math.min(n, MAX);
     return Math.min(n * 1000, MAX);
   };
 

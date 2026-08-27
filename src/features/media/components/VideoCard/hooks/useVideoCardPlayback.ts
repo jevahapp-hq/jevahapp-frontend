@@ -1,6 +1,8 @@
 import type { VideoPlayer } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import contentInteractionAPI from "../../../../../../app/utils/contentInteractionAPI";
+import { setCachedDurationMs } from "../player/durationCache";
+import { getPlayerDurationMs } from "../player/expoVideoAdapter";
 
 export interface UseVideoCardPlaybackParams {
   isAudioSermon: boolean;
@@ -14,11 +16,25 @@ export interface UseVideoCardPlaybackParams {
   setHasTrackedView: (v: boolean) => void;
   storeRef: React.MutableRefObject<any>;
   isMountedRef: React.MutableRefObject<boolean>;
+  /**
+   * Duration we already know before the player reports one — from the upload's
+   * local probe (`durationCache`) or the item's own metadata.
+   */
+  initialDurationMs?: number;
 }
+
+const MIN_DURATION_MS = 100;
+const DURATION_EPSILON_MS = 40;
+const POSITION_EPSILON_MS = 80;
 
 /**
  * Progress / duration / view-tracking driven by expo-video player events
  * (`timeUpdate`, `statusChange`, `playToEnd`, `sourceLoad`).
+ *
+ * Position is written only from `timeUpdate` (same as Reels). A JS interval
+ * that sampled `currentTime` every 250ms retriggered this effect and hit
+ * "Maximum update depth exceeded", which also left the scrubber on
+ * "Preparing…".
  */
 export function useVideoCardPlayback({
   isAudioSermon,
@@ -32,9 +48,17 @@ export function useVideoCardPlayback({
   setHasTrackedView,
   storeRef,
   isMountedRef,
+  initialDurationMs = 0,
 }: UseVideoCardPlaybackParams) {
-  const lastKnownDurationRef = useRef(0);
-  const [videoDurationMs, setVideoDurationMs] = useState(0);
+  const seedMs =
+    Number.isFinite(initialDurationMs) && initialDurationMs > 0
+      ? initialDurationMs
+      : 0;
+
+  const lastKnownDurationRef = useRef(seedMs);
+  const lastPositionMsRef = useRef(0);
+  const lastProgressRef = useRef(0);
+  const [videoDurationMs, setVideoDurationMs] = useState(seedMs);
   const [videoPositionMs, setVideoPositionMs] = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
   const hasTrackedViewRef = useRef(hasTrackedView);
@@ -44,46 +68,83 @@ export function useVideoCardPlayback({
   }, [hasTrackedView]);
 
   useEffect(() => {
-    // Reset progress when the player instance / source identity changes.
-    lastKnownDurationRef.current = 0;
-    setVideoDurationMs(0);
-    setVideoPositionMs(0);
-    setVideoProgress(0);
-  }, [player]);
+    if (!(seedMs > 0)) return;
+    const prev = lastKnownDurationRef.current;
+    if (Math.abs(prev - seedMs) < DURATION_EPSILON_MS) return;
+    if (prev >= MIN_DURATION_MS && seedMs < prev * 0.5) return;
+    lastKnownDurationRef.current = seedMs;
+    setVideoDurationMs(seedMs);
+    setCachedDurationMs(contentId, seedMs);
+  }, [seedMs, contentId]);
 
   useEffect(() => {
-    if (isAudioSermon || !player || !isMountedRef.current) return;
+    /**
+     * Deliberately NOT gated on `isMountedRef.current` at setup.
+     * That ref is owned by an effect declared after this hook; on remount
+     * its cleanup runs first and would skip attaching listeners for good.
+     */
+    if (isAudioSermon || !player) return;
 
-    const applyDurationSeconds = (durationSec: number) => {
-      if (!Number.isFinite(durationSec) || durationSec <= 0) return;
-      const durationMs = Math.min(durationSec * 1000, 24 * 60 * 60 * 1000);
-      if (lastKnownDurationRef.current !== durationMs) {
-        lastKnownDurationRef.current = durationMs;
-        setVideoDurationMs(durationMs);
+    if (lastPositionMsRef.current !== 0 || lastProgressRef.current !== 0) {
+      lastPositionMsRef.current = 0;
+      lastProgressRef.current = 0;
+      setVideoPositionMs(0);
+      setVideoProgress(0);
+    }
+
+    try {
+      player.timeUpdateEventInterval = 0.25;
+    } catch {
+      // no-op
+    }
+
+    const commitDurationMs = (durationMs: number) => {
+      if (!Number.isFinite(durationMs) || durationMs < MIN_DURATION_MS) return;
+      const prev = lastKnownDurationRef.current;
+      if (Math.abs(prev - durationMs) < DURATION_EPSILON_MS) {
+        setCachedDurationMs(contentId, Math.max(prev, durationMs));
+        return;
       }
+      if (prev >= MIN_DURATION_MS && durationMs < prev * 0.5) return;
+      lastKnownDurationRef.current = durationMs;
+      setVideoDurationMs(durationMs);
+      setCachedDurationMs(contentId, durationMs);
+    };
+
+    const applyDurationSeconds = (durationSec: unknown) => {
+      const fake = { duration: durationSec };
+      const ms = getPlayerDurationMs(fake, 0);
+      if (ms > 0) commitDurationMs(ms);
     };
 
     const applyPositionSeconds = (positionSec: number, isPlaying: boolean) => {
-      if (!isMountedRef.current) return;
+      if (!Number.isFinite(positionSec)) return;
 
       const positionMs = Math.max(0, positionSec * 1000);
       const durationMs = lastKnownDurationRef.current;
+      const clamped =
+        durationMs > 0 ? Math.min(positionMs, durationMs) : positionMs;
       const progress =
-        durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
+        durationMs > 0 ? Math.max(0, Math.min(1, clamped / durationMs)) : 0;
 
-      setVideoPositionMs(
-        durationMs > 0 ? Math.min(positionMs, durationMs) : positionMs
-      );
+      if (
+        Math.abs(clamped - lastPositionMsRef.current) < POSITION_EPSILON_MS &&
+        Math.abs(progress - lastProgressRef.current) < 0.002
+      ) {
+        return;
+      }
+
+      lastPositionMsRef.current = clamped;
+      lastProgressRef.current = progress;
+      setVideoPositionMs(clamped);
       setVideoProgress(progress);
 
-      const qualifies =
-        isPlaying && (positionMs >= 3000 || progress >= 0.25);
-
+      const qualifies = isPlaying && (clamped >= 3000 || progress >= 0.25);
       if (!hasTrackedViewRef.current && qualifies) {
         try {
           contentInteractionAPI
             .recordView(contentId, "media", {
-              durationMs: positionMs,
+              durationMs: clamped,
               progressPct: Math.round(progress * 100),
               isComplete: false,
             })
@@ -164,6 +225,8 @@ export function useVideoCardPlayback({
 
       try {
         player.currentTime = 0;
+        lastPositionMsRef.current = 0;
+        lastProgressRef.current = 0;
         setVideoPositionMs(0);
         setVideoProgress(0);
         if (wasPlaying) player.play();
@@ -172,16 +235,35 @@ export function useVideoCardPlayback({
       }
     });
 
-    // Seed from current player state (may already be ready from pre-roll).
     if (player.status === "readyToPlay") {
       setFailedVideoLoad(false);
       setVideoLoaded(true);
       videoLoadedRef.current = true;
-      applyDurationSeconds(player.duration);
-      applyPositionSeconds(player.currentTime, player.playing);
+    }
+    const immediateMs = getPlayerDurationMs(player, 0);
+    if (immediateMs > 0) commitDurationMs(immediateMs);
+
+    /**
+     * Duration-only poll. Feed cards are often handed a player whose
+     * `sourceLoad` / `readyToPlay` already fired, so those events never
+     * come again. Do not sample `currentTime` here — that setState loop
+     * is what blew the update cap.
+     */
+    let pollId: ReturnType<typeof setInterval> | undefined;
+    if (!(lastKnownDurationRef.current >= MIN_DURATION_MS)) {
+      pollId = setInterval(() => {
+        if (lastKnownDurationRef.current >= MIN_DURATION_MS) {
+          if (pollId) clearInterval(pollId);
+          pollId = undefined;
+          return;
+        }
+        const ms = getPlayerDurationMs(player, 0);
+        if (ms > 0) commitDurationMs(ms);
+      }, 400);
     }
 
     return () => {
+      if (pollId) clearInterval(pollId);
       statusSub.remove();
       sourceLoadSub.remove();
       timeSub.remove();

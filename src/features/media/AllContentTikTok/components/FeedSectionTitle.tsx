@@ -12,7 +12,8 @@ export function FeedSectionTitle({ title }: { title: string }) {
       <Text
         style={{
           fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-          fontWeight: "600",
+          fontFamily: "PlusJakartaSans-Bold",
+          fontWeight: "700",
           color: UI_CONFIG.COLORS.TEXT_PRIMARY,
           paddingHorizontal: UI_CONFIG.SPACING.MD,
         }}
