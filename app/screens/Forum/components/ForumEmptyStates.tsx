@@ -1,10 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-  ActivityIndicator,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
+import { ListSkeletonStack } from "../../../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 import { ApiError } from "../../../utils/apiErrorHandler";
 import { Forum, ForumPost } from "../../../utils/communityAPI";
 import { PostComposer } from "./PostComposer";
@@ -44,12 +40,7 @@ export function ForumEmptyStates({
   onCreateForum,
 }: ForumEmptyStatesProps) {
   if (isInitialLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#DF930E" />
-        <Text style={styles.loadingText}>Loading forum posts...</Text>
-      </View>
-    );
+    return <ListSkeletonStack rows={7} />;
   }
 
   if (categoriesError && categories.length === 0) {
@@ -128,7 +119,6 @@ export function ForumEmptyStates({
   if (!selectedForumId) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#DF930E" />
         <Text style={styles.loadingText}>Select a forum to view posts</Text>
       </View>
     );

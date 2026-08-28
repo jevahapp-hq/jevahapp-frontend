@@ -1,7 +1,7 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect } from "react";
-import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 
 export const useVideoPlaybackControl = ({
   videoKey,

@@ -5,7 +5,7 @@ export function useHydrateContentStats(contentId?: string, contentType: string =
     if (!contentId) return;
     
     try {
-      const { useInteractionStore } = require("../../../app/store/useInteractionStore");
+      const { useInteractionStore } = require("@/store/useInteractionStore");
       const store = useInteractionStore.getState();
       const contentIdStr = String(contentId);
       

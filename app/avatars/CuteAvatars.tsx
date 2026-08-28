@@ -48,9 +48,9 @@ const cuteAvatars = {
 const CuteAvatar = ({ renderAvatarRow }: RenderAvatarRowProps) => {
   return (
     <View>
-      <Text className="text-[12px] font-rubik-medium text-[#475467] mb-2">GIRLS</Text>
+      <Text className="text-[12px] font-jakarta-medium text-[#475467] mb-2">GIRLS</Text>
       {renderAvatarRow(cuteAvatars.girls)}
-      <Text className="text-[12px] font-rubik-medium text-[#475467] mb-2">BOYS</Text>
+      <Text className="text-[12px] font-jakarta-medium text-[#475467] mb-2">BOYS</Text>
       {renderAvatarRow(cuteAvatars.boys)}
     </View>
   );

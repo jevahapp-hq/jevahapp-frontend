@@ -3,29 +3,34 @@ import { StyleSheet, Text, View } from 'react-native';
 import { UI_CONFIG } from '../constants';
 
 interface ModerationBadgeProps {
-    status: 'approved' | 'under_review' | 'rejected';
+    /** Widened to `string`: the API also sends `pending`, and omits it entirely
+     * on some paths. Anything that isn't `approved` deserves a badge. */
+    status?: string | null;
     showLabel?: boolean;
 }
 
 export const ModerationBadge: React.FC<ModerationBadgeProps> = ({ status, showLabel = true }) => {
-    if (status === 'approved') return null;
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'approved') return null;
 
     const getStatusConfig = () => {
-        switch (status) {
-            case 'under_review':
-                return {
-                    text: 'Under Review',
-                    color: '#FFA500', // Orange
-                    backgroundColor: 'rgba(255, 165, 0, 0.1)',
-                };
+        switch (normalized) {
             case 'rejected':
                 return {
-                    text: 'Rejected',
+                    // Rejected content is owner-visible only, so the badge has
+                    // to explain why nobody else is engaging with it.
+                    text: 'Rejected · only you can see this',
                     color: UI_CONFIG.COLORS.ERROR || '#FF0000',
                     backgroundColor: 'rgba(255, 0, 0, 0.1)',
                 };
+            case 'under_review':
+            case 'pending':
             default:
-                return null;
+                return {
+                    text: 'Under review · only you can see this',
+                    color: '#FFA500', // Orange
+                    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                };
         }
     };
 
@@ -62,6 +67,6 @@ const styles = StyleSheet.create({
     text: {
         fontSize: 10,
         fontWeight: 'bold',
-        textTransform: 'uppercase',
+        letterSpacing: 0.3,
     },
 });

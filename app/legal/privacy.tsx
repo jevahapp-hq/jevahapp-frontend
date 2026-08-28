@@ -1,7 +1,7 @@
 import { LegalScreen, H, P, Ul } from "./LegalDocument";
 
 export default function PrivacyPolicyScreen() {
-  return (
+    return (
     <LegalScreen title="Privacy Policy" updated="16 August 2026">
       <H>1. Who we are</H>
       <P>
@@ -305,5 +305,5 @@ export default function PrivacyPolicyScreen() {
         Location: Nigeria
       </P>
     </LegalScreen>
-  );
+    );
 }

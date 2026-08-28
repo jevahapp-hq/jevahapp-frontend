@@ -113,7 +113,7 @@ export function AllLibraryMediaCard({
             </View>
           </View>
           <View className="absolute bottom-2 left-2 right-2">
-            <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+            <Text className="text-white font-jakarta-bold text-sm" numberOfLines={2}>
               {item.title}
             </Text>
           </View>
@@ -141,7 +141,7 @@ export function AllLibraryMediaCard({
             </View>
           </View>
           <View className="absolute bottom-2 left-2 right-2">
-            <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+            <Text className="text-white font-jakarta-bold text-sm" numberOfLines={2}>
               {item.title}
             </Text>
           </View>
@@ -160,7 +160,7 @@ export function AllLibraryMediaCard({
             resizeMode="cover"
           />
           <View className="absolute bottom-2 left-2 right-2">
-            <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+            <Text className="text-white font-jakarta-bold text-sm" numberOfLines={2}>
               {item.title}
             </Text>
           </View>
@@ -182,7 +182,7 @@ export function AllLibraryMediaCard({
 
       {!isVideo && !isAudio && !isBook && (
         <View className="absolute bottom-2 left-2 right-2">
-          <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+          <Text className="text-white font-jakarta-bold text-sm" numberOfLines={2}>
             {item.title}
           </Text>
         </View>
@@ -262,7 +262,7 @@ export function AllLibraryMediaCard({
                 }}
                 onPress={() => setMenuOpenId(null)}
               >
-                <Text className="text-[#1D2939] font-rubik text-xs">View Details</Text>
+                <Text className="text-[#1D2939] font-jakarta text-xs">View Details</Text>
                 <Ionicons name="eye-outline" size={16} color="#1D2939" />
               </TouchableOpacity>
               <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
@@ -276,7 +276,7 @@ export function AllLibraryMediaCard({
                 }}
                 onPress={() => onShare(item)}
               >
-                <Text className="text-[#1D2939] font-rubik text-xs">Share</Text>
+                <Text className="text-[#1D2939] font-jakarta text-xs">Share</Text>
                 <Feather name="send" size={16} color="#1D2939" />
               </TouchableOpacity>
               <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
@@ -297,7 +297,7 @@ export function AllLibraryMediaCard({
                   }
                 }}
               >
-                <Text className="text-[#1D2939] font-rubik text-xs">Download</Text>
+                <Text className="text-[#1D2939] font-jakarta text-xs">Download</Text>
                 <Ionicons name="download-outline" size={16} color="#1D2939" />
               </TouchableOpacity>
               <View style={{ height: 1, backgroundColor: "#F3F4F6" }} />
@@ -311,7 +311,7 @@ export function AllLibraryMediaCard({
                 }}
                 onPress={() => onRemoveFromLibrary(item)}
               >
-                <Text className="text-[#1D2939] font-rubik text-xs">Remove</Text>
+                <Text className="text-[#1D2939] font-jakarta text-xs">Remove</Text>
                 <MaterialIcons name="bookmark" size={16} color="#1D2939" />
               </TouchableOpacity>
               {isOwner && (
@@ -327,7 +327,7 @@ export function AllLibraryMediaCard({
                     }}
                     onPress={() => onDeletePress(item)}
                   >
-                    <Text className="text-[#EF4444] font-rubik text-xs">Delete</Text>
+                    <Text className="text-[#EF4444] font-jakarta text-xs">Delete</Text>
                     <Ionicons name="trash-outline" size={16} color="#EF4444" />
                   </TouchableOpacity>
                 </>

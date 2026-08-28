@@ -9,7 +9,7 @@ import {
   getBestVideoUrl,
   getVideoUrlFromMedia
 } from "../../../shared/utils/videoUrlManager";
-import { useGlobalVideoStore } from "../../../../app/store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { VideoCardFooter } from "./VideoCard/VideoCardFooter";
 import { VideoCardModals } from "./VideoCard/VideoCardModals";
 import { VideoCardPlayerArea } from "./VideoCard/VideoCardPlayerArea";
@@ -129,7 +129,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     try {
       const {
         useInteractionStore,
-      } = require("../../../../app/store/useInteractionStore");
+      } = require("@/store/useInteractionStore");
       storeRef.current = useInteractionStore.getState();
     } catch { }
   }, []);

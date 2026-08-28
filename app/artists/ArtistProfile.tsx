@@ -29,8 +29,8 @@ import {
   trackCardToSongUi,
   type TrackCard,
 } from "../services/music-catalog/trackTypes";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import { useCopyrightFreeOverlayStore } from "../store/useCopyrightFreeOverlayStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import { resolveAlbumArtSource } from "../../src/shared/brand/albumArt";
 
 const PAGE_SIZE = 30;
 
@@ -351,26 +351,12 @@ export default function ArtistProfileScreen() {
                   opacity: processing ? 0.65 : 1,
                 }}
               >
-                {item.thumbnailUrl ? (
-                  <Image
-                    source={{ uri: item.thumbnailUrl }}
-                    style={{ width: 52, height: 52, borderRadius: 8, marginRight: 12 }}
-                  />
-                ) : (
-                  <View
-                    style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: 8,
-                      backgroundColor: "#E5E7EB",
-                      marginRight: 12,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Ionicons name="musical-notes" size={22} color="#9CA3AF" />
-                  </View>
-                )}
+                <Image
+                  source={resolveAlbumArtSource(
+                    item.thumbnailUrl || item.release?.coverUrl
+                  )}
+                  style={{ width: 52, height: 52, borderRadius: 8, marginRight: 12 }}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: "600", color: "#111" }} numberOfLines={1}>
                     {item.title}

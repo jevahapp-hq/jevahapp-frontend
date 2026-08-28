@@ -1,24 +1,13 @@
 /**
  * ContentFeedStates - Loading, Error, Empty states for AllContentTikTok
- * Loading avoids large white skeleton cards (looked like blank video stages).
  */
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
+import { FeedSkeletonStack } from "./FeedMediaCardSkeleton";
 
 export function LoadingState() {
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "transparent",
-      }}
-    >
-      <ActivityIndicator size="small" color={UI_CONFIG.COLORS.PRIMARY} />
-    </View>
-  );
+  return <FeedSkeletonStack />;
 }
 
 export function ErrorState({ message }: { message: string }) {

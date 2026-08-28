@@ -180,7 +180,7 @@ export default function ExploreGroupsScreen() {
             fontWeight: "bold",
             color: "#000",
             marginBottom: 4,
-            fontFamily: "Rubik-Bold",
+            fontFamily: "PlusJakartaSans-Bold",
           }}
         >
           {group.title}
@@ -191,7 +191,7 @@ export default function ExploreGroupsScreen() {
             fontSize: 14,
             color: "#666",
             lineHeight: 20,
-            fontFamily: "Rubik-Regular",
+            fontFamily: "PlusJakartaSans-Regular",
           }}
         >
           {group.description}
@@ -216,7 +216,7 @@ export default function ExploreGroupsScreen() {
             color: "#000",
             fontSize: 14,
             fontWeight: "bold",
-            fontFamily: "Rubik-Bold",
+            fontFamily: "PlusJakartaSans-Bold",
           }}
         >
           Join
@@ -259,7 +259,7 @@ export default function ExploreGroupsScreen() {
               fontSize: 20,
               fontWeight: "bold",
               color: "#000",
-              fontFamily: "Rubik-Bold",
+              fontFamily: "PlusJakartaSans-Bold",
               flex: 1,
               textAlign: "center",
             }}
@@ -277,7 +277,7 @@ export default function ExploreGroupsScreen() {
               fontSize: 28,
               fontWeight: "bold",
               color: "#000",
-              fontFamily: "Rubik-Bold",
+              fontFamily: "PlusJakartaSans-Bold",
               marginBottom: 12,
             }}
           >
@@ -290,7 +290,7 @@ export default function ExploreGroupsScreen() {
               color: "#666",
               lineHeight: 24,
               marginBottom: 20,
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
             }}
           >
             Join groups and connect where the community shares contents that
@@ -326,7 +326,7 @@ export default function ExploreGroupsScreen() {
                   color: "#0A332D",
                   fontSize: 10,
                   fontWeight: "bold",
-                  fontFamily: "Rubik-Bold",
+                  fontFamily: "PlusJakartaSans-Bold",
                   lineHeight: 12,
                   textAlign: "center",
                 }}
@@ -356,7 +356,7 @@ export default function ExploreGroupsScreen() {
                   color: "#1D2939",
                   fontSize: 10,
                   fontWeight: "bold",
-                  fontFamily: "Rubik-Bold",
+                  fontFamily: "PlusJakartaSans-Bold",
                   lineHeight: 12,
                   textAlign: "center",
                 }}

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -33,6 +33,19 @@ interface WordPosition {
   word: string;
 }
 
+function buildWordMap(verses: BibleVerse[]): WordPosition[] {
+  const words: WordPosition[] = [];
+  verses.forEach((verse, verseIndex) => {
+    verse.text
+      .split(/\s+/)
+      .filter((w) => w.length > 0)
+      .forEach((word, wordIndex) => {
+        words.push({ verseIndex, wordIndex, word });
+      });
+  });
+  return words;
+}
+
 export default function BibleReader({
   bookName,
   chapterNumber,
@@ -48,8 +61,15 @@ export default function BibleReader({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentWordPosition, setCurrentWordPosition] = useState<WordPosition | null>(null);
-  const [allWords, setAllWords] = useState<WordPosition[]>([]);
+  // The word map only exists to drive TTS highlighting, so it is not built
+  // until the user actually starts playback.
+  const [ttsArmed, setTtsArmed] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  const allWords = useMemo<WordPosition[]>(
+    () => (ttsArmed ? buildWordMap(verses) : []),
+    [ttsArmed, verses]
+  );
 
   // Slide controls
   const screenWidth = Dimensions.get("window").width;
@@ -115,7 +135,6 @@ export default function BibleReader({
 
   useEffect(() => {
     loadVerses();
-    loadChapterInfo();
     // Stop any ongoing speech when chapter changes
     const cleanup = () => {
       stop();
@@ -124,24 +143,6 @@ export default function BibleReader({
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookName, chapterNumber, translationId, packRevision]);
-
-  // Build word mapping when verses change
-  useEffect(() => {
-    if (verses.length > 0) {
-      const words: WordPosition[] = [];
-      verses.forEach((verse, verseIndex) => {
-        const verseWords = verse.text.split(/\s+/).filter((w) => w.length > 0);
-        verseWords.forEach((word, wordIndex) => {
-          words.push({
-            verseIndex,
-            wordIndex,
-            word,
-          });
-        });
-      });
-      setAllWords(words);
-    }
-  }, [verses]);
 
   useEffect(() => {
     if (isSpeaking || isPaused) {
@@ -160,22 +161,6 @@ export default function BibleReader({
     }
   };
 
-  const loadChapterInfo = async () => {
-    try {
-      // Get chapter info with verse count
-      const chapter = await bibleApiService.getChapter(bookName, chapterNumber);
-      // Use actualVerseCount if available, otherwise use verseCount or verses length
-      setVerseCount(
-        (chapter as any).actualVerseCount ||
-          (chapter as any).verseCount ||
-          verses.length
-      );
-    } catch (err) {
-      console.error("Error loading chapter info:", err);
-      // Will be set when verses load
-    }
-  };
-
   const loadVerses = async () => {
     setLoading(true);
     setError(null);
@@ -185,9 +170,7 @@ export default function BibleReader({
         chapterNumber
       );
       setVerses(chapterVerses);
-      if (chapterVerses.length > 0 && verseCount === 0) {
-        setVerseCount(chapterVerses.length);
-      }
+      setVerseCount(chapterVerses.length);
       void bibleApiService
         .getChapterVerses(bookName, chapterNumber + 1)
         .catch(() => {});
@@ -199,23 +182,14 @@ export default function BibleReader({
     }
   };
 
-  // Get full text of all verses for TTS (must match allWords structure)
-  const getFullText = () => {
-    // Use the same word splitting logic to ensure perfect alignment
-    return allWords.map((wp) => wp.word).join(" ");
-  };
-
   // Handle play/pause
   const handlePlayPause = async () => {
     if (!isSpeaking && !isPaused) {
-      // Ensure words are mapped before speaking
-      if (allWords.length === 0) {
-        console.warn("No words available to speak");
-        return;
-      }
-      const fullText = getFullText();
-      console.log(`🎙️ Speaking ${allWords.length} words`);
-      await speak(fullText);
+      // Build the map on demand so the first render never pays for it.
+      const words = ttsArmed ? allWords : buildWordMap(verses);
+      if (words.length === 0) return;
+      if (!ttsArmed) setTtsArmed(true);
+      await speak(words.map((wp) => wp.word).join(" "));
     } else if (isPaused) {
       resume();
     } else {
@@ -229,41 +203,57 @@ export default function BibleReader({
     setCurrentWordPosition(null);
   };
 
-  const renderVerse = ({ item, index }: { item: BibleVerse; index: number }) => {
-    const words = item.text.split(/\s+/).filter((w) => w.length > 0);
-    const isCurrentVerse = currentWordPosition?.verseIndex === index;
+  const renderVerse = useCallback(
+    ({ item, index }: { item: BibleVerse; index: number }) => {
+      const highlightWordIndex =
+        currentWordPosition?.verseIndex === index
+          ? currentWordPosition.wordIndex
+          : null;
 
-    return (
-      <View style={styles.verseContainer}>
-        <Text style={styles.verseNumber}>{item.verseNumber}</Text>
-        <View style={styles.verseTextContainer}>
-          {words.map((word, wordIndex) => {
-            const isHighlighted =
-              isCurrentVerse &&
-              currentWordPosition?.wordIndex === wordIndex;
+      // Splitting a verse into one <Text> per word is only needed for the
+      // verse currently being read aloud. Every other verse renders as a
+      // single node, which is what keeps long chapters cheap to scroll.
+      if (highlightWordIndex == null) {
+        return (
+          <View style={styles.verseContainer}>
+            <Text style={styles.verseNumber}>{item.verseNumber}</Text>
+            <View style={styles.verseTextContainer}>
+              <Text style={styles.verseWord}>{item.text}</Text>
+            </View>
+          </View>
+        );
+      }
 
-            return (
+      const words = item.text.split(/\s+/).filter((w) => w.length > 0);
+      return (
+        <View style={styles.verseContainer}>
+          <Text style={styles.verseNumber}>{item.verseNumber}</Text>
+          <View style={styles.verseTextContainer}>
+            {words.map((word, wordIndex) => (
               <Text
                 key={`${index}-${wordIndex}`}
                 style={[
                   styles.verseWord,
-                  isHighlighted && styles.highlightedWord,
+                  wordIndex === highlightWordIndex && styles.highlightedWord,
                 ]}
               >
                 {word}{" "}
               </Text>
-            );
-          })}
+            ))}
+          </View>
         </View>
-      </View>
-    );
-  };
+      );
+    },
+    [currentWordPosition]
+  );
 
   const renderNavigationControls = () => (
     <View style={styles.navigationContainer} />
   );
 
-  if (loading) {
+  // Only blank the reader on a cold load; a chapter change keeps the previous
+  // text on screen until the new one resolves.
+  if (loading && verses.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#256E63" />
@@ -442,6 +432,10 @@ export default function BibleReader({
               contentContainerStyle={[styles.versesContainer, { paddingTop: 88 }]}
               showsVerticalScrollIndicator={false}
               ListFooterComponent={renderNavigationControls}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={7}
+              removeClippedSubviews
               onScrollToIndexFailed={(info) => {
                 // Handle scroll errors gracefully
                 setTimeout(() => {
@@ -583,13 +577,13 @@ const styles = StyleSheet.create({
   },
   speedTextSmall: {
     fontSize: 20,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
     lineHeight: 24,
   },
   speedValueDisplay: {
     fontSize: 14,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
     minWidth: 40,
     textAlign: "center",
@@ -633,7 +627,7 @@ const styles = StyleSheet.create({
   },
   verseNumber: {
     fontSize: 12,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#256E63",
     marginRight: 12,
     marginTop: 2,
@@ -647,7 +641,7 @@ const styles = StyleSheet.create({
   },
   verseWord: {
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#1F2937",
     lineHeight: 24,
   },
@@ -661,7 +655,7 @@ const styles = StyleSheet.create({
   verseText: {
     flex: 1,
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#1F2937",
     lineHeight: 24,
   },
@@ -689,7 +683,7 @@ const styles = StyleSheet.create({
   },
   navButtonText: {
     fontSize: 14,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#256E63",
     marginHorizontal: 8,
   },
@@ -699,13 +693,13 @@ const styles = StyleSheet.create({
   playButtonInBar: { },
   loadingText: {
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     marginTop: 16,
   },
   errorText: {
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#EF4444",
     textAlign: "center",
     marginTop: 16,
@@ -719,12 +713,12 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     fontSize: 14,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#FFFFFF",
   },
   emptyText: {
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     textAlign: "center",
     marginTop: 16,

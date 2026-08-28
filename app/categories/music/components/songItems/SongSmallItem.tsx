@@ -55,7 +55,7 @@ export function SongSmallItem({
           fontSize: 12,
           fontWeight: "600",
           color: "#1D2939",
-          fontFamily: "Rubik_600SemiBold",
+          fontFamily: "PlusJakartaSans_600SemiBold",
         }}
         numberOfLines={2}
       >

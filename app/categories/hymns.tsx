@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -15,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HymnMiniCard, { HymnItem } from "../home/components/HymnMiniCard";
 import { UI_CONFIG } from "../../src/shared/constants";
+import { ListSkeletonStack } from "../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 columns with padding
@@ -152,7 +152,7 @@ export default function Hymns() {
             style={{
               flex: 1,
               fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-              fontFamily: "Rubik",
+              fontFamily: "PlusJakartaSans",
               color: UI_CONFIG.COLORS.TEXT_PRIMARY,
             }}
           />
@@ -173,29 +173,7 @@ export default function Hymns() {
 
       {/* Hymns Grid */}
       {loadingHymns ? (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingVertical: 40,
-          }}
-        >
-          <ActivityIndicator
-            size="large"
-            color={UI_CONFIG.COLORS.PRIMARY}
-          />
-          <Text
-            style={{
-              marginTop: 16,
-              fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
-              color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-              fontFamily: "Rubik",
-            }}
-          >
-            Loading hymns...
-          </Text>
-        </View>
+        <ListSkeletonStack rows={8} />
       ) : filteredHymns.length === 0 ? (
         <View
           style={{
@@ -215,7 +193,7 @@ export default function Hymns() {
               marginTop: 16,
               fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.MD,
               color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-              fontFamily: "Rubik",
+              fontFamily: "PlusJakartaSans",
             }}
           >
             {searchQuery
@@ -246,7 +224,7 @@ export default function Hymns() {
                   fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
                   fontWeight: "600",
                   color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                 }}
               >
                 {searchQuery

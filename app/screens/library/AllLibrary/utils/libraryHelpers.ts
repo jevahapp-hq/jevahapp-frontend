@@ -166,29 +166,66 @@ export const getContentTypeColor = (contentType: string): string => {
 /**
  * Thumbnail source with comprehensive fallbacks
  */
+function isLikelyVideoUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    /\.(mp4|mov|avi|mkv|m3u8|webm)(\?|$)/i.test(lower) ||
+    lower.includes("video/") ||
+    lower.includes("/video/upload/")
+  );
+}
+
+function isLikelyImageUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    /\.(jpg|jpeg|png|gif|webp|avif)(\?|$)/i.test(lower) ||
+    lower.includes("/image/upload/")
+  );
+}
+
+/** Cloudinary frame grab — same pattern as feed save handlers. */
+export function deriveVideoPosterUrl(videoUrl?: string | null): string | null {
+  if (!videoUrl || typeof videoUrl !== "string") return null;
+  const trimmed = videoUrl.trim();
+  if (!trimmed.startsWith("http")) return null;
+  if (!trimmed.includes("/upload/")) return null;
+  if (isLikelyImageUrl(trimmed)) return trimmed;
+  return trimmed.replace("/upload/", "/upload/so_1/") + ".jpg";
+}
+
+function uriFromField(value: unknown): string | null {
+  if (typeof value === "string") {
+    const t = value.trim();
+    return t.startsWith("http") ? t : null;
+  }
+  if (value && typeof value === "object" && "uri" in value) {
+    const u = String((value as { uri?: string }).uri || "").trim();
+    return u.startsWith("http") ? u : null;
+  }
+  return null;
+}
+
 export const getThumbnailSource = (item: any): { uri: string } | number => {
-  if (item.thumbnailUrl) return { uri: item.thumbnailUrl };
-  if (item.mediaUrl) return { uri: item.mediaUrl };
-  if (item.fileUrl) return { uri: item.fileUrl };
-  if (
-    item.imageUrl &&
-    typeof item.imageUrl === "object" &&
-    item.imageUrl.uri
-  ) {
-    return item.imageUrl;
-  }
-  if (item.imageUrl && typeof item.imageUrl === "string") {
-    return { uri: item.imageUrl };
-  }
-  if (item.coverImage) {
-    return typeof item.coverImage === "string"
-      ? { uri: item.coverImage }
-      : item.coverImage;
-  }
+  const thumb = uriFromField(item.thumbnailUrl);
+  if (thumb && !isLikelyVideoUrl(thumb)) return { uri: thumb };
+
+  const image = uriFromField(item.imageUrl);
+  if (image && !isLikelyVideoUrl(image)) return { uri: image };
+
+  const cover = uriFromField(item.coverImage);
+  if (cover && !isLikelyVideoUrl(cover)) return { uri: cover };
+
+  const posterFromVideo =
+    deriveVideoPosterUrl(item.fileUrl) ||
+    deriveVideoPosterUrl(item.mediaUrl) ||
+    deriveVideoPosterUrl(item.playbackUrl);
+  if (posterFromVideo) return { uri: posterFromVideo };
+
   const type = item.contentType?.toLowerCase();
   switch (type) {
     case "videos":
     case "video":
+    case "reel":
       return require("../../../../../assets/images/image (10).png");
     case "music":
     case "audio":
@@ -216,7 +253,8 @@ export const isVideoContent = (item: any): boolean => {
   return (
     videoExts.some((ext) => url.includes(ext)) ||
     mime.startsWith("video/") ||
-    type.includes("video")
+    type.includes("video") ||
+    type.includes("reel")
   );
 };
 

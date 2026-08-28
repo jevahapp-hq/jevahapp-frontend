@@ -3,7 +3,7 @@
  * Soft-fail; never blocks playback. Counted views stay on contentInteractionAPI.
  */
 import { useEffect, useRef } from "react";
-import { useGlobalVideoStore } from "../../../app/store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import type { MediaItem } from "../types";
 import { enqueueFeedEvent } from "./feedRanker";
 

@@ -21,12 +21,15 @@ export function useCommentSheetAnimation(options: {
   isVisible: boolean;
   /** Dynamic peek — measured media bottom when available */
   mediaPeekHeight?: number;
+  /** Fire on the same frame dismiss starts — HUD + media restore */
+  onDismissStart?: () => void;
   onHideComplete: () => void;
   onClosedUiReset?: () => void;
 }) {
   const {
     isVisible,
     mediaPeekHeight = MEDIA_PEEK_HEIGHT,
+    onDismissStart,
     onHideComplete,
     onClosedUiReset,
   } = options;
@@ -127,13 +130,14 @@ export function useCommentSheetAnimation(options: {
   const closeModal = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
+    onDismissStart?.();
     Keyboard.dismiss();
     keyboardOffset.value = withTiming(0, { duration: 160 });
     const rest = Math.max(280, getWindowHeight() - peekRef.current);
     translateY.value = withTiming(rest + 40, COMMENT_SHEET_OUT);
     backdropOpacity.value = withTiming(0, { duration: 140 });
     setTimeout(() => finishHide(), 165);
-  }, [finishHide, translateY, backdropOpacity, keyboardOffset]);
+  }, [finishHide, onDismissStart, translateY, backdropOpacity, keyboardOffset]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -147,9 +151,10 @@ export function useCommentSheetAnimation(options: {
   const dismissFromGesture = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
+    onDismissStart?.();
     Keyboard.dismiss();
     setTimeout(() => finishHide(), 200);
-  }, [finishHide]);
+  }, [finishHide, onDismissStart]);
 
   const handleGestureEnd = (event: any) => {
     "worklet";

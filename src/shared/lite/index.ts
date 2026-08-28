@@ -11,6 +11,7 @@ export {
   getLitePrefetchAhead,
   getLiteListRequestMeta,
   getLiteRequestMeta,
+  getLiteStatsHydrateCount,
   isFeedListPath,
   hydrateLiteProfile,
   isLiteHydrated,
@@ -21,6 +22,7 @@ export {
   shouldProbeUploadDuration,
   setLiteMode,
   shouldMountLitePlayer,
+  shouldPrefetchFeedComments,
   subscribeLiteProfile,
   type LiteMode,
 } from "./liteProfile";

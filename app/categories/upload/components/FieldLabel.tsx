@@ -44,7 +44,7 @@ export function FieldLabel({
         style={{
           fontSize: getResponsiveFontSize(11, 12, 12),
           color: "#64748B",
-          fontFamily: "Rubik-SemiBold",
+          fontFamily: "PlusJakartaSans-SemiBold",
           letterSpacing: 0.4,
           flex: 1,
         }}

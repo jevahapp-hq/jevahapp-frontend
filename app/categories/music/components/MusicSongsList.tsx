@@ -1,6 +1,7 @@
-import { ActivityIndicator, Dimensions, FlatList, View } from "react-native";
+import { Dimensions, FlatList, View } from "react-native";
 import type { MusicLane } from "../MusicLaneTabs";
 import type { DisplayMode } from "../types";
+import { MusicCatalogSkeleton } from "./MusicCatalogSkeleton";
 import { renderSongItem } from "./songItems";
 
 type MusicSongsListProps = {
@@ -71,8 +72,8 @@ export function MusicSongsList({
       onEndReachedThreshold={0.4}
       ListFooterComponent={
         loadingMore ? (
-          <View style={{ paddingVertical: 16, alignItems: "center" }}>
-            <ActivityIndicator color="#0A332D" />
+          <View style={{ paddingVertical: 4 }}>
+            <MusicCatalogSkeleton showDiscover={false} rows={2} />
           </View>
         ) : null
       }

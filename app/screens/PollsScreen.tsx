@@ -475,7 +475,7 @@ const styles = {
     fontSize: 20,
     fontWeight: "bold" as const,
     color: "#000",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   filterButton: {
     padding: 8,
@@ -505,7 +505,7 @@ const styles = {
     fontSize: 14,
     fontWeight: "600" as const,
     color: "#6B7280",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   filterButtonTextActive: {
     color: "#fff",
@@ -538,7 +538,7 @@ const styles = {
     fontSize: 18,
     fontWeight: "bold" as const,
     color: "#111827",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
     flex: 1,
     marginRight: 8,
   },
@@ -552,7 +552,7 @@ const styles = {
   pollDescription: {
     fontSize: 14,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginBottom: 12,
     lineHeight: 20,
   },
@@ -564,12 +564,12 @@ const styles = {
   pollTimestamp: {
     fontSize: 12,
     color: "#9CA3AF",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   pollVotes: {
     fontSize: 12,
     color: "#6B7280",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   pollOptions: {
     marginBottom: 12,
@@ -585,7 +585,7 @@ const styles = {
   noOptionsText: {
     fontSize: 14,
     color: "#92400E",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "center" as const,
   },
   pollOption: {
@@ -620,17 +620,17 @@ const styles = {
   optionText: {
     fontSize: 14,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     flex: 1,
   },
   selectedOptionText: {
     color: "#16A34A",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   optionPercentage: {
     fontSize: 12,
     color: "#16A34A",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   progressBar: {
     height: 4,
@@ -654,7 +654,7 @@ const styles = {
   votedText: {
     fontSize: 12,
     color: "#22C55E",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
     marginLeft: 4,
   },
   expiredBadge: {
@@ -668,7 +668,7 @@ const styles = {
   expiredText: {
     fontSize: 12,
     color: "#DC2626",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   disabledOption: {
     opacity: 0.6,
@@ -689,7 +689,7 @@ const styles = {
     marginTop: 16,
     fontSize: 16,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   errorContainer: {
     flex: 1,
@@ -703,7 +703,7 @@ const styles = {
     fontWeight: "bold" as const,
     color: "#1F2937",
     marginTop: 16,
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   errorText: {
     fontSize: 14,
@@ -711,7 +711,7 @@ const styles = {
     textAlign: "center" as const,
     marginTop: 8,
     marginBottom: 16,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   retryButton: {
     backgroundColor: "#DF930E",
@@ -723,7 +723,7 @@ const styles = {
     color: "white",
     fontSize: 16,
     fontWeight: "600" as const,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   emptyContainer: {
     flex: 1,
@@ -737,7 +737,7 @@ const styles = {
     fontWeight: "bold" as const,
     color: "#1F2937",
     marginTop: 24,
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   emptyText: {
     fontSize: 16,
@@ -745,7 +745,7 @@ const styles = {
     textAlign: "center" as const,
     marginTop: 12,
     lineHeight: 24,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   footerLoader: {
     paddingVertical: 20,
@@ -762,7 +762,7 @@ const styles = {
   multiSelectText: {
     fontSize: 12,
     color: "#256E63",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   modalContainer: {
     flex: 1,
@@ -780,7 +780,7 @@ const styles = {
     fontSize: 20,
     fontWeight: "bold" as const,
     color: "#111827",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   closeButton: {
     padding: 4,

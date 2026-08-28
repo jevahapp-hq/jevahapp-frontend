@@ -69,7 +69,7 @@ export function SongListItem({
             fontSize: 16,
             fontWeight: "600",
             color: "#1D2939",
-            fontFamily: "Rubik_600SemiBold",
+            fontFamily: "PlusJakartaSans_600SemiBold",
             marginBottom: 4,
           }}
           numberOfLines={1}
@@ -88,7 +88,7 @@ export function SongListItem({
             style={{
               fontSize: 14,
               color: item.artistSlug ? "#256E63" : "#98A2B3",
-              fontFamily: "Rubik_400Regular",
+              fontFamily: "PlusJakartaSans_400Regular",
             }}
             numberOfLines={1}
           >

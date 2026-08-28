@@ -35,15 +35,15 @@ export default function DeleteGroupModal({ visible, onClose, onDelete }: DeleteG
         <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 24, height: 310 }}>
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 8 }}>
-            <Text style={{ fontSize: 14, color: "#667085", fontFamily: "Rubik-Bold", flex: 1 }}>Delete Item</Text>
+            <Text style={{ fontSize: 14, color: "#667085", fontFamily: "PlusJakartaSans-Bold", flex: 1 }}>Delete Item</Text>
             <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
               <Ionicons name="close" size={22} color="#1D2939" />
             </TouchableOpacity>
           </View>
 
           <View style={{ paddingHorizontal: 20, flex: 1 }}>
-            <Text style={{ fontSize: 22, fontFamily: "Rubik-Bold", color: "#0F172A", marginBottom: 8 }}>Delete Group?</Text>
-            <Text style={{ fontSize: 14, color: "#475467", lineHeight: 20, fontFamily: "Rubik-Regular", marginBottom: 20 }}>
+            <Text style={{ fontSize: 22, fontFamily: "PlusJakartaSans-Bold", color: "#0F172A", marginBottom: 8 }}>Delete Group?</Text>
+            <Text style={{ fontSize: 14, color: "#475467", lineHeight: 20, fontFamily: "PlusJakartaSans-Regular", marginBottom: 20 }}>
               This action will not be reversible. Are you sure you want to delete this group?
             </Text>
 
@@ -55,14 +55,14 @@ export default function DeleteGroupModal({ visible, onClose, onDelete }: DeleteG
                 activeOpacity={0.8}
                 style={{ backgroundColor: "#0C1529", width: 172.5, height: 45, borderRadius: 25, alignItems: "center", justifyContent: "center" }}
               >
-                <Text style={{ color: "#FFFFFF", fontFamily: "Rubik-Bold" }}>Delete</Text>
+                <Text style={{ color: "#FFFFFF", fontFamily: "PlusJakartaSans-Bold" }}>Delete</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleClose}
                 activeOpacity={0.8}
                 style={{ backgroundColor: "#FFFFFF", width: 172.5, height: 45, borderRadius: 25, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#0C1529" }}
               >
-                <Text style={{ color: "#0C1529", fontFamily: "Rubik-Bold" }}>Cancel</Text>
+                <Text style={{ color: "#0C1529", fontFamily: "PlusJakartaSans-Bold" }}>Cancel</Text>
               </TouchableOpacity>
               </View>
             </View>

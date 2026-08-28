@@ -66,7 +66,7 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
       ? getResponsiveFontSize(9, 10, 11)
       : getResponsiveFontSize(10, 11, 12),
     color,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     textAlign: "center" as const,
     textShadowColor:
       isVertical && color.toLowerCase() === "#ffffff"

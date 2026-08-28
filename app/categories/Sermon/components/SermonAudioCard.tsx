@@ -156,7 +156,7 @@ export default function SermonAudioCard({
               size={30}
               color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
             />
-            <Text className="text-[10px] text-white font-rubik-semibold">
+            <Text className="text-[10px] text-white font-jakarta-semibold">
               {globalFavoriteCounts[key] || 0}
             </Text>
           </TouchableOpacity>
@@ -191,7 +191,7 @@ export default function SermonAudioCard({
               size={30}
               color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
             />
-            <Text className="text-[10px] text-white font-rubik-semibold">
+            <Text className="text-[10px] text-white font-jakarta-semibold">
               {stats.saved === 1 ? (audio.saved ?? 0) + 1 : audio.saved ?? 0}
             </Text>
           </TouchableOpacity>
@@ -278,12 +278,12 @@ export default function SermonAudioCard({
           </View>
           <View className="ml-3">
             <View className="flex-row items-center">
-              <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
+              <Text className="ml-1 text-[13px] font-jakarta-semibold text-[#344054] mt-1">
                 {getUserDisplayNameFromContent(audio)}
               </Text>
               <View className="flex flex-row mt-2 ml-2">
                 <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                   {getTimeAgo(audio.createdAt)}
                 </Text>
               </View>
@@ -291,7 +291,7 @@ export default function SermonAudioCard({
             <View className="flex-row mt-2">
               <View className="flex-row items-center">
                 <AntDesign name="eye" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-jakarta">
                   {stats.views ?? audio.views ?? 0}
                 </Text>
               </View>
@@ -300,7 +300,7 @@ export default function SermonAudioCard({
                 className="flex-row items-center ml-4"
               >
                 <Feather name="send" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                   {stats.sheared ?? audio.sheared ?? 0}
                 </Text>
               </TouchableOpacity>
@@ -324,7 +324,7 @@ export default function SermonAudioCard({
           </TouchableWithoutFeedback>
           <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[200px] h-[180]">
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-              <Text className="text-[#1D2939] font-rubik ml-2">
+              <Text className="text-[#1D2939] font-jakarta ml-2">
                 View Details
               </Text>
               <Ionicons name="eye-outline" size={22} color="#1D2939" />
@@ -333,14 +333,14 @@ export default function SermonAudioCard({
               onPress={() => handleShare(key, audio)}
               className="py-2 border-b border-gray-200 flex-row items-center justify-between"
             >
-              <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
+              <Text className="text-[#1D2939] font-jakarta ml-2">Share</Text>
               <Feather name="send" size={22} color="#1D2939" />
             </TouchableOpacity>
             <TouchableOpacity
               className="flex-row items-center justify-between mt-6"
               onPress={() => handleSave(key, audio)}
             >
-              <Text className="text-[#1D2939] font-rubik ml-2">
+              <Text className="text-[#1D2939] font-jakarta ml-2">
                 {stats.saved === 1
                   ? "Remove from Library"
                   : "Save to Library"}
@@ -352,7 +352,7 @@ export default function SermonAudioCard({
               />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 flex-row items-center justify-between border-t border-gray-200 mt-2">
-              <Text className="text-[#1D2939] font-rubik ml-2">Download</Text>
+              <Text className="text-[#1D2939] font-jakarta ml-2">Download</Text>
               <Ionicons name="download-outline" size={24} color="#090E24" />
             </TouchableOpacity>
           </View>

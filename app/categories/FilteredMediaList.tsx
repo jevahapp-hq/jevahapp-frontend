@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, FlatList, Text } from "react-native";
-import { useMediaStore } from "../store/useUploadStore";
+import { useMediaStore } from "@/store/useUploadStore";
 
 export default function FilteredMediaList({ tag }: { tag: string }) {
   const mediaList = useMediaStore((state) => state.mediaList);

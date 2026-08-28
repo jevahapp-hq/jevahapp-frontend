@@ -409,7 +409,7 @@ export default function PdfViewer() {
             <Text
               style={{
                 fontSize: 17,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#3B3B3B",
                 textAlign: "center",
               }}
@@ -421,7 +421,7 @@ export default function PdfViewer() {
               <Text
                 style={{
                   fontSize: 12,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#667085",
                   textAlign: "center",
                   marginTop: 2,
@@ -1167,7 +1167,7 @@ export default function PdfViewer() {
                 borderRadius: 8,
               }}
             >
-              <Text style={{ color: "#fff", fontFamily: "Rubik-SemiBold" }}>
+              <Text style={{ color: "#fff", fontFamily: "PlusJakartaSans-SemiBold" }}>
                 Retry with Online Viewer
               </Text>
             </TouchableOpacity>

@@ -4,6 +4,7 @@
  * when this item's data changes, not when other items or global state changes.
  */
 import React from "react";
+import { canViewerSeeMedia } from "../../../../shared/media/moderationVisibility";
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon } from "../../../../shared/utils";
 import EbookCard from "../../components/EbookCard";
@@ -159,55 +160,38 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onDelete,
   };
 
+  /**
+   * Backstop for the feed-level filter in `AllContentTikTok/index.tsx`, which
+   * is the primary gate. Kept because this renderer is reachable from other
+   * lists, and collapsed into the shared predicate — the four hand-rolled
+   * copies that used to live here only checked `rejected`, and their owner test
+   * was stricter than `extractUploaderId`, so an owner whose id couldn't be
+   * resolved from props lost sight of their own upload.
+   */
+  if (!canViewerSeeMedia(item as any, currentUserId)) {
+    return <ContentUnavailableState />;
+  }
+
   switch (item.contentType) {
     case "video":
     case "videos":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
       return <VideoCard key={key} {...videoCardProps} />;
 
     case "sermon":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
+    case "teachings":
       if (isAudioSermonValue) return <MusicCard key={key} {...musicCardProps} />;
       return <VideoCard key={key} {...videoCardProps} />;
 
     case "audio":
     case "music":
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
       return <MusicCard key={key} {...musicCardProps} />;
 
     case "image":
     case "ebook":
+    case "e-books":
+    case "ebooks":
     case "books":
     default:
-      if (item.moderationStatus === 'rejected') {
-        const isOwner = currentUserId && (
-          (item.userId === currentUserId) ||
-          (typeof item.uploadedBy === 'object' && item.uploadedBy?._id === currentUserId) ||
-          (item.uploadedBy === currentUserId)
-        );
-        if (!isOwner) return <ContentUnavailableState />;
-      }
       return <EbookCard key={key} {...ebookCardProps} />;
   }
 }

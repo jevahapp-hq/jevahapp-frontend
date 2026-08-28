@@ -85,7 +85,7 @@ export const AvatarWithInitialFallback: React.FC<
       <Text
         style={{
           fontSize,
-          fontFamily: "Rubik-SemiBold",
+          fontFamily: "PlusJakartaSans-SemiBold",
           color: textColor,
         }}
       >

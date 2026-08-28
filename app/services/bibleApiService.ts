@@ -3,6 +3,9 @@
 
 import { BaseService } from "../../src/core/services/BaseService";
 import {
+  areBooksFresh,
+  areChaptersFresh,
+  areVersesFresh,
   getCachedBooks,
   getCachedChapters,
   getCachedVerses,
@@ -106,6 +109,19 @@ interface BibleApiResponse<T> {
 }
 
 class BibleApiService extends BaseService {
+  /** Coalesces concurrent callers of the same endpoint onto one request. */
+  private inFlight = new Map<string, Promise<any>>();
+
+  private dedupe<T>(key: string, run: () => Promise<T>): Promise<T> {
+    const existing = this.inFlight.get(key) as Promise<T> | undefined;
+    if (existing) return existing;
+    const promise = run().finally(() => {
+      this.inFlight.delete(key);
+    });
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+
   private translationQuery(path: string): string {
     if (!isTranslationQueryEnabled()) return path;
     const id = getSelectedTranslationId() || DEFAULT_TRANSLATION_ID;
@@ -114,12 +130,10 @@ class BibleApiService extends BaseService {
   }
 
   private async makeRequest<T>(endpoint: string): Promise<BibleApiResponse<T>> {
-    console.log(`📖 Bible API Request: ${endpoint}`);
-    
     const response = await this.get<T>(endpoint, undefined, { requireAuth: false });
-    
+
     if (!response.success) {
-      console.error(`❌ Bible API Error:`, response.error);
+      if (__DEV__) console.error(`❌ Bible API Error:`, response.error);
       throw new Error(response.error || "Bible API request failed");
     }
 
@@ -129,7 +143,6 @@ class BibleApiService extends BaseService {
       throw new Error("No data returned from Bible API");
     }
 
-    console.log(`✅ Bible API Success: ${endpoint}`);
     return {
       success: true,
       data,
@@ -145,18 +158,22 @@ class BibleApiService extends BaseService {
     }
     const cached = getCachedBooks(translationId);
     if (cached) {
-      void this.fetchAllBooks().catch(() => {});
+      if (!areBooksFresh(translationId)) {
+        void this.fetchAllBooks().catch(() => {});
+      }
       return cached;
     }
     return this.fetchAllBooks();
   }
 
-  private async fetchAllBooks(): Promise<BibleBook[]> {
+  private fetchAllBooks(): Promise<BibleBook[]> {
+    return this.dedupe(`books:${getSelectedTranslationId()}`, async () => {
     const response = await this.makeRequest<BibleBook[]>(
       this.translationQuery("/api/bible/books")
     );
     setCachedBooks(response.data, getSelectedTranslationId());
     return response.data;
+    });
   }
 
   async getOldTestamentBooks(): Promise<BibleBook[]> {
@@ -189,20 +206,27 @@ class BibleApiService extends BaseService {
     }
     const cached = getCachedChapters(bookName, translationId);
     if (cached) {
-      void this.fetchBookChapters(bookName).catch(() => {});
+      if (!areChaptersFresh(bookName, translationId)) {
+        void this.fetchBookChapters(bookName).catch(() => {});
+      }
       return cached;
     }
     return this.fetchBookChapters(bookName);
   }
 
-  private async fetchBookChapters(bookName: string): Promise<BibleChapter[]> {
-    const response = await this.makeRequest<BibleChapter[]>(
-      this.translationQuery(
-        `/api/bible/books/${encodeURIComponent(bookName)}/chapters`
-      )
+  private fetchBookChapters(bookName: string): Promise<BibleChapter[]> {
+    return this.dedupe(
+      `chapters:${getSelectedTranslationId()}:${bookName}`,
+      async () => {
+        const response = await this.makeRequest<BibleChapter[]>(
+          this.translationQuery(
+            `/api/bible/books/${encodeURIComponent(bookName)}/chapters`
+          )
+        );
+        setCachedChapters(bookName, response.data, getSelectedTranslationId());
+        return response.data;
+      }
     );
-    setCachedChapters(bookName, response.data, getSelectedTranslationId());
-    return response.data;
   }
 
   async getChapter(
@@ -254,16 +278,21 @@ class BibleApiService extends BaseService {
     }
     const cached = getCachedVerses(bookName, chapterNumber, translationId);
     if (cached) {
-      void this.fetchChapterVerses(bookName, chapterNumber).catch(() => {});
+      if (!areVersesFresh(bookName, chapterNumber, translationId)) {
+        void this.fetchChapterVerses(bookName, chapterNumber).catch(() => {});
+      }
       return cached;
     }
     return this.fetchChapterVerses(bookName, chapterNumber);
   }
 
-  private async fetchChapterVerses(
+  private fetchChapterVerses(
     bookName: string,
     chapterNumber: number
   ): Promise<BibleVerse[]> {
+    return this.dedupe(
+      `verses:${getSelectedTranslationId()}:${bookName}:${chapterNumber}`,
+      async () => {
     const response = await this.makeRequest<BibleVerse[]>(
       this.translationQuery(
         `/api/bible/books/${encodeURIComponent(
@@ -278,6 +307,8 @@ class BibleApiService extends BaseService {
       getSelectedTranslationId()
     );
     return response.data;
+      }
+    );
   }
 
   async getVerse(

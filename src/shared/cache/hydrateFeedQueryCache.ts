@@ -8,6 +8,10 @@ import type { AllContentPageResult } from "../media/fetchAllContentPage";
 import { syncMediaStatsToInteractionStore } from "../media/syncMediaStats";
 import { PERF, perfMark, perfMeasure } from "../utils/perfMarks";
 import { getFeedPageSync, getRqFeedSeedSync } from "./feedMmkv";
+import {
+  buildFeedInfiniteData,
+  shouldSeedFeedPage,
+} from "./feedSeedInfiniteData";
 
 /**
  * Synchronously seed React Query infinite feed from MMKV so Home can paint
@@ -31,7 +35,7 @@ export function hydrateFeedQueryCache(queryClient: QueryClient): void {
     const page =
       getFeedPageSync(contentType, useAuth) ||
       (contentType === "ALL" ? getRqFeedSeedSync() : null);
-    if (!page?.media?.length) continue;
+    if (!shouldSeedFeedPage(page?.media)) continue;
     const media = paintAuthorsFromCache(page.media);
     syncMediaStatsToInteractionStore(media);
 
@@ -48,19 +52,10 @@ export function hydrateFeedQueryCache(queryClient: QueryClient): void {
         hasMore: page.hasMore,
       };
 
-      // Chronological + For You — whichever Home uses, paint instantly
       for (const forYou of [false, true] as const) {
         queryClient.setQueryData(
           allContentQueryKey(contentType, limit, useAuth, forYou),
-          {
-            pages: [
-              {
-                ...result,
-                source: forYou ? "for_you" : "all_content",
-              },
-            ],
-            pageParams: [forYou ? null : 1],
-          }
+          buildFeedInfiniteData(result, forYou)
         );
       }
     }

@@ -124,7 +124,7 @@ export default function SlideUpSetProfileImageModal({
                 color: '#1D2939',
                 marginBottom: getResponsiveSpacing(8, 10, 12, 16),
               }
-            ]} className="font-rubik-semibold">
+            ]} className="font-jakarta-semibold">
               Set as profile image?
             </Text>
             
@@ -137,7 +137,7 @@ export default function SlideUpSetProfileImageModal({
                 marginBottom: getResponsiveSpacing(20, 24, 28, 32),
                 lineHeight: getResponsiveSpacing(20, 22, 24, 26),
               }
-            ]} className="font-rubik">
+            ]} className="font-jakarta">
               Well done choosing this avatar as your profile picture. Don't worry, you can always change it whenever you want.
             </Text>
 

@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
     color: "#1F2937",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   input: {
     borderWidth: 1,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: "#F9FAFB",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     color: "#111827",
   },
   textArea: {
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 4,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   optionRow: {
     flexDirection: "row",
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: "#F9FAFB",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     color: "#111827",
   },
   removeButton: {
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     color: "#256E63",
     fontWeight: "600",
     fontSize: 14,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   switchRow: {
     flexDirection: "row",
@@ -282,13 +282,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#1F2937",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     marginBottom: 4,
   },
   switchDescription: {
     fontSize: 12,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   switch: {
     width: 50,
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     color: "#374151",
     fontWeight: "600",
     fontSize: 16,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   submitButton: {
     backgroundColor: "#256E63",
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 16,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
 });
 

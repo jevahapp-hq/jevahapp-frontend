@@ -1,20 +1,18 @@
 /**
- * FeedMediaCardSkeleton — faint gray card placeholder with soft pulse/shimmer.
- * Kept light so load feels calm and blended with the white feed.
+ * Feed skeleton — light gray bones, whisper shimmer, short stagger.
+ * Close to the white feed so it reads as layout, not a loading screen.
  */
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
 
-const PAGE_BG = UI_CONFIG.COLORS.BACKGROUND || "#FFFFFF";
-/** Very faint cool gray — readable as placeholder, not harsh */
-const MEDIA_BG = "#F0F1F3";
-const BONE = "#E4E6EA";
-const BONE_SOFT = "#ECEEF1";
+const PAGE_BG = UI_CONFIG.COLORS.BACKGROUND || "#FCFCFD";
+const MEDIA_BG = "#F3F4F6";
+const BONE = "#E8EAED";
 
 type FeedMediaCardSkeletonProps = {
-  /** Stagger entrance (ms) so cards cascade in */
   delay?: number;
+  instant?: boolean;
 };
 
 function Bone({
@@ -40,7 +38,7 @@ function Bone({
           backgroundColor: BONE,
           opacity: pulse.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.55, 1],
+            outputRange: [0.72, 1],
           }),
         },
         style,
@@ -49,35 +47,38 @@ function Bone({
   );
 }
 
-export function FeedMediaCardSkeleton({ delay = 0 }: FeedMediaCardSkeletonProps) {
-  const enter = useRef(new Animated.Value(0)).current;
+export function FeedMediaCardSkeleton({
+  delay = 0,
+  instant = false,
+}: FeedMediaCardSkeletonProps) {
+  const enter = useRef(new Animated.Value(instant ? 1 : 0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const entrance = Animated.sequence([
-      Animated.delay(delay),
-      Animated.parallel([
-        Animated.timing(enter, {
-          toValue: 1,
-          duration: 420,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-    ]);
+    const entrance = instant
+      ? null
+      : Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(enter, {
+            toValue: 1,
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]);
 
     const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
           toValue: 1,
-          duration: 1100,
+          duration: 1400,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.timing(pulse, {
           toValue: 0,
-          duration: 1100,
+          duration: 1400,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
@@ -87,45 +88,44 @@ export function FeedMediaCardSkeleton({ delay = 0 }: FeedMediaCardSkeletonProps)
     const shimmerLoop = Animated.loop(
       Animated.timing(shimmer, {
         toValue: 1,
-        duration: 1600,
+        duration: 2400,
         easing: Easing.inOut(Easing.linear),
         useNativeDriver: true,
       })
     );
 
-    entrance.start();
+    entrance?.start();
     pulseLoop.start();
     shimmerLoop.start();
 
     return () => {
-      entrance.stop();
+      entrance?.stop();
       pulseLoop.stop();
       shimmerLoop.stop();
     };
-  }, [delay, enter, pulse, shimmer]);
+  }, [delay, enter, pulse, shimmer, instant]);
 
   const shimmerX = shimmer.interpolate({
     inputRange: [0, 1],
-    outputRange: [-80, 320],
+    outputRange: [-70, 380],
   });
 
   return (
     <Animated.View
       style={{
-        marginBottom: 20,
+        marginBottom: 16,
         backgroundColor: PAGE_BG,
         opacity: enter,
         transform: [
           {
             translateY: enter.interpolate({
               inputRange: [0, 1],
-              outputRange: [10, 0],
+              outputRange: [6, 0],
             }),
           },
         ],
       }}
     >
-      {/* Media plane — faint gray, not black */}
       <View
         style={{
           width: "100%",
@@ -141,121 +141,107 @@ export function FeedMediaCardSkeleton({ delay = 0 }: FeedMediaCardSkeletonProps)
             position: "absolute",
             top: 0,
             bottom: 0,
-            width: 90,
-            backgroundColor: "rgba(255,255,255,0.55)",
-            transform: [{ translateX: shimmerX }, { skewX: "-18deg" }],
+            width: 72,
+            backgroundColor: "rgba(255,255,255,0.22)",
+            transform: [{ translateX: shimmerX }, { skewX: "-16deg" }],
           }}
         />
-
-        <View style={{ position: "absolute", top: 12, left: 12, zIndex: 2 }}>
-          <Bone width={64} height={24} borderRadius={6} pulse={pulse} />
-        </View>
-        <View style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
-          <Bone width={36} height={30} borderRadius={6} pulse={pulse} />
-        </View>
-
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2,
-          }}
-          pointerEvents="none"
-        >
-          <Bone width={56} height={56} borderRadius={28} pulse={pulse} />
-        </View>
-
-        <View
-          style={{
-            position: "absolute",
-            bottom: 64,
-            left: 12,
-            right: 48,
-            zIndex: 2,
-          }}
-        >
-          <Bone width="68%" height={14} borderRadius={4} pulse={pulse} />
-        </View>
-
-        <View
-          style={{
-            position: "absolute",
-            bottom: 24,
-            left: 12,
-            right: 48,
-            zIndex: 2,
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <Bone width={32} height={10} borderRadius={4} pulse={pulse} />
-          <View style={{ flex: 1, marginHorizontal: 10 }}>
-            <Bone width="100%" height={4} borderRadius={2} pulse={pulse} />
-          </View>
-          <Bone width={32} height={10} borderRadius={4} pulse={pulse} />
-        </View>
-        <View style={{ position: "absolute", bottom: 18, right: 12, zIndex: 2 }}>
-          <Bone width={28} height={28} borderRadius={14} pulse={pulse} />
-        </View>
       </View>
 
-      {/* Footer */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
-          marginTop: 8,
-          paddingHorizontal: 8,
+          marginTop: 10,
+          paddingHorizontal: 12,
           backgroundColor: PAGE_BG,
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-          <Bone width={40} height={40} borderRadius={20} pulse={pulse} />
-          <View style={{ marginLeft: 12, flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Bone width={110} height={14} borderRadius={4} pulse={pulse} />
-              <Bone
-                width={48}
-                height={10}
-                borderRadius={4}
-                pulse={pulse}
-                style={{ marginLeft: 8 }}
-              />
-            </View>
-            <View
-              style={{
-                marginTop: 10,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 14,
-              }}
-            >
-              <Bone width={22} height={22} borderRadius={11} pulse={pulse} />
-              <Bone width={22} height={22} borderRadius={11} pulse={pulse} />
-              <Bone width={22} height={22} borderRadius={11} pulse={pulse} />
-              <Bone width={22} height={22} borderRadius={11} pulse={pulse} />
-            </View>
-          </View>
+        <Bone width={36} height={36} borderRadius={18} pulse={pulse} />
+        <View style={{ marginLeft: 10, flex: 1 }}>
+          <Bone width={128} height={11} borderRadius={4} pulse={pulse} />
+          <Bone
+            width={72}
+            height={8}
+            borderRadius={4}
+            pulse={pulse}
+            style={{ marginTop: 8 }}
+          />
         </View>
-        <Bone width={24} height={24} borderRadius={4} pulse={pulse} />
       </View>
-
-      {/* Soft separator tint */}
-      <View
-        style={{
-          height: 1,
-          marginTop: 12,
-          backgroundColor: BONE_SOFT,
-          opacity: 0.7,
-        }}
-      />
     </Animated.View>
+  );
+}
+
+export function FeedSkeletonStack({ count = 2 }: { count?: number }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: PAGE_BG, paddingTop: 4 }}>
+      {Array.from({ length: count }, (_, i) => (
+        <FeedMediaCardSkeleton key={i} delay={i * 70} />
+      ))}
+    </View>
+  );
+}
+
+function useBonePulse() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return pulse;
+}
+
+/** Compact song/hymn/library row — not a video card. */
+export function ListRowSkeleton() {
+  const pulse = useBonePulse();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+      }}
+    >
+      <Bone width={52} height={52} borderRadius={8} pulse={pulse} />
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Bone width="62%" height={12} borderRadius={4} pulse={pulse} />
+        <Bone
+          width="38%"
+          height={9}
+          borderRadius={4}
+          pulse={pulse}
+          style={{ marginTop: 8 }}
+        />
+      </View>
+    </View>
+  );
+}
+
+export function ListSkeletonStack({ rows = 8 }: { rows?: number }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: PAGE_BG, paddingTop: 8 }}>
+      {Array.from({ length: rows }, (_, i) => (
+        <ListRowSkeleton key={i} />
+      ))}
+    </View>
   );
 }
 

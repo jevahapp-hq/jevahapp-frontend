@@ -1,38 +1,24 @@
 import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  InteractionManager,
-  StyleSheet,
-  View,
-} from "react-native";
+import { InteractionManager, StyleSheet, View } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
-import { setMiniPlayerSuppressed } from "../../src/shared/audio/miniPlayerGate";
-import { useNewUserLoginTour } from "../components/loginTour/useNewUserLoginTour";
 import {
-  BibleScreenWithSuspense,
-  CommunityScreenWithSuspense,
-  LibraryScreenWithSuspense,
-} from "../utils/lazyImports";
+  releaseMiniPlayer,
+  setMiniPlayerSuppression,
+} from "../../src/shared/audio/miniPlayerGate";
+import { useNewUserLoginTour } from "../components/loginTour/useNewUserLoginTour";
+import BibleTabSkeleton from "../components/bible/BibleTabSkeleton";
+import CommunityTabSkeleton from "../screens/CommunityTabSkeleton";
+import LibraryTabSkeleton from "../screens/library/LibraryTabSkeleton";
 import HomeTabContent from "./HomeTabContent";
 
 const NewUserLoginTour = lazy(
   () => import("../components/loginTour/NewUserLoginTour")
 );
-
-const TabLoadingFallback = () => (
-  <View
-    style={{
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "#FFFFFF",
-    }}
-  >
-    <ActivityIndicator size="large" color="#000" />
-  </View>
-);
+const LibraryScreen = lazy(() => import("../screens/library/LibraryScreen"));
+const CommunityScreen = lazy(() => import("../screens/CommunityScreen"));
+const BibleScreen = lazy(() => import("../screens/BibleScreen"));
 
 const tabList = ["Home", "Community", "Library", "Bible"] as const;
 type MainShellTab = (typeof tabList)[number];
@@ -57,7 +43,7 @@ export default function HomeScreen() {
     if (!tabList.includes(tab as MainShellTab)) return;
     const next = tab as MainShellTab;
     setSelectedTab(next);
-    setMiniPlayerSuppressed(next === "Bible");
+    setMiniPlayerSuppression("bible-tab", next === "Bible");
     setMounted({
       Home: true,
       ...(next !== "Home" ? { [next]: true } : {}),
@@ -65,7 +51,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    return () => setMiniPlayerSuppressed(false);
+    return () => releaseMiniPlayer("bible-tab");
   }, []);
 
   useEffect(() => {
@@ -74,8 +60,10 @@ export default function HomeScreen() {
     }
   }, [defaultTabParam, handleTabChange]);
 
-  // Warm JS chunks so first Community/Library/Bible tap is instant
+  // In Metro/dev, extra import() calls steal the compiler from Home.
+  // Production already has those chunks; prefetch there only.
   useEffect(() => {
+    if (__DEV__) return;
     const task = InteractionManager.runAfterInteractions(() => {
       void import("../screens/CommunityScreen");
       void import("../screens/library/LibraryScreen");
@@ -137,8 +125,8 @@ export default function HomeScreen() {
             ]}
             collapsable={false}
           >
-            <Suspense fallback={<TabLoadingFallback />}>
-              <CommunityScreenWithSuspense embedded />
+            <Suspense fallback={<CommunityTabSkeleton />}>
+              <CommunityScreen embedded />
             </Suspense>
           </View>
         ) : null}
@@ -151,8 +139,8 @@ export default function HomeScreen() {
             ]}
             collapsable={false}
           >
-            <Suspense fallback={<TabLoadingFallback />}>
-              <LibraryScreenWithSuspense embedded />
+            <Suspense fallback={<LibraryTabSkeleton />}>
+              <LibraryScreen embedded />
             </Suspense>
           </View>
         ) : null}
@@ -165,8 +153,8 @@ export default function HomeScreen() {
             ]}
             collapsable={false}
           >
-            <Suspense fallback={<TabLoadingFallback />}>
-              <BibleScreenWithSuspense />
+            <Suspense fallback={<BibleTabSkeleton />}>
+              <BibleScreen />
             </Suspense>
           </View>
         ) : null}

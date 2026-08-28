@@ -81,7 +81,7 @@ export function CategoryTypeSection({
           style={{
             fontSize: getResponsiveFontSize(10, 11, 12),
             color: "#64748B",
-            fontFamily: "Rubik-Regular",
+            fontFamily: "PlusJakartaSans-Regular",
             marginBottom: 8,
           }}
         >

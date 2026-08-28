@@ -105,7 +105,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
         useContentStats,
         useInteractionStore,
         useUserInteraction,
-      } = require("../../../../app/store/useInteractionStore");
+      } = require("@/store/useInteractionStore");
 
       const { toggleLike, toggleSave, recordShare, loadContentStats, comments } =
         useInteractionStore();
@@ -296,7 +296,7 @@ export const UnifiedInteractionButtons: React.FC<UnifiedInteractionButtonsProps>
     color: textColor,
     marginTop: isHorizontal ? 0 : getResponsiveSpacing(2, 4, 6),
     marginLeft: isHorizontal ? getResponsiveSpacing(4, 6, 8) : 0,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   };
 
   const likeColor = finalLikeState

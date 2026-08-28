@@ -121,8 +121,8 @@ export function useSongModalController({
   const { playlists, loadPlaylistsFromBackend } = usePlaylistStore();
 
   const {
-    gesture,
-    modalAnimatedStyle,
+    handleGesture,
+    artworkGesture,
     playlistViewAnimatedStyle,
     playlistDetailAnimatedStyle,
   } = useModalSheetAnimations({
@@ -388,8 +388,8 @@ export function useSongModalController({
     repeatMode,
     isShuffled,
     toggleShuffle,
-    gesture,
-    modalAnimatedStyle,
+    handleGesture,
+    artworkGesture,
     playlistViewAnimatedStyle,
     playlistDetailAnimatedStyle,
     panHandlers: seekGesture.panHandlers,

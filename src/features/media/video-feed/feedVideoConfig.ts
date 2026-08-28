@@ -3,6 +3,9 @@
  * Tuned for device health: Android only has a few hardware decoder slots.
  * Mounting 10+ players (× multiple category panes) hangs the app.
  * Pattern: Mux Slop Social / Tendbble — active + 1 ahead, warm network only beyond that.
+ *
+ * Feed cards are a fixed box (not 9:16 Reels). The player uses contain so
+ * uploaded video is fully visible inside the box instead of cropped.
  */
 export const FEED_VIDEO_PLAYER_HEIGHT = 400;
 /** Footer + bottom margin — keep FlashList row size stable. */
@@ -10,6 +13,10 @@ export const FEED_VIDEO_FOOTER_ESTIMATE = 88;
 export const FEED_VIDEO_CARD_MARGIN = 64;
 export const FEED_VIDEO_ROW_SIZE =
   FEED_VIDEO_PLAYER_HEIGHT + FEED_VIDEO_FOOTER_ESTIMATE + FEED_VIDEO_CARD_MARGIN;
+
+export function getFeedVideoRowSize(): number {
+  return FEED_VIDEO_ROW_SIZE;
+}
 
 /** Real decoder window around the active video. */
 export const FEED_PRELOAD_NEIGHBOR_DISTANCE = 1;

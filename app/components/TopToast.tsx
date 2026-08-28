@@ -80,7 +80,7 @@ export default function TopToast({
             color: "#FFFFFF",
             marginLeft: 8,
             flex: 1,
-            fontFamily: "Rubik-Medium",
+            fontFamily: "PlusJakartaSans-Medium",
             fontSize: 13,
             lineHeight: 18,
           }}

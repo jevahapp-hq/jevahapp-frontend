@@ -58,14 +58,15 @@ export function VideoCardFooter({
   openModal,
   onModalToggle,
 }: VideoCardFooterProps) {
-  const { isVisible: commentsOpen } = useCommentModal();
+  const { isVisible: commentsOpen, isClosing } = useCommentModal();
   if (!video) return null;
+  const hideFooter = commentsOpen || isClosing;
 
   return (
     <View
       className="flex-row items-center justify-between mt-2 px-2"
-      pointerEvents={commentsOpen ? "none" : "box-none"}
-      style={{ opacity: commentsOpen ? 0 : 1 }}
+      pointerEvents={hideFooter ? "none" : "box-none"}
+      style={{ opacity: hideFooter ? 0 : 1 }}
     >
       <View className="flex flex-row items-center" pointerEvents="box-none">
         <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 overflow-hidden">

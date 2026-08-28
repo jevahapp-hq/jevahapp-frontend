@@ -285,7 +285,7 @@ const styles = {
     fontSize: 20,
     fontWeight: "bold" as const,
     color: "#000",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   closeButton: {
     padding: 8,
@@ -321,7 +321,7 @@ const styles = {
     fontSize: 14,
     fontWeight: "600" as const,
     color: "#374151",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   userDetails: {
     flex: 1,
@@ -330,7 +330,7 @@ const styles = {
     fontSize: 16,
     fontWeight: "600" as const,
     color: "#111827",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   postContent: {
     marginBottom: 12,
@@ -339,12 +339,12 @@ const styles = {
     fontSize: 15,
     lineHeight: 22,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   timestamp: {
     fontSize: 12,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "right" as const,
     marginTop: 8,
   },
@@ -368,7 +368,7 @@ const styles = {
   interactionText: {
     fontSize: 14,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginLeft: 4,
   },
   repliesContainer: {
@@ -396,13 +396,13 @@ const styles = {
     fontSize: 12,
     fontWeight: "600" as const,
     color: "#374151",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   replyUserName: {
     fontSize: 14,
     fontWeight: "600" as const,
     color: "#111827",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   replyBubble: {
     maxWidth: "80%",
@@ -423,7 +423,7 @@ const styles = {
     fontSize: 14,
     lineHeight: 20,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   replyTimestamp: {
     flexDirection: "row" as const,
@@ -433,7 +433,7 @@ const styles = {
   replyTimeText: {
     fontSize: 12,
     color: "#9CA3AF",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginRight: 4,
   },
   commentInputContainer: {
@@ -464,13 +464,13 @@ const styles = {
     fontSize: 12,
     fontWeight: "600" as const,
     color: "#374151",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   commentInput: {
     flex: 1,
     fontSize: 15,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     maxHeight: 100,
     paddingVertical: 8,
   },

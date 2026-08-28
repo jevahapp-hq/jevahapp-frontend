@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { FlatList, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ListSkeletonStack } from "../../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
 import SuccessCard from "../../components/SuccessCard";
 import { useVideoNavigation } from "../../hooks/useVideoNavigation";
@@ -155,7 +155,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
       <View className="mx-4 mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
         <View className="flex-row items-center">
           <Ionicons name="warning-outline" size={20} color="#F59E0B" />
-          <Text className="text-yellow-800 text-sm font-rubik ml-2 flex-1">
+          <Text className="text-yellow-800 text-sm font-jakarta ml-2 flex-1">
             {error}
           </Text>
         </View>
@@ -165,26 +165,19 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   const renderEmptyState = () => (
     <View className="flex-1 justify-center items-center py-10">
       <Ionicons name="bookmark-outline" size={48} color="#98A2B3" />
-      <Text className="text-[#98A2B3] text-lg font-rubik-medium mt-4">
+      <Text className="text-[#98A2B3] text-lg font-jakarta-medium mt-4">
         No saved content yet
       </Text>
-      <Text className="text-[#D0D5DD] text-sm font-rubik text-center mt-2 px-6">
+      <Text className="text-[#D0D5DD] text-sm font-jakarta text-center mt-2 px-6">
         Content you save will appear here for easy access
       </Text>
     </View>
   );
 
-  const renderLoadingState = () => (
-    <View className="flex-1 justify-center items-center py-10">
-      <Ionicons name="refresh" size={48} color="#98A2B3" />
-      <Text className="text-[#98A2B3] text-lg font-rubik-medium mt-4">
-        Loading your library...
-      </Text>
-    </View>
-  );
+  const renderLoadingState = () => <ListSkeletonStack rows={6} />;
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white">
       {showSuccessCard && (
         <SuccessCard
           message={successMessage}
@@ -245,6 +238,6 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
         onClose={handlers.closeBook}
         onReadNow={handlers.openBookInPdfViewer}
       />
-    </SafeAreaView>
+    </View>
   );
 }

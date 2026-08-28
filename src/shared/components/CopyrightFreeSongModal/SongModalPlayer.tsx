@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { ImageSourcePropType } from "react-native";
-import { View } from "react-native";
+import { PanResponder, View } from "react-native";
 import { UI_CONFIG } from "@/shared/constants";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { PlayerArtwork } from "./components/PlayerArtwork";
 import { PlayerBackground } from "./components/PlayerBackground";
 import { PlayerHeader } from "./components/PlayerHeader";
@@ -13,11 +14,6 @@ import { usePlayerSeek } from "./hooks/usePlayerSeek";
 
 export interface SongModalPlayerProps {
   song: any;
-  /**
-   * Bottom safe-area inset, applied to the inner content rather than to the
-   * overlay wrapper. Keeps the opaque background edge-to-edge while the
-   * controls stay clear of the system gesture area.
-   */
   bottomInset?: number;
   albumArtSize: number;
   imageSource: ImageSourcePropType | null;
@@ -48,7 +44,12 @@ export interface SongModalPlayerProps {
   onToggleShuffle: () => void;
   onOpenPlaylistView: () => void;
   onShare?: () => void;
-  dismissGesture?: any;
+  handleGesture?: any;
+  artworkGesture?: any;
+}
+
+function minimizePlayer() {
+  useCopyrightFreeOverlayStore.getState().minimize();
 }
 
 export function SongModalPlayer({
@@ -83,7 +84,6 @@ export function SongModalPlayer({
   onToggleShuffle,
   onOpenPlaylistView,
   onShare,
-  dismissGesture,
 }: SongModalPlayerProps) {
   const { durationMs, displayProgress, displayPositionMs } = usePlayerSeek({
     song,
@@ -94,37 +94,72 @@ export function SongModalPlayer({
     audioPosition,
   });
 
-  const header = (
-    <PlayerHeader
-      onClose={onClose}
-      onOptionsPress={onOptionsPress}
-      dismissGesture={dismissGesture}
-    />
+  const dismissPan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_e, g) =>
+          g.dy > 10 && g.dy > Math.abs(g.dx) * 1.2,
+        onPanResponderRelease: (_e, g) => {
+          if (g.dy > 28 || g.vy > 0.6) {
+            minimizePlayer();
+            onClose();
+          }
+        },
+      }),
+    [onClose]
   );
 
-  const body = (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
+  return (
+    <View style={{ flex: 1 }}>
       <PlayerBackground imageSource={imageSource} />
-      {header}
 
-      <View
-        style={{
-          flex: 1,
-          paddingHorizontal: UI_CONFIG.SPACING.LG,
-          paddingTop: UI_CONFIG.SPACING.MD,
-          paddingBottom: UI_CONFIG.SPACING.MD + bottomInset,
-          justifyContent: "center",
-        }}
-      >
-        <View style={{ flexGrow: 1, justifyContent: "center", minHeight: 0 }}>
+      <View style={{ flexGrow: 1, minHeight: 0 }}>
+        <View
+          {...dismissPan.panHandlers}
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            paddingTop: 10,
+            paddingBottom: 4,
+            minHeight: 44,
+          }}
+        >
+          <View
+            style={{
+              width: 48,
+              height: 5,
+              borderRadius: 3,
+              backgroundColor: "rgba(255, 255, 255, 0.45)",
+            }}
+          />
+        </View>
+        <PlayerHeader onClose={onClose} onOptionsPress={onOptionsPress} />
+        <View
+          {...dismissPan.panHandlers}
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            minHeight: 0,
+            overflow: "hidden",
+            paddingHorizontal: UI_CONFIG.SPACING.LG,
+          }}
+        >
           <PlayerArtwork
             imageSource={imageSource}
             albumArtSize={albumArtSize}
             isPlaying={isPlaying}
           />
         </View>
+      </View>
 
-        <View style={{ flexShrink: 0 }}>
+      <View
+        style={{
+          flexShrink: 0,
+          paddingHorizontal: UI_CONFIG.SPACING.LG,
+          paddingBottom: UI_CONFIG.SPACING.MD + bottomInset,
+        }}
+      >
         <PlayerInfo
           title={song.title}
           artist={song.artist}
@@ -162,10 +197,7 @@ export function SongModalPlayer({
           onOpenPlaylistView={onOpenPlaylistView}
           onShare={onShare}
         />
-        </View>
       </View>
     </View>
   );
-
-  return body;
 }

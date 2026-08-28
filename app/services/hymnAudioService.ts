@@ -1,4 +1,4 @@
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 
 export interface HymnAudio {

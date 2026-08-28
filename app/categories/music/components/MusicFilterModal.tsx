@@ -56,7 +56,7 @@ export function MusicFilterModal({
               fontSize: 20,
               fontWeight: "700",
               color: "#1D2939",
-              fontFamily: "Rubik_700Bold",
+              fontFamily: "PlusJakartaSans_700Bold",
               paddingHorizontal: 20,
               marginBottom: 16,
             }}
@@ -84,8 +84,8 @@ export function MusicFilterModal({
                   color: selectedCategory === null ? "#256E63" : "#1D2939",
                   fontFamily:
                     selectedCategory === null
-                      ? "Rubik_600SemiBold"
-                      : "Rubik_400Regular",
+                      ? "PlusJakartaSans_600SemiBold"
+                      : "PlusJakartaSans_400Regular",
                 }}
               >
                 All Categories
@@ -111,8 +111,8 @@ export function MusicFilterModal({
                       selectedCategory === category ? "#256E63" : "#1D2939",
                     fontFamily:
                       selectedCategory === category
-                        ? "Rubik_600SemiBold"
-                        : "Rubik_400Regular",
+                        ? "PlusJakartaSans_600SemiBold"
+                        : "PlusJakartaSans_400Regular",
                   }}
                 >
                   {category}

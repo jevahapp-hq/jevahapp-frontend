@@ -37,11 +37,11 @@ export default function ComingSoonModal({
                   <Ionicons name="sparkles-outline" size={24} color="#256E63" />
                 </View>
 
-                <Text className="text-[18px] font-rubik-semibold text-gray-900 text-center">
+                <Text className="text-[18px] font-jakarta-semibold text-gray-900 text-center">
                   {title}
                 </Text>
 
-                <Text className="text-[13px] font-rubik text-gray-600 text-center mt-2 leading-5">
+                <Text className="text-[13px] font-jakarta text-gray-600 text-center mt-2 leading-5">
                   {description}
                 </Text>
               </View>
@@ -50,7 +50,7 @@ export default function ComingSoonModal({
                 onPress={onClose}
                 className="mt-5 bg-[#256E63] rounded-full py-3 items-center"
               >
-                <Text className="text-white font-rubik-semibold text-[14px]">
+                <Text className="text-white font-jakarta-semibold text-[14px]">
                   Got it
                 </Text>
               </Pressable>

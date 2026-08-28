@@ -24,7 +24,10 @@ export type EditCommentInput = {
 };
 
 export interface CommentModalContextType {
+  /** True while the sheet is on screen */
   isVisible: boolean;
+  /** True from dismiss tap until media has snapped home — HUD/chrome must not hang */
+  isClosing: boolean;
   comments: Comment[];
   isLoadingComments: boolean;
   loadError: string | null;
@@ -46,6 +49,8 @@ export interface CommentModalContextType {
   ) => void;
   /** Re-dock sheet after feed chrome (tabs/header) collapses while open */
   updateCommentMediaLayout: (anchor: CommentMediaAnchor | null) => void;
+  /** Same-frame start of dismiss — hide peek HUD and restore media with the sheet */
+  beginCommentDismiss: () => void;
   hideCommentModal: () => void;
   addComment: (comment: Comment) => void;
   updateComment: (commentId: string, updates: Partial<Comment>) => void;
@@ -67,6 +72,7 @@ export interface CommentModalContextType {
 
 export const COMMENT_MODAL_NOOP: CommentModalContextType = {
   isVisible: false,
+  isClosing: false,
   comments: [],
   isLoadingComments: false,
   loadError: null,
@@ -78,6 +84,7 @@ export const COMMENT_MODAL_NOOP: CommentModalContextType = {
   contentId: undefined,
   showCommentModal: () => {},
   updateCommentMediaLayout: () => {},
+  beginCommentDismiss: () => {},
   hideCommentModal: () => {},
   addComment: () => {},
   updateComment: () => {},

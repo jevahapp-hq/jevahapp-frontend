@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#374151",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   expandButton: {
     padding: 4,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "#4B5563",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   cursor: {
     color: "#FEA74E",
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     color: "#DC2626",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   verseButton: {
     padding: 2,
@@ -365,19 +365,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     marginLeft: 6,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   enhancedDescription: {
     fontSize: 12,
     lineHeight: 16,
     color: "#4B5563",
     fontStyle: "italic",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   contentTypeText: {
     fontSize: 11,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   expandButtonFull: {
     alignItems: "center",
@@ -390,6 +390,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     color: "#6B7280",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
 });

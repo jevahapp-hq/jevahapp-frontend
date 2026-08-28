@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as Share from 'expo-sharing';
 import { useCallback, useState } from 'react';
 import { Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-import { useMediaStore } from '../../store/useUploadStore';
+import { useMediaStore } from '@/store/useUploadStore';
 import { convertToDownloadableItem, useDownloadHandler } from '../../utils/downloadUtils';
 
 interface EbookItem {
@@ -142,7 +142,7 @@ export default function ViewEbook() {
     setModalIndex: (val: number | null) => void
   ) => (
     <View className="mb-6">
-      <Text className="text-[16px] mb-3 font-rubik-semibold text-[#344054] mt-4">
+      <Text className="text-[16px] mb-3 font-jakarta-semibold text-[#344054] mt-4">
         {title}
       </Text>
       <ScrollView
@@ -182,7 +182,7 @@ export default function ViewEbook() {
                 
                 <View className="absolute bottom-2 left-2 right-2">
                   <Text
-                    className="text-white text-start text-[14px] font-rubik-semibold"
+                    className="text-white text-start text-[14px] font-jakarta-semibold"
                     numberOfLines={2}
                   >
                     {item.title}
@@ -202,18 +202,18 @@ export default function ViewEbook() {
                       onPress={() => handleEbookPress(item)}
                       className="py-2 border-b border-gray-200 flex-row items-center justify-between"
                     >
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">View Details</Text>
+                      <Text className="text-[#1D2939] font-jakarta-medium ml-2">View Details</Text>
                       <MaterialIcons name="visibility" size={22} color="#1D2939" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleShare(item)}
                       className="py-2 border-b border-gray-200 flex-row items-center justify-between"
                     >
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">Share</Text>
+                      <Text className="text-[#1D2939] font-jakarta-medium ml-2">Share</Text>
                       <Feather name="send" size={22} color="#1D2939" />
                     </TouchableOpacity>
                     <TouchableOpacity className="flex-row items-center justify-between mt-6">
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">Save to Library</Text>
+                      <Text className="text-[#1D2939] font-jakarta-medium ml-2">Save to Library</Text>
                       <MaterialIcons name="bookmark-border" size={22} color="#1D2939" />
                     </TouchableOpacity>
                     <TouchableOpacity 
@@ -226,7 +226,7 @@ export default function ViewEbook() {
                         }
                       }}
                     >
-                      <Text className="text-[#1D2939] font-rubik-medium ml-2">
+                      <Text className="text-[#1D2939] font-jakarta-medium ml-2">
                         {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
                       </Text>
                       <Ionicons 
@@ -242,7 +242,7 @@ export default function ViewEbook() {
               <View className="mt-2 flex flex-col w-full">
                 <View className="flex flex-row justify-between items-center">
                   <Text
-                    className="text-[12px] text-[#98A2B3] font-rubik-medium flex-1"
+                    className="text-[12px] text-[#98A2B3] font-jakarta-medium flex-1"
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
@@ -257,7 +257,7 @@ export default function ViewEbook() {
                 </View>
                 <View className="flex-row items-center mt-1">
                   <MaterialIcons name="visibility" size={16} color="#98A2B3" />
-                  <Text className="text-[10px] text-[#98A2B3] ml-2 font-rubik">
+                  <Text className="text-[10px] text-[#98A2B3] ml-2 font-jakarta">
                     {item.views || 0} views
                   </Text>
                 </View>
@@ -273,10 +273,10 @@ export default function ViewEbook() {
   if (processedEbooks.length === 0) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
-        <Text className="text-[#344054] text-lg font-rubik-semibold mb-2">
+        <Text className="text-[#344054] text-lg font-jakarta-semibold mb-2">
           No Ebooks Available
         </Text>
-        <Text className="text-[#667085] text-sm font-rubik text-center px-8">
+        <Text className="text-[#667085] text-sm font-jakarta text-center px-8">
           Upload PDF ebooks through the upload section to see them here.
         </Text>
       </View>

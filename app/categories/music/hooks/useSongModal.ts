@@ -1,4 +1,4 @@
-import { useCopyrightFreeOverlayStore } from "../../../store/useCopyrightFreeOverlayStore";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 
 export function useSongModal() {
   const openSongPlayer = (item: any) => {

@@ -3,7 +3,7 @@
  * It never creates its own expo-av Sound.
  */
 import { useCallback, useState } from "react";
-import { useGlobalAudioPlayerStore } from "../../../../../../app/store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import {
   mapMediaItemToTrack,
   resolveMediaAudioUrl,

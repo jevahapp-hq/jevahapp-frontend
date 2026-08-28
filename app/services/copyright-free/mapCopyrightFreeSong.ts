@@ -63,7 +63,7 @@ export function mapCopyrightFreeSong(raw: any): MappedCopyrightFreeSong {
     raw?.artistName ?? raw?.artist ?? raw?.singer ?? raw?.speaker ?? ""
   );
   const likeCount = num(raw?.likeCount, raw?.likes);
-  const viewCount = Math.max(num(raw?.viewCount, raw?.views), likeCount);
+  const viewCount = num(raw?.viewCount, raw?.views);
   const duration = resolveDurationSec(raw);
   const isInLibrary = Boolean(
     raw?.isInLibrary ?? raw?.isSaved ?? raw?.bookmarked ?? false

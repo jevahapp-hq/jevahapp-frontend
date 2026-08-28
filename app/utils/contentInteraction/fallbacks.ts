@@ -8,7 +8,7 @@ export async function syncWithLibraryStore(
   isSaved: boolean
 ): Promise<void> {
   try {
-    const { useLibraryStore } = await import("../../store/useLibraryStore");
+    const { useLibraryStore } = await import("@/store/useLibraryStore");
     const libraryStore = useLibraryStore.getState();
 
     if (isSaved) {

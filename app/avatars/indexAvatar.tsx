@@ -355,7 +355,7 @@ const AvatarSelection = () => {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text className="text-[32px] font-rubik-bold text-[#1D2939] w-[333px] mt-6">
+        <Text className="text-[32px] font-jakarta-bold text-[#1D2939] w-[333px] mt-6">
           Pick an Avatar
         </Text>
 
@@ -370,7 +370,7 @@ const AvatarSelection = () => {
               onPress={() => setActiveTab(tab)}
             >
               <Text
-                className={`text-[12px] font-rubik-medium mt-1 ${
+                className={`text-[12px] font-jakarta-medium mt-1 ${
                   activeTab === tab ? "text-white" : "text-[#667085]"
                 }`}
               >
@@ -416,7 +416,7 @@ const AvatarSelection = () => {
         </TouchableOpacity>
         <TouchableOpacity className="mt-6 items-center"
          onPress={() => router.push("/categories/HomeScreen")}>
-          <Text className="text-[#344054] text-[14px] font-rubik-medium">
+          <Text className="text-[#344054] text-[14px] font-jakarta-medium">
             Skip this
           </Text>
         </TouchableOpacity>
@@ -631,7 +631,7 @@ export default AvatarSelection;
 //         }}
 //         showsVerticalScrollIndicator={false}
 //       >
-//         <Text className="text-[32px] font-rubik-bold text-[#1D2939] w-[333px] mt-6">
+//         <Text className="text-[32px] font-jakarta-bold text-[#1D2939] w-[333px] mt-6">
 //           Pick an Avatar
 //         </Text>
 
@@ -646,7 +646,7 @@ export default AvatarSelection;
 //               onPress={() => setActiveTab(tab)}
 //             >
 //               <Text
-//                 className={`text-[12px] font-rubik-medium mt-1 ${
+//                 className={`text-[12px] font-jakarta-medium mt-1 ${
 //                   activeTab === tab ? "text-white" : "text-[#667085]"
 //                 }`}
 //               >
@@ -686,7 +686,7 @@ export default AvatarSelection;
 //           <Text className="text-white font-semibold">Use Avatar</Text>
 //         </TouchableOpacity>
 //         <TouchableOpacity className="mt-6 items-center">
-//           <Text className="text-[#344054] text-[14px] font-rubik-medium">
+//           <Text className="text-[#344054] text-[14px] font-jakarta-medium">
 //             Skip this
 //           </Text>
 //         </TouchableOpacity>

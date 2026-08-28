@@ -76,7 +76,7 @@ export function AiDescriptionBlock({
                   style={{
                     fontSize: getResponsiveFontSize(13, 14, 15),
                     color: "#DF930E",
-                    fontFamily: "Rubik-Medium",
+                    fontFamily: "PlusJakartaSans-Medium",
                   }}
                 >
                   Analyzing content...
@@ -94,7 +94,7 @@ export function AiDescriptionBlock({
                   style={{
                     fontSize: getResponsiveFontSize(13, 14, 15),
                     color: "#94a3b8",
-                    fontFamily: "Rubik-Medium",
+                    fontFamily: "PlusJakartaSans-Medium",
                   }}
                 >
                   {!title
@@ -116,7 +116,7 @@ export function AiDescriptionBlock({
                   style={{
                     fontSize: getResponsiveFontSize(13, 14, 15),
                     color: "#DF930E",
-                    fontFamily: "Rubik-Medium",
+                    fontFamily: "PlusJakartaSans-Medium",
                   }}
                 >
                   Generate Description with AI
@@ -140,7 +140,7 @@ export function AiDescriptionBlock({
             style={{
               fontSize: getResponsiveFontSize(11, 12, 13),
               color: "#475569",
-              fontFamily: "Rubik-Medium",
+              fontFamily: "PlusJakartaSans-Medium",
               marginBottom: 6,
             }}
           >
@@ -152,7 +152,7 @@ export function AiDescriptionBlock({
               style={{
                 fontSize: getResponsiveFontSize(11, 12, 13),
                 color: "#64748b",
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
                 marginLeft: 8,
                 marginBottom: 4,
               }}
@@ -191,7 +191,7 @@ export function AiDescriptionBlock({
                 descriptionGenerationError.includes("limitations")
                   ? "#92400e"
                   : "#991b1b",
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
             }}
           >
             {descriptionGenerationError}

@@ -1,4 +1,4 @@
-import { useLibraryStore } from "../store/useLibraryStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 
 export interface CopyrightFreeSong {
   id: string;

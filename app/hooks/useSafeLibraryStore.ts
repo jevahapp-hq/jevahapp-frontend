@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLibraryStore } from "../store/useLibraryStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 
 interface SafeLibraryStore {
   isItemSaved: (itemId: string) => boolean;

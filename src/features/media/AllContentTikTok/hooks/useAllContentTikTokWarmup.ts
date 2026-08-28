@@ -10,10 +10,14 @@ import { prefetchVideoUrls } from "../../../../shared/utils/videoPrefetch";
 import { getVideoUrlFromMedia } from "../../../../shared/utils/videoUrlManager";
 
 /** Warm posters + video heads. Lite: first screen on disk; no extra players. */
-export function useAllContentTikTokWarmup(filteredMediaList: MediaItem[]) {
+export function useAllContentTikTokWarmup(
+  filteredMediaList: MediaItem[],
+  isFeedActive = true
+) {
   const warmedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!isFeedActive) return;
     if (filteredMediaList.length === 0) return;
     const headId = String(
       filteredMediaList[0]?._id || (filteredMediaList[0] as any)?.id || ""
@@ -28,7 +32,7 @@ export function useAllContentTikTokWarmup(filteredMediaList: MediaItem[]) {
       .map((item) => getVideoUrlFromMedia(item))
       .filter(Boolean) as string[];
     if (urls.length) prefetchVideoUrls(urls);
-  }, [filteredMediaList]);
+  }, [filteredMediaList, isFeedActive]);
 
   const feedFirstPaintMarkedRef = useRef(false);
   useEffect(() => {

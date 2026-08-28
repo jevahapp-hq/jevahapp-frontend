@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { useContentCacheStore } from "../../../app/store/useContentCacheStore";
+import { useContentCacheStore } from "@/store/useContentCacheStore";
 import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
 import { mediaApi } from "../../core/api/MediaApi";
 import {
@@ -10,9 +10,15 @@ import {
 } from "../config/feedCachePolicy";
 import type { ContentFilter, MediaItem } from "../types";
 import { transformApiResponseToMediaItem } from "../utils";
+import { normalizeListContentType } from "./fetchAllContentPage";
 import { syncMediaStatsToInteractionStore } from "./syncMediaStats";
 
 const EMPTY_MEDIA_LIST: MediaItem[] = [];
+
+function apiDefaultContentType(contentType?: string): string | undefined {
+  const n = normalizeListContentType(contentType || "ALL");
+  return n === "ALL" ? undefined : n;
+}
 
 export function useDefaultContentQuery(options: {
   enabled: boolean;
@@ -34,7 +40,7 @@ export function useDefaultContentQuery(options: {
       const response = await mediaApi.getDefaultContent({
         page,
         limit,
-        contentType: contentType !== "ALL" ? contentType : undefined,
+        contentType: apiDefaultContentType(contentType),
       });
 
       if (!response.success) {
@@ -108,7 +114,9 @@ export function useDefaultContentQuery(options: {
       const filter: ContentFilter = {
         page: params?.page || page,
         limit: params?.limit || limit,
-        contentType: params?.contentType || contentType,
+        contentType: apiDefaultContentType(
+          params?.contentType || contentType
+        ),
         search: params?.search,
       };
 

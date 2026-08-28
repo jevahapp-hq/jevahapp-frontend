@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: getResponsiveFontSize(11, 12, 13),
     color: "#64748B",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     lineHeight: 17,
   },
 });

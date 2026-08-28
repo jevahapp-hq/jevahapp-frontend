@@ -78,7 +78,7 @@ export default function AuthHeader({
 
           {/* Center - Title */}
           <View className="flex-1 items-center">
-            <Text className="text-[17px] font-rubik-semibold text-[#3B3B3B] text-center">
+            <Text className="text-[17px] font-jakarta-bold text-[#3B3B3B] text-center">
               {title}
             </Text>
           </View>

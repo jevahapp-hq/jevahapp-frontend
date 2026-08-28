@@ -20,7 +20,7 @@ export function useEbookViewTracking(contentId: string) {
     try {
       const {
         useInteractionStore,
-      } = require("../../../../../../app/store/useInteractionStore");
+      } = require("@/store/useInteractionStore");
       storeRef.current = useInteractionStore.getState();
     } catch {
       // ignore

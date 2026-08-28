@@ -206,7 +206,7 @@ export default function MediaDetailsModal({
                 fontSize: 18,
                 fontWeight: "600",
                 color: "#1D2939",
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 flex: 1,
                 marginRight: 12,
               }}
@@ -260,7 +260,7 @@ export default function MediaDetailsModal({
                 style={{
                   fontSize: 11,
                   color: "#4F46E5",
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                 }}
               >
                 {displayContentType.toUpperCase()}
@@ -281,7 +281,7 @@ export default function MediaDetailsModal({
                 style={{
                   fontSize: 11,
                   color: "#166534",
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                 }}
               >
                 By {displaySpeaker}
@@ -303,7 +303,7 @@ export default function MediaDetailsModal({
                   style={{
                     fontSize: 11,
                     color: "#4B5563",
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                   }}
                 >
                   {createdLabel}
@@ -328,7 +328,7 @@ export default function MediaDetailsModal({
                       marginLeft: 4,
                       fontSize: 12,
                       color: "#4B5563",
-                      fontFamily: "Rubik",
+                      fontFamily: "PlusJakartaSans",
                     }}
                   >
                     {displayViews} views
@@ -343,7 +343,7 @@ export default function MediaDetailsModal({
                       marginLeft: 4,
                       fontSize: 12,
                       color: "#4B5563",
-                      fontFamily: "Rubik",
+                      fontFamily: "PlusJakartaSans",
                     }}
                   >
                     {displayLikes} likes
@@ -363,7 +363,7 @@ export default function MediaDetailsModal({
               style={{
                 fontSize: 13,
                 color: "#4B5563",
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 lineHeight: 18,
               }}
             >

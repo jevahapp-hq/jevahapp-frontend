@@ -108,7 +108,7 @@ export default function SermonVideoCard({
                 size={30}
                 color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
               />
-              <Text className="text-[10px] text-white font-rubik-semibold">
+              <Text className="text-[10px] text-white font-jakarta-semibold">
                 {globalFavoriteCounts[key] || 0}
               </Text>
             </TouchableOpacity>
@@ -119,7 +119,7 @@ export default function SermonVideoCard({
               activeOpacity={0.7}
             >
               <Ionicons name="chatbubble-sharp" size={30} color="white" />
-              <Text className="text-[10px] text-white font-rubik-semibold">
+              <Text className="text-[10px] text-white font-jakarta-semibold">
                 {stats.comment === 1
                   ? (video.comment ?? 0) + 1
                   : video.comment ?? 0}
@@ -134,7 +134,7 @@ export default function SermonVideoCard({
                 size={30}
                 color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
               />
-              <Text className="text-[10px] text-white font-rubik-semibold">
+              <Text className="text-[10px] text-white font-jakarta-semibold">
                 {stats.saved === 1
                   ? (video.saved ?? 0) + 1
                   : video.saved ?? 0}
@@ -171,12 +171,12 @@ export default function SermonVideoCard({
             </View>
             <View className="ml-3">
               <View className="flex-row items-center">
-                <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
+                <Text className="ml-1 text-[13px] font-jakarta-semibold text-[#344054] mt-1">
                   {getUserDisplayNameFromContent(video)}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {getTimeAgo(video.createdAt)}
                   </Text>
                 </View>
@@ -184,7 +184,7 @@ export default function SermonVideoCard({
               <View className="flex-row mt-2">
                 <View className="flex-row items-center">
                   <AntDesign name="eye" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 mt-1 font-jakarta">
                     {stats.views ?? video.views ?? 0}
                   </Text>
                 </View>
@@ -193,7 +193,7 @@ export default function SermonVideoCard({
                   className="flex-row items-center ml-4"
                 >
                   <Feather name="send" size={24} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {stats.sheared ?? video.sheared ?? 0}
                   </Text>
                 </TouchableOpacity>
@@ -217,7 +217,7 @@ export default function SermonVideoCard({
             </TouchableWithoutFeedback>
             <View className="absolute bottom-24 right-16 bg-white shadow-md rounded-lg p-3 z-50 w-[170px] h-[140]">
               <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                <Text className="text-[#1D2939] font-rubik ml-2">
+                <Text className="text-[#1D2939] font-jakarta ml-2">
                   View Details
                 </Text>
                 <Ionicons name="eye-outline" size={22} color="#1D2939" />
@@ -226,14 +226,14 @@ export default function SermonVideoCard({
                 onPress={() => handleShare(modalKey, video)}
                 className="py-2 border-b border-gray-200 flex-row items-center justify-between"
               >
-                <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
+                <Text className="text-[#1D2939] font-jakarta ml-2">Share</Text>
                 <Feather name="send" size={22} color="#1D2939" />
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center justify-between mt-6"
                 onPress={() => handleSave(modalKey, video)}
               >
-                <Text className="text-[#1D2939] font-rubik ml-2">
+                <Text className="text-[#1D2939] font-jakarta ml-2">
                   Save to Library
                 </Text>
                 <MaterialIcons name="bookmark-border" size={22} color="#1D2939" />

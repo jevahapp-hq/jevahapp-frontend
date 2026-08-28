@@ -57,7 +57,7 @@ export function EligibilityBanner({
           style={{
             flex: 1,
             fontSize: getResponsiveFontSize(13, 14, 15),
-            fontFamily: "Rubik-SemiBold",
+            fontFamily: "PlusJakartaSans-SemiBold",
             color: isValid ? "#166534" : "#92400E",
           }}
         >
@@ -87,7 +87,7 @@ export function EligibilityBanner({
                   flex: 1,
                   fontSize: getResponsiveFontSize(12, 13, 14),
                   lineHeight: 18,
-                  fontFamily: "Rubik-Regular",
+                  fontFamily: "PlusJakartaSans-Regular",
                   color: "#78350F",
                 }}
               >
@@ -106,7 +106,7 @@ export function EligibilityBanner({
               style={{
                 fontSize: getResponsiveFontSize(11, 12, 13),
                 color: "#64748B",
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
                 marginBottom: 4,
               }}
             >

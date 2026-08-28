@@ -9,6 +9,44 @@ import {
 import type { BibleBook, BibleChapter, BibleVerse } from "./bibleApiService";
 import { DEFAULT_TRANSLATION_ID } from "./bibleTranslations";
 
+/**
+ * Scripture text for a given translation is immutable, so a cache hit is
+ * revalidated rarely rather than on every read.
+ */
+export const BIBLE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function stampKey(key: string) {
+  return `bible_fetched_at:${key}`;
+}
+
+function markFetched(key: string): void {
+  mmkvSetJson(stampKey(key), Date.now());
+}
+
+function isFresh(key: string): boolean {
+  const at = mmkvGetJson<number>(stampKey(key));
+  return typeof at === "number" && Date.now() - at < BIBLE_CACHE_TTL_MS;
+}
+
+export function areBooksFresh(translationId?: string): boolean {
+  return isFresh(booksKey(translationId));
+}
+
+export function areChaptersFresh(
+  bookName: string,
+  translationId?: string
+): boolean {
+  return isFresh(chaptersKey(bookName, translationId));
+}
+
+export function areVersesFresh(
+  bookName: string,
+  chapterNumber: number,
+  translationId?: string
+): boolean {
+  return isFresh(versesKey(bookName, chapterNumber, translationId));
+}
+
 function lastReadKey(translationId?: string) {
   return `bible_last_read_v2:${tid(translationId)}`;
 }
@@ -50,7 +88,10 @@ export function setCachedBooks(
   books: BibleBook[],
   translationId?: string
 ): void {
-  if (books?.length) mmkvSetJson(booksKey(translationId), books);
+  if (books?.length) {
+    mmkvSetJson(booksKey(translationId), books);
+    markFetched(booksKey(translationId));
+  }
 }
 
 export function getCachedChapters(
@@ -70,6 +111,7 @@ export function setCachedChapters(
 ): void {
   if (chapters?.length) {
     mmkvSetJson(chaptersKey(bookName, translationId), chapters);
+    markFetched(chaptersKey(bookName, translationId));
   }
 }
 
@@ -92,6 +134,7 @@ export function setCachedVerses(
 ): void {
   if (verses?.length) {
     mmkvSetJson(versesKey(bookName, chapterNumber, translationId), verses);
+    markFetched(versesKey(bookName, chapterNumber, translationId));
   }
 }
 

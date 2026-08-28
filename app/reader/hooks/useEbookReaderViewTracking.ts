@@ -56,7 +56,7 @@ export function useEbookReaderViewTracking(options: {
         try {
           const {
             useInteractionStore,
-          } = require("../../store/useInteractionStore");
+          } = require("@/store/useInteractionStore");
           if (result?.totalViews != null) {
             useInteractionStore.getState().mutateStats?.(id, () => ({
               views: Number(result.totalViews) || 0,

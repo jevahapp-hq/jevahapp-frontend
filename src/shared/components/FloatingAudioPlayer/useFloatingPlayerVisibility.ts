@@ -1,122 +1,43 @@
 import { usePathname, useSegments } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated } from "react-native";
+import { useMemo, useSyncExternalStore } from "react";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
+import type { AudioTrack } from "@/store/useGlobalAudioPlayerStore";
 import {
   isMiniPlayerSuppressed,
   subscribeMiniPlayerGate,
 } from "../../audio/miniPlayerGate";
-import type { AudioTrack } from "../../../../app/store/useGlobalAudioPlayerStore";
+import { isRouteHostileToMiniPlayer } from "./miniPlayerRoutePolicy";
 
 type Params = {
   currentTrack: AudioTrack | null;
-  stop: () => void;
+  isSessionActive: boolean;
 };
 
-/**
- * Route-based mini-player visibility. Avoids Clerk `useAuth()` here —
- * that hook fires telemetry on every render and can spam
- * "[clerk/telemetry] Value is a number, expected an Object" in RN.
- */
-export function useFloatingPlayerVisibility({ currentTrack, stop }: Params) {
+function useSuppressed(): boolean {
+  return useSyncExternalStore(
+    subscribeMiniPlayerGate,
+    isMiniPlayerSuppressed,
+    isMiniPlayerSuppressed
+  );
+}
+
+export function useFloatingPlayerVisibility({
+  currentTrack,
+  isSessionActive,
+}: Params) {
   const pathname = usePathname();
   const segments = useSegments();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(100)).current;
-  const [bibleTabHidden, setBibleTabHidden] = useState(isMiniPlayerSuppressed());
+  const suppressed = useSuppressed();
+  const overlayCovered = useCopyrightFreeOverlayStore(
+    (s) => s.surface === "full"
+  );
 
-  useEffect(() => subscribeMiniPlayerGate(() => {
-    setBibleTabHidden(isMiniPlayerSuppressed());
-  }), []);
+  const shouldMountPlayer = useMemo(() => {
+    if (suppressed) return false;
+    if (!isSessionActive) return false;
+    if (!currentTrack) return false;
+    return !isRouteHostileToMiniPlayer(pathname, segments);
+  }, [pathname, segments, currentTrack, isSessionActive, suppressed]);
 
-  const shouldShowPlayer = useMemo(() => {
-    if (bibleTabHidden) return false;
-    const authRouteSegments = [
-      "auth",
-      "login",
-      "signup",
-      "sign-in",
-      "sign-up",
-      "onboarding",
-      "welcome",
-    ];
-    const authRoutePaths = [
-      "/auth",
-      "/login",
-      "/signup",
-      "/sign-in",
-      "/sign-up",
-      "/onboarding",
-      "/welcome",
-    ];
-
-    const isAuthRoute =
-      authRoutePaths.some((route) => pathname?.startsWith(route)) ||
-      segments.some((seg) => authRouteSegments.includes(seg.toLowerCase()));
-
-    if (
-      (pathname as any) === "/" ||
-      (pathname as any) === "/index" ||
-      (segments as any).length === 0 ||
-      ((segments as any).length === 1 && (segments as any)[0] === "index")
-    ) {
-      return false;
-    }
-
-    if (isAuthRoute) {
-      return false;
-    }
-
-    const bibleRouteSegments = [
-      "bible",
-      "biblescreen",
-      "bibleonboarding",
-      "reader",
-    ];
-    const inBibleRoute = segments.some((seg) =>
-      bibleRouteSegments.includes(seg.toLowerCase())
-    );
-    if (inBibleRoute) {
-      return false;
-    }
-
-    if (pathname?.startsWith("/categories/upload")) {
-      return false;
-    }
-
-    // Show whenever a track is loaded (auth is enforced elsewhere)
-    return !!currentTrack;
-  }, [pathname, segments, currentTrack, bibleTabHidden]);
-
-  useEffect(() => {
-    if (currentTrack && shouldShowPlayer) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 100,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [currentTrack, shouldShowPlayer, segments, stop, fadeAnim, slideAnim]);
-
-  return { shouldShowPlayer, fadeAnim, slideAnim };
+  return { shouldMountPlayer, overlayCovered };
 }

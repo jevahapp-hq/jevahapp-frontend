@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
-import VerifyEmail from "./verifyEmail";
+import VerifyEmail from "../components/auth/VerifyEmailSheet";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp } = useSignUp();
@@ -187,7 +187,7 @@ export default function SignUpScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View className="flex flex-col justify-center items-start h-[140px] w-[333px] mt-2 bg-[#FCFCFD]">
-            <Text className="font-rubik-semibold text-[#1D2939] text-star text-[40px]">
+            <Text className="font-jakarta-extrabold text-[#1D2939] text-left text-[40px]">
               Welcome to the {"\n"}family!{" "}
               <Image
                 source={{
@@ -197,7 +197,7 @@ export default function SignUpScreen() {
                 resizeMode="contain"
               />
             </Text>
-            <Text className="mt-2 font-rubik text-[15px] w-full text-[#344054] text-start">
+            <Text className="mt-2 font-jakarta text-[15px] w-full text-[#344054] text-start">
               Sign up with your email. We promise no spam, just blessings.
             </Text>
           </View>
@@ -332,7 +332,7 @@ export default function SignUpScreen() {
                   solid={acceptedTerms}
                 />
               </TouchableOpacity>
-              <Text className="flex-1 text-[#344054] text-[13px] font-rubik leading-5 text-left pt-[2px]">
+              <Text className="flex-1 text-[#344054] text-[13px] font-jakarta leading-5 text-left pt-[2px]">
                 I agree to the{" "}
                 <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/terms")}>Terms of Service</Text>,{" "}
                 <Text className="font-bold underline text-[#FEA74E]" onPress={() => router.push("/legal/privacy")}>Privacy Policy</Text>, and{" "}
@@ -355,14 +355,14 @@ export default function SignUpScreen() {
               {isLoading ? (
                 <>
                   <ActivityIndicator size="small" color="white" />
-                  <Text className="text-white text-center font-rubik ml-2">Signing Up...</Text>
+                  <Text className="text-white text-center font-jakarta-semibold ml-2">Signing Up...</Text>
                 </>
               ) : (
-                <Text className="text-white text-center font-rubik">Sign Up</Text>
+                <Text className="text-white text-center font-jakarta-semibold">Sign Up</Text>
               )}
             </TouchableOpacity>
 
-            <Text className="text-1xl font-semibold mt-8">
+            <Text className="text-1xl font-jakarta-bold mt-8 text-[#1D2939]">
               ALREADY HAVE AN ACCOUNT?
             </Text>
 
@@ -373,7 +373,7 @@ export default function SignUpScreen() {
               accessibilityRole="button"
               accessibilityLabel="Sign in"
             >
-              <Text className="text-[#344054] text-sm font-medium">
+              <Text className="text-[#344054] text-sm font-jakarta-semibold">
                 Sign In
               </Text>
             </TouchableOpacity>

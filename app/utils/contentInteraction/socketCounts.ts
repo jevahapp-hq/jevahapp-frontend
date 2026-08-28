@@ -2,7 +2,7 @@
  * Live engagement counts from sockets.
  * Rule: sockets may update global counts only — never flip *my* liked/saved.
  */
-import { useInteractionStore } from "../../store/useInteractionStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 
 export type LiveCountPayload = {
   contentId?: string;

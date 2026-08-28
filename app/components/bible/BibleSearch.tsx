@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#1F2937",
   },
   clearButton: {
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 14,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#374151",
   },
   filterButtons: {
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: 12,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#6B7280",
   },
   activeFilterButtonText: {
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   },
   resultsCount: {
     fontSize: 14,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#6B7280",
   },
   resultsList: {
@@ -552,12 +552,12 @@ const styles = StyleSheet.create({
   },
   reference: {
     fontSize: 14,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#256E63",
   },
   verseText: {
     fontSize: 16,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#1F2937",
     lineHeight: 24,
   },
@@ -569,14 +569,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#6B7280",
     marginTop: 16,
     textAlign: "center",
   },
   emptySubtext: {
     fontSize: 14,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#9CA3AF",
     marginTop: 8,
     textAlign: "center",
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
   },
   interpretationText: {
     fontSize: 14,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#1F2937",
     fontStyle: "italic",
   },
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   },
   suggestionsLabel: {
     fontSize: 14,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#374151",
     marginBottom: 8,
   },
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     fontSize: 12,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#256E63",
   },
   referenceContainer: {
@@ -645,12 +645,12 @@ const styles = StyleSheet.create({
   },
   testamentBadgeText: {
     fontSize: 10,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#374151",
   },
   relevanceScore: {
     fontSize: 11,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#6B7280",
   },
   highlightedText: {
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
   },
   explanation: {
     fontSize: 12,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     fontStyle: "italic",
     marginTop: 6,

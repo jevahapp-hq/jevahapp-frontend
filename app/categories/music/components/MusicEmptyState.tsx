@@ -1,11 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-  ActivityIndicator,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import type { MusicLane } from "../MusicLaneTabs";
+import { MusicCatalogSkeleton } from "./MusicCatalogSkeleton";
 
 type MusicEmptyStateProps = {
   loading: boolean;
@@ -21,27 +17,7 @@ export function MusicEmptyState({
   onBecomeCreator,
 }: MusicEmptyStateProps) {
   if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#256E63" />
-        <Text
-          style={{
-            marginTop: 12,
-            fontSize: 14,
-            color: "#98A2B3",
-            fontFamily: "Rubik_400Regular",
-          }}
-        >
-          Loading songs...
-        </Text>
-      </View>
-    );
+    return <MusicCatalogSkeleton showDiscover={false} rows={8} />;
   }
 
   if (error) {
@@ -60,7 +36,7 @@ export function MusicEmptyState({
             marginTop: 12,
             fontSize: 16,
             color: "#98A2B3",
-            fontFamily: "Rubik_400Regular",
+            fontFamily: "PlusJakartaSans_400Regular",
             textAlign: "center",
           }}
         >
@@ -85,7 +61,7 @@ export function MusicEmptyState({
           marginTop: 12,
           fontSize: 16,
           color: "#98A2B3",
-          fontFamily: "Rubik_400Regular",
+          fontFamily: "PlusJakartaSans_400Regular",
           textAlign: "center",
         }}
       >
@@ -96,7 +72,7 @@ export function MusicEmptyState({
           <Text
             style={{
               color: "#0A332D",
-              fontFamily: "Rubik_500Medium",
+              fontFamily: "PlusJakartaSans_500Medium",
               fontSize: 14,
             }}
           >

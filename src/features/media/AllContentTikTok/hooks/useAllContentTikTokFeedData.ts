@@ -3,9 +3,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { InteractionManager } from "react-native";
-import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
-import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 import { getPersistedStats, getViewed } from "../../../../../app/utils/persistentStorage";
+import { getLiteStatsHydrateCount, isLiteProfileActive } from "../../../../shared/lite/liteProfile";
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import {
   categorizeContent,
@@ -16,6 +17,8 @@ import {
 export interface UseAllContentTikTokFeedDataParams {
   mediaList: MediaItem[];
   contentType: ContentType | "ALL";
+  /** Caller already curated this tab's list — don't filter by type again. */
+  skipTypeFilter?: boolean;
   setPreviouslyViewed: (v: any[]) => void;
   setIsLoadingContent: (v: boolean) => void;
 }
@@ -26,6 +29,7 @@ export function useAllContentTikTokFeedData(
   const {
     mediaList,
     contentType,
+    skipTypeFilter = false,
     setPreviouslyViewed,
     setIsLoadingContent,
   } = params;
@@ -33,7 +37,9 @@ export function useAllContentTikTokFeedData(
   const libraryStore = useLibraryStore();
 
   const filteredMediaList = useMemo(() => {
-    const filtered = filterContentByType(mediaList, contentType);
+    const filtered = skipTypeFilter
+      ? mediaList
+      : filterContentByType(mediaList, contentType);
     // Dedupe by id — duplicate rows silently disappear in FlashList under
     // Coming Soon (same key twice → later cells dropped).
     const seen = new Set<string>();
@@ -45,7 +51,7 @@ export function useAllContentTikTokFeedData(
       unique.push(item);
     }
     return unique;
-  }, [mediaList, contentType]);
+  }, [mediaList, contentType, skipTypeFilter]);
 
   const categorizedContent = useMemo(
     () => categorizeContent(filteredMediaList),
@@ -105,7 +111,10 @@ export function useAllContentTikTokFeedData(
 
   // Hydrate liked/saved from feed
   useEffect(() => {
-    const items = (filteredMediaList || []).slice(0, 50);
+    const items = (filteredMediaList || []).slice(
+      0,
+      isLiteProfileActive() ? 12 : 50
+    );
     if (items.length === 0) return;
     const withInteractions = items
       .filter((i) => i._id && (i.hasLiked === true || i.hasBookmarked === true))
@@ -123,7 +132,7 @@ export function useAllContentTikTokFeedData(
 
   // Load content stats (runs async, doesn't block rendering)
   useEffect(() => {
-    const items = (filteredMediaList || []).slice(0, 16);
+    const items = (filteredMediaList || []).slice(0, getLiteStatsHydrateCount());
     if (items.length === 0) return;
     const ids = items.map((i) => i._id).filter(Boolean) as string[];
     InteractionManager.runAfterInteractions(async () => {

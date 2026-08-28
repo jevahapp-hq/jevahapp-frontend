@@ -206,15 +206,16 @@ export const useNotifications = (): UseNotificationsReturn => {
         });
 
         // Emit to socket for real-time updates
-        if (socket) {
-          socket.emit("mark_notification_read", notificationId);
-        }
+        getSharedNotificationSocket()?.emit(
+          "mark_notification_read",
+          notificationId
+        );
       } catch (error) {
         console.error("Error marking notification as read:", error);
         throw error;
       }
     },
-    [socket, queryClient]
+    [queryClient]
   );
 
   // Mark all notifications as read
@@ -247,15 +248,12 @@ export const useNotifications = (): UseNotificationsReturn => {
         };
       });
 
-      // Emit to socket for real-time updates
-      if (socket) {
-        socket.emit("mark_all_notifications_read");
-      }
+      getSharedNotificationSocket()?.emit("mark_all_notifications_read");
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
       throw error;
     }
-  }, [socket, queryClient]);
+  }, [queryClient]);
 
   // Refresh notifications using React Query
   const refreshNotifications = useCallback(async () => {

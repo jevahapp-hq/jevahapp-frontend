@@ -7,6 +7,7 @@ import { StatusBar, View } from "react-native";
 import { FlatList } from "react-native-gesture-handler";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
+import { ReelsDescriptionEditor } from "./components/ReelsDescriptionEditor";
 import { ReelsErrorView } from "./components/ReelsErrorView";
 import { ReelsModals } from "./components/ReelsModals";
 import { ReelsVideoItem } from "./components/ReelsVideoItem";
@@ -93,6 +94,8 @@ const ReelsView = () => {
             checkIfDownloaded={o.checkIfDownloaded}
             currentUser={o.currentUser}
             getAvatarUrl={o.getAvatarUrl}
+            canEditDescription={o.descriptionEdit.canEdit}
+            onEditDescription={o.descriptionEdit.openEditor}
           />
         </View>
       );
@@ -165,6 +168,15 @@ const ReelsView = () => {
         getResponsiveSpacing={o.responsive.getResponsiveSpacing}
         getResponsiveSize={o.responsive.getResponsiveSize}
         getTouchTargetSize={o.responsive.getTouchTargetSize}
+      />
+
+      <ReelsDescriptionEditor
+        visible={o.descriptionEdit.isEditing}
+        initialValue={String(o.current.currentVideo?.description || "")}
+        isSaving={o.descriptionEdit.isSaving}
+        error={o.descriptionEdit.error}
+        onCancel={o.descriptionEdit.closeEditor}
+        onSubmit={o.descriptionEdit.submit}
       />
     </ErrorBoundary>
   );

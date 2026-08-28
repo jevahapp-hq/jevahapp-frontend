@@ -27,62 +27,119 @@ export function showAuthToast(payload: AuthToastPayload): void {
   }
 }
 
-/** Convenience presets for common auth copy */
+/** Strip API / Clerk jargon into something a human can act on. */
+export function humanizeAuthError(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const t = String(raw).trim();
+  if (!t) return undefined;
+  const m = t.toLowerCase();
+
+  if (
+    m.includes("password") ||
+    m.includes("credentials") ||
+    m.includes("incorrect") ||
+    m.includes("invalid email or password") ||
+    m.includes("invalid_credentials") ||
+    m.includes("form_password") ||
+    m.includes("identifier")
+  ) {
+    return undefined; // presets own the copy
+  }
+  if (m.includes("too many") || m.includes("rate") || m.includes("locked")) {
+    return "Too many tries. Wait a moment, then try again.";
+  }
+  if (m.includes("network") || m.includes("fetch") || m.includes("timeout")) {
+    return "Check your connection and try again.";
+  }
+  if (m.includes("verify") || m.includes("unverified")) {
+    return "Confirm your email, then try signing in again.";
+  }
+  // Don't surface raw stack / status blobs
+  if (t.length > 120 || /[{}\[\]]/.test(t) || /http\s?\d{3}/i.test(t)) {
+    return undefined;
+  }
+  return t;
+}
+
+/** Convenience presets — short, clear, no jargon */
 export const authToast = {
-  wrongPassword(detail?: string) {
+  wrongPassword(_detail?: string) {
     showAuthToast({
       variant: "error",
-      title: "Wrong password",
-      message: detail || "Check your email and password, then try again.",
+      title: "That password didn’t match",
+      message: "Double-check it, or tap Forgot password to reset.",
+      durationMs: 4200,
     });
   },
   loginFailed(detail?: string) {
+    const friendly = humanizeAuthError(detail);
     showAuthToast({
       variant: "error",
-      title: "Couldn’t sign in",
-      message: detail || "Invalid email or password.",
+      title: "Couldn’t sign you in",
+      message:
+        friendly ||
+        "Email or password looks off. Check them and try again.",
+      durationMs: 4200,
     });
   },
   sessionExpired() {
     showAuthToast({
       variant: "warning",
-      title: "Session expired",
-      message: "For your security, please sign in again.",
-      durationMs: 3800,
+      title: "You’re signed out",
+      message: "Your session ended. Sign in again to keep going.",
+      durationMs: 4000,
     });
   },
   resetCodeSent(email?: string) {
     showAuthToast({
       variant: "success",
-      title: "Reset code sent",
+      title: "Check your inbox",
       message: email
-        ? `We sent a code to ${email}. Check your inbox.`
-        : "Check your email for the reset code.",
-      durationMs: 3600,
+        ? `We sent a reset code to ${email}.`
+        : "We sent a reset code to your email.",
+      durationMs: 3800,
     });
   },
   passwordResetSuccess() {
     showAuthToast({
       variant: "success",
       title: "Password updated",
-      message: "You can sign in with your new password.",
-      durationMs: 3200,
+      message: "You’re all set — sign in with your new password.",
+      durationMs: 3400,
     });
   },
   resetFailed(detail?: string) {
     showAuthToast({
       variant: "error",
-      title: "Reset failed",
-      message: detail || "Please try again or request a new code.",
+      title: "Couldn’t reset password",
+      message:
+        humanizeAuthError(detail) ||
+        "Try again, or request a fresh code.",
+      durationMs: 4000,
     });
   },
   validation(title: string, message: string) {
-    showAuthToast({ variant: "info", title, message, durationMs: 2800 });
+    showAuthToast({
+      variant: "info",
+      title,
+      message,
+      durationMs: 3000,
+    });
   },
   error(title: string, message?: string) {
-    showAuthToast({ variant: "error", title, message });
+    showAuthToast({
+      variant: "error",
+      title,
+      message: humanizeAuthError(message) || message,
+      durationMs: 4000,
+    });
   },
   success(title: string, message?: string) {
-    showAuthToast({ variant: "success", title, message });
+    showAuthToast({
+      variant: "success",
+      title,
+      message,
+      durationMs: 3200,
+    });
   },
 };

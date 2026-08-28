@@ -1,5 +1,9 @@
-import { useGlobalAudioPlayerStore } from "../../../app/store/useGlobalAudioPlayerStore";
-import type { AudioTrack } from "../../../app/store/audioPlayer/types";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import type { AudioTrack } from "@/store/audioPlayer/types";
+import {
+  playOrToggleDecision,
+  shouldReplaceAudioQueue,
+} from "./playOrToggleDecision";
 
 /**
  * Single-session play: one Sound for the whole app.
@@ -9,17 +13,12 @@ export async function playOrToggleTrack(track: AudioTrack): Promise<void> {
   if (!track?.id || !track.audioUrl) return;
   const store = useGlobalAudioPlayerStore.getState();
 
-  if (store.currentTrack?.id === track.id) {
+  if (playOrToggleDecision(store.currentTrack?.id, track.id) === "toggle") {
     await store.togglePlayPause();
     return;
   }
 
-  if (
-    track.source === "feed" ||
-    track.source === "hymn" ||
-    track.source === "ebook" ||
-    track.source === "library"
-  ) {
+  if (shouldReplaceAudioQueue(track.source)) {
     useGlobalAudioPlayerStore.setState({
       queue: [track],
       originalQueue: [track],
@@ -29,7 +28,7 @@ export async function playOrToggleTrack(track: AudioTrack): Promise<void> {
   }
 
   try {
-    const videoStore = require("../../../app/store/useGlobalVideoStore")
+    const videoStore = require("@/store/useGlobalVideoStore")
       .useGlobalVideoStore.getState();
     videoStore.pauseAllVideosImperatively?.();
   } catch {

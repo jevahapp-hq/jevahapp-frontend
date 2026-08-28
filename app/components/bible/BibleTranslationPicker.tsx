@@ -167,12 +167,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
   },
   subtitle: {
     fontSize: 13,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     marginTop: 4,
     marginBottom: 12,
@@ -197,18 +197,18 @@ const styles = StyleSheet.create({
   },
   abbr: {
     fontSize: 15,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#256E63",
   },
   name: {
     fontSize: 14,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#1F2937",
     marginTop: 2,
   },
   meta: {
     fontSize: 12,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     marginTop: 2,
   },
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   },
   downloadText: {
     fontSize: 12,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#256E63",
   },
   closeBtn: {
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     fontSize: 15,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#256E63",
   },
 });

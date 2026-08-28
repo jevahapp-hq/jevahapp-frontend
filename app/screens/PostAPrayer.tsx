@@ -819,14 +819,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 12,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   previewTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 12,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     textAlign: "center",
   },
   verseContainer: {
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
   postButtonText: {
     fontSize: 18,
     fontWeight: "600",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   disabledButtonText: {
     color: "#D1D5DB",
@@ -1137,7 +1137,7 @@ const styles = StyleSheet.create({
   fixedPostButtonText: {
     fontSize: 18,
     fontWeight: "600",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     color: "white",
   },
   previewTouchable: {
@@ -1153,7 +1153,7 @@ const styles = StyleSheet.create({
   previewTextInput: {
     color: "white",
     fontSize: 14,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "center",
     width: "100%",
     minHeight: 60,
@@ -1168,7 +1168,7 @@ const styles = StyleSheet.create({
     height: 160,
     color: "white",
     fontSize: 14,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "center",
     textAlignVertical: "center",
     borderRadius: 80,
@@ -1177,7 +1177,7 @@ const styles = StyleSheet.create({
   previewText: {
     color: "white",
     fontSize: 14,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "center",
     paddingHorizontal: 8,
   },
@@ -1193,7 +1193,7 @@ const styles = StyleSheet.create({
   previewPlaceholder: {
     color: "white",
     fontSize: 14,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "center",
     opacity: 0.7,
   },
@@ -1210,7 +1210,7 @@ const styles = StyleSheet.create({
   scallopedPlaceholder: {
     color: "white",
     fontSize: 14,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "center",
     opacity: 0.7,
   },

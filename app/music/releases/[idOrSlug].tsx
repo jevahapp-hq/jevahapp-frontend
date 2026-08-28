@@ -23,7 +23,7 @@ import {
   trackCardToAudioTrack,
   type TrackCard,
 } from "../../services/music-catalog/trackTypes";
-import { useGlobalAudioPlayerStore } from "../../store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 
 function trackToCard(t: ReleaseTrack, release: ArtistRelease): TrackCard | null {
   const card = normalizeTrackCard(

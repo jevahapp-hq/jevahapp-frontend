@@ -4,10 +4,8 @@
 import {
   Modal,
   StatusBar,
-  StyleSheet,
   View,
 } from "react-native";
-import Animated from "react-native-reanimated";
 
 import { SongModalCreatePlaylist } from "./SongModalCreatePlaylist";
 import { SongModalOptions } from "./SongModalOptions";
@@ -29,28 +27,12 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
 
   const player = (
         <View style={{ flex: 1 }} pointerEvents={props.visible ? "auto" : "none"}>
-          {/**
-           * No `paddingBottom` here on purpose. The player's only opaque
-           * background lives on a child (`SongModalPlayer`'s body), so padding
-           * at this level left the bottom strip of a supposedly full-screen
-           * overlay transparent — the white bottom nav and the lower half of
-           * the FAB showed through it. The inset is applied to the inner
-           * content instead, so the background reaches the screen edge while
-           * the controls still clear the system inset.
-           */}
-          <Animated.View
+          <View
             collapsable={false}
-            style={[
-              {
-                flex: 1,
-                paddingTop: m.safeTop + 4,
-                // On the sliding element, not the static root: keeps the
-                // overlay opaque edge-to-edge (including the top inset strip)
-                // while still uncovering the app as it is dragged away.
-                backgroundColor: "#000",
-              },
-              m.modalAnimatedStyle,
-            ]}
+            style={{
+              flex: 1,
+              paddingTop: m.safeTop + 4,
+            }}
           >
             <View collapsable={false} style={{ flex: 1 }}>
                   <SongModalPlayer
@@ -87,10 +69,9 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
                     onToggleShuffle={m.toggleShuffle}
                     onOpenPlaylistView={() => m.setShowPlaylistView(true)}
                     onShare={m.handleShare}
-                    dismissGesture={m.gesture}
                   />
             </View>
-          </Animated.View>
+          </View>
         </View>
   );
 
@@ -98,10 +79,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
     <>
       {isOverlay ? (
         <View
-          style={[
-            overlayStyles.root,
-            props.visible ? overlayStyles.rootOpen : overlayStyles.rootIdle,
-          ]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
           pointerEvents={props.visible ? "auto" : "none"}
         >
           {props.visible ? <StatusBar barStyle="light-content" /> : null}
@@ -114,9 +92,10 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
           animationType="none"
           onRequestClose={m.onClose}
           statusBarTranslucent
+          presentationStyle="overFullScreen"
         >
           <StatusBar barStyle="light-content" />
-          {player}
+          <View style={{ flex: 1, backgroundColor: "#0A0D14" }}>{player}</View>
         </Modal>
       )}
 
@@ -204,24 +183,4 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
     </>
   );
 }
-
-const overlayStyles = StyleSheet.create({
-  root: {
-    // Deliberately transparent. This View does not move, so an opaque
-    // background here would stay on screen as a black sheet while the player
-    // is dragged down, hiding the app instead of revealing it. The opaque
-    // surface belongs on the sliding Animated.View below.
-    ...StyleSheet.absoluteFillObject,
-  },
-  rootOpen: {
-    zIndex: 99999,
-    elevation: 99999,
-    opacity: 1,
-  },
-  rootIdle: {
-    zIndex: -1,
-    elevation: 0,
-    opacity: 0,
-  },
-});
 

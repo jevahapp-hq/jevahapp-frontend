@@ -49,7 +49,7 @@ export function ModerationErrorInline({
           style={{
             fontSize: getResponsiveFontSize(16, 18, 20),
             color: friendlyMessage.isReview ? "#856404" : "#e65100",
-            fontFamily: "Rubik-Medium",
+            fontFamily: "PlusJakartaSans-Medium",
           }}
         >
           {friendlyMessage.title}
@@ -61,7 +61,7 @@ export function ModerationErrorInline({
           fontSize: getResponsiveFontSize(14, 16, 18),
           color: "#333",
           lineHeight: 22,
-          fontFamily: "Rubik-Regular",
+          fontFamily: "PlusJakartaSans-Regular",
         }}
       >
         {friendlyMessage.message}
@@ -77,7 +77,7 @@ export function ModerationErrorInline({
             style={{
               fontSize: getResponsiveFontSize(12, 13, 14),
               color: "#666",
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
               fontStyle: "italic",
             }}
           >
@@ -103,7 +103,7 @@ export function ModerationErrorInline({
           style={{
             fontSize: getResponsiveFontSize(14, 16, 18),
             color: "#fff",
-            fontFamily: "Rubik-Medium",
+            fontFamily: "PlusJakartaSans-Medium",
           }}
         >
           {friendlyMessage.isReview ? "Got it" : "Try Again"}

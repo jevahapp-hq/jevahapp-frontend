@@ -11,22 +11,29 @@ export function PlayerBackground({
   imageSource: any | null;
 }) {
   return (
-    <View style={{ ...StyleSheet.absoluteFillObject, overflow: "hidden", backgroundColor: "#0A0D14" }}>
+    <View
+      pointerEvents="none"
+      style={{
+        ...StyleSheet.absoluteFillObject,
+        overflow: "hidden",
+        backgroundColor: "#0A0D14",
+      }}
+    >
       {imageSource ? (
         <Image
           source={imageSource}
           style={{
             position: "absolute",
-            top: -SCREEN_HEIGHT * 0.25,
-            left: -120,
-            right: -120,
-            bottom: -120,
-            width: "160%",
-            height: "160%",
-            opacity: 0.65,
+            top: -SCREEN_HEIGHT * 0.1,
+            left: -40,
+            right: -40,
+            bottom: -40,
+            width: "120%",
+            height: "120%",
+            opacity: 0.55,
           }}
           resizeMode="cover"
-          blurRadius={90}
+          blurRadius={24}
         />
       ) : null}
       {/* Primary Teal Ambient Glow Orb */}

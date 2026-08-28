@@ -1,11 +1,25 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
+import {
   Rubik_400Regular,
+  Rubik_500Medium,
   Rubik_600SemiBold,
   Rubik_700Bold,
-  useFonts,
 } from "@expo-google-fonts/rubik";
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
+} from "@expo-google-fonts/poppins";
 import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
@@ -27,10 +41,10 @@ import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
 import { useArtistDeepLinks } from "./hooks/useArtistDeepLinks";
-import { useDownloadStore } from "./store/useDownloadStore";
-import { useLibraryStore } from "./store/useLibraryStore";
-import { useMediaStore } from "./store/useUploadStore";
-import { hydrateFallbackKvFromAsyncStorage, appMmkv } from "../src/shared/cache/mmkvStorage";
+import { useDownloadStore } from "@/store/useDownloadStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
+import { useMediaStore } from "@/store/useUploadStore";
+import { hydrateFallbackKvByPrefix, hydrateFallbackKvFromAsyncStorage, appMmkv } from "../src/shared/cache/mmkvStorage";
 import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
 import { AUTHOR_DISK_KEY } from "../src/shared/author";
 import {
@@ -124,9 +138,38 @@ try {
 export default function RootLayout() {
   useArtistDeepLinks();
   const [fontsLoaded, fontError] = useFonts({
+    // Primary — Plus Jakarta Sans
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+    PlusJakartaSans: PlusJakartaSans_400Regular,
+    "PlusJakartaSans-Regular": PlusJakartaSans_400Regular,
+    "PlusJakartaSans-Medium": PlusJakartaSans_500Medium,
+    "PlusJakartaSans-SemiBold": PlusJakartaSans_600SemiBold,
+    "PlusJakartaSans-Bold": PlusJakartaSans_700Bold,
+    "PlusJakartaSans-ExtraBold": PlusJakartaSans_800ExtraBold,
+    // Secondary — Rubik
     Rubik_400Regular,
+    Rubik_500Medium,
     Rubik_600SemiBold,
     Rubik_700Bold,
+    Rubik: Rubik_400Regular,
+    "Rubik-Regular": Rubik_400Regular,
+    "Rubik-Medium": Rubik_500Medium,
+    "Rubik-SemiBold": Rubik_600SemiBold,
+    "Rubik-Bold": Rubik_700Bold,
+    // Tertiary — Poppins
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins: Poppins_400Regular,
+    "Poppins-Regular": Poppins_400Regular,
+    "Poppins-Medium": Poppins_500Medium,
+    "Poppins-SemiBold": Poppins_600SemiBold,
+    "Poppins-Bold": Poppins_700Bold,
     ...Ionicons.font,
     ...MaterialIcons.font,
     ...Feather.font,
@@ -255,6 +298,10 @@ export default function RootLayout() {
             "video-feed-data",
           ]);
           hydrateFeedQueryCache(queryClient);
+        } catch {}
+
+        try {
+          await hydrateFallbackKvByPrefix(["bible_"]);
         } catch {}
 
         void warmupBackend(3000).catch(() => {});

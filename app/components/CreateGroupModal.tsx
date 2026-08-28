@@ -230,7 +230,7 @@ export default function CreateGroupModal({
           >
             {/* Header */}
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 8 }}>
-              <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000", fontFamily: "Rubik-Bold", flex: 1 }}>
+              <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000", fontFamily: "PlusJakartaSans-Bold", flex: 1 }}>
                 {mode === "edit" ? "Edit Group" : "Create A Group"}
               </Text>
               <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
@@ -244,7 +244,7 @@ export default function CreateGroupModal({
               contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}
             >
             {/* Display Picture Uploader */}
-            <Text style={{ fontSize: 10, color: "#667085", marginBottom: 4, fontFamily: "Rubik-Bold" }}>GROUP DISPLAY PICTURE</Text>
+            <Text style={{ fontSize: 10, color: "#667085", marginBottom: 4, fontFamily: "PlusJakartaSans-Bold" }}>GROUP DISPLAY PICTURE</Text>
             <View style={{
               borderWidth: 1,
               borderStyle: "dashed",
@@ -266,7 +266,7 @@ export default function CreateGroupModal({
                     resizeMode="cover"
                   />
                   <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: "#FFFFFF", fontFamily: "Rubik-Bold", marginBottom: 8 }}>REPLACE IMAGE</Text>
+                    <Text style={{ color: "#FFFFFF", fontFamily: "PlusJakartaSans-Bold", marginBottom: 8 }}>REPLACE IMAGE</Text>
                     <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={{
                       borderWidth: 1,
                       borderColor: "#FFFFFF",
@@ -277,7 +277,7 @@ export default function CreateGroupModal({
                       justifyContent: "center",
                       backgroundColor: "rgba(0,0,0,0.25)",
                     }}>
-                      <Text style={{ fontFamily: "Rubik-Bold", color: "#FFFFFF" }}>upload</Text>
+                      <Text style={{ fontFamily: "PlusJakartaSans-Bold", color: "#FFFFFF" }}>upload</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -292,13 +292,13 @@ export default function CreateGroupModal({
                   justifyContent: "center",
                   backgroundColor: "#FFFFFF",
                 }}>
-                  <Text style={{ fontFamily: "Rubik-Bold", color: "#101828" }}>Upload</Text>
+                  <Text style={{ fontFamily: "PlusJakartaSans-Bold", color: "#101828" }}>Upload</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             {/* Group Name */}
-            <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "Rubik-Bold" }}>GROUP NAME</Text>
+            <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "PlusJakartaSans-Bold" }}>GROUP NAME</Text>
             <TextInput
               placeholder="Add here"
               placeholderTextColor="#98A2B3"
@@ -311,13 +311,13 @@ export default function CreateGroupModal({
                 height: 50,
                 paddingHorizontal: 16,
                 marginBottom: 16,
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
                 color: "#101828",
               }}
             />
 
             {/* Description */}
-            <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "Rubik-Bold" }}>DESCRIPTION</Text>
+            <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "PlusJakartaSans-Bold" }}>DESCRIPTION</Text>
             <View style={{ position: "relative", marginBottom: 6 }}>
               <TextInput
                 placeholder="Type here"
@@ -334,12 +334,12 @@ export default function CreateGroupModal({
                   paddingHorizontal: 16,
                   paddingTop: 12,
                   textAlignVertical: "top",
-                  fontFamily: "Rubik-Regular",
+                  fontFamily: "PlusJakartaSans-Regular",
                   color: "#101828",
                 }}
               />
             </View>
-            <Text style={{ alignSelf: "flex-end", color: "#667085", fontSize: 10, marginBottom: 16, fontFamily: "Rubik-Regular" }}>
+            <Text style={{ alignSelf: "flex-end", color: "#667085", fontSize: 10, marginBottom: 16, fontFamily: "PlusJakartaSans-Regular" }}>
               {`${description.length}/${descriptionLimit}`}
             </Text>
 
@@ -363,12 +363,12 @@ export default function CreateGroupModal({
                 {isPublic ? <Ionicons name="checkmark" size={12} color="#FFFFFF" /> : null}
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setIsPublic(!isPublic)} activeOpacity={0.7}>
-                <Text style={{ color: "#101828", fontFamily: "Rubik-Bold" }}>OPEN TO THE PUBLIC</Text>
+                <Text style={{ color: "#101828", fontFamily: "PlusJakartaSans-Bold" }}>OPEN TO THE PUBLIC</Text>
               </TouchableOpacity>
             </View>
 
             {error ? (
-              <Text style={{ color: "#DC2626", fontFamily: "Rubik-Regular", fontSize: 12, marginBottom: 16 }}>
+              <Text style={{ color: "#DC2626", fontFamily: "PlusJakartaSans-Regular", fontSize: 12, marginBottom: 16 }}>
                 {error}
               </Text>
             ) : null}
@@ -391,7 +391,7 @@ export default function CreateGroupModal({
               {isSubmitting ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>
+                <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "PlusJakartaSans-Bold" }}>
                   {mode === "edit" ? "Save Changes" : "Create"}
                 </Text>
               )}

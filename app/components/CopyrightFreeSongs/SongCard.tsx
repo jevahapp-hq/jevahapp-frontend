@@ -45,7 +45,19 @@ export function SongCard({
             e.stopPropagation();
             onPlayPress(song);
           }}
-          className="absolute inset-0 justify-center items-center"
+          delayPressIn={0}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            marginTop: -24,
+            marginLeft: -24,
+            width: 48,
+            height: 48,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
         >
           <View className="bg-white/70 p-2 rounded-full">
             <Ionicons
@@ -57,7 +69,7 @@ export function SongCard({
         </TouchableOpacity>
         <View className="absolute bottom-2 left-2 right-2">
           <Text
-            className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+            className="text-white text-start text-[14px] ml-1 mb-6 font-jakarta"
             numberOfLines={2}
           >
             {song.title}
@@ -68,7 +80,7 @@ export function SongCard({
       <View className="mt-2 flex flex-col w-full">
         <View className="flex flex-row justify-between items-center">
           <Text
-            className="text-[12px] text-[#1D2939] font-rubik font-medium"
+            className="text-[12px] text-[#1D2939] font-jakarta font-medium"
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -89,7 +101,7 @@ export function SongCard({
         <View className="flex-row items-center">
           <Ionicons name="eye-outline" size={13} color="#98A2B3" />
           <Text
-            className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik"
+            className="text-[10px] text-gray-500 ml-2 mt-1 font-jakarta"
             numberOfLines={1}
           >
             {song.views || song.viewCount || 0} views

@@ -16,9 +16,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AuthHeader from "../components/AuthHeader";
 import SuccessCard from "../components/SuccessCard";
 import unifiedSearchAPI, { UnifiedSearchItem } from "../services/unifiedSearchAPI";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
-import { useDownloadStore } from "../store/useDownloadStore";
-import { MediaItem, useMediaStore } from "../store/useUploadStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
+import { MediaItem, useMediaStore } from "@/store/useUploadStore";
 import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import {
@@ -411,10 +411,10 @@ export default function ExploreSearch() {
                     />
                   </View>
                   <View className="flex-row justify-between mt-1">
-                    <Text className="text-white text-xs font-rubik">
+                    <Text className="text-white text-xs font-jakarta">
                       {formatTime(sessionPosition || 0)}
                     </Text>
-                    <Text className="text-white text-xs font-rubik">
+                    <Text className="text-white text-xs font-jakarta">
                       {formatTime(sessionDuration || 0)}
                     </Text>
                   </View>
@@ -428,7 +428,7 @@ export default function ExploreSearch() {
         {!isMusic && (
           <View className="absolute bottom-2 left-2 right-2">
             <View className="flex flex-row justify-between items-center">
-              <Text className="text-white font-rubik-bold text-sm flex-1 mr-2" numberOfLines={2}>
+              <Text className="text-white font-jakarta-bold text-sm flex-1 mr-2" numberOfLines={2}>
                 {item.title}
               </Text>
               <TouchableOpacity
@@ -445,11 +445,11 @@ export default function ExploreSearch() {
         {modalIndex === index && (
           <View className="absolute top-2 right-2 bg-white shadow-md rounded-lg p-2 z-50 w-32">
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-              <Text className="text-[#1D2939] font-rubik text-sm">View Details</Text>
+              <Text className="text-[#1D2939] font-jakarta text-sm">View Details</Text>
               <MaterialIcons name="visibility" size={16} color="#3A3E50" />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-              <Text className="text-sm text-[#1D2939] font-rubik">Share</Text>
+              <Text className="text-sm text-[#1D2939] font-jakarta">Share</Text>
               <Ionicons name="share-outline" size={16} color="#3A3E50" />
             </TouchableOpacity>
             <TouchableOpacity 
@@ -497,7 +497,7 @@ export default function ExploreSearch() {
                 }
               }}
             >
-              <Text className="text-[#1D2939] font-rubik text-sm">
+              <Text className="text-[#1D2939] font-jakarta text-sm">
                 {checkIfDownloaded(item._id || item.fileUrl) ? "Downloaded" : "Download"}
               </Text>
               <Ionicons 
@@ -507,7 +507,7 @@ export default function ExploreSearch() {
               />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 flex-row items-center justify-between">
-              <Text className="text-[#1D2939] font-rubik text-sm">Save</Text>
+              <Text className="text-[#1D2939] font-jakarta text-sm">Save</Text>
               <Ionicons name="bookmark-outline" size={16} color="#3A3E50" />
             </TouchableOpacity>
           </View>
@@ -521,37 +521,37 @@ export default function ExploreSearch() {
       {isSearching ? (
         <View className="items-center">
           <ActivityIndicator size="large" color="#256E63" />
-          <Text className="text-[#9CA3AF] text-lg font-rubik-semibold mt-4">
+          <Text className="text-[#9CA3AF] text-lg font-jakarta-semibold mt-4">
             Searching...
           </Text>
         </View>
       ) : hasSearched ? (
         <View className="items-center">
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text className="text-[#9CA3AF] text-lg font-rubik-semibold mt-4">
+          <Text className="text-[#9CA3AF] text-lg font-jakarta-semibold mt-4">
             {searchError || "No results found"}
           </Text>
-          <Text className="text-[#9CA3AF] text-sm font-rubik text-center mt-2 px-8">
+          <Text className="text-[#9CA3AF] text-sm font-jakarta text-center mt-2 px-8">
             {searchError ? "Please try again" : "Try searching with different keywords"}
           </Text>
         </View>
       ) : mediaList.length === 0 ? (
         <View className="items-center">
           <Ionicons name="folder-outline" size={48} color="#9CA3AF" />
-          <Text className="text-[#9CA3AF] text-lg font-rubik-semibold mt-4">
+          <Text className="text-[#9CA3AF] text-lg font-jakarta-semibold mt-4">
             No content available
           </Text>
-          <Text className="text-[#9CA3AF] text-sm font-rubik text-center mt-2 px-8">
+          <Text className="text-[#9CA3AF] text-sm font-jakarta text-center mt-2 px-8">
             Upload some content to see it here
           </Text>
         </View>
       ) : (
         <View className="items-center">
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text className="text-[#9CA3AF] text-lg font-rubik-semibold mt-4">
+          <Text className="text-[#9CA3AF] text-lg font-jakarta-semibold mt-4">
             All Content
           </Text>
-          <Text className="text-[#9CA3AF] text-sm font-rubik text-center mt-2 px-8">
+          <Text className="text-[#9CA3AF] text-sm font-jakarta text-center mt-2 px-8">
             Browse all available content or search for specific items
           </Text>
         </View>
@@ -587,7 +587,7 @@ export default function ExploreSearch() {
             </View>
             <TextInput
               placeholder="Search for anything..."
-              className="ml-3 flex-1 text-base font-rubik items-center"
+              className="ml-3 flex-1 text-base font-jakarta items-center"
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => handleSearch(query)}
@@ -623,7 +623,7 @@ export default function ExploreSearch() {
           <View className="mb-4">
             {pastSearches.length > 0 ? (
               <>
-            <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
+            <Text className="text-gray-700 text-base font-jakarta-semibold mb-2">
               Recent Searches
             </Text>
                 {pastSearches.slice(0, 5).map((keyword, index) => (
@@ -641,7 +641,7 @@ export default function ExploreSearch() {
               </>
             ) : trendingSearches.length > 0 ? (
               <>
-                <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
+                <Text className="text-gray-700 text-base font-jakarta-semibold mb-2">
                   Popular Searches
                 </Text>
                 {trendingSearches.slice(0, 5).map((trendingItem: { query: string; }, index: any) => (
@@ -657,7 +657,7 @@ export default function ExploreSearch() {
               </>
             ) : (
               <>
-                <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
+                <Text className="text-gray-700 text-base font-jakarta-semibold mb-2">
                   Suggested Searches
                 </Text>
                 {["Worship", "Prayer", "Faith", "Healing", "Grace"].map((keyword, index) => (
@@ -677,7 +677,7 @@ export default function ExploreSearch() {
 
         {/* Content Header */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-base font-rubik-semibold mb-2">
+          <Text className="text-gray-700 text-base font-jakarta-semibold mb-2">
             {hasSearched ? `Search Results (${displayResults.length})` : `All Content (${displayResults.length})`}
           </Text>
         </View>
@@ -691,7 +691,7 @@ export default function ExploreSearch() {
           {isSearching ? (
             <View className="py-20 items-center">
               <ActivityIndicator size="large" color="#256E63" />
-              <Text className="text-[#9CA3AF] text-sm font-rubik mt-4">
+              <Text className="text-[#9CA3AF] text-sm font-jakarta mt-4">
                 Searching...
               </Text>
             </View>

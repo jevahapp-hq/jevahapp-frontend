@@ -182,7 +182,7 @@ export default function EbookAudioControls({
               <Text
                 style={{
                   fontSize: 14,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#1D2939",
                 }}
                 numberOfLines={1}
@@ -192,7 +192,7 @@ export default function EbookAudioControls({
               <Text
                 style={{
                   fontSize: 12,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#667085",
                   marginTop: 2,
                 }}
@@ -256,7 +256,7 @@ export default function EbookAudioControls({
                 <Text
                   style={{
                     fontSize: 16,
-                    fontFamily: "Rubik-SemiBold",
+                    fontFamily: "PlusJakartaSans-SemiBold",
                     color: "#1D2939",
                   }}
                   numberOfLines={1}
@@ -266,7 +266,7 @@ export default function EbookAudioControls({
                 <Text
                   style={{
                     fontSize: 12,
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                     color: "#667085",
                     marginTop: 2,
                   }}
@@ -322,7 +322,7 @@ export default function EbookAudioControls({
                             ? "#10B981" 
                             : "#374151",
                           backgroundColor: isCurrentWord ? "#FEA74E" : "transparent",
-                          fontFamily: isCurrentWord ? "Rubik-Bold" : isPastWord ? "Rubik-Medium" : "Rubik",
+                          fontFamily: isCurrentWord ? "PlusJakartaSans-Bold" : isPastWord ? "PlusJakartaSans-Medium" : "PlusJakartaSans",
                           paddingHorizontal: isCurrentWord ? 6 : 0,
                           paddingVertical: isCurrentWord ? 3 : 0,
                           borderRadius: isCurrentWord ? 8 : 0,
@@ -362,7 +362,7 @@ export default function EbookAudioControls({
                   style={{
                     marginLeft: 8,
                     fontSize: 14,
-                    fontFamily: "Rubik-SemiBold",
+                    fontFamily: "PlusJakartaSans-SemiBold",
                     color: "#92400E",
                   }}
                 >
@@ -373,7 +373,7 @@ export default function EbookAudioControls({
                 style={{
                   marginTop: 4,
                   fontSize: 12,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#92400E",
                   lineHeight: 16,
                 }}
@@ -415,7 +415,7 @@ export default function EbookAudioControls({
                 <Text
                   style={{
                     fontSize: 11,
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                     color: "#667085",
                   }}
                 >
@@ -424,7 +424,7 @@ export default function EbookAudioControls({
                 <Text
                   style={{
                     fontSize: 11,
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                     color: "#667085",
                   }}
                 >
@@ -532,7 +532,7 @@ export default function EbookAudioControls({
               <Text
                 style={{
                   fontSize: 13,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#1D2939",
                 }}
               >
@@ -541,7 +541,7 @@ export default function EbookAudioControls({
               <Text
                 style={{
                   fontSize: 13,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#FEA74E",
                 }}
               >
@@ -581,7 +581,7 @@ export default function EbookAudioControls({
               <Text
                 style={{
                   fontSize: 13,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#1D2939",
                 }}
               >
@@ -590,7 +590,7 @@ export default function EbookAudioControls({
               <Text
                 style={{
                   fontSize: 13,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#FEA74E",
                 }}
               >

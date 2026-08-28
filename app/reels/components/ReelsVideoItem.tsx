@@ -8,7 +8,7 @@ import {
 import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../src/shared/utils/videoUrlManager";
-import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { getBottomNavHeight } from "../../utils/responsiveOptimized";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { ReelsActionButtons } from "./ReelsActionButtons";
@@ -71,6 +71,9 @@ export interface ReelsVideoItemProps {
   checkIfDownloaded: (id: string) => boolean;
   currentUser: any;
   getAvatarUrl: (user: any) => string | null;
+  /** Uploader-only description editing. */
+  canEditDescription?: boolean;
+  onEditDescription?: () => void;
 }
 
 /**
@@ -128,6 +131,8 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     checkIfDownloaded,
     currentUser,
     getAvatarUrl,
+    canEditDescription,
+    onEditDescription,
   } = props;
 
   const [localPosition, setLocalPosition] = useState(videoPosition);
@@ -169,12 +174,22 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   // Track if we should render skeletons
   const showSkeletons = isActive && (!isPlaying || !localDuration);
 
-  // Sync with global props when active — skip position while scrubbing
+  /**
+   * Adopt the parent's position/duration only when this item *becomes* active
+   * (or the parent's duration first arrives).
+   *
+   * This used to depend on `videoPosition` too, which made it a two-way sync:
+   * the player pushes position up to the parent while the parent pushed it back
+   * down here, so a one-step rounding disagreement had each render schedule the
+   * other's setState until React hit the update-depth limit. While active, the
+   * player writes `localPosition` directly — this effect must not fight it.
+   */
   useEffect(() => {
     if (!isActive) return;
     if (!isDragging) setLocalPosition(videoPosition);
     setLocalDuration(videoDuration);
-  }, [isActive, videoPosition, videoDuration, isDragging]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, videoDuration]);
 
   if (!enriched || !enriched.title || !videoUrl) {
     return (
@@ -204,8 +219,6 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
               setLocalPosition={setLocalPosition}
               setLocalDuration={setLocalDuration}
               isDragging={isDragging}
-              localDuration={localDuration}
-              videoPosition={videoPosition}
               globalVideoStore={globalVideoStore}
               showPauseOverlay={showPauseOverlay}
               getResponsiveSize={getResponsiveSize}
@@ -270,6 +283,8 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
                 triggerHapticFeedback={triggerHapticFeedback}
                 currentUser={currentUser ?? undefined}
                 getAvatarUrl={getAvatarUrl}
+                canEditDescription={canEditDescription}
+                onEditDescription={onEditDescription}
               />
               <ReelsMenu
                 visible={menuVisible}
@@ -314,9 +329,9 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
           showControls
           bottomOffset={getBottomNavHeight() + getResponsiveSpacing(6, 8, 10)}
           enlargeOnDrag
-          knobSize={10}
-          knobSizeDragging={14}
-          trackHeights={{ normal: 3, dragging: 8 }}
+          knobSize={8}
+          knobSizeDragging={12}
+          trackHeights={{ normal: 4, dragging: 8 }}
           seekDuringDrag
           liveSeekThrottleMs={32}
           enableHaptics

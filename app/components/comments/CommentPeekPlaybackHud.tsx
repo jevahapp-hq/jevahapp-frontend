@@ -15,7 +15,7 @@ import {
   resolveRegisteredVideoKey,
   useGlobalVideoStore,
   type VideoPlaybackSnapshot,
-} from "../../store/useGlobalVideoStore";
+} from "@/store/useGlobalVideoStore";
 import { COMMENT_PEEK_HUD_STRIP } from "../commentSheetLayout";
 
 const EMPTY_SNAP: VideoPlaybackSnapshot = {

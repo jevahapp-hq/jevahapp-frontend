@@ -96,7 +96,7 @@ export function LikeHeartButton({
           />
         </Animated.View>
       </View>
-      {showCount && likeCount > 0 ? (
+      {showCount ? (
         <Text
           style={[
             styles.count,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   count: {
     fontSize: 10,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   countBeside: {
     marginLeft: 4,

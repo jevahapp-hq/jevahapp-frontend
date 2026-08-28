@@ -125,7 +125,7 @@ export default function WelcomeLanding({ showIntro, onIntroFinished }: Props) {
           </View>
 
           <View className="mt-8">
-            <Text className="text-[#344054] text-[12px] font-rubik-bold text-center">
+            <Text className="text-[#344054] text-[12px] font-jakarta-bold text-center">
               GET STARTED WITH
             </Text>
           </View>

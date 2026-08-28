@@ -191,20 +191,20 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#1f2937",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     fontSize: getResponsiveFontSize(13, 14, 15),
     marginBottom: 1,
     minHeight: 18,
   },
   sub: {
     color: "#6b7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     fontSize: getResponsiveFontSize(11, 12, 13),
     lineHeight: 16,
     minHeight: 32,
   },
   caret: {
     color: "#10b981",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
 });

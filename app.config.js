@@ -1,17 +1,33 @@
 import "dotenv/config";
 
+const appVariant =
+  process.env.EXPO_PUBLIC_APP_VARIANT === "lite" ? "lite" : "full";
+const isLiteVariant = appVariant === "lite";
+
+const ANDROID_PACKAGE = {
+  full: "com.italgyirhrudhdhd.jevahapp",
+  lite: "com.italgyirhrudhdhd.jevahapp.lite",
+};
+
+/** EAS profile can set ANDROID_BUILD_ARCHS=arm64-v8a (smallest sideload) or armeabi-v7a,arm64-v8a (Play). */
+const androidBuildArchs = (process.env.ANDROID_BUILD_ARCHS || "arm64-v8a")
+  .split(",")
+  .map((arch) => arch.trim())
+  .filter(Boolean);
+
 export default {
   expo: {
-    name: "jevah-app",
+    name: isLiteVariant ? "Jevah Lite" : "jevah-app",
     slug: "jevah-app",
     version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/images/Jevah.png",
-    scheme: ["jevahapp", "jevah"],
+    scheme: isLiteVariant ? ["jevahlite", "jevah"] : ["jevahapp", "jevah"],
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     owner: "bldlne",
     extra: {
+      appVariant,
       API_URL:
         process.env.EXPO_PUBLIC_API_ENV === "local" ||
         process.env.EXPO_PUBLIC_API_ENV === "dev" ||
@@ -29,17 +45,19 @@ export default {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.italgyirhrudhdhd.jevahapp",
+      bundleIdentifier: isLiteVariant
+        ? "com.italgyirhrudhdhd.jevahapp.lite"
+        : "com.italgyirhrudhdhd.jevahapp",
       infoPlist: {
         NSPhotoLibraryUsageDescription:
           "This app needs access to your photo and video library.",
         NSCameraUsageDescription:
           "This app needs access to your camera for media upload.",
-        UIBackgroundModes: ["audio"], // Enable background audio playback
+        UIBackgroundModes: ["audio"],
       },
     },
     android: {
-      package: "com.italgyirhrudhdhd.jevahapp",
+      package: ANDROID_PACKAGE[appVariant],
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
         foregroundImage: "./assets/images/Jevah.png",
@@ -55,9 +73,7 @@ export default {
         "INTERNET",
         "ACCESS_NETWORK_STATE",
       ],
-      // Network security config for API connectivity
-      networkSecurityConfig: "./android/network_security_config.xml",
-      // Play Store specific configurations
+      networkSecurityConfig: "./config/network_security_config.xml",
       allowBackup: true,
       softwareKeyboardLayoutMode: "pan",
     },
@@ -72,13 +88,28 @@ export default {
       "expo-font",
       "expo-asset",
       "expo-media-library",
-
+      [
+        "expo-build-properties",
+        {
+          android: {
+            buildArchs: androidBuildArchs,
+            enableMinifyInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: false,
+            enableBundleCompression: true,
+            useLegacyPackaging: isLiteVariant,
+            extraProguardRules: [
+              "-keep class com.facebook.hermes.** { *; }",
+              "-keep class com.facebook.jni.** { *; }",
+            ].join("\n"),
+          },
+        },
+      ],
       [
         "@sentry/react-native",
         {
           url: "https://sentry.io/",
-          organization: "jevah-app", // from Sentry dashboard
-          project: "jevah-app", // from Sentry dashboard
+          organization: "jevah-app",
+          project: "jevah-app",
         },
       ],
     ],

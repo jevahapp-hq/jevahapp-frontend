@@ -107,7 +107,7 @@ export function useUploadFlow(deps: UploadFlowDeps) {
       normalizeUploadUser(auth.user);
 
       try {
-        require("../../../store/useGlobalVideoStore")
+        require("@/store/useGlobalVideoStore")
           .useGlobalVideoStore.getState()
           .pauseAllVideosImperatively?.();
       } catch {
@@ -174,15 +174,40 @@ export function useUploadFlow(deps: UploadFlowDeps) {
 
       if (!res.ok) {
         setLoading(false);
-        setUploadState({ status: "error", progress: 0, message: "" });
         cleanupSocket();
         await handleUploadHttpError({
           res,
           result,
           rawText,
+          uploadId,
           setModerationError,
           setUploadResult,
           setUploadState,
+          onLateSuccess: () => {
+            // The proxy timed out but the write committed. Treat it as the
+            // success it was: refresh the feed and tell the user it's up.
+            setUploadState({
+              status: "success",
+              progress: 100,
+              message: "Upload complete",
+            });
+            setUploadResult({
+              kind: "success",
+              title: "You're live",
+              message:
+                "The server was slow to confirm, but your content went through and is on the feed.",
+              primaryLabel: "View feed",
+              secondaryLabel: "Stay here",
+            });
+            void queryClient.invalidateQueries({ queryKey: ["all-content"] });
+            void queryClient.invalidateQueries({
+              queryKey: ["all-content-infinite"],
+            });
+            void queryClient.invalidateQueries({
+              queryKey: ["default-content"],
+            });
+            resetForm();
+          },
         });
         return;
       }

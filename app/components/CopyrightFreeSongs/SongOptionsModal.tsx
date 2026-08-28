@@ -82,7 +82,7 @@ export function SongOptionsModal({
                   fontWeight: "600",
                   color: "#111827",
                   marginBottom: 4,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                 }}
                 numberOfLines={1}
               >
@@ -93,7 +93,7 @@ export function SongOptionsModal({
                   fontSize: 13,
                   color: "#6B7280",
                   marginBottom: 12,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                 }}
                 numberOfLines={1}
               >
@@ -118,7 +118,7 @@ export function SongOptionsModal({
                     color: "#374151",
                     fontWeight: "500",
                     marginLeft: 8,
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                   }}
                 >
                   {loadingOptionsSong ? (
@@ -161,7 +161,7 @@ export function SongOptionsModal({
                 fontSize: 15,
                 color: "#111827",
                 fontWeight: "500",
-                fontFamily: "Rubik-Medium",
+                fontFamily: "PlusJakartaSans-Medium",
               }}
             >
               Play in full player
@@ -198,7 +198,7 @@ export function SongOptionsModal({
                 fontSize: 15,
                 color: "#111827",
                 fontWeight: "500",
-                fontFamily: "Rubik-Medium",
+                fontFamily: "PlusJakartaSans-Medium",
               }}
             >
               Add to playlist
@@ -219,7 +219,7 @@ export function SongOptionsModal({
                 fontSize: 15,
                 color: "#6B7280",
                 fontWeight: "500",
-                fontFamily: "Rubik-Medium",
+                fontFamily: "PlusJakartaSans-Medium",
               }}
             >
               Cancel

@@ -58,7 +58,7 @@ export const ReelsHeader: React.FC<ReelsHeaderProps> = ({
           fontSize: getResponsiveSize(18, 20, 22),
           color: "#FFFFFF",
           fontWeight: "600",
-          fontFamily: "Rubik-SemiBold",
+          fontFamily: "PlusJakartaSans-SemiBold",
           textShadowColor: "rgba(0, 0, 0, 0.5)",
           textShadowOffset: { width: 0, height: 1 },
           textShadowRadius: 3,

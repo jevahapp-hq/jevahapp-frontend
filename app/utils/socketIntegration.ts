@@ -2,7 +2,7 @@
 // This utility helps integrate SocketManager with your existing components
 
 import SocketManager from "../services/SocketManager";
-import { useInteractionStore } from "../store/useInteractionStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 
 interface SocketIntegrationConfig {
   serverUrl: string;

@@ -52,8 +52,8 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
   showFloatingLabel = true,
   enlargeOnDrag = true,
   knobSize = 8,
-  knobSizeDragging = 12,
-  trackHeights = { normal: 3, dragging: 8 },
+  knobSizeDragging = 10,
+  trackHeights = { normal: 4, dragging: 8 },
   seekSyncTicks = 2,
   seekMsTolerance = 300,
   minProgressEpsilon = 0.01,
@@ -68,6 +68,7 @@ export const VideoProgressBar: React.FC<VideoProgressBarProps> = ({
 }) => {
   const config: Partial<ProgressBarConfig> = {
     showFloatingLabel,
+    showTimeLabels: true,
     enlargeOnDrag,
     knobSize,
     knobSizeDragging,

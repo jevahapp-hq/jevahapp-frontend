@@ -5,10 +5,11 @@ import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, Animated, Share } from "react-native";
 import { useDeleteMedia } from "../../../../hooks/useDeleteMedia";
-import { useInteractionStore } from "../../../../store/useInteractionStore";
-import { useLibraryStore } from "../../../../store/useLibraryStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 import allMediaAPI from "../../../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../../../utils/downloadUtils";
+import { deriveVideoPosterUrl } from "../utils/libraryHelpers";
 
 interface UseAllLibraryHandlersProps {
   savedItems: any[];
@@ -133,10 +134,19 @@ export function useAllLibraryHandlers({
         try {
           await toggleSave(itemId, "media");
 
+          const videoSrc = item.mediaUrl || item.fileUrl || "";
+          const thumbnailUrl =
+            item.thumbnailUrl ||
+            deriveVideoPosterUrl(videoSrc) ||
+            (typeof item.imageUrl === "string" && !videoSrc.includes(item.imageUrl)
+              ? item.imageUrl
+              : undefined);
+
           const libraryItem = {
             id: itemId,
             contentType: item.contentType || "unknown",
-            fileUrl: item.mediaUrl || item.fileUrl || "",
+            fileUrl: videoSrc,
+            mediaUrl: videoSrc,
             title: item.title || "Untitled",
             speaker: item.speaker || item.uploadedBy || "",
             uploadedBy: item.uploadedBy || "",
@@ -148,7 +158,8 @@ export function useAllLibraryHandlers({
             saved: 1,
             comment: item.comment || 0,
             favorite: item.favorite || 0,
-            imageUrl: item.imageUrl || item.thumbnailUrl,
+            imageUrl: item.imageUrl || thumbnailUrl,
+            thumbnailUrl,
           };
 
           await libraryStore.addToLibrary(libraryItem);

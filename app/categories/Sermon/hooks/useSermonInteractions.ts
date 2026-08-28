@@ -1,8 +1,8 @@
 import { MutableRefObject, useState } from "react";
 import { Share } from "react-native";
 import { useCommentModal } from "../../../context/CommentModalContext";
-import { useInteractionStore } from "../../../store/useInteractionStore";
-import { useLibraryStore } from "../../../store/useLibraryStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
 import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
 import { persistStats, toggleFavorite } from "../../../utils/persistentStorage";

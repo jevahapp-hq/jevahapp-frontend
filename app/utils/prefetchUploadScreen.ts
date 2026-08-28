@@ -26,6 +26,7 @@ function warmPickers(): void {
 
 /** Route entry + screen graph for Upload. */
 export function prefetchUploadScreen(): void {
+  if (__DEV__) return;
   if (isLiteProfileActive()) return;
   warmPickers();
   if (uploadWarmed) return;
@@ -40,6 +41,7 @@ export function prefetchUploadScreen(): void {
 
 /** Permissions → coming-soon chain for Go Live. */
 export function prefetchGoLiveScreen(): void {
+  if (__DEV__) return;
   if (isLiteProfileActive()) return;
   if (goLiveWarmed) return;
   goLiveWarmed = true;

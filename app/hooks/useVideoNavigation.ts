@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
-import { useReelsStore } from "../store/useReelsStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useReelsStore } from "@/store/useReelsStore";
 import { MediaItem } from "../types/media";
 import { UserProfileCache } from "../utils/cache/UserProfileCache";
 import { getUserDisplayNameFromContent } from "../utils/userValidation";
@@ -29,6 +29,23 @@ function mapVideoForReels(
   const key = getContentKey(v);
   const stats = contentStats[key] || {};
 
+  // Like metadata must survive the hop into Reels. Dropping it meant a Reels
+  // item arrived with no like info at all, so a like made in the feed had
+  // nothing to fall back on when the store entry was missing.
+  const likeCount = Number(
+    stats.likes ??
+      globalFavoriteCounts[key] ??
+      (v as any).likeCount ??
+      (v as any).totalLikes ??
+      (v as any).likes ??
+      v.favorite ??
+      0
+  );
+  const hasLiked =
+    stats?.userInteractions?.liked ??
+    (v as any).hasLiked ??
+    (v as any).userHasLiked;
+
   return {
     title: v.title || "Untitled",
     speaker: v.speaker || "Unknown",
@@ -37,6 +54,9 @@ function mapVideoForReels(
     sheared: stats.sheared || v.sheared || 0,
     saved: stats.saved || v.saved || 0,
     favorite: globalFavoriteCounts[key] || v.favorite || 0,
+    likeCount,
+    totalLikes: likeCount,
+    ...(typeof hasLiked === "boolean" ? { hasLiked } : {}),
     fileUrl: v.fileUrl || "",
     playbackUrl: (v as any).playbackUrl || "",
     hlsUrl: (v as any).hlsUrl || "",

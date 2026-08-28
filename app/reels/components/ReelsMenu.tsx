@@ -58,19 +58,25 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
     if (visible) {
       setMounted(true);
       progress.value = withTiming(1, {
-        duration: 240,
+        duration: 200,
         easing: Easing.out(Easing.cubic),
       });
     } else if (mounted) {
       progress.value = withTiming(
         0,
-        { duration: 180, easing: Easing.in(Easing.cubic) },
+        { duration: 90, easing: Easing.in(Easing.cubic) },
         (finished) => {
           if (finished) runOnJS(setMounted)(false);
         }
       );
     }
   }, [visible, mounted, progress]);
+
+  const dismissInstant = () => {
+    progress.value = 0;
+    setMounted(false);
+    onClose();
+  };
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
@@ -125,7 +131,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
         style={{
           color: isDestructive ? UI_CONFIG.COLORS.ERROR : "#FFFFFF",
           fontSize: 14,
-          fontFamily: "Rubik-SemiBold",
+          fontFamily: "PlusJakartaSans-SemiBold",
         }}
       >
         {label}
@@ -209,7 +215,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
                 style={{
                   color: "rgba(255, 255, 255, 0.5)",
                   fontSize: 11,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   textTransform: "uppercase",
                   letterSpacing: 0.8,
                 }}
@@ -217,7 +223,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
                 Options
               </Text>
               <TouchableOpacity
-                onPress={onClose}
+                onPress={dismissInstant}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons

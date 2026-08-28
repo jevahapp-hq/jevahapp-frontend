@@ -45,7 +45,7 @@ const PremiumBadge = ({ count, size = "medium" }: { count: number; size: "small"
         <Text style={{
           color: "#FFFFFF",
           fontSize: font,
-          fontFamily: "Rubik-Bold",
+          fontFamily: "PlusJakartaSans-Bold",
           textAlign: "center",
           includeFontPadding: false,
         }}>

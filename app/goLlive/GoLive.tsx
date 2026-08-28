@@ -179,7 +179,7 @@
 //               onPress={() => setSelectedDuration(time)}
 //             >
 //               <Text
-//                 className={`text-[12px] font-rubik-semibold ${
+//                 className={`text-[12px] font-jakarta-semibold ${
 //                   selectedDuration === time ? "text-white" : "text-gray-400"
 //                 }`}
 //               >

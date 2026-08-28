@@ -59,9 +59,7 @@ function CardFooterActions({
     <View style={styles.row}>
       <View style={styles.slot}>
         <MaterialIcons name="visibility" size={22} color={IDLE} />
-        {viewCount > 0 ? (
-          <Text style={styles.count}>{formatCount(viewCount)}</Text>
-        ) : null}
+        <Text style={styles.count}>{formatCount(viewCount)}</Text>
       </View>
 
       <View style={styles.slot}>
@@ -163,7 +161,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: IDLE,
     marginLeft: 3,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   shareBtn: {
     marginRight: 0,

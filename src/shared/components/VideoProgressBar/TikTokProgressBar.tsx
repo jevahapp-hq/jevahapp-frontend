@@ -223,17 +223,32 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
         positionStyle,
         style,
       ]}
-      // Block parent play/pause tap while interacting with the scrubber
-      onStartShouldSetResponder={() => true}
-      onMoveShouldSetResponder={() => true}
+      /**
+       * `box-none`: this container must never be the touch target itself, only
+       * its children.
+       *
+       * It previously claimed every touch via
+       * `onStartShouldSetResponder: () => true` with no `onResponderRelease`,
+       * so any tap landing in the container but not on a child — the gaps
+       * around the track, the time labels, the space beside the mute pill —
+       * was consumed and did nothing, and never reached the parent's
+       * play/pause either. Because this bar renders above every Reels item and
+       * every feed video card, that made the whole bottom strip of every video
+       * a dead zone. `onMoveShouldSetResponder` compounded it by stealing the
+       * mute button mid-press on a few pixels of finger drift.
+       *
+       * Blocking the parent play/pause during a scrub is already handled where
+       * it belongs: the track owns an RNGH Pan gesture, and the mute button
+       * owns its own Touchable.
+       */
+      pointerEvents="box-none"
     >
       <View className="flex-1 flex-row items-center">
         {config.showTimeLabels ? (
-          <Text className="text-white text-xs font-rubik mr-2 min-w-[35px]">
-            {durationMs > 0 ? formatTime(currentProgress * durationMs) : "0:00"}
+          <Text className="text-white text-xs font-jakarta mr-3 min-w-[40px] text-right">
+            {formatTime(currentProgress * durationMs)}
           </Text>
         ) : null}
-
         <ProgressBarTrack
           config={config}
           barWidth={barWidth}
@@ -249,10 +264,9 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
           onLayout={handleLayout}
           gesture={gesture}
         />
-
         {config.showTimeLabels ? (
-          <Text className="text-white text-xs font-rubik ml-2 min-w-[35px]">
-            {durationMs > 0 ? formatTime(durationMs) : "--:--"}
+          <Text className="text-white text-xs font-jakarta ml-3 min-w-[40px]">
+            {formatTime(durationMs)}
           </Text>
         ) : null}
       </View>

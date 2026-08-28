@@ -212,12 +212,12 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#0F172A",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     fontSize: getResponsiveFontSize(13, 14, 15),
   },
   subtitle: {
     color: "#64748B",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     fontSize: getResponsiveFontSize(11, 12, 13),
     marginTop: 2,
   },
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   rowText: {
     flex: 1,
     color: "#334155",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
     fontSize: getResponsiveFontSize(11, 12, 13),
   },
 });

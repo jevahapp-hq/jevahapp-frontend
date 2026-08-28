@@ -1,4 +1,4 @@
-import { useContentLoading } from "../../../app/store/useInteractionStore";
+import { useContentLoading } from "@/store/useInteractionStore";
 
 /**
  * Hook to check if content stats are currently loading

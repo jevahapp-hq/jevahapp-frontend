@@ -109,7 +109,7 @@ export default function CreateGroupScreen() {
               fontSize: 20,
               fontWeight: "bold",
               color: "#000",
-              fontFamily: "Rubik-Bold",
+              fontFamily: "PlusJakartaSans-Bold",
               flex: 1,
               textAlign: "left",
             }}
@@ -124,7 +124,7 @@ export default function CreateGroupScreen() {
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {/* Display Picture Uploader (placeholder) */}
-          <Text style={{ fontSize: 10, color: "#667085", marginBottom: 4, fontFamily: "Rubik-Bold" }}>GROUP DISPLAY PICTURE</Text>
+          <Text style={{ fontSize: 10, color: "#667085", marginBottom: 4, fontFamily: "PlusJakartaSans-Bold" }}>GROUP DISPLAY PICTURE</Text>
           <View style={{
             borderWidth: 1,
             borderStyle: "dashed",
@@ -147,12 +147,12 @@ export default function CreateGroupScreen() {
               justifyContent: "center",
               backgroundColor: "#FFFFFF",
             }}>
-              <Text style={{ fontFamily: "Rubik-Bold", color: "#101828" }}>Upload</Text>
+              <Text style={{ fontFamily: "PlusJakartaSans-Bold", color: "#101828" }}>Upload</Text>
             </TouchableOpacity>
           </View>
 
           {/* Group Name */}
-          <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "Rubik-Bold" }}>GROUP NAME</Text>
+          <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "PlusJakartaSans-Bold" }}>GROUP NAME</Text>
           <TextInput
             placeholder="Add here"
             placeholderTextColor="#98A2B3"
@@ -165,13 +165,13 @@ export default function CreateGroupScreen() {
               height: 50,
               paddingHorizontal: 16,
               marginBottom: 16,
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
               color: "#101828",
             }}
           />
 
           {/* Description */}
-          <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "Rubik-Bold" }}>DESCRIPTION</Text>
+          <Text style={{ fontSize: 10, color: "#667085", marginBottom: 8, fontFamily: "PlusJakartaSans-Bold" }}>DESCRIPTION</Text>
           <View style={{ position: "relative", marginBottom: 6 }}>
             <TextInput
               placeholder="Type here"
@@ -188,12 +188,12 @@ export default function CreateGroupScreen() {
                 paddingHorizontal: 16,
                 paddingTop: 12,
                 textAlignVertical: "top",
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
                 color: "#101828",
               }}
             />
           </View>
-          <Text style={{ alignSelf: "flex-end", color: "#667085", fontSize: 10, marginBottom: 16, fontFamily: "Rubik-Regular" }}>
+          <Text style={{ alignSelf: "flex-end", color: "#667085", fontSize: 10, marginBottom: 16, fontFamily: "PlusJakartaSans-Regular" }}>
             {`${description.length}/${descriptionLimit}`}
           </Text>
 
@@ -211,7 +211,7 @@ export default function CreateGroupScreen() {
               {isPublic ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
             </View>
             <TouchableOpacity onPress={() => setIsPublic(!isPublic)} activeOpacity={0.7}>
-              <Text style={{ color: "#101828", fontFamily: "Rubik-Bold" }}>OPEN TO THE PUBLIC</Text>
+              <Text style={{ color: "#101828", fontFamily: "PlusJakartaSans-Bold" }}>OPEN TO THE PUBLIC</Text>
             </TouchableOpacity>
           </View>
 
@@ -233,7 +233,7 @@ export default function CreateGroupScreen() {
             {isCreating ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "Rubik-Bold" }}>Create</Text>
+              <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "PlusJakartaSans-Bold" }}>Create</Text>
             )}
           </TouchableOpacity>
         </ScrollView>

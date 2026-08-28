@@ -324,13 +324,13 @@ const styles = StyleSheet.create({
   },
   bookName: {
     fontSize: 12,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#1F2937",
     marginBottom: 2,
   },
   chapterNumber: {
     fontSize: 18,
-    fontFamily: "Rubik_700Bold",
+    fontFamily: "PlusJakartaSans_700Bold",
     color: "#256E63",
   },
   modalOverlay: {
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
   },
   chaptersScroll: {
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   },
   chapterButtonText: {
     fontSize: 16,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
   },
   chapterButtonTextActive: {

@@ -143,7 +143,7 @@ export function VideoComponentMiniCards({
 
   return (
     <View className="mb-6">
-      <Text className="text-[16px] mb-3 font-rubik-semibold text-[#344054] mt-4">
+      <Text className="text-[16px] mb-3 font-jakarta-semibold text-[#344054] mt-4">
         {title}
       </Text>
       <ScrollView
@@ -179,7 +179,7 @@ export function VideoComponentMiniCards({
                   </View>
                   <View className="absolute bottom-2 left-2 right-2">
                     <Text
-                      className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                      className="text-white text-start text-[14px] ml-1 mb-6 font-jakarta"
                       numberOfLines={2}
                     >
                       {item.title}
@@ -193,18 +193,18 @@ export function VideoComponentMiniCards({
                     </TouchableWithoutFeedback>
                     <View className="absolute bottom-14 right-3 bg-white shadow-md rounded-lg p-3 z-50 w-[160px] h-[180]">
                       <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                        <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
+                        <Text className="text-[#1D2939] font-jakarta ml-2">View Details</Text>
                         <Ionicons name="eye-outline" size={22} color="#1D2939" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleShare(item)}
                         className="py-2 border-b border-gray-200 flex-row items-center justify-between"
                       >
-                        <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
+                        <Text className="text-[#1D2939] font-jakarta ml-2">Share</Text>
                         <Feather name="send" size={22} color="#1D2939" />
                       </TouchableOpacity>
                       <TouchableOpacity className="flex-row items-center justify-between mt-6">
-                        <Text className="text-[#1D2939] font-rubik ml-2">Save to Library</Text>
+                        <Text className="text-[#1D2939] font-jakarta ml-2">Save to Library</Text>
                         <MaterialIcons name="bookmark-border" size={22} color="#1D2939" />
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -213,7 +213,7 @@ export function VideoComponentMiniCards({
                           await onDownload(item);
                         }}
                       >
-                        <Text className="text-[#1D2939] font-rubik ml-2">
+                        <Text className="text-[#1D2939] font-jakarta ml-2">
                           {checkIfDownloaded(item.fileUrl) ? "Downloaded" : "Download"}
                         </Text>
                         <Ionicons
@@ -228,7 +228,7 @@ export function VideoComponentMiniCards({
                 <View className="mt-2 flex flex-col w-full">
                   <View className="flex flex-row justify-between items-center">
                     <Text
-                      className="text-[12px] text-[#98A2B3] font-rubik font-medium"
+                      className="text-[12px] text-[#98A2B3] font-jakarta font-medium"
                       numberOfLines={1}
                       ellipsizeMode="tail"
                     >
@@ -246,7 +246,7 @@ export function VideoComponentMiniCards({
                   </View>
                   <View className="flex-row items-center">
                     <AntDesign name="eye" size={20} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">{views}</Text>
+                    <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-jakarta">{views}</Text>
                   </View>
                 </View>
               </View>

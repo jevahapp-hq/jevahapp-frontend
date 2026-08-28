@@ -18,7 +18,6 @@ export const DEFAULT_CONFIG: ProgressBarConfig = {
   seekSyncTicks: 2,
   seekMsTolerance: 300,
   minProgressEpsilon: 0.01,
-  /** Live-scrub the player while dragging (IG/TikTok style) */
   seekDuringDrag: true,
   liveSeekThrottleMs: 48,
   verticalScrub: {

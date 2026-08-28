@@ -111,7 +111,7 @@ export const useUserProfile = () => {
 
       // Refresh any media that was stuck with "Anonymous User"
       try {
-        const { useMediaStore } = await import("../store/useUploadStore");
+        const { useMediaStore } = await import("@/store/useUploadStore");
         await useMediaStore.getState().forceRefreshWithCompleteUserData();
       } catch (error) {
         console.error("❌ Failed to trigger media refresh:", error);
@@ -120,7 +120,7 @@ export const useUserProfile = () => {
       // Refresh interaction stats after profile fetch
       try {
         const { useInteractionStore } = await import(
-          "../store/useInteractionStore"
+          "@/store/useInteractionStore"
         );
         await useInteractionStore.getState().refreshAllStatsAfterLogin();
       } catch (error) {

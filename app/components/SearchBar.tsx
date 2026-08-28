@@ -22,7 +22,7 @@ export default function SearchBar({
       </View>
       <TextInput
         placeholder={placeholder}
-        className="ml-3 flex-1 text-base font-rubik"
+        className="ml-3 flex-1 text-base font-jakarta"
         value={value}
         onChangeText={onChange}
       />

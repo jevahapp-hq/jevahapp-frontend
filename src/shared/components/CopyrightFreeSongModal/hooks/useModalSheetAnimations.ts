@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Dimensions } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import {
@@ -7,42 +7,48 @@ import {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+const DISMISS_DISTANCE = 28;
+const DISMISS_VELOCITY = 350;
+
+function minimizeNow() {
+  useCopyrightFreeOverlayStore.getState().minimize();
+}
+
 export function useModalSheetAnimations({
-  visible,
   showPlaylistView,
   showPlaylistDetail,
-  onClose,
 }: {
   visible: boolean;
   showPlaylistView: boolean;
   showPlaylistDetail: boolean;
   onClose: () => void;
 }) {
-  const translateY = useSharedValue(SCREEN_HEIGHT);
   const playlistViewTranslateY = useSharedValue(SCREEN_HEIGHT);
   const playlistDetailTranslateY = useSharedValue(SCREEN_HEIGHT);
-  const dragY = useSharedValue(0);
 
-  const gesture = Gesture.Pan()
-    .activeOffsetY(20)
-    .failOffsetX([-18, 18])
-    .onUpdate((event) => {
-      if (event.translationY > 0) {
-        dragY.value = event.translationY;
-      }
-    })
-    .onEnd((event) => {
-      if (event.translationY > 120 || event.velocityY > 600) {
-        dragY.value = withTiming(SCREEN_HEIGHT, { duration: 250 }, () => {
-          runOnJS(onClose)();
+  const { handleGesture, artworkGesture } = useMemo(() => {
+    const pan = () =>
+      Gesture.Pan()
+        .activeOffsetY(10)
+        .failOffsetX([-48, 48])
+        .onEnd((event) => {
+          if (
+            event.translationY > DISMISS_DISTANCE ||
+            event.velocityY > DISMISS_VELOCITY
+          ) {
+            runOnJS(minimizeNow)();
+          }
         });
-      } else {
-        dragY.value = withTiming(0, { duration: 140 });
-      }
-    });
+
+    return {
+      handleGesture: pan(),
+      artworkGesture: pan(),
+    };
+  }, []);
 
   useEffect(() => {
     if (showPlaylistView) {
@@ -62,16 +68,6 @@ export function useModalSheetAnimations({
     }
   }, [showPlaylistDetail, playlistDetailTranslateY]);
 
-  useEffect(() => {
-    if (visible) {
-      dragY.value = 0;
-      translateY.value = withTiming(0, { duration: 140 });
-    } else {
-      dragY.value = 0;
-      translateY.value = SCREEN_HEIGHT;
-    }
-  }, [visible, translateY, dragY]);
-
   const playlistViewAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: playlistViewTranslateY.value }],
   }));
@@ -80,13 +76,10 @@ export function useModalSheetAnimations({
     transform: [{ translateY: playlistDetailTranslateY.value }],
   }));
 
-  const modalAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value + dragY.value }],
-  }));
-
   return {
-    gesture,
-    modalAnimatedStyle,
+    gesture: handleGesture,
+    handleGesture,
+    artworkGesture,
     playlistViewAnimatedStyle,
     playlistDetailAnimatedStyle,
   };

@@ -51,7 +51,7 @@ export default function HymnMiniCard({
         </View>
         <View className="absolute bottom-2 left-2 right-2">
           <Text
-            className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+            className="text-white text-start text-[14px] ml-1 mb-6 font-jakarta"
             numberOfLines={2}
           >
             {item.title}
@@ -61,7 +61,7 @@ export default function HymnMiniCard({
       <View className="mt-2 flex flex-col w-full">
         <View className="flex flex-row justify-between items-center">
           <Text
-            className="text-[12px] text-[#1D2939] font-rubik font-medium"
+            className="text-[12px] text-[#1D2939] font-jakarta font-medium"
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -72,7 +72,7 @@ export default function HymnMiniCard({
         <View className="flex-row items-center">
           <Ionicons name="book-outline" size={13} color="#98A2B3" />
           <Text
-            className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik"
+            className="text-[10px] text-gray-500 ml-2 mt-1 font-jakarta"
             numberOfLines={1}
           >
             {(item.meter || item.refs || "Hymn").toString()}

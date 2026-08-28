@@ -32,7 +32,7 @@ export default function PillTabs({ tabs, value, onChange }: PillTabsProps) {
             <Text
               style={{
                 color: active ? "white" : "#1D2939",
-                fontFamily: "Rubik_600SemiBold",
+                fontFamily: "PlusJakartaSans_600SemiBold",
                 fontSize: 14,
               }}
             >

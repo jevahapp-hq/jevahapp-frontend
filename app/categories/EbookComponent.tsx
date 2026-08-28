@@ -10,10 +10,10 @@ import { GestureResponderEvent, Image, ScrollView, Text, TouchableOpacity, Touch
 import CommentIcon from "../components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
-import { useDownloadStore } from "../store/useDownloadStore";
-import { useInteractionStore } from "../store/useInteractionStore";
-import { useLibraryStore } from "../store/useLibraryStore";
-import { useMediaStore } from "../store/useUploadStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
 
@@ -189,19 +189,19 @@ export default function EbookComponent() {
                 </TouchableWithoutFeedback>
                 <View className="absolute mt-[260px] right-4 bg-white shadow-md rounded-lg p-3 z-50 w-56 h-[180px]">
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-[#1D2939] font-jakarta ml-2">
                     View Details
                   </Text>
                   <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-sm text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-sm text-[#1D2939] font-jakarta ml-2">
                     Share
                   </Text>
                   <AntDesign name="share-alt" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-[#1D2939] font-jakarta ml-2">
                     Save to Library
                   </Text>
                   <MaterialIcons name="library-add" size={18} color="#3A3E50" />
@@ -219,7 +219,7 @@ export default function EbookComponent() {
                     }
                   }}
                 >
-                  <Text className="text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-[#1D2939] font-jakarta ml-2">
                     {checkIfDownloaded(ebook._id || ebook.fileUrl || "") ? "Downloaded" : "Download"}
                   </Text>
                   <Ionicons 
@@ -245,12 +245,12 @@ export default function EbookComponent() {
               </View>
               <View className="ml-3">
                 <View className="flex-row items-center">
-                  <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
+                  <Text className="ml-1 text-[13px] font-jakarta-semibold text-[#344054] mt-1">
                     {getUserDisplayNameFromContent(ebook)}
                   </Text>
                   <View className="flex flex-row mt-2 ml-2">
                     <Ionicons name="time-outline" size={13} color="#9CA3AF" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {ebook.timeAgo}
                     </Text>
                   </View>
@@ -258,19 +258,19 @@ export default function EbookComponent() {
                 <View className="flex flex-row mt-2">
                   <View className="flex-row items-center">
                     <MaterialIcons name="visibility" size={16} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {ebook.views || 0}
                     </Text>
                   </View>
                   <View className="flex-row items-center ml-4">
                     <AntDesign name="share-alt" size={16} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {ebook.sheared || 0}
                     </Text>
                   </View>
                   <View className="flex-row items-center ml-6">
                     <Fontisto name="favorite" size={14} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {ebook.saved || 0}
                     </Text>
                   </View>
@@ -280,7 +280,7 @@ export default function EbookComponent() {
                       size={16}
                       color="#98A2B3"
                     />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {ebook.favorite || 0}
                     </Text>
                   </View>
@@ -308,7 +308,7 @@ export default function EbookComponent() {
     setModalIndex: any
   ) => (
     <View className="mt-5">
-      <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+      <Text className="text-[16px] font-jakarta-semibold text-[#344054] mt-4 mb-2 ml-2">
         {title}
       </Text>
       <ScrollView
@@ -334,7 +334,7 @@ export default function EbookComponent() {
 
               <View className="absolute bottom-2 left-2 right-2">
                 <Text
-                  className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                  className="text-white text-start text-[14px] ml-1 mb-6 font-jakarta"
                   numberOfLines={2}
                 >
                   {item.title}
@@ -344,19 +344,19 @@ export default function EbookComponent() {
             {modalIndex === index && (
               <View className="absolute mt-[26px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-30">
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-[#1D2939] font-jakarta ml-2">
                     View Details
                   </Text>
                   <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-sm text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-sm text-[#1D2939] font-jakarta ml-2">
                     Share
                   </Text>
                   <AntDesign name="share-alt" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik mr-2">
+                  <Text className="text-[#1D2939] font-jakarta mr-2">
                     Save to Library
                   </Text>
                   <MaterialIcons name="library-add" size={18} color="#3A3E50" />
@@ -375,7 +375,7 @@ export default function EbookComponent() {
                     }
                   }}
                 >
-                  <Text className="text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-[#1D2939] font-jakarta ml-2">
                     {checkIfDownloaded(item._id || item.fileUrl || "") ? "Downloaded" : "Download"}
                   </Text>
                   <Ionicons 
@@ -389,7 +389,7 @@ export default function EbookComponent() {
             <View className="mt-2 flex flex-col w-full">
               <View className="flex flex-row justify-between items-center">
                 <Text
-                  className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                  className="text-[12px] text-[#1D2939] font-jakarta font-medium"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
@@ -426,7 +426,7 @@ export default function EbookComponent() {
                   <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
                 <View className="flex-row items-center mr-6">
                   <MaterialIcons name="visibility" size={28} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                   {item.views || 0}
                 </Text>
               </View>
@@ -436,7 +436,7 @@ export default function EbookComponent() {
                     size={28}
                     color={getContentStat(contentId, "liked") ? "#D22A2A" : "#98A2B3"}
                   />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {getContentCount(contentId, "likes") || item.favorite || 0}
                   </Text>
                 </TouchableOpacity>
@@ -464,7 +464,7 @@ export default function EbookComponent() {
                     size={28}
                     color={isItemSaved(getContentKey(item)) ? "#FEA74E" : "#98A2B3"}
                   />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {getContentCount(contentId, "saves") || item.saved || 0}
                   </Text>
                 </TouchableOpacity>
@@ -492,10 +492,10 @@ export default function EbookComponent() {
   if (processedEbooks.length === 0) {
     return (
       <View className="flex-1 justify-center items-center">
-        <Text className="text-[#344054] text-lg font-rubik-semibold mb-2">
+        <Text className="text-[#344054] text-lg font-jakarta-semibold mb-2">
           No Ebooks Available
         </Text>
-        <Text className="text-[#667085] text-sm font-rubik text-center px-8">
+        <Text className="text-[#667085] text-sm font-jakarta text-center px-8">
           Upload PDF ebooks through the upload section to see them here.
         </Text>
       </View>
@@ -527,7 +527,7 @@ export default function EbookComponent() {
       {/* 1. Most Recent */}
       {recentEbooks.length > 0 && (
         <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+          <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">
             Most Recent
           </Text>
           {recentEbooks.slice(0, 1).map((ebook, index) => (
@@ -549,7 +549,7 @@ export default function EbookComponent() {
       {/* 3. Explore More Ebooks */}
       {recentEbooks.length > 1 && (
         <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">
+          <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-3">
             Explore More Ebooks
           </Text>
           <View className="gap-8">
@@ -572,15 +572,15 @@ export default function EbookComponent() {
         )
       ) : (
         <View className="mt-5 mb-4">
-          <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+          <Text className="text-[16px] font-jakarta-semibold text-[#344054] mt-4 mb-2 ml-2">
             Trending Now
           </Text>
           <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
             <Text className="text-[32px] mb-2">📈</Text>
-            <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
+            <Text className="text-[14px] font-jakarta-medium text-[#98A2B3] text-center">
               No trending ebooks yet
             </Text>
-            <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
+            <Text className="text-[12px] font-jakarta text-[#D0D5DD] text-center mt-1">
               Keep engaging with content to see trending ebooks here
             </Text>
           </View>
@@ -590,7 +590,7 @@ export default function EbookComponent() {
       {/* 5. Exploring More */}
       {recentEbooks.length > 5 && (
         <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+          <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">
             Exploring More
           </Text>
           <View className="gap-8">
@@ -616,7 +616,7 @@ export default function EbookComponent() {
       {/* 7. More Ebooks */}
       {recentEbooks.length > 9 && (
         <>
-          <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+          <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">
             More Ebooks
           </Text>
           <View className="gap-8">

@@ -7,7 +7,7 @@ import { AppState, type AppStateStatus } from "react-native";
 import * as Network from "expo-network";
 import { flushLikeMutationQueue } from "./likeFlush";
 import { getPersistedContentInteractions } from "../contentInteractionPersist";
-import { useInteractionStore } from "../../store/useInteractionStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 import { devLog } from "./logging";
 
 function hydrateStatsFromDiskCache() {

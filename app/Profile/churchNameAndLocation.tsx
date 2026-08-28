@@ -208,7 +208,7 @@ function ChurchNameAndLocation() {
 
         <View className="flex-1 w-full items-center mt-2 bg-[#FCFCFD]">
           <View className="flex-1 w-[333px]">
-            <Text className="font-rubik-semibold text-[32px] text-[#1D2939]">
+            <Text className="font-jakarta-semibold text-[32px] text-[#1D2939]">
               What’s the name of your church?
             </Text>
 

@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     borderColor: "#D1D5DB",
   },
   initial: {
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#344054",
   },
   textContainer: {
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 14,
-    fontFamily: "Rubik_700Bold",
+    fontFamily: "PlusJakartaSans_700Bold",
     color: "#1F2937",
   },
   dot: {
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   },
   timeAgo: {
     fontSize: 11,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     textTransform: "uppercase",
   },

@@ -1,5 +1,5 @@
 // Test script to verify library store functionality
-const { useLibraryStore } = require("./app/store/useLibraryStore.tsx");
+const { useLibraryStore } = require("./src/store/useLibraryStore.tsx");
 
 console.log("🧪 Testing Library Store...");
 

@@ -14,11 +14,11 @@ jevahapp-frontend/
 │   ├── hooks/                # App-specific hooks
 │   ├── screens/              # Screen components
 │   ├── services/             # API services & domain logic
-│   │   └── copyright-free/   # Copyright-free music (types, service)
-│   ├── store/                # Zustand stores
-│   └── utils/                # App utilities
-│
+    │   │   └── copyright-free/   # Copyright-free music (types, service)
+    │   └── utils/                # App utilities
+    │
 └── src/                      # Shared, reusable code
+    ├── store/                # Zustand stores (not routes)
     ├── core/                 # Core infrastructure
     │   └── api/              # API clients (MediaApi, ApiClient)
     ├── features/             # Feature modules
@@ -49,6 +49,7 @@ Use these for cleaner imports:
 | `@/shared/*` | `src/shared/*` |
 | `@/core/*` | `src/core/*` |
 | `@/features/*` | `src/features/*` |
+| `@/store/*` | `src/store/*` |
 | `@/*` | Root |
 
 ## Adding New Code
@@ -56,7 +57,7 @@ Use these for cleaner imports:
 - **New API service** → `app/services/<domain>/` or `src/core/api/services/`
 - **New shared component** → `src/shared/components/`
 - **New feature** → `src/features/<feature-name>/`
-- **New store** → `app/store/` (app-specific) or `src/core/store/` (reusable)
+- **New store** → `src/store/`
 - **New screen/route** → `app/` (Expo Router file-based routing)
 
 ## Modularization Guidelines

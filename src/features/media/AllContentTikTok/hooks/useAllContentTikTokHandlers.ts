@@ -5,15 +5,11 @@ import { useCallback } from "react";
 import { Alert, Share } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { mapContentTypeForBackend } from "../../../../../app/utils/engagementHelpers";
-import {
-  getCachedContentInteraction,
-  isContentInteractionFresh,
-  resolveLikedFlag,
-} from "../../../../../app/utils/contentInteractionPersist";
+import { resolveLikeSeed } from "../../../../shared/hooks/useContentLikeState";
 import { useVideoNavigation } from "../../../../../app/hooks/useVideoNavigation";
-import { useGlobalVideoStore } from "../../../../../app/store/useGlobalVideoStore";
-import { useInteractionStore } from "../../../../../app/store/useInteractionStore";
-import { useLibraryStore } from "../../../../../app/store/useLibraryStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -178,30 +174,13 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        const storeStats = useInteractionStore.getState().contentStats[contentId];
-        const cached = getCachedContentInteraction(contentId);
-        const cacheFresh = isContentInteractionFresh(contentId);
-        const initialLiked = Boolean(
-          resolveLikedFlag(
-            contentId,
-            storeStats?.userInteractions?.liked ??
-              (item as any).hasLiked ??
-              (item as any).userHasLiked
-          )
+        // Shared with Reels so both surfaces seed the optimistic flip
+        // identically — see resolveLikeSeed.
+        const result = await toggleLike(
+          contentId,
+          contentType,
+          resolveLikeSeed(contentId, item as any)
         );
-        const initialLikes =
-          storeStats?.likes ??
-          (cacheFresh ? cached?.likes : undefined) ??
-          item.likeCount ??
-          item.totalLikes ??
-          item.likes ??
-          item.favorite ??
-          0;
-
-        const result = await toggleLike(contentId, contentType, {
-          initialLikes: Number(initialLikes) || 0,
-          initialLiked,
-        });
         if (result?.authRequired) {
           return;
         }

@@ -150,6 +150,15 @@ export function subscribeSessionExpired(
   listener: SessionExpiredListener
 ): () => void {
   listeners.push(listener);
+  // Deferred overlay can mount after refresh already ended the session
+  // (especially slow in __DEV__). Replay so login redirect still runs.
+  if (notified) {
+    try {
+      listener();
+    } catch {
+      // no-op
+    }
+  }
   return () => {
     listeners = listeners.filter((l) => l !== listener);
   };

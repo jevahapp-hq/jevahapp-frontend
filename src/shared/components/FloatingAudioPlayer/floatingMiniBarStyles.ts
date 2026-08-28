@@ -1,143 +1,171 @@
 import { Platform, StyleSheet } from "react-native";
 import { UI_CONFIG } from "../../constants";
+import {
+  MINI_PLAYER_ELEVATION,
+  MINI_PLAYER_Z_INDEX,
+} from "../../layout/bottomChromeLayout";
 
-export const MINI_PLAYER_HEIGHT = 72;
+export const MINI_PLAYER_HEIGHT = 86;
+export const MINI_PLAYER_RADIUS = 18;
+export const ARTWORK_SIZE = 44;
+
+/** Deep ink surface: separates the bar from the white nav without a heavy glow. */
+export const SURFACE = "#111827";
+export const ON_SURFACE = "#FFFFFF";
+export const ON_SURFACE_MUTED = "rgba(255, 255, 255, 0.62)";
+const HAIRLINE = "rgba(255, 255, 255, 0.10)";
 
 export const floatingMiniBarStyles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 16,
-    right: 16,
-    height: MINI_PLAYER_HEIGHT + 4,
-    zIndex: 100,
+    left: 12,
+    right: 12,
+    height: MINI_PLAYER_HEIGHT,
+    zIndex: MINI_PLAYER_Z_INDEX,
+    borderRadius: MINI_PLAYER_RADIUS,
+    backgroundColor: SURFACE,
     overflow: "hidden",
-    borderRadius: 32,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.22,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 12,
+        elevation: MINI_PLAYER_ELEVATION,
       },
     }),
   },
-  glassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-    borderRadius: 32,
+
+  /** Grab affordance + a hint that the bar is vertically draggable. */
+  /** Full-width strip so the bar can be dragged without fighting the buttons. */
+  dragHandle: {
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  glowEffect: {
-    position: "absolute",
-    top: -30,
-    left: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
-    opacity: 0.25,
+  grabber: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255, 255, 255, 0.35)",
   },
-  gradientAccent: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
-    opacity: 0.8,
-  },
+
   content: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingTop: 2,
+    paddingBottom: 10,
+  },
+
+  // ---- Artwork -------------------------------------------------------------
+  artworkWrap: {
+    width: ARTWORK_SIZE,
+    height: ARTWORK_SIZE,
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+  },
+  artwork: {
+    width: "100%",
     height: "100%",
   },
-  thumbnailContainer: {
-    marginRight: 12,
-    position: "relative",
-  },
-  thumbnail: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.8)",
-  },
-  playIndicator: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
+  artworkRing: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: 10,
-    backgroundColor: UI_CONFIG.COLORS.SECONDARY,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2.5,
-    borderColor: "#FFFFFF",
-    shadowColor: UI_CONFIG.COLORS.SECONDARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255, 255, 255, 0.18)",
   },
-  playIndicatorDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#FFFFFF",
-  },
-  trackInfo: {
+
+  // ---- Meta ---------------------------------------------------------------
+  meta: {
     flex: 1,
+    marginLeft: 12,
     marginRight: 8,
+    justifyContent: "center",
   },
-  trackTitle: {
-    fontSize: 15,
-    fontFamily: "Rubik-SemiBold",
-    color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-    letterSpacing: -0.2,
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  trackArtist: {
-    fontSize: 12,
-    fontFamily: "Rubik",
-    color: UI_CONFIG.COLORS.TEXT_SECONDARY,
+  title: {
+    flexShrink: 1,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: "PlusJakartaSans-Bold",
+    color: ON_SURFACE,
+    letterSpacing: -0.1,
+  },
+  expandChevron: {
+    marginLeft: 6,
+  },
+  expandButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 2,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  },
+  subtitle: {
+    fontSize: 11.5,
+    lineHeight: 15,
     marginTop: 1,
-    opacity: 0.8,
+    fontFamily: "PlusJakartaSans-Medium",
+    color: ON_SURFACE_MUTED,
   },
+
+  // ---- Controls -----------------------------------------------------------
   controls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  closeButton: {
-    padding: 6,
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
-    borderRadius: 16,
-    marginLeft: 4,
-  },
-  controlButton: {
-    padding: 8,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.8)",
   },
   playButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: UI_CONFIG.COLORS.PRIMARY,
-    justifyContent: "center",
     alignItems: "center",
-    shadowColor: UI_CONFIG.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    justifyContent: "center",
+  },
+  ghostButton: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 2,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 2,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  },
+
+  // ---- Progress -----------------------------------------------------------
+  progressTrack: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 6,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
   },
 });

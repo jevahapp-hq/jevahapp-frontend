@@ -105,7 +105,7 @@ export default function AgeInputScreen() {
           className="w-[333px] h-[56px] bg-white rounded-2xl shadow-md justify-center items-center mb-8 border border-[#FEA74E]"
           onPress={() => setShowPicker(true)}
         >
-          <Text className="text-[16px] font-rubik  text-[#1D2939]">
+          <Text className="text-[16px] font-jakarta  text-[#1D2939]">
             {date
               ? date.toLocaleDateString(undefined, {
                   year: "numeric",

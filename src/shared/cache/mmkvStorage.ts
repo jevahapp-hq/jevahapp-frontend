@@ -136,3 +136,30 @@ export async function hydrateFallbackKvFromAsyncStorage(
     // ignore
   }
 }
+
+/**
+ * Prefix variant for caches whose keys are generated at runtime (Bible books,
+ * chapters and verses are keyed by translation/book/chapter), so they cannot
+ * be enumerated ahead of time.
+ */
+export async function hydrateFallbackKvByPrefix(
+  prefixes: string[]
+): Promise<void> {
+  if (isMmkvNative || prefixes.length === 0) return;
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const matching = allKeys.filter((asyncKey) => {
+      if (!asyncKey.startsWith(ASYNC_PREFIX)) return false;
+      const key = asyncKey.slice(ASYNC_PREFIX.length);
+      return prefixes.some((p) => key.startsWith(p));
+    });
+    if (matching.length === 0) return;
+    const pairs = await AsyncStorage.multiGet(matching);
+    for (const [asyncKey, value] of pairs) {
+      if (value == null) continue;
+      memory.set(asyncKey.slice(ASYNC_PREFIX.length), value);
+    }
+  } catch {
+    // ignore
+  }
+}

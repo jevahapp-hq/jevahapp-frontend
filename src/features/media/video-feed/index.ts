@@ -8,7 +8,9 @@ export {
   FEED_VIDEO_MIN_VIEW_MS,
   FEED_VIDEO_VISIBLE_PERCENT,
   FEED_WARM_IDLE_MOUNT_COUNT,
+  getFeedVideoRowSize,
 } from "./feedVideoConfig";
 export { FeedVideoPoster, posterUriFromMedia } from "./FeedVideoPoster";
 export { FeedVideoSurface } from "./FeedVideoSurface";
+export { fitRectInBox } from "./fitRectInBox";
 export { useInstantFeedVideoPlayer } from "./useInstantFeedVideoPlayer";

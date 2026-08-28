@@ -7,7 +7,9 @@
  * Format milliseconds to MM:SS format
  */
 export const formatTime = (ms: number): string => {
-  const totalSeconds = Math.floor(ms / 1000);
+  if (!Number.isFinite(ms) || ms < 0) return "0:00";
+  const clampedMs = Math.min(ms, 24 * 60 * 60 * 1000);
+  const totalSeconds = Math.floor(clampedMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;

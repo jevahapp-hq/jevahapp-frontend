@@ -53,15 +53,15 @@ export function AllLibraryBookModal({
         </View>
 
         <View className="items-center mb-6">
-          <Text className="text-xl font-rubik-bold text-center mb-2">
+          <Text className="text-xl font-jakarta-bold text-center mb-2">
             {selectedBook.title}
           </Text>
           {selectedBook.speaker && (
-            <Text className="text-gray-600 font-rubik text-center mb-2">
+            <Text className="text-gray-600 font-jakarta text-center mb-2">
               by {selectedBook.speaker}
             </Text>
           )}
-          <Text className="text-sm text-gray-500 font-rubik text-center">
+          <Text className="text-sm text-gray-500 font-jakarta text-center">
             E-Book
           </Text>
         </View>
@@ -71,14 +71,14 @@ export function AllLibraryBookModal({
             onPress={onClose}
             className="flex-1 bg-gray-200 py-3 rounded-lg items-center"
           >
-            <Text className="text-gray-700 font-rubik-bold">Close</Text>
+            <Text className="text-gray-700 font-jakarta-bold">Close</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => onReadNow(selectedBook)}
             className="flex-1 bg-[#FEA74E] py-3 rounded-lg items-center"
           >
-            <Text className="text-white font-rubik-bold">Read Now</Text>
+            <Text className="text-white font-jakarta-bold">Read Now</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>

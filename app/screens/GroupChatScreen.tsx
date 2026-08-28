@@ -223,7 +223,7 @@ export default function GroupChatScreen() {
             fontWeight: "bold",
             color: "#333",
             marginBottom: 4,
-            fontFamily: "Rubik-Bold",
+            fontFamily: "PlusJakartaSans-Bold",
           }}
         >
           {message.sender}
@@ -244,7 +244,7 @@ export default function GroupChatScreen() {
               fontSize: 16,
               color: "#333",
               lineHeight: 22,
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
             }}
           >
             {message.message}
@@ -262,7 +262,7 @@ export default function GroupChatScreen() {
             style={{
               fontSize: 12,
               color: "#999",
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
             }}
           >
             {message.timestamp}
@@ -328,7 +328,7 @@ export default function GroupChatScreen() {
               fontSize: 20,
               fontWeight: "bold",
               color: "#000",
-              fontFamily: "Rubik-Bold",
+              fontFamily: "PlusJakartaSans-Bold",
               flex: 1,
               textAlign: "center",
             }}
@@ -367,7 +367,7 @@ export default function GroupChatScreen() {
                 fontSize: 14,
                 color: "#666",
                 fontWeight: "bold",
-                fontFamily: "Rubik-Bold",
+                fontFamily: "PlusJakartaSans-Bold",
               }}
             >
               Today
@@ -420,7 +420,7 @@ export default function GroupChatScreen() {
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 fontSize: 16,
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
                 maxHeight: 100,
                 minHeight: 44,
               }}

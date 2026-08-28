@@ -137,7 +137,7 @@ export default function ReportMediaModal({
                 fontSize: 20,
                 fontWeight: "bold",
                 color: "#333",
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
               }}
             >
               Report Content
@@ -172,7 +172,7 @@ export default function ReportMediaModal({
                   fontSize: 14,
                   color: "#667085",
                   marginBottom: 16,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                 }}
               >
                 Reporting: {mediaTitle}
@@ -185,7 +185,7 @@ export default function ReportMediaModal({
                 fontWeight: "600",
                 color: "#333",
                 marginBottom: 12,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
               }}
             >
               Why are you reporting this content? *
@@ -232,7 +232,7 @@ export default function ReportMediaModal({
                   style={{
                     fontSize: 16,
                     color: "#333",
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                     flex: 1,
                   }}
                 >
@@ -248,7 +248,7 @@ export default function ReportMediaModal({
                 color: "#333",
                 marginTop: 16,
                 marginBottom: 12,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
               }}
             >
               Additional Details (Optional)
@@ -262,7 +262,7 @@ export default function ReportMediaModal({
                 fontSize: 16,
                 minHeight: 100,
                 textAlignVertical: "top",
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#333",
               }}
               placeholder="Please provide more details about why you're reporting this content..."
@@ -280,7 +280,7 @@ export default function ReportMediaModal({
                 color: "#999",
                 textAlign: "right",
                 marginTop: 4,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
               }}
             >
               {description.length}/1000 characters
@@ -315,7 +315,7 @@ export default function ReportMediaModal({
                   color: "#666",
                   fontSize: 16,
                   fontWeight: "600",
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                 }}
               >
                 Cancel
@@ -344,7 +344,7 @@ export default function ReportMediaModal({
                     color: "#fff",
                     fontSize: 16,
                     fontWeight: "600",
-                    fontFamily: "Rubik-SemiBold",
+                    fontFamily: "PlusJakartaSans-SemiBold",
                   }}
                 >
                   Submit Report

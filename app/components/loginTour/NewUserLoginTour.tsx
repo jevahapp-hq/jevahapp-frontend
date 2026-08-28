@@ -24,7 +24,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { pausePlaybackSession } from "../../../src/shared/audio/playOrToggleTrack";
-import { setMiniPlayerSuppressed } from "../../../src/shared/audio/miniPlayerGate";
+import {
+  releaseMiniPlayer,
+  suppressMiniPlayer,
+} from "../../../src/shared/audio/miniPlayerGate";
 import { isLiteProfileActive } from "../../../src/shared/lite/liteProfile";
 import { triggerHapticFeedback } from "../../../src/shared/utils/haptics";
 import {
@@ -33,7 +36,7 @@ import {
   getResponsiveSpacing,
 } from "../../../utils/responsive";
 import { trackEvent } from "../../utils/analytics";
-import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import type { LoginTourDismissReason } from "./useNewUserLoginTour";
 
 type Slide = {
@@ -166,7 +169,7 @@ export default function NewUserLoginTour({
   }, []);
 
   useEffect(() => {
-    setMiniPlayerSuppressed(true);
+    suppressMiniPlayer("login-tour");
     const pause = () => {
       try {
         useGlobalVideoStore.getState().pauseAllVideos();
@@ -179,7 +182,7 @@ export default function NewUserLoginTour({
     const again = setTimeout(pause, 700);
     return () => {
       clearTimeout(again);
-      setMiniPlayerSuppressed(false);
+      releaseMiniPlayer("login-tour");
     };
   }, []);
 

@@ -283,7 +283,7 @@ export const authUtils = {
     // Refresh interaction stats after login to restore like/bookmark state
     try {
       const { useInteractionStore } = await import(
-        "../store/useInteractionStore"
+        "@/store/useInteractionStore"
       );
       await useInteractionStore.getState().refreshAllStatsAfterLogin();
       if (__DEV__) console.log("✅ Refreshed interaction stats after login");
@@ -303,7 +303,7 @@ export const authUtils = {
 
     try {
       const { useInteractionStore } = await import(
-        "../store/useInteractionStore"
+        "@/store/useInteractionStore"
       );
       useInteractionStore.getState().clearCache();
       if (__DEV__) console.log("✅ Cleared interaction cache on logout");

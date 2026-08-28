@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   Image,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Skeleton from "../../src/shared/components/Skeleton/Skeleton";
 import { useDailyVerse } from "../hooks/useDailyVerse";
 
 interface BibleOnboardingProps {
@@ -23,28 +23,23 @@ export default function BibleOnboarding({
   onEnterBible,
 }: BibleOnboardingProps) {
   const { currentVerse, loading, fadeAnim, loadTodaysVerse } = useDailyVerse();
-  const [slideAnim] = useState(new Animated.Value(50));
+  const [slideAnim] = useState(() => new Animated.Value(16));
 
   useEffect(() => {
-    // Reset fadeAnim to 0 so it can animate to 1
     fadeAnim.setValue(0);
-    startAnimations();
-  }, []);
-
-  const startAnimations = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1000,
+        duration: 180,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 800,
+        duration: 220,
         useNativeDriver: true,
       }),
     ]).start();
-  };
+  }, [fadeAnim, slideAnim]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -97,9 +92,27 @@ export default function BibleOnboarding({
           </View>
 
           {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#256E63" />
-              <Text style={styles.loadingText}>Loading today's verse...</Text>
+            <View style={styles.verseContainer}>
+              <View style={styles.verseCard}>
+                <Skeleton height={16} borderRadius={8} style={styles.skeletonLine} />
+                <Skeleton height={16} borderRadius={8} style={styles.skeletonLine} />
+                <Skeleton
+                  width="72%"
+                  height={16}
+                  borderRadius={8}
+                  style={styles.skeletonLineLast}
+                />
+                <View style={styles.verseReference}>
+                  <Skeleton width={132} height={15} borderRadius={7} />
+                  <Skeleton
+                    width={56}
+                    height={13}
+                    borderRadius={6}
+                    style={styles.skeletonTranslation}
+                  />
+                </View>
+              </View>
+              <Skeleton width={196} height={13} borderRadius={6} />
             </View>
           ) : currentVerse ? (
             <Animated.View
@@ -238,14 +251,15 @@ const styles = StyleSheet.create({
     color: "#256E63",
     marginLeft: 8,
   },
-  loadingContainer: {
-    alignItems: "center",
-    paddingVertical: 40,
+  skeletonLine: {
+    marginBottom: 10,
   },
-  loadingText: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginTop: 16,
+  skeletonLineLast: {
+    alignSelf: "center",
+    marginBottom: 18,
+  },
+  skeletonTranslation: {
+    marginTop: 6,
   },
   verseContainer: {
     alignItems: "center",

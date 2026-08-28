@@ -245,7 +245,7 @@ class SocketManager {
     this.socket.on("view-updated", (data: any) => {
       try {
         sockLog("Real-time view updated:", data);
-        const { useInteractionStore } = require("../store/useInteractionStore");
+        const { useInteractionStore } = require("@/store/useInteractionStore");
         const store = useInteractionStore.getState();
         if (data?.contentId && typeof data?.viewCount === "number") {
           store.mutateStats(data.contentId, (_s: any) => ({
@@ -440,7 +440,7 @@ class SocketManager {
         commentCount: data?.totalComments ?? data?.commentCount,
         likeCount: data?.likeCount ?? data?.totalLikes,
       });
-      const { useInteractionStore } = require("../store/useInteractionStore");
+      const { useInteractionStore } = require("@/store/useInteractionStore");
       if (data?.contentId) {
         useInteractionStore.getState().loadComments(data.contentId);
       }

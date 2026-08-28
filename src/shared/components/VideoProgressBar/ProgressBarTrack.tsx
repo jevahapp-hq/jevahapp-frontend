@@ -71,7 +71,9 @@ export function ProgressBarTrack({
           }}
         />
 
-        {config.showFloatingLabel && (isDragging || isSeeking) ? (
+        {config.showFloatingLabel &&
+        durationMs > 0 &&
+        (isDragging || isSeeking) ? (
           <Animated.View
             className="absolute bg-black/70 px-2 py-1 rounded"
             pointerEvents="none"
@@ -86,12 +88,13 @@ export function ProgressBarTrack({
                   : 0,
             }}
           >
-            <Text className="text-white text-[10px] font-rubik">
+            <Text className="text-white text-[10px] font-jakarta">
               {formatTime(currentProgress * durationMs)}
             </Text>
           </Animated.View>
         ) : null}
 
+        {knobRadius > 0.5 ? (
         <Animated.View
           className="absolute rounded-full"
           pointerEvents="none"
@@ -123,6 +126,7 @@ export function ProgressBarTrack({
             zIndex: 10,
           }}
         />
+        ) : null}
       </View>
     </GestureDetector>
   );

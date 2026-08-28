@@ -249,49 +249,53 @@ export const getScreenDimensions = () => ({
 });
 
 // Responsive text styles
-export const getResponsiveTextStyle = (type: 'title' | 'subtitle' | 'body' | 'caption' | 'button') => {
-  const baseStyle = {
-    fontFamily: 'Rubik_400Regular',
-  };
+/**
+ * Weight must be expressed as a font file, not `fontWeight`. Android resolves
+ * an explicit `fontFamily` to a single file and ignores `fontWeight`, so
+ * pairing the Regular file with `fontWeight: '700'` renders Regular.
+ */
+export const JAKARTA = {
+  regular: 'PlusJakartaSans_400Regular',
+  medium: 'PlusJakartaSans_500Medium',
+  semibold: 'PlusJakartaSans_600SemiBold',
+  bold: 'PlusJakartaSans_700Bold',
+  extrabold: 'PlusJakartaSans_800ExtraBold',
+} as const;
 
+export const getResponsiveTextStyle = (type: 'title' | 'subtitle' | 'body' | 'caption' | 'button') => {
   switch (type) {
     case 'title':
     return {
-        ...baseStyle,
+        fontFamily: JAKARTA.extrabold,
         fontSize: getResponsiveFontSize(24, 28, 32, 36),
-        fontWeight: '700' as const,
         lineHeight: getResponsiveSize(32, 36, 40, 44),
       };
     case 'subtitle':
     return {
-        ...baseStyle,
+        fontFamily: JAKARTA.bold,
         fontSize: getResponsiveFontSize(18, 20, 22, 24),
-        fontWeight: '600' as const,
         lineHeight: getResponsiveSize(24, 26, 28, 30),
       };
     case 'body':
       return {
-        ...baseStyle,
+        fontFamily: JAKARTA.regular,
         fontSize: getResponsiveFontSize(14, 16, 18, 20),
-        fontWeight: '400' as const,
         lineHeight: getResponsiveSize(20, 22, 24, 26),
       };
     case 'caption':
     return {
-        ...baseStyle,
+        fontFamily: JAKARTA.regular,
         fontSize: getResponsiveFontSize(12, 14, 16, 18),
-        fontWeight: '400' as const,
         lineHeight: getResponsiveSize(16, 18, 20, 22),
       };
     case 'button':
     return {
-        ...baseStyle,
+        fontFamily: JAKARTA.bold,
         fontSize: getResponsiveFontSize(14, 16, 18, 20),
-        fontWeight: '600' as const,
         lineHeight: getResponsiveSize(20, 22, 24, 26),
       };
     default:
-      return baseStyle;
+      return { fontFamily: JAKARTA.regular };
   }
 };
 

@@ -12,12 +12,11 @@ import {
 import AuthGlassToastHost from "./auth/AuthGlassToastHost";
 import CommentModalV2 from "./CommentModalV2";
 import CopyrightFreeSongOverlayHost from "./CopyrightFreeSongOverlayHost";
+import FabTapCatcher from "./FabTapCatcher";
+import FloatingAudioPlayer from "../../src/shared/components/FloatingAudioPlayer";
 
 const SessionExpiredOverlay = React.lazy(
   () => import("./SessionExpiredOverlay")
-);
-const FloatingAudioPlayer = React.lazy(
-  () => import("../../src/shared/components/FloatingAudioPlayer")
 );
 const ServerUnavailableModalWrapper = React.lazy(
   () => import("./ServerUnavailableModalWrapper")
@@ -31,6 +30,8 @@ export default function DeferredRootOverlays() {
     const task = InteractionManager.runAfterInteractions(() => {
       if (!cancelled) setReady(true);
     });
+    // SessionExpiredOverlay must subscribe before a cold-start refresh
+    // failure, or the login redirect is missed.
     const fallback = setTimeout(() => {
       if (!cancelled) setReady(true);
     }, 400);
@@ -48,10 +49,11 @@ export default function DeferredRootOverlays() {
       <AuthGlassToastHost />
       <CommentModalV2 />
       <CopyrightFreeSongOverlayHost />
+      <FloatingAudioPlayer />
+      <FabTapCatcher />
       {ready ? (
         <Suspense fallback={null}>
           <SessionExpiredOverlay />
-          <FloatingAudioPlayer />
           <ServerUnavailableModalWrapper />
         </Suspense>
       ) : null}

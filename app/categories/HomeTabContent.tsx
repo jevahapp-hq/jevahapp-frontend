@@ -8,7 +8,6 @@ import React, {
   type ReactNode,
 } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   ScrollView,
   Text,
@@ -24,6 +23,8 @@ import Animated, {
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AllContentTikTok } from "../../src/features/media/AllContentTikTok";
+import { FeedSkeletonStack } from "../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
+import { isLiteProfileActive } from "../../src/shared/lite/liteProfile";
 import {
   getResponsiveBorderRadius,
   getResponsiveSpacing,
@@ -32,8 +33,8 @@ import {
 import Header from "../components/Header";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useAuth } from "../hooks/useAuth";
-import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
-import { useMediaStore } from "../store/useUploadStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useMediaStore } from "@/store/useUploadStore";
 
 const Music = lazy(() => import("./music"));
 const Hymns = lazy(() => import("./hymns"));
@@ -43,17 +44,7 @@ const TAB_EASE = Easing.bezier(0.22, 1, 0.36, 1);
 const TAB_MS = 220;
 
 function CategorySuspense({ children }: { children: ReactNode }) {
-  return (
-    <Suspense
-      fallback={
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color="#090E24" />
-        </View>
-      }
-    >
-      {children}
-    </Suspense>
-  );
+  return <Suspense fallback={<FeedSkeletonStack />}>{children}</Suspense>;
 }
 
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
@@ -206,11 +197,12 @@ export default function HomeTabContent() {
   }));
 
   useEffect(() => {
+    if (__DEV__ || isLiteProfileActive()) return;
     const id = setTimeout(() => {
       void import("./music");
       void import("./hymns");
       void import("./LiveComponent");
-    }, 600);
+    }, 2500);
     return () => clearTimeout(id);
   }, []);
 

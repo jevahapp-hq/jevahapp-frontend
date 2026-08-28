@@ -1,7 +1,7 @@
 import { LegalScreen, H, P, Ul } from "./LegalDocument";
 
 export default function TermsOfServiceScreen() {
-  return (
+    return (
     <LegalScreen title="Terms of Service" updated="16 August 2026">
       <H>1. Agreement</H>
       <P>
@@ -302,5 +302,5 @@ export default function TermsOfServiceScreen() {
         Location: Nigeria
       </P>
     </LegalScreen>
-  );
+    );
 }

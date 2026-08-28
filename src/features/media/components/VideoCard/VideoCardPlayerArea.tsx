@@ -21,6 +21,7 @@ import {
   FEED_VIDEO_PLAYER_HEIGHT,
   FeedVideoPoster,
   FeedVideoSurface,
+  fitRectInBox,
   useInstantFeedVideoPlayer,
 } from "../../video-feed";
 import { normalizeDurationMs } from "../../../../shared/media/normalizeDurationMs";
@@ -154,6 +155,8 @@ function VideoCardPlayerInner(
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
+  const [contentAspect, setContentAspect] = useState(0);
+  const [boxWidth, setBoxWidth] = useState(0);
 
   /**
    * Declared here, above every hook that reads `isMountedRef`, because React
@@ -170,6 +173,18 @@ function VideoCardPlayerInner(
   }, []);
 
   const videoRef = useRef<VideoPlayer | null>(null);
+
+  const fittedFrame = useMemo(
+    () =>
+      contentAspect > 0 && boxWidth > 0
+        ? fitRectInBox(
+            contentAspect,
+            boxWidth,
+            FEED_VIDEO_PLAYER_HEIGHT
+          )
+        : null,
+    [contentAspect, boxWidth]
+  );
 
   const {
     player,
@@ -399,10 +414,21 @@ function VideoCardPlayerInner(
         backgroundColor: "#121212",
         overflow: "hidden",
       }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - boxWidth) > 0.5) setBoxWidth(w);
+      }}
     >
       <TouchableWithoutFeedback onPress={handleVideoTap}>
         <View style={{ flex: 1 }}>
-          <FeedVideoPoster item={video} />
+          <FeedVideoPoster
+            item={video}
+            onAspectRatio={(aspect) => {
+              if (aspect > 0 && Math.abs(aspect - contentAspect) > 0.01) {
+                setContentAspect(aspect);
+              }
+            }}
+          />
           <View
             pointerEvents="none"
             style={{
@@ -414,6 +440,8 @@ function VideoCardPlayerInner(
               player={player}
               visible={firstFrameReady}
               onFirstFrameRender={handleFirstFrameRender}
+              fitWidth={fittedFrame?.width}
+              fitHeight={fittedFrame?.height}
             />
           </View>
 
@@ -531,15 +559,15 @@ function VideoCardPlayerInner(
           }}
           onScrubStart={() => setIsDragging(true)}
           onScrubEnd={() => setIsDragging(false)}
-          showControls
-          bottomOffset={24}
-          enlargeOnDrag
-          knobSize={10}
-          knobSizeDragging={14}
-          trackHeights={{ normal: 3, dragging: 8 }}
-          seekDuringDrag
-          liveSeekThrottleMs={32}
-          enableHaptics
+            showControls
+            bottomOffset={24}
+            enlargeOnDrag
+            knobSize={8}
+            knobSizeDragging={10}
+            trackHeights={{ normal: 4, dragging: 8 }}
+            seekDuringDrag
+            liveSeekThrottleMs={32}
+            enableHaptics
           verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
           style={{ zIndex: 200, elevation: 200 }}
         />

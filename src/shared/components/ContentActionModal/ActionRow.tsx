@@ -50,7 +50,7 @@ export default function ActionRow({
         <Text
           style={{
             fontSize: 14,
-            fontFamily: "Rubik-SemiBold",
+            fontFamily: "PlusJakartaSans-SemiBold",
             color: destructive
               ? UI_CONFIG.COLORS.ERROR
               : UI_CONFIG.COLORS.TEXT_PRIMARY,

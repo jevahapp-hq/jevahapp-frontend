@@ -48,7 +48,7 @@ export default function LiveCardSlider() {
   return (
     <View className="">
 
-<Text className="text-[16px] font-rubik-semibold  text-[#344054] mt-4 mb-2 ml-2">See Who is Live</Text>
+<Text className="text-[16px] font-jakarta-semibold  text-[#344054] mt-4 mb-2 ml-2">See Who is Live</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -106,12 +106,12 @@ export default function LiveCardSlider() {
                   />
                 </View>
                 <View className="ml-3">
-                  <Text className="text-[13px]  font-rubik-semibold  text-[#344054] mt-1 ">
+                  <Text className="text-[13px]  font-jakarta-semibold  text-[#344054] mt-1 ">
                     {getUserDisplayNameFromContent(video)}
                   </Text>
                   <View className="flex-row items-center mt-0.5">
                     <MaterialIcons name="visibility" size={10} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {video.views}
                     </Text>
 
@@ -121,7 +121,7 @@ export default function LiveCardSlider() {
                       color="#9CA3AF"
                       style={{ marginLeft: 6 }}
                     />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {video.timeAgo}
                     </Text>
                   </View>

@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: "#6B7280",
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
   },
   testamentFilter: {
     flexDirection: "row",
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: 14,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#6B7280",
   },
   activeFilterButtonText: {
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   },
   bookName: {
     fontSize: 18,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
   },
   selectedBookName: {
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
   bookMeta: {
     marginTop: 2,
     fontSize: 13,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
   },
 });

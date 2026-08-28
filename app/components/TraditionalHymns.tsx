@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import hymnAudioService from "../services/hymnAudioService";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 
 interface Hymn {
   id: string;

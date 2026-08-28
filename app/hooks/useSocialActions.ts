@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import contentInteractionAPI from '../utils/contentInteractionAPI';
-import { useInteractionStore } from '../store/useInteractionStore';
+import { useInteractionStore } from '@/store/useInteractionStore';
 
 export interface UseSocialActionsOptions {
   contentId: string;

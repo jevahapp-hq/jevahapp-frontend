@@ -42,7 +42,7 @@ export default function HymnDetail() {
             fontSize: 28,
             fontWeight: "700",
             color: "#111",
-            fontFamily: "Rubik-Bold",
+            fontFamily: "PlusJakartaSans-Bold",
           }}
         >
           {hymn.title}
@@ -52,7 +52,7 @@ export default function HymnDetail() {
             marginTop: 8,
             color: "#475467",
             fontSize: 18,
-            fontFamily: "Rubik-Medium",
+            fontFamily: "PlusJakartaSans-Medium",
           }}
         >
           {(hymn.author || "Unknown").toString()}
@@ -62,7 +62,7 @@ export default function HymnDetail() {
             marginTop: 4,
             color: "#667085",
             fontSize: 16,
-            fontFamily: "Rubik-Regular",
+            fontFamily: "PlusJakartaSans-Regular",
           }}
         >
           {(hymn.meter || hymn.refs || "Hymn").toString()}
@@ -199,7 +199,7 @@ export default function HymnDetail() {
                   fontWeight: "600",
                   marginBottom: 16,
                   fontSize: 18,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                 }}
               >
                 Verse {index + 1}
@@ -209,7 +209,7 @@ export default function HymnDetail() {
                   color: "#1D2939",
                   lineHeight: 30,
                   fontSize: 17,
-                  fontFamily: "Rubik-Regular",
+                  fontFamily: "PlusJakartaSans-Regular",
                   textAlign: "left",
                 }}
               >

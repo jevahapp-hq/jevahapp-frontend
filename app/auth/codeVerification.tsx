@@ -214,7 +214,7 @@ export default function CodeVerification() {
             // Clear any previous user's interaction data
             try {
               const { useInteractionStore } = await import(
-                "../store/useInteractionStore"
+                "@/store/useInteractionStore"
               );
               useInteractionStore.getState().clearCache();
               console.log("✅ Cleared interaction cache after verification");

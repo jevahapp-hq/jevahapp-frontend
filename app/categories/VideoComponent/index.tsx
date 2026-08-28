@@ -10,11 +10,11 @@ import VideoCard from "../../../src/features/media/components/VideoCard";
 import { VideoCardSkeleton } from "../../../src/shared/components/Skeleton";
 import SuccessCard from "../../components/SuccessCard";
 import { useCommentModal } from "../../context/CommentModalContext";
-import { useDownloadStore } from "../../store/useDownloadStore";
-import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
-import { useInteractionStore } from "../../store/useInteractionStore";
-import { useLibraryStore } from "../../store/useLibraryStore";
-import { useMediaStore } from "../../store/useUploadStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -290,6 +290,18 @@ export default function VideoComponent() {
           videoLayoutsRef.current[key] = { y, height };
         }}
         isAutoPlayEnabled={globalVideoStore.isAutoPlayEnabled}
+        /**
+         * Completes the intent behind the `playType` argument, which was being
+         * passed but never read. Without this, `VideoCard` defaults
+         * `shouldRenderPlayer` to false and renders a poster with no player,
+         * so the progress bar and its timer never mounted.
+         *
+         * Scoped to the "progress" cards on purpose: mounting a player means
+         * allocating a video decoder, and this screen is a plain ScrollView
+         * with no windowing, so doing it for every card would allocate one per
+         * video.
+         */
+        shouldRenderPlayer={playType === "progress"}
       />
     );
   };
@@ -322,7 +334,7 @@ export default function VideoComponent() {
       >
         {uploadedVideos.length > 0 ? (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">Most Recent</Text>
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">Most Recent</Text>
             {renderVideoCard(
               {
                 ...(uploadedVideos[0] as any),
@@ -345,7 +357,7 @@ export default function VideoComponent() {
           </>
         ) : (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">Most Recent</Text>
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">Most Recent</Text>
             <VideoCardSkeleton dark={false} />
           </>
         )}
@@ -380,7 +392,7 @@ export default function VideoComponent() {
 
         {firstExploreVideos.length > 0 ? (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">Explore More Videos</Text>
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-3">Explore More Videos</Text>
             <View className="gap-8">
               {firstExploreVideos.map((video, index) =>
                 renderVideoCard(
@@ -408,7 +420,7 @@ export default function VideoComponent() {
         ) : (
           uploadedVideos.length > 0 && (
             <>
-              <Text className="text-[#344054] text-[16px] font-rubik-semibold my-3">Explore More Videos</Text>
+              <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-3">Explore More Videos</Text>
               <View className="gap-8">
                 {Array.from({ length: 3 }).map((_, index) => (
                   <VideoCardSkeleton key={`explore-skeleton-${index}`} dark={false} />
@@ -448,13 +460,13 @@ export default function VideoComponent() {
           />
         ) : (
           <View className="mt-5 mb-4">
-            <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">Trending Now</Text>
+            <Text className="text-[16px] font-jakarta-semibold text-[#344054] mt-4 mb-2 ml-2">Trending Now</Text>
             <View className="bg-gray-50 rounded-lg p-6 mx-2 items-center">
               <Text className="text-[32px] mb-2">📈</Text>
-              <Text className="text-[14px] font-rubik-medium text-[#98A2B3] text-center">
+              <Text className="text-[14px] font-jakarta-medium text-[#98A2B3] text-center">
                 No trending videos yet
               </Text>
-              <Text className="text-[12px] font-rubik text-[#D0D5DD] text-center mt-1">
+              <Text className="text-[12px] font-jakarta text-[#D0D5DD] text-center mt-1">
                 Keep engaging with content to see trending videos here
               </Text>
             </View>
@@ -463,7 +475,7 @@ export default function VideoComponent() {
 
         {middleExploreVideos.length > 0 ? (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">Exploring More</Text>
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">Exploring More</Text>
             <View className="gap-8">
               {middleExploreVideos.map((video, index) =>
                 renderVideoCard(
@@ -491,7 +503,7 @@ export default function VideoComponent() {
         ) : (
           uploadedVideos.length > 0 && (
             <>
-              <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">Exploring More</Text>
+              <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">Exploring More</Text>
               <View className="gap-8">
                 {Array.from({ length: 2 }).map((_, index) => (
                   <VideoCardSkeleton key={`middle-skeleton-${index}`} dark={false} />
@@ -533,7 +545,7 @@ export default function VideoComponent() {
 
         {remainingExploreVideos.length > 0 ? (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">More Videos</Text>
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">More Videos</Text>
             <View className="gap-8">
               {remainingExploreVideos.map((video, index) =>
                 renderVideoCard(
@@ -561,7 +573,7 @@ export default function VideoComponent() {
         ) : (
           uploadedVideos.length > 0 && (
             <>
-              <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">More Videos</Text>
+              <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">More Videos</Text>
               <View className="gap-8">
                 {Array.from({ length: 2 }).map((_, index) => (
                   <VideoCardSkeleton key={`remaining-skeleton-${index}`} dark={false} />

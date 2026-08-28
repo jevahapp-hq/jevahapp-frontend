@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useContentCacheStore } from "../../../app/store/useContentCacheStore";
+import { useContentCacheStore } from "@/store/useContentCacheStore";
 
 type MediaLike = { _id?: string; id?: string; media?: unknown[] };
 

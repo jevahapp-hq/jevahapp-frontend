@@ -8,6 +8,7 @@ import { enrichContentWithAuthor, resolveAuthorName, stampPayloadAuthor } from "
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
 import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
 import { ContentType, MediaItem } from "../types";
+import { isEbook } from "./mediaTypeDetection";
 
 /**
  * Transform API response to MediaItem format
@@ -142,16 +143,38 @@ export const filterContentByType = (
       return itemType === "audio" || itemType === "music";
     }
     if (filterType === "ebook" || filterType === "e-books" || filterType === "books") {
+      if (isEbook(item)) return true;
       return (
         itemType === "ebook" ||
         itemType === "e-books" ||
+        itemType === "ebooks" ||
         itemType === "books" ||
+        itemType === "book" ||
         itemType === "image" ||
         (item.fileUrl && /\.pdf$/i.test(item.fileUrl))
       );
     }
-    if (filterType === "sermon") {
-      return itemType === "sermon" || itemType === "devotional";
+    if (filterType === "sermon" || filterType === "teachings") {
+      const categories = Array.isArray(item.category)
+        ? item.category.map((c) => String(c).toLowerCase())
+        : [];
+      if (
+        categories.some(
+          (c) =>
+            c === "sermon" ||
+            c === "sermons" ||
+            c === "teaching" ||
+            c === "teachings"
+        )
+      ) {
+        return true;
+      }
+      return (
+        itemType === "sermon" ||
+        itemType === "devotional" ||
+        itemType === "teaching" ||
+        itemType === "teachings"
+      );
     }
 
     return itemType === filterType;
@@ -179,12 +202,19 @@ export const categorizeContent = (items: MediaItem[]) => {
     } else if (
       contentType === "ebook" ||
       contentType === "e-books" ||
+      contentType === "ebooks" ||
       contentType === "books" ||
+      contentType === "book" ||
       contentType === "image" ||
       (item.fileUrl && /\.pdf$/i.test(item.fileUrl))
     ) {
       categorized.ebooks.push(item);
-    } else if (contentType === "sermon" || contentType === "devotional") {
+    } else if (
+      contentType === "sermon" ||
+      contentType === "devotional" ||
+      contentType === "teaching" ||
+      contentType === "teachings"
+    ) {
       categorized.sermons.push(item);
     } else {
       // Default to videos for unknown types

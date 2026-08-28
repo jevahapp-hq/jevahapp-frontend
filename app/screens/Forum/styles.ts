@@ -18,7 +18,7 @@ export const styles = {
     fontSize: 20,
     fontWeight: "bold" as const,
     color: "#000",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   filterButton: {
     padding: 8,
@@ -50,7 +50,7 @@ export const styles = {
     fontSize: 14,
     fontWeight: "600" as const,
     color: "#1F2937",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   categoryChipTextActive: {
     color: "#FFFFFF",
@@ -90,7 +90,7 @@ export const styles = {
     fontSize: 14,
     fontWeight: "600" as const,
     color: "#374151",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   userDetails: {
     flex: 1,
@@ -99,12 +99,12 @@ export const styles = {
     fontSize: 16,
     fontWeight: "600" as const,
     color: "#111827",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   forumBadge: {
     fontSize: 12,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginTop: 2,
   },
   postActions: {
@@ -121,12 +121,12 @@ export const styles = {
     fontSize: 15,
     lineHeight: 22,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   timestamp: {
     fontSize: 12,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     textAlign: "right" as const,
     marginTop: 8,
   },
@@ -146,7 +146,7 @@ export const styles = {
     color: "white",
     fontSize: 16,
     fontWeight: "bold" as const,
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   playButton: {
     position: "absolute" as const,
@@ -164,14 +164,14 @@ export const styles = {
     fontSize: 14,
     fontWeight: "600" as const,
     color: "#111827",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
     marginTop: 8,
     marginBottom: 4,
   },
   videoUrl: {
     fontSize: 12,
     color: "#3B82F6",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   interactionBar: {
     flexDirection: "row" as const,
@@ -193,13 +193,13 @@ export const styles = {
   interactionText: {
     fontSize: 14,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginLeft: 4,
   },
   greaterThanIcon: {
     fontSize: 18,
     color: "#666",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     fontWeight: "bold" as const,
   },
   startConversationContainer: {
@@ -228,7 +228,7 @@ export const styles = {
     flex: 1,
     fontSize: 15,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     paddingVertical: 8,
   },
   micButton: {
@@ -259,7 +259,7 @@ export const styles = {
   videoDescription: {
     fontSize: 13,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginTop: 4,
   },
   sendButton: {
@@ -282,7 +282,7 @@ export const styles = {
     marginTop: 16,
     fontSize: 16,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   errorContainer: {
     flex: 1,
@@ -296,14 +296,14 @@ export const styles = {
     fontWeight: "bold" as const,
     color: "#1F2937",
     marginTop: 16,
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   errorText: {
     fontSize: 14,
     color: "#6B7280",
     textAlign: "center" as const,
     marginTop: 8,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   emptyContainer: {
     flex: 1,
@@ -328,7 +328,7 @@ export const styles = {
     fontWeight: "bold" as const,
     color: "#1F2937",
     marginTop: 24,
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   emptyText: {
     fontSize: 16,
@@ -337,7 +337,7 @@ export const styles = {
     marginTop: 12,
     marginBottom: 32,
     lineHeight: 24,
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   createForumButtonInEmpty: {
     flexDirection: "row" as const,
@@ -353,7 +353,7 @@ export const styles = {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600" as const,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   footerLoader: {
     paddingVertical: 20,
@@ -387,7 +387,7 @@ export const styles = {
     fontSize: 20,
     fontWeight: "bold" as const,
     color: "#111827",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   closeButton: {
     padding: 4,
@@ -399,7 +399,7 @@ export const styles = {
     padding: 12,
     fontSize: 15,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     minHeight: 100,
     textAlignVertical: "top" as const,
     marginBottom: 16,
@@ -423,7 +423,7 @@ export const styles = {
     color: "#374151",
     fontWeight: "600" as const,
     fontSize: 14,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   saveEditButton: {
     backgroundColor: "#256E63",
@@ -432,7 +432,7 @@ export const styles = {
     color: "#fff",
     fontWeight: "600" as const,
     fontSize: 14,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   createForumModal: {
     flex: 1,
@@ -460,7 +460,7 @@ export const styles = {
     fontSize: 22,
     fontWeight: "bold" as const,
     color: "#111827",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   createForumForm: {
     paddingBottom: 16,
@@ -469,7 +469,7 @@ export const styles = {
     fontSize: 16,
     fontWeight: "600" as const,
     color: "#1F2937",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     marginBottom: 8,
     marginTop: 16,
   },
@@ -480,7 +480,7 @@ export const styles = {
     padding: 12,
     fontSize: 16,
     color: "#111827",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     backgroundColor: "#F9FAFB",
   },
   createForumTextArea: {
@@ -490,7 +490,7 @@ export const styles = {
   createForumHelperText: {
     fontSize: 12,
     color: "#6B7280",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
     marginTop: 4,
   },
   createForumScroll: {
@@ -509,7 +509,7 @@ export const styles = {
     marginLeft: 8,
     fontSize: 14,
     color: "#4B5563",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   createForumCategoryList: {
     flexDirection: "row" as const,
@@ -533,11 +533,11 @@ export const styles = {
   createForumCategoryChipText: {
     fontSize: 14,
     color: "#374151",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   createForumCategoryChipTextActive: {
     color: "#0F766E",
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   createForumModalActions: {
     flexDirection: "row" as const,
@@ -555,7 +555,7 @@ export const styles = {
     color: "#374151",
     fontWeight: "600" as const,
     fontSize: 16,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   submitForumButton: {
     flex: 1,
@@ -573,6 +573,6 @@ export const styles = {
     color: "#fff",
     fontWeight: "600" as const,
     fontSize: 16,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
 };

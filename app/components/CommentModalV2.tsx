@@ -15,6 +15,7 @@ import { PanGestureHandler } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatCount } from "../../src/shared/utils/formatCount";
+import { isCommentPeekHudVisible } from "../../src/shared/comments/commentPeekHud";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { ensureAuthenticatedForInteraction } from "../utils/auth/requireAuthForInteraction";
@@ -43,12 +44,14 @@ import { COMMENT_PEEK_HUD_STRIP } from "./commentSheetLayout";
 export default function CommentModalV2() {
   const {
     isVisible,
+    isClosing,
     comments,
     isLoadingComments,
     loadError,
     composerError,
     clearComposerError,
     hideCommentModal,
+    beginCommentDismiss,
     submitComment,
     likeComment,
     replyToComment,
@@ -91,6 +94,7 @@ export default function CommentModalV2() {
   const anim = useCommentSheetAnimation({
     isVisible,
     mediaPeekHeight,
+    onDismissStart: beginCommentDismiss,
     onHideComplete: hideCommentModal,
     onClosedUiReset: ui.resetUi,
   });
@@ -301,7 +305,7 @@ export default function CommentModalV2() {
         <View style={styles.dimFill} />
       </Animated.View>
 
-      {isVisible ? (
+      {isCommentPeekHudVisible(isVisible, isClosing) ? (
         <CommentPeekPlaybackHud
           peekHeight={mediaPeekHeight}
           contentId={contentId}

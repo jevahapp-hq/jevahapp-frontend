@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useMediaStore } from "../../../../store/useUploadStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import { stampPayloadAuthor } from "../../../../../src/shared/author";
 import type { MediaItem } from "../../../../../src/shared/types";
 import { normalizeUserData } from "../../../../utils/userValidation";
@@ -101,9 +101,18 @@ export function buildFeedMediaItem(params: {
     sheared: 0,
     comments: 0,
     comment: 0,
+    /**
+     * Default to `under_review`, never `approved`.
+     *
+     * Finalize often omits `moderationStatus`, and defaulting to "approved"
+     * meant our own optimistic item asserted an approval the server had not
+     * granted — so any "hide unless approved" rule silently skipped freshly
+     * uploaded content. Assume the stricter state until the server says
+     * otherwise.
+     */
     moderationStatus:
       (uploaded.moderationStatus as MediaItem["moderationStatus"]) ||
-      "approved",
+      "under_review",
     processingStatus: resolveProcessingStatus({
       ...uploaded,
       duration,

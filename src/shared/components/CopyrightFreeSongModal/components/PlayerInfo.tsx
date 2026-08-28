@@ -29,35 +29,6 @@ export function PlayerInfo({
         marginBottom: UI_CONFIG.SPACING.MD,
       }}
     >
-      {/* Lossless & Copyright Free Tag */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 5,
-          paddingHorizontal: 10,
-          paddingVertical: 3,
-          borderRadius: 12,
-          backgroundColor: "rgba(37, 110, 99, 0.35)",
-          borderWidth: 1,
-          borderColor: "rgba(37, 110, 99, 0.6)",
-          marginBottom: 10,
-        }}
-      >
-        <Ionicons name="sparkles" size={12} color="#5EEAD4" />
-        <Text
-          style={{
-            fontSize: 11,
-            fontFamily: "PlusJakartaSans-Bold",
-            color: "#5EEAD4",
-            letterSpacing: 0.4,
-            textTransform: "uppercase",
-          }}
-        >
-          Copyright Free • Lossless
-        </Text>
-      </View>
-
       <Text
         style={{
           fontSize: 24,

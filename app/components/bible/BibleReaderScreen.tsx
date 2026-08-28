@@ -175,66 +175,39 @@ export default function BibleReaderScreen({ onBack }: BibleReaderScreenProps) {
     persistPlace(verse.bookName, verse.chapterNumber);
   };
 
-  const handleNavigateChapter = async (direction: "prev" | "next") => {
-    if (!selectedBook || !selectedChapter) {
-      console.log("❌ Cannot navigate: missing book or chapter");
-      return;
-    }
+  const handleNavigateChapter = (direction: "prev" | "next") => {
+    if (!selectedBook || !selectedChapter) return;
 
     const newChapterNumber =
       direction === "prev"
         ? selectedChapter.chapterNumber - 1
         : selectedChapter.chapterNumber + 1;
 
-    console.log(
-      `📖 Attempting to navigate ${direction} from chapter ${selectedChapter.chapterNumber} to ${newChapterNumber}`
-    );
-    console.log(
-      `📚 Book: ${selectedBook.name}, Total chapters: ${selectedBook.chapterCount}`
-    );
-
-    // Validate chapter number (upper bound only if we know it)
-    if (newChapterNumber < 1) {
-      console.log("❌ Cannot navigate: chapter number below 1");
-      return;
-    }
-    const effectiveChapterCount = selectedBook.chapterCount || chapters.length || 0;
+    if (newChapterNumber < 1) return;
+    const effectiveChapterCount =
+      selectedBook.chapterCount || chapters.length || 0;
     if (effectiveChapterCount > 0 && newChapterNumber > effectiveChapterCount) {
-      console.log(
-        `❌ Cannot navigate: chapter ${newChapterNumber} exceeds book's ${effectiveChapterCount} chapters`
-      );
       return;
     }
 
-    // Try to get actual verse count from API
-    let verseCount = 0;
-    try {
-      const chapterInfo = await bibleApiService.getChapter(
-        selectedBook.name,
-        newChapterNumber
-      );
-      verseCount =
-        (chapterInfo as any).actualVerseCount ||
-        (chapterInfo as any).verseCount ||
-        0;
-      console.log(`✅ Loaded chapter info: ${verseCount} verses`);
-    } catch (error) {
-      console.error("⚠️ Error loading chapter info:", error);
-      // Continue anyway
-    }
-
-    const newChapter: BibleChapter = {
+    // Navigate immediately; BibleReader derives the verse count from the
+    // verses it loads, so there is nothing to await here.
+    setSelectedChapter({
       _id: `${selectedBook.name}-${newChapterNumber}`,
       bookName: selectedBook.name,
       chapterNumber: newChapterNumber,
-      verseCount: verseCount,
-    };
-
-    console.log(
-      `✅ Navigating to ${selectedBook.name} ${newChapterNumber} (${verseCount} verses)`
-    );
-    setSelectedChapter(newChapter);
+      verseCount: 0,
+    });
     persistPlace(selectedBook.name, newChapterNumber, selectedBook);
+
+    // Warm the chapter beyond the one we just opened.
+    const lookahead =
+      direction === "prev" ? newChapterNumber - 1 : newChapterNumber + 1;
+    if (lookahead >= 1) {
+      void bibleApiService
+        .getChapterVerses(selectedBook.name, lookahead)
+        .catch(() => {});
+    }
   };
 
   const handleTranslationSelect = (id: string) => {
@@ -581,12 +554,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
   },
   headerSubtitle: {
     fontSize: 12,
-    fontFamily: "Rubik_400Regular",
+    fontFamily: "PlusJakartaSans_400Regular",
     color: "#6B7280",
     marginTop: 2,
   },
@@ -610,7 +583,7 @@ const styles = StyleSheet.create({
   },
   translationChipText: {
     fontSize: 12,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#256E63",
   },
   content: {
@@ -647,7 +620,7 @@ const styles = StyleSheet.create({
   },
   navItemText: {
     fontSize: 12,
-    fontFamily: "Rubik_500Medium",
+    fontFamily: "PlusJakartaSans_500Medium",
     color: "#9CA3AF",
     marginTop: 4,
     textAlign: "center",

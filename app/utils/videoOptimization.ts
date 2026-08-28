@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 /**
  * Video Optimization Utility
  * Handles buffering, retry logic, and network-aware configuration
- * for smooth video playback even on slow connections (like Render free tier)
+ * for smooth video playback even on slow mobile connections
  */
 
 // ============================================================================

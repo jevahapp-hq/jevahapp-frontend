@@ -1,29 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Dimensions, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState, Suspense, lazy } from "react";
+import { Dimensions, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
     getResponsiveBorderRadius,
     getResponsiveShadow,
     getResponsiveSpacing,
     getResponsiveTextStyle,
 } from "../../../utils/responsive";
-import CopyrightFreeSongs from "../../components/CopyrightFreeSongs";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
-import { AllLibraryWithSuspense } from "../../utils/lazyImports";
 import { navigateMainTab } from "../../utils/navigation";
-import PlaylistsLibrary from "./PlaylistsLibrary";
-import Music from "../../categories/music";
-import { Suspense } from "react";
+import { ListSkeletonStack } from "../../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
+import AllLibrary from "./AllLibrary";
 
-// Loading fallback for lazy-loaded content
-const ContentLoadingFallback = () => (
-  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", minHeight: 200 }}>
-    <ActivityIndicator size="large" color="#000" />
-  </View>
-);
+const Music = lazy(() => import("../../categories/music"));
+const PlaylistsLibrary = lazy(() => import("./PlaylistsLibrary"));
+
+const ContentLoadingFallback = () => <ListSkeletonStack rows={7} />;
 
 const categories = ["ALL", "SERMON", "MUSIC", "E-BOOKS", "VIDEO", "PLAYLISTS"];
+const GRID_CATEGORIES = new Set(["ALL", "SERMON", "E-BOOKS", "VIDEO"]);
 
 export default function LibraryScreen({
   embedded = false,
@@ -34,7 +29,6 @@ export default function LibraryScreen({
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("Library");
-  const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const buttonLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
 
@@ -95,55 +89,55 @@ export default function LibraryScreen({
   );
 
   const renderContent = () => {
-    switch (selectedCategory) {
-      case "ALL":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="ALL" />
-          </Suspense>
-        );
-      case "SERMON":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="SERMON" />
-          </Suspense>
-        );
-      case "MUSIC":
-        return <Music />;
-      case "E-BOOKS":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="E-BOOKS" />
-          </Suspense>
-        );
-      case "VIDEO":
-        return (
-          <Suspense fallback={<ContentLoadingFallback />}>
-            <AllLibraryWithSuspense contentType="VIDEO" />
-          </Suspense>
-        );
-      case "PLAYLISTS":
-        return <PlaylistsLibrary />;
-      default:
-        return null;
+    if (GRID_CATEGORIES.has(selectedCategory)) {
+      return <AllLibrary contentType={selectedCategory} />;
     }
+    if (selectedCategory === "MUSIC") {
+      return (
+        <Suspense fallback={<ContentLoadingFallback />}>
+          <Music />
+        </Suspense>
+      );
+    }
+    if (selectedCategory === "PLAYLISTS") {
+      return (
+        <Suspense fallback={<ContentLoadingFallback />}>
+          <PlaylistsLibrary />
+        </Suspense>
+      );
+    }
+    return null;
   };
+
+  const pagePad = getResponsiveSpacing(16, 20, 24, 32);
 
   return (
     <View className="flex-col bg-white flex-1">
-      <Text className="mt-12 text-[24px] font-rubik-semibold ml-7 text-[#344054]">
+      <Text
+        className="mt-12 text-[24px] font-jakarta-semibold text-[#344054]"
+        style={{ paddingHorizontal: pagePad }}
+      >
         My Library
       </Text>
-      <View className="flex-row items-center  mx-auto px-2 bg-[#E5E5EA] w-[360px] rounded-xl  h-[42px] mt-3">
-        <View className="ml-2 ">
+      <View style={{ paddingHorizontal: pagePad, marginTop: 12 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: "#E5E5EA",
+            borderRadius: 12,
+            height: 42,
+            paddingHorizontal: 12,
+          }}
+        >
           <Ionicons name="search" size={20} color="#666" />
+          <TextInput
+            placeholder="Search for anything..."
+            className="ml-3 flex-1 text-base font-jakarta"
+            value={query}
+            onChangeText={setQuery}
+          />
         </View>
-        <TextInput
-          placeholder="Search for anything..."
-          className="ml-3 flex-1 text-base font-rubik items-center"
-          value={query}
-          onChangeText={setQuery}
-        />
       </View>
 
       {/* Category tabs - matching AllContent style exactly */}

@@ -1,4 +1,4 @@
-import { useInteractionStore } from "../../../app/store/useInteractionStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 import {
   getCachedContentInteraction,
   isContentInteractionFresh,

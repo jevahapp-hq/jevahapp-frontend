@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useInteractionStore } from '../store/useInteractionStore';
+import { useInteractionStore } from '@/store/useInteractionStore';
 
 interface UseContentViewOptions {
   contentId: string;

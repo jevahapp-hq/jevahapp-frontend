@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   SafeAreaView,
@@ -8,6 +7,7 @@ import {
   View,
 } from "react-native";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
+import { ListRowSkeleton } from "../../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 import { useForums, useForumPosts } from "../../hooks/useForums";
 import { navigateMainTab } from "../../utils/navigation";
 import { CategoryChipList } from "./components/CategoryChipList";
@@ -177,7 +177,7 @@ export default function ForumScreen() {
             ListFooterComponent={
               postsLoading && posts.length > 0 ? (
                 <View style={styles.footerLoader}>
-                  <ActivityIndicator size="small" color="#DF930E" />
+                  <ListRowSkeleton />
                 </View>
               ) : null
             }

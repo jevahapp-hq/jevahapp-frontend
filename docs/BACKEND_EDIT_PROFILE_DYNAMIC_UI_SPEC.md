@@ -6,7 +6,7 @@ This document specifies the backend API endpoints and response formats required 
 
 ## Base URL
 
-All endpoints use the base URL: `https://jevahapp-backend.onrender.com`
+All endpoints use the base URL: `https://api.jevahapp.com`
 
 ## Authentication
 

@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLibraryStore } from "../../store/useLibraryStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../../utils/downloadUtils";
 
 
@@ -126,7 +126,7 @@ export default function MusicLibrary () {
         resizeMode="cover"
       />
       <View className="absolute bottom-2 left-2 right-2">
-        <Text className="text-white font-rubik-bold text-sm" numberOfLines={2}>
+        <Text className="text-white font-jakarta-bold text-sm" numberOfLines={2}>
           {item.title}
         </Text>
       </View>
@@ -150,19 +150,19 @@ export default function MusicLibrary () {
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between"
               onPress={() => setMenuOpenId(null)}
             >
-              <Text className="text-[#1D2939] font-rubik ml-2">View Details</Text>
+              <Text className="text-[#1D2939] font-jakarta ml-2">View Details</Text>
               <MaterialIcons name="visibility" size={20} color="#1D2939" />
             </TouchableOpacity>
             <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between"
               onPress={() => handleShare(item)}
             >
-              <Text className="text-[#1D2939] font-rubik ml-2">Share</Text>
+              <Text className="text-[#1D2939] font-jakarta ml-2">Share</Text>
               <Feather name="send" size={20} color="#1D2939" />
             </TouchableOpacity>
             <TouchableOpacity className="flex-row items-center justify-between mt-2"
               onPress={() => handleRemoveFromLibrary(item)}
             >
-              <Text className="text-[#1D2939] font-rubik ml-2">Remove from Library</Text>
+              <Text className="text-[#1D2939] font-jakarta ml-2">Remove from Library</Text>
               <MaterialIcons name="bookmark" size={20} color="#1D2939" />
             </TouchableOpacity>
             <TouchableOpacity 
@@ -175,7 +175,7 @@ export default function MusicLibrary () {
                 }
               }}
             >
-              <Text className="text-[#1D2939] font-rubik ml-2">
+              <Text className="text-[#1D2939] font-jakarta ml-2">
                 {checkIfDownloaded(item.id) ? "Downloaded" : "Download"}
               </Text>
               <Ionicons 
@@ -189,7 +189,7 @@ export default function MusicLibrary () {
       )}
       {item.speaker && (
         <View className="absolute top-2 left-2 bg-black/50 rounded px-2 py-1">
-          <Text className="text-white text-xs font-rubik">{item.speaker}</Text>
+          <Text className="text-white text-xs font-jakarta">{item.speaker}</Text>
         </View>
       )}
     </View>
@@ -217,7 +217,7 @@ export default function MusicLibrary () {
         <View className="mt-4 mb-3 flex-row items-center bg-[#E5E5EA] rounded-xl px-3 py-2">
           <Ionicons name="search" size={18} color="#8E8E93" />
           <TextInput
-            className="ml-2 flex-1 font-rubik text-[#090E24]"
+            className="ml-2 flex-1 font-jakarta text-[#090E24]"
             placeholder="Search saved music..."
             placeholderTextColor="#98A2B3"
             value={query}
@@ -225,7 +225,7 @@ export default function MusicLibrary () {
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery("")}>
-              <Text className="text-xs text-blue-500 font-rubik-semibold">
+              <Text className="text-xs text-blue-500 font-jakarta-semibold">
                 Clear
               </Text>
             </TouchableOpacity>
@@ -245,20 +245,20 @@ export default function MusicLibrary () {
         ) : savedMusic.length > 0 ? (
           <View className="flex-1 justify-center items-center py-10">
             <Ionicons name="musical-notes-outline" size={48} color="#98A2B3" />
-            <Text className="text-[#98A2B3] text-lg font-rubik-medium mt-4">
+            <Text className="text-[#98A2B3] text-lg font-jakarta-medium mt-4">
               No matches found
             </Text>
-            <Text className="text-[#D0D5DD] text-sm font-rubik text-center mt-2 px-6">
+            <Text className="text-[#D0D5DD] text-sm font-jakarta text-center mt-2 px-6">
               Try a different song title or artist
             </Text>
           </View>
         ) : (
           <View className="flex-1 justify-center items-center py-10">
             <Ionicons name="musical-notes-outline" size={48} color="#98A2B3" />
-            <Text className="text-[#98A2B3] text-lg font-rubik-medium mt-4">
+            <Text className="text-[#98A2B3] text-lg font-jakarta-medium mt-4">
               No saved music yet
             </Text>
-            <Text className="text-[#D0D5DD] text-sm font-rubik text-center mt-2 px-6">
+            <Text className="text-[#D0D5DD] text-sm font-jakarta text-center mt-2 px-6">
               Music you save will appear here for easy access
             </Text>
           </View>

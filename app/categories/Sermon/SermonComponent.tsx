@@ -2,8 +2,8 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import SuccessCard from "../../components/SuccessCard";
-import { useDownloadStore } from "../../store/useDownloadStore";
-import { useMediaStore } from "../../store/useUploadStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import { getDisplayName } from "../../utils/userValidation";
 import MiniCardRow from "./components/MiniCardRow";
 import SermonCard from "./components/SermonCard";
@@ -127,7 +127,7 @@ export default function SermonComponent() {
         {/* 1. Most Recent Upload */}
         {recentSermons.length > 0 && (
           <View className="mt-4">
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold mb-4 ml-2">
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold mb-4 ml-2">
               Most Recent
             </Text>
             {recentSermons.map((item, index) => (
@@ -163,7 +163,7 @@ export default function SermonComponent() {
         {/* 3. First 4 Explore More Sermon */}
         {exploreMoreSermons.length > 0 && (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">
               Explore More Sermon
             </Text>
             <View className="gap-12">
@@ -204,7 +204,7 @@ export default function SermonComponent() {
         {/* 5. Second 4 Explore More Sermon */}
         {sermonContent.length > 5 && (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">
               Explore More Sermon
             </Text>
             <View className="gap-12">
@@ -245,7 +245,7 @@ export default function SermonComponent() {
         {/* 7. Remaining Explore More Sermon */}
         {sermonContent.length > 9 && (
           <>
-            <Text className="text-[#344054] text-[16px] font-rubik-semibold my-4">
+            <Text className="text-[#344054] text-[16px] font-jakarta-semibold my-4">
               Explore More Sermon
             </Text>
             <View className="gap-12">
@@ -267,10 +267,10 @@ export default function SermonComponent() {
         {/* Empty State */}
         {sermonContent.length === 0 && (
           <View className="flex-1 justify-center items-center mt-20">
-            <Text className="text-gray-500 text-center text-lg font-rubik">
+            <Text className="text-gray-500 text-center text-lg font-jakarta">
               No sermon content available yet.
             </Text>
-            <Text className="text-gray-400 text-center text-sm font-rubik mt-2">
+            <Text className="text-gray-400 text-center text-sm font-jakarta mt-2">
               Upload sermon content to see it here.
             </Text>
           </View>

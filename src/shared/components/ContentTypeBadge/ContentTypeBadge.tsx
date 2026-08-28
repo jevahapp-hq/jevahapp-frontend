@@ -26,6 +26,7 @@ export const ContentTypeBadge: React.FC<ContentTypeBadgeProps> = ({
         return "play";
       case "audio":
       case "music":
+      case "hymns":
         return "musical-notes";
       case "sermon":
         return "person";
@@ -34,6 +35,9 @@ export const ContentTypeBadge: React.FC<ContentTypeBadgeProps> = ({
         return "images";
       case "image":
       case "ebook":
+      case "ebooks":
+      case "e-book":
+      case "e-books":
       case "books":
         return "book";
       case "live":

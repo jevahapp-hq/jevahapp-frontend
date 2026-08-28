@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     textAlign: "center",
     marginTop: 8,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   fill: {
     width: "100%",

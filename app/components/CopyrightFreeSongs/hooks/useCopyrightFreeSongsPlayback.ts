@@ -4,8 +4,8 @@
 import { useCallback, useEffect } from "react";
 import { prefetchAudioUrl } from "../../../../src/shared/utils/audioPrefetch";
 import { devLog } from "../../../../src/shared/utils/logger";
-import { useCopyrightFreeOverlayStore } from "../../../store/useCopyrightFreeOverlayStore";
-import { useGlobalAudioPlayerStore } from "../../../store/useGlobalAudioPlayerStore";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 
 function mapSongToTrack(song: any) {
   return {
@@ -105,7 +105,8 @@ export function useCopyrightFreeSongsPlayback({
 
   const handleCardPress = useCallback((song: any) => {
     useCopyrightFreeOverlayStore.getState().open(song);
-  }, []);
+    void playCopyrightFreeSong(song, songs);
+  }, [songs]);
 
   return {
     handlePlayIconPress,

@@ -246,8 +246,8 @@ class AuthService {
         // Preload content for all categories in background for instant navigation
         try {
           const { mediaApi } = await import("../../src/core/api/MediaApi");
-          const { useContentCacheStore } = await import("../store/useContentCacheStore");
-          const { useInteractionStore } = await import("../store/useInteractionStore");
+          const { useContentCacheStore } = await import("@/store/useContentCacheStore");
+          const { useInteractionStore } = await import("@/store/useInteractionStore");
           
           // Preload content for all major categories (non-blocking)
           Promise.all([

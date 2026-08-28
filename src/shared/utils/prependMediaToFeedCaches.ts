@@ -1,11 +1,37 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useContentCacheStore } from "../../../app/store/useContentCacheStore";
+import { useContentCacheStore } from "@/store/useContentCacheStore";
 import {
   FEED_PAGE_SIZE,
   LEGACY_ALL_FIRST_KEY,
   feedZustandFirstPageKey,
 } from "../config/feedCachePolicy";
 import type { MediaItem } from "../types";
+import { filterContentByType } from "./contentHelpers";
+
+function queryTypeFromKey(queryKey: readonly unknown[]): string {
+  const root = String(queryKey[0] || "");
+  if (root === "all-content") return String(queryKey[1] || "ALL");
+  if (root === "default-content") return String(queryKey[3] || "ALL");
+  return "ALL";
+}
+
+function itemBelongsInQuery(item: MediaItem, queryType: string): boolean {
+  const t = String(queryType || "ALL");
+  if (t === "ALL") return true;
+  return filterContentByType([item], t as any).length > 0;
+}
+
+function cacheKeyAcceptsItem(key: string, item: MediaItem): boolean {
+  const k = key.toLowerCase();
+  if (k.includes("sermon") && !itemBelongsInQuery(item, "sermon")) return false;
+  if (
+    (k.includes("ebook") || k.includes("e-book") || /(^|:)books(:|$)/.test(k)) &&
+    !itemBelongsInQuery(item, "e-books")
+  ) {
+    return false;
+  }
+  return true;
+}
 
 function itemId(item: { _id?: string; id?: string }): string {
   return String(item?._id || item?.id || "");
@@ -106,18 +132,30 @@ export function prependMediaToFeedCaches(
   const id = itemId(item);
   if (!id) return;
 
-  queryClient.setQueriesData(
-    { queryKey: ["all-content"] },
-    (old: any) => mergeInfiniteOrPage(old, item)
-  );
-  queryClient.setQueriesData(
-    { queryKey: ["default-content"] },
-    (old: any) => mergePageData(old, item)
-  );
-  queryClient.setQueriesData(
-    { queryKey: ["all-content-infinite"] },
-    (old: any) => mergeInfiniteOrPage(old, item)
-  );
+  for (const query of queryClient.getQueryCache().findAll({
+    queryKey: ["all-content"],
+  })) {
+    if (!itemBelongsInQuery(item, queryTypeFromKey(query.queryKey))) continue;
+    queryClient.setQueryData(query.queryKey, (old: any) =>
+      mergeInfiniteOrPage(old, item)
+    );
+  }
+  for (const query of queryClient.getQueryCache().findAll({
+    queryKey: ["default-content"],
+  })) {
+    if (!itemBelongsInQuery(item, queryTypeFromKey(query.queryKey))) continue;
+    queryClient.setQueryData(query.queryKey, (old: any) =>
+      mergePageData(old, item)
+    );
+  }
+  for (const query of queryClient.getQueryCache().findAll({
+    queryKey: ["all-content-infinite"],
+  })) {
+    if (!itemBelongsInQuery(item, queryTypeFromKey(query.queryKey))) continue;
+    queryClient.setQueryData(query.queryKey, (old: any) =>
+      mergeInfiniteOrPage(old, item)
+    );
+  }
 
   const cache = useContentCacheStore.getState().cache;
   const touchKeys = new Set([
@@ -129,6 +167,7 @@ export function prependMediaToFeedCaches(
   ]);
 
   for (const key of touchKeys) {
+    if (!cacheKeyAcceptsItem(key, item)) continue;
     const page = cache[key];
     if (!page?.items) {
       if (

@@ -1,71 +1,105 @@
-import React, { useRef } from "react";
-import { Animated, Dimensions, PanResponder } from "react-native";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { Dimensions } from "react-native";
+import { Gesture } from "react-native-gesture-handler";
+import {
+  runOnJS,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+const DISMISS_DISTANCE = 56;
+const DISMISS_VELOCITY = 450;
+const EXPAND_DISTANCE = 24;
+const EXPAND_VELOCITY = 350;
+
 type Params = {
   clear: () => void;
+  trackId?: string;
+  onExpand?: () => void;
 };
 
-export function useFloatingPlayerActions({ clear }: Params) {
-  const handleCloseMini = React.useCallback(() => {
+/**
+ * Surface of the Now Playing bar: tap / chevron → expand, drag down → dismiss,
+ * drag up → expand. Pan lives on the artwork + title only so play / next / close
+ * keep their own taps.
+ */
+export function useFloatingPlayerActions({
+  clear,
+  trackId,
+  onExpand,
+}: Params) {
+  const handleCloseMini = useCallback(() => {
     clear();
   }, [clear]);
 
-  const baselineOffset = useRef(0);
-  const dragY = useRef(new Animated.Value(0)).current;
+  const dragY = useSharedValue(0);
+  const onExpandRef = useRef(onExpand);
+  onExpandRef.current = onExpand;
+  const clearRef = useRef(clear);
+  clearRef.current = clear;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 5;
-      },
-      onPanResponderGrant: () => {
-        dragY.setOffset(baselineOffset.current);
-        dragY.setValue(0);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        dragY.setValue(gestureState.dy);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        dragY.flattenOffset();
+  const fireExpand = useCallback(() => {
+    onExpandRef.current?.();
+  }, []);
+  const fireClear = useCallback(() => {
+    clearRef.current();
+  }, []);
 
-        const currentY = (dragY as any)._value;
+  useEffect(() => {
+    dragY.value = 0;
+  }, [dragY, trackId]);
 
-        if (gestureState.dy > 100 || gestureState.vy > 0.8) {
-          Animated.timing(dragY, {
-            toValue: SCREEN_HEIGHT,
-            duration: 250,
-            useNativeDriver: true,
-          }).start(() => {
-            clear();
-          });
-          return;
-        }
+  const makePan = useCallback(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-8, 8])
+        .failOffsetX([-28, 28])
+        .onUpdate((event) => {
+          dragY.value =
+            event.translationY < 0
+              ? Math.max(event.translationY * 0.4, -32)
+              : event.translationY;
+        })
+        .onEnd((event) => {
+          const dismissed =
+            event.translationY > DISMISS_DISTANCE ||
+            event.velocityY > DISMISS_VELOCITY;
+          if (dismissed) {
+            dragY.value = SCREEN_HEIGHT;
+            runOnJS(fireClear)();
+            return;
+          }
 
-        const maxUp = -SCREEN_HEIGHT * 0.6;
-        const maxDown = 40;
+          const expand =
+            event.translationY < -EXPAND_DISTANCE ||
+            event.velocityY < -EXPAND_VELOCITY;
+          if (expand) {
+            runOnJS(fireExpand)();
+          }
 
-        let finalValue = currentY;
-        if (currentY < maxUp) finalValue = maxUp;
-        if (currentY > maxDown) finalValue = 0;
+          dragY.value = withSpring(0, { damping: 18, stiffness: 260 });
+        }),
+    [dragY, fireClear, fireExpand]
+  );
 
-        baselineOffset.current = finalValue;
-
-        Animated.spring(dragY, {
-          toValue: finalValue,
-          tension: 60,
-          friction: 10,
-          useNativeDriver: true,
-        }).start();
-      },
-    })
-  ).current;
+  const { handlePan, surfaceGesture } = useMemo(() => {
+    const handlePan = makePan();
+    const surfacePan = makePan();
+    const tap = Gesture.Tap().onEnd(() => {
+      runOnJS(fireExpand)();
+    });
+    return {
+      handlePan,
+      surfaceGesture: Gesture.Exclusive(surfacePan, tap),
+    };
+  }, [fireExpand, makePan]);
 
   return {
     handleCloseMini,
     dragY,
-    panResponder,
+    handlePan,
+    surfaceGesture,
   };
 }

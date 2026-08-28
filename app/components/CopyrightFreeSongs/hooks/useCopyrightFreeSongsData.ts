@@ -10,7 +10,7 @@ import {
 import copyrightFreeMusicAPI, {
   CopyrightFreeSongResponse,
 } from "../../../services/copyrightFreeMusicAPI";
-import { transformBackendSong } from "../../CopyrightFreeSongModal/utils/transformBackendSong";
+import { transformBackendSong } from "@/components/CopyrightFreeSongModal/utils/transformBackendSong";
 
 const CACHE_KEY = "copyrightFreeSongsCache_v1";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes

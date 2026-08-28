@@ -5,7 +5,7 @@
 import type { VideoPlayer } from "expo-video";
 import { RefObject, useCallback, useEffect } from "react";
 import { audioConfig } from "../../utils/audioConfig";
-import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 
 export interface UseReelsVideoPlaybackParams {
   videoRefs: RefObject<Record<string, VideoPlayer>>;

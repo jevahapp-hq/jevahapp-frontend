@@ -1,5 +1,5 @@
 import { Alert } from "react-native";
-import { useDownloadStore } from "../store/useDownloadStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
 import { downloadAPI } from "./downloadAPI";
 import { DownloadProgressCallback, fileDownloadManager } from "./fileDownloadManager";
 

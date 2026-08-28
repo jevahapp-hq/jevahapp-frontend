@@ -1,0 +1,11 @@
+# Force EAS to run prebuild from app.config.js (lite vs full package, New Arch, ABIs).
+# Without this, the committed android/ folder overrides variant settings.
+android/
+ios/
+
+.expo/
+dist/
+coverage/
+*.log
+**/*.test.ts
+**/*.test.tsx

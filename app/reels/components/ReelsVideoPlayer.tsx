@@ -10,6 +10,7 @@ import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { useVideoPlaybackControl } from "../../../src/shared/hooks/useVideoPlaybackControl";
 import { handleVideoError } from "../../../src/shared/utils/videoUrlManager";
 import { useInstantFeedVideoPlayer } from "../../../src/features/media/video-feed";
+import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
 
@@ -28,8 +29,6 @@ interface ReelsVideoPlayerProps {
   setLocalPosition: (p: number) => void;
   setLocalDuration: (d: number) => void;
   isDragging: boolean;
-  localDuration: number;
-  videoPosition: number;
   globalVideoStore: any;
   showPauseOverlay: boolean;
   getResponsiveSize: (s: number, m: number, l: number) => number;
@@ -52,8 +51,6 @@ const ReelsVideoPlayer = memo(
     setLocalPosition,
     setLocalDuration,
     isDragging,
-    localDuration,
-    videoPosition,
     globalVideoStore,
     showPauseOverlay,
     getResponsiveSize,
@@ -62,6 +59,34 @@ const ReelsVideoPlayer = memo(
     const lastUpdateRef = useRef(0);
     const hasTrackedViewRef = useRef(false);
     const playerRef = useRef<VideoPlayer | null>(null);
+
+    /**
+     * Values the native listeners read but must NOT re-subscribe on.
+     *
+     * These used to be effect dependencies, and the effect also *wrote* two of
+     * them (`localDuration`, `videoPosition`), so each write tore down and
+     * rebuilt three listeners and scheduled another write — the
+     * "Maximum update depth exceeded" loop. Reading them from refs keeps the
+     * subscription stable for the life of the player.
+     */
+    const isActiveRef = useRef(isActive);
+    isActiveRef.current = isActive;
+    const isPlayingRef = useRef(isPlaying);
+    isPlayingRef.current = isPlaying;
+    const isDraggingRef = useRef(isDragging);
+    isDraggingRef.current = isDragging;
+    const hapticRef = useRef(triggerHapticFeedback);
+    hapticRef.current = triggerHapticFeedback;
+
+    /**
+     * What we last pushed to the parent. Previously the effect compared against
+     * the parent's `videoPosition` prop, but `memo` below intentionally ignores
+     * that prop, so the closure held a stale 0 forever and the throttle check
+     * was always true — pushing a parent setState every 400ms indefinitely.
+     * The child tracking its own last-published value is both correct and local.
+     */
+    const lastPushedPositionRef = useRef(-1);
+    const lastPushedDurationRef = useRef(-1);
 
     const { player, firstFrameReady, handleFirstFrameRender } =
       useInstantFeedVideoPlayer({
@@ -118,8 +143,14 @@ const ReelsVideoPlayer = memo(
       const applyDuration = (durationSec: number) => {
         if (!Number.isFinite(durationSec) || durationSec <= 0) return;
         const durationMs = Math.min(durationSec * 1000, 24 * 60 * 60 * 1000);
+        // expo-video refines `duration` repeatedly while buffering (and for
+        // every HLS segment), so publish only real changes.
+        if (lastPushedDurationRef.current === durationMs) return;
+        lastPushedDurationRef.current = durationMs;
         setLocalDuration(durationMs);
         setVideoDuration(durationMs);
+        // Shared with the feed cards so both surfaces agree on the timer.
+        setCachedDurationMs(contentId, durationMs);
       };
 
       if (player.duration > 0) applyDuration(player.duration);
@@ -136,22 +167,25 @@ const ReelsVideoPlayer = memo(
       });
 
       const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
-        if (!isActive) return;
+        if (!isActiveRef.current) return;
         const durationSec = Number(player.duration) || 0;
         const positionMs = Math.max(0, (currentTime || 0) * 1000);
         const durationMs = durationSec * 1000;
+        const dragging = isDraggingRef.current;
 
-        if (!isDragging) {
+        if (!dragging) {
           setLocalPosition(positionMs);
         }
 
         const now = Date.now();
         if (now - lastUpdateRef.current > 400) {
           lastUpdateRef.current = now;
-          if (durationMs > 0 && (localDuration === 0 || localDuration !== durationMs)) {
-            setVideoDuration(durationMs);
-          }
-          if (!isDragging && Math.abs(positionMs - videoPosition) > 1000) {
+          if (durationMs > 0) applyDuration(durationSec);
+          if (
+            !dragging &&
+            Math.abs(positionMs - lastPushedPositionRef.current) > 1000
+          ) {
+            lastPushedPositionRef.current = positionMs;
             setVideoPosition(positionMs);
           }
           const pct = durationMs > 0 ? (positionMs / durationMs) * 100 : 0;
@@ -159,7 +193,6 @@ const ReelsVideoPlayer = memo(
         }
 
         if (
-          isActive &&
           !hasTrackedViewRef.current &&
           player.playing &&
           durationMs > 0
@@ -194,10 +227,10 @@ const ReelsVideoPlayer = memo(
       });
 
       const endSub = player.addListener("playToEnd", () => {
-        triggerHapticFeedback();
+        hapticRef.current();
         try {
           player.currentTime = 0;
-          if (isActive && isPlaying) player.play();
+          if (isActiveRef.current && isPlayingRef.current) player.play();
         } catch {
           // no-op
         }
@@ -208,13 +241,9 @@ const ReelsVideoPlayer = memo(
         timeSub.remove();
         endSub.remove();
       };
+      // Subscribe once per player/source. Everything else is read via refs.
     }, [
       player,
-      isActive,
-      isPlaying,
-      isDragging,
-      localDuration,
-      videoPosition,
       videoKey,
       videoUrl,
       contentId,
@@ -223,7 +252,6 @@ const ReelsVideoPlayer = memo(
       setLocalPosition,
       setVideoDuration,
       setVideoPosition,
-      triggerHapticFeedback,
     ]);
 
     if (!player) {

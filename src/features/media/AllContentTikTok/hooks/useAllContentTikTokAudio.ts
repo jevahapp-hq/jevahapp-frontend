@@ -3,7 +3,7 @@
  * This hook only reports the current feed track and pauses it when asked.
  */
 import { useCallback } from "react";
-import { useGlobalAudioPlayerStore } from "../../../../../app/store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { pausePlaybackSession } from "../../../../shared/audio/playOrToggleTrack";
 
 export function useAllContentTikTokAudio() {

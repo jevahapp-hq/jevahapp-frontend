@@ -1,4 +1,4 @@
-import type { AudioTrack } from "../../../app/store/audioPlayer/types";
+import type { AudioTrack } from "@/store/audioPlayer/types";
 import type { MediaItem } from "../types";
 import { getUserDisplayNameFromContent, isValidUri } from "../utils";
 

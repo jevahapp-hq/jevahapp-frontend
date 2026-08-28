@@ -12,7 +12,7 @@ import {
   convertToDownloadableItem,
   useDownloadHandler,
 } from "../../../utils/downloadUtils";
-import { useDownloadStore } from "../../../store/useDownloadStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
 import { RecommendedItem } from "../types";
 
 export interface MiniCardRowProps {
@@ -35,7 +35,7 @@ export default function MiniCardRow({
 
   return (
     <View className="mt-9 mb-3">
-      <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-3 ">
+      <Text className="text-[16px] font-jakarta-semibold text-[#344054] mt-4 mb-3 ">
         {title}
       </Text>
       <ScrollView
@@ -65,7 +65,7 @@ export default function MiniCardRow({
               </View>
               <View className="absolute bottom-2 left-2 right-2">
                 <Text
-                  className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                  className="text-white text-start text-[14px] ml-1 mb-6 font-jakarta"
                   numberOfLines={2}
                 >
                   {item.title}
@@ -79,19 +79,19 @@ export default function MiniCardRow({
                 </TouchableWithoutFeedback>
                 <View className="absolute mt-[26px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-30">
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                    <Text className="text-[#1D2939] font-rubik ml-2">
+                    <Text className="text-[#1D2939] font-jakarta ml-2">
                       View Details
                     </Text>
                     <Ionicons name="eye-outline" size={16} color="##3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                    <Text className="text-sm text-[#1D2939] font-rubik ml-2">
+                    <Text className="text-sm text-[#1D2939] font-jakarta ml-2">
                       Share
                     </Text>
                     <AntDesign name="share-alt" size={16} color="#3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                    <Text className="text-[#1D2939] font-rubik mr-2">
+                    <Text className="text-[#1D2939] font-jakarta mr-2">
                       Save to Library
                     </Text>
                     <MaterialIcons
@@ -118,7 +118,7 @@ export default function MiniCardRow({
                       }
                     }}
                   >
-                    <Text className="text-[#1D2939] font-rubik ml-2">
+                    <Text className="text-[#1D2939] font-jakarta ml-2">
                       {checkIfDownloaded((item as any)._id || item.fileUrl)
                         ? "Downloaded"
                         : "Download"}
@@ -143,7 +143,7 @@ export default function MiniCardRow({
             <View className="mt-2 flex flex-col w-full">
               <View className="flex flex-row justify-between items-center">
                 <Text
-                  className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                  className="text-[12px] text-[#1D2939] font-jakarta font-medium"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
@@ -164,7 +164,7 @@ export default function MiniCardRow({
               </View>
               <View className="flex-row items-center">
                 <Feather name="eye" size={24} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 ml-2 mt-1 font-jakarta">
                   {item.views}
                 </Text>
               </View>

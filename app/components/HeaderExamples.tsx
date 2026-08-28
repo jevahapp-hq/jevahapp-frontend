@@ -38,11 +38,11 @@ export const MainHeaderExample = () => {
         rightActions={rightActions}
       />
       <View className="flex-1 px-4 pt-4">
-        <Text className="text-lg font-rubik font-semibold text-[#3B3B3B]">
+        <Text className="text-lg font-jakarta font-semibold text-[#3B3B3B]">
           Main Header Example
         </Text>
-        <Text className="text-base font-rubik text-[#3B3B3B] mt-2">
-          This header takes full width and uses Rubik font throughout.
+        <Text className="text-base font-jakarta text-[#3B3B3B] mt-2">
+          This header takes full width and uses Plus Jakarta Sans throughout.
         </Text>
       </View>
     </View>
@@ -60,11 +60,11 @@ export const AuthHeaderExample = () => {
         showCancel={true}
       />
       <View className="flex-1 px-4 pt-4">
-        <Text className="text-lg font-rubik font-semibold text-[#3B3B3B]">
+        <Text className="text-lg font-jakarta font-semibold text-[#3B3B3B]">
           Auth Header Example
         </Text>
-        <Text className="text-base font-rubik text-[#3B3B3B] mt-2">
-          This header takes full width and uses Rubik font throughout.
+        <Text className="text-base font-jakarta text-[#3B3B3B] mt-2">
+          This header takes full width and uses Plus Jakarta Sans throughout.
         </Text>
       </View>
     </View>
@@ -91,11 +91,11 @@ export const SearchHeaderExample = () => {
         rightActions={rightActions}
       />
       <View className="flex-1 px-4 pt-4">
-        <Text className="text-lg font-rubik font-semibold text-[#3B3B3B]">
+        <Text className="text-lg font-jakarta font-semibold text-[#3B3B3B]">
           Search Header Example
         </Text>
-        <Text className="text-base font-rubik text-[#3B3B3B] mt-2">
-          This header takes full width and uses Rubik font throughout.
+        <Text className="text-base font-jakarta text-[#3B3B3B] mt-2">
+          This header takes full width and uses Plus Jakarta Sans throughout.
         </Text>
       </View>
     </View>
@@ -127,11 +127,11 @@ export const ProfileHeaderExample = () => {
         rightActions={rightActions}
       />
       <View className="flex-1 px-4 pt-4">
-        <Text className="text-lg font-rubik font-semibold text-[#3B3B3B]">
+        <Text className="text-lg font-jakarta font-semibold text-[#3B3B3B]">
           Profile Header Example
         </Text>
-        <Text className="text-base font-rubik text-[#3B3B3B] mt-2">
-          This header takes full width and uses Rubik font throughout.
+        <Text className="text-base font-jakarta text-[#3B3B3B] mt-2">
+          This header takes full width and uses Plus Jakarta Sans throughout.
         </Text>
       </View>
     </View>
@@ -141,7 +141,7 @@ export const ProfileHeaderExample = () => {
 export const CustomHeaderExample = () => {
   const customRightComponent = (
     <View className="flex-row items-center space-x-2">
-      <Text className="text-blue-500 font-rubik font-semibold">Save</Text>
+      <Text className="text-blue-500 font-jakarta font-semibold">Save</Text>
     </View>
   );
 
@@ -158,11 +158,11 @@ export const CustomHeaderExample = () => {
         textColor="#3B3B3B"
       />
       <View className="flex-1 px-4 pt-4">
-        <Text className="text-lg font-rubik font-semibold text-[#3B3B3B]">
+        <Text className="text-lg font-jakarta font-semibold text-[#3B3B3B]">
           Custom Header Example
         </Text>
-        <Text className="text-base font-rubik text-[#3B3B3B] mt-2">
-          This header takes full width and uses Rubik font throughout.
+        <Text className="text-base font-jakarta text-[#3B3B3B] mt-2">
+          This header takes full width and uses Plus Jakarta Sans throughout.
         </Text>
       </View>
     </View>
@@ -194,11 +194,11 @@ export const DarkHeaderExample = () => {
         statusBarBackgroundColor="#0f172a"
       />
       <View className="flex-1 px-4 pt-4">
-        <Text className="text-lg font-rubik font-semibold text-white">
+        <Text className="text-lg font-jakarta font-semibold text-white">
           Dark Header Example
         </Text>
-        <Text className="text-base font-rubik text-gray-300 mt-2">
-          This header takes full width and uses Rubik font throughout.
+        <Text className="text-base font-jakarta text-gray-300 mt-2">
+          This header takes full width and uses Plus Jakarta Sans throughout.
         </Text>
       </View>
     </View>
@@ -273,7 +273,7 @@ export const DarkHeaderExample = () => {
   <MobileHeader
     title="Edit Post"
     leftAction={{ icon: "close", onPress: () => router.back() }}
-    rightComponent={<Text className="text-blue-500 font-rubik font-semibold">Post</Text>}
+    rightComponent={<Text className="text-blue-500 font-jakarta font-semibold">Post</Text>}
   />
   <View className="flex-1 px-4 pt-4">
     // Your content here

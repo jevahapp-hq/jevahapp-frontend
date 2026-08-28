@@ -9,7 +9,13 @@ import {
   View,
 } from "react-native";
 import { playNavTapSound } from "../../src/shared/utils/uiSounds";
+import { setMiniPlayerSuppression } from "../../src/shared/audio/miniPlayerGate";
 import { pausePlaybackSession } from "../../src/shared/audio/playOrToggleTrack";
+import {
+  getCreateSheetBottomOffset,
+  getFabWrapperBottom,
+} from "../../src/shared/layout/bottomChromeLayout";
+import { setFabTapHandler } from "../../src/shared/layout/fabTapBridge";
 import {
   getBottomNavHeight,
   getFabSize,
@@ -18,9 +24,10 @@ import {
   getResponsiveShadow,
   getResponsiveSpacing,
   getResponsiveTextStyle,
+  JAKARTA,
 } from "../../utils/responsive";
-import { useGlobalVideoStore } from "../store/useGlobalVideoStore";
-import { useMediaStore } from "../store/useUploadStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import {
   prefetchCreateFlows,
   prefetchGoLiveScreen,
@@ -85,6 +92,22 @@ export default function BottomNav({
       if (next) prefetchCreateFlows();
       return next;
     });
+  }, []);
+
+  useEffect(() => {
+    setFabTapHandler(handleFabToggle);
+    return () => setFabTapHandler(null);
+  }, [handleFabToggle]);
+
+  // The create sheet and the Now Playing bar occupy the same strip above the
+  // nav, and the bar is a later root sibling so it would paint over the chips
+  // regardless of zIndex. Yield the bar while the sheet is open.
+  useEffect(() => {
+    setMiniPlayerSuppression("create-sheet", showActions);
+  }, [showActions]);
+
+  useEffect(() => {
+    return () => setMiniPlayerSuppression("create-sheet", false);
   }, []);
 
   const handleUpload = useCallback(() => {
@@ -189,6 +212,7 @@ export default function BottomNav({
               style={[
                 getResponsiveTextStyle("caption"),
                 {
+                  fontFamily: JAKARTA.bold,
                   color: isActive ? "#256E63" : "#000",
                   textAlign: "center",
                 },
@@ -207,12 +231,7 @@ export default function BottomNav({
       {fabSheetMounted ? (
         <FabCreateActions
           visible={showActions}
-          bottomOffset={
-            navBarHeight -
-            getResponsiveSpacing(40, 44, 48, 52) +
-            getFabSize().size +
-            getResponsiveSpacing(8, 10, 12, 16)
-          }
+          bottomOffset={getCreateSheetBottomOffset()}
           onUpload={handleUpload}
           onGoLive={handleGoLive}
           onUploadIntent={prefetchUploadScreen}
@@ -245,7 +264,7 @@ export default function BottomNav({
       <View
         style={{
           position: "absolute",
-          bottom: navBarHeight - getResponsiveSpacing(40, 44, 48, 52),
+          bottom: getFabWrapperBottom(),
           left: "50%",
           transform: [{ translateX: -getFabSize().size / 2 }],
           backgroundColor: "white",

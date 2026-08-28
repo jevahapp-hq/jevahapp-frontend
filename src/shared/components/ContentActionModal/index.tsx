@@ -173,7 +173,7 @@ export default function ContentActionModal({
                     fontSize: 20,
                     fontWeight: "600",
                     color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-                    fontFamily: "Rubik-SemiBold",
+                    fontFamily: "PlusJakartaSans-SemiBold",
                   }}
                 >
                   Content Actions
@@ -201,7 +201,7 @@ export default function ContentActionModal({
                 style={{
                   fontSize: 14,
                   color: UI_CONFIG.COLORS.TEXT_SECONDARY,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   marginBottom: 8,
                   textAlign: "center",
                 }}

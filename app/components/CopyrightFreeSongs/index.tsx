@@ -5,14 +5,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   Text,
   View,
 } from "react-native";
 import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
-import { transformBackendSong } from "../CopyrightFreeSongModal/utils/transformBackendSong";
+import { transformBackendSong } from "@/components/CopyrightFreeSongModal/utils/transformBackendSong";
 import { useCopyrightFreeSongsData } from "./hooks/useCopyrightFreeSongsData";
 import { useCopyrightFreeSongsPlayback } from "./hooks/useCopyrightFreeSongsPlayback";
 import { SongCard } from "./SongCard";
@@ -88,20 +87,34 @@ export default function CopyrightFreeSongs(_props: CopyrightFreeSongsProps) {
       }}
     >
       <View className="px-4 py-3">
-        <Text className="text-xl font-rubik-bold text-gray-900">
+        <Text className="text-xl font-jakarta-bold text-gray-900">
           Songs for you
         </Text>
         {error && (
-          <Text className="text-xs text-orange-500 mt-1 font-rubik">{error}</Text>
+          <Text className="text-xs text-orange-500 mt-1 font-jakarta">{error}</Text>
         )}
       </View>
 
       {loading && songs.length === 0 ? (
-        <View className="flex-1 justify-center items-center py-20">
-          <ActivityIndicator size="large" color="#256E63" />
-          <Text className="text-sm text-gray-500 mt-4 font-rubik">
-            Loading songs...
-          </Text>
+        <View
+          style={{
+            flexDirection: "row",
+            paddingHorizontal: 16,
+            paddingBottom: 8,
+            gap: 12,
+          }}
+        >
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={{
+                width: 140,
+                height: 168,
+                borderRadius: 12,
+                backgroundColor: "#E4E6EA",
+              }}
+            />
+          ))}
         </View>
       ) : (
         <ScrollView
@@ -123,7 +136,7 @@ export default function CopyrightFreeSongs(_props: CopyrightFreeSongsProps) {
           ) : (
             <View className="flex-1 justify-center items-center py-20 px-4">
               <Ionicons name="musical-notes-outline" size={48} color="#9CA3AF" />
-              <Text className="text-sm text-gray-500 mt-4 font-rubik text-center">
+              <Text className="text-sm text-gray-500 mt-4 font-jakarta text-center">
                 No songs available
               </Text>
             </View>

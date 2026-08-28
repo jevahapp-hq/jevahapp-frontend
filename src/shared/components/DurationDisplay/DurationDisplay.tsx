@@ -51,7 +51,7 @@ export const DurationDisplay: React.FC<DurationDisplayProps> = ({
         <Ionicons name={iconName} size={iconSize} color={iconColor} />
       )}
       <Text
-        className={`${getTextSizeClass()} font-rubik ml-1`}
+        className={`${getTextSizeClass()} font-jakarta ml-1`}
         style={{ color: textColor }}
       >
         {formatTime(currentMs)} / {formatTime(durationMs)}

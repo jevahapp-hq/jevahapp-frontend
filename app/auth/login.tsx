@@ -173,9 +173,11 @@ export default function LoginScreen() {
         if (
           lower.includes("password") ||
           lower.includes("credentials") ||
-          lower.includes("invalid")
+          lower.includes("invalid") ||
+          lower.includes("incorrect") ||
+          lower.includes("unauthorized")
         ) {
-          authToast.wrongPassword(errorMessage);
+          authToast.wrongPassword();
         } else {
           authToast.loginFailed(errorMessage);
         }
@@ -204,7 +206,7 @@ export default function LoginScreen() {
       </View>
       <View className="flex flex-col justify-center items-center mx-auto px-4 mt-0 w-[333px] bg-white">
         <View className="flex flex-col justify-center items-start h-[160px] w-[333px] mt-3">
-          <Text className="font-rubik-semibold text-[#1D2939] text-star text-[40px]">
+          <Text className="font-jakarta-extrabold text-[#1D2939] text-left text-[40px]">
             Great to see you {"\n"}again{" "}
             <Image
               source={{
@@ -214,7 +216,7 @@ export default function LoginScreen() {
               resizeMode="contain"
             />
           </Text>
-          <Text className="mt-2 font-rubik text-[14px] w-full text-[#344054] text-start">
+          <Text className="mt-2 font-jakarta text-[14px] w-full text-[#344054] text-start">
             Log in to pick up where you left off. Your sermons, playlists, and
             community await.
           </Text>
@@ -304,7 +306,7 @@ export default function LoginScreen() {
                   <FontAwesome6 name="check" size={10} color="#FFFFFF" />
                 )}
               </View>
-              <Text className="ml-2 text-[#344054] text-[14px] font-rubik">
+              <Text className="ml-2 text-[#344054] text-[14px] font-jakarta">
                 Remember me
               </Text>
             </TouchableOpacity>
@@ -314,7 +316,7 @@ export default function LoginScreen() {
               className="flex flex-row ml-2"
             >
               <Text
-                className="text-[#FEA74E] text-[14px] font-rubik-semibold"
+                className="text-[#FEA74E] text-[14px] font-jakarta-semibold"
                 style={{ textDecorationLine: "none" }}
               >
                 Forgot password?
@@ -332,19 +334,19 @@ export default function LoginScreen() {
           >
             {isLoading ? (
               <>
-                <Text className="text-white text-center text-base">
+                <Text className="text-white text-center text-base font-jakarta-semibold">
                   Signing in…
                 </Text>
                 <ActivityIndicator size="small" color="#FFFFFF" style={{ marginLeft: 8 }} />
               </>
             ) : (
-              <Text className="text-white text-center text-base">
+              <Text className="text-white text-center text-base font-jakarta-semibold">
                 Sign In
               </Text>
             )}
           </TouchableOpacity>
 
-          <Text className="text-1xl font-semibold mt-6">
+          <Text className="text-1xl font-jakarta-bold mt-6 text-[#1D2939]">
             DON'T HAVE AN ACCOUNT?
           </Text>
 
@@ -352,7 +354,7 @@ export default function LoginScreen() {
             onPress={() => router.push("/auth/signup")}
             className="mt-6"
           >
-            <Text className="text-[#344054] text-sm font-medium mt-4">
+            <Text className="text-[#344054] text-sm font-jakarta-semibold mt-4">
               Sign Up
             </Text>
           </TouchableOpacity>

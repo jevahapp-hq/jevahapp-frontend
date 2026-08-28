@@ -93,7 +93,7 @@ export function DiscoverCardItem({
                 fontWeight: "700",
                 textTransform: "uppercase",
                 letterSpacing: 1.4,
-                fontFamily: "Rubik_700Bold",
+                fontFamily: "PlusJakartaSans_700Bold",
                 marginBottom: 4,
               }}
             >
@@ -105,7 +105,7 @@ export function DiscoverCardItem({
                 fontSize: 16,
                 fontWeight: "800",
                 color: "#FFFFFF",
-                fontFamily: "Rubik_700Bold",
+                fontFamily: "PlusJakartaSans_700Bold",
                 letterSpacing: -0.3,
               }}
             >
@@ -116,7 +116,7 @@ export function DiscoverCardItem({
               style={{
                 fontSize: 11,
                 color: "rgba(255, 255, 255, 0.82)",
-                fontFamily: "Rubik_400Regular",
+                fontFamily: "PlusJakartaSans_400Regular",
                 marginTop: 2,
               }}
             >

@@ -162,7 +162,7 @@ export default function MobileHeader({
                 backgroundColor: "#F3F4F6",
               }}
             >
-              <Text className="text-gray-600 font-rubik-semibold text-sm">
+              <Text className="text-gray-600 font-jakarta-semibold text-sm">
                 {user?.firstName?.[0]?.toUpperCase() ||
                   user?.lastName?.[0]?.toUpperCase() ||
                   "U"}
@@ -175,10 +175,17 @@ export default function MobileHeader({
         </View>
 
         <View className="ml-3 flex-1">
-          <Text className="text-[15px] font-rubik font-semibold text-[#3B3B3B] leading-5">
+          {/* Named font files carry their own weight — pairing `font-jakarta`
+              with `font-semibold` silently rendered Regular on Android. */}
+          <Text className="text-[15px] font-jakarta-bold text-[#1D2939] leading-5">
             {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
           </Text>
-          <Text className="text-[12px] text-[#3B3B3B] font-rubik font-medium mt-0.5">
+          {/* Kept one step lighter than the name so the eyebrow label doesn't
+              compete with it; tracking does the emphasis instead of weight. */}
+          <Text
+            className="text-[11px] text-[#667085] font-jakarta-semibold mt-0.5"
+            style={{ letterSpacing: 0.6 }}
+          >
             {user?.section?.toUpperCase() || "USER"}
           </Text>
         </View>
@@ -260,7 +267,7 @@ export default function MobileHeader({
                     <Text style={{
                       color: "#FFFFFF",
                       fontSize: 9,
-                      fontFamily: "Rubik-Bold",
+                      fontFamily: "PlusJakartaSans-Bold",
                       includeFontPadding: false,
                       textAlign: "center"
                     }}>
@@ -292,11 +299,11 @@ export default function MobileHeader({
 
       {/* Center - Title */}
       <View className="flex-1 items-center">
-        <Text className="text-[17px] font-rubik font-semibold text-[#3B3B3B] text-center">
+        <Text className="text-[17px] font-jakarta font-semibold text-[#3B3B3B] text-center">
           {title}
         </Text>
         {subtitle && (
-          <Text className="text-[13px] text-[#3B3B3B] font-rubik text-center mt-0.5">
+          <Text className="text-[13px] text-[#3B3B3B] font-jakarta text-center mt-0.5">
             {subtitle}
           </Text>
         )}
@@ -371,11 +378,11 @@ export default function MobileHeader({
           renderNode(centerComponent)
         ) : title ? (
           <View>
-            <Text className="text-[17px] font-rubik font-semibold text-[#3B3B3B] text-center">
+            <Text className="text-[17px] font-jakarta font-semibold text-[#3B3B3B] text-center">
               {title}
             </Text>
             {subtitle && (
-              <Text className="text-[13px] text-[#3B3B3B] font-rubik text-center mt-0.5">
+              <Text className="text-[13px] text-[#3B3B3B] font-jakarta text-center mt-0.5">
                 {subtitle}
               </Text>
             )}
@@ -457,7 +464,7 @@ export default function MobileHeader({
                       <Text style={{
                         color: "#FFFFFF",
                         fontSize: 9,
-                        fontFamily: "Rubik-Bold",
+                        fontFamily: "PlusJakartaSans-Bold",
                         includeFontPadding: false,
                         textAlign: "center"
                       }}>

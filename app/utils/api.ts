@@ -11,7 +11,7 @@ import TokenUtils from "./tokenUtils";
 export { API_BASE_URL, getApiBaseUrl };
 
 // Configure axios defaults for better timeout handling
-axios.defaults.timeout = 30000; // 30 seconds timeout to handle Render cold starts
+axios.defaults.timeout = 30000; // generous: single-region VPS, far from most users
 
 // Add retry interceptor with proper typing
 axios.interceptors.response.use(
@@ -44,7 +44,7 @@ axios.interceptors.response.use(
 // Create a configured axios instance for API calls
 export const apiAxios = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds for Render cold starts
+  timeout: 30000, // generous: single-region VPS, far from most users
   headers: {
     "Content-Type": "application/json",
     "expo-platform": Platform.OS,
@@ -323,7 +323,7 @@ export class APIClient {
       body,
       headers: customHeaders = {},
       requireAuth = true,
-      timeoutMs = 30000, // 30 seconds for Render cold starts
+      timeoutMs = 30000, // generous: single-region VPS, far from most users
       retryOnAbort = false,
     } = options;
 
@@ -535,7 +535,7 @@ export class APIClient {
       // Clear user-specific interaction data
       try {
         const { useInteractionStore } = await import(
-          "../store/useInteractionStore"
+          "@/store/useInteractionStore"
         );
         useInteractionStore.getState().clearCache();
         console.log("✅ Cleared interaction cache on logout");

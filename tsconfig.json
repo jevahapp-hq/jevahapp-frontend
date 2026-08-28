@@ -27,6 +27,9 @@
       "@/features/*": [
         "./src/features/*"
       ],
+      "@/store/*": [
+        "./src/store/*"
+      ],
       "@/components/*": [
         "./src/shared/components/*"
       ],

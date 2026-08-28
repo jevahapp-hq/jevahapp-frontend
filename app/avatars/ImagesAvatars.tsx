@@ -141,7 +141,7 @@ const Images = ({
 
       {!uploadedImage && (
         <View className="border border-dashed border-[#667085] bg-[#667085] rounded-xl p-4 mb-4 items-center h-[105px]">
-          <Text className="text-[10px] font-rubik-medium text-[#475467] mb-2">
+          <Text className="text-[10px] font-jakarta-medium text-[#475467] mb-2">
             UPLOAD YOUR IMAGE
           </Text>
           <View className="flex-row gap-2">
@@ -149,7 +149,7 @@ const Images = ({
               onPress={() => handleImageUpload('camera')}
               className="border border-[#9D9FA7] px-4 py-2 rounded-full"
             >
-              <Text className="text-[12px] font-rubik-medium text-[#090E24] text-center">
+              <Text className="text-[12px] font-jakarta-medium text-[#090E24] text-center">
                 Camera
               </Text>
             </TouchableOpacity>
@@ -157,7 +157,7 @@ const Images = ({
               onPress={() => handleImageUpload('gallery')}
               className="border border-[#9D9FA7] px-4 py-2 rounded-full"
             >
-              <Text className="text-[12px] font-rubik-medium text-[#090E24] text-center">
+              <Text className="text-[12px] font-jakarta-medium text-[#090E24] text-center">
                 Gallery
               </Text>
             </TouchableOpacity>
@@ -167,7 +167,7 @@ const Images = ({
 
       <View className="flex-row items-center my-4 w-[300px]">
         <View className="flex-1 h-px bg-black/50" />
-        <Text className="mx-2 text-[#475467] font-rubik-medium text-[10px]">
+        <Text className="mx-2 text-[#475467] font-jakarta-medium text-[10px]">
           OR SELECT BELOW
         </Text>
         <View className="flex-1 h-px bg-black/50" />

@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Dimensions, View } from "react-native";
-import { useCopyrightFreeOverlayStore } from "../../store/useCopyrightFreeOverlayStore";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { ArtistsLaneBanner } from "./components/ArtistsLaneBanner";
 import { MusicDiscoverShelf } from "./components/MusicDiscoverShelf";
 import { MusicEmptyState } from "./components/MusicEmptyState";

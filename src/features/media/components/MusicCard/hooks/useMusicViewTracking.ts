@@ -33,7 +33,7 @@ export function useMusicViewTracking(options: {
     try {
       const {
         useInteractionStore,
-      } = require("../../../../../../app/store/useInteractionStore");
+      } = require("@/store/useInteractionStore");
       storeRef.current = useInteractionStore.getState();
     } catch {
       // ignore

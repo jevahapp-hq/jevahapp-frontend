@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useDownloadStore } from "../store/useDownloadStore";
+import { useDownloadStore } from "@/store/useDownloadStore";
 import type { MediaItem } from "../types/media";
 
 export default function DownloadContentViewer() {
@@ -75,7 +75,7 @@ export default function DownloadContentViewer() {
           <Text style={{ fontSize: 18 }}>{"‹"}</Text>
         </TouchableOpacity>
 
-        <Text style={{ fontFamily: "Rubik-SemiBold", fontSize: 16 }}>
+        <Text style={{ fontFamily: "PlusJakartaSans-SemiBold", fontSize: 16 }}>
           Downloads
         </Text>
 
@@ -84,13 +84,13 @@ export default function DownloadContentViewer() {
 
       {!id ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Text style={{ color: "#667085", fontFamily: "Rubik" }}>
+          <Text style={{ color: "#667085", fontFamily: "PlusJakartaSans" }}>
             No content selected
           </Text>
         </View>
       ) : !item || !mediaItem ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Text style={{ color: "#667085", fontFamily: "Rubik" }}>
+          <Text style={{ color: "#667085", fontFamily: "PlusJakartaSans" }}>
             Content not found in downloads
           </Text>
         </View>
@@ -121,7 +121,7 @@ export default function DownloadContentViewer() {
             />
           ) : (
             <View style={{ paddingVertical: 24 }}>
-              <Text style={{ color: "#667085", fontFamily: "Rubik" }}>
+              <Text style={{ color: "#667085", fontFamily: "PlusJakartaSans" }}>
                 This content type isn’t supported in downloads viewer yet.
               </Text>
             </View>

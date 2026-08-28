@@ -7,7 +7,7 @@ import {
   generateEbookTts,
   getEbookTts,
 } from "../services/ebookTtsApi";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 
 type Props = {
@@ -256,7 +256,7 @@ export default function EbookTtsPlayer({
         <View style={{ flex: 1 }}>
           <Text
             style={{
-              fontFamily: "Rubik-SemiBold",
+              fontFamily: "PlusJakartaSans-SemiBold",
               fontSize: 14,
               color: "#1D2939",
             }}
@@ -267,7 +267,7 @@ export default function EbookTtsPlayer({
           <Text
             style={{
               marginTop: 2,
-              fontFamily: "Rubik-Regular",
+              fontFamily: "PlusJakartaSans-Regular",
               fontSize: 12,
               color: "#667085",
             }}
@@ -354,10 +354,10 @@ export default function EbookTtsPlayer({
               justifyContent: "space-between",
             }}
           >
-            <Text style={{ fontFamily: "Rubik-Medium", color: "#8C5A00", fontSize: 12 }}>
+            <Text style={{ fontFamily: "PlusJakartaSans-Medium", color: "#8C5A00", fontSize: 12 }}>
               Synced text (tap a line to jump)
             </Text>
-            <Text style={{ fontFamily: "Rubik-Regular", color: "#8C5A00", fontSize: 12 }}>
+            <Text style={{ fontFamily: "PlusJakartaSans-Regular", color: "#8C5A00", fontSize: 12 }}>
               {segments.length} segments
             </Text>
           </View>
@@ -391,7 +391,7 @@ export default function EbookTtsPlayer({
                 >
                   <Text
                     style={{
-                      fontFamily: active ? "Rubik-Medium" : "Rubik-Regular",
+                      fontFamily: active ? "PlusJakartaSans-Medium" : "PlusJakartaSans-Regular",
                       color: active ? "#4B2C00" : "#344054",
                       fontSize: 13,
                       lineHeight: 18,
@@ -404,7 +404,7 @@ export default function EbookTtsPlayer({
             })}
 
             {!segments.length && (
-              <Text style={{ fontFamily: "Rubik-Regular", color: "#667085", fontSize: 12 }}>
+              <Text style={{ fontFamily: "PlusJakartaSans-Regular", color: "#667085", fontSize: 12 }}>
                 No timings returned by backend yet. Audio playback will still work, but highlighting requires backend
                 `timings.segments`.
               </Text>
@@ -427,13 +427,13 @@ export default function EbookTtsPlayer({
           disabled={!canPlay}
           style={{ paddingVertical: 6, paddingHorizontal: 10, opacity: canPlay ? 1 : 0.4 }}
         >
-          <Text style={{ fontFamily: "Rubik-Medium", color: "#667085" }}>
+          <Text style={{ fontFamily: "PlusJakartaSans-Medium", color: "#667085" }}>
             Stop
           </Text>
         </TouchableOpacity>
 
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ fontFamily: "Rubik-Regular", color: "#667085", marginRight: 8 }}>
+          <Text style={{ fontFamily: "PlusJakartaSans-Regular", color: "#667085", marginRight: 8 }}>
             Speed
           </Text>
           {[0.8, 1.0, 1.2].map((v) => (
@@ -453,7 +453,7 @@ export default function EbookTtsPlayer({
             >
               <Text
                 style={{
-                  fontFamily: "Rubik-Medium",
+                  fontFamily: "PlusJakartaSans-Medium",
                   color: Math.abs(speed - v) < 0.01 ? "#DF930E" : "#667085",
                 }}
               >
@@ -476,7 +476,7 @@ export default function EbookTtsPlayer({
               marginRight: 6,
             }}
           >
-            <Text style={{ fontFamily: "Rubik-Medium", color: "#667085" }}>
+            <Text style={{ fontFamily: "PlusJakartaSans-Medium", color: "#667085" }}>
               Voice: {voicePreset}
             </Text>
           </TouchableOpacity>
@@ -492,7 +492,7 @@ export default function EbookTtsPlayer({
               opacity: isLoading || isGenerating ? 0.5 : 1,
             }}
           >
-            <Text style={{ fontFamily: "Rubik-Medium", color: "#DF930E" }}>
+            <Text style={{ fontFamily: "PlusJakartaSans-Medium", color: "#DF930E" }}>
               Generate
             </Text>
           </TouchableOpacity>
@@ -510,7 +510,7 @@ export default function EbookTtsPlayer({
             borderColor: "rgba(223, 147, 14, 0.25)",
           }}
         >
-          <Text style={{ fontFamily: "Rubik-Regular", color: "#8C5A00", fontSize: 12 }}>
+          <Text style={{ fontFamily: "PlusJakartaSans-Regular", color: "#8C5A00", fontSize: 12 }}>
             {error}
           </Text>
         </View>

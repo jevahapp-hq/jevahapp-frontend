@@ -288,7 +288,7 @@ export const getScreenDimensions = () => ({
 // Enhanced responsive text styles with performance optimization
 export const getResponsiveTextStyle = (type: 'title' | 'subtitle' | 'body' | 'caption' | 'button') => {
   const baseStyle = {
-    fontFamily: 'Rubik_400Regular',
+    fontFamily: 'PlusJakartaSans_400Regular',
     // Add performance optimizations
     includeFontPadding: false,
     textAlignVertical: 'center' as const,

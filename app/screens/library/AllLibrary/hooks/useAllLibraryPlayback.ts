@@ -3,7 +3,7 @@
  * Video tiles are posters — tap opens Reels, they do not mount a player.
  */
 import { useCallback, useRef, useState } from "react";
-import { useGlobalAudioPlayerStore } from "../../../../store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { playOrToggleTrack } from "../../../../../src/shared/audio/playOrToggleTrack";
 
 export function useAllLibraryPlayback() {

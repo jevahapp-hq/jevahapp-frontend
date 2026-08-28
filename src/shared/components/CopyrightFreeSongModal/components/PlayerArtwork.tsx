@@ -47,7 +47,7 @@ export function PlayerArtwork({
             shadowOffset: { width: 0, height: 20 },
             shadowOpacity: isPlaying ? 0.6 : 0.45,
             shadowRadius: 30,
-            elevation: 30,
+            elevation: 8,
             borderWidth: 1.5,
             borderColor: "rgba(255, 255, 255, 0.18)",
             overflow: "hidden",

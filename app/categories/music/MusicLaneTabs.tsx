@@ -41,7 +41,7 @@ export function MusicLaneTabs({ lane, onChange }: Props) {
           >
             <Text
               style={{
-                fontFamily: "Rubik_500Medium",
+                fontFamily: "PlusJakartaSans_500Medium",
                 fontSize: 13,
                 color: active ? "#fff" : "#4B5563",
               }}

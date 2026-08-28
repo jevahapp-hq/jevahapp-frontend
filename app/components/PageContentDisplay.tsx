@@ -137,7 +137,7 @@ export default function PageContentDisplay({
             <Text
               style={{
                 fontSize: 18,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#1D2939",
               }}
               numberOfLines={1}
@@ -147,7 +147,7 @@ export default function PageContentDisplay({
             <Text
               style={{
                 fontSize: 12,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#667085",
                 marginTop: 2,
               }}
@@ -278,7 +278,7 @@ export default function PageContentDisplay({
             <Text
               style={{
                 fontSize: 11,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#667085",
               }}
             >
@@ -287,7 +287,7 @@ export default function PageContentDisplay({
             <Text
               style={{
                 fontSize: 11,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#667085",
               }}
             >
@@ -316,7 +316,7 @@ export default function PageContentDisplay({
           <Text
             style={{
               fontSize: 18,
-              fontFamily: "Rubik-SemiBold",
+              fontFamily: "PlusJakartaSans-SemiBold",
               color: "#10B981",
               fontStyle: "italic",
             }}
@@ -359,7 +359,7 @@ export default function PageContentDisplay({
                       ? "#10B981" 
                       : "#1D2939",
                     backgroundColor: isCurrentWord ? "#FEA74E" : "transparent",
-                    fontFamily: isCurrentWord ? "Rubik-Bold" : isPastWord ? "Rubik-Medium" : "Rubik",
+                    fontFamily: isCurrentWord ? "PlusJakartaSans-Bold" : isPastWord ? "PlusJakartaSans-Medium" : "PlusJakartaSans",
                     paddingHorizontal: isCurrentWord ? 6 : 0,
                     paddingVertical: isCurrentWord ? 3 : 0,
                     borderRadius: isCurrentWord ? 8 : 0,
@@ -396,7 +396,7 @@ export default function PageContentDisplay({
               style={{
                 marginLeft: 8,
                 fontSize: 14,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#1D2939",
               }}
             >
@@ -406,7 +406,7 @@ export default function PageContentDisplay({
           <Text
             style={{
               fontSize: 13,
-              fontFamily: "Rubik",
+              fontFamily: "PlusJakartaSans",
               color: "#667085",
               lineHeight: 18,
             }}

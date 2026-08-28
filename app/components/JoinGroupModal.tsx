@@ -181,7 +181,7 @@ export default function JoinGroupModal({
                 color: "#000",
                 textAlign: "center",
                 marginBottom: 8,
-                fontFamily: "Rubik-Bold",
+                fontFamily: "PlusJakartaSans-Bold",
               }}
             >
               {groupTitle}
@@ -194,7 +194,7 @@ export default function JoinGroupModal({
                 color: "#666",
                 textAlign: "center",
                 marginBottom: 16,
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
               }}
             >
               {groupMembers.toLocaleString()} Members
@@ -209,7 +209,7 @@ export default function JoinGroupModal({
                 lineHeight: 24,
                 marginBottom: 32,
                 paddingHorizontal: 16,
-                fontFamily: "Rubik-Regular",
+                fontFamily: "PlusJakartaSans-Regular",
               }}
             >
               {groupDescription}
@@ -233,7 +233,7 @@ export default function JoinGroupModal({
                   color: "white",
                   fontSize: 18,
                   fontWeight: "bold",
-                  fontFamily: "Rubik-Bold",
+                  fontFamily: "PlusJakartaSans-Bold",
                 }}
               >
                 Join

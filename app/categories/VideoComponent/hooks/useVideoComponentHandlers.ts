@@ -263,7 +263,7 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
       const contentType = (video as any).contentType || "media";
 
       try {
-        const { useInteractionStore } = require("../../../store/useInteractionStore");
+        const { useInteractionStore } = require("@/store/useInteractionStore");
         await useInteractionStore.getState().toggleLike(contentId, contentType);
       } catch (storeError) {
         console.warn("Backend like sync failed:", storeError);

@@ -5,7 +5,7 @@ import {
   isTrackPlayable,
   isTrackProcessing,
 } from "../../../services/music-catalog/trackTypes";
-import { useGlobalAudioPlayerStore } from "../../../store/useGlobalAudioPlayerStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { enqueueFeedEvent } from "../../../../src/shared/feed/feedRanker";
 
 /**

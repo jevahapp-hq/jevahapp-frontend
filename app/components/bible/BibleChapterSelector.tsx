@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   chapterNumber: {
     fontSize: 16,
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
     color: "#1F2937",
   },
   selectedChapterNumber: {

@@ -8,7 +8,7 @@ import {
   View
 } from "react-native";
 import AuthHeader from "../components/AuthHeader";
-import EmailResetSeenModal from "./emailResetSeen";
+import EmailResetSeenModal from "../components/auth/EmailResetSeenModal";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -51,11 +51,11 @@ export default function ForgotPassword() {
       <View className="flex-1 w-full items-center mt-8 bg-[#FCFCFD]">
         <View className="w-[333px]">
           {/* Title Section */}
-          <Text className="font-rubik-semibold text-[32px] text-[#1D2939] mb-4">
+          <Text className="font-jakarta-extrabold text-[32px] text-[#1D2939] mb-4">
             Forgot Password?
           </Text>
           
-          <Text className="text-[16px] text-[#667085] font-rubik leading-6 mb-8">
+          <Text className="text-[16px] text-[#667085] font-jakarta leading-6 mb-8">
             Don't worry! It happens. Please enter the email address associated with your account.
           </Text>
 
@@ -107,7 +107,7 @@ export default function ForgotPassword() {
               REMEMBER YOUR PASSWORD?
             </Text>
             <TouchableOpacity onPress={() => router.push("/auth/login")}>
-              <Text className="text-[#344054] text-[14px] font-rubik mt-6">
+              <Text className="text-[#344054] text-[14px] font-jakarta mt-6">
                 Sign In
               </Text>
             </TouchableOpacity>

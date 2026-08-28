@@ -198,7 +198,7 @@ export default function TextHighlightOverlay({
             <Text
               style={{
                 fontSize: 18,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#1D2939",
               }}
               numberOfLines={1}
@@ -208,7 +208,7 @@ export default function TextHighlightOverlay({
             <Text
               style={{
                 fontSize: 12,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#667085",
                 marginTop: 2,
               }}
@@ -240,7 +240,7 @@ export default function TextHighlightOverlay({
             style={{
               marginLeft: 8,
               fontSize: 14,
-              fontFamily: "Rubik-SemiBold",
+              fontFamily: "PlusJakartaSans-SemiBold",
               color: "#0284C7",
             }}
           >
@@ -250,7 +250,7 @@ export default function TextHighlightOverlay({
         <Text
           style={{
             fontSize: 13,
-            fontFamily: "Rubik",
+            fontFamily: "PlusJakartaSans",
             color: "#0369A1",
             lineHeight: 18,
           }}
@@ -324,7 +324,7 @@ export default function TextHighlightOverlay({
             <Text
               style={{
                 fontSize: 14,
-                fontFamily: "Rubik-Medium",
+                fontFamily: "PlusJakartaSans-Medium",
                 color: "#9CA3AF",
                 marginTop: 8,
                 textAlign: "center",
@@ -355,7 +355,7 @@ export default function TextHighlightOverlay({
               <Text
                 style={{
                   fontSize: 14,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#FFFFFF",
                   lineHeight: 20,
                 }}
@@ -393,7 +393,7 @@ export default function TextHighlightOverlay({
           <Text
             style={{
               fontSize: 14,
-              fontFamily: "Rubik-Medium",
+              fontFamily: "PlusJakartaSans-Medium",
               color: highlightAreas.length === 0 ? "#9CA3AF" : "#374151",
             }}
           >
@@ -415,7 +415,7 @@ export default function TextHighlightOverlay({
           <Text
             style={{
               fontSize: 14,
-              fontFamily: "Rubik-Medium",
+              fontFamily: "PlusJakartaSans-Medium",
               color: selectedText.length === 0 ? "#9CA3AF" : "#374151",
             }}
           >
@@ -438,7 +438,7 @@ export default function TextHighlightOverlay({
           <Text
             style={{
               fontSize: 16,
-              fontFamily: "Rubik-SemiBold",
+              fontFamily: "PlusJakartaSans-SemiBold",
               color: selectedText.length > 0 ? "#FFFFFF" : "#9CA3AF",
             }}
           >

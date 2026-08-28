@@ -157,7 +157,7 @@ export default function ProfileSetUp() {
           </View>
 
           <View className="flex flex-col justify-center items-center w-full mt-4">
-            <Text className="font-rubik-semibold text-[32px] text-[#1D2939] text-center">
+            <Text className="font-jakarta-semibold text-[32px] text-[#1D2939] text-center">
               What are you most interested in?
             </Text>
             {interests.map((interest, index) => {

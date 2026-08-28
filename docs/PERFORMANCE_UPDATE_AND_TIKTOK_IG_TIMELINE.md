@@ -154,7 +154,7 @@ Use “**materially improved vs prior architecture**” for shipped items. Use �
 | Backend warmup then **800ms stagger** then feed prefetch | Fewer cold-start 429s; healthier first feed fetch |
 | Prefetch first page (`all-content`, page size 12) into React Query | Home can hit cache when user lands |
 
-**Estimated impact:** Hundreds of ms to multi-second improvement in *perceived* readiness on slower devices and cold backends (exact delta depends on device + Render cold start).
+**Estimated impact:** Hundreds of ms to multi-second improvement in *perceived* readiness on slower devices (exact delta depends on device + round-trip latency to the single-region VPS).
 
 ### 5.2 Feed / page load (All Content TikTok)
 
@@ -480,7 +480,7 @@ Paste filled values back into §4 before sending partner-facing absolute claims.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Backend / Render cold starts (30–90s possible) | Dominates “app feels slow” even if UI is fast | Keep warmup; consider always-on or edge API for feed |
+| Single-region VPS (Contabo) — 150–300ms RTT for distant users | Dominates “app feels slow” even if UI is fast | Put a CDN in front of read APIs; reduce request count |
 | Short-lived signed media URLs | Thumbnail-only videos | CDN / long-lived URLs + existing refresh retry |
 | Over-prefetch | Memory pressure, 429s | Cap concurrent players; stagger requests |
 | Unmeasured estimates used externally | Credibility risk | Run Phase 0 before hard ms claims |

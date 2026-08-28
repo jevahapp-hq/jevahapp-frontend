@@ -75,7 +75,7 @@ export function AdminReportMediaInspect({ media, fallbackTitle }: Props) {
             color: "#fff",
             fontSize: 18,
             fontWeight: "700",
-            fontFamily: "Rubik_700Bold",
+            fontFamily: "PlusJakartaSans_700Bold",
             marginBottom: 4,
           }}
         >

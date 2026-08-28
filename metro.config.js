@@ -108,6 +108,38 @@ function asSource(filePath) {
   return { type: "sourceFile", filePath };
 }
 
+const STORE_ROOT = path.resolve(__dirname, "src/store");
+
+function rewriteLegacyAppStoreRelative(originModulePath, moduleName) {
+  if (!moduleName || moduleName[0] !== ".") return null;
+  const abs = path.resolve(path.dirname(originModulePath), moduleName);
+  const appStoreRoot = path.resolve(__dirname, "app", "store");
+  const rel = path.relative(appStoreRoot, abs);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  const rest = slash(rel).replace(/\.(tsx?|jsx?)$/, "");
+  return firstExisting([
+    path.join(STORE_ROOT, `${rest}.tsx`),
+    path.join(STORE_ROOT, `${rest}.ts`),
+    path.join(STORE_ROOT, rest, "index.tsx"),
+    path.join(STORE_ROOT, rest, "index.ts"),
+  ]);
+}
+
+function resolveStoreAlias(moduleName) {
+  const name = slash(moduleName);
+  let rest = null;
+  if (name === "@/store" || name === "src/store") rest = "";
+  else if (name.startsWith("@/store/")) rest = name.slice("@/store/".length);
+  else if (name.startsWith("src/store/")) rest = name.slice("src/store/".length);
+  if (rest === null) return null;
+  return firstExisting([
+    path.join(STORE_ROOT, `${rest}.tsx`),
+    path.join(STORE_ROOT, `${rest}.ts`),
+    path.join(STORE_ROOT, rest, "index.tsx"),
+    path.join(STORE_ROOT, rest, "index.ts"),
+  ]);
+}
+
 module.exports = (() => {
   const base = getSentryExpoConfig(__dirname);
   const { transformer, resolver } = base;
@@ -137,6 +169,15 @@ module.exports = (() => {
     if (kind) {
       return asSource(resolveCtxFile(kind, platform));
     }
+
+    const storePath = resolveStoreAlias(moduleName);
+    if (storePath) return asSource(storePath);
+
+    const legacyStore = rewriteLegacyAppStoreRelative(
+      context.originModulePath,
+      moduleName
+    );
+    if (legacyStore) return asSource(legacyStore);
 
     if (moduleName === "react-native-nitro-modules") {
       return asSource(path.join(NITRO_LIB, "index.js"));

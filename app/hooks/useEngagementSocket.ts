@@ -9,33 +9,59 @@ import { applyLiveEngagementCounts } from "../utils/contentInteraction/socketCou
 import { mapContentTypeForBackend } from "../utils/engagementHelpers";
 import TokenUtils from "../utils/tokenUtils";
 
+/** Author edited their own post; payload carries the changed fields only. */
+export type MediaUpdatedPayload = {
+  contentId?: string;
+  mediaId?: string;
+  description?: string;
+  title?: string;
+  updatedAt?: string;
+};
+
 export type UseEngagementSocketOptions = {
   focusedContentId?: string | null;
   focusedContentType?: string | null;
   /** Override API origin when needed */
   serverUrl?: string;
+  /**
+   * Metadata edits (e.g. description) from the author's other devices or from
+   * another viewer's author. Bound on the same socket rather than in a separate
+   * hook, because each `useEngagementSocket` owns its own SocketManager and a
+   * second hook would mean a second connection per screen.
+   */
+  onMediaUpdated?: (payload: MediaUpdatedPayload) => void;
 };
 
-function bindCountOnlyListeners(socket: any) {
+function bindSocketListeners(
+  socket: any,
+  onMediaUpdated: (payload: MediaUpdatedPayload) => void
+) {
   const onPayload = (data: any) => applyLiveEngagementCounts(data);
-
-  socket.on("content-reaction", onPayload);
-  socket.on("count-update", onPayload);
-  socket.on("content-like-update", onPayload);
-  socket.on("like-updated", onPayload);
-  socket.on("content-comment", (data: any) => {
+  const onComment = (data: any) => {
     applyLiveEngagementCounts({
       contentId: data?.contentId,
       commentCount: data?.totalComments ?? data?.commentCount ?? data?.comments,
       likeCount: data?.likeCount ?? data?.totalLikes,
     });
-  });
+  };
+  const onUpdated = (data: any) => onMediaUpdated(data || {});
+
+  socket.on("content-reaction", onPayload);
+  socket.on("count-update", onPayload);
+  socket.on("content-like-update", onPayload);
+  socket.on("like-updated", onPayload);
+  socket.on("content-comment", onComment);
+  socket.on("media-updated", onUpdated);
+  socket.on("content-updated", onUpdated);
 
   return () => {
     socket.off("content-reaction", onPayload);
     socket.off("count-update", onPayload);
     socket.off("content-like-update", onPayload);
     socket.off("like-updated", onPayload);
+    socket.off("content-comment", onComment);
+    socket.off("media-updated", onUpdated);
+    socket.off("content-updated", onUpdated);
   };
 }
 
@@ -60,6 +86,10 @@ export function useEngagementSocket(options: UseEngagementSocketOptions = {}) {
       options.focusedContentType || "media"
     ),
   };
+
+  // Held in a ref so a new callback identity never reconnects the socket.
+  const onMediaUpdatedRef = useRef(options.onMediaUpdated);
+  onMediaUpdatedRef.current = options.onMediaUpdated;
 
   const syncJoinedRoom = () => {
     const manager = managerRef.current;
@@ -121,7 +151,11 @@ export function useEngagementSocket(options: UseEngagementSocketOptions = {}) {
         }
 
         const socket = (manager as any).socket;
-        if (socket) unbind = bindCountOnlyListeners(socket);
+        if (socket) {
+          unbind = bindSocketListeners(socket, (payload) =>
+            onMediaUpdatedRef.current?.(payload)
+          );
+        }
         syncJoinedRoom();
       } catch {
         managerRef.current = null;

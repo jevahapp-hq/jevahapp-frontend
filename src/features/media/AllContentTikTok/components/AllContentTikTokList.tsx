@@ -1,235 +1,161 @@
 import { FlashList } from "@shopify/flash-list";
 import React, { useCallback, useMemo } from "react";
-import {
-  ActivityIndicator,
-  RefreshControl,
-  Text,
-  View,
-} from "react-native";
+import { RefreshControl, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
-import { getLiteListWindow } from "../../../../shared/lite/liteProfile";
-import type { ContentType, MediaItem } from "../../../../shared/types";
+import { detectMediaType, isAudioSermon } from "../../../../shared/utils";
+import { getFeedVideoRowSize } from "../../video-feed";
+import type { FeedRow } from "../types";
+import type { MediaItem } from "../../../../shared/types";
+import { FeedSectionTitle } from "./FeedSectionTitle";
 import { LiveComingSoonCard } from "./LiveComingSoonCard";
 
 const FeedList = FlashList as any;
 
-export type FeedRow =
-  | { kind: "section"; id: string; title: string }
-  | { kind: "media"; id: string; item: MediaItem; mediaIndex: number }
-  | { kind: "livePromo"; id: "live-promo" }
-  | { kind: "spacer"; id: string; height: number };
-
 type Props = {
-  activeTab: ContentType | "ALL";
-  rest: MediaItem[];
-  mostRecentItem: MediaItem | null;
-  firstFour: MediaItem[];
-  filteredMediaListLength: number;
-  getContentKey: (item: MediaItem) => string;
+  listData: FeedRow[];
+  mountedVideoKeys: Set<string>;
+  currentlyVisibleVideo: string | null;
+  currentlyPlayingVideo: string | null;
+  isFeedActive: boolean;
+  authorStoreVersion: number;
+  commentsOpen: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  estimatedItemSize: number;
+  liteActive: boolean;
+  drawDistance: number;
+  onEndReached: () => void;
+  viewabilityConfigCallbackPairs: any;
+  extraData?: unknown;
   renderContentByType: (
     item: MediaItem,
     index: number,
-    ignored?: boolean
+    shouldRenderPlayer?: boolean
   ) => React.ReactElement | null;
-  refreshing: boolean;
-  onRefresh: () => void;
-  onScroll: (...args: any[]) => void;
-  onScrollEnd: (...args: any[]) => void;
-  setListHostRef: (node: View | null) => void;
-  onEndReached?: () => void;
-  isFetchingNextPage?: boolean;
-  /** Lock scroll while comment sheet is open (IG/TikTok) */
-  scrollEnabled?: boolean;
 };
 
-function buildFeedRows(params: {
-  mostRecentItem: MediaItem | null;
-  firstFour: MediaItem[];
-  rest: MediaItem[];
-  activeTab: ContentType | "ALL";
-  filteredMediaListLength: number;
-  getContentKey: (item: MediaItem) => string;
-}): FeedRow[] {
-  const {
-    mostRecentItem,
-    firstFour,
-    rest,
-    activeTab,
-    filteredMediaListLength,
-    getContentKey,
-  } = params;
-  const rows: FeedRow[] = [];
-  let mediaIndex = 0;
-
-  if (mostRecentItem) {
-    rows.push({
-      kind: "section",
-      id: "section-most-recent",
-      title: "Most Recent",
-    });
-    rows.push({
-      kind: "media",
-      id: `media-${getContentKey(mostRecentItem)}`,
-      item: mostRecentItem,
-      mediaIndex: mediaIndex++,
-    });
-  }
-
-  const forYouTitle =
-    activeTab === "ALL"
-      ? `For You (${filteredMediaListLength})`
-      : `${activeTab} · For You (${filteredMediaListLength})`;
-
-  rows.push({
-    kind: "section",
-    id: "section-for-you",
-    title: forYouTitle,
-  });
-
-  for (const item of firstFour) {
-    rows.push({
-      kind: "media",
-      id: `media-${getContentKey(item)}`,
-      item,
-      mediaIndex: mediaIndex++,
-    });
-  }
-
-  if (activeTab === "ALL" || activeTab === "live") {
-    rows.push({ kind: "livePromo", id: "live-promo" });
-  }
-
-  rows.push({
-    kind: "spacer",
-    id: "spacer-after-promo",
-    height: UI_CONFIG.SPACING.XXL,
-  });
-
-  for (const item of rest) {
-    rows.push({
-      kind: "media",
-      id: `media-${getContentKey(item)}`,
-      item,
-      mediaIndex: mediaIndex++,
-    });
-  }
-
-  return rows;
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <Text
-      style={{
-        fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-        fontWeight: "600",
-        color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-        paddingHorizontal: UI_CONFIG.SPACING.MD,
-        marginTop: UI_CONFIG.SPACING.LG,
-        marginBottom: UI_CONFIG.SPACING.MD,
-      }}
-    >
-      {title}
-    </Text>
-  );
-}
-
 export function AllContentTikTokList({
-  activeTab,
-  rest,
-  mostRecentItem,
-  firstFour,
-  filteredMediaListLength,
-  getContentKey,
-  renderContentByType,
+  listData,
+  mountedVideoKeys,
+  currentlyVisibleVideo,
+  currentlyPlayingVideo,
+  isFeedActive,
+  authorStoreVersion,
+  commentsOpen,
   refreshing,
   onRefresh,
-  onScroll,
-  onScrollEnd,
-  setListHostRef,
+  estimatedItemSize,
+  liteActive,
+  drawDistance,
   onEndReached,
-  isFetchingNextPage,
-  scrollEnabled = true,
+  viewabilityConfigCallbackPairs,
+  renderContentByType,
 }: Props) {
-  const feedRows = useMemo(
-    () =>
-      buildFeedRows({
-        mostRecentItem,
-        firstFour,
-        rest,
-        activeTab,
-        filteredMediaListLength,
-        getContentKey,
-      }),
+  const getItemType = useCallback((row: FeedRow) => {
+    if (row.rowType !== "media") return row.rowType;
+    if (isAudioSermon(row.item)) return "media-audio";
+    const mediaType = detectMediaType(row.item);
+    return mediaType === "video" ? "media-video" : "media-audio";
+  }, []);
+
+  const overrideItemLayout = useCallback(
+    (layout: { size?: number }, row: FeedRow) => {
+      if (row.rowType === "spacer") {
+        layout.size = row.height;
+        return;
+      }
+      if (row.rowType === "section-title") {
+        layout.size = 48;
+        return;
+      }
+      if (row.rowType === "coming-soon") {
+        layout.size = 320;
+        return;
+      }
+      if (row.rowType === "media") {
+        if (!isAudioSermon(row.item) && detectMediaType(row.item) === "video") {
+          layout.size = getFeedVideoRowSize();
+        }
+      }
+    },
+    []
+  );
+
+  const renderRow = useCallback(
+    ({ item: row }: { item: FeedRow }) => {
+      switch (row.rowType) {
+        case "section-title":
+          return <FeedSectionTitle title={row.title} />;
+        case "coming-soon":
+          return <LiveComingSoonCard />;
+        case "spacer":
+          return <View style={{ height: row.height }} />;
+        case "media": {
+          const shouldRenderPlayer =
+            mountedVideoKeys.has(row.key) || currentlyVisibleVideo === row.key;
+          return renderContentByType(
+            row.item,
+            row.renderIndex,
+            shouldRenderPlayer
+          );
+        }
+        default:
+          return null;
+      }
+    },
+    [renderContentByType, mountedVideoKeys, currentlyVisibleVideo]
+  );
+
+  const keyExtractor = useCallback((row: FeedRow) => row.key, []);
+
+  const mountedPlayerSig = useMemo(
+    () => Array.from(mountedVideoKeys).sort().join("|"),
+    [mountedVideoKeys]
+  );
+  const feedExtraData = useMemo(
+    () => ({
+      visible: currentlyVisibleVideo,
+      primed: mountedPlayerSig,
+      playing: currentlyPlayingVideo,
+      active: isFeedActive,
+      authors: authorStoreVersion,
+    }),
     [
-      mostRecentItem,
-      firstFour,
-      rest,
-      activeTab,
-      filteredMediaListLength,
-      getContentKey,
+      currentlyVisibleVideo,
+      mountedPlayerSig,
+      currentlyPlayingVideo,
+      isFeedActive,
+      authorStoreVersion,
     ]
   );
 
-  const renderListItem = useCallback(
-    ({ item: row }: { item: FeedRow }) => {
-      if (row.kind === "section") {
-        return <SectionHeader title={row.title} />;
-      }
-      if (row.kind === "livePromo") {
-        return <LiveComingSoonCard />;
-      }
-      if (row.kind === "spacer") {
-        return <View style={{ height: row.height }} />;
-      }
-      return renderContentByType(row.item, row.mediaIndex);
-    },
-    [renderContentByType]
-  );
-
-  const keyExtractor = useCallback((row: FeedRow) => row.id, []);
-
-  const getItemType = useCallback((row: FeedRow) => row.kind, []);
-
-  const listFooterComponent = useMemo(() => {
-    if (!isFetchingNextPage) return null;
-    return (
-      <View style={{ paddingVertical: 24, alignItems: "center" }}>
-        <ActivityIndicator color={UI_CONFIG.COLORS.PRIMARY} />
-      </View>
-    );
-  }, [isFetchingNextPage]);
-
-  const listWindow = getLiteListWindow();
-
   return (
-    <View style={{ flex: 1 }} ref={setListHostRef} collapsable={false}>
-      <FeedList
-        data={feedRows}
-        renderItem={renderListItem}
-        keyExtractor={keyExtractor}
-        getItemType={getItemType}
-        ListFooterComponent={listFooterComponent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[UI_CONFIG.COLORS.PRIMARY]}
-            tintColor={UI_CONFIG.COLORS.PRIMARY}
-          />
-        }
-        showsVerticalScrollIndicator={true}
-        scrollEnabled={scrollEnabled}
-        onScroll={onScroll}
-        onScrollEndDrag={onScrollEnd}
-        onMomentumScrollEnd={onScrollEnd}
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.6}
-        scrollEventThrottle={16}
-        estimatedItemSize={listWindow.estimatedItemSize}
-        keyboardShouldPersistTaps="handled"
-        drawDistance={listWindow.drawDistance}
-      />
-    </View>
+    <FeedList
+      data={listData}
+      renderItem={renderRow}
+      keyExtractor={keyExtractor}
+      getItemType={getItemType}
+      overrideItemLayout={overrideItemLayout}
+      extraData={feedExtraData}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[UI_CONFIG.COLORS.PRIMARY]}
+          tintColor={UI_CONFIG.COLORS.PRIMARY}
+        />
+      }
+      showsVerticalScrollIndicator={true}
+      scrollEnabled={!commentsOpen}
+      viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+      scrollEventThrottle={16}
+      estimatedItemSize={estimatedItemSize || getFeedVideoRowSize()}
+      keyboardShouldPersistTaps="handled"
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.75}
+      removeClippedSubviews={liteActive}
+      overscan={liteActive ? 280 : 800}
+      drawDistance={liteActive ? drawDistance : 1600}
+    />
   );
 }

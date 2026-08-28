@@ -1,10 +1,10 @@
 /**
  * Ebook cover / open surface.
  */
-import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { Text, TouchableWithoutFeedback, View } from "react-native";
 import { SafeImage } from "../../../../../app/components/SafeImage";
+import { FeedMediaTypeOverlay } from "../../../../shared/components/FeedMediaTypeOverlay";
 import type { MediaItem } from "../../../../shared/types";
 
 export function EbookCardCoverArea(props: {
@@ -50,20 +50,7 @@ export function EbookCardCoverArea(props: {
           />
         )}
 
-        <View className="absolute top-4 left-4">
-          <View className="bg-black/50 px-2 py-1 rounded-full flex-row items-center">
-            <Ionicons name="book" size={16} color="#FFFFFF" />
-          </View>
-        </View>
-
-        <View
-          className="absolute inset-0 justify-center items-center"
-          pointerEvents="none"
-        >
-          <View className="bg-white/70 p-4 rounded-full">
-            <Ionicons name="book" size={40} color="#FEA74E" />
-          </View>
-        </View>
+        <FeedMediaTypeOverlay item={ebook} contentType="ebook" />
 
         <View className="absolute bottom-9 left-3 right-3 px-4 py-2 rounded-md">
           <Text

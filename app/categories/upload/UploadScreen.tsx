@@ -29,8 +29,8 @@ import {
 import AuthHeader from "../../components/AuthHeader";
 import TopToast from "../../components/TopToast";
 import { pausePlaybackSession } from "../../../src/shared/audio/playOrToggleTrack";
-import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
-import { useMediaStore } from "../../store/useUploadStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import { AiVerificationPlate } from "./components/AiVerificationPlate";
 import { MediaPickers } from "./components/MediaPickers";
 import { ModerationErrorInline } from "./components/ModerationErrorModal";

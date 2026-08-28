@@ -89,7 +89,7 @@ export function LiveComingSoonCard() {
                 fontWeight: "700",
                 color: "#FEA74E",
                 letterSpacing: 1.2,
-                fontFamily: "Rubik-Bold",
+                fontFamily: "PlusJakartaSans-Bold",
               }}
             >
               LIVE
@@ -108,7 +108,7 @@ export function LiveComingSoonCard() {
               style={{
                 fontSize: 11,
                 color: "rgba(255,255,255,0.6)",
-                fontFamily: "Rubik-Medium",
+                fontFamily: "PlusJakartaSans-Medium",
                 letterSpacing: 0.5,
               }}
             >
@@ -138,7 +138,7 @@ export function LiveComingSoonCard() {
             fontSize: 22,
             fontWeight: "700",
             color: "#FFFFFF",
-            fontFamily: "Rubik-Bold",
+            fontFamily: "PlusJakartaSans-Bold",
             marginBottom: 8,
             lineHeight: 30,
           }}
@@ -150,7 +150,7 @@ export function LiveComingSoonCard() {
             fontSize: 14,
             color: "rgba(255,255,255,0.6)",
             lineHeight: 22,
-            fontFamily: "Rubik",
+            fontFamily: "PlusJakartaSans",
             marginBottom: 24,
             maxWidth: 280,
           }}
@@ -189,7 +189,7 @@ export function LiveComingSoonCard() {
               style={{
                 fontSize: 14,
                 color: "rgba(255,255,255,0.75)",
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
               }}
             >
               {item.text}

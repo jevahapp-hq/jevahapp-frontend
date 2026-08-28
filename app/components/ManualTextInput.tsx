@@ -118,7 +118,7 @@ export default function ManualTextInput({
               <Text
                 style={{
                   fontSize: 18,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#1D2939",
                 }}
                 numberOfLines={1}
@@ -128,7 +128,7 @@ export default function ManualTextInput({
               <Text
                 style={{
                   fontSize: 12,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#667085",
                   marginTop: 2,
                 }}
@@ -165,7 +165,7 @@ export default function ManualTextInput({
                 style={{
                   marginLeft: 8,
                   fontSize: 14,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#0284C7",
                 }}
               >
@@ -175,7 +175,7 @@ export default function ManualTextInput({
             <Text
               style={{
                 fontSize: 13,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#0369A1",
                 lineHeight: 18,
               }}
@@ -183,7 +183,7 @@ export default function ManualTextInput({
               Automatic text extraction didn't work for this PDF. You can manually add text to enable audio reading:
             </Text>
             <View style={{ marginTop: 8 }}>
-              <Text style={{ fontSize: 12, color: "#0369A1", fontFamily: "Rubik" }}>
+              <Text style={{ fontSize: 12, color: "#0369A1", fontFamily: "PlusJakartaSans" }}>
                 • Copy and paste text from the PDF{"\n"}
                 • Type content manually for accessibility{"\n"}
                 • Use voice dictation if available{"\n"}
@@ -197,7 +197,7 @@ export default function ManualTextInput({
             <Text
               style={{
                 fontSize: 14,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#1D2939",
                 marginBottom: 12,
               }}
@@ -228,7 +228,7 @@ export default function ManualTextInput({
                   style={{
                     marginLeft: 8,
                     fontSize: 13,
-                    fontFamily: "Rubik-Medium",
+                    fontFamily: "PlusJakartaSans-Medium",
                     color: !isFullDocument ? "#FFFFFF" : "#6B7280",
                   }}
                 >
@@ -258,7 +258,7 @@ export default function ManualTextInput({
                   style={{
                     marginLeft: 8,
                     fontSize: 13,
-                    fontFamily: "Rubik-Medium",
+                    fontFamily: "PlusJakartaSans-Medium",
                     color: isFullDocument ? "#FFFFFF" : "#6B7280",
                   }}
                 >
@@ -272,7 +272,7 @@ export default function ManualTextInput({
                 <Text
                   style={{
                     fontSize: 13,
-                    fontFamily: "Rubik",
+                    fontFamily: "PlusJakartaSans",
                     color: "#667085",
                     marginBottom: 8,
                   }}
@@ -305,7 +305,7 @@ export default function ManualTextInput({
                       flex: 1,
                       textAlign: "center",
                       fontSize: 16,
-                      fontFamily: "Rubik-Medium",
+                      fontFamily: "PlusJakartaSans-Medium",
                       color: "#1D2939",
                       paddingVertical: 8,
                     }}
@@ -341,7 +341,7 @@ export default function ManualTextInput({
               <Text
                 style={{
                   fontSize: 14,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#1D2939",
                 }}
               >
@@ -368,7 +368,7 @@ export default function ManualTextInput({
                 borderRadius: 12,
                 padding: 16,
                 fontSize: 16,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "#1D2939",
                 height: Math.min(screenHeight * 0.4, 300),
                 textAlignVertical: "top",
@@ -383,7 +383,7 @@ export default function ManualTextInput({
             <Text
               style={{
                 fontSize: 12,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: inputText.length > 0 ? "#FEA74E" : "#9CA3AF",
               }}
             >
@@ -418,7 +418,7 @@ export default function ManualTextInput({
             <Text
               style={{
                 fontSize: 16,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#374151",
               }}
             >
@@ -442,7 +442,7 @@ export default function ManualTextInput({
             <Text
               style={{
                 fontSize: 16,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: inputText.trim().length > 0 ? "#FFFFFF" : "#9CA3AF",
               }}
             >

@@ -13,7 +13,7 @@ import {
 import { MEDIA_PEEK_HEIGHT } from "../../components/commentSheetLayout";
 import { useCommentTyping } from "./useCommentTyping";
 import SocketManager from "../../services/SocketManager";
-import { useInteractionStore } from "../../store/useInteractionStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 import { getApiBaseUrl } from "../../utils/api";
 import contentInteractionAPI, {
   hydrateCommentsCacheFromDisk,
@@ -32,6 +32,7 @@ import { mapServerCommentsToSheet } from "./mapServerComment";
 export function useCommentModalController(): CommentModalContextType {
 
   const [isVisible, setIsVisible] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [currentContentId, setCurrentContentId] = useState<string>("");
   const [currentContentType, setCurrentContentType] = useState<
@@ -109,6 +110,7 @@ export function useCommentModalController(): CommentModalContextType {
     }
 
     // Paint sheet IMMEDIATELY — no awaits on open path
+    setIsClosing(false);
     setIsVisible(true);
     setLoadError(null);
     setComposerError(null);
@@ -263,6 +265,10 @@ export function useCommentModalController(): CommentModalContextType {
     []
   );
 
+  const beginCommentDismiss = () => {
+    setIsClosing(true);
+  };
+
   const hideCommentModal = () => {
     if (currentContentId && comments.length > 0) {
       lastSheetRef.current = {
@@ -283,6 +289,7 @@ export function useCommentModalController(): CommentModalContextType {
       } catch {}
     }
     setIsVisible(false);
+    setIsClosing(false);
     setIsOpening(false);
     setLoadError(null);
     setMediaPeekHeight(MEDIA_PEEK_HEIGHT);
@@ -913,6 +920,7 @@ export function useCommentModalController(): CommentModalContextType {
 
   const value: CommentModalContextType = {
     isVisible,
+    isClosing,
     comments,
     isLoadingComments,
     loadError,
@@ -924,6 +932,7 @@ export function useCommentModalController(): CommentModalContextType {
     contentId: currentContentId || undefined,
     showCommentModal,
     updateCommentMediaLayout,
+    beginCommentDismiss,
     hideCommentModal,
     addComment,
     updateComment,

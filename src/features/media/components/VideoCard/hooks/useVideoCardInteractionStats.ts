@@ -1,14 +1,10 @@
 /**
  * useVideoCardInteractionStats - Derives like/save/comment/view counts from contentStats and video
  */
+import { useContentLikeState } from "../../../../../shared/hooks/useContentLikeState";
 import { useHydrateContentStats } from "../../../../../shared/hooks/useHydrateContentStats";
 import type { MediaItem } from "../../../../../shared/types";
-import {
-  getCachedContentInteraction,
-  isContentInteractionFresh,
-  resolveLikedFlag,
-  resolveSavedFlag,
-} from "../../../../../../app/utils/contentInteractionPersist";
+import { resolveSavedFlag } from "../../../../../../app/utils/contentInteractionPersist";
 
 export interface UseVideoCardInteractionStatsParams {
   video: MediaItem;
@@ -34,13 +30,6 @@ export function useVideoCardInteractionStats({
 
   const stats = contentStats[contentId];
 
-  const fallbackLikeCount = Number(
-    video.likeCount ??
-      video.totalLikes ??
-      video.likes ??
-      video.favorite ??
-      0
-  );
   const fallbackSaveCount = Number(
     video.saves ??
       video.saved ??
@@ -55,17 +44,15 @@ export function useVideoCardInteractionStats({
     video.viewCount ?? video.totalViews ?? video.views ?? 0
   );
 
-  const cached = getCachedContentInteraction(contentId);
-  const cacheIsFresh = isContentInteractionFresh(contentId);
-
-  // Liked/saved flags are sticky (30d) so a bad API hasLiked:false can't gray the heart.
-  const backendUserLiked = resolveLikedFlag(
+  // Shared with Reels so the two surfaces cannot disagree about a like.
+  const like = useContentLikeState(
     contentId,
-    stats?.userInteractions?.liked ??
-      (video as any)?.hasLiked ??
-      (video as any)?.userHasLiked ??
-      userFavorites[contentKey]
+    video as any,
+    userFavorites[contentKey],
+    globalFavoriteCounts[contentKey]
   );
+
+  // Saved flag is sticky (30d) so a bad API hasBookmarked:false can't clear it.
   const backendUserSaved = resolveSavedFlag(
     contentId,
     stats?.userInteractions?.saved ??
@@ -73,22 +60,13 @@ export function useVideoCardInteractionStats({
       (video as any)?.isBookmarked
   );
 
-  const userLikeState = Boolean(backendUserLiked);
+  const userLikeState = like.liked;
+  const likeCount = like.likeCount;
   const userSaveState = Boolean(backendUserSaved);
 
-  const storeLikes = Number(stats?.likes ?? 0);
   const storeComments = Number(stats?.comments ?? 0);
   const storeSaves = Number(stats?.saves ?? 0);
   const storeViews = Number(stats?.views ?? 0);
-  const globalLikes = Number(globalFavoriteCounts[contentKey] || 0);
-
-  // A recent confirmed mutation beats stale feed/metadata. Outside that short
-  // window, surface the best server/feed total available.
-  let likeCount =
-    cacheIsFresh && cached?.likes !== undefined
-      ? Math.max(0, cached.likes)
-      : Math.max(storeLikes, globalLikes, fallbackLikeCount);
-  if (userLikeState && likeCount < 1) likeCount = 1;
 
   const saveCount = Math.max(storeSaves, fallbackSaveCount);
   // After comments list loads, store total is truth (incl. 0). Never Math.max with stale feed.
@@ -107,5 +85,7 @@ export function useVideoCardInteractionStats({
     userLikeState,
     userSaveState,
     isLoadingStats: false,
+    /** Pass to `toggleLike` so the optimistic flip starts from the truth. */
+    likeToggleSeed: like.toggleSeed,
   };
 }

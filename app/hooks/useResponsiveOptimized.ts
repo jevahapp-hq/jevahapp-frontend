@@ -147,7 +147,7 @@ export const useResponsiveOptimized = () => {
   // Responsive text styles
   const getResponsiveTextStyle = useCallback((type: 'title' | 'subtitle' | 'body' | 'caption' | 'button') => {
     const baseStyle = {
-      fontFamily: 'Rubik_400Regular',
+      fontFamily: 'PlusJakartaSans_400Regular',
       includeFontPadding: false,
       textAlignVertical: 'center' as const,
     };

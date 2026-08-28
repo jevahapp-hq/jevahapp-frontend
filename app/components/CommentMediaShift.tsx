@@ -10,21 +10,24 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useCommentModal } from "../context/CommentModalContext";
+import { isCommentPeekHudVisible } from "../../src/shared/comments/commentPeekHud";
 import {
   COMMENT_SHEET_IN,
   COMMENT_SHEET_OUT,
 } from "./commentSheetLayout";
 
 export function CommentMediaShift({ children }: { children: ReactNode }) {
-  const { isVisible, mediaShiftY, mediaScale } = useCommentModal();
+  const { isVisible, isClosing, mediaShiftY, mediaScale } = useCommentModal();
   const shiftY = useSharedValue(0);
   const scale = useSharedValue(1);
-  const wasVisibleRef = useRef(false);
+  const wasPeekRef = useRef(false);
+
+  const peeking = isCommentPeekHudVisible(isVisible, isClosing);
 
   useEffect(() => {
-    if (isVisible) {
-      const opening = !wasVisibleRef.current;
-      wasVisibleRef.current = true;
+    if (peeking) {
+      const opening = !wasPeekRef.current;
+      wasPeekRef.current = true;
       if (opening) {
         shiftY.value = withTiming(mediaShiftY, COMMENT_SHEET_IN);
         scale.value = withTiming(mediaScale, COMMENT_SHEET_IN);
@@ -33,11 +36,11 @@ export function CommentMediaShift({ children }: { children: ReactNode }) {
         scale.value = mediaScale;
       }
     } else {
-      wasVisibleRef.current = false;
+      wasPeekRef.current = false;
       shiftY.value = withTiming(0, COMMENT_SHEET_OUT);
       scale.value = withTiming(1, COMMENT_SHEET_OUT);
     }
-  }, [isVisible, mediaShiftY, mediaScale, shiftY, scale]);
+  }, [peeking, mediaShiftY, mediaScale, shiftY, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     flex: 1,

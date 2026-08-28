@@ -171,14 +171,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 12,
     color: "#1F2937",
-    fontFamily: "Rubik-Bold",
+    fontFamily: "PlusJakartaSans-Bold",
   },
   message: {
     fontSize: 16,
     marginBottom: 12,
     color: "#374151",
     textAlign: "center",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   warning: {
     fontSize: 14,
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     fontWeight: "500",
     textAlign: "center",
-    fontFamily: "Rubik-Medium",
+    fontFamily: "PlusJakartaSans-Medium",
   },
   errorContainer: {
     backgroundColor: "#FEE",
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     color: "#DC2626",
     fontSize: 14,
     textAlign: "center",
-    fontFamily: "Rubik-Regular",
+    fontFamily: "PlusJakartaSans-Regular",
   },
   buttonContainer: {
     flexDirection: "row",
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     color: "#374151",
     fontWeight: "600",
     fontSize: 16,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
   deleteButton: {
     backgroundColor: "#EF4444",
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 16,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
   },
 });
 

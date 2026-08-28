@@ -49,10 +49,13 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       )?.[1] || 0
     );
   const rateLimited = allContentStatus === 429;
+  const typedList =
+    String(contentType || "ALL").toUpperCase() !== "ALL";
   const shouldFetchDefault =
     immediate &&
     !rateLimited &&
-    (allContentQuery.isError ||
+    (typedList ||
+      allContentQuery.isError ||
       (allContentQuery.isFetched && allContentEarly.length === 0));
 
   const {

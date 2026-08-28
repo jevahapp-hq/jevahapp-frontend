@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 14,
-    fontFamily: "Rubik-SemiBold",
+    fontFamily: "PlusJakartaSans-SemiBold",
     color: "#1F2937",
     maxWidth: "70%",
   },

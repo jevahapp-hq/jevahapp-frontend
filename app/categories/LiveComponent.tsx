@@ -10,7 +10,7 @@ import { Image, ImageSourcePropType, ScrollView, StyleSheet, Text, TouchableOpac
 
 import { router, useFocusEffect, useRouter } from "expo-router";
 import SuccessCard from "../components/SuccessCard";
-import { useMediaStore } from "../store/useUploadStore";
+import { useMediaStore } from "@/store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 
 
@@ -220,7 +220,7 @@ const renderMiniCards = (
   setModalIndex: (index: number | null) => void
 ) => (
   <View className="mt-5">
-    <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+    <Text className="text-[16px] font-jakarta-semibold text-[#344054] mt-4 mb-2 ml-2">
       {title}
     </Text>
     <ScrollView
@@ -277,7 +277,7 @@ const renderMiniCards = (
               </View>
               <View className="absolute bottom-2 left-2 right-2">
                 <Text
-                  className="text-white text-start text-[14px] ml-1 mb-6 font-rubik"
+                  className="text-white text-start text-[14px] ml-1 mb-6 font-jakarta"
                   numberOfLines={2}
                 >
                   {item.title}
@@ -288,19 +288,19 @@ const renderMiniCards = (
             {modalIndex === index && (
               <View className="absolute mt-[26px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-30">
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-[#1D2939] font-jakarta ml-2">
                     View Details
                   </Text>
                   <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                  <Text className="text-sm text-[#1D2939] font-rubik ml-2">
+                  <Text className="text-sm text-[#1D2939] font-jakarta ml-2">
                     Share
                   </Text>
                   <AntDesign name="share-alt" size={16} color="#3A3E50" />
                 </TouchableOpacity>
                 <TouchableOpacity className="py-2 flex-row items-center justify-between">
-                  <Text className="text-[#1D2939] font-rubik mr-2">
+                  <Text className="text-[#1D2939] font-jakarta mr-2">
                     Save to Library
                   </Text>
                   <MaterialIcons name="library-add" size={18} color="#3A3E50" />
@@ -311,7 +311,7 @@ const renderMiniCards = (
             <View className="mt-2 flex flex-col w-full">
               <View className="flex flex-row justify-between items-center">
                 <Text
-                  className="text-[12px] text-[#1D2939] font-rubik font-medium"
+                  className="text-[12px] text-[#1D2939] font-jakarta font-medium"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
@@ -328,7 +328,7 @@ const renderMiniCards = (
               </View>
               <View className="flex-row items-center">
                 <MaterialIcons name="visibility" size={16} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                   {item.views}
                 </Text>
               </View>
@@ -450,12 +450,12 @@ export default function LiveComponent() {
             </View>
             <View className="ml-3">
               <View className="flex-row items center">
-                <Text className="ml-1 text-[13px] font-rubik-semibold text-[#344054] mt-1">
+                <Text className="ml-1 text-[13px] font-jakarta-semibold text-[#344054] mt-1">
                   {video.speaker}
                 </Text>
                 <View className="flex flex-row mt-2 ml-2">
                   <Ionicons name="time-outline" size={13} color="#9CA3AF" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {video.timeAgo}
                   </Text>
                 </View>
@@ -463,19 +463,19 @@ export default function LiveComponent() {
               <View className="flex flex-row mt-2">
                 <View className="flex-row items-center">
                   <MaterialIcons name="visibility" size={16} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {video.views}
                   </Text>
                 </View>
                 <View className="flex-row items-center ml-4">
                   <AntDesign name="share-alt" size={16} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {video.shares}
                   </Text>
                 </View>
                 <View className="flex-row items-center ml-6">
                   <Fontisto name="favorite" size={14} color="#98A2B3" />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {video.saved}
                   </Text>
                 </View>
@@ -485,7 +485,7 @@ export default function LiveComponent() {
                     size={16}
                     color="#98A2B3"
                   />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                     {video.likes}
                   </Text>
                 </View>
@@ -560,7 +560,7 @@ export default function LiveComponent() {
 
   const renderLiveRecommendation = () => (
     <View className="mt-5">
-      <Text className="text-[16px] font-rubik-semibold text-[#344054] mt-4 mb-2 ml-2">
+      <Text className="text-[16px] font-jakarta-semibold text-[#344054] mt-4 mb-2 ml-2">
         Live from your favourite speaker
       </Text>
       <ScrollView
@@ -626,7 +626,7 @@ export default function LiveComponent() {
                 </View>
                 <View className="absolute bottom-2 left-2 right-2">
                   <Text
-                    className="text-white text-start text-[17px] mb-6 font-rubik-semibold text-sm"
+                    className="text-white text-start text-[17px] mb-6 font-jakarta-semibold text-sm"
                     numberOfLines={2}
                   >
                     {item.title}
@@ -637,19 +637,19 @@ export default function LiveComponent() {
               {favModalIndex === index && (
                 <View className="absolute mt-[30px] left-1 bg-white shadow-md rounded-lg p-3 z-50 w-36">
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                    <Text className="text-[#1D2939] font-rubik ml-2">
+                    <Text className="text-[#1D2939] font-jakarta ml-2">
                       View Details
                     </Text>
                     <MaterialIcons name="visibility" size={16} color="#3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 border-b border-gray-200 flex-row items-center justify-between">
-                    <Text className="text-sm text-[#1D2939] font-rubik ml-2">
+                    <Text className="text-sm text-[#1D2939] font-jakarta ml-2">
                       Share
                     </Text>
                     <AntDesign name="share-alt" size={16} color="#3A3E50" />
                   </TouchableOpacity>
                   <TouchableOpacity className="py-2 flex-row items-center justify-between">
-                    <Text className="text-[#1D2939] font-rubik mr-2">Save</Text>
+                    <Text className="text-[#1D2939] font-jakarta mr-2">Save</Text>
                     <MaterialIcons name="library-add" size={18} color="#3A3E50" />
                   </TouchableOpacity>
                 </View>
@@ -657,7 +657,7 @@ export default function LiveComponent() {
 
               <View className="mt-2 flex flex-col">
                 <View className="flex flex-row w-[150px] justify-between">
-                  <Text className="text-[11px] text-[#1D2939] font-rubik-semibold">
+                  <Text className="text-[11px] text-[#1D2939] font-jakarta-semibold">
                     {item.speaker}
                   </Text>
                   <TouchableOpacity
@@ -675,13 +675,13 @@ export default function LiveComponent() {
                 <View className="flex flex-row">
                   <View className="flex-row items-center">
                     <MaterialIcons name="visibility" size={16} color="#98A2B3" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {item.views}
                     </Text>
                   </View>
                   <View className="flex flex-row mt-2 ml-2">
                     <Ionicons name="time-outline" size={13} color="#9CA3AF" />
-                    <Text className="text-[10px] text-gray-500 ml-1 font-rubik">
+                    <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
                       {item.timeAgo}
                     </Text>
                   </View>
@@ -731,17 +731,17 @@ export default function LiveComponent() {
               }}
             />
             <Text
-              className="text-[#9CA3AF] font-rubik-semibold tracking-widest text-[12px]"
+              className="text-[#9CA3AF] font-jakarta-semibold tracking-widest text-[12px]"
               style={{ letterSpacing: 2 }}
             >
               LIVE STAGE
             </Text>
           </View>
 
-          <Text className="text-white text-4xl font-rubik-bold leading-tight">
+          <Text className="text-white text-4xl font-jakarta-bold leading-tight">
             Immersive{"\n"}Worship Experience
           </Text>
-          <Text className="text-[#9CA3AF] font-rubik mt-4 text-[16px] leading-6">
+          <Text className="text-[#9CA3AF] font-jakarta mt-4 text-[16px] leading-6">
             Connecting you to global sounds of revival. Stay tuned for live encounters.
           </Text>
         </View>
@@ -775,16 +775,16 @@ export default function LiveComponent() {
                 className="self-start px-3 py-1 rounded-full mb-4"
                 style={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
               >
-                <Text className="text-white font-rubik-semibold text-[10px]">COMING SOON</Text>
+                <Text className="text-white font-jakarta-semibold text-[10px]">COMING SOON</Text>
               </View>
 
-              <Text className="text-white text-3xl font-rubik-bold mb-3">
+              <Text className="text-white text-3xl font-jakarta-bold mb-3">
                 Global Revival Night
               </Text>
 
               <View className="flex-row items-center">
                 <Ionicons name="calendar-outline" size={16} color="#FEA74E" />
-                <Text className="text-[#D1D5DB] font-rubik ml-2 text-sm">Stay Tuned for Announcements</Text>
+                <Text className="text-[#D1D5DB] font-jakarta ml-2 text-sm">Stay Tuned for Announcements</Text>
               </View>
             </View>
 
@@ -793,7 +793,7 @@ export default function LiveComponent() {
 
         {/* Feature Teasers */}
         <View className="px-6">
-          <Text className="text-white font-rubik-semibold text-lg mb-6">What to expect</Text>
+          <Text className="text-white font-jakarta-semibold text-lg mb-6">What to expect</Text>
 
           <View className="flex-row justify-between mb-8">
             <View className="items-center w-[28%]">
@@ -803,7 +803,7 @@ export default function LiveComponent() {
               >
                 <Ionicons name="videocam" size={28} color="#FEA74E" />
               </View>
-              <Text className="text-white font-rubik text-center text-[12px]">4K HDR Streaming</Text>
+              <Text className="text-white font-jakarta text-center text-[12px]">4K HDR Streaming</Text>
             </View>
 
             <View className="items-center w-[28%]">
@@ -813,7 +813,7 @@ export default function LiveComponent() {
               >
                 <Ionicons name="headset" size={28} color="#FEA74E" />
               </View>
-              <Text className="text-white font-rubik text-center text-[12px]">Spatial Audio Experience</Text>
+              <Text className="text-white font-jakarta text-center text-[12px]">Spatial Audio Experience</Text>
             </View>
 
             <View className="items-center w-[28%]">
@@ -823,7 +823,7 @@ export default function LiveComponent() {
               >
                 <Ionicons name="chatbubbles" size={28} color="#FEA74E" />
               </View>
-              <Text className="text-white font-rubik text-center text-[12px]">Interactive Fellowships</Text>
+              <Text className="text-white font-jakarta text-center text-[12px]">Interactive Fellowships</Text>
             </View>
           </View>
 
@@ -838,9 +838,9 @@ export default function LiveComponent() {
           >
             <View className="flex-row items-center mb-2">
               <Ionicons name="sparkles" size={20} color="#FEA74E" />
-              <Text className="text-[#FEA74E] font-rubik-semibold ml-2">Premium Experience</Text>
+              <Text className="text-[#FEA74E] font-jakarta-semibold ml-2">Premium Experience</Text>
             </View>
-            <Text className="text-[#9CA3AF] font-rubik text-[13px] leading-5">
+            <Text className="text-[#9CA3AF] font-jakarta text-[13px] leading-5">
               Live Stage is being crafted to bring you the highest quality spiritual encounters. We are building something extraordinary.
             </Text>
           </View>

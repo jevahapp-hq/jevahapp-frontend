@@ -13,7 +13,7 @@ export function ArtistsLaneBanner({
           fontSize: 22,
           fontWeight: "700",
           color: "#0F1C1A",
-          fontFamily: "Rubik_700Bold",
+          fontFamily: "PlusJakartaSans_700Bold",
           marginBottom: 4,
         }}
       >
@@ -23,7 +23,7 @@ export function ArtistsLaneBanner({
         style={{
           fontSize: 13,
           color: "#6B7280",
-          fontFamily: "Rubik_400Regular",
+          fontFamily: "PlusJakartaSans_400Regular",
           lineHeight: 18,
         }}
       >

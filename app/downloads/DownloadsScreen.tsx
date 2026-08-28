@@ -29,8 +29,8 @@ import { useRouter } from "expo-router";
 import AuthHeader from "../components/AuthHeader";
 import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 import { useVideoNavigation } from "../hooks/useVideoNavigation";
-import { DownloadItem, useDownloadStore } from "../store/useDownloadStore";
-import { useGlobalAudioPlayerStore } from "../store/useGlobalAudioPlayerStore";
+import { DownloadItem, useDownloadStore } from "@/store/useDownloadStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { API_BASE_URL } from "../utils/api";
 import { authUtils } from "../utils/authUtils";
 import type { MediaItem } from "../types/media";
@@ -103,11 +103,11 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen, onPreview }) 
       </TouchableOpacity>
 
       <View className="flex-col w-[268px]">
-        <Text className="mt-2 font-rubik-semibold text-[16px] text-[#1D2939]">
+        <Text className="mt-2 font-jakarta-semibold text-[16px] text-[#1D2939]">
           {item.title}
         </Text>
         <Text
-          className="text-[#667085] text-sm mt-2 font-rubik"
+          className="text-[#667085] text-sm mt-2 font-jakarta"
           numberOfLines={2}
         >
           {item.description}
@@ -119,7 +119,7 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen, onPreview }) 
             <View className="mr-2">
               <Play size={18} color="black" />
             </View>
-            <Text className="text-[#667085] text-sm font-rubik">
+            <Text className="text-[#667085] text-sm font-jakarta">
               {isVideo ? "Open in Reels" : isAudio ? "Open player" : "Open"}
             </Text>
           </View>
@@ -129,7 +129,7 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen, onPreview }) 
         <View className="flex-row items-center justify-between mt-3">
           <Image source={profileImage} className="w-6 h-6 rounded-full" />
           <View className="flex-row items-center flex-wrap">
-            <Text className="ml-2 text-[14px] font-rubik-semibold text-[#344054]">
+            <Text className="ml-2 text-[14px] font-jakarta-semibold text-[#344054]">
               {typeof item.author === 'string' 
                 ? item.author 
                 : item.author?.fullName || item.author?.firstName || 'Unknown'}
@@ -137,21 +137,21 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ item, onOpen, onPreview }) 
             <View className="flex-row items-center mt-2">
               <View className="flex-row items-center">
                 <Ionicons name="time-outline" size={12} color="#667085" />
-                <Text className="ml-1 text-xs text-[#667085] font-rubik">
+                <Text className="ml-1 text-xs text-[#667085] font-jakarta">
                   {new Date(item.downloadedAt).toLocaleDateString()}
                 </Text>
               </View>
               <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
               <View className="flex-row items-center">
                 <Ionicons name="document-outline" size={12} color="#667085" />
-                <Text className="ml-1 text-xs text-[#667085] font-rubik">
+                <Text className="ml-1 text-xs text-[#667085] font-jakarta">
                   {item.size || "Unknown"}
                 </Text>
               </View>
               <View className="w-1 h-1 bg-orange-300 mx-2 rounded-sm" />
               <View className="flex-row items-center">
                 <Ionicons name="checkmark-circle-outline" size={12} color="#256E63" />
-                <Text className="ml-1 text-xs text-[#256E63] font-rubik-semibold">
+                <Text className="ml-1 text-xs text-[#256E63] font-jakarta-semibold">
                   {item.status}
                 </Text>
               </View>
@@ -309,7 +309,7 @@ const DownloadScreen: React.FC = () => {
         <View className="flex-row items-center bg-[#E5E5EA] w-[362px] rounded-xl mx-4 mt-4 px-2 py-3 border border-[rgb(229,229,234)]">
                         <Search size={22} color="#8E8E93" />
           <TextInput
-            className="ml-2 flex-1 font-rubik-regular text-[#090E24]"
+            className="ml-2 flex-1 font-jakarta-regular text-[#090E24]"
             placeholder="Search for downloads..."
             placeholderTextColor="#98A2B3"
             value={searchQuery}
@@ -329,15 +329,15 @@ const DownloadScreen: React.FC = () => {
               <Ionicons name="download-outline" size={24} color="#6B7280" />
             </View>
             <View className="flex-1">
-              <Text className="font-rubik-semibold text-[14px] text-[#1D2939]">
+              <Text className="font-jakarta-semibold text-[14px] text-[#1D2939]">
                 Smart download
               </Text>
-              <Text className="text-[#667085] text-sm mt-1 font-rubik">
+              <Text className="text-[#667085] text-sm mt-1 font-jakarta">
                 Automatically downloads content for you based on what you watch
                 when connected to a wifi
               </Text>
               <TouchableOpacity className="mt-2">
-                <Text className="text-[#256E63]  font-rubik-semibold text-[10px]">
+                <Text className="text-[#256E63]  font-jakarta-semibold text-[10px]">
                   SETUP
         </Text>
               </TouchableOpacity>
@@ -357,22 +357,22 @@ const DownloadScreen: React.FC = () => {
           contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
         >
         {/* All downloads */}
-          <Text className="text-[14px] font-rubik-semibold text-[#1D2939] mb-3">
+          <Text className="text-[14px] font-jakarta-semibold text-[#1D2939] mb-3">
             All Downloads ({downloadedItems.length})
           </Text>
           
           {!isLoaded ? (
             <View className="flex-1 justify-center items-center mt-20 mb-20">
-              <Text className="text-[#667085] text-lg font-rubik">
+              <Text className="text-[#667085] text-lg font-jakarta">
                 Loading downloads...
               </Text>
             </View>
           ) : downloadedItems.length === 0 ? (
             <View className="flex-1 justify-center items-center mt-20 mb-20">
-              <Text className="text-[#667085] text-lg font-rubik">
+              <Text className="text-[#667085] text-lg font-jakarta">
                 No downloads yet
               </Text>
-              <Text className="text-[#667085] text-sm mt-2 font-rubik">
+              <Text className="text-[#667085] text-sm mt-2 font-jakarta">
                 Download content from any category to see it here
               </Text>
             </View>
@@ -390,10 +390,10 @@ const DownloadScreen: React.FC = () => {
           {/* Show message when no results found */}
           {searchQuery && filteredDownloads.length === 0 && downloadedItems.length > 0 && (
             <View className="flex-1 justify-center items-center mt-20 mb-20">
-              <Text className="text-[#667085] text-lg font-rubik">
+              <Text className="text-[#667085] text-lg font-jakarta">
                 No downloads found
               </Text>
-              <Text className="text-[#667085] text-sm mt-2 font-rubik">
+              <Text className="text-[#667085] text-sm mt-2 font-jakarta">
                 Try searching with different keywords
               </Text>
             </View>
@@ -523,7 +523,7 @@ const AutomaticDownloadsModal: React.FC<{
           
           {/* Header */}
           <View className="flex-row justify-between items-center mb-9">
-            <Text className="text-[20px] font-rubik-semibold text-[#1D2939]">
+            <Text className="text-[20px] font-jakarta-semibold text-[#1D2939]">
               Automatic downloads
             </Text>
             <TouchableOpacity
@@ -553,17 +553,17 @@ const AutomaticDownloadsModal: React.FC<{
                 <Ionicons name="download-outline" size={24} color="#6B7280" />
               </View>
               <View className="flex-1">
-                <Text className="font-rubik-semibold text-[14px] text-[#1D2939]">
+                <Text className="font-jakarta-semibold text-[14px] text-[#1D2939]">
                   Smart download
                 </Text>
-                <Text className="text-[#667085] text-sm mt-1 font-rubik">
+                <Text className="text-[#667085] text-sm mt-1 font-jakarta">
                   Automatically downloads content for you based on what you watch when connected to a wifi
                 </Text>
               </View>
             </View>
             
             <View className="flex-row justify-between items-center ml-4 w-[340px] h-[24px]">
-              <Text className="text-[#1D2939] font-rubik-semibold text-sm mr-3">
+              <Text className="text-[#1D2939] font-jakarta-semibold text-sm mr-3">
                 Turn on
               </Text>
               <TouchableOpacity
@@ -747,7 +747,7 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, on
                   <Volume2 size={24} color="white" />
                 </TouchableOpacity>
               </View>
-              <Text className="text-white text-lg font-rubik-semibold mt-4 text-center">
+              <Text className="text-white text-lg font-jakarta-semibold mt-4 text-center">
                 {item.title}
               </Text>
             </View>
@@ -765,7 +765,7 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, on
                 resizeMode="cover"
               />
             </View>
-            <Text className="text-white text-lg font-rubik-semibold mb-4 text-center">
+            <Text className="text-white text-lg font-jakarta-semibold mb-4 text-center">
               {item.title}
             </Text>
           </View>
@@ -780,7 +780,7 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, on
               className="w-64 h-64 rounded-xl"
               resizeMode="cover"
             />
-            <Text className="text-white text-lg font-rubik-semibold mt-4 text-center">
+            <Text className="text-white text-lg font-jakarta-semibold mt-4 text-center">
               {item.title}
             </Text>
           </View>
@@ -798,7 +798,7 @@ const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ item, onClose, on
           style={{ zIndex: 10002 }}
           activeOpacity={0.8}
         >
-          <Text className="text-white font-rubik-semibold">
+          <Text className="text-white font-jakarta-semibold">
             {isVideo ? "Open in Reels" : isAudio ? "Open Player" : isEbook ? "Open Reader" : "Open Full Viewer"}
           </Text>
         </TouchableOpacity>

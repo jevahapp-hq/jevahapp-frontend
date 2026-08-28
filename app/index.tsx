@@ -2,7 +2,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect, router } from "expo-router";
 import React, { Suspense, useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { View } from "react-native";
 import { appMmkv } from "../src/shared/cache/mmkvStorage";
 import {
   hasBackendSession,
@@ -36,16 +36,9 @@ function BootSpinner() {
     <View
       style={{
         flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
         backgroundColor: "#FFFFFF",
       }}
-    >
-      <ActivityIndicator size="large" color="#090E24" />
-      <Text style={{ marginTop: 10, fontSize: 16, color: "#090E24" }}>
-        Loading...
-      </Text>
-    </View>
+    />
   );
 }
 

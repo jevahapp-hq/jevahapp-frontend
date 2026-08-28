@@ -64,13 +64,13 @@ export default function FilterScreen() {
             </View>
             <TextInput
               placeholder="Search for anything..."
-              className="ml-3 flex-1 text-base font-rubik items-center"
+              className="ml-3 flex-1 text-base font-jakarta items-center"
               value={query}
               onChangeText={setQuery}
             />
           </View>
 
-          <Text className="text-[#3B3B3B] font-rubik-bold ml-3 mb-2">
+          <Text className="text-[#3B3B3B] font-jakarta-bold ml-3 mb-2">
             clear
           </Text>
         </View>
@@ -117,7 +117,7 @@ export default function FilterScreen() {
           { title: "Duration", options: ["short", "Medium", "Long"] },
         ].map((section, index) => (
           <View key={index} className="mt-6">
-            <Text className="font-rubik-semibold text-[#1D2939] mb-2">
+            <Text className="font-jakarta-semibold text-[#1D2939] mb-2">
               {section.title}
             </Text>
             <View className="flex-row flex-wrap gap-2 ">
@@ -126,7 +126,7 @@ export default function FilterScreen() {
                   key={idx}
                   className="border border-gray-400  px-3 py-1 h-[38px] rounded-[10px] "
                 >
-                  <Text className="mt-1 font-rubik text-[12px]">{option}</Text>
+                  <Text className="mt-1 font-jakarta text-[12px]">{option}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -135,7 +135,7 @@ export default function FilterScreen() {
 
         {/* Creator (Scrollable) */}
         <View className="mt-6">
-          <Text className="font-rubik-semibold text-[#1D2939] mb-2">
+          <Text className="font-jakarta-semibold text-[#1D2939] mb-2">
             Creator
           </Text>
 
@@ -164,7 +164,7 @@ export default function FilterScreen() {
                       <Text className="text-white text-xs font-bold">✓</Text>
                     )}
                   </View>
-                  <Text className="font-rubik text-[#1D2939]">{item}</Text>
+                  <Text className="font-jakarta text-[#1D2939]">{item}</Text>
                 </TouchableOpacity>
               );
             })}

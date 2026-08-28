@@ -178,16 +178,16 @@ export default function NotificationsScreen() {
         <View className="flex-1">
           {/* Name and Time Row */}
           <View className="flex-row items-center justify-between mb-1">
-            <Text className="font-rubik-semibold text-[#1D2939] text-[15px]">
+            <Text className="font-jakarta-semibold text-[#1D2939] text-[15px]">
               {notification.metadata?.actorName || "Someone"}
             </Text>
-            <Text className="text-[#98A2B3] font-rubik text-[12px]">
+            <Text className="text-[#98A2B3] font-jakarta text-[12px]">
               {formatTimeAgo(notification.createdAt)}
             </Text>
           </View>
 
           {/* What they did */}
-          <Text className="text-[#475467] font-rubik text-[14px] leading-5 mb-2">
+          <Text className="text-[#475467] font-jakarta text-[14px] leading-5 mb-2">
             {notification.message || notification.title}
           </Text>
 
@@ -201,14 +201,14 @@ export default function NotificationsScreen() {
               />
               <View className="flex-1 ml-2">
                 <Text 
-                  className="font-rubik-semibold text-[#1D2939] text-[13px]"
+                  className="font-jakarta-semibold text-[#1D2939] text-[13px]"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
                   {notification.metadata.contentTitle || "Content"}
                 </Text>
                 <Text
-                  className="text-[#667085] font-rubik text-[11px] mt-0.5"
+                  className="text-[#667085] font-jakarta text-[11px] mt-0.5"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
@@ -220,7 +220,7 @@ export default function NotificationsScreen() {
 
           {/* Action Button */}
           <TouchableOpacity className="mt-2 self-start">
-            <Text className="text-[#256E63] font-rubik-bold text-[12px]">
+            <Text className="text-[#256E63] font-jakarta-bold text-[12px]">
               REPLY
             </Text>
           </TouchableOpacity>
@@ -232,10 +232,10 @@ export default function NotificationsScreen() {
   const renderEmptyState = () => (
     <View className="flex-1 items-center justify-center py-20">
       <Ionicons name="notifications-outline" size={64} color="#D1D5DB" />
-      <Text className="text-[#6B7280] text-lg font-rubik-semibold mt-4">
+      <Text className="text-[#6B7280] text-lg font-jakarta-semibold mt-4">
         No Notifications
       </Text>
-      <Text className="text-[#9CA3AF] text-sm font-rubik text-center mt-2 px-8">
+      <Text className="text-[#9CA3AF] text-sm font-jakarta text-center mt-2 px-8">
         You'll see notifications here when someone likes, comments, or shares
         your content.
       </Text>
@@ -245,7 +245,7 @@ export default function NotificationsScreen() {
   const renderLoadingState = () => (
     <View className="flex-1 items-center justify-center py-20">
       <ActivityIndicator size="large" color="#FEA74E" />
-      <Text className="text-[#6B7280] text-sm font-rubik mt-4">
+      <Text className="text-[#6B7280] text-sm font-jakarta mt-4">
         Loading notifications...
       </Text>
     </View>
@@ -287,7 +287,7 @@ export default function NotificationsScreen() {
       {/* Error State */}
       {error && (
         <View className="mx-4 mb-4 bg-red-50 p-3 rounded-lg">
-          <Text className="text-red-800 text-sm font-rubik-semibold">
+          <Text className="text-red-800 text-sm font-jakarta-semibold">
             {error}
           </Text>
         </View>
@@ -325,7 +325,7 @@ export default function NotificationsScreen() {
         ) : (
           groupedNotifications.map((section, idx) => (
             <View key={idx} className="mt-5">
-              <Text className="text-[#1D2939] font-rubik-semibold mb-2">
+              <Text className="text-[#1D2939] font-jakarta-semibold mb-2">
                 {section.category}
               </Text>
               {section.items.map(renderNotificationItem)}

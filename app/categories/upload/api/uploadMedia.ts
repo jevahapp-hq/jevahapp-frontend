@@ -98,7 +98,7 @@ export async function uploadMedia({
 }
 
 export function getUploadTimeoutMs(mimeType?: string): number {
-  // Much longer timeouts for Render free tier (cold start can take 30+ seconds)
+  // Long timeouts: large media over mobile networks to a single-region VPS
   return mimeType?.startsWith("video/")
     ? 600000 // 10 minutes for videos
     : 300000; // 5 minutes for other files

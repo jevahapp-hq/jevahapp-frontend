@@ -1,14 +1,12 @@
-// API Warmup utility for Render cold starts
+// API warmup: opens the TLS/HTTP connection before the first real request.
 import { API_BASE_URL } from "./api";
 
 /**
- * Render free tier instances sleep after 15 minutes of inactivity.
- * Cold starts can take 30-90 seconds. This function "wakes up" the backend
- * by making a lightweight request before user actions.
- */
-/**
- * @param timeoutMs Cap wait so cold start never blocks on a sleeping host.
- * Default 3s — Render cold starts still benefit from fire-and-forget warmup.
+ * The backend runs on a VPS and does not sleep, so this is not a cold-start
+ * workaround. It exists to pay the DNS + TLS handshake cost up front, which
+ * is worth doing when the single origin region is far from most users.
+ *
+ * @param timeoutMs Cap the wait so startup never blocks on an unreachable host.
  */
 export async function warmupBackend(timeoutMs = 3000): Promise<boolean> {
   try {

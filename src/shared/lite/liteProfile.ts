@@ -6,6 +6,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Dimensions, PixelRatio, Platform } from "react-native";
 import { appMmkv } from "../cache/mmkvStorage";
+import { isLiteAppBuild } from "../config/appVariant";
 
 export type LiteMode = "auto" | "on" | "off";
 
@@ -49,6 +50,7 @@ export function detectLowEndAndroid(): boolean {
 }
 
 export function computeLiteActive(current: LiteMode = mode): boolean {
+  if (isLiteAppBuild()) return true;
   if (current === "on") return true;
   if (current === "off") return false;
   return detectLowEndAndroid();
@@ -110,15 +112,18 @@ export async function hydrateLiteProfile(): Promise<boolean> {
 }
 
 export function getLiteMode(): LiteMode {
+  if (isLiteAppBuild()) return "on";
   return mode;
 }
 
 export function isLiteProfileActive(): boolean {
+  if (isLiteAppBuild()) return true;
   if (cachedActive != null) return cachedActive;
   return computeLiteActive();
 }
 
 export async function setLiteMode(next: LiteMode): Promise<void> {
+  if (isLiteAppBuild()) return;
   mode = next;
   persistLiteModeSync(next);
   try {
@@ -177,7 +182,7 @@ export function getLiteWarmupUrlCount(): number {
  * Queued at MAX_CONCURRENT=2 — not extra native players.
  */
 export function getLiteDiskWarmupCount(): number {
-  return isLiteProfileActive() ? 8 : 8;
+  return isLiteProfileActive() ? 4 : 8;
 }
 
 /**
@@ -239,7 +244,7 @@ export function shouldAttachFileToAiDescription(): boolean {
 }
 
 export function getLiteDrawDistance(full = 480): number {
-  return isLiteProfileActive() ? 220 : full;
+  return isLiteProfileActive() ? 600 : full;
 }
 
 export function getLiteListWindow(): {
@@ -248,9 +253,20 @@ export function getLiteListWindow(): {
 } {
   const lite = isLiteProfileActive();
   return {
-    drawDistance: lite ? 220 : 480,
-    estimatedItemSize: lite ? 420 : 500,
+    drawDistance: lite ? 600 : 480,
+    /** Must match FEED_VIDEO_ROW_SIZE or FlashList recaclulates every cell. */
+    estimatedItemSize: 552,
   };
+}
+
+/** How many feed cards to batch-hydrate likes/views for. */
+export function getLiteStatsHydrateCount(): number {
+  return isLiteProfileActive() ? 8 : 16;
+}
+
+/** Comments wait until the sheet opens on Lite — prefetch fights video bandwidth. */
+export function shouldPrefetchFeedComments(): boolean {
+  return !isLiteProfileActive();
 }
 
 /**

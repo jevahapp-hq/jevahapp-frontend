@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   initial: {
-    fontFamily: "Rubik_600SemiBold",
+    fontFamily: "PlusJakartaSans_600SemiBold",
   },
 });
 

@@ -5,10 +5,10 @@
  */
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
-import { Share } from "react-native";
+import { Alert, Share } from "react-native";
 import allMediaAPI from "../../utils/allMediaAPI";
 import { ensureAuthenticatedForInteraction } from "../../utils/auth/requireAuthForInteraction";
-import { useInteractionStore } from "../../store/useInteractionStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
 
 export interface UseReelsHandlersParams {
@@ -125,7 +125,20 @@ export function useReelsHandlers({
 
   const handleLike = useCallback(async () => {
     try {
-      if (!canUseBackendLikes) return;
+      /**
+       * This used to `return` silently. The heart still animated — the button
+       * plays its animation before invoking onPress — so the user saw a heart
+       * punch and a count that never moved. It happens whenever the reel was
+       * navigated in as a synthetic item with no real `_id`, e.g. from the
+       * VideoComponent mini cards. Tell them instead of pretending.
+       */
+      if (!canUseBackendLikes || !contentIdForHooks) {
+        Alert.alert(
+          "Can't like this yet",
+          "This video is still syncing. Pull to refresh and try again."
+        );
+        return;
+      }
       await toggleLike(contentIdForHooks, activeContentType);
     } catch (e) {
       console.error("❌ Error toggling like in reels:", e);

@@ -5,7 +5,7 @@ import {
   useContentCount,
   useContentStats,
   useUserInteraction,
-} from "../../../../../../app/store/useInteractionStore";
+} from "@/store/useInteractionStore";
 import { useHydrateContentStats } from "../../../../../shared/hooks/useHydrateContentStats";
 import type { MediaItem } from "../../../../../shared/types";
 

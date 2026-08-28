@@ -20,7 +20,7 @@ export default function AppHeader({
     >
       <View>{left}</View>
       {title ? (
-        <Text className="text-lg font-rubik-semibold text-gray-900">
+        <Text className="text-lg font-jakarta-semibold text-gray-900">
           {title}
         </Text>
       ) : (

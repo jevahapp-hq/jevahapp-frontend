@@ -54,7 +54,7 @@ export function MusicHeader({
               flex: 1,
               marginLeft: 8,
               fontSize: 16,
-              fontFamily: "Rubik_400Regular",
+              fontFamily: "PlusJakartaSans_400Regular",
               color: "#1D2939",
             }}
             placeholder="Search songs..."
@@ -73,7 +73,7 @@ export function MusicHeader({
             <Text
               style={{
                 color: "#256E63",
-                fontFamily: "Rubik_600SemiBold",
+                fontFamily: "PlusJakartaSans_600SemiBold",
                 fontSize: 14,
               }}
             >

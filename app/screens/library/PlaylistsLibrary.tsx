@@ -1,6 +1,5 @@
 // Playlists Library Screen - Dedicated UI for viewing and managing playlists
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,11 +13,14 @@ import {
   View
 } from "react-native";
 import { UI_CONFIG } from "../../../src/shared/constants";
-import { usePlaylistStore, type Playlist, type PlaylistSong } from "../../store/usePlaylistStore";
+import { resolveAlbumArtSource } from "../../../src/shared/brand/albumArt";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import { usePlaylistStore, type Playlist } from "@/store/usePlaylistStore";
 import { playlistAPI } from "../../utils/playlistAPI";
+import { PlaylistDetailSheet } from "./components/PlaylistDetailSheet";
 
 export default function PlaylistsLibrary() {
-  const router = useRouter();
   const { playlists, loadPlaylistsFromBackend } = usePlaylistStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -144,6 +146,46 @@ export default function PlaylistsLibrary() {
     }
   };
 
+  const playPlaylistAt = async (index: number) => {
+    if (!selectedPlaylist) return;
+    const playable = selectedPlaylist.songs.filter((s) => s.audioUrl);
+    if (playable.length === 0) {
+      Alert.alert("Empty playlist", "Add a song first.");
+      return;
+    }
+    const start = Math.max(0, Math.min(index, playable.length - 1));
+    const queue = playable.map((s) => ({
+      id: s.id,
+      title: s.title,
+      artist: s.artist,
+      audioUrl: s.audioUrl,
+      thumbnailUrl: s.thumbnailUrl,
+      duration: s.duration,
+      category: s.category,
+      description: s.description,
+      source:
+        s.trackType === "copyrightFree"
+          ? ("copyright-free" as const)
+          : ("library" as const),
+    }));
+    useGlobalAudioPlayerStore.setState({
+      queue,
+      originalQueue: queue,
+      currentIndex: start,
+    });
+    await useGlobalAudioPlayerStore.getState().setTrack(queue[start], true);
+    const ui = playable.map((s) => ({
+      id: s.id,
+      _id: s.id,
+      title: s.title,
+      artist: s.artist,
+      audioUrl: s.audioUrl,
+      thumbnailUrl: s.thumbnailUrl,
+      duration: s.duration,
+    }));
+    useCopyrightFreeOverlayStore.getState().open(ui[start], { queue: ui });
+  };
+
   const handleRemoveTrack = async (playlistId: string, trackId: string, trackType?: "media" | "copyrightFree") => {
     Alert.alert(
       "Remove Track",
@@ -183,11 +225,6 @@ export default function PlaylistsLibrary() {
   };
 
   const renderPlaylistCard = ({ item: playlist }: { item: Playlist }) => {
-    const thumbnailSource =
-      typeof playlist.thumbnailUrl === "string"
-        ? { uri: playlist.thumbnailUrl }
-        : playlist.thumbnailUrl;
-
     return (
       <TouchableOpacity
         onPress={() => handleViewPlaylist(playlist)}
@@ -223,25 +260,11 @@ export default function PlaylistsLibrary() {
               elevation: 2,
             }}
           >
-            {playlist.thumbnailUrl ? (
-              <Image
-                source={thumbnailSource}
-                style={{ width: 96, height: 96 }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  width: 96,
-                  height: 96,
-                  backgroundColor: "#E5E7EB",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Ionicons name="musical-notes" size={40} color="#9CA3AF" />
-              </View>
-            )}
+            <Image
+              source={resolveAlbumArtSource(playlist.thumbnailUrl)}
+              style={{ width: 96, height: 96 }}
+              resizeMode="cover"
+            />
           </View>
 
           {/* Playlist Info */}
@@ -249,7 +272,7 @@ export default function PlaylistsLibrary() {
             <Text
               style={{
                 fontSize: 18,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#111827",
                 marginBottom: 6,
                 letterSpacing: -0.3,
@@ -262,7 +285,7 @@ export default function PlaylistsLibrary() {
               <Text
                 style={{
                   fontSize: 14,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#6B7280",
                   marginBottom: 10,
                   lineHeight: 20,
@@ -287,7 +310,7 @@ export default function PlaylistsLibrary() {
                 <Text
                   style={{
                     fontSize: 13,
-                    fontFamily: "Rubik-Medium",
+                    fontFamily: "PlusJakartaSans-Medium",
                     color: "#6B7280",
                     marginLeft: 4,
                   }}
@@ -347,152 +370,10 @@ export default function PlaylistsLibrary() {
     );
   };
 
-  const renderTrackItem = ({ item: track, index }: { item: PlaylistSong; index: number }) => {
-    const thumbnailSource =
-      typeof track.thumbnailUrl === "string"
-        ? { uri: track.thumbnailUrl }
-        : track.thumbnailUrl;
-
-    // Show track type badge (Media or Copyright-Free)
-    const trackType = track.trackType || (track.copyrightFreeSongId ? "copyrightFree" : "media");
-    const isCopyrightFree = trackType === "copyrightFree";
-
-    return (
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: "#F3F4F6",
-        }}
-      >
-        {/* Track Number */}
-        <Text
-          style={{
-            fontSize: 16,
-            fontFamily: "Rubik-Medium",
-            color: "#9CA3AF",
-            width: 30,
-          }}
-        >
-          {index + 1}
-        </Text>
-
-        {/* Thumbnail */}
-        <View
-          style={{
-            width: 50,
-            height: 50,
-            borderRadius: 8,
-            backgroundColor: "#F3F4F6",
-            marginRight: 12,
-            overflow: "hidden",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          {track.thumbnailUrl ? (
-            <Image
-              source={thumbnailSource}
-              style={{ width: 50, height: 50 }}
-              resizeMode="cover"
-            />
-          ) : (
-            <Ionicons name="musical-note" size={24} color="#9CA3AF" />
-          )}
-        </View>
-
-        {/* Track Info */}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-            <Text
-              style={{
-                fontSize: 16,
-                fontFamily: "Rubik-SemiBold",
-                color: "#111827",
-                flex: 1,
-              }}
-              numberOfLines={1}
-            >
-              {track.title}
-            </Text>
-            {/* Track Type Badge */}
-            {isCopyrightFree && (
-              <View
-                style={{
-                  backgroundColor: "#FEF3C7",
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 4,
-                  marginLeft: 8,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "Rubik-SemiBold",
-                    color: "#92400E",
-                  }}
-                >
-                  FREE
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text
-            style={{
-              fontSize: 14,
-              fontFamily: "Rubik",
-              color: "#6B7280",
-            }}
-            numberOfLines={1}
-          >
-            {track.artist}
-          </Text>
-        </View>
-
-        {/* Duration */}
-        <Text
-          style={{
-            fontSize: 14,
-            fontFamily: "Rubik",
-            color: "#9CA3AF",
-            marginRight: 12,
-          }}
-        >
-          {formatDuration(track.duration)}
-        </Text>
-
-        {/* Remove Button */}
-        <TouchableOpacity
-          onPress={() => {
-            if (selectedPlaylist) {
-              handleRemoveTrack(selectedPlaylist.id, track.id, track.trackType);
-            }
-          }}
-          style={{
-            padding: 8,
-            borderRadius: 8,
-          }}
-        >
-          <Ionicons name="close-circle-outline" size={20} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
   if (isLoading && playlists.length === 0) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text style={{ fontSize: 16, fontFamily: "Rubik", color: "#6B7280" }}>
+        <Text style={{ fontSize: 16, fontFamily: "PlusJakartaSans", color: "#6B7280" }}>
           Loading playlists...
         </Text>
       </View>
@@ -547,7 +428,7 @@ export default function PlaylistsLibrary() {
             <Text
               style={{
                 fontSize: 26,
-                fontFamily: "Rubik-Bold",
+                fontFamily: "PlusJakartaSans-Bold",
                 color: "#FFFFFF",
                 letterSpacing: -0.5,
               }}
@@ -557,7 +438,7 @@ export default function PlaylistsLibrary() {
             <Text
               style={{
                 fontSize: 14,
-                fontFamily: "Rubik",
+                fontFamily: "PlusJakartaSans",
                 color: "rgba(255,255,255,0.55)",
                 marginTop: 3,
               }}
@@ -586,7 +467,7 @@ export default function PlaylistsLibrary() {
             <Text
               style={{
                 fontSize: 15,
-                fontFamily: "Rubik-SemiBold",
+                fontFamily: "PlusJakartaSans-SemiBold",
                 color: "#FFFFFF",
                 marginLeft: 5,
               }}
@@ -630,7 +511,7 @@ export default function PlaylistsLibrary() {
           <Text
             style={{
               fontSize: 20,
-              fontFamily: "Rubik-Bold",
+              fontFamily: "PlusJakartaSans-Bold",
               color: "#111827",
               textAlign: "center",
               marginBottom: 8,
@@ -641,7 +522,7 @@ export default function PlaylistsLibrary() {
           <Text
             style={{
               fontSize: 14,
-              fontFamily: "Rubik",
+              fontFamily: "PlusJakartaSans",
               color: "#6B7280",
               textAlign: "center",
               lineHeight: 22,
@@ -724,7 +605,7 @@ export default function PlaylistsLibrary() {
               <Text
                 style={{
                   fontSize: 24,
-                  fontFamily: "Rubik-Bold",
+                  fontFamily: "PlusJakartaSans-Bold",
                   color: "#111827",
                   letterSpacing: -0.5,
                 }}
@@ -755,7 +636,7 @@ export default function PlaylistsLibrary() {
               <Text
                 style={{
                   fontSize: 13,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#374151",
                   marginBottom: 8,
                   letterSpacing: 0.2,
@@ -776,7 +657,7 @@ export default function PlaylistsLibrary() {
                   paddingHorizontal: 16,
                   paddingVertical: 14,
                   fontSize: 16,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#111827",
                 }}
                 autoFocus
@@ -788,7 +669,7 @@ export default function PlaylistsLibrary() {
               <Text
                 style={{
                   fontSize: 13,
-                  fontFamily: "Rubik-SemiBold",
+                  fontFamily: "PlusJakartaSans-SemiBold",
                   color: "#374151",
                   marginBottom: 8,
                   letterSpacing: 0.2,
@@ -812,7 +693,7 @@ export default function PlaylistsLibrary() {
                   paddingHorizontal: 16,
                   paddingVertical: 14,
                   fontSize: 16,
-                  fontFamily: "Rubik",
+                  fontFamily: "PlusJakartaSans",
                   color: "#111827",
                   minHeight: 80,
                 }}
@@ -841,7 +722,7 @@ export default function PlaylistsLibrary() {
                 <Text
                   style={{
                     fontSize: 16,
-                    fontFamily: "Rubik-SemiBold",
+                    fontFamily: "PlusJakartaSans-SemiBold",
                     color: "#374151",
                   }}
                 >
@@ -878,7 +759,7 @@ export default function PlaylistsLibrary() {
                     <Text
                       style={{
                         fontSize: 16,
-                        fontFamily: "Rubik-SemiBold",
+                        fontFamily: "PlusJakartaSans-SemiBold",
                         color: "#FFFFFF",
                       }}
                     >
@@ -889,7 +770,7 @@ export default function PlaylistsLibrary() {
                   <Text
                     style={{
                       fontSize: 16,
-                      fontFamily: "Rubik-SemiBold",
+                      fontFamily: "PlusJakartaSans-SemiBold",
                       color: "#FFFFFF",
                     }}
                   >
@@ -902,178 +783,27 @@ export default function PlaylistsLibrary() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Playlist Detail Modal */}
-      <Modal
+      <PlaylistDetailSheet
         visible={showPlaylistDetail}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
+        playlist={selectedPlaylist}
+        onClose={() => {
           setShowPlaylistDetail(false);
           setSelectedPlaylist(null);
         }}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 20,
-              paddingTop: 60,
-              paddingBottom: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: "#E5E7EB",
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => {
-                setShowPlaylistDetail(false);
-                setSelectedPlaylist(null);
-              }}
-            >
-              <Ionicons name="arrow-back" size={24} color="#111827" />
-            </TouchableOpacity>
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Text
-                style={{
-                  fontSize: 20,
-                  fontFamily: "Rubik-SemiBold",
-                  color: "#111827",
-                }}
-                numberOfLines={1}
-              >
-                {selectedPlaylist?.name}
-              </Text>
-              {selectedPlaylist?.description && (
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontFamily: "Rubik",
-                    color: "#6B7280",
-                    marginTop: 4,
-                  }}
-                  numberOfLines={1}
-                >
-                  {selectedPlaylist.description}
-                </Text>
-              )}
-            </View>
-            {selectedPlaylist && (
-              <TouchableOpacity
-                onPress={() => handleDeletePlaylist(selectedPlaylist.id)}
-                style={{ marginLeft: 12 }}
-              >
-                <Ionicons name="trash-outline" size={24} color="#EF4444" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Playlist Info */}
-          {selectedPlaylist && (
-            <View
-              style={{
-                padding: 20,
-                borderBottomWidth: 1,
-                borderBottomColor: "#E5E7EB",
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
-                <Ionicons name="musical-notes" size={20} color="#6B7280" />
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontFamily: "Rubik",
-                    color: "#6B7280",
-                    marginLeft: 8,
-                  }}
-                >
-                  {selectedPlaylist.songs.length} song
-                  {selectedPlaylist.songs.length !== 1 ? "s" : ""}
-                </Text>
-                {/* Show track type breakdown */}
-                {selectedPlaylist.songs.length > 0 && (
-                  <>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontFamily: "Rubik",
-                        color: "#9CA3AF",
-                        marginLeft: 12,
-                      }}
-                    >
-                      •
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontFamily: "Rubik",
-                        color: "#9CA3AF",
-                        marginLeft: 8,
-                      }}
-                    >
-                      {selectedPlaylist.songs.filter((s) => s.trackType === "copyrightFree").length} copyright-free
-                      {selectedPlaylist.songs.filter((s) => s.trackType === "media").length > 0 && (
-                        <>, {selectedPlaylist.songs.filter((s) => s.trackType === "media").length} regular</>
-                      )}
-                    </Text>
-                  </>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Tracks List */}
-          {selectedPlaylist && selectedPlaylist.songs.length === 0 ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-                padding: 40,
-              }}
-            >
-              <Ionicons name="musical-notes-outline" size={64} color="#D1D5DB" />
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontFamily: "Rubik-SemiBold",
-                  color: "#6B7280",
-                  marginTop: 16,
-                  textAlign: "center",
-                }}
-              >
-                This playlist is empty
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontFamily: "Rubik",
-                  color: "#9CA3AF",
-                  marginTop: 8,
-                  textAlign: "center",
-                }}
-              >
-                Add songs from the music player or library
-              </Text>
-            </View>
-          ) : (
-            selectedPlaylist && (
-              <FlatList
-                data={selectedPlaylist.songs}
-                renderItem={renderTrackItem}
-                keyExtractor={(item, index) => `${item.id}-${index}`}
-                contentContainerStyle={{ paddingBottom: 20 }}
-              />
-            )
-          )}
-        </View>
-      </Modal>
+        onPlayAll={() => {
+          void playPlaylistAt(0);
+        }}
+        onPlayTrack={(_track, index) => {
+          void playPlaylistAt(index);
+        }}
+        onRemoveTrack={(track) => {
+          if (!selectedPlaylist) return;
+          void handleRemoveTrack(selectedPlaylist.id, track.id, track.trackType);
+        }}
+        onDeletePlaylist={() => {
+          if (selectedPlaylist) handleDeletePlaylist(selectedPlaylist.id);
+        }}
+      />
     </View>
   );
 }

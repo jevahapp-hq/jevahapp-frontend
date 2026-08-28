@@ -7,25 +7,27 @@ import {
   refreshFeedAfterDelete,
   removeMediaFromFeedCaches,
 } from "../../../src/shared/utils/removeMediaFromFeedCaches";
+import { applyMediaDescriptionToCaches } from "../../../src/shared/utils/applyMediaDescriptionToCaches";
 import { useCommentModal } from "../../context/CommentModalContext";
 import { useUserProfile } from "../../hooks/useUserProfile";
-import { useGlobalVideoStore } from "../../store/useGlobalVideoStore";
-import { useInteractionStore, useContentCount, useUserInteraction } from "../../store/useInteractionStore";
-import { useLibraryStore } from "../../store/useLibraryStore";
-import { useReelsStore } from "../../store/useReelsStore";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
+import { useContentLikeState } from "../../../src/shared/hooks/useContentLikeState";
+import { useHydrateContentStats } from "../../../src/shared/hooks/useHydrateContentStats";
+import { useLibraryStore } from "@/store/useLibraryStore";
+import { useReelsStore } from "@/store/useReelsStore";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
 import { useDownloadHandler } from "../../utils/downloadUtils";
 import { getPersistedStats } from "../../utils/persistentStorage";
 import { useEngagementSocket } from "../../hooks/useEngagementSocket";
-import {
-    useReelsCurrentVideo,
-    useReelsHandlers,
-    useReelsResponsive,
-    useReelsScroll,
-    useReelsVideoList,
-    useReelsVideoPlayback
-} from "./";
 import { useReelsAdjacentPrefetch } from "./useReelsAdjacentPrefetch";
+import { useReelsCurrentVideo } from "./useReelsCurrentVideo";
+import { useReelsDescriptionEdit } from "./useReelsDescriptionEdit";
+import { useReelsHandlers } from "./useReelsHandlers";
+import { useReelsResponsive } from "./useReelsResponsive";
+import { useReelsScroll } from "./useReelsScroll";
+import { useReelsVideoList } from "./useReelsVideoList";
+import { useReelsVideoPlayback } from "./useReelsVideoPlayback";
 
 /**
  * useReelsOrchestrator - The "Master Hook" for the Reels feature.
@@ -34,6 +36,7 @@ import { useReelsAdjacentPrefetch } from "./useReelsAdjacentPrefetch";
 export function useReelsOrchestrator() {
     const params = useLocalSearchParams() as any;
     const router = useRouter();
+    const queryClient = useQueryClient();
     const videoRefs = useRef<Record<string, VideoPlayer>>({});
 
     // State
@@ -129,20 +132,41 @@ export function useReelsOrchestrator() {
         getFullName,
     });
 
-    const activeIsLiked = useUserInteraction(current.contentIdForHooks, "liked");
-    const activeLikesCount = useContentCount(current.contentIdForHooks, "likes");
+    // Same read path as the feed card — see useContentLikeState. Reels used to
+    // read the store alone, which is why a like made in the feed showed as
+    // unliked here after a cold start or a metadata refetch.
+    const activeLike = useContentLikeState(
+        current.contentIdForHooks,
+        current.currentVideo as any
+    );
+    const activeIsLiked = activeLike.liked;
+    const activeLikesCount = activeLike.likeCount;
+
+    /** Live metadata edits from the author's other devices. */
+    const handleMediaUpdated = useCallback(
+        (payload: { contentId?: string; mediaId?: string; description?: string }) => {
+            const id = String(payload?.contentId || payload?.mediaId || "").trim();
+            if (!id || typeof payload?.description !== "string") return;
+            applyMediaDescriptionToCaches(queryClient, id, payload.description);
+        },
+        [queryClient]
+    );
 
     useEngagementSocket({
       focusedContentId: current.canUseBackendLikes
         ? current.contentIdForHooks
         : null,
       focusedContentType: current.activeContentType || "media",
+      onMediaUpdated: handleMediaUpdated,
     });
 
-    useEffect(() => {
-        if (!current.canUseBackendLikes) return;
-        loadContentStats(current.contentIdForHooks, current.activeContentType);
-    }, [current.canUseBackendLikes, loadContentStats, current.contentIdForHooks, current.activeContentType]);
+    // Guarded hydration, matching the feed. The previous unconditional
+    // `loadContentStats` re-fetched on every mount and let a server
+    // `hasLiked: false` overwrite a local like.
+    useHydrateContentStats(
+        current.canUseBackendLikes ? current.contentIdForHooks : "",
+        "media"
+    );
 
     const {
         isOwner,
@@ -155,7 +179,11 @@ export function useReelsOrchestrator() {
         isModalVisible: menuVisible,
     });
 
-    const queryClient = useQueryClient();
+    const descriptionEdit = useReelsDescriptionEdit({
+        mediaId: String(current.currentVideo?._id || ""),
+        currentDescription: String(current.currentVideo?.description || ""),
+        isOwner,
+    });
 
     /** After API delete succeeds — remove instantly from Reels + feed caches (no second delete call). */
     const handleDeleteSuccessUi = useCallback(() => {
@@ -181,9 +209,11 @@ export function useReelsOrchestrator() {
         router,
     ]);
 
-    const triggerHapticFeedback = () => {
+    // Stable identity: this is passed down into the player's listener effect,
+    // and a fresh function each render re-subscribed the native listeners.
+    const triggerHapticFeedback = useCallback(() => {
         // Basic trigger logic if needed
-    };
+    }, []);
 
     const handlers = useReelsHandlers({
         router,
@@ -206,7 +236,11 @@ export function useReelsOrchestrator() {
         timeAgo: params.timeAgo,
         imageUrl: params.imageUrl,
         sheared: params.sheared,
-        toggleLike: async (cid, ct) => await toggleLike(cid, ct),
+        // Seed the optimistic flip with the truth. Without this the store
+        // assumed `liked: false, likes: 0`, so the first tap in Reels sent a
+        // *like* for content the user had already liked in the feed.
+        toggleLike: async (cid, ct) =>
+            await toggleLike(cid, ct, activeLike.toggleSeed),
         showCommentModal: (comments, cid, type, speaker) => showCommentModal(comments, cid, type as any, speaker),
         libraryStore,
         handleDownload,
@@ -254,7 +288,18 @@ export function useReelsOrchestrator() {
         }
     }, [current.modalKey, pauseVideo, playVideoGlobally]);
 
-    const allVideos = parsedVideoList.length > 0 ? parsedVideoList : [current.currentVideo];
+    // Memoized: a fresh array literal here re-created the FlatList `data` and
+    // the prefetch dep on every render, turning any single state tick into a
+    // full-list re-render.
+    const allVideos = useMemo(
+        () =>
+            parsedVideoList.length > 0
+                ? parsedVideoList
+                : current.currentVideo
+                  ? [current.currentVideo]
+                  : [],
+        [parsedVideoList, current.currentVideo]
+    );
 
     useReelsAdjacentPrefetch({
         currentIndex: currentIndex_state,
@@ -315,6 +360,7 @@ export function useReelsOrchestrator() {
         toggleVideoPlay,
         checkIfDownloaded,
         handleDownload,
+        descriptionEdit,
 
         // Data
         allVideos,

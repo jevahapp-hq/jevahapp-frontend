@@ -101,7 +101,7 @@ export function CategoryTypeTag({
       <Text
         style={{
           fontSize: tagFontSize,
-          fontFamily: "Rubik-Medium",
+          fontFamily: "PlusJakartaSans-Medium",
           color: isSelected ? "#FFFFFF" : "#0F172A",
           lineHeight: tagFontSize + 4,
         }}
