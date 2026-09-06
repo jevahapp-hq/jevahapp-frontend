@@ -60,7 +60,7 @@ export const useUserProfile = () => {
     error: queryError,
     refetch: refetchQuery,
   } = useQuery({
-    queryKey: ["user-profile"],
+    queryKey: ["user-profile", initialUser?.id || initialUser?._id || "session"],
     queryFn: async () => {
       const userData = await apiClient.getUserProfile();
 
@@ -101,6 +101,14 @@ export const useUserProfile = () => {
       // Cache user profile by userId for content enrichment
       const userId = userWithSection.id || userWithSection._id;
       if (userId) {
+        try {
+          const { setSessionCacheUserId } = await import(
+            "../../src/shared/cache/sessionCacheScope"
+          );
+          setSessionCacheUserId(String(userId));
+        } catch {
+          // ignore
+        }
         try {
           const { userProfileCache } = await import("../utils/dataFetching");
           userProfileCache.cacheUserProfile(userId, userWithSection);

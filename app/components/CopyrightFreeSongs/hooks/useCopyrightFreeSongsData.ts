@@ -7,34 +7,43 @@ import {
   mmkvGetJson,
   mmkvSetJson,
 } from "../../../../src/shared/cache/mmkvStorage";
+import { CF_SONGS_CACHE_KEY } from "../../../../src/shared/cache/persistKeys";
+import {
+  isCheapJsonFresh,
+  isCheapJsonPaintable,
+} from "../../../../src/shared/config/feedCachePolicy";
 import copyrightFreeMusicAPI, {
   CopyrightFreeSongResponse,
 } from "../../../services/copyrightFreeMusicAPI";
 import { transformBackendSong } from "@/components/CopyrightFreeSongModal/utils/transformBackendSong";
 
-const CACHE_KEY = "copyrightFreeSongsCache_v1";
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_KEY = CF_SONGS_CACHE_KEY;
 
 type SongsCache = { timestamp: number; songs: any[] };
 let memorySongs: any[] | null = null;
+let memoryFetchedAt = 0;
 
-function readInstantCache(): any[] | null {
-  if (memorySongs?.length) return memorySongs;
+function readInstantCache(): { songs: any[]; timestamp: number } | null {
+  if (memorySongs?.length && isCheapJsonPaintable(memoryFetchedAt)) {
+    return { songs: memorySongs, timestamp: memoryFetchedAt };
+  }
   const disk = mmkvGetJson<SongsCache>(CACHE_KEY);
   if (
     Array.isArray(disk?.songs) &&
-    typeof disk?.timestamp === "number" &&
-    Date.now() - disk.timestamp < CACHE_TTL_MS
+    disk.songs.length > 0 &&
+    isCheapJsonPaintable(disk.timestamp)
   ) {
     memorySongs = disk.songs;
-    return disk.songs;
+    memoryFetchedAt = disk.timestamp;
+    return { songs: disk.songs, timestamp: disk.timestamp };
   }
   return null;
 }
 
-function writeInstantCache(songs: any[]) {
+function writeInstantCache(songs: any[], fetchedAt = Date.now()) {
   memorySongs = songs;
-  mmkvSetJson(CACHE_KEY, { timestamp: Date.now(), songs });
+  memoryFetchedAt = fetchedAt;
+  mmkvSetJson(CACHE_KEY, { timestamp: fetchedAt, songs });
 }
 
 const FALLBACK_THUMBNAIL = require("../../../../assets/images/Rectangle.svg");
@@ -142,8 +151,12 @@ function getFallbackSongs(): any[] {
 }
 
 export function useCopyrightFreeSongsData() {
-  const [songs, setSongs] = useState<any[]>(() => readInstantCache() ?? []);
-  const [loading, setLoading] = useState(() => !readInstantCache()?.length);
+  const [songs, setSongs] = useState<any[]>(
+    () => readInstantCache()?.songs ?? []
+  );
+  const [loading, setLoading] = useState(
+    () => !readInstantCache()?.songs.length
+  );
   const [error, setError] = useState<string | null>(null);
 
   const transformSong = useCallback((backendSong: CopyrightFreeSongResponse) => {
@@ -157,10 +170,14 @@ export function useCopyrightFreeSongsData() {
 
       if (useCacheFirst) {
         const instant = readInstantCache();
-        if (instant?.length) {
-          setSongs(instant);
+        if (instant?.songs.length) {
+          setSongs(instant.songs);
           setLoading(false);
           usedCache = true;
+          // Match feed SWR: fresh disk skips the network; stale still paints then revalidates.
+          if (isCheapJsonFresh(instant.timestamp)) {
+            return;
+          }
         } else {
           try {
             const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
@@ -169,13 +186,17 @@ export function useCopyrightFreeSongsData() {
               const { timestamp, songs: cachedSongs } = parsed || {};
               if (
                 Array.isArray(cachedSongs) &&
-                typeof timestamp === "number" &&
-                Date.now() - timestamp < CACHE_TTL_MS
+                cachedSongs.length > 0 &&
+                isCheapJsonPaintable(timestamp)
               ) {
-                writeInstantCache(cachedSongs);
+                writeInstantCache(cachedSongs, timestamp);
                 setSongs(cachedSongs);
                 setLoading(false);
                 usedCache = true;
+                if (isCheapJsonFresh(timestamp)) {
+                  void AsyncStorage.removeItem(CACHE_KEY);
+                  return;
+                }
               }
               void AsyncStorage.removeItem(CACHE_KEY);
             }

@@ -74,7 +74,11 @@ export default {
         "ACCESS_NETWORK_STATE",
       ],
       networkSecurityConfig: "./config/network_security_config.xml",
-      allowBackup: true,
+      allowBackup: false,
+      usesCleartextTraffic:
+        process.env.EXPO_PUBLIC_API_ENV === "local" ||
+        process.env.EXPO_PUBLIC_API_ENV === "dev" ||
+        process.env.EXPO_PUBLIC_API_ENV === "development",
       softwareKeyboardLayoutMode: "pan",
     },
     web: {

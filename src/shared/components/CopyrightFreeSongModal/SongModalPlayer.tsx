@@ -1,8 +1,7 @@
-import React, { useMemo } from "react";
+import React from "react";
 import type { ImageSourcePropType } from "react-native";
-import { PanResponder, View } from "react-native";
+import { View } from "react-native";
 import { UI_CONFIG } from "@/shared/constants";
-import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { PlayerArtwork } from "./components/PlayerArtwork";
 import { PlayerBackground } from "./components/PlayerBackground";
 import { PlayerHeader } from "./components/PlayerHeader";
@@ -44,12 +43,6 @@ export interface SongModalPlayerProps {
   onToggleShuffle: () => void;
   onOpenPlaylistView: () => void;
   onShare?: () => void;
-  handleGesture?: any;
-  artworkGesture?: any;
-}
-
-function minimizePlayer() {
-  useCopyrightFreeOverlayStore.getState().minimize();
 }
 
 export function SongModalPlayer({
@@ -94,55 +87,21 @@ export function SongModalPlayer({
     audioPosition,
   });
 
-  const dismissPan = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_e, g) =>
-          g.dy > 10 && g.dy > Math.abs(g.dx) * 1.2,
-        onPanResponderRelease: (_e, g) => {
-          if (g.dy > 28 || g.vy > 0.6) {
-            minimizePlayer();
-            onClose();
-          }
-        },
-      }),
-    [onClose]
-  );
-
   return (
     <View style={{ flex: 1 }}>
       <PlayerBackground imageSource={imageSource} />
 
-      <View style={{ flexGrow: 1, minHeight: 0 }}>
-        <View
-          {...dismissPan.panHandlers}
-          style={{
-            alignItems: "center",
-            justifyContent: "center",
-            paddingTop: 10,
-            paddingBottom: 4,
-            minHeight: 44,
-          }}
-        >
-          <View
-            style={{
-              width: 48,
-              height: 5,
-              borderRadius: 3,
-              backgroundColor: "rgba(255, 255, 255, 0.45)",
-            }}
-          />
-        </View>
+      <View style={{ flexGrow: 1, minHeight: 0, paddingTop: 8 }}>
         <PlayerHeader onClose={onClose} onOptionsPress={onOptionsPress} />
         <View
-          {...dismissPan.panHandlers}
+          collapsable={false}
           style={{
             flex: 1,
-            justifyContent: "center",
+            justifyContent: "flex-end",
+            alignItems: "center",
             minHeight: 0,
-            overflow: "hidden",
             paddingHorizontal: UI_CONFIG.SPACING.LG,
+            paddingBottom: UI_CONFIG.SPACING.MD,
           }}
         >
           <PlayerArtwork
@@ -157,7 +116,8 @@ export function SongModalPlayer({
         style={{
           flexShrink: 0,
           paddingHorizontal: UI_CONFIG.SPACING.LG,
-          paddingBottom: UI_CONFIG.SPACING.MD + bottomInset,
+          paddingTop: UI_CONFIG.SPACING.SM,
+          paddingBottom: UI_CONFIG.SPACING.LG + bottomInset,
         }}
       >
         <PlayerInfo

@@ -84,7 +84,12 @@ export const useVideoPlaybackControl = ({
         if (!videoRef.current) return;
         try {
           if (isExpoVideo) {
-            videoRef.current.play();
+            const current = videoRef.current;
+            const muted =
+              useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
+            current.muted = muted;
+            current.volume = muted ? 0 : 1;
+            current.play();
           }
         } catch {
           // no-op
@@ -150,6 +155,10 @@ export const useVideoPlaybackControl = ({
 
     if (shouldPlayThisVideo) {
       if (isExpoVideo) {
+        const muted =
+          useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
+        p.muted = muted;
+        p.volume = muted ? 0 : 1;
         if (!p.playing) p.play();
       }
     } else {

@@ -59,15 +59,16 @@ export const MiniBarControls = React.memo(function MiniBarControls({
         <Ionicons name="play-skip-forward" size={19} color={ON_SURFACE} />
       </Pressable>
 
-      <Pressable
-        onPress={onClose}
+      <View
+        collapsable={false}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={onClose}
         style={styles.closeButton}
-        hitSlop={HIT_SLOP}
         accessibilityRole="button"
         accessibilityLabel="Close player"
       >
-        <Ionicons name="close" size={15} color={ON_SURFACE_MUTED} />
-      </Pressable>
+        <Ionicons name="close" size={15} color={ON_SURFACE_MUTED} pointerEvents="none" />
+      </View>
     </View>
   );
 });

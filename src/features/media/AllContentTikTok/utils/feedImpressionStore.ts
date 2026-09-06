@@ -3,17 +3,22 @@
  * Stores { id -> lastSeenAt } for ~14 days.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getSessionCacheUserId } from "../../../../shared/cache/sessionCacheScope";
 
 const KEY = "feed_impressions_v1";
 const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const SESSION_SEED_KEY = "feed_session_seed_v1";
 const LAST_SESSION_TOPS_KEY = "feed_last_session_tops_v1";
 
+function impressionKey(): string {
+  return `${KEY}:${getSessionCacheUserId()}`;
+}
+
 type ImpressionMap = Record<string, number>;
 
 async function readMap(): Promise<ImpressionMap> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(impressionKey());
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -24,7 +29,7 @@ async function readMap(): Promise<ImpressionMap> {
 
 async function writeMap(map: ImpressionMap): Promise<void> {
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(map));
+    await AsyncStorage.setItem(impressionKey(), JSON.stringify(map));
   } catch {
     // no-op
   }
@@ -113,6 +118,14 @@ export async function rememberLastSessionTopIds(ids: string[]): Promise<void> {
   if (clean.length === 0) return;
   try {
     await AsyncStorage.setItem(LAST_SESSION_TOPS_KEY, JSON.stringify(clean));
+  } catch {
+    // no-op
+  }
+}
+
+export function resetFeedImpressionMemory(): void {
+  try {
+    delete (global as any).__jevahFeedSessionSeed;
   } catch {
     // no-op
   }

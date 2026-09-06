@@ -39,13 +39,22 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import LikeQueueBootstrap from "./components/LikeQueueBootstrap";
 import { CommentModalProvider } from "./context/CommentModalContext";
 import { NotificationProvider } from "./context/NotificationContext";
-import { PersistentNotificationProvider } from "./context/PersistentNotificationContext";
 import { useArtistDeepLinks } from "./hooks/useArtistDeepLinks";
 import { useDownloadStore } from "@/store/useDownloadStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
 import { hydrateFallbackKvByPrefix, hydrateFallbackKvFromAsyncStorage, appMmkv } from "../src/shared/cache/mmkvStorage";
 import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
+import {
+  ASYNC_FALLBACK_JSON_CACHE_KEYS,
+  MUSIC_CATALOG_PREFIX,
+} from "../src/shared/cache/persistKeys";
+import {
+  hydratePersistedQueryCache,
+  registerPersistedQueryClient,
+  subscribePersistedQueryCache,
+  swrPersistedQueryCache,
+} from "../src/shared/cache/persistQueryClient";
 import { AUTHOR_DISK_KEY } from "../src/shared/author";
 import {
   allContentQueryKey,
@@ -89,10 +98,30 @@ Sentry.init({
   integrations: [],
 });
 
-const publishableKey =
-  Constants.expoConfig?.extra?.CLERK_KEY ||
-  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-  "pk_test_ZWxlZ2FudC10aWdlci0zNi5jbGVyay5hY2NvdW50cy5kZXYk";
+function resolveClerkPublishableKey(): string | null {
+  const key = String(
+    Constants.expoConfig?.extra?.CLERK_KEY ||
+      process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+      ""
+  ).trim();
+  if (!key) return null;
+  if (!key.startsWith("pk_")) {
+    throw new Error(
+      "Invalid Clerk publishable key. Expected a key beginning with pk_test_ or pk_live_."
+    );
+  }
+  if (
+    process.env.EXPO_PUBLIC_CLERK_KEY_MODE === "live" &&
+    !key.startsWith("pk_live_")
+  ) {
+    throw new Error(
+      "This build requires a Clerk live publishable key (pk_live_), not pk_test_."
+    );
+  }
+  return key;
+}
+
+const publishableKey = resolveClerkPublishableKey();
 
 const tokenCache = {
   async getToken(key: string) {
@@ -131,9 +160,13 @@ const queryClient = new QueryClient({
 try {
   hydrateLiteProfileSync();
   hydrateFeedQueryCache(queryClient);
+  hydratePersistedQueryCache(queryClient);
 } catch {
   // ignore corrupt cache
 }
+
+registerPersistedQueryClient(queryClient);
+subscribePersistedQueryCache(queryClient);
 
 export default function RootLayout() {
   useArtistDeepLinks();
@@ -179,31 +212,13 @@ export default function RootLayout() {
     if (__DEV__) return;
     const originalError = console.error;
     console.error = (...args) => {
-      const errorMessage = args[0]?.toString() || "";
+      const first = args[0];
+      const errorMessage =
+        typeof first === "string" ? first : first?.toString?.() || "";
+      // Clerk telemetry is noisy in production and is not an app failure.
       if (
-        args[0]?.includes?.("clerk/telemetry") ||
-        args[0]?.includes?.("Clerk hooks not available") ||
-        args[0]?.includes?.("Video error for") ||
-        args[0]?.includes?.("Video load error") ||
-        args[0]?.includes?.("AVPlayerItem instance has failed") ||
-        args[0]?.includes?.("error code -11819") ||
-        args[0]?.includes?.("error code -1001") ||
-        args[0]?.includes?.("NSURLErrorDomain") ||
-        args[0]?.includes?.("NSURLErrorTimedOut") ||
-        args[0]?.includes?.("AVFoundationErrorDomain") ||
-        args[0]?.includes?.("Audio sermon error") ||
-        args[0]?.includes?.("Failed to load audio") ||
-        args[0]?.includes?.("Failed to load the player item") ||
-        args[0]?.includes?.("request timed out") ||
-        errorMessage.includes("Network request failed") ||
-        errorMessage.includes("TypeError: Network request failed") ||
-        errorMessage.includes("The request timed out") ||
-        errorMessage.includes("NSURLErrorTimedOut") ||
-        errorMessage.includes("error code -1001") ||
-        errorMessage.includes("User not found") ||
-        errorMessage.includes("Email not found") ||
-        errorMessage.includes("Forgot password failed: User not found") ||
-        errorMessage.includes("Error fetching categories")
+        errorMessage.includes("clerk/telemetry") ||
+        (typeof first === "string" && first.includes("clerk/telemetry"))
       ) {
         return;
       }
@@ -296,18 +311,35 @@ export default function RootLayout() {
             "feed-page:ALL:public:full",
             "feed-page:ALL:auth:full",
             "video-feed-data",
+            ...ASYNC_FALLBACK_JSON_CACHE_KEYS,
           ]);
           hydrateFeedQueryCache(queryClient);
+          hydratePersistedQueryCache(queryClient);
+          try {
+            const { CacheManager } = await import("./utils/cache/CacheManager");
+            CacheManager.rehydrateFromDisk();
+          } catch {}
+          try {
+            const { URLManager } = await import("./utils/urlManager");
+            URLManager.rehydrateFromDisk();
+          } catch {}
+          try {
+            const { default: copyrightFreeMusicAPI } = await import(
+              "./services/copyrightFreeMusicAPI"
+            );
+            copyrightFreeMusicAPI.rehydrateFromDisk();
+          } catch {}
         } catch {}
 
         try {
-          await hydrateFallbackKvByPrefix(["bible_"]);
+          await hydrateFallbackKvByPrefix(["bible_", MUSIC_CATALOG_PREFIX]);
         } catch {}
 
         void warmupBackend(3000).catch(() => {});
 
         const pageSize = getFeedPageSize();
         const useAuth = hasBackendSessionSync();
+        swrPersistedQueryCache(queryClient, useAuth);
         // Chronological public first — has authorInfo, no For You wait.
         queryClient
           .prefetchInfiniteQuery({
@@ -429,7 +461,6 @@ export default function RootLayout() {
             afterSignUpUrl="/"
           >
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <PersistentNotificationProvider>
                 <NotificationProvider>
                   <CommentModalProvider>
                     <LikeQueueBootstrap />
@@ -439,7 +470,6 @@ export default function RootLayout() {
                     <DeferredRootOverlays />
                   </CommentModalProvider>
                 </NotificationProvider>
-              </PersistentNotificationProvider>
             </GestureHandlerRootView>
           </ClerkProvider>
         </SafeAreaProvider>

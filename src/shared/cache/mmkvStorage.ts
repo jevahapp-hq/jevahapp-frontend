@@ -115,6 +115,11 @@ export function mmkvSetJson(key: string, value: unknown): void {
   }
 }
 
+export function mmkvRemove(key: string): void {
+  appMmkv.remove(key);
+  mirrorAsync(key, null);
+}
+
 /**
  * Warm memory fallback from AsyncStorage so cold start after process death
  * can still seed RQ once this resolves (non-blocking for splash).

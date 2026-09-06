@@ -9,6 +9,11 @@ import { Alert, Share } from "react-native";
 import allMediaAPI from "../../utils/allMediaAPI";
 import { ensureAuthenticatedForInteraction } from "../../utils/auth/requireAuthForInteraction";
 import { useInteractionStore } from "@/store/useInteractionStore";
+import {
+  getVideoPlaybackSnapshot,
+  useGlobalVideoStore,
+} from "@/store/useGlobalVideoStore";
+import { useReelsStore } from "@/store/useReelsStore";
 import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
 
 export interface UseReelsHandlersParams {
@@ -62,7 +67,6 @@ export function useReelsHandlers({
   timeAgo,
   imageUrl,
   sheared,
-  params,
   toggleLike,
   showCommentModal,
   libraryStore,
@@ -73,6 +77,35 @@ export function useReelsHandlers({
 }: UseReelsHandlersParams) {
   const handleBackNavigation = useCallback(() => {
     triggerHapticFeedback();
+
+    // Persist active reel position so the feed can seek on return.
+    try {
+      const reels = useReelsStore.getState();
+      const active =
+        reels.videoList[reels.currentIndex] || reels.videoList[0];
+      const contentId = String(active?._id || (active as any)?.id || "").trim();
+      const visibleKey = useGlobalVideoStore.getState().currentlyVisibleVideo;
+      const snap = visibleKey ? getVideoPlaybackSnapshot(visibleKey) : null;
+      const prev = reels.resumePlayback;
+      if (contentId) {
+        const sameVideo =
+          prev?.contentId && String(prev.contentId) === contentId;
+        reels.setResumePlayback({
+          contentId,
+          positionMs: snap?.currentMs ?? (sameVideo ? prev?.positionMs : 0) ?? 0,
+          feedKey: sameVideo ? prev?.feedKey : undefined,
+          target: "feed",
+        });
+      }
+    } catch {
+      // best-effort
+    }
+
+    // Prefer stack pop so the feed keeps scroll position / active video.
+    if (source === "AllContentTikTok" && router.canGoBack?.()) {
+      router.back();
+      return;
+    }
     if (source === "Downloads") {
       router.replace("/downloads/DownloadsScreen");
       return;

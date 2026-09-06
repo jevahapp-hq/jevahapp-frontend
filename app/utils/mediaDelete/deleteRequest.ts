@@ -1,24 +1,14 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { getAuthToken } from "@/src/core/auth/tokenStore";
 import { getApiBaseUrl } from "../api";
 import type { DeleteMediaResponse } from "./types";
 
 const OBJECT_ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 const REQUEST_TIMEOUT_MS = 30000;
 
-/** Same lookup order as upload: userToken → token → SecureStore jwt. */
+/** Canonical auth token (SecureStore jwt, with legacy AsyncStorage migration). */
 export async function resolveAuthToken(): Promise<string | null> {
-  let token = await AsyncStorage.getItem("userToken");
-  if (!token) token = await AsyncStorage.getItem("token");
-  if (!token) {
-    try {
-      const { default: SecureStore } = await import("expo-secure-store");
-      token = await SecureStore.getItemAsync("jwt");
-    } catch {
-      // Silent fallback
-    }
-  }
-  return token;
+  return getAuthToken();
 }
 
 function assertObjectId(mediaId: string): string {

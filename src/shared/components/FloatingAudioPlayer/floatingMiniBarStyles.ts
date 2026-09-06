@@ -17,9 +17,6 @@ const HAIRLINE = "rgba(255, 255, 255, 0.10)";
 
 export const floatingMiniBarStyles = StyleSheet.create({
   container: {
-    position: "absolute",
-    left: 12,
-    right: 12,
     height: MINI_PLAYER_HEIGHT,
     zIndex: MINI_PLAYER_Z_INDEX,
     borderRadius: MINI_PLAYER_RADIUS,
@@ -40,8 +37,7 @@ export const floatingMiniBarStyles = StyleSheet.create({
     }),
   },
 
-  /** Grab affordance + a hint that the bar is vertically draggable. */
-  /** Full-width strip so the bar can be dragged without fighting the buttons. */
+  /** Grab affordance — drag to move, tap to expand. */
   dragHandle: {
     height: 18,
     alignItems: "center",
@@ -126,6 +122,8 @@ export const floatingMiniBarStyles = StyleSheet.create({
   controls: {
     flexDirection: "row",
     alignItems: "center",
+    zIndex: 8,
+    elevation: 12,
   },
   playButton: {
     width: 38,

@@ -35,19 +35,19 @@ export function PlayerArtwork({
   }));
 
   return (
-    <View style={{ alignItems: "center", marginTop: 4, marginBottom: 8 }}>
+    <View style={{ alignItems: "center", justifyContent: "center", marginVertical: 4 }}>
       <Animated.View
         style={[
           {
-            width: albumArtSize * 1.08,
-            height: albumArtSize * 1.08,
-            borderRadius: 28,
+            width: albumArtSize,
+            height: albumArtSize,
+            borderRadius: 24,
             backgroundColor: "#121721",
             shadowColor: isPlaying ? "#256E63" : "#000000",
-            shadowOffset: { width: 0, height: 20 },
-            shadowOpacity: isPlaying ? 0.6 : 0.45,
-            shadowRadius: 30,
-            elevation: 8,
+            shadowOffset: { width: 0, height: 16 },
+            shadowOpacity: isPlaying ? 0.55 : 0.4,
+            shadowRadius: 24,
+            elevation: 2,
             borderWidth: 1.5,
             borderColor: "rgba(255, 255, 255, 0.18)",
             overflow: "hidden",

@@ -18,7 +18,7 @@ export function createQueueActions(
 > {
   return {
     next: async () => {
-      const { queue, currentIndex, setTrack, repeatMode, position } = get();
+      const { queue, currentIndex, setTrack, repeatMode, position, duration } = get();
 
       // Soft ranking skip if leaving early
       try {
@@ -67,7 +67,19 @@ export function createQueueActions(
           set({ currentIndex: nextIndex });
           await setTrack(queue[nextIndex], true);
         } else {
-          await get().stop();
+          const reachedNaturalEnd =
+            duration > 0 && position >= Math.max(0, duration - 1000);
+          if (reachedNaturalEnd) {
+            // Keep an ended track visually at 100%. Resetting to zero here
+            // makes the UI claim the track never played.
+            set({
+              isPlaying: false,
+              position: duration,
+              progress: 1,
+            });
+          } else {
+            await get().stop();
+          }
         }
       } else {
         await get().stop();
@@ -103,18 +115,12 @@ export function createQueueActions(
     },
 
     clear: async () => {
-      const { soundInstance, stop } = get();
-      await stop();
-      if (soundInstance) {
-        try {
-          await soundInstance.unloadAsync();
-        } catch (error) {
-          console.warn("Error unloading audio:", error);
-        }
-      }
+      const sound = get().soundInstance;
+      // Hide the mini bar immediately — never wait on pause/unload.
       set({
         currentTrack: null,
         soundInstance: null,
+        isPlaying: false,
         isSessionActive: false,
         queue: [],
         currentIndex: -1,
@@ -124,6 +130,16 @@ export function createQueueActions(
         progress: 0,
         __completionTimeout: false,
       });
+      if (!sound) return;
+      try {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded) {
+          if (status.isPlaying) await sound.pauseAsync();
+          await sound.unloadAsync();
+        }
+      } catch {
+        // already torn down
+      }
     },
 
     setRepeatMode: (mode: "none" | "all" | "one") => {

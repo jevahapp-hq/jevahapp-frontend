@@ -55,15 +55,6 @@ export function useAIDescription({
       return;
     }
 
-    if (!thumbnail) {
-      Alert.alert(
-        "Thumbnail Required",
-        "Please upload a thumbnail image for AI analysis.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
     setIsGeneratingDescription(true);
     setDescriptionGenerationError(null);
     setBibleVerses([]);

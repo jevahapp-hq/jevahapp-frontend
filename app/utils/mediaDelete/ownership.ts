@@ -115,10 +115,8 @@ export const isMediaOwner = async (
     let currentUserId = idFromStoredUser(user);
 
     if (!currentUserId) {
-      const token =
-        (await AsyncStorage.getItem("userToken")) ||
-        (await AsyncStorage.getItem("token")) ||
-        null;
+      const { getAuthToken } = await import("@/src/core/auth/tokenStore");
+      const token = await getAuthToken();
 
       if (!token) {
         console.log("❌ isMediaOwner: No current user ID or auth token found");

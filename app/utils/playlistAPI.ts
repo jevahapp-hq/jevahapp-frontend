@@ -110,7 +110,7 @@ class PlaylistAPI {
 
     return {
       success: true,
-      data: data?.data || data,
+      data: data?.data ?? data,
       message: data?.message,
     };
   }
@@ -127,7 +127,24 @@ class PlaylistAPI {
         headers,
       });
 
-      return await this.handleResponse<{ playlists: Playlist[] }>(response);
+      const result = await this.handleResponse<{ playlists: Playlist[] } | Playlist[]>(
+        response
+      );
+      if (!result.success) return result as ApiResponse<{ playlists: Playlist[] }>;
+
+      // Normalize { playlists } | Playlist[] | { data: { playlists } }
+      const payload = result.data as any;
+      const playlists = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.playlists)
+          ? payload.playlists
+          : [];
+
+      return {
+        success: true,
+        data: { playlists },
+        message: result.message,
+      };
     } catch (error) {
       console.error("Error getting user playlists:", error);
       return {
@@ -149,7 +166,38 @@ class PlaylistAPI {
         headers,
       });
 
-      return await this.handleResponse<Playlist>(response);
+      const result = await this.handleResponse<Playlist | { playlist: Playlist }>(
+        response
+      );
+      if (!result.success) return result as ApiResponse<Playlist>;
+
+      const payload = result.data as any;
+      const playlist: Playlist | null = payload?.tracks
+        ? (payload as Playlist)
+        : payload?.playlist?.tracks
+          ? (payload.playlist as Playlist)
+          : payload?._id
+            ? {
+                ...(payload as Playlist),
+                tracks: Array.isArray(payload.tracks) ? payload.tracks : [],
+              }
+            : null;
+
+      if (!playlist) {
+        return {
+          success: false,
+          error: "Playlist payload missing tracks",
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          ...playlist,
+          tracks: Array.isArray(playlist.tracks) ? playlist.tracks : [],
+        },
+        message: result.message,
+      };
     } catch (error) {
       console.error("Error getting playlist:", error);
       return {

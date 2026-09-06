@@ -6,11 +6,19 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_CLERK_KEY_MODE": "test"
+      }
     },
     "preview": {
       "extends": "release-base",
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_CLERK_KEY_MODE": "test"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -21,6 +29,10 @@
     "ota-preview": {
       "extends": "release-base",
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_CLERK_KEY_MODE": "test"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -66,7 +78,7 @@
         "EXPO_PUBLIC_APP_VARIANT": "full",
         "EXPO_PUBLIC_API_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://api.jevahapp.com",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_ZGl2ZXJzZS1mb3dsLTYwLmNsZXJrLmFjY291bnRzLmRldiQ"
+        "EXPO_PUBLIC_CLERK_KEY_MODE": "live"
       },
       "prebuildCommand": "npx expo prebuild --clean"
     },

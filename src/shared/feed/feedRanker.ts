@@ -3,8 +3,8 @@
  * Never blocks playback. Uses origin base + `/api/...` (repo convention).
  */
 import { AppState, type AppStateStatus } from "react-native";
-import { getApiBaseUrl } from "../../../app/utils/environmentManager";
-import TokenUtils from "../../../app/utils/tokenUtils";
+import { getApiBaseUrl } from "../../core/config/environment";
+import { getAuthToken } from "../../core/auth/tokenStore";
 
 export type FeedEventType =
   | "impression"
@@ -73,7 +73,7 @@ export async function flushFeedEvents(): Promise<void> {
   if (!queue.length) return;
   const batch = queue.splice(0, 50);
   try {
-    const token = await TokenUtils.getAuthToken();
+    const token = await getAuthToken();
     if (!token) return;
     const res = await fetch(`${apiRoot()}/feed/events`, {
       method: "POST",
@@ -116,7 +116,7 @@ export async function fetchForYou(
   cursor?: string | null,
   limit?: number
 ): Promise<ForYouPage> {
-  const token = await TokenUtils.getAuthToken();
+  const token = await getAuthToken();
   if (!token) throw new Error("for-you auth required");
 
   const { getLiteListRequestMeta } = await import("../lite/liteProfile");
@@ -154,7 +154,7 @@ export async function fetchMusicForYou(opts?: {
   limit?: number;
   lane?: "artist" | "curated";
 }): Promise<MusicForYouPage> {
-  const token = await TokenUtils.getAuthToken();
+  const token = await getAuthToken();
   if (!token) throw new Error("music-for-you auth required");
 
   const { getLiteListRequestMeta } = await import("../lite/liteProfile");

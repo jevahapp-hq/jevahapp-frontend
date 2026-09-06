@@ -12,8 +12,8 @@ import {
 import AuthGlassToastHost from "./auth/AuthGlassToastHost";
 import CommentModalV2 from "./CommentModalV2";
 import CopyrightFreeSongOverlayHost from "./CopyrightFreeSongOverlayHost";
-import FabTapCatcher from "./FabTapCatcher";
 import FloatingAudioPlayer from "../../src/shared/components/FloatingAudioPlayer";
+import RootCreateFab from "./RootCreateFab";
 
 const SessionExpiredOverlay = React.lazy(
   () => import("./SessionExpiredOverlay")
@@ -50,13 +50,13 @@ export default function DeferredRootOverlays() {
       <CommentModalV2 />
       <CopyrightFreeSongOverlayHost />
       <FloatingAudioPlayer />
-      <FabTapCatcher />
       {ready ? (
         <Suspense fallback={null}>
           <SessionExpiredOverlay />
           <ServerUnavailableModalWrapper />
         </Suspense>
       ) : null}
+      <RootCreateFab />
     </>
   );
 }

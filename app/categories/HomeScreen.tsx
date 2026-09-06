@@ -194,10 +194,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#fff",
-    zIndex: 20,
+    // The root mini-player is intentionally above page content but below nav.
+    // Keep this parent in the native Android stacking order as well; zIndex
+    // alone does not reliably win hit-testing across elevated root siblings.
+    zIndex: 60000,
+    elevation: 20,
   },
   navElevated: {
-    zIndex: 90,
+    zIndex: 90000,
     elevation: 90,
   },
   navHidden: {

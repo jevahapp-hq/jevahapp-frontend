@@ -1,5 +1,6 @@
 import { API_CONFIG } from "../../shared/constants";
 import { ApiResponse } from "../../shared/types";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 class ApiClient {
   private timeout: number;
@@ -50,13 +51,12 @@ class ApiClient {
         ...defaultHeaders,
         ...options.headers,
       },
-      timeout: this.timeout,
     };
 
     try {
       console.log(`🌐 API Request: ${options.method || "GET"} ${url}`);
 
-      const response = await fetch(url, config);
+      const response = await fetchWithTimeout(url, config, this.timeout);
 
       // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
       if ((response.status === 401 || response.status === 402) && authToken) {
@@ -74,14 +74,13 @@ class ApiClient {
           const retryConfig: RequestInit = {
             ...options,
             headers: retryHeaders,
-            timeout: this.timeout,
           };
 
           console.log(
             `🔄 Retrying request with new token: ${options.method || "GET"} ${url}`
           );
 
-          const retryResponse = await fetch(url, retryConfig);
+          const retryResponse = await fetchWithTimeout(url, retryConfig, this.timeout);
 
           if (!retryResponse.ok) {
             const errorText = await retryResponse.text();
@@ -202,9 +201,8 @@ class ApiClient {
   // Get authentication token
   private async getAuthToken(): Promise<string | null> {
     try {
-      // Import TokenUtils dynamically to avoid circular dependencies
-      const TokenUtils = await import("../../../app/utils/tokenUtils");
-      return await TokenUtils.default.getAuthToken();
+      const { getAuthToken } = await import("../auth/tokenStore");
+      return await getAuthToken();
     } catch (error) {
       console.warn("Failed to get auth token:", error);
       return null;
@@ -229,14 +227,18 @@ class ApiClient {
 
         console.log("🔄 Attempting to refresh token...");
 
-        const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${currentToken}`,
+        const refreshResponse = await fetchWithTimeout(
+          `${this.baseURL}/api/auth/refresh`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${currentToken}`,
+            },
+            body: JSON.stringify({ token: currentToken }),
           },
-          body: JSON.stringify({ token: currentToken }),
-        });
+          15000
+        );
 
         if (!refreshResponse.ok) {
           const errorText = await refreshResponse.text();
@@ -276,13 +278,15 @@ class ApiClient {
         }
 
         // Validate and store the new token
-        const TokenUtils = await import("../../../app/utils/tokenUtils");
-        if (!TokenUtils.default.isValidJWTFormat(newToken)) {
+        const { isValidJwtFormat, storeAuthToken } = await import(
+          "../auth/tokenStore"
+        );
+        if (!isValidJwtFormat(newToken)) {
           console.error("❌ New token has invalid format");
           return null;
         }
 
-        await TokenUtils.default.storeAuthToken(newToken);
+        await storeAuthToken(newToken);
         console.log("✅ Token refreshed successfully");
 
         return newToken;
@@ -368,12 +372,15 @@ class ApiClient {
     try {
       console.log(`📤 Upload Request: POST ${url}`);
 
-      let response = await fetch(url, {
-        method: "POST",
-        headers,
-        body: formData,
-        timeout: this.timeout,
-      });
+      let response = await fetchWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers,
+          body: formData,
+        },
+        this.timeout
+      );
 
       // Handle 401 and 402 errors with token refresh (402 is used for auth failures)
       if ((response.status === 401 || response.status === 402) && authToken) {
@@ -385,12 +392,15 @@ class ApiClient {
           headers["Authorization"] = `Bearer ${newToken}`;
           console.log(`🔄 Retrying upload with new token: POST ${url}`);
           
-          response = await fetch(url, {
-            method: "POST",
-            headers,
-            body: formData,
-            timeout: this.timeout,
-          });
+          response = await fetchWithTimeout(
+            url,
+            {
+              method: "POST",
+              headers,
+              body: formData,
+            },
+            this.timeout
+          );
         } else {
           // Token refresh failed
           const errorText = await response.text();
@@ -457,10 +467,11 @@ class ApiClient {
 
     try {
       // Try a simple health check endpoint first
-      const healthResponse = await fetch(`${this.baseURL}/health`, {
-        method: "GET",
-        timeout: 5000, // 5 second timeout for health check
-      });
+      const healthResponse = await fetchWithTimeout(
+        `${this.baseURL}/health`,
+        { method: "GET" },
+        5000
+      );
 
       const responseTime = Date.now() - startTime;
 
@@ -472,10 +483,11 @@ class ApiClient {
       }
 
       // If health endpoint doesn't exist, try the main API
-      const apiResponse = await fetch(`${this.baseURL}/api`, {
-        method: "GET",
-        timeout: 5000,
-      });
+      const apiResponse = await fetchWithTimeout(
+        `${this.baseURL}/api`,
+        { method: "GET" },
+        5000
+      );
 
       const responseTime2 = Date.now() - startTime;
 

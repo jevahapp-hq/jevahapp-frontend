@@ -3,12 +3,10 @@
  * Shared utilities for working with content items across the application
  */
 
-import { enrichContentWithUserData } from "../../../app/utils/dataFetching";
-import { enrichContentWithAuthor, resolveAuthorName, stampPayloadAuthor } from "../author";
-import { getTimeAgo as getTimeAgoFromTimeUtils } from "../../../app/utils/timeUtils";
-import { getUserAvatarFromContent as getUserAvatarFromUserValidation, getUserDisplayNameFromContent as getUserDisplayNameFromUserValidation } from "../../../app/utils/userValidation";
+import { enrichContentWithAuthor, resolveAuthorAvatar, resolveAuthorName, stampPayloadAuthor } from "../author";
 import { ContentType, MediaItem } from "../types";
 import { isEbook } from "./mediaTypeDetection";
+import { getTimeAgo as getTimeAgoFromTimeUtils } from "./timeAgo";
 
 /**
  * Transform API response to MediaItem format
@@ -22,9 +20,7 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
 
   try {
     // Enrich content with cached user data (fullname and avatar)
-    const enrichedItem = enrichContentWithAuthor(
-      enrichContentWithUserData(item)
-    );
+    const enrichedItem = enrichContentWithAuthor(item);
 
     const stamped = stampPayloadAuthor(enrichedItem);
     const resolvedName = resolveAuthorName(stamped, "");
@@ -252,15 +248,13 @@ export const formatTimeAgo = getTimeAgoFromTimeUtils;
 
 /**
  * Get user display name from content
- * Re-export from userValidation for convenience
  */
-export const getUserDisplayNameFromContent = getUserDisplayNameFromUserValidation;
+export const getUserDisplayNameFromContent = resolveAuthorName;
 
 /**
  * Get user avatar from content
- * Re-export from userValidation for convenience
  */
-export const getUserAvatarFromContent = getUserAvatarFromUserValidation;
+export const getUserAvatarFromContent = resolveAuthorAvatar;
 
 /**
  * Check if a URI is valid (non-empty string)

@@ -64,12 +64,12 @@ export function VideoCardFooter({
 
   return (
     <View
-      className="flex-row items-center justify-between mt-2 px-2"
+      className="flex-row items-start justify-between mt-2 px-2"
       pointerEvents={hideFooter ? "none" : "box-none"}
       style={{ opacity: hideFooter ? 0 : 1 }}
     >
-      <View className="flex flex-row items-center" pointerEvents="box-none">
-        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 overflow-hidden">
+      <View className="flex flex-row items-start flex-1 min-w-0" pointerEvents="box-none">
+        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 overflow-hidden mt-0.5">
           <AvatarWithInitialFallback
             imageSource={getUserAvatarFromContent(video) as any}
             name={getUserDisplayNameFromContent(video)}
@@ -79,8 +79,8 @@ export function VideoCardFooter({
             textColor="#344054"
           />
         </View>
-        <View className="ml-3">
-          <View className="flex-row items-center">
+        <View className="ml-3 flex-1 min-w-0 pr-2">
+          <View className="flex-row items-center flex-wrap">
             <Text className="text-sm font-semibold text-gray-800">
               {getUserDisplayNameFromContent(video)}
             </Text>
@@ -91,10 +91,14 @@ export function VideoCardFooter({
               </Text>
             </View>
           </View>
-          {video.moderationStatus === 'under_review' && (
-            <View className="mt-1 bg-orange-50 p-2 rounded-md border border-orange-100">
-              <Text className="text-[10px] text-orange-700 leading-3">
-                This content is currently under review and is only visible to you. It will be made public once approved.
+          {video.moderationStatus === "under_review" && (
+            <View className="mt-1.5 mb-1 bg-orange-50 px-2.5 py-2 rounded-md border border-orange-100">
+              <Text
+                className="text-[11px] text-orange-700"
+                style={{ lineHeight: 16 }}
+              >
+                This content is currently under review and is only visible to
+                you. It will be made public once approved.
               </Text>
             </View>
           )}
@@ -121,7 +125,7 @@ export function VideoCardFooter({
           />
         </View>
       </View>
-      <View>
+      <View style={{ marginTop: 2 }}>
         <ThreeDotsMenuButton
           onPress={() => {
             openModal();

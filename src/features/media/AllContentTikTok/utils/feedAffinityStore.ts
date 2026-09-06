@@ -5,8 +5,13 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { MediaItem } from "../../../../shared/types";
+import { getSessionCacheUserId } from "../../../../shared/cache/sessionCacheScope";
 
 const KEY = "feed_affinity_v1";
+
+function storageKey(): string {
+  return `${KEY}:${getSessionCacheUserId()}`;
+}
 
 export type FeedAffinityProfile = {
   families: Record<string, number>;
@@ -63,7 +68,7 @@ function bump(map: Record<string, number>, key: string, amount: number) {
 
 async function read(): Promise<FeedAffinityProfile> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(storageKey());
     if (!raw) return { ...EMPTY, families: {}, tags: {}, speakers: {} };
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
@@ -84,7 +89,7 @@ async function read(): Promise<FeedAffinityProfile> {
 async function write(profile: FeedAffinityProfile): Promise<void> {
   memory = profile;
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(profile));
+    await AsyncStorage.setItem(storageKey(), JSON.stringify(profile));
   } catch {
     // no-op
   }
@@ -166,4 +171,8 @@ export function affinityScore(item: MediaItem, profile?: FeedAffinityProfile): n
   max += 0.2;
 
   return max > 0 ? Math.max(0, Math.min(1, score / max)) : 0;
+}
+
+export function resetFeedAffinityMemory(): void {
+  memory = { ...EMPTY, families: {}, tags: {}, speakers: {} };
 }

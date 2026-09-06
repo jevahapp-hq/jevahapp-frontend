@@ -1,5 +1,9 @@
 import { useRouter } from "expo-router";
-import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import {
+  getVideoPlaybackSnapshot,
+  resolveRegisteredVideoKey,
+  useGlobalVideoStore,
+} from "@/store/useGlobalVideoStore";
 import { useReelsStore } from "@/store/useReelsStore";
 import { MediaItem } from "../types/media";
 import { UserProfileCache } from "../utils/cache/UserProfileCache";
@@ -93,6 +97,31 @@ export const useVideoNavigation = () => {
     source,
     category,
   }: VideoNavigationOptions) => {
+    const contentId = String(video._id || (video as any).id || "").trim();
+    const feedKey = getContentKey(video);
+    const registeredKey =
+      resolveRegisteredVideoKey(contentId) || feedKey || null;
+    const snapshot = registeredKey
+      ? getVideoPlaybackSnapshot(registeredKey)
+      : null;
+
+    if (contentId && snapshot && snapshot.currentMs > 400) {
+      reelsStore.setResumePlayback({
+        contentId,
+        positionMs: snapshot.currentMs,
+        feedKey,
+        target: "reels",
+      });
+    } else if (contentId) {
+      // Still remember which feed card to restore even at t≈0.
+      reelsStore.setResumePlayback({
+        contentId,
+        positionMs: 0,
+        feedKey,
+        target: "reels",
+      });
+    }
+
     // Pause feed players without blocking navigation
     try {
       globalVideoStore.pauseAllVideos();

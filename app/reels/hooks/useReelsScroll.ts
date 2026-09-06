@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import { ViewToken } from "react-native";
+import { useReelsStore } from "@/store/useReelsStore";
 
 export interface UseReelsScrollOptions {
   currentIndex: number;
@@ -40,6 +41,8 @@ export function useReelsScroll({
         // If the focused reel has changed
         if (newIndex !== currentIndex) {
           setCurrentIndex(newIndex);
+          // Keep store in sync so exit/re-enter resumes the same video.
+          useReelsStore.getState().setCurrentIndex(newIndex);
 
           // Trigger playback for the new video
           const videoData = allVideos[newIndex];

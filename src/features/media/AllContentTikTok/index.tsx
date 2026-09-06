@@ -38,6 +38,7 @@ import {
   useFeedPlaybackSession,
   useFeedPlayerMounts,
   useFeedViewability,
+  useAllContentTikTokLifecycle,
 } from "./hooks";
 import { ContentErrorBoundary } from "../../../../app/components/ContentErrorBoundary";
 import SuccessCard from "../../../../app/components/SuccessCard";
@@ -157,6 +158,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const {
     playMedia,
     pauseMedia,
+    pauseAllMedia,
     toggleVideoMute,
     currentlyPlayingVideo,
     isAutoPlayEnabled,
@@ -191,6 +193,13 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     currentlyVisibleVideoRef.current = currentlyVisibleVideo;
     useGlobalVideoStore.setState({ currentlyVisibleVideo });
   }, [currentlyVisibleVideo]);
+
+  useAllContentTikTokLifecycle({
+    pauseAllMedia,
+    pauseAllAudio,
+    setCurrentlyVisibleVideo,
+    currentlyVisibleVideoRef,
+  });
 
   useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
 

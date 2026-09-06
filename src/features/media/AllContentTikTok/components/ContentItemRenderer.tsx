@@ -225,7 +225,8 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     // adds this key — autoplay has nothing to drive shouldPlay on.
     !!prev.shouldRenderPlayer === !!next.shouldRenderPlayer &&
     prev.isFeedActive === next.isFeedActive &&
-    prev.isAutoPlayEnabled === next.isAutoPlayEnabled
+    prev.isAutoPlayEnabled === next.isAutoPlayEnabled &&
+    prev.item.moderationStatus === next.item.moderationStatus
   );
 }
 

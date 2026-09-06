@@ -376,8 +376,14 @@ export default function HomeTabContent() {
                     <Text
                       style={[
                         getResponsiveTextStyle("button"),
-                        { color: selected ? "#FFFFFF" : "#1D2939" },
+                        {
+                          color: selected ? "#FFFFFF" : "#1D2939",
+                          flexShrink: 0,
+                        },
                       ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
                     >
                       {category}
                     </Text>

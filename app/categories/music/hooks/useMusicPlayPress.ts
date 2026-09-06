@@ -9,16 +9,15 @@ import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { enqueueFeedEvent } from "../../../../src/shared/feed/feedRanker";
 
 /**
- * Handle play/pause for a song
+ * Handle play/pause for a song.
+ * Subscribe only to identity/playback flags — never to position/progress,
+ * or the Music catalog re-renders on every audio tick.
  */
 export function useMusicPlayPress(songs: any[]) {
-  const {
-    currentTrack,
-    isPlaying: globalIsPlaying,
-    setTrack,
-    togglePlayPause,
-    position,
-  } = useGlobalAudioPlayerStore();
+  const currentTrack = useGlobalAudioPlayerStore((s) => s.currentTrack);
+  const globalIsPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const setTrack = useGlobalAudioPlayerStore((s) => s.setTrack);
+  const togglePlayPause = useGlobalAudioPlayerStore((s) => s.togglePlayPause);
   const playStartedAt = useRef<number>(0);
 
   const handlePlayPress = useCallback(
@@ -39,6 +38,7 @@ export function useMusicPlayPress(songs: any[]) {
         await togglePlayPause();
         const watched = Date.now() - playStartedAt.current;
         if (watched > 0) {
+          const position = useGlobalAudioPlayerStore.getState().position;
           enqueueFeedEvent({
             contentId: String(song.id),
             contentType: "music",
@@ -120,14 +120,7 @@ export function useMusicPlayPress(songs: any[]) {
         }
       }
     },
-    [
-      currentTrack,
-      globalIsPlaying,
-      setTrack,
-      togglePlayPause,
-      songs,
-      position,
-    ]
+    [currentTrack, globalIsPlaying, setTrack, togglePlayPause, songs]
   );
 
   return handlePlayPress;

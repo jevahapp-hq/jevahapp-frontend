@@ -18,6 +18,7 @@ import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlaySto
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { usePlaylistStore, type Playlist } from "@/store/usePlaylistStore";
 import { playlistAPI } from "../../utils/playlistAPI";
+import { mapPlaylistTracksToSongs } from "../../utils/playlistTrackMapper";
 import { PlaylistDetailSheet } from "./components/PlaylistDetailSheet";
 
 export default function PlaylistsLibrary() {
@@ -117,31 +118,37 @@ export default function PlaylistsLibrary() {
       // Fetch full playlist details from backend
       const result = await playlistAPI.getPlaylistById(playlist.id);
       if (result.success && result.data) {
-        // Transform backend format to frontend format
+        const songs = mapPlaylistTracksToSongs(result.data.tracks);
+        // Prefer detail tracks; fall back to cached list songs if API omitted content.
         const transformedPlaylist: Playlist = {
           id: result.data._id,
           name: result.data.name,
           description: result.data.description,
-          songs: result.data.tracks.map((track) => ({
-            id: track.content._id,
-            title: track.content.title,
-            artist: track.content.artistName,
-            audioUrl: track.content.fileUrl,
-            thumbnailUrl: track.content.thumbnailUrl,
-            duration: track.content.duration,
-            category: track.content.contentType,
-            description: track.content.title,
-            addedAt: track.addedAt,
-          })),
+          songs: songs.length > 0 ? songs : playlist.songs || [],
           createdAt: result.data.createdAt,
           updatedAt: result.data.updatedAt,
-          thumbnailUrl: result.data.tracks[0]?.content.thumbnailUrl,
+          thumbnailUrl:
+            songs[0]?.thumbnailUrl ||
+            playlist.thumbnailUrl ||
+            result.data.tracks?.[0]?.content?.thumbnailUrl,
+          totalTracks: result.data.totalTracks || songs.length || playlist.songs?.length,
         };
         setSelectedPlaylist(transformedPlaylist);
         setShowPlaylistDetail(true);
+      } else if (playlist.songs?.length) {
+        // Offline / incomplete API — still show local songs
+        setSelectedPlaylist(playlist);
+        setShowPlaylistDetail(true);
+      } else {
+        Alert.alert("Error", result.error || "Failed to load playlist details");
       }
     } catch (error) {
       console.error("Error loading playlist details:", error);
+      if (playlist.songs?.length) {
+        setSelectedPlaylist(playlist);
+        setShowPlaylistDetail(true);
+        return;
+      }
       Alert.alert("Error", "Failed to load playlist details");
     }
   };

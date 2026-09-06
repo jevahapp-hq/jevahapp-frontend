@@ -11,6 +11,8 @@ import { useVideoPlaybackControl } from "../../../src/shared/hooks/useVideoPlayb
 import { handleVideoError } from "../../../src/shared/utils/videoUrlManager";
 import { useInstantFeedVideoPlayer } from "../../../src/features/media/video-feed";
 import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
+import { seekPlayerToMs } from "../../../src/features/media/components/VideoCard/player/expoVideoAdapter";
+import { useReelsStore } from "@/store/useReelsStore";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
 
@@ -103,6 +105,41 @@ const ReelsVideoPlayer = memo(
       playbackReady: firstFrameReady,
     });
 
+    const didApplyResumeRef = useRef(false);
+    useEffect(() => {
+      didApplyResumeRef.current = false;
+    }, [contentId]);
+
+    // Continuity from feed: seek once when this reel becomes ready/active.
+    useEffect(() => {
+      if (!player || !isActive || !firstFrameReady || didApplyResumeRef.current) {
+        return;
+      }
+      const resume = useReelsStore.getState().resumePlayback;
+      if (
+        !resume ||
+        resume.target !== "reels" ||
+        String(resume.contentId) !== String(contentId) ||
+        !(resume.positionMs > 400)
+      ) {
+        return;
+      }
+      didApplyResumeRef.current = true;
+      void seekPlayerToMs(player, resume.positionMs).then((ok) => {
+        if (ok) {
+          setLocalPosition(resume.positionMs);
+          setVideoPosition(resume.positionMs);
+        }
+      });
+    }, [
+      player,
+      isActive,
+      firstFrameReady,
+      contentId,
+      setLocalPosition,
+      setVideoPosition,
+    ]);
+
     useEffect(() => {
       hasTrackedViewRef.current = false;
     }, [contentId]);
@@ -117,25 +154,31 @@ const ReelsVideoPlayer = memo(
     }, [player, videoKey, videoRefs]);
 
     useEffect(() => {
-      if (!player || !firstFrameReady) return;
+      if (!player) return;
 
-      if (isActive && isPlaying) {
-        player.muted = isMuted;
-        player.volume = isMuted ? 0 : videoVolume;
-        if (!player.playing) player.play();
-      } else {
-        player.muted = true;
-        player.volume = 0;
-        if (player.playing) player.pause();
-      }
-    }, [
-      player,
-      firstFrameReady,
-      isActive,
-      isPlaying,
-      isMuted,
-      videoVolume,
-    ]);
+      const applyAudibleState = () => {
+        try {
+          if (isActive && isPlaying) {
+            player.muted = isMuted;
+            player.volume = isMuted ? 0 : videoVolume;
+            if (!player.playing) player.play();
+            return;
+          }
+          if (!isActive) {
+            player.muted = true;
+            player.volume = 0;
+            if (player.playing) player.pause();
+          }
+        } catch {
+          // no-op
+        }
+      };
+
+      applyAudibleState();
+      // expo-video can re-apply the muted prime after play(); push volume again.
+      const frame = requestAnimationFrame(applyAudibleState);
+      return () => cancelAnimationFrame(frame);
+    }, [player, isActive, isPlaying, isMuted, videoVolume]);
 
     useEffect(() => {
       if (!player) return;
@@ -263,7 +306,7 @@ const ReelsVideoPlayer = memo(
         <VideoView
           player={player}
           style={[styles.video, { zIndex: isActive ? 1 : 0 }]}
-          contentFit="cover"
+          contentFit="contain"
           nativeControls={false}
           fullscreenOptions={{ enable: false }}
           allowsPictureInPicture={false}

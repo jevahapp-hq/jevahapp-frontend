@@ -24,13 +24,13 @@ type AiDescriptionBlockProps = {
 export function AiDescriptionBlock({
   title,
   hasFile,
-  hasThumbnail,
+  hasThumbnail: _hasThumbnail,
   isGeneratingDescription,
   descriptionGenerationError,
   bibleVerses,
   onGenerateAIDescription,
 }: AiDescriptionBlockProps) {
-  const isReady = !!(title && hasFile && hasThumbnail);
+  const isReady = !!(title && hasFile);
   const isDisabled = isGeneratingDescription || !isReady;
 
   return (
@@ -101,7 +101,7 @@ export function AiDescriptionBlock({
                     ? "Enter title to enable"
                     : !hasFile
                       ? "Upload file to enable"
-                      : "Upload cover to enable"}
+                      : "Enter title and file first"}
                 </Text>
               </>
             ) : (

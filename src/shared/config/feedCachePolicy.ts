@@ -54,6 +54,24 @@ export function getFeedDiskMaxMs(): number {
   return isLiteProfileActive() ? FEED_DISK_MAX_MS_LITE : FEED_DISK_MAX_MS_FULL;
 }
 
+/** Cheap list JSON (catalogs, profiles) — same paint window as the feed. */
+export function isCheapJsonPaintable(fetchedAt: number): boolean {
+  return (
+    typeof fetchedAt === "number" &&
+    fetchedAt > 0 &&
+    Date.now() - fetchedAt <= getFeedDiskMaxMs()
+  );
+}
+
+/** Cheap list JSON is still "fresh" (no network needed). Same as feed staleTime. */
+export function isCheapJsonFresh(fetchedAt: number): boolean {
+  return (
+    typeof fetchedAt === "number" &&
+    fetchedAt > 0 &&
+    Date.now() - fetchedAt <= getFeedStaleMs()
+  );
+}
+
 /** React Query key for infinite all-content feed. */
 export function allContentQueryKey(
   contentType: string,

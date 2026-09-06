@@ -1,35 +1,23 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetchWithTimeout } from "../../src/core/api/fetchWithTimeout";
+import {
+  clearAuthTokens as clearSecureAuthTokens,
+  getAuthToken as getSecureAuthToken,
+  getTokenSources,
+  isValidJwtFormat,
+  storeAuthToken as storeSecureAuthToken,
+} from "../../src/core/auth/tokenStore";
 
 /**
  * Centralized token management utilities
- * Provides consistent token retrieval, validation, and storage across the app
+ * JWTs are stored in SecureStore only (legacy AsyncStorage copies are migrated off).
  */
 export class TokenUtils {
   /**
-   * Retrieve authentication token from multiple storage sources
-   * Priority: userToken -> token -> jwt (SecureStore)
+   * Retrieve authentication token from SecureStore (migrating any legacy copies).
    */
   static async getAuthToken(): Promise<string | null> {
     try {
-      // Try AsyncStorage first
-      let token = await AsyncStorage.getItem("userToken");
-      if (!token) {
-        token = await AsyncStorage.getItem("token");
-      }
-
-      // If not found in AsyncStorage, try SecureStore
-      if (!token) {
-        try {
-          const SecureStore = await import("expo-secure-store");
-          if (typeof SecureStore.getItemAsync === "function") {
-            token = await SecureStore.getItemAsync("jwt");
-          }
-        } catch {
-          // SecureStore unavailable
-        }
-      }
-
-      return token;
+      return await getSecureAuthToken();
     } catch (error) {
       console.error("❌ Error retrieving auth token:", error);
       return null;
@@ -40,17 +28,11 @@ export class TokenUtils {
    * Validate if a token has the correct JWT format
    */
   static isValidJWTFormat(token: string): boolean {
-    if (!token || token.trim() === "") {
-      return false;
-    }
-
-    // JWT should have 3 parts separated by dots
-    const parts = token.split(".");
-    return parts.length === 3;
+    return isValidJwtFormat(token);
   }
 
   /**
-   * Get token information for debugging
+   * Get token information for debugging (never includes the token value)
    */
   static async getTokenInfo(): Promise<{
     hasToken: boolean;
@@ -58,36 +40,8 @@ export class TokenUtils {
     tokenFormat: "JWT" | "Other" | "None";
     sources: string[];
   }> {
-    const sources: string[] = [];
-    let token: string | null = null;
-
-    // Check AsyncStorage sources
-    const userToken = await AsyncStorage.getItem("userToken");
-    const tokenStorage = await AsyncStorage.getItem("token");
-
-    if (userToken) {
-      sources.push("userToken");
-      token = userToken;
-    } else if (tokenStorage) {
-      sources.push("token");
-      token = tokenStorage;
-    }
-
-    // Check SecureStore
-    if (!token) {
-      try {
-        const SecureStore = await import("expo-secure-store");
-        if (typeof SecureStore.getItemAsync === "function") {
-          const jwtToken = await SecureStore.getItemAsync("jwt");
-          if (jwtToken) {
-            sources.push("jwt");
-            token = jwtToken;
-          }
-        }
-      } catch (error) {
-        // SecureStore not available
-      }
-    }
+    const token = await this.getAuthToken();
+    const sources = await getTokenSources();
 
     return {
       hasToken: !!token,
@@ -102,26 +56,11 @@ export class TokenUtils {
   }
 
   /**
-   * Store authentication token in multiple storage locations
+   * Store authentication token in SecureStore only
    */
   static async storeAuthToken(token: string): Promise<void> {
     try {
-      // Store in AsyncStorage
-      await AsyncStorage.setItem("userToken", token);
-      await AsyncStorage.setItem("token", token);
-
-      // Store in SecureStore
-      try {
-        const SecureStore = await import("expo-secure-store");
-        if (typeof SecureStore.setItemAsync === "function") {
-          await SecureStore.setItemAsync("jwt", token);
-        }
-      } catch (secureStoreError) {
-        console.warn(
-          "⚠️ Could not store token in SecureStore:",
-          secureStoreError
-        );
-      }
+      await storeSecureAuthToken(token);
 
       if (__DEV__) console.log("✅ Auth token stored successfully");
       try {
@@ -141,22 +80,7 @@ export class TokenUtils {
    */
   static async clearAuthTokens(): Promise<void> {
     try {
-      // Clear AsyncStorage
-      await AsyncStorage.removeItem("userToken");
-      await AsyncStorage.removeItem("token");
-
-      // Clear SecureStore
-      try {
-        const SecureStore = await import("expo-secure-store");
-        if (typeof SecureStore.deleteItemAsync === "function") {
-          await SecureStore.deleteItemAsync("jwt");
-        }
-      } catch (secureStoreError) {
-        console.warn(
-          "⚠️ Could not clear token from SecureStore:",
-          secureStoreError
-        );
-      }
+      await clearSecureAuthTokens();
 
       if (__DEV__) console.log("✅ Auth tokens cleared successfully");
       try {
@@ -186,14 +110,17 @@ export class TokenUtils {
       const { getApiBaseUrl } = await import("./environmentManager");
       const origin = baseUrl || getApiBaseUrl();
 
-      const response = await fetch(`${origin}/api/auth/validate`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      const response = await fetchWithTimeout(
+        `${origin}/api/auth/validate`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
         },
-        timeout: 5000,
-      } as any);
+        5000
+      );
 
       return response.ok;
     } catch (error) {
@@ -212,4 +139,3 @@ export class TokenUtils {
 }
 
 export default TokenUtils;
-

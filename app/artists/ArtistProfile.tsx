@@ -30,6 +30,7 @@ import {
   type TrackCard,
 } from "../services/music-catalog/trackTypes";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { resolveAlbumArtSource } from "../../src/shared/brand/albumArt";
 
 const PAGE_SIZE = 30;

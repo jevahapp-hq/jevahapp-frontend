@@ -2,6 +2,9 @@
  * Copyright-free music API service
  * Handles fetching, search, likes, saves, and view tracking for copyright-free songs.
  */
+import { mmkvGetJson, mmkvSetJson } from "../../../src/shared/cache/mmkvStorage";
+import { CF_API_CACHE_DISK_KEY } from "../../../src/shared/cache/persistKeys";
+import { getFeedStaleMs } from "../../../src/shared/config/feedCachePolicy";
 import { getApiBaseUrl } from "../../utils/api";
 import TokenUtils from "../../utils/tokenUtils";
 import { mapCopyrightFreeSong } from "./mapCopyrightFreeSong";
@@ -16,12 +19,21 @@ class CopyrightFreeMusicAPI {
   private baseUrl: string;
   private pendingRequests: Map<string, Promise<any>> = new Map();
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private errorLogTimes: Map<string, number> = new Map();
   private readonly ERROR_LOG_THROTTLE = 10000; // 10 seconds between error logs
 
   constructor() {
     this.baseUrl = `${getApiBaseUrl()}/api/audio/copyright-free`;
+    this.hydrateFromDisk();
+  }
+
+  rehydrateFromDisk(): void {
+    this.hydrateFromDisk();
+  }
+
+  private get cacheTtlMs(): number {
+    return getFeedStaleMs();
   }
 
   private shouldLogError(key: string): boolean {
@@ -34,9 +46,33 @@ class CopyrightFreeMusicAPI {
     return false;
   }
 
+  private hydrateFromDisk(): void {
+    const disk = mmkvGetJson<Record<string, { data: any; timestamp: number }>>(
+      CF_API_CACHE_DISK_KEY
+    );
+    if (!disk || typeof disk !== "object") return;
+    const now = Date.now();
+    const ttl = this.cacheTtlMs;
+    for (const [key, value] of Object.entries(disk)) {
+      if (value && now - value.timestamp < ttl) {
+        this.cache.set(key, value);
+      }
+    }
+  }
+
+  private schedulePersist(): void {
+    if (this.persistTimer) clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      const out: Record<string, { data: any; timestamp: number }> = {};
+      for (const [key, value] of this.cache) out[key] = value;
+      mmkvSetJson(CF_API_CACHE_DISK_KEY, out);
+    }, 400);
+  }
+
   private getCached<T>(key: string): T | null {
     const cached = this.cache.get(key);
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+    if (cached && Date.now() - cached.timestamp < this.cacheTtlMs) {
       return cached.data as T;
     }
     if (cached) this.cache.delete(key);
@@ -45,12 +81,14 @@ class CopyrightFreeMusicAPI {
 
   private setCache<T>(key: string, data: T): void {
     this.cache.set(key, { data, timestamp: Date.now() });
+    this.schedulePersist();
   }
 
   private clearExpiredCache(): void {
     const now = Date.now();
+    const ttl = this.cacheTtlMs;
     for (const [key, value] of this.cache.entries()) {
-      if (now - value.timestamp >= this.CACHE_TTL) this.cache.delete(key);
+      if (now - value.timestamp >= ttl) this.cache.delete(key);
     }
   }
 

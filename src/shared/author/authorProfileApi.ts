@@ -1,5 +1,5 @@
-import { getApiBaseUrl } from "../../../app/utils/environmentManager";
-import { authUtils } from "../../../app/utils/authUtils";
+import { getApiBaseUrl } from "../../core/config/environment";
+import { getAuthToken } from "../../core/auth/tokenStore";
 import { isLiteProfileActive } from "../lite/liteProfile";
 import type { AuthorId, AuthorProfile } from "./types";
 import { hasUsableAuthorName, normalizeAuthorProfile } from "./normalizeAuthor";
@@ -63,7 +63,7 @@ export async function fetchAuthorProfile(
 ): Promise<AuthorProfile | null> {
   if (!userId) return null;
 
-  const token = await authUtils.getStoredToken();
+  const token = await getAuthToken();
   const headers: Record<string, string> = { Accept: "application/json" };
   if (token) {
     headers.Authorization = `Bearer ${token}`;

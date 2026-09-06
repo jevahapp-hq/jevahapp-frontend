@@ -1,4 +1,4 @@
-import { RenderAvatarRowProps } from "@/.expo/types/avatarTypes";
+import { RenderAvatarRowProps } from "./avatarTypes";
 import { Text, View } from "react-native";
 
 const cuteAvatars = {

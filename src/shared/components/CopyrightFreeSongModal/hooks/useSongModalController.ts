@@ -120,17 +120,13 @@ export function useSongModalController({
   const toggleShuffle = useGlobalAudioPlayerStore((s) => s.toggleShuffle);
   const { playlists, loadPlaylistsFromBackend } = usePlaylistStore();
 
-  const {
-    handleGesture,
-    artworkGesture,
-    playlistViewAnimatedStyle,
-    playlistDetailAnimatedStyle,
-  } = useModalSheetAnimations({
-    visible,
-    showPlaylistView,
-    showPlaylistDetail,
-    onClose,
-  });
+  const { playlistViewAnimatedStyle, playlistDetailAnimatedStyle } =
+    useModalSheetAnimations({
+      visible,
+      showPlaylistView,
+      showPlaylistDetail,
+      onClose,
+    });
 
   useEffect(() => {
     if (song) setHasTrackedView(false);
@@ -280,6 +276,22 @@ export function useSongModalController({
         url: shareUrl || song.audioUrl || song.fileUrl,
       });
       if (result.action === Share.sharedAction) {
+        if (!isCopyrightFreeSong(song)) {
+          try {
+            const { mediaApi } = await import("@/core/api/MediaApi");
+            await mediaApi.recordShare(
+              String(songId),
+              song?.lane === "artist" || song?.contentType === "artist-music"
+                ? "music"
+                : String(song?.contentType || "media"),
+              result.activityType || "internal"
+            );
+            setShareCount((prev: number) => prev + 1);
+          } catch {
+            // share already happened; tracking is best-effort
+          }
+          return;
+        }
         const response = await copyrightFreeMusicAPI.recordShare(
           songId,
           result.activityType || "internal"
@@ -288,7 +300,7 @@ export function useSongModalController({
           if (typeof response.data.shareCount === "number") {
             setShareCount(response.data.shareCount);
           } else {
-            setShareCount((prev) => prev + 1);
+            setShareCount((prev: number) => prev + 1);
           }
           if (typeof response.data.viewCount === "number") {
             setViewCount(response.data.viewCount);
@@ -328,12 +340,12 @@ export function useSongModalController({
   const albumArtSize = useMemo(() => {
     const screenWidth = Dimensions.get("window").width;
     const screenHeight = Dimensions.get("window").height;
-    const chrome = safeTop + contentBottomInset + 200;
+    const chrome = safeTop + contentBottomInset + 140;
     const usable = screenHeight - chrome;
     return Math.min(
       screenWidth * 0.62,
-      screenHeight * 0.32,
-      Math.max(usable * 0.42, 140),
+      screenHeight * 0.30,
+      Math.max(usable * 0.42, 180),
       260
     );
   }, [safeTop, contentBottomInset]);
@@ -388,8 +400,6 @@ export function useSongModalController({
     repeatMode,
     isShuffled,
     toggleShuffle,
-    handleGesture,
-    artworkGesture,
     playlistViewAnimatedStyle,
     playlistDetailAnimatedStyle,
     panHandlers: seekGesture.panHandlers,

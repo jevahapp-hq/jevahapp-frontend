@@ -3,7 +3,7 @@
  * Fully modularized and performance optimized.
  */
 import { memo, useCallback, useEffect, useRef } from "react";
-import { StatusBar, View } from "react-native";
+import { BackHandler, Platform, StatusBar, View } from "react-native";
 import { FlatList } from "react-native-gesture-handler";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
@@ -16,6 +16,7 @@ import { useReelsOrchestrator } from "./hooks/useReelsOrchestrator";
 const ReelsView = () => {
   const o = useReelsOrchestrator();
   const flatListRef = useRef<FlatList>(null);
+  const initialIndex = Math.max(0, o.reelsStore.currentIndex || 0);
 
   // Sync scroll position when list loads or index changes externally
   useEffect(() => {
@@ -29,6 +30,17 @@ const ReelsView = () => {
       });
     }
   }, [o.allVideos.length]);
+
+  // Hardware back exits fullscreen (Reels) before any app-exit prompt.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const onBack = () => {
+      o.handlers.handleBackNavigation();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [o.handlers]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: any; index: number }) => {
@@ -133,6 +145,11 @@ const ReelsView = () => {
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={o.scroll.onViewableItemsChanged}
         viewabilityConfig={o.scroll.viewabilityConfig}
+        initialScrollIndex={
+          o.allVideos.length > 0
+            ? Math.min(initialIndex, o.allVideos.length - 1)
+            : 0
+        }
         getItemLayout={(_, index) => ({
           length: o.responsive.screenHeight,
           offset: o.responsive.screenHeight * index,

@@ -3,6 +3,7 @@
  * Handles video URL validation, refresh, and fallback mechanisms
  */
 
+import { fetchWithTimeout } from "../../src/core/api/fetchWithTimeout";
 import allMediaAPI from "./allMediaAPI";
 
 export interface VideoUrlValidationResult {
@@ -41,10 +42,11 @@ export const validateVideoUrl = async (
 
   try {
     // Test if URL is accessible with a HEAD request
-    const response = await fetch(trimmedUrl, {
-      method: "HEAD",
-      timeout: 10000, // 10 second timeout
-    });
+    const response = await fetchWithTimeout(
+      trimmedUrl,
+      { method: "HEAD" },
+      10000
+    );
 
     if (response.ok) {
       return {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mmkvGetJson, mmkvSetJson } from "../../../src/shared/cache/mmkvStorage";
+import { MUSIC_CATALOG_PREFIX } from "../../../src/shared/cache/persistKeys";
+import { isCheapJsonPaintable } from "../../../src/shared/config/feedCachePolicy";
 import copyrightFreeMusicAPI from "../../services/copyrightFreeMusicAPI";
 import { musicCatalogApi } from "../../services/music-catalog";
 import {
@@ -17,23 +19,26 @@ function artistsPageSize(): number {
   return getLiteFeedLimit(20);
 }
 
-const MUSIC_CACHE_TTL_MS = 10 * 60 * 1000;
 type MusicCatalogCache = { timestamp: number; songs: any[] };
 
 function musicCacheKey(lane: MusicLane) {
-  return `music-catalog-v1:${lane}`;
+  return `${MUSIC_CATALOG_PREFIX}${lane}`;
 }
 
-function readMusicCache(lane: MusicLane): any[] | null {
+function readMusicCacheMeta(lane: MusicLane): MusicCatalogCache | null {
   const disk = mmkvGetJson<MusicCatalogCache>(musicCacheKey(lane));
   if (
     Array.isArray(disk?.songs) &&
-    typeof disk?.timestamp === "number" &&
-    Date.now() - disk.timestamp < MUSIC_CACHE_TTL_MS
+    disk.songs.length > 0 &&
+    isCheapJsonPaintable(disk.timestamp)
   ) {
-    return disk.songs;
+    return disk;
   }
   return null;
+}
+
+function readMusicCache(lane: MusicLane): any[] | null {
+  return readMusicCacheMeta(lane)?.songs ?? null;
 }
 
 function writeMusicCache(lane: MusicLane, songs: any[]) {
@@ -68,9 +73,9 @@ export function useMusicCatalog(musicLane: MusicLane) {
       if (append) {
         setLoadingMore(true);
       } else if (!browsing) {
-        const cached = readMusicCache(lane);
-        if (cached?.length) {
-          setSongs(cached);
+        const cached = readMusicCacheMeta(lane);
+        if (cached?.songs.length) {
+          setSongs(cached.songs);
           setLoading(false);
         } else {
           setLoading(true);

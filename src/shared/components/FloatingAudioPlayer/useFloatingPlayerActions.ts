@@ -1,105 +1,150 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Dimensions } from "react-native";
+import { useWindowDimensions } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
+import { runOnJS, useSharedValue, withSpring } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  runOnJS,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+  getMiniPlayerBottomOffset,
+  getMiniPlayerFloorOffset,
+  MINI_PLAYER_SIDE_MARGIN,
+} from "../../layout/bottomChromeLayout";
+import {
+  clampMiniPlayerTranslation,
+  getMiniPlayerTranslationBounds,
+  type MiniPlayerDragBounds,
+} from "../../layout/miniPlayerDragBounds";
+import { MINI_PLAYER_HEIGHT } from "./floatingMiniBarStyles";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-const DISMISS_DISTANCE = 56;
-const DISMISS_VELOCITY = 450;
-const EXPAND_DISTANCE = 24;
-const EXPAND_VELOCITY = 350;
+const SPRING = { damping: 22, stiffness: 280 };
+const DRAG_ACTIVATE = 8;
 
 type Params = {
   clear: () => void;
-  trackId?: string;
   onExpand?: () => void;
 };
 
 /**
- * Surface of the Now Playing bar: tap / chevron → expand, drag down → dismiss,
- * drag up → expand. Pan lives on the artwork + title only so play / next / close
- * keep their own taps.
+ * Free-drag the Now Playing bar anywhere except into the bottom nav / FAB.
+ * Tap artwork or the grabber to expand. Play / next / close keep their own taps.
  */
-export function useFloatingPlayerActions({
-  clear,
-  trackId,
-  onExpand,
-}: Params) {
+export function useFloatingPlayerActions({ clear, onExpand }: Params) {
   const handleCloseMini = useCallback(() => {
     clear();
   }, [clear]);
 
-  const dragY = useSharedValue(0);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { top: topInset } = useSafeAreaInsets();
+
+  const defaultBottom = getMiniPlayerBottomOffset();
+  const minBottom = getMiniPlayerFloorOffset();
+  const barWidth = Math.max(0, screenWidth - MINI_PLAYER_SIDE_MARGIN * 2);
+
+  const offsetX = useSharedValue(0);
+  const offsetY = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const bounds = useSharedValue<MiniPlayerDragBounds>(
+    getMiniPlayerTranslationBounds({
+      screenWidth,
+      screenHeight,
+      barWidth,
+      barHeight: MINI_PLAYER_HEIGHT,
+      defaultLeft: MINI_PLAYER_SIDE_MARGIN,
+      defaultBottom,
+      minBottom,
+      topInset,
+      sideMargin: MINI_PLAYER_SIDE_MARGIN,
+    })
+  );
+
+  useEffect(() => {
+    const next = getMiniPlayerTranslationBounds({
+      screenWidth,
+      screenHeight,
+      barWidth,
+      barHeight: MINI_PLAYER_HEIGHT,
+      defaultLeft: MINI_PLAYER_SIDE_MARGIN,
+      defaultBottom,
+      minBottom,
+      topInset,
+      sideMargin: MINI_PLAYER_SIDE_MARGIN,
+    });
+    bounds.value = next;
+    const clamped = clampMiniPlayerTranslation(
+      offsetX.value,
+      offsetY.value,
+      next
+    );
+    offsetX.value = clamped.x;
+    offsetY.value = clamped.y;
+  }, [
+    barWidth,
+    bounds,
+    defaultBottom,
+    minBottom,
+    offsetX,
+    offsetY,
+    screenHeight,
+    screenWidth,
+    topInset,
+  ]);
+
   const onExpandRef = useRef(onExpand);
   onExpandRef.current = onExpand;
-  const clearRef = useRef(clear);
-  clearRef.current = clear;
 
   const fireExpand = useCallback(() => {
     onExpandRef.current?.();
   }, []);
-  const fireClear = useCallback(() => {
-    clearRef.current();
-  }, []);
-
-  useEffect(() => {
-    dragY.value = 0;
-  }, [dragY, trackId]);
 
   const makePan = useCallback(
     () =>
       Gesture.Pan()
-        .activeOffsetY([-8, 8])
-        .failOffsetX([-28, 28])
-        .onUpdate((event) => {
-          dragY.value =
-            event.translationY < 0
-              ? Math.max(event.translationY * 0.4, -32)
-              : event.translationY;
+        .minDistance(DRAG_ACTIVATE)
+        .onStart(() => {
+          startX.value = offsetX.value;
+          startY.value = offsetY.value;
         })
-        .onEnd((event) => {
-          const dismissed =
-            event.translationY > DISMISS_DISTANCE ||
-            event.velocityY > DISMISS_VELOCITY;
-          if (dismissed) {
-            dragY.value = SCREEN_HEIGHT;
-            runOnJS(fireClear)();
-            return;
-          }
-
-          const expand =
-            event.translationY < -EXPAND_DISTANCE ||
-            event.velocityY < -EXPAND_VELOCITY;
-          if (expand) {
-            runOnJS(fireExpand)();
-          }
-
-          dragY.value = withSpring(0, { damping: 18, stiffness: 260 });
+        .onUpdate((event) => {
+          const next = clampMiniPlayerTranslation(
+            startX.value + event.translationX,
+            startY.value + event.translationY,
+            bounds.value
+          );
+          offsetX.value = next.x;
+          offsetY.value = next.y;
+        })
+        .onEnd(() => {
+          const next = clampMiniPlayerTranslation(
+            offsetX.value,
+            offsetY.value,
+            bounds.value
+          );
+          offsetX.value = withSpring(next.x, SPRING);
+          offsetY.value = withSpring(next.y, SPRING);
         }),
-    [dragY, fireClear, fireExpand]
+    [bounds, offsetX, offsetY, startX, startY]
   );
 
-  const { handlePan, surfaceGesture } = useMemo(() => {
+  const { handleGesture, surfaceGesture } = useMemo(() => {
     const handlePan = makePan();
     const surfacePan = makePan();
-    const tap = Gesture.Tap().onEnd(() => {
-      runOnJS(fireExpand)();
+    const handleTap = Gesture.Tap().onEnd((_event, success) => {
+      if (success) runOnJS(fireExpand)();
+    });
+    const surfaceTap = Gesture.Tap().onEnd((_event, success) => {
+      if (success) runOnJS(fireExpand)();
     });
     return {
-      handlePan,
-      surfaceGesture: Gesture.Exclusive(surfacePan, tap),
+      handleGesture: Gesture.Exclusive(handlePan, handleTap),
+      surfaceGesture: Gesture.Exclusive(surfacePan, surfaceTap),
     };
   }, [fireExpand, makePan]);
 
   return {
     handleCloseMini,
-    dragY,
-    handlePan,
+    dragX: offsetX,
+    dragY: offsetY,
+    handlePan: handleGesture,
     surfaceGesture,
   };
 }

@@ -1,6 +1,15 @@
 import { useCallback, useState, useEffect } from "react";
 import { Alert } from "react-native";
+import { isCopyrightFreeSong } from "@/shared/audio";
+import { mediaApi } from "@/core/api/MediaApi";
 import copyrightFreeMusicAPI from "@/app/services/copyrightFreeMusicAPI";
+
+function interactionContentType(song: any): string {
+  if (song?.lane === "artist" || song?.contentType === "artist-music") {
+    return "music";
+  }
+  return String(song?.contentType || "media");
+}
 
 export function useSongInteractions(song: any) {
   const [isLiked, setIsLiked] = useState(song?.isLiked || false);
@@ -37,17 +46,29 @@ export function useSongInteractions(song: any) {
     setLikeCount(previousLiked ? previousLikeCount - 1 : previousLikeCount + 1);
     setIsTogglingLike(true);
     try {
-      const result = await copyrightFreeMusicAPI.toggleLike(songId);
-      if (result.success && result.data) {
-        setIsLiked(result.data.liked);
-        setLikeCount(result.data.likeCount);
-        if (typeof result.data.viewCount === "number") {
-          setViewCount(result.data.viewCount);
+      if (isCopyrightFreeSong(song)) {
+        const result = await copyrightFreeMusicAPI.toggleLike(songId);
+        if (result.success && result.data) {
+          setIsLiked(result.data.liked);
+          setLikeCount(result.data.likeCount);
+          if (typeof result.data.viewCount === "number") {
+            setViewCount(result.data.viewCount);
+          }
+        } else {
+          setIsLiked(previousLiked);
+          setLikeCount(previousLikeCount);
+          Alert.alert("Error", "Failed to update like");
         }
       } else {
-        setIsLiked(previousLiked);
-        setLikeCount(previousLikeCount);
-        Alert.alert("Error", "Failed to update like");
+        const result = await mediaApi.toggleLike(
+          String(songId),
+          interactionContentType(song)
+        );
+        if (!result.success) {
+          setIsLiked(previousLiked);
+          setLikeCount(previousLikeCount);
+          Alert.alert("Error", "Failed to update like");
+        }
       }
     } catch {
       setIsLiked(previousLiked);
@@ -68,18 +89,30 @@ export function useSongInteractions(song: any) {
     setSaveCount(previousSaved ? Math.max(0, previousCount - 1) : previousCount + 1);
     setIsTogglingSave(true);
     try {
-      const result = await copyrightFreeMusicAPI.toggleSave(songId);
-      if (result.success && result.data) {
-        const saved =
-          result.data.saved ?? result.data.bookmarked ?? result.data.isInLibrary ?? false;
-        setIsInLibrary(Boolean(saved));
-        const nextCount =
-          result.data.saveCount ?? result.data.bookmarkCount ?? previousCount;
-        setSaveCount(Number(nextCount) || 0);
+      if (isCopyrightFreeSong(song)) {
+        const result = await copyrightFreeMusicAPI.toggleSave(songId);
+        if (result.success && result.data) {
+          const saved =
+            result.data.saved ?? result.data.bookmarked ?? result.data.isInLibrary ?? false;
+          setIsInLibrary(Boolean(saved));
+          const nextCount =
+            result.data.saveCount ?? result.data.bookmarkCount ?? previousCount;
+          setSaveCount(Number(nextCount) || 0);
+        } else {
+          setIsInLibrary(previousSaved);
+          setSaveCount(previousCount);
+          Alert.alert("Error", "Failed to update library");
+        }
       } else {
-        setIsInLibrary(previousSaved);
-        setSaveCount(previousCount);
-        Alert.alert("Error", "Failed to update library");
+        const result = await mediaApi.toggleSave(
+          String(songId),
+          interactionContentType(song)
+        );
+        if (!result.success) {
+          setIsInLibrary(previousSaved);
+          setSaveCount(previousCount);
+          Alert.alert("Error", "Failed to update library");
+        }
       }
     } catch {
       setIsInLibrary(previousSaved);

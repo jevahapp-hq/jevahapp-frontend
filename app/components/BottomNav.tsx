@@ -1,26 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import {
   InteractionManager,
   Pressable,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { playNavTapSound } from "../../src/shared/utils/uiSounds";
-import { setMiniPlayerSuppression } from "../../src/shared/audio/miniPlayerGate";
 import { pausePlaybackSession } from "../../src/shared/audio/playOrToggleTrack";
 import {
-  getCreateSheetBottomOffset,
-  getFabWrapperBottom,
-} from "../../src/shared/layout/bottomChromeLayout";
-import { setFabTapHandler } from "../../src/shared/layout/fabTapBridge";
+  retainBottomChrome,
+  releaseBottomChrome,
+} from "../../src/shared/layout/bottomChromeGate";
 import {
   getBottomNavHeight,
   getFabSize,
   getIconSize,
-  getResponsiveBorderRadius,
   getResponsiveShadow,
   getResponsiveSpacing,
   getResponsiveTextStyle,
@@ -28,12 +23,7 @@ import {
 } from "../../utils/responsive";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useMediaStore } from "@/store/useUploadStore";
-import {
-  prefetchCreateFlows,
-  prefetchGoLiveScreen,
-  prefetchUploadScreen,
-} from "../utils/prefetchUploadScreen";
-import { FabCreateActions } from "./FabCreateActions";
+import { prefetchCreateFlows } from "../utils/prefetchUploadScreen";
 
 interface BottomNavProps {
   selectedTab: string;
@@ -80,53 +70,11 @@ export default function BottomNav({
   selectedTab,
   setSelectedTab,
 }: BottomNavProps) {
-  const [showActions, setShowActions] = useState(false);
-  /** Defer FAB sheet until first open — avoids BlurView cost on cold paint */
-  const [fabSheetMounted, setFabSheetMounted] = useState(false);
   const navBarHeight = getBottomNavHeight();
 
-  const handleFabToggle = useCallback(() => {
-    setFabSheetMounted(true);
-    setShowActions((v) => {
-      const next = !v;
-      if (next) prefetchCreateFlows();
-      return next;
-    });
-  }, []);
-
   useEffect(() => {
-    setFabTapHandler(handleFabToggle);
-    return () => setFabTapHandler(null);
-  }, [handleFabToggle]);
-
-  // The create sheet and the Now Playing bar occupy the same strip above the
-  // nav, and the bar is a later root sibling so it would paint over the chips
-  // regardless of zIndex. Yield the bar while the sheet is open.
-  useEffect(() => {
-    setMiniPlayerSuppression("create-sheet", showActions);
-  }, [showActions]);
-
-  useEffect(() => {
-    return () => setMiniPlayerSuppression("create-sheet", false);
-  }, []);
-
-  const handleUpload = useCallback(() => {
-    setShowActions(false);
-    // Navigate first — never block push on media cleanup / extra imports.
-    router.push("/categories/upload");
-    queueMicrotask(() => prefetchUploadScreen());
-    InteractionManager.runAfterInteractions(() => {
-      try {
-        useMediaStore.getState().stopAudioFn?.();
-      } catch {
-        // no-op
-      }
-      try {
-        useGlobalVideoStore.getState().pauseAllVideos();
-      } catch {
-        // no-op
-      }
-    });
+    retainBottomChrome();
+    return () => releaseBottomChrome();
   }, []);
 
   // Idle warm: after first paint settles, pull Create flows into the JS cache
@@ -139,24 +87,6 @@ export default function BottomNav({
       task.cancel();
       if (timeout) clearTimeout(timeout);
     };
-  }, []);
-
-  const handleGoLive = useCallback(() => {
-    setShowActions(false);
-    router.push("/goLlive/AllowPermissionsScreen");
-    queueMicrotask(() => prefetchGoLiveScreen());
-    InteractionManager.runAfterInteractions(() => {
-      try {
-        useMediaStore.getState().stopAudioFn?.();
-      } catch {
-        // no-op
-      }
-      try {
-        useGlobalVideoStore.getState().pauseAllVideos();
-      } catch {
-        // no-op
-      }
-    });
   }, []);
 
   const handleTabPress = useCallback(
@@ -215,8 +145,12 @@ export default function BottomNav({
                   fontFamily: JAKARTA.bold,
                   color: isActive ? "#256E63" : "#000",
                   textAlign: "center",
+                  flexShrink: 1,
                 },
               ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               {label}
             </Text>
@@ -227,75 +161,26 @@ export default function BottomNav({
   };
 
   return (
-    <>
-      {fabSheetMounted ? (
-        <FabCreateActions
-          visible={showActions}
-          bottomOffset={getCreateSheetBottomOffset()}
-          onUpload={handleUpload}
-          onGoLive={handleGoLive}
-          onUploadIntent={prefetchUploadScreen}
-          onGoLiveIntent={prefetchGoLiveScreen}
-        />
-      ) : null}
-
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: navBarHeight,
-          paddingTop: getResponsiveSpacing(8, 10, 12, 14),
-          paddingBottom: getResponsiveSpacing(8, 10, 12, 14),
-          paddingHorizontal: getResponsiveSpacing(8, 12, 16, 20),
-          backgroundColor: "white",
-          flexDirection: "row",
-          alignItems: "stretch",
-          ...getResponsiveShadow(),
-          zIndex: 10,
-        }}
-      >
-        {TAB_ORDER.slice(0, 2).map(renderTab)}
-        <View style={{ width: fabSlotWidth }} />
-        {TAB_ORDER.slice(2).map(renderTab)}
-      </View>
-
-      <View
-        style={{
-          position: "absolute",
-          bottom: getFabWrapperBottom(),
-          left: "50%",
-          transform: [{ translateX: -getFabSize().size / 2 }],
-          backgroundColor: "white",
-          padding: getResponsiveSpacing(2, 3, 4, 5),
-          borderRadius: getResponsiveBorderRadius("round"),
-          ...getResponsiveShadow(),
-          zIndex: 1000,
-        }}
-      >
-        <TouchableOpacity
-          style={{
-            width: getFabSize().size,
-            height: getFabSize().size,
-            borderRadius: getResponsiveBorderRadius("round"),
-            backgroundColor: "white",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-            elevation: 15,
-          }}
-          onPress={handleFabToggle}
-          delayPressIn={0}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={showActions ? "close" : "add"}
-            size={getFabSize().iconSize}
-            color="#256E63"
-          />
-        </TouchableOpacity>
-      </View>
-    </>
+    <View
+      style={{
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: navBarHeight,
+        paddingTop: getResponsiveSpacing(8, 10, 12, 14),
+        paddingBottom: getResponsiveSpacing(8, 10, 12, 14),
+        paddingHorizontal: getResponsiveSpacing(8, 12, 16, 20),
+        backgroundColor: "white",
+        flexDirection: "row",
+        alignItems: "stretch",
+        ...getResponsiveShadow(),
+        zIndex: 10,
+      }}
+    >
+      {TAB_ORDER.slice(0, 2).map(renderTab)}
+      <View style={{ width: fabSlotWidth }} />
+      {TAB_ORDER.slice(2).map(renderTab)}
+    </View>
   );
 }

@@ -12,7 +12,7 @@ export type GenerateDescriptionParams = {
   selectedType: string;
   selectedCategory: string;
   file: MediaFile;
-  thumbnail: MediaFile;
+  thumbnail?: MediaFile | null;
 };
 
 export type GenerateDescriptionResult = {
@@ -54,20 +54,24 @@ export async function generateDescription(
     } as any);
   }
 
-  formData.append("thumbnail", {
-    uri: thumbnail.uri,
-    type: thumbnail.mimeType || "image/jpeg",
-    name: thumbnail.name || `thumbnail_${Date.now()}.jpg`,
-  } as any);
+  if (thumbnail?.uri) {
+    formData.append("thumbnail", {
+      uri: thumbnail.uri,
+      type: thumbnail.mimeType || "image/jpeg",
+      name: thumbnail.name || `thumbnail_${Date.now()}.jpg`,
+    } as any);
+  }
 
   console.log("📤 Sending AI description request with:", {
     title,
     contentType: selectedType || "videos",
     hasFile: !!file,
     fileSizeMB: fileSizeMB > 0 ? fileSizeMB.toFixed(2) : "unknown",
-    hasThumbnail: !!thumbnail,
+    hasThumbnail: !!thumbnail?.uri,
     fileUri: file.uri?.substring(0, 50) + "...",
-    thumbnailUri: thumbnail.uri?.substring(0, 50) + "...",
+    thumbnailUri: thumbnail?.uri
+      ? thumbnail.uri.substring(0, 50) + "..."
+      : undefined,
   });
 
   const headers: HeadersInit = {};

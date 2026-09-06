@@ -70,50 +70,48 @@ export function PlayerProgress({
         pointerEvents={seekEnabled ? "auto" : "none"}
         {...(seekEnabled ? panHandlers : {})}
       >
-        {/* Background track */}
         <View
           style={{
             height: 6,
             borderRadius: 3,
             backgroundColor: "rgba(255, 255, 255, 0.18)",
-            overflow: "hidden",
+            overflow: "visible",
+            justifyContent: "center",
           }}
         >
-          {/* Active progress fill */}
           <View
             style={{
-              height: "100%",
-              width: `${pct * 100}%`,
+              height: 6,
               borderRadius: 3,
+              backgroundColor: "rgba(255, 255, 255, 0.18)",
               overflow: "hidden",
             }}
           >
-            <LinearGradient
-              colors={["#256E63", "#5EEAD4", "#FEA74E"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ width: "100%", height: "100%" }}
-            />
+            <View
+              style={{
+                height: "100%",
+                width: `${pct * 100}%`,
+                borderRadius: 3,
+                overflow: "hidden",
+              }}
+            >
+              <LinearGradient
+                colors={["#256E63", "#5EEAD4", "#FEA74E"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ width: "100%", height: "100%" }}
+              />
+            </View>
           </View>
-        </View>
-
-        {/* Thumb handle with glowing outer halo */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: `${pct * 100}%`,
-            marginLeft: -14,
-            width: 28,
-            height: 28,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
           <View
+            pointerEvents="none"
             style={{
+              position: "absolute",
+              left: `${pct * 100}%`,
+              marginLeft: -10,
               width: 20,
               height: 20,
+              marginTop: -7,
               borderRadius: 10,
               backgroundColor: "#FFFFFF",
               shadowColor: "#5EEAD4",

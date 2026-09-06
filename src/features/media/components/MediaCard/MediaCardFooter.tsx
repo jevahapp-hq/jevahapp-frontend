@@ -204,9 +204,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   reviewText: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#C2410C",
-    lineHeight: 14,
+    lineHeight: 16,
+    flexShrink: 1,
   },
   actionsLine: {
     flexDirection: "row",

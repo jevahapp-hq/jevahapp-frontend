@@ -74,7 +74,9 @@ export function AllContentTikTokList({
       }
       if (row.rowType === "media") {
         if (!isAudioSermon(row.item) && detectMediaType(row.item) === "video") {
-          layout.size = getFeedVideoRowSize();
+          layout.size = getFeedVideoRowSize({
+            moderationStatus: (row.item as MediaItem)?.moderationStatus,
+          });
         }
       }
     },

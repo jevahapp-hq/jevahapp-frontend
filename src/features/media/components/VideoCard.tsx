@@ -148,7 +148,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       collapsable={false}
       style={{
         marginBottom: showFooterSlot ? 64 : 0,
-        overflow: "hidden",
+        // Allow under-review banner + ⋮ menu to remain visible; player clips itself.
+        overflow: "visible",
       }}
       onLayout={
         onLayout

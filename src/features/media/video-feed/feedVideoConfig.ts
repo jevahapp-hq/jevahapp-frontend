@@ -10,12 +10,19 @@
 export const FEED_VIDEO_PLAYER_HEIGHT = 400;
 /** Footer + bottom margin — keep FlashList row size stable. */
 export const FEED_VIDEO_FOOTER_ESTIMATE = 88;
+/** Extra footer space when under-review banner is shown (menu must stay visible). */
+export const FEED_VIDEO_UNDER_REVIEW_EXTRA = 72;
 export const FEED_VIDEO_CARD_MARGIN = 64;
 export const FEED_VIDEO_ROW_SIZE =
   FEED_VIDEO_PLAYER_HEIGHT + FEED_VIDEO_FOOTER_ESTIMATE + FEED_VIDEO_CARD_MARGIN;
 
-export function getFeedVideoRowSize(): number {
-  return FEED_VIDEO_ROW_SIZE;
+export function getFeedVideoRowSize(options?: {
+  moderationStatus?: string | null;
+}): number {
+  const status = options?.moderationStatus;
+  const underReviewExtra =
+    status && status !== "approved" ? FEED_VIDEO_UNDER_REVIEW_EXTRA : 0;
+  return FEED_VIDEO_ROW_SIZE + underReviewExtra;
 }
 
 /** Real decoder window around the active video. */

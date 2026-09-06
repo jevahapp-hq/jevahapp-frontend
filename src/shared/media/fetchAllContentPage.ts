@@ -12,6 +12,7 @@ import {
 import { shouldFetchServerForYou } from "../feed/feedFeatureFlags";
 import { fetchForYou } from "../feed/feedRanker";
 import { isLiteProfileActive } from "../lite/liteProfile";
+import { hasForYouItems } from "./chooseAllContentPage";
 import type { MediaItem } from "../types";
 import { transformApiResponseToMediaItem } from "../utils";
 import { mergeAuthorFieldsByMediaId, paintAuthorsFromCache } from "../author";
@@ -265,22 +266,13 @@ export async function fetchAllContentPage(options: {
     shouldFetchServerForYou(contentType, useAuth) &&
     (page === 1 || options.cursor != null);
 
-  const chronoPromise = fetchChronologicalPage({
-    contentType,
-    page,
-    limit,
-    useAuth,
-  });
-
   if (!tryForYou) {
-    return chronoPromise;
-  }
-
-  // One list call first. For You is a fallback only — firing both at boot
-  // 429s a single user against the media rate limiter.
-  const chrono = await chronoPromise.catch(() => null);
-  if (chrono?.media?.length) {
-    return chrono;
+    return fetchChronologicalPage({
+      contentType,
+      page,
+      limit,
+      useAuth,
+    });
   }
 
   const ranked = await fetchForYou(
@@ -292,10 +284,16 @@ export async function fetchAllContentPage(options: {
     }
     return null;
   });
-  if (ranked && (ranked.media?.length || ranked.items?.length)) {
+  if (ranked && hasForYouItems(ranked)) {
     return finishForYouPage(contentType, useAuth, page, limit, ranked, []);
   }
 
+  const chrono = await fetchChronologicalPage({
+    contentType,
+    page,
+    limit,
+    useAuth,
+  }).catch(() => null);
   if (chrono) return chrono;
   throw new Error("Failed to fetch content");
 }

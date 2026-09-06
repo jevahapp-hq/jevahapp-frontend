@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Notification,
@@ -280,35 +280,106 @@ export const useNotifications = (): UseNotificationsReturn => {
   };
 };
 
-// Hook for notification badge only
+// Hook for notification badge only — shares React Query cache with the center
 export const useNotificationBadge = () => {
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const {
+    data: stats,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: ["notification-stats"],
+    queryFn: async () => notificationAPIService.getStats(),
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     let mounted = true;
 
-    const loadUnreadCount = async () => {
-      try {
-        const stats = await notificationAPIService.getStats();
-        if (mounted) setUnreadCount(stats.unread);
-      } catch (error) {
-        if (__DEV__) console.error("Error loading notification count:", error);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+    const onNew = () => {
+      queryClient.setQueryData(
+        ["notification-stats"],
+        (old: NotificationStats | undefined) => {
+          if (!old) {
+            return {
+              unread: 1,
+              total: 1,
+              byType: {},
+            } as NotificationStats;
+          }
+          return { ...old, unread: (old.unread || 0) + 1 };
+        }
+      );
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old?.pages?.[0]) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any, idx: number) =>
+            idx === 0
+              ? { ...page, unreadCount: (page.unreadCount || 0) + 1 }
+              : page
+          ),
+        };
+      });
     };
 
-    void loadUnreadCount();
+    const onRead = () => {
+      queryClient.setQueryData(
+        ["notification-stats"],
+        (old: NotificationStats | undefined) => {
+          if (!old) return old;
+          return { ...old, unread: Math.max(0, (old.unread || 0) - 1) };
+        }
+      );
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old?.pages?.[0]) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any, idx: number) =>
+            idx === 0
+              ? {
+                  ...page,
+                  unreadCount: Math.max(0, (page.unreadCount || 0) - 1),
+                }
+              : page
+          ),
+        };
+      });
+    };
 
-    const onNew = () => setUnreadCount((prev) => prev + 1);
-    const onRead = () => setUnreadCount((prev) => Math.max(0, prev - 1));
+    const onMarkAll = () => {
+      queryClient.setQueryData(
+        ["notification-stats"],
+        (old: NotificationStats | undefined) => {
+          if (!old) return old;
+          return { ...old, unread: 0 };
+        }
+      );
+      queryClient.setQueryData(["notifications"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            notifications: (page.notifications || []).map(
+              (n: Notification) => ({ ...n, isRead: true })
+            ),
+            unreadCount: page.page === 1 ? 0 : page.unreadCount,
+          })),
+        };
+      });
+    };
 
     void (async () => {
       const socket = await acquireNotificationSocket();
       if (!mounted || !socket) return;
       socket.on("new_notification", onNew);
       socket.on("notification_read", onRead);
+      socket.on("all_notifications_read", onMarkAll);
     })();
 
     return () => {
@@ -316,9 +387,10 @@ export const useNotificationBadge = () => {
       const s = getSharedNotificationSocket();
       s?.off("new_notification", onNew);
       s?.off("notification_read", onRead);
+      s?.off("all_notifications_read", onMarkAll);
       releaseNotificationSocket();
     };
-  }, []);
+  }, [queryClient]);
 
-  return { unreadCount, loading };
+  return { unreadCount: stats?.unread ?? 0, loading };
 };

@@ -26,7 +26,7 @@ export function createStateSetters(
     },
     setPosition: (position: number) => {
       const { duration, position: prev } = get();
-      if (Math.abs(prev - position) < 40) return;
+      if (Math.abs(prev - position) < 150) return;
       const progress = duration > 0 ? position / duration : 0;
       set({ position, progress });
     },

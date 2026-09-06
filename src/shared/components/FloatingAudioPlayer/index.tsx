@@ -61,11 +61,11 @@ export default function FloatingAudioPlayer() {
     void clear();
   }, [clear]);
 
-  const { handleCloseMini, dragY, handlePan, surfaceGesture } = useFloatingPlayerActions({
-    clear: handleClear,
-    trackId: currentTrack?.id,
-    onExpand: openFullPlayer,
-  });
+  const { handleCloseMini, dragX, dragY, handlePan, surfaceGesture } =
+    useFloatingPlayerActions({
+      clear: handleClear,
+      onExpand: openFullPlayer,
+    });
 
   if (!shouldMountPlayer || !currentTrack) {
     return null;
@@ -77,6 +77,7 @@ export default function FloatingAudioPlayer() {
       isPlaying={isPlaying}
       isLoading={isLoading}
       progress={progress}
+      dragX={dragX}
       dragY={dragY}
       handlePan={handlePan}
       surfaceGesture={surfaceGesture}

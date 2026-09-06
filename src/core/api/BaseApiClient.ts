@@ -4,9 +4,10 @@
  */
 
 import { Platform } from "react-native";
-import { API_BASE_URL } from "../../../app/utils/api";
-import TokenUtils from "../../../app/utils/tokenUtils";
+import { getAuthToken, storeAuthToken, isValidJwtFormat } from "../auth/tokenStore";
+import { API_CONFIG } from "../../shared/constants";
 import { ApiResponse } from "../../shared/types";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -25,7 +26,7 @@ export class BaseApiClient {
   private refreshPromise: Promise<string | null> | null = null;
 
   constructor(baseURL?: string) {
-    this.baseURL = baseURL || API_BASE_URL || "https://api.jevahapp.com";
+    this.baseURL = baseURL || API_CONFIG.BASE_URL || "https://api.jevahapp.com";
   }
 
   /**
@@ -33,7 +34,7 @@ export class BaseApiClient {
    */
   protected async getAuthHeaders(endpoint?: string): Promise<HeadersInit> {
     try {
-      const token = await TokenUtils.getAuthToken();
+      const token = await getAuthToken();
       const headers: HeadersInit = {
         "Content-Type": "application/json",
         "expo-platform": Platform.OS,
@@ -76,7 +77,7 @@ export class BaseApiClient {
     this.isRefreshing = true;
     this.refreshPromise = (async () => {
       try {
-        const currentToken = await TokenUtils.getAuthToken();
+        const currentToken = await getAuthToken();
         if (!currentToken) {
           console.warn("No token to refresh");
           return null;
@@ -84,14 +85,18 @@ export class BaseApiClient {
 
         console.log("🔄 Attempting to refresh token...");
 
-        const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${currentToken}`,
+        const refreshResponse = await fetchWithTimeout(
+          `${this.baseURL}/api/auth/refresh`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${currentToken}`,
+            },
+            body: JSON.stringify({ token: currentToken }),
           },
-          body: JSON.stringify({ token: currentToken }),
-        });
+          15000
+        );
 
         if (!refreshResponse.ok) {
           const errorText = await refreshResponse.text().catch(() => "");
@@ -127,12 +132,12 @@ export class BaseApiClient {
         }
 
         // Validate and store the new token
-        if (!TokenUtils.isValidJWTFormat(newToken)) {
+        if (!isValidJwtFormat(newToken)) {
           console.error("New token has invalid format");
           return null;
         }
 
-        await TokenUtils.storeAuthToken(newToken);
+        await storeAuthToken(newToken);
         console.log("✅ Token refreshed successfully");
 
         return newToken;
@@ -179,22 +184,20 @@ export class BaseApiClient {
         config.body = typeof body === "string" ? body : JSON.stringify(body);
       }
 
-      // First attempt with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      
       let response: Response;
       try {
-        response = await fetch(`${this.baseURL}${endpoint}`, {
-          ...config,
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+        response = await fetchWithTimeout(
+          `${this.baseURL}${endpoint}`,
+          config,
+          timeoutMs
+        );
       } catch (fetchError: any) {
-        clearTimeout(timeoutId);
         if (fetchError.name === "AbortError" && retryOnAbort) {
-          // Retry once on abort
-          response = await fetch(`${this.baseURL}${endpoint}`, config);
+          response = await fetchWithTimeout(
+            `${this.baseURL}${endpoint}`,
+            config,
+            timeoutMs
+          );
         } else {
           throw fetchError;
         }
@@ -221,7 +224,11 @@ export class BaseApiClient {
             headers: retryHeaders,
           };
 
-          response = await fetch(`${this.baseURL}${endpoint}`, retryConfig);
+          response = await fetchWithTimeout(
+            `${this.baseURL}${endpoint}`,
+            retryConfig,
+            timeoutMs
+          );
         } else {
           // Token refresh failed, but don't clear tokens here
           // Only clear if refresh endpoint itself returns 401/402

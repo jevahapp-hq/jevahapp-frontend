@@ -7,7 +7,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { GestureResponderEvent, Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
-import CommentIcon from "../components/CommentIcon";
+import CommentIcon from "../../src/shared/components/CommentIcon";
 import SuccessCard from "../components/SuccessCard";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "@/store/useDownloadStore";

@@ -166,7 +166,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: "50%",
     width: 280,
-    zIndex: 1000,
+    zIndex: 91000,
+    elevation: 98,
     alignItems: "center",
   },
   sheetInner: {

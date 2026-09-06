@@ -49,6 +49,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       __completionTimeout: false,
       __completionTimeoutId: null,
       __lastStatusUpdateTs: 0,
+      __loadGeneration: 0,
       __ignoreStatusUntil: 0,
       __failedTrackIds: {},
 

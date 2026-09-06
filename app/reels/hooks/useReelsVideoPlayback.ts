@@ -5,6 +5,7 @@
 import type { VideoPlayer } from "expo-video";
 import { RefObject, useCallback, useEffect } from "react";
 import { audioConfig } from "../../utils/audioConfig";
+import { pausePlaybackSession } from "../../../src/shared/audio/playOrToggleTrack";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 
 export interface UseReelsVideoPlaybackParams {
@@ -121,9 +122,21 @@ export function useReelsVideoPlayback({
   }, [videoRefs]);
 
   useEffect(() => {
-    audioConfig.configureForVideoPlayback().catch((e) =>
-      console.error("❌ ReelsView: Failed to init audio:", e)
-    );
+    let cancelled = false;
+    void (async () => {
+      try {
+        await pausePlaybackSession();
+      } catch {
+        // no-op
+      }
+      if (cancelled) return;
+      audioConfig.configureForVideoPlayback().catch((e) =>
+        console.error("❌ ReelsView: Failed to init audio:", e)
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

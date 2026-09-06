@@ -1,8 +1,9 @@
 import type { VideoPlayer } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import contentInteractionAPI from "../../../../../../app/utils/contentInteractionAPI";
+import { useReelsStore } from "@/store/useReelsStore";
 import { setCachedDurationMs } from "../player/durationCache";
-import { getPlayerDurationMs } from "../player/expoVideoAdapter";
+import { getPlayerDurationMs, seekPlayerToMs } from "../player/expoVideoAdapter";
 
 export interface UseVideoCardPlaybackParams {
   isAudioSermon: boolean;
@@ -62,10 +63,50 @@ export function useVideoCardPlayback({
   const [videoPositionMs, setVideoPositionMs] = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
   const hasTrackedViewRef = useRef(hasTrackedView);
+  const handleVideoErrorRef = useRef(handleVideoError);
+  const setFailedVideoLoadRef = useRef(setFailedVideoLoad);
+  const setVideoLoadedRef = useRef(setVideoLoaded);
+  const setHasTrackedViewRef = useRef(setHasTrackedView);
+
+  // Parent callbacks are not guaranteed to be referentially stable. Keeping
+  // them in refs prevents playback state updates from tearing down and
+  // reattaching every player listener on each render.
+  handleVideoErrorRef.current = handleVideoError;
+  setFailedVideoLoadRef.current = setFailedVideoLoad;
+  setVideoLoadedRef.current = setVideoLoaded;
+  setHasTrackedViewRef.current = setHasTrackedView;
 
   useEffect(() => {
     hasTrackedViewRef.current = hasTrackedView;
   }, [hasTrackedView]);
+
+  useEffect(() => {
+    if (isAudioSermon || !player) return;
+
+    const unsub = useReelsStore.subscribe((state, prev) => {
+      if (
+        state.resumePlayback?.target === "feed" &&
+        String(state.resumePlayback.contentId) === String(contentId) &&
+        state.resumePlayback !== prev.resumePlayback
+      ) {
+        const resume = useReelsStore
+          .getState()
+          .consumeResumePlayback(contentId, "feed");
+        if (!resume || !(resume.positionMs > 400)) return;
+        void seekPlayerToMs(player, resume.positionMs).then((ok) => {
+          if (!ok || !isMountedRef.current) return;
+          lastPositionMsRef.current = resume.positionMs;
+          lastProgressRef.current =
+            lastKnownDurationRef.current > 0
+              ? resume.positionMs / lastKnownDurationRef.current
+              : 0;
+          setVideoPositionMs(resume.positionMs);
+          setVideoProgress(lastProgressRef.current);
+        });
+      }
+    });
+    return unsub;
+  }, [isAudioSermon, player, contentId, isMountedRef]);
 
   useEffect(() => {
     if (!(seedMs > 0)) return;
@@ -85,7 +126,16 @@ export function useVideoCardPlayback({
      */
     if (isAudioSermon || !player) return;
 
-    if (lastPositionMsRef.current !== 0 || lastProgressRef.current !== 0) {
+    const pendingResume = useReelsStore.getState().resumePlayback;
+    const keepFeedResume =
+      pendingResume?.target === "feed" &&
+      String(pendingResume.contentId) === String(contentId) &&
+      pendingResume.positionMs > 400;
+
+    if (
+      !keepFeedResume &&
+      (lastPositionMsRef.current !== 0 || lastProgressRef.current !== 0)
+    ) {
       lastPositionMsRef.current = 0;
       lastProgressRef.current = 0;
       setVideoPositionMs(0);
@@ -149,7 +199,7 @@ export function useVideoCardPlayback({
               isComplete: false,
             })
             .then((result) => {
-              setHasTrackedView(true);
+              setHasTrackedViewRef.current(true);
               hasTrackedViewRef.current = true;
               if (result?.totalViews != null && storeRef.current?.mutateStats) {
                 storeRef.current.mutateStats(contentId, () => ({
@@ -168,23 +218,39 @@ export function useVideoCardPlayback({
       if (!isMountedRef.current) return;
 
       if (status === "error") {
-        setFailedVideoLoad(true);
-        handleVideoError(error ?? new Error("Video playback error"));
+        setFailedVideoLoadRef.current(true);
+        handleVideoErrorRef.current(error ?? new Error("Video playback error"));
         return;
       }
 
       if (status === "readyToPlay") {
-        setFailedVideoLoad(false);
-        setVideoLoaded(true);
+        setFailedVideoLoadRef.current(false);
+        setVideoLoadedRef.current(true);
         videoLoadedRef.current = true;
         applyDurationSeconds(player.duration);
+
+        const resume = useReelsStore
+          .getState()
+          .consumeResumePlayback(contentId, "feed");
+        if (resume && resume.positionMs > 400) {
+          void seekPlayerToMs(player, resume.positionMs).then((ok) => {
+            if (!ok || !isMountedRef.current) return;
+            lastPositionMsRef.current = resume.positionMs;
+            lastProgressRef.current =
+              lastKnownDurationRef.current > 0
+                ? resume.positionMs / lastKnownDurationRef.current
+                : 0;
+            setVideoPositionMs(resume.positionMs);
+            setVideoProgress(lastProgressRef.current);
+          });
+        }
       }
     });
 
     const sourceLoadSub = player.addListener("sourceLoad", ({ duration }) => {
       if (!isMountedRef.current) return;
-      setFailedVideoLoad(false);
-      setVideoLoaded(true);
+      setFailedVideoLoadRef.current(false);
+      setVideoLoadedRef.current(true);
       videoLoadedRef.current = true;
       applyDurationSeconds(duration);
     });
@@ -209,7 +275,7 @@ export function useVideoCardPlayback({
               isComplete: true,
             })
             .then((result) => {
-              setHasTrackedView(true);
+              setHasTrackedViewRef.current(true);
               hasTrackedViewRef.current = true;
               if (result?.totalViews != null && storeRef.current?.mutateStats) {
                 storeRef.current.mutateStats(contentId, () => ({
@@ -236,9 +302,24 @@ export function useVideoCardPlayback({
     });
 
     if (player.status === "readyToPlay") {
-      setFailedVideoLoad(false);
-      setVideoLoaded(true);
+      setFailedVideoLoadRef.current(false);
+      setVideoLoadedRef.current(true);
       videoLoadedRef.current = true;
+      const resume = useReelsStore
+        .getState()
+        .consumeResumePlayback(contentId, "feed");
+      if (resume && resume.positionMs > 400) {
+        void seekPlayerToMs(player, resume.positionMs).then((ok) => {
+          if (!ok || !isMountedRef.current) return;
+          lastPositionMsRef.current = resume.positionMs;
+          lastProgressRef.current =
+            lastKnownDurationRef.current > 0
+              ? resume.positionMs / lastKnownDurationRef.current
+              : 0;
+          setVideoPositionMs(resume.positionMs);
+          setVideoProgress(lastProgressRef.current);
+        });
+      }
     }
     const immediateMs = getPlayerDurationMs(player, 0);
     if (immediateMs > 0) commitDurationMs(immediateMs);
@@ -273,13 +354,6 @@ export function useVideoCardPlayback({
     player,
     isAudioSermon,
     contentId,
-    handleVideoError,
-    setFailedVideoLoad,
-    setVideoLoaded,
-    videoLoadedRef,
-    setHasTrackedView,
-    storeRef,
-    isMountedRef,
   ]);
 
   return {

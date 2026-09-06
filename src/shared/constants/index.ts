@@ -1,5 +1,5 @@
 // API Configuration — follows EXPO_PUBLIC_API_ENV (local | production)
-import { getApiBaseUrl } from "../../../app/utils/environmentManager";
+import { getApiBaseUrl } from "../../core/config/environment";
 
 export const API_CONFIG = {
   get BASE_URL() {

@@ -1,22 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Dimensions } from "react-native";
-import { Gesture } from "react-native-gesture-handler";
 import {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-const DISMISS_DISTANCE = 28;
-const DISMISS_VELOCITY = 350;
-
-function minimizeNow() {
-  useCopyrightFreeOverlayStore.getState().minimize();
-}
 
 export function useModalSheetAnimations({
   showPlaylistView,
@@ -29,26 +19,6 @@ export function useModalSheetAnimations({
 }) {
   const playlistViewTranslateY = useSharedValue(SCREEN_HEIGHT);
   const playlistDetailTranslateY = useSharedValue(SCREEN_HEIGHT);
-
-  const { handleGesture, artworkGesture } = useMemo(() => {
-    const pan = () =>
-      Gesture.Pan()
-        .activeOffsetY(10)
-        .failOffsetX([-48, 48])
-        .onEnd((event) => {
-          if (
-            event.translationY > DISMISS_DISTANCE ||
-            event.velocityY > DISMISS_VELOCITY
-          ) {
-            runOnJS(minimizeNow)();
-          }
-        });
-
-    return {
-      handleGesture: pan(),
-      artworkGesture: pan(),
-    };
-  }, []);
 
   useEffect(() => {
     if (showPlaylistView) {
@@ -77,9 +47,6 @@ export function useModalSheetAnimations({
   }));
 
   return {
-    gesture: handleGesture,
-    handleGesture,
-    artworkGesture,
     playlistViewAnimatedStyle,
     playlistDetailAnimatedStyle,
   };

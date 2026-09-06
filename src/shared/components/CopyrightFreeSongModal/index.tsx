@@ -24,6 +24,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
   if (!m.song) return null;
 
   const isOverlay = props.presentation === "overlay";
+  const isInline = props.presentation === "inline";
 
   const player = (
         <View style={{ flex: 1 }} pointerEvents={props.visible ? "auto" : "none"}>
@@ -31,7 +32,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
             collapsable={false}
             style={{
               flex: 1,
-              paddingTop: m.safeTop + 4,
+              paddingTop: m.safeTop + 12,
             }}
           >
             <View collapsable={false} style={{ flex: 1 }}>
@@ -75,15 +76,19 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
         </View>
   );
 
+  const playerBody = player;
+
   return (
     <>
-      {isOverlay ? (
+      {isInline ? (
+        playerBody
+      ) : isOverlay ? (
         <View
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
           pointerEvents={props.visible ? "auto" : "none"}
         >
           {props.visible ? <StatusBar barStyle="light-content" /> : null}
-          {player}
+          {playerBody}
         </View>
       ) : (
         <Modal
@@ -95,91 +100,101 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
           presentationStyle="overFullScreen"
         >
           <StatusBar barStyle="light-content" />
-          <View style={{ flex: 1, backgroundColor: "#0A0D14" }}>{player}</View>
+          <View style={{ flex: 1, backgroundColor: "#0A0D14" }}>{playerBody}</View>
         </Modal>
       )}
 
-      <SongModalPlaylistView
-        visible={m.showPlaylistView}
-        playlists={m.playlists}
-        isLoadingPlaylists={m.isLoadingPlaylists}
-        animatedStyle={m.playlistViewAnimatedStyle}
-        bottomInset={m.safeBottom}
-        onClose={() => m.setShowPlaylistView(false)}
-        onSelectPlaylist={(playlist) => {
-          m.setSelectedPlaylistForDetail(playlist);
-          m.setShowPlaylistView(false);
-          m.setShowPlaylistDetail(true);
-        }}
-      />
+      {m.showPlaylistView ? (
+        <SongModalPlaylistView
+          visible={m.showPlaylistView}
+          playlists={m.playlists}
+          isLoadingPlaylists={m.isLoadingPlaylists}
+          animatedStyle={m.playlistViewAnimatedStyle}
+          bottomInset={m.safeBottom}
+          onClose={() => m.setShowPlaylistView(false)}
+          onSelectPlaylist={(playlist) => {
+            m.setSelectedPlaylistForDetail(playlist);
+            m.setShowPlaylistView(false);
+            m.setShowPlaylistDetail(true);
+          }}
+        />
+      ) : null}
 
-      <SongModalPlaylistSelection
-        visible={m.showPlaylistModal}
-        playlists={m.playlists}
-        isLoadingPlaylists={m.isLoadingPlaylists}
-        onClose={m.handleClosePlaylistModal}
-        onCreateNew={async () => {
-          await m.loadPlaylistsFromBackend();
-          m.setShowCreatePlaylist(true);
-          m.setShowPlaylistModal(false);
-        }}
-        onAddToPlaylist={m.handleAddToExistingPlaylist}
-        onDeletePlaylist={m.handleDeletePlaylist}
-      />
+      {m.showPlaylistModal ? (
+        <SongModalPlaylistSelection
+          visible={m.showPlaylistModal}
+          playlists={m.playlists}
+          isLoadingPlaylists={m.isLoadingPlaylists}
+          onClose={m.handleClosePlaylistModal}
+          onCreateNew={async () => {
+            await m.loadPlaylistsFromBackend();
+            m.setShowCreatePlaylist(true);
+            m.setShowPlaylistModal(false);
+          }}
+          onAddToPlaylist={m.handleAddToExistingPlaylist}
+          onDeletePlaylist={m.handleDeletePlaylist}
+        />
+      ) : null}
 
-      <SongModalCreatePlaylist
-        visible={m.showCreatePlaylist}
-        playlistName={m.newPlaylistName}
-        playlistDescription={m.newPlaylistDescription}
-        isLoading={m.isLoadingPlaylists}
-        onNameChange={m.setNewPlaylistName}
-        onDescriptionChange={m.setNewPlaylistDescription}
-        onCreate={m.handleCreatePlaylist}
-        onCancel={() => {
-          m.setShowCreatePlaylist(false);
-          m.setNewPlaylistName("");
-          m.setNewPlaylistDescription("");
-        }}
-      />
+      {m.showCreatePlaylist ? (
+        <SongModalCreatePlaylist
+          visible={m.showCreatePlaylist}
+          playlistName={m.newPlaylistName}
+          playlistDescription={m.newPlaylistDescription}
+          isLoading={m.isLoadingPlaylists}
+          onNameChange={m.setNewPlaylistName}
+          onDescriptionChange={m.setNewPlaylistDescription}
+          onCreate={m.handleCreatePlaylist}
+          onCancel={() => {
+            m.setShowCreatePlaylist(false);
+            m.setNewPlaylistName("");
+            m.setNewPlaylistDescription("");
+          }}
+        />
+      ) : null}
 
-      <SongModalPlaylistDetail
-        visible={m.showPlaylistDetail}
-        playlist={m.selectedPlaylistForDetail}
-        animatedStyle={m.playlistDetailAnimatedStyle}
-        bottomInset={m.safeBottom}
-        onClose={() => {
-          m.setShowPlaylistDetail(false);
-          m.setSelectedPlaylistForDetail(null);
-        }}
-        onBack={() => {
-          m.setShowPlaylistDetail(false);
-          m.setSelectedPlaylistForDetail(null);
-          setTimeout(() => m.setShowPlaylistView(true), 100);
-        }}
-        onPlaySong={(s) => m.onPlay?.(s)}
-      />
+      {m.showPlaylistDetail ? (
+        <SongModalPlaylistDetail
+          visible={m.showPlaylistDetail}
+          playlist={m.selectedPlaylistForDetail}
+          animatedStyle={m.playlistDetailAnimatedStyle}
+          bottomInset={m.safeBottom}
+          onClose={() => {
+            m.setShowPlaylistDetail(false);
+            m.setSelectedPlaylistForDetail(null);
+          }}
+          onBack={() => {
+            m.setShowPlaylistDetail(false);
+            m.setSelectedPlaylistForDetail(null);
+            setTimeout(() => m.setShowPlaylistView(true), 100);
+          }}
+          onPlaySong={(s) => m.onPlay?.(s)}
+        />
+      ) : null}
 
-      <SongModalOptions
-        visible={m.showOptionsModal}
-        song={m.song}
-        viewCount={m.viewCount}
-        shareCount={m.shareCount}
-        isInLibrary={m.isInLibrary}
-        isTogglingSave={m.isTogglingSave}
-        optionsSongData={m.optionsSongData}
-        loadingOptionsSong={m.loadingOptionsSong}
-        bottomInset={m.safeBottom}
-        onClose={() => {
-          m.setShowOptionsModal(false);
-          m.setOptionsSongData(null);
-        }}
-        onAddToPlaylist={() => {
-          m.setShowOptionsModal(false);
-          m.setOptionsSongData(null);
-          m.setShowPlaylistModal(true);
-        }}
-        onToggleSave={m.handleToggleSave}
-      />
+      {m.showOptionsModal ? (
+        <SongModalOptions
+          visible={m.showOptionsModal}
+          song={m.song}
+          viewCount={m.viewCount}
+          shareCount={m.shareCount}
+          isInLibrary={m.isInLibrary}
+          isTogglingSave={m.isTogglingSave}
+          optionsSongData={m.optionsSongData}
+          loadingOptionsSong={m.loadingOptionsSong}
+          bottomInset={m.safeBottom}
+          onClose={() => {
+            m.setShowOptionsModal(false);
+            m.setOptionsSongData(null);
+          }}
+          onAddToPlaylist={() => {
+            m.setShowOptionsModal(false);
+            m.setOptionsSongData(null);
+            m.setShowPlaylistModal(true);
+          }}
+          onToggleSave={m.handleToggleSave}
+        />
+      ) : null}
     </>
   );
 }

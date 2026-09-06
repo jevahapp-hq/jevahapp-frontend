@@ -87,6 +87,15 @@ export async function clearLocalSessionState(): Promise<void> {
     } catch {
       // continue
     }
+
+    try {
+      const { clearUserScopedSessionCaches } = await import(
+        "../../src/shared/cache/clearSessionCaches"
+      );
+      await clearUserScopedSessionCaches();
+    } catch {
+      // continue
+    }
   })().finally(() => {
     clearing = null;
   });

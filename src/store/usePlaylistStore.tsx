@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { playlistAPI, type Playlist as BackendPlaylist, type PlaylistTrack } from "@/app/utils/playlistAPI";
+import { playlistAPI, type Playlist as BackendPlaylist } from "@/app/utils/playlistAPI";
+import { mapPlaylistTracksToSongs } from "@/app/utils/playlistTrackMapper";
 
 export interface PlaylistSong {
   id: string;
@@ -192,22 +193,7 @@ export const usePlaylistStore = create<PlaylistState>()(
           if (result.success && result.data?.playlists) {
             // Transform backend playlists to frontend format
             const transformedPlaylists: Playlist[] = result.data.playlists.map((backendPlaylist: BackendPlaylist) => {
-              // Transform tracks to songs (preserving track type info)
-              const songs: PlaylistSong[] = backendPlaylist.tracks.map((track: PlaylistTrack) => ({
-                id: track.content._id,
-                title: track.content.title,
-                artist: track.content.artistName,
-                audioUrl: track.content.fileUrl,
-                thumbnailUrl: track.content.thumbnailUrl,
-                duration: track.content.duration,
-                category: track.content.contentType,
-                description: track.content.title, // Use title as description fallback
-                addedAt: track.addedAt,
-                // Store track type for reference (Media vs Copyright-Free)
-                trackType: track.trackType, // "media" | "copyrightFree"
-                mediaId: track.mediaId,
-                copyrightFreeSongId: track.copyrightFreeSongId,
-              }));
+              const songs = mapPlaylistTracksToSongs(backendPlaylist.tracks);
 
               return {
                 id: backendPlaylist._id,
@@ -216,7 +202,7 @@ export const usePlaylistStore = create<PlaylistState>()(
                 songs,
                 createdAt: backendPlaylist.createdAt,
                 updatedAt: backendPlaylist.updatedAt,
-                thumbnailUrl: songs[0]?.thumbnailUrl, // Use first song's thumbnail
+                thumbnailUrl: songs[0]?.thumbnailUrl,
                 totalTracks: backendPlaylist.totalTracks || songs.length,
               };
             });

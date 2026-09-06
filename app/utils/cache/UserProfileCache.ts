@@ -148,7 +148,7 @@ export class UserProfileCache {
   static cacheUserProfile(userId: string, userData: UserData): void {
     if (!userId || !userData) return;
     const cacheKey = `user:${userId}`;
-    this.cache.set(cacheKey, userData, AVATAR_CACHE_DURATION); // Cache for 30 minutes
+    this.cache.set(cacheKey, userData, AVATAR_CACHE_DURATION);
     // Keep the canonical author store in sync (feed name resolution)
     if (!this.hasUsableName(userData)) return;
     try {

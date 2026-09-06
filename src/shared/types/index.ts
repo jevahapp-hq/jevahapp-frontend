@@ -67,7 +67,6 @@ export interface MediaItem extends BaseEntity {
   processingStatus?: "ready" | "processing" | "pending" | "failed" | string;
   playbackUrl?: string; // HLS or processed playback URL from backend
   hlsUrl?: string; // Legacy HLS field
-  mimeType?: string;
   /** Compact feed playback hints when `profile=lite` */
   lite?: {
     preferHls?: boolean;
@@ -465,6 +464,4 @@ export interface UseMediaReturn {
   isLoadingMore?: boolean;
   /** Whether another page of `defaultContent` is available to load */
   hasMoreDefaultPages?: boolean;
-  /** Compat: default-content query pending with empty list */
-  defaultContentLoading?: boolean;
 }

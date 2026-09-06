@@ -87,6 +87,8 @@ export interface GlobalAudioPlayerState {
   __completionTimeout?: boolean;
   __completionTimeoutId?: any;
   __lastStatusUpdateTs?: number;
+  /** Invalidates callbacks emitted by a previously unloaded Audio.Sound. */
+  __loadGeneration?: number;
   /** Ignore player position callbacks until this timestamp (after a seek). */
   __ignoreStatusUntil?: number;
   /** Track ids that 404'd this session — skip them instead of looping. */

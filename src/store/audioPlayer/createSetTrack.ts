@@ -53,6 +53,11 @@ export function createSetTrack(
         }
       }
 
+      const loadGeneration = (get().__loadGeneration || 0) + 1;
+      // Invalidate the previous engine before its asynchronous teardown. This
+      // also makes overlapping setTrack calls deterministic: newest call wins.
+      set({ __loadGeneration: loadGeneration });
+
       if (soundInstance) {
         try {
           await soundInstance.unloadAsync();
@@ -60,6 +65,8 @@ export function createSetTrack(
           console.warn("Error unloading previous audio:", error);
         }
       }
+
+      if (get().__loadGeneration !== loadGeneration) return;
 
       // `setTrack` is the only entry point that builds an engine, so it is the
       // one place a session legitimately begins.
@@ -73,6 +80,8 @@ export function createSetTrack(
         progress: 0,
         duration: trackDurationToMs(track.duration),
         soundInstance: null,
+        __loadGeneration: loadGeneration,
+        __lastStatusUpdateTs: 0,
       });
 
       try {
@@ -99,13 +108,21 @@ export function createSetTrack(
           {
             shouldPlay: shouldPlayImmediately,
             isMuted: get().isMuted,
-            progressUpdateIntervalMillis: 80,
+            progressUpdateIntervalMillis: 250,
             isLooping: false,
           },
           (status) => {
             if (!status.isLoaded) return;
 
             const prev = get();
+            // An unloaded sound can emit one last callback. It must never
+            // overwrite the position/duration of the track that replaced it.
+            if (
+              prev.__loadGeneration !== loadGeneration ||
+              prev.currentTrack?.id !== track.id
+            ) {
+              return;
+            }
             if (
               !status.didJustFinish &&
               (prev.__ignoreStatusUntil || 0) > Date.now()
@@ -119,10 +136,12 @@ export function createSetTrack(
             });
 
             if (status.didJustFinish) {
+              const finishedPosition =
+                newDuration || status.positionMillis || prev.duration;
               set({
                 isPlaying: false,
-                progress: 0,
-                position: 0,
+                progress: finishedPosition > 0 ? 1 : 0,
+                position: finishedPosition,
                 duration: newDuration || prev.duration,
               });
               const st: any = get();
@@ -149,8 +168,6 @@ export function createSetTrack(
               return;
             }
 
-            if (!status.isPlaying && !prev.isPlaying) return;
-
             const newPosition = status.positionMillis || 0;
             const newProgress =
               newDuration > 0
@@ -160,12 +177,12 @@ export function createSetTrack(
             const lastTs = (prev as any).__lastStatusUpdateTs || 0;
             const timeSinceLastUpdate = now - lastTs;
             const positionChangedSignificantly =
-              Math.abs(prev.position - newPosition) > 200;
+              Math.abs(prev.position - newPosition) > 400;
             const playingChanged = prev.isPlaying !== status.isPlaying;
             const durationChanged =
               newDuration > 0 && prev.duration !== newDuration;
             const shouldUpdatePosition =
-              timeSinceLastUpdate > 80 || positionChangedSignificantly;
+              timeSinceLastUpdate > 250 || positionChangedSignificantly;
 
             if (!shouldUpdatePosition && !playingChanged && !durationChanged) {
               return;
@@ -174,8 +191,8 @@ export function createSetTrack(
             const updates: Record<string, unknown> = {};
             if (
               shouldUpdatePosition &&
-              (Math.abs(prev.position - newPosition) > 50 ||
-                Math.abs(prev.progress - newProgress) > 0.001)
+              (Math.abs(prev.position - newPosition) > 150 ||
+                Math.abs(prev.progress - newProgress) > 0.005)
             ) {
               updates.position = newPosition;
               updates.progress = newProgress;
@@ -193,6 +210,15 @@ export function createSetTrack(
           }
         );
 
+        if (
+          get().__loadGeneration !== loadGeneration ||
+          get().currentTrack?.id !== track.id
+        ) {
+          // A newer request won while this remote source was loading.
+          void sound.unloadAsync().catch(() => {});
+          return;
+        }
+
         set({
           soundInstance: sound,
           isLoading: false,
@@ -205,6 +231,12 @@ export function createSetTrack(
           isPlaying: shouldPlayImmediately,
         });
       } catch (error) {
+        if (
+          get().__loadGeneration !== loadGeneration ||
+          get().currentTrack?.id !== track.id
+        ) {
+          return;
+        }
         const message = audioLoadErrorMessage(error, track.title);
         if (__DEV__) {
           console.warn(

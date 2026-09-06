@@ -15,18 +15,15 @@ export interface UploadFormData {
   selectedType: string;
 }
 
-/** Content types that should have a cover before we treat the form as complete. */
-export const COVER_REQUIRED_TYPES = new Set([
-  "music",
-  "videos",
-  "podcasts",
-  "gif",
-  "sermon",
-]);
+/** Thumbnails/covers are optional — backend can generate defaults.
+ * Keep as soft warnings / confirm dialogs only (see useUploadFormState / useUploadFlow).
+ */
+export const COVER_REQUIRED_TYPES = new Set<string>([]);
 
 /**
  * Single source of truth for “form looks complete” (AI badge, etc.).
  * Stricter than submit eligibility: does not run MIME/size checks.
+ * Cover/thumbnail is never required here.
  */
 export function isUploadFormReady(input: {
   file: unknown;
@@ -41,9 +38,6 @@ export function isUploadFormReady(input: {
     !input.selectedCategory ||
     !input.selectedType
   ) {
-    return false;
-  }
-  if (COVER_REQUIRED_TYPES.has(input.selectedType) && !input.thumbnail) {
     return false;
   }
   return true;

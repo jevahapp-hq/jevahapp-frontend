@@ -11,7 +11,7 @@ export function usePlaylistActions(
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [newPlaylistDescription, setNewPlaylistDescription] = useState("");
-  const { loadPlaylistsFromBackend } = usePlaylistStore();
+  const { loadPlaylistsFromBackend, addSongToPlaylist } = usePlaylistStore();
 
   const handleCreatePlaylist = useCallback(async () => {
     if (!newPlaylistName.trim()) {
@@ -43,6 +43,19 @@ export function usePlaylistActions(
             position: undefined,
           });
           if (addResult.success) {
+            addSongToPlaylist(playlistId, {
+              id: String(songId),
+              title: song.title || "Untitled",
+              artist: song.artist || song.artistName || "Unknown",
+              audioUrl: song.audioUrl || song.fileUrl,
+              thumbnailUrl: song.thumbnailUrl || song.imageUrl,
+              duration: Number(song.duration || 0),
+              category: song.category || song.contentType,
+              description: song.description || song.title,
+              addedAt: new Date().toISOString(),
+              trackType: "copyrightFree",
+              copyrightFreeSongId: String(songId),
+            });
             await loadPlaylistsFromBackend();
             setShowPlaylistModal?.(false);
             Alert.alert("Success", "Playlist created and song added!");
@@ -69,6 +82,7 @@ export function usePlaylistActions(
     newPlaylistDescription,
     song,
     loadPlaylistsFromBackend,
+    addSongToPlaylist,
     setShowCreatePlaylist,
     setShowPlaylistModal,
   ]);
@@ -97,6 +111,20 @@ export function usePlaylistActions(
           setIsLoadingPlaylists(false);
           return;
         }
+        // Optimistic local update so the song is visible before/without full refetch.
+        addSongToPlaylist(playlistId, {
+          id: String(songId),
+          title: song.title || "Untitled",
+          artist: song.artist || song.artistName || "Unknown",
+          audioUrl: song.audioUrl || song.fileUrl,
+          thumbnailUrl: song.thumbnailUrl || song.imageUrl,
+          duration: Number(song.duration || 0),
+          category: song.category || song.contentType,
+          description: song.description || song.title,
+          addedAt: new Date().toISOString(),
+          trackType: "copyrightFree",
+          copyrightFreeSongId: String(songId),
+        });
         await loadPlaylistsFromBackend();
         setNewPlaylistName("");
         setNewPlaylistDescription("");
@@ -110,7 +138,7 @@ export function usePlaylistActions(
         setIsLoadingPlaylists(false);
       }
     },
-    [song, loadPlaylistsFromBackend, setShowCreatePlaylist, setShowPlaylistModal]
+    [song, loadPlaylistsFromBackend, addSongToPlaylist, setShowCreatePlaylist, setShowPlaylistModal]
   );
 
   const handleDeletePlaylist = useCallback(

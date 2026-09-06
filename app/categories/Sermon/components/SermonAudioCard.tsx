@@ -11,7 +11,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import CommentIcon from "../../../components/CommentIcon";
+import CommentIcon from "../../../../src/shared/components/CommentIcon";
 import {
   convertToDownloadableItem,
   useDownloadHandler,

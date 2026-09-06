@@ -1,12 +1,15 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   type SharedValue,
   useAnimatedStyle,
 } from "react-native-reanimated";
-import { getMiniPlayerBottomOffset } from "../../layout/bottomChromeLayout";
+import {
+  getMiniPlayerBottomOffset,
+  MINI_PLAYER_SIDE_MARGIN,
+} from "../../layout/bottomChromeLayout";
 import { floatingMiniBarStyles as styles, ON_SURFACE } from "./floatingMiniBarStyles";
 import { MiniBarArtwork } from "./parts/MiniBarArtwork";
 import { MiniBarControls } from "./parts/MiniBarControls";
@@ -26,6 +29,7 @@ type FloatingMiniBarProps = {
   isPlaying: boolean;
   isLoading: boolean;
   progress: number;
+  dragX: SharedValue<number>;
   dragY: SharedValue<number>;
   handlePan: any;
   surfaceGesture: any;
@@ -47,6 +51,7 @@ export function FloatingMiniBar({
   isPlaying,
   isLoading,
   progress,
+  dragX,
   dragY,
   handlePan,
   surfaceGesture,
@@ -58,65 +63,82 @@ export function FloatingMiniBar({
 }: FloatingMiniBarProps) {
   const expandable = typeof onOpenFullPlayer === "function";
 
+  const restBottom = getMiniPlayerBottomOffset();
   const dragStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
+    left: MINI_PLAYER_SIDE_MARGIN + dragX.value,
+    right: MINI_PLAYER_SIDE_MARGIN - dragX.value,
+    bottom: restBottom - dragY.value,
   }));
 
   return (
     <Animated.View
-      pointerEvents={overlayCovered ? "none" : "box-none"}
-      style={[
-        styles.container,
-        { bottom: getMiniPlayerBottomOffset() },
-        dragStyle,
-      ]}
+      pointerEvents={overlayCovered ? "none" : "auto"}
+      style={[styles.container, overlayStyles.bar, dragStyle]}
     >
-      <GestureDetector gesture={handlePan}>
-        <View collapsable={false} style={styles.dragHandle}>
-          <View style={styles.grabber} />
-        </View>
-      </GestureDetector>
-
-      <View style={styles.content}>
-        <GestureDetector gesture={surfaceGesture}>
-          <Animated.View
+        <GestureDetector gesture={handlePan}>
+          <View
             collapsable={false}
-            style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+            style={styles.dragHandle}
+            accessible
+            accessibilityLabel="Move player"
+            accessibilityHint={
+              expandable
+                ? "Drag to reposition. Activate to expand."
+                : "Drag to reposition."
+            }
           >
-            <View style={styles.artworkWrap}>
-              <MiniBarArtwork thumbnailUrl={currentTrack.thumbnailUrl} />
-            </View>
-            <View style={styles.meta}>
-              <MiniBarMeta
-                title={currentTrack.title}
-                subtitle={resolveSubtitle(currentTrack)}
-              />
-            </View>
-          </Animated.View>
+            <View style={styles.grabber} />
+          </View>
         </GestureDetector>
 
-        {expandable ? (
-          <Pressable
-            onPress={onOpenFullPlayer}
-            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Expand player"
-            style={styles.expandButton}
-          >
-            <Ionicons name="chevron-up" size={22} color={ON_SURFACE} />
-          </Pressable>
-        ) : null}
+        <View style={styles.content}>
+          <GestureDetector gesture={surfaceGesture}>
+            <Animated.View
+              collapsable={false}
+              style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+            >
+              <View style={styles.artworkWrap}>
+                <MiniBarArtwork thumbnailUrl={currentTrack.thumbnailUrl} />
+              </View>
+              <View style={styles.meta}>
+                <MiniBarMeta
+                  title={currentTrack.title}
+                  subtitle={resolveSubtitle(currentTrack)}
+                />
+              </View>
+            </Animated.View>
+          </GestureDetector>
 
-        <MiniBarControls
-          isPlaying={isPlaying}
-          isLoading={isLoading}
-          onTogglePlayPause={onTogglePlayPause}
-          onNext={onNext}
-          onClose={onClose}
-        />
-      </View>
+          {expandable ? (
+            <Pressable
+              onPress={onOpenFullPlayer}
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Expand player"
+              style={styles.expandButton}
+            >
+              <Ionicons name="chevron-up" size={22} color={ON_SURFACE} />
+            </Pressable>
+          ) : null}
 
-      <MiniBarProgress progress={progress} />
+          <MiniBarControls
+            isPlaying={isPlaying}
+            isLoading={isLoading}
+            onTogglePlayPause={onTogglePlayPause}
+            onNext={onNext}
+            onClose={onClose}
+          />
+        </View>
+
+        <MiniBarProgress progress={progress} />
     </Animated.View>
   );
 }
+
+const overlayStyles = StyleSheet.create({
+  bar: {
+    position: "absolute",
+    left: MINI_PLAYER_SIDE_MARGIN,
+    right: MINI_PLAYER_SIDE_MARGIN,
+  },
+});

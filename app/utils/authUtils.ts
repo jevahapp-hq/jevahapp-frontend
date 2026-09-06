@@ -155,19 +155,12 @@ export const authUtils = {
       userInfo,
     };
 
-    console.log("📤 Request payload:", {
-      token: token ? `${token.substring(0, 20)}...` : "null",
-      userInfo: {
-        firstName: userInfo.firstName,
-        lastName: userInfo.lastName,
-        email: userInfo.email,
-        avatar: userInfo.avatar
-          ? `${userInfo.avatar.substring(0, 50)}...`
-          : "null",
-      },
-    });
-
-    console.log("📤 Full request body:", JSON.stringify(requestBody, null, 2));
+    if (__DEV__) {
+      console.log("📤 Request payload:", {
+        token: token ? `${token.substring(0, 8)}…` : "null",
+        hasUserInfo: Boolean(userInfo),
+      });
+    }
 
     try {
       const response = await fetch(apiUrl, {

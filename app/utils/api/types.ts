@@ -38,6 +38,6 @@ import { getApiBaseUrl } from "../environmentManager";
 export const API_BASE_URL = `${getApiBaseUrl()}/api`;
 
 // Cache configuration
-export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-export const AVATAR_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes — generic GET default
+export const AVATAR_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24h — cheap profile JSON
 
