@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Dimensions } from "react-native";
 import { getOrientation } from "../../../../utils/responsive";
 import { detectFileType, validateMediaEligibility } from "../utils";
+import { collectFileGuidelineErrors } from "../utils/eligibilityRules";
+import { collectDeviceGuidelineErrors } from "../utils/uploadGuidelineAlert";
 import {
   clearUploadDraft,
   detectedTypeFromDraft,
@@ -106,6 +108,16 @@ export function useUploadFormState() {
         selectedType: nextType,
       });
 
+      const baseFileErrors = collectFileGuidelineErrors(nextFile, nextType);
+      const fileGuidelineErrors = collectDeviceGuidelineErrors(
+        nextFile,
+        nextType
+      );
+      const formErrors = result.errors.filter(
+        (error) => !baseFileErrors.includes(error)
+      );
+      const errors = [...formErrors, ...fileGuidelineErrors];
+
       const warnings = [...result.warnings];
       if (nextFile) {
         const actualFileType = detectFileType(nextFile);
@@ -124,7 +136,8 @@ export function useUploadFormState() {
       }
 
       return {
-        ...result,
+        isValid: errors.length === 0,
+        errors,
         warnings,
       };
     },

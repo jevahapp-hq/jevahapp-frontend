@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
+import { libraryItemMatchesId } from "../shared/media/engagementDisplay";
 
 export interface LibraryItem {
   id: string;
@@ -46,7 +47,11 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
     // Check if item already exists
     const existingItem = currentSavedItems.find(
-      (saved) => saved.id === item.id
+      (saved) =>
+        libraryItemMatchesId(saved, item.id) ||
+        (item.originalKey
+          ? libraryItemMatchesId(saved, item.originalKey)
+          : false)
     );
     if (existingItem) {
       console.log(`📚 Item already in library: ${item.title}`);
@@ -74,7 +79,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
   removeFromLibrary: async (itemId: string) => {
     const { savedItems } = get();
     const currentSavedItems = Array.isArray(savedItems) ? savedItems : [];
-    const updatedItems = currentSavedItems.filter((item) => item.id !== itemId);
+    const updatedItems = currentSavedItems.filter(
+      (item) => !libraryItemMatchesId(item, itemId)
+    );
 
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
@@ -89,7 +96,8 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
   isItemSaved: (itemId: string) => {
     const { savedItems } = get();
     return (
-      Array.isArray(savedItems) && savedItems.some((item) => item.id === itemId)
+      Array.isArray(savedItems) &&
+      savedItems.some((item) => libraryItemMatchesId(item, itemId))
     );
   },
 

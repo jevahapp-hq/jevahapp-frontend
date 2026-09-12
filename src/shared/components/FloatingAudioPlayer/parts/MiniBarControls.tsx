@@ -4,7 +4,6 @@ import { Pressable, View } from "react-native";
 import {
   floatingMiniBarStyles as styles,
   ON_SURFACE,
-  ON_SURFACE_MUTED,
 } from "../floatingMiniBarStyles";
 
 /** Generous target: these buttons sit close together in a 64px-tall bar. */
@@ -14,29 +13,38 @@ type Props = {
   isPlaying: boolean;
   isLoading: boolean;
   onTogglePlayPause: () => void;
+  onPrevious: () => void;
   onNext: () => void;
   onClose: () => void;
 };
 
 /**
- * Play / next / dismiss only.
- *
- * `previous` was dropped from the mini bar deliberately: four adjacent targets
- * in a compact bar invited mis-taps, and skip-back is available in the full
- * player. This matches how Spotify and YouTube Music scope their mini bars.
+ * Previous (green) / play / next / dismiss.
+ * Close is a red X so it is obvious and must stop playback.
  */
 export const MiniBarControls = React.memo(function MiniBarControls({
   isPlaying,
   isLoading,
   onTogglePlayPause,
+  onPrevious,
   onNext,
   onClose,
 }: Props) {
   return (
     <View style={styles.controls}>
       <Pressable
-        onPress={onTogglePlayPause}
+        onPress={onPrevious}
         style={styles.playButton}
+        hitSlop={HIT_SLOP}
+        accessibilityRole="button"
+        accessibilityLabel="Previous track"
+      >
+        <Ionicons name="play-skip-back" size={18} color="#FFFFFF" />
+      </Pressable>
+
+      <Pressable
+        onPress={onTogglePlayPause}
+        style={styles.ghostButton}
         hitSlop={HIT_SLOP}
         accessibilityRole="button"
         accessibilityLabel={isPlaying ? "Pause" : "Play"}
@@ -44,8 +52,8 @@ export const MiniBarControls = React.memo(function MiniBarControls({
       >
         <Ionicons
           name={isPlaying ? "pause" : "play"}
-          size={18}
-          color="#FFFFFF"
+          size={19}
+          color={ON_SURFACE}
         />
       </Pressable>
 
@@ -59,16 +67,15 @@ export const MiniBarControls = React.memo(function MiniBarControls({
         <Ionicons name="play-skip-forward" size={19} color={ON_SURFACE} />
       </Pressable>
 
-      <View
-        collapsable={false}
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={onClose}
+      <Pressable
+        onPress={onClose}
+        hitSlop={HIT_SLOP}
         style={styles.closeButton}
         accessibilityRole="button"
         accessibilityLabel="Close player"
       >
-        <Ionicons name="close" size={15} color={ON_SURFACE_MUTED} pointerEvents="none" />
-      </View>
+        <Ionicons name="close-circle" size={18} color="#EF4444" />
+      </Pressable>
     </View>
   );
 });

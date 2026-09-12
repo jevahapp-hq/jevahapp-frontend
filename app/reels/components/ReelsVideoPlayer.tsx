@@ -4,14 +4,18 @@
  */
 import { MaterialIcons } from "@expo/vector-icons";
 import type { VideoPlayer } from "expo-video";
-import { VideoView } from "expo-video";
 import { MutableRefObject, memo, useEffect, useRef } from "react";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useVideoPlaybackControl } from "../../../src/shared/hooks/useVideoPlaybackControl";
 import { handleVideoError } from "../../../src/shared/utils/videoUrlManager";
-import { useInstantFeedVideoPlayer } from "../../../src/features/media/video-feed";
+import {
+  FeedVideoSurface,
+  FittedMediaImage,
+  useInstantFeedVideoPlayer,
+} from "../../../src/features/media/video-feed";
 import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
 import { seekPlayerToMs } from "../../../src/features/media/components/VideoCard/player/expoVideoAdapter";
+import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
 import { useReelsStore } from "@/store/useReelsStore";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
@@ -20,6 +24,9 @@ interface ReelsVideoPlayerProps {
   videoKey: string;
   contentId: string;
   videoUrl: string;
+  posterUri?: string | null;
+  screenHeight: number;
+  screenWidth: number;
   isActive: boolean;
   isMuted: boolean;
   videoVolume: number;
@@ -42,12 +49,15 @@ const ReelsVideoPlayer = memo(
     videoKey,
     contentId,
     videoUrl,
+    posterUri,
+    screenHeight,
+    screenWidth,
     isActive,
     isMuted,
     videoVolume,
     isPlaying,
     videoRefs,
-    onToggleVideoPlay,
+    onToggleVideoPlay: _onToggleVideoPlay,
     setVideoDuration,
     setVideoPosition,
     setLocalPosition,
@@ -90,14 +100,21 @@ const ReelsVideoPlayer = memo(
     const lastPushedPositionRef = useRef(-1);
     const lastPushedDurationRef = useRef(-1);
 
-    const { player, firstFrameReady, handleFirstFrameRender } =
-      useInstantFeedVideoPlayer({
-        source: videoUrl,
-        loop: true,
-        timeUpdateEventInterval: 0.25,
-      });
+    const {
+      player,
+      firstFrameReady,
+      firstFramePainted,
+      handleFirstFrameRender,
+      freezeOnFirstFrame,
+    } = useInstantFeedVideoPlayer({
+      source: videoUrl,
+      loop: true,
+      restorePlayhead: false,
+      timeUpdateEventInterval: 0.25,
+    });
 
     playerRef.current = player;
+    const lastFrame = useVideoFrameSnapshot(videoUrl);
 
     useVideoPlaybackControl({
       videoKey,
@@ -158,17 +175,20 @@ const ReelsVideoPlayer = memo(
 
       const applyAudibleState = () => {
         try {
+          // Mute before any play() so a neighbor decoder cannot leak audio.
+          player.muted = !(isActive && isPlaying) || isMuted;
+          player.volume = isActive && isPlaying && !isMuted ? videoVolume : 0;
           if (isActive && isPlaying) {
-            player.muted = isMuted;
-            player.volume = isMuted ? 0 : videoVolume;
             if (!player.playing) player.play();
             return;
           }
-          if (!isActive) {
-            player.muted = true;
-            player.volume = 0;
-            if (player.playing) player.pause();
+          // Neighbors: decode one muted frame then freeze. Playing two
+          // audible (or racing) players is what made Reels crackle.
+          if (!firstFramePainted) {
+            if (!player.playing) player.play();
+            return;
           }
+          if (player.playing) freezeOnFirstFrame();
         } catch {
           // no-op
         }
@@ -178,7 +198,15 @@ const ReelsVideoPlayer = memo(
       // expo-video can re-apply the muted prime after play(); push volume again.
       const frame = requestAnimationFrame(applyAudibleState);
       return () => cancelAnimationFrame(frame);
-    }, [player, isActive, isPlaying, isMuted, videoVolume]);
+    }, [
+      player,
+      isActive,
+      isPlaying,
+      isMuted,
+      videoVolume,
+      firstFramePainted,
+      freezeOnFirstFrame,
+    ]);
 
     useEffect(() => {
       if (!player) return;
@@ -297,37 +325,55 @@ const ReelsVideoPlayer = memo(
       setVideoPosition,
     ]);
 
+    const surfaceStyle = {
+      width: screenWidth,
+      height: screenHeight,
+    };
+
     if (!player) {
-      return <View style={styles.host} />;
+      return (
+        <View style={[styles.host, surfaceStyle]} collapsable={false}>
+          <PosterLayer
+            posterUri={posterUri}
+            lastFrame={lastFrame}
+            width={screenWidth}
+            height={screenHeight}
+          />
+        </View>
+      );
     }
 
     return (
-      <View style={styles.host}>
-        <VideoView
+      <View style={[styles.host, surfaceStyle]} collapsable={false}>
+        <View style={styles.poster} pointerEvents="none">
+          <PosterLayer
+            posterUri={posterUri}
+            lastFrame={lastFrame}
+            width={screenWidth}
+            height={screenHeight}
+          />
+        </View>
+        <FeedVideoSurface
           player={player}
-          style={[styles.video, { zIndex: isActive ? 1 : 0 }]}
+          visible
+          height={screenHeight}
+          width={screenWidth}
           contentFit="contain"
-          nativeControls={false}
-          fullscreenOptions={{ enable: false }}
-          allowsPictureInPicture={false}
-          useExoShutter={false}
           onFirstFrameRender={handleFirstFrameRender}
         />
 
         {isActive && !isPlaying && (
-          <View style={styles.overlay}>
-            <TouchableOpacity onPress={onToggleVideoPlay} activeOpacity={0.8}>
-              <MaterialIcons
-                name="play-arrow"
-                size={getResponsiveSize(50, 60, 70)}
-                color="rgba(255, 255, 255, 0.6)"
-              />
-            </TouchableOpacity>
+          <View style={styles.overlay} pointerEvents="none">
+            <MaterialIcons
+              name="play-arrow"
+              size={getResponsiveSize(50, 60, 70)}
+              color="rgba(255, 255, 255, 0.6)"
+            />
           </View>
         )}
 
         {isActive && showPauseOverlay && isPlaying && (
-          <View style={[styles.overlay, { zIndex: 30 }]} pointerEvents="none">
+          <View style={styles.overlay} pointerEvents="none">
             <MaterialIcons
               name="pause"
               size={getResponsiveSize(50, 60, 70)}
@@ -340,6 +386,9 @@ const ReelsVideoPlayer = memo(
   },
   (prev, next) =>
     prev.videoUrl === next.videoUrl &&
+    prev.posterUri === next.posterUri &&
+    prev.screenHeight === next.screenHeight &&
+    prev.screenWidth === next.screenWidth &&
     prev.isActive === next.isActive &&
     prev.isMuted === next.isMuted &&
     prev.isPlaying === next.isPlaying &&
@@ -347,24 +396,56 @@ const ReelsVideoPlayer = memo(
     prev.isDragging === next.isDragging
 );
 
+function PosterLayer({
+  posterUri,
+  lastFrame,
+  width,
+  height,
+}: {
+  posterUri?: string | null;
+  lastFrame: ReturnType<typeof useVideoFrameSnapshot>;
+  width: number;
+  height: number;
+}) {
+  if (lastFrame) {
+    return (
+      <FittedMediaImage
+        source={lastFrame}
+        width={width}
+        height={height}
+        contentFit="contain"
+      />
+    );
+  }
+  if (posterUri) {
+    return (
+      <FittedMediaImage
+        uri={posterUri}
+        width={width}
+        height={height}
+        contentFit="contain"
+      />
+    );
+  }
+  return null;
+}
+
 export default ReelsVideoPlayer;
 
 const styles = StyleSheet.create({
   host: {
-    width: "100%",
-    height: "100%",
-    position: "absolute",
     backgroundColor: "#000",
+    overflow: "visible",
   },
-  video: {
+  poster: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "transparent",
+    overflow: "hidden",
+    backgroundColor: "#000",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
     zIndex: 10,
   },
 });

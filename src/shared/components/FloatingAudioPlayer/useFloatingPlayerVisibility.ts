@@ -2,6 +2,7 @@ import { usePathname, useSegments } from "expo-router";
 import { useMemo, useSyncExternalStore } from "react";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import type { AudioTrack } from "@/store/useGlobalAudioPlayerStore";
+import { shouldHideMiniPlayerForTrack } from "../../audio/audioSourcePolicy";
 import {
   isMiniPlayerSuppressed,
   subscribeMiniPlayerGate,
@@ -36,6 +37,7 @@ export function useFloatingPlayerVisibility({
     if (suppressed) return false;
     if (!isSessionActive) return false;
     if (!currentTrack) return false;
+    if (shouldHideMiniPlayerForTrack(currentTrack.source)) return false;
     return !isRouteHostileToMiniPlayer(pathname, segments);
   }, [pathname, segments, currentTrack, isSessionActive, suppressed]);
 

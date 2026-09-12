@@ -2,55 +2,81 @@
  * Reelsviewscroll - Main Reels screen
  * Fully modularized and performance optimized.
  */
-import { memo, useCallback, useEffect, useRef } from "react";
-import { BackHandler, Platform, StatusBar, View } from "react-native";
-import { FlatList } from "react-native-gesture-handler";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, StatusBar, View } from "react-native";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
+import { useFullscreenBackInterceptor } from "../../src/features/media/video-feed";
 import { ReelsDescriptionEditor } from "./components/ReelsDescriptionEditor";
 import { ReelsErrorView } from "./components/ReelsErrorView";
 import { ReelsModals } from "./components/ReelsModals";
 import { ReelsVideoItem } from "./components/ReelsVideoItem";
 import { useReelsOrchestrator } from "./hooks/useReelsOrchestrator";
+import SuccessCard from "../components/SuccessCard";
 
 const ReelsView = () => {
   const o = useReelsOrchestrator();
   const flatListRef = useRef<FlatList>(null);
-  const initialIndex = Math.max(0, o.reelsStore.currentIndex || 0);
+  const initialIndex = Math.max(0, o.currentIndex_state || 0);
+  const [viewport, setViewport] = useState({
+    width: o.responsive.screenWidth,
+    height: o.responsive.screenHeight,
+  });
+  const cellWidth = viewport.width || o.responsive.screenWidth;
+  const cellHeight = viewport.height || o.responsive.screenHeight;
 
-  // Sync scroll position when list loads or index changes externally
+  const onListLayout = useCallback(
+    (event: { nativeEvent: { layout: { width: number; height: number } } }) => {
+      const { width, height } = event.nativeEvent.layout;
+      if (!(width > 0) || !(height > 0)) return;
+      setViewport((prev) =>
+        Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
+          ? prev
+          : { width, height }
+      );
+    },
+    []
+  );
+
+  // Land on the opened video once the list/layout is ready. Do not depend on
+  // currentIndex — swipe updates would fight the pager.
   useEffect(() => {
-    if (flatListRef.current && o.allVideos.length > 0) {
-      const index = o.reelsStore.currentIndex || 0;
-      requestAnimationFrame(() => {
+    if (!flatListRef.current || o.allVideos.length === 0) return;
+    const pending = o.pendingStartIndexRef?.current;
+    const index = Math.min(
+      Math.max(0, pending ?? o.currentIndex_state),
+      o.allVideos.length - 1
+    );
+    requestAnimationFrame(() => {
+      try {
         flatListRef.current?.scrollToIndex({
           index,
           animated: false,
         });
-      });
-    }
-  }, [o.allVideos.length]);
+      } catch {
+        /* getItemLayout may not be ready yet */
+      }
+    });
+    const unlock = setTimeout(() => {
+      if (o.pendingStartIndexRef) o.pendingStartIndexRef.current = null;
+    }, 1000);
+    return () => clearTimeout(unlock);
+  }, [o.allVideos.length, cellHeight]);
 
-  // Hardware back exits fullscreen (Reels) before any app-exit prompt.
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
-    const onBack = () => {
-      o.handlers.handleBackNavigation();
-      return true;
-    };
-    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
-    return () => sub.remove();
-  }, [o.handlers]);
+  // Hardware back exits fullscreen before the root app-exit prompt.
+  useFullscreenBackInterceptor(o.handlers.handleBackNavigation);
 
   const renderItem = useCallback(
     ({ item, index }: { item: any; index: number }) => {
       const isActive = index === o.currentIndex_state;
       return (
         <View
+          collapsable={false}
           style={{
-            height: o.responsive.screenHeight,
-            width: "100%",
-            backgroundColor: "#000000",
+            height: cellHeight,
+            width: cellWidth,
+            backgroundColor: "#000",
+            overflow: "visible",
           }}
         >
           <ReelsVideoItem
@@ -58,8 +84,8 @@ const ReelsView = () => {
             index={index}
             isActive={isActive}
             videoRefs={o.videoRefs}
-            screenHeight={o.responsive.screenHeight}
-            screenWidth={o.responsive.screenWidth}
+            screenHeight={cellHeight}
+            screenWidth={cellWidth}
             isIOS={o.responsive.isIOS}
             currentIndex_state={o.currentIndex_state}
             videoDuration={o.videoDuration}
@@ -112,7 +138,7 @@ const ReelsView = () => {
         </View>
       );
     },
-    [o]
+    [o, cellHeight, cellWidth]
   );
 
   if (o.hasError) {
@@ -138,11 +164,13 @@ const ReelsView = () => {
       <FlatList
         ref={flatListRef}
         data={o.allVideos}
+        extraData={`${o.currentIndex_state}:${cellHeight}:${cellWidth}:${o.activeIsLiked}:${o.activeIsSaved}`}
         renderItem={renderItem}
         keyExtractor={(item, index) => `reel-${item._id || item.id || index}`}
         pagingEnabled
         scrollEnabled={!o.isDragging}
         showsVerticalScrollIndicator={false}
+        onLayout={onListLayout}
         onViewableItemsChanged={o.scroll.onViewableItemsChanged}
         viewabilityConfig={o.scroll.viewabilityConfig}
         initialScrollIndex={
@@ -151,17 +179,19 @@ const ReelsView = () => {
             : 0
         }
         getItemLayout={(_, index) => ({
-          length: o.responsive.screenHeight,
-          offset: o.responsive.screenHeight * index,
+          length: cellHeight,
+          offset: cellHeight * index,
           index,
         })}
-        removeClippedSubviews={true}
+        // VideoView surfaces go black when Android detaches clipped cells.
+        removeClippedSubviews={false}
         initialNumToRender={1}
-        maxToRenderPerBatch={2}
-        windowSize={3}
+        maxToRenderPerBatch={1}
+        windowSize={2}
         decelerationRate="fast"
-        snapToInterval={o.responsive.screenHeight}
+        snapToInterval={cellHeight}
         snapToAlignment="start"
+        style={{ flex: 1, backgroundColor: "#000" }}
       />
 
       <ReelsModals
@@ -195,6 +225,14 @@ const ReelsView = () => {
         onCancel={o.descriptionEdit.closeEditor}
         onSubmit={o.descriptionEdit.submit}
       />
+
+      {o.showSuccessCard ? (
+        <SuccessCard
+          message={o.successMessage}
+          onClose={() => o.setShowSuccessCard(false)}
+          duration={3000}
+        />
+      ) : null}
     </ErrorBoundary>
   );
 };

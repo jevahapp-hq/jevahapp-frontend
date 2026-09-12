@@ -13,6 +13,7 @@ interface UseMediaDeletionOptions {
   isModalVisible?: boolean;
   onDeleteSuccess?: (mediaItem: any) => void;
   onDeleteError?: (error: string) => void;
+  viewerId?: string | null;
 }
 
 interface UseMediaDeletionReturn {
@@ -35,6 +36,7 @@ export const useMediaDeletion = ({
   isModalVisible = false,
   onDeleteSuccess,
   onDeleteError,
+  viewerId,
 }: UseMediaDeletionOptions): UseMediaDeletionReturn => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const { deleteMediaItem, isLoading: isDeleting } = useDeleteMedia();
@@ -44,6 +46,7 @@ export const useMediaDeletion = ({
     mediaItem,
     isModalVisible,
     checkOnModalOpen: true,
+    viewerId,
   });
 
   const openDeleteModal = useCallback(() => {

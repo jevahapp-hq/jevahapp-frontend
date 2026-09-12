@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import CommentIcon from "../../../../src/shared/components/CommentIcon";
+import { useAudioProgressForTrack } from "@/store/audioPlayer/audioProgressStore";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -27,7 +28,6 @@ export interface SermonAudioCardProps {
   index: number;
   sectionId: string;
   playingAudioId: string | null;
-  audioProgressMap: Record<string, number>;
   contentStats: Record<string, any>;
   userFavorites: Record<string, boolean>;
   globalFavoriteCounts: Record<string, number>;
@@ -46,7 +46,6 @@ export default function SermonAudioCard({
   index,
   sectionId,
   playingAudioId,
-  audioProgressMap,
   contentStats,
   userFavorites,
   globalFavoriteCounts,
@@ -73,7 +72,6 @@ export default function SermonAudioCard({
     : { uri: audio.fileUrl };
   const sermonId = audio._id || modalKey;
   const isPlaying = playingAudioId === sermonId;
-  const currentProgress = audioProgressMap[sermonId] || 0;
 
   const contentId = audio._id || modalKey;
   const currentComments = comments[contentId] || [];
@@ -209,26 +207,7 @@ export default function SermonAudioCard({
               color="#FEA74E"
             />
           </TouchableOpacity>
-          <View className="flex-1 h-1 bg-white/30 rounded-full relative">
-            <View
-              className="h-full bg-[#FEA74E] rounded-full"
-              style={{ width: `${currentProgress * 100}%` }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                left: `${currentProgress * 100}%`,
-                transform: [{ translateX: -6 }],
-                top: -5,
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: "#FFFFFF",
-                borderWidth: 1,
-                borderColor: "#FEA74E",
-              }}
-            />
-          </View>
+          <SermonAudioProgress trackId={sermonId} />
           <TouchableOpacity
             onPress={async () => {
               const contentType = audio.fileUrl?.includes(".mp4")
@@ -358,6 +337,32 @@ export default function SermonAudioCard({
           </View>
         </>
       )}
+    </View>
+  );
+}
+
+function SermonAudioProgress({ trackId }: { trackId: string }) {
+  const currentProgress = useAudioProgressForTrack(trackId);
+  return (
+    <View className="flex-1 h-1 bg-white/30 rounded-full relative">
+      <View
+        className="h-full bg-[#FEA74E] rounded-full"
+        style={{ width: `${currentProgress * 100}%` }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          left: `${currentProgress * 100}%`,
+          transform: [{ translateX: -6 }],
+          top: -5,
+          width: 12,
+          height: 12,
+          borderRadius: 6,
+          backgroundColor: "#FFFFFF",
+          borderWidth: 1,
+          borderColor: "#FEA74E",
+        }}
+      />
     </View>
   );
 }

@@ -12,5 +12,24 @@ export {
 } from "./feedVideoConfig";
 export { FeedVideoPoster, posterUriFromMedia } from "./FeedVideoPoster";
 export { FeedVideoSurface } from "./FeedVideoSurface";
+export { FittedMediaImage } from "./FittedMediaImage";
 export { fitRectInBox } from "./fitRectInBox";
+export {
+  findMediaRowIndex,
+  playbackKeyToContentKey,
+  remapResumeFeedKey,
+  resolveFeedResumeKey,
+} from "./resumeFeedKey";
+export {
+  findReelsIndexByContentId,
+  parseNonNegativeInt,
+  resolveReelsStartIndex,
+} from "./reelsStartIndex";
+export { videoKeyMatchesContentId } from "./videoPlayerKey";
 export { useInstantFeedVideoPlayer } from "./useInstantFeedVideoPlayer";
+export {
+  isVideoFullscreenActive,
+  runFullscreenBackExit,
+  setFullscreenBackExit,
+} from "./fullscreenBackSession";
+export { useFullscreenBackInterceptor } from "./useFullscreenBackInterceptor";

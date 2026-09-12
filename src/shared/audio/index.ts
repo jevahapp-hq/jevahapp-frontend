@@ -7,6 +7,12 @@ export {
 export type { PlaybackSource } from "./mapToAudioTrack";
 export { pausePlaybackSession, playOrToggleTrack } from "./playOrToggleTrack";
 export {
+  getSessionAudioQueue,
+  rememberSessionAudioQueue,
+  resolvePlaybackQueue,
+} from "./sessionAudioQueue";
+export { stopAndDismissNowPlaying } from "./stopNowPlaying";
+export {
   playOrToggleDecision,
   shouldReplaceAudioQueue,
 } from "./playOrToggleDecision";
@@ -21,6 +27,7 @@ export {
 export type { MiniPlayerSuppressionReason } from "./miniPlayerGate";
 export {
   resolveFullPlayerTarget,
+  shouldHideMiniPlayerForTrack,
   supportsFullScreenPlayer,
 } from "./audioSourcePolicy";
 export type { FullPlayerTarget } from "./audioSourcePolicy";

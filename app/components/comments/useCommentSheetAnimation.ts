@@ -36,7 +36,6 @@ export function useCommentSheetAnimation(options: {
   const peekRef = useRef(mediaPeekHeight);
   peekRef.current = mediaPeekHeight;
   const windowH = getWindowHeight();
-  const sheetRestHeight = Math.max(280, windowH - mediaPeekHeight);
 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const closingRef = useRef(false);
@@ -57,10 +56,11 @@ export function useCommentSheetAnimation(options: {
   }, [windowH, windowHShared]);
 
   useEffect(() => {
-    const onShow = (e: {
-      endCoordinates: { height: number; screenY: number };
+    const applyKeyboard = (e?: {
+      endCoordinates?: { height: number; screenY: number };
     }) => {
-      const { height, screenY } = e.endCoordinates;
+      const height = e?.endCoordinates?.height ?? 0;
+      const screenY = e?.endCoordinates?.screenY ?? SCREEN_H;
       const fromScreen = Math.max(0, SCREEN_H - screenY);
       const liveH = getWindowHeight();
       const windowOvershoot = Math.max(0, SCREEN_H - liveH);
@@ -68,42 +68,45 @@ export function useCommentSheetAnimation(options: {
         0,
         Math.max(height, fromScreen) - windowOvershoot
       );
+      // Instant — never leave the composer under the keys for an animation frame.
       setKeyboardHeight(measured);
-      keyboardOffset.value = withTiming(measured, {
-        duration: Platform.OS === "ios" ? 250 : 160,
-      });
+      keyboardOffset.value = measured;
     };
     const onHide = () => {
       setKeyboardHeight(0);
-      keyboardOffset.value = withTiming(0, {
-        duration: Platform.OS === "ios" ? 220 : 140,
-      });
+      keyboardOffset.value = 0;
     };
     const show = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      onShow
+      applyKeyboard
     );
+    const shown = Keyboard.addListener("keyboardDidShow", applyKeyboard);
+    const frame =
+      Platform.OS === "ios"
+        ? Keyboard.addListener("keyboardWillChangeFrame", applyKeyboard)
+        : null;
     const hide = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       onHide
     );
+    const hidden = Keyboard.addListener("keyboardDidHide", onHide);
     return () => {
       show?.remove();
+      shown?.remove();
+      frame?.remove();
       hide?.remove();
+      hidden?.remove();
     };
   }, [keyboardOffset]);
 
   useEffect(() => {
     if (isVisible) {
-      // Ensure peek is current before open animation (avoids full-bleed first frame)
+      // Instant like working-in-progress — a start offset of sheetRestHeight
+      // leaves the sheet off-screen if Reanimated timing doesn't paint in Modal.
       peekShared.value = mediaPeekHeight;
       closingRef.current = false;
-      translateY.value = sheetRestHeight;
-      backdropOpacity.value = 0;
-      translateY.value = withTiming(0, COMMENT_SHEET_IN);
-      backdropOpacity.value = withTiming(COMMENT_SHEET_BACKDROP_MAX, {
-        duration: 160,
-      });
+      translateY.value = 0;
+      backdropOpacity.value = COMMENT_SHEET_BACKDROP_MAX;
     } else {
       translateY.value = getWindowHeight();
       backdropOpacity.value = 0;
@@ -114,7 +117,6 @@ export function useCommentSheetAnimation(options: {
   }, [
     isVisible,
     mediaPeekHeight,
-    sheetRestHeight,
     translateY,
     backdropOpacity,
     keyboardOffset,
@@ -169,14 +171,9 @@ export function useCommentSheetAnimation(options: {
     }
   };
 
-  const sheetAnimatedStyle = useAnimatedStyle(() => {
-    const kb = keyboardOffset.value;
-    // Pin top via StyleSheet `top: peek`; only lift for keyboard + dismiss slide
-    return {
-      bottom: kb,
-      transform: [{ translateY: translateY.value }],
-    };
-  });
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,

@@ -1,29 +1,32 @@
-                                                                                                                                                                                                                                                                                                                                                                                                                  /**
+/**
  * Soft UI sounds for chrome (bottom nav, etc.).
  * Preloads once; plays without blocking navigation.
  */
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+} from "expo-audio";
 import { Platform } from "react-native";
+import { releaseAudioPlayer } from "../audio/releaseAudioPlayer";
 import { triggerHapticFeedback } from "./haptics";
 
 // Soft dual-tone plink (~110ms) — replace assets/sounds/nav-tap.wav anytime
 const NAV_TAP = require("../../../assets/sounds/nav-tap.wav");
 
-let navSound: Audio.Sound | null = null;
+let navSound: AudioPlayer | null = null;
 let loading: Promise<void> | null = null;
 let audioModeReady = false;
 
 async function ensureAudioMode(): Promise<void> {
   if (audioModeReady || Platform.OS === "web") return;
   try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: false,
-      staysActiveInBackground: false,
-      interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-      interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: false,
+      shouldPlayInBackground: false,
+      interruptionMode: "mixWithOthers",
+      shouldRouteThroughEarpiece: false,
     });
     audioModeReady = true;
   } catch {
@@ -31,7 +34,7 @@ async function ensureAudioMode(): Promise<void> {
   }
 }
 
-async function ensureNavSound(): Promise<Audio.Sound | null> {
+async function ensureNavSound(): Promise<AudioPlayer | null> {
   if (Platform.OS === "web") return null;
   if (navSound) return navSound;
   if (loading) {
@@ -41,12 +44,13 @@ async function ensureNavSound(): Promise<Audio.Sound | null> {
   loading = (async () => {
     await ensureAudioMode();
     try {
-      const { sound } = await Audio.Sound.createAsync(NAV_TAP, {
-        volume: 0.38,
-        shouldPlay: false,
-        isLooping: false,
+      const player = createAudioPlayer(NAV_TAP, {
+        updateInterval: 250,
+        keepAudioSessionActive: true,
       });
-      navSound = sound;
+      player.volume = 0.38;
+      player.loop = false;
+      navSound = player;
     } catch (e) {
       if (__DEV__) console.warn("[uiSounds] failed to load nav tap", e);
       navSound = null;
@@ -72,10 +76,10 @@ export function playNavTapSound(options?: { haptic?: boolean }): void {
   if (options?.haptic !== false) {
     triggerHapticFeedback("light");
   }
-  const play = (sound: Audio.Sound) => {
+  const play = (sound: AudioPlayer) => {
     void sound
-      .setPositionAsync(0)
-      .then(() => sound.playAsync())
+      .seekTo(0)
+      .then(() => sound.play())
       .catch(() => {});
   };
   if (navSound) {
@@ -85,4 +89,9 @@ export function playNavTapSound(options?: { haptic?: boolean }): void {
   void ensureNavSound().then((sound) => {
     if (sound) play(sound);
   });
+}
+
+export function releaseNavTapSound(): void {
+  releaseAudioPlayer(navSound);
+  navSound = null;
 }

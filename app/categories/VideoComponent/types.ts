@@ -38,5 +38,6 @@ export interface RecommendedItem {
   isHot?: boolean;
   isRising?: boolean;
   trendingScore?: number;
+  _id?: string;
 }
 

@@ -1,5 +1,5 @@
 /**
- * CommentModalV2 — thin composition shell (TikTok / IG same-window overlay).
+ * CommentModalV2 — native Modal popup (same approach as working-in-progress).
  * Row UI, animation, overlays, and composer live under ./comments/*.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -7,15 +7,19 @@ import {
   Alert,
   FlatList,
   InteractionManager,
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
   View,
 } from "react-native";
-import { PanGestureHandler } from "react-native-gesture-handler";
+import {
+  GestureHandlerRootView,
+  PanGestureHandler,
+} from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatCount } from "../../src/shared/utils/formatCount";
-import { isCommentPeekHudVisible } from "../../src/shared/comments/commentPeekHud";
 import { useCommentModal } from "../context/CommentModalContext";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { ensureAuthenticatedForInteraction } from "../utils/auth/requireAuthForInteraction";
@@ -25,7 +29,6 @@ import {
   CommentComposer,
   CommentDeleteModal,
   CommentListEmpty,
-  CommentPeekPlaybackHud,
   CommentRow,
   CommentSheetHeader,
   CommentSortModal,
@@ -39,12 +42,11 @@ import {
   type SubmitCommentPayload,
 } from "./comments";
 import { COMMENT_COMPOSER_COLORS as C } from "./comments/types";
-import { COMMENT_PEEK_HUD_STRIP } from "./commentSheetLayout";
+import { getWindowHeight } from "./commentSheetAnchor";
 
 export default function CommentModalV2() {
   const {
     isVisible,
-    isClosing,
     comments,
     isLoadingComments,
     loadError,
@@ -64,7 +66,6 @@ export default function CommentModalV2() {
     typingUsers,
     setLocalTyping,
     mediaPeekHeight,
-    contentId,
   } = useCommentModal();
 
   const { user, getAvatarUrl, getFullName } = useUserProfile();
@@ -75,6 +76,7 @@ export default function CommentModalV2() {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<CommentThreadItem>>(null);
   const lastCountRef = useRef(0);
+  const [composerH, setComposerH] = useState(88);
   // Keep the sheet in the tree after idle / first open so tap 1 isn't a JS mount.
   const [shellReady, setShellReady] = useState(false);
   useEffect(() => {
@@ -285,44 +287,34 @@ export default function CommentModalV2() {
   const headerLabel =
     totalCount === 1 ? "1 comment" : `${formatCount(totalCount)} comments`;
 
-  return (
+  // working-in-progress: sit the sheet on top of the keyboard so the input
+  // (and reply text) is never covered. Height is the space left above the keys.
+  const windowH = getWindowHeight();
+  const kbLift = anim.keyboardHeight;
+  const sheetHeight =
+    kbLift > 0
+      ? Math.max(280, windowH - kbLift)
+      : Math.max(320, Math.round(windowH * 0.6));
+
+  const overlay = (
     <View
-      style={[
-        styles.overlayRoot,
-        !isVisible ? styles.overlayRootIdle : undefined,
-      ]}
+      style={styles.overlayRoot}
       pointerEvents={isVisible ? "box-none" : "none"}
     >
-      {/* Light dim — leave the HUD strip undimmed for seek */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.dimHitArea,
-          { height: Math.max(0, mediaPeekHeight - COMMENT_PEEK_HUD_STRIP) },
-          anim.backdropStyle,
-        ]}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss comments"
+        onPress={anim.closeModal}
+        style={styles.backdropHit}
       >
-        <View style={styles.dimFill} />
-      </Animated.View>
-
-      {isCommentPeekHudVisible(isVisible, isClosing) ? (
-        <CommentPeekPlaybackHud
-          peekHeight={mediaPeekHeight}
-          contentId={contentId}
-        />
-      ) : null}
-
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.keyboardBridge, anim.keyboardBridgeStyle]}
-      />
+        <View style={styles.backdropFill} />
+      </Pressable>
 
       <Animated.View
         pointerEvents="auto"
         style={[
           styles.sheet,
-          // Static pin: sheet never fills the overlay before Reanimated applies
-          { top: mediaPeekHeight, bottom: 0 },
+          { height: sheetHeight, marginBottom: kbLift },
           anim.sheetAnimatedStyle,
         ]}
       >
@@ -353,7 +345,10 @@ export default function CommentModalV2() {
             renderItem={renderItem}
           ListEmptyComponent={listEmpty}
           style={styles.list}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: composerH + 12 },
+          ]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
           nestedScrollEnabled
@@ -369,7 +364,16 @@ export default function CommentModalV2() {
         />
 
         <CommentTypingBanner users={typingUsers} />
+      </Animated.View>
 
+      <View
+        pointerEvents="auto"
+        onLayout={(e) => {
+          const h = Math.ceil(e.nativeEvent.layout.height);
+          if (h > 0 && Math.abs(h - composerH) > 1) setComposerH(h);
+        }}
+        style={[styles.composerDock, { bottom: kbLift }]}
+      >
         <CommentComposer
           key={isVisible ? "open" : "closed"}
           isAuthenticated={isAuthenticated}
@@ -414,7 +418,7 @@ export default function CommentModalV2() {
             });
           }}
         />
-      </Animated.View>
+      </View>
 
       <CommentSortModal
         visible={ui.sortSheetOpen}
@@ -451,51 +455,63 @@ export default function CommentModalV2() {
       />
     </View>
   );
+
+  // Native Modal (working-in-progress): VideoView ignores zIndex, so an
+  // in-tree overlay never pops up over Reels / feed players.
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+      onRequestClose={anim.closeModal}
+      onShow={() => {
+        anim.translateY.value = 0;
+      }}
+    >
+      <GestureHandlerRootView style={styles.modalHost}>
+        {overlay}
+      </GestureHandlerRootView>
+    </Modal>
+  );
 }
 
 const styles = StyleSheet.create({
   overlayRoot: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-end",
+  },
+  modalHost: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-end",
+  },
+  backdropHit: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
-    elevation: 1000,
   },
-  overlayRootIdle: {
-    zIndex: -1,
-    elevation: 0,
-  },
-  dimHitArea: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-  },
-  dimFill: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#000000",
-  },
-  keyboardBridge: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: C.sheet,
+  backdropFill: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   sheet: {
+    width: "100%",
+    backgroundColor: C.sheet,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  composerDock: {
     position: "absolute",
     left: 0,
     right: 0,
-    // top + bottom pinned from props / keyboard — never unbound height
+    zIndex: 40,
+    elevation: 40,
     backgroundColor: C.sheet,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    flexDirection: "column",
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 18,
   },
   handleWrap: {
     alignItems: "center",
@@ -511,6 +527,7 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+    minHeight: 0,
   },
   listContent: {
     paddingHorizontal: 14,

@@ -4,7 +4,7 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { FlatList, Text, View } from "react-native";
 import { ListSkeletonStack } from "../../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
@@ -18,7 +18,9 @@ import {
   useAllLibraryHandlers,
   useAllLibraryPlayback,
 } from "./AllLibrary/hooks";
-import { isVideoContent } from "./AllLibrary/utils/libraryHelpers";
+import { isEbookContent, isVideoContent } from "./AllLibrary/utils/libraryHelpers";
+import { mapMediaItemToTrack } from "../../../src/shared/audio/mapToAudioTrack";
+import { rememberSessionAudioQueue } from "../../../src/shared/audio/sessionAudioQueue";
 
 export default function AllLibrary({ contentType }: { contentType?: string }) {
   const router = useRouter();
@@ -42,6 +44,14 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
     refreshSavedState,
     setSavedItems,
   } = data;
+
+  useEffect(() => {
+    const tracks = filteredItems
+      .filter((item: any) => !isVideoContent(item) && !isEbookContent(item))
+      .map((item: any) => mapMediaItemToTrack(item, "library"))
+      .filter((t): t is NonNullable<typeof t> => !!t);
+    rememberSessionAudioQueue(tracks);
+  }, [filteredItems]);
 
   const { navigateToReels } = useVideoNavigation();
 
@@ -177,7 +187,7 @@ export default function AllLibrary({ contentType }: { contentType?: string }) {
   const renderLoadingState = () => <ListSkeletonStack rows={6} />;
 
   return (
-    <View className="flex-1 bg-white">
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {showSuccessCard && (
         <SuccessCard
           message={successMessage}

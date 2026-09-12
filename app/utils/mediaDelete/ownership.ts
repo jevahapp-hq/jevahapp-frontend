@@ -127,9 +127,9 @@ export const isMediaOwner = async (
 
       if (!currentUserId) {
         console.log(
-          "⚠️ isMediaOwner: No explicit user ID found, but token exists – deferring the final check to the backend."
+          "⚠️ isMediaOwner: No explicit user ID found — hide delete until ownership is proven."
         );
-        return true;
+        return false;
       }
     }
 
@@ -144,13 +144,13 @@ export const isMediaOwner = async (
     }
 
     const uploadedById = extractUploaderId(uploadedBy, mediaItem);
-    if (uploadedById === "assume-owner") return true;
+    if (uploadedById === "assume-owner") return false;
 
     if (!uploadedById) {
       console.log("❌ isMediaOwner: Could not extract uploadedBy ID", {
         uploadedBy,
       });
-      return true;
+      return false;
     }
 
     const isOwner = currentUserId === uploadedById;
@@ -162,7 +162,7 @@ export const isMediaOwner = async (
     return isOwner;
   } catch (error) {
     console.error("❌ Error checking media ownership:", error);
-    return true;
+    return false;
   }
 };
 

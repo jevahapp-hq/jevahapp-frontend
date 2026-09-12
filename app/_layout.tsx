@@ -27,7 +27,7 @@ import { Slot } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { Alert, BackHandler, InteractionManager, Platform, Text, View } from "react-native";
+import { BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
@@ -67,6 +67,7 @@ import {
   hydrateLiteProfileSync,
 } from "../src/shared/lite/liteProfile";
 import { hasBackendSessionSync } from "./utils/sessionAuth";
+import { runFullscreenBackExit } from "../src/features/media/video-feed/fullscreenBackSession";
 import { PERF, getAllPerfSummaries, perfMark, perfMeasure } from "../src/shared/utils/perfMarks";
 import { warmupBackend } from "./utils/apiWarmup";
 import { PerformanceOptimizer } from "./utils/performance";
@@ -405,14 +406,13 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const handler = () => {
-      Alert.alert("Exit App?", "Do you want to exit the app?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Exit",
-          style: "destructive",
-          onPress: () => BackHandler.exitApp(),
-        },
-      ]);
+      try {
+        if (runFullscreenBackExit()) return true;
+      } catch {
+        return true;
+      }
+      // Leave the app. Do not sign the user out — session stays on disk.
+      BackHandler.exitApp();
       return true;
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", handler);

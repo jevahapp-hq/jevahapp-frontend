@@ -11,10 +11,19 @@ import { ensureAuthenticatedForInteraction } from "../../utils/auth/requireAuthF
 import { useInteractionStore } from "@/store/useInteractionStore";
 import {
   getVideoPlaybackSnapshot,
+  resolveRegisteredVideoKey,
   useGlobalVideoStore,
 } from "@/store/useGlobalVideoStore";
 import { useReelsStore } from "@/store/useReelsStore";
 import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
+import { remapResumeFeedKey } from "../../../src/features/media/video-feed";
+import { savePlayhead } from "../../../src/features/media/video-feed/playheadCache";
+import {
+  fullscreenReelsCommentAnchor,
+  type CommentMediaAnchor,
+} from "../../components/commentSheetAnchor";
+import type { CommentCreatorInfo } from "../../context/commentModalTypes";
+import { resolveSaveSeed } from "../../../src/shared/hooks/useContentSaveState";
 
 export interface UseReelsHandlersParams {
   router: ReturnType<typeof useRouter>;
@@ -38,12 +47,22 @@ export interface UseReelsHandlersParams {
   imageUrl: string;
   sheared: string;
   toggleLike: (contentId: string, contentType: string) => Promise<void>;
-  showCommentModal: (comments: any[], contentId: string, type: string, speaker?: any) => void;
+  showCommentModal: (
+    comments: any[],
+    contentId: string,
+    type: string,
+    speaker?: any,
+    creator?: CommentCreatorInfo | null,
+    anchor?: CommentMediaAnchor | null
+  ) => void;
   libraryStore: any;
   handleDownload: (item: any) => Promise<void>;
   openDeleteModal: () => void;
   handleDeleteConfirmInternal: () => Promise<void>;
   triggerHapticFeedback: () => void;
+  getVideoPositionMs?: () => number;
+  setSuccessMessage: (m: string) => void;
+  setShowSuccessCard: (v: boolean) => void;
 }
 
 export function useReelsHandlers({
@@ -74,35 +93,63 @@ export function useReelsHandlers({
   openDeleteModal,
   handleDeleteConfirmInternal,
   triggerHapticFeedback,
+  getVideoPositionMs,
+  setSuccessMessage,
+  setShowSuccessCard,
 }: UseReelsHandlersParams) {
   const handleBackNavigation = useCallback(() => {
     triggerHapticFeedback();
 
-    // Persist active reel position so the feed can seek on return.
+    // Persist active reel + playhead independently of fullscreen being open.
     try {
       const reels = useReelsStore.getState();
+      const activeIndex = Math.max(0, reels.currentIndex || 0);
       const active =
-        reels.videoList[reels.currentIndex] || reels.videoList[0];
-      const contentId = String(active?._id || (active as any)?.id || "").trim();
+        reels.videoList[activeIndex] || reels.videoList[0];
+      const contentId = String(
+        active?._id || (active as any)?.id || contentIdForHooks || ""
+      ).trim();
       const visibleKey = useGlobalVideoStore.getState().currentlyVisibleVideo;
-      const snap = visibleKey ? getVideoPlaybackSnapshot(visibleKey) : null;
+      const snap =
+        getVideoPlaybackSnapshot(modalKey) ||
+        (contentId
+          ? getVideoPlaybackSnapshot(
+              resolveRegisteredVideoKey(contentId) || ""
+            )
+          : null) ||
+        (visibleKey ? getVideoPlaybackSnapshot(visibleKey) : null);
       const prev = reels.resumePlayback;
+      const liveMs = getVideoPositionMs?.() ?? 0;
+      const positionMs =
+        snap?.currentMs ??
+        (liveMs > 0 ? liveMs : undefined) ??
+        (prev?.contentId && String(prev.contentId) === contentId
+          ? prev.positionMs
+          : 0) ??
+        0;
       if (contentId) {
-        const sameVideo =
-          prev?.contentId && String(prev.contentId) === contentId;
+        const feedKey = remapResumeFeedKey(prev?.feedKey, contentId);
         reels.setResumePlayback({
           contentId,
-          positionMs: snap?.currentMs ?? (sameVideo ? prev?.positionMs : 0) ?? 0,
-          feedKey: sameVideo ? prev?.feedKey : undefined,
+          positionMs,
+          feedKey,
+          reelsIndex: activeIndex,
           target: "feed",
         });
+        const url =
+          (active as any)?.fileUrl ||
+          (active as any)?.playbackUrl ||
+          (active as any)?.hlsUrl;
+        if (typeof url === "string" && positionMs > 150) {
+          savePlayhead(url, positionMs / 1000);
+        }
       }
     } catch {
       // best-effort
     }
 
     // Prefer stack pop so the feed keeps scroll position / active video.
-    if (source === "AllContentTikTok" && router.canGoBack?.()) {
+    if (router.canGoBack?.()) {
       router.back();
       return;
     }
@@ -121,10 +168,6 @@ export function useReelsHandlers({
       router.replace("/screens/library/LibraryScreen");
       return;
     }
-    if (router.canGoBack?.()) {
-      router.back();
-      return;
-    }
     if (source === "VideoComponent") router.push("/categories/VideoComponent");
     else if (source === "SermonComponent") router.push("/categories/SermonComponent");
     else if (source === "LiveComponent") router.push("/categories/LiveComponent");
@@ -136,7 +179,15 @@ export function useReelsHandlers({
         params: { default: "Home", defaultCategory: category || "ALL" },
       });
     }
-  }, [router, source, category, triggerHapticFeedback]);
+  }, [
+    router,
+    source,
+    category,
+    triggerHapticFeedback,
+    getVideoPositionMs,
+    modalKey,
+    contentIdForHooks,
+  ]);
 
   const tryRefreshMediaUrl = useCallback(async (item: any): Promise<string | null> => {
     try {
@@ -180,10 +231,30 @@ export function useReelsHandlers({
 
   const handleComment = useCallback(
     (key: string) => {
-      const commentContentId = contentId || key;
-      showCommentModal([], commentContentId, "media", currentVideo.speaker);
+      const commentContentId = contentIdForHooks || contentId || key;
+      const speakerName =
+        typeof currentVideo?.speaker === "string"
+          ? currentVideo.speaker
+          : undefined;
+      showCommentModal(
+        [],
+        commentContentId,
+        "media",
+        speakerName,
+        speakerName
+          ? {
+              userId: "",
+              displayName: speakerName,
+              avatar:
+                typeof currentVideo?.speakerAvatar === "string"
+                  ? currentVideo.speakerAvatar
+                  : undefined,
+            }
+          : null,
+        fullscreenReelsCommentAnchor()
+      );
     },
-    [contentId, showCommentModal, currentVideo?.speaker]
+    [contentId, contentIdForHooks, showCommentModal, currentVideo]
   );
 
   const handleSave = useCallback(
@@ -192,54 +263,75 @@ export function useReelsHandlers({
         const auth = await ensureAuthenticatedForInteraction({ action: "save" });
         if (!auth.ok) return;
 
-        // Prefer durable backend bookmark when we have a real content id.
+        const libraryId = contentIdForHooks || key;
+        const seed = resolveSaveSeed(libraryId, currentVideo);
+        const currentlySaved =
+          seed.initialSaved ||
+          libraryStore.isItemSaved(libraryId) ||
+          libraryStore.isItemSaved(key);
+
+        const nextSaved = !currentlySaved;
+        setSuccessMessage(
+          nextSaved ? "Saved to library!" : "Removed from library!"
+        );
+        setShowSuccessCard(true);
+
+        const libraryItem = {
+          id: libraryId,
+          title: currentVideo.title || title,
+          speaker: currentVideo.speaker || speaker,
+          timeAgo: currentVideo.timeAgo || timeAgo,
+          contentType: currentVideo.contentType || "Reel",
+          fileUrl: currentVideo.fileUrl || imageUrl,
+          thumbnailUrl:
+            currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
+          originalKey: key,
+          createdAt: currentVideo.createdAt || new Date().toISOString(),
+        };
+
+        if (nextSaved) {
+          void libraryStore.addToLibrary(libraryItem);
+        } else {
+          void libraryStore.removeFromLibrary(libraryId);
+          void libraryStore.removeFromLibrary(key);
+        }
+
         if (canUseBackendLikes && contentIdForHooks) {
           const result = await useInteractionStore
             .getState()
             .toggleSave(
               contentIdForHooks,
-              mapContentTypeForBackend(activeContentType || "media")
+              mapContentTypeForBackend(activeContentType || "media"),
+              {
+                initialSaved: seed.initialSaved,
+                initialSaves: seed.initialSaves,
+              }
             );
-          if (result?.authRequired) return;
-
-          if (result.saved) {
-            libraryStore.addToLibrary({
-              id: key,
-              title: currentVideo.title || title,
-              speaker: currentVideo.speaker || speaker,
-              timeAgo: currentVideo.timeAgo || timeAgo,
-              contentType: "Reel",
-              fileUrl: currentVideo.fileUrl || imageUrl,
-              thumbnailUrl:
-                currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
-              originalKey: key,
-              createdAt: new Date().toISOString(),
-            });
-          } else {
-            libraryStore.removeFromLibrary(key);
+          if (result?.authRequired) {
+            setShowSuccessCard(false);
+            if (nextSaved) {
+              void libraryStore.removeFromLibrary(libraryId);
+              void libraryStore.removeFromLibrary(key);
+            } else {
+              void libraryStore.addToLibrary(libraryItem);
+            }
+            return;
           }
-          return;
-        }
 
-        const isSaved = libraryStore.isItemSaved(key);
-        if (isSaved) {
-          libraryStore.removeFromLibrary(key);
-        } else {
-          libraryStore.addToLibrary({
-            id: key,
-            title: currentVideo.title || title,
-            speaker: currentVideo.speaker || speaker,
-            timeAgo: currentVideo.timeAgo || timeAgo,
-            contentType: "Reel",
-            fileUrl: currentVideo.fileUrl || imageUrl,
-            thumbnailUrl:
-              currentVideo.imageUrl || currentVideo.thumbnailUrl || imageUrl,
-            originalKey: key,
-            createdAt: new Date().toISOString(),
-          });
+          setSuccessMessage(
+            result?.saved ? "Saved to library!" : "Removed from library!"
+          );
+          if (result?.saved) {
+            void libraryStore.addToLibrary(libraryItem);
+          } else {
+            void libraryStore.removeFromLibrary(libraryId);
+            void libraryStore.removeFromLibrary(key);
+          }
         }
       } catch (e) {
         console.error("❌ Error handling save:", e);
+        setSuccessMessage("Couldn't save — media may be unavailable");
+        setShowSuccessCard(true);
       }
     },
     [
@@ -252,6 +344,8 @@ export function useReelsHandlers({
       canUseBackendLikes,
       contentIdForHooks,
       activeContentType,
+      setSuccessMessage,
+      setShowSuccessCard,
     ]
   );
 

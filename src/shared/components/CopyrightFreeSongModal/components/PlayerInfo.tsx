@@ -1,136 +1,68 @@
-import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
-import { UI_CONFIG } from "@/shared/constants";
+import { Text, View } from "react-native";
+import { PlayerActionChips } from "./PlayerActionChips";
 
 export interface PlayerInfoProps {
   title: string;
   artist: string;
   isLiked: boolean;
-  likeCount: number;
-  viewCount: number;
   isTogglingLike: boolean;
+  isInLibrary?: boolean;
+  isTogglingSave?: boolean;
   onToggleLike: () => void;
+  onOpenPlaylistView: () => void;
+  onToggleSave?: () => void;
+  onShare?: () => void;
 }
 
 export function PlayerInfo({
   title,
   artist,
   isLiked,
-  likeCount,
-  viewCount,
   isTogglingLike,
+  isInLibrary,
+  isTogglingSave,
   onToggleLike,
+  onOpenPlaylistView,
+  onToggleSave,
+  onShare,
 }: PlayerInfoProps) {
   return (
-    <View
-      style={{
-        alignItems: "center",
-        marginBottom: UI_CONFIG.SPACING.MD,
-      }}
-    >
+    <View style={{ alignItems: "center", marginTop: 8, marginBottom: 4 }}>
       <Text
         style={{
-          fontSize: 24,
-          fontFamily: "PlusJakartaSans-Bold",
-          color: "#FFFFFF",
-          marginBottom: 4,
-          textAlign: "center",
-          letterSpacing: -0.3,
-          textShadowColor: "rgba(0, 0, 0, 0.6)",
-          textShadowOffset: { width: 0, height: 2 },
-          textShadowRadius: 6,
-        }}
-        numberOfLines={2}
-      >
-        {title}
-      </Text>
-      <Text
-        style={{
-          fontSize: 16,
+          fontSize: 14,
           fontFamily: "PlusJakartaSans-Medium",
-          color: "rgba(255, 255, 255, 0.78)",
-          marginBottom: 14,
+          color: "rgba(255,255,255,0.55)",
+          marginBottom: 2,
           textAlign: "center",
-          textShadowColor: "rgba(0, 0, 0, 0.4)",
-          textShadowOffset: { width: 0, height: 1 },
-          textShadowRadius: 3,
         }}
         numberOfLines={1}
       >
         {artist}
       </Text>
-
-      <View
+      <Text
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: UI_CONFIG.SPACING.MD,
+          fontSize: 20,
+          fontFamily: "PlusJakartaSans-Bold",
+          color: "#FFFFFF",
+          textAlign: "center",
+          letterSpacing: -0.2,
         }}
+        numberOfLines={2}
       >
-        <TouchableOpacity
-          onPress={onToggleLike}
-          disabled={isTogglingLike}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 7,
-            paddingHorizontal: 16,
-            paddingVertical: 7,
-            borderRadius: 20,
-            backgroundColor: isLiked
-              ? "rgba(255, 107, 107, 0.22)"
-              : "rgba(255, 255, 255, 0.12)",
-            borderWidth: 1,
-            borderColor: isLiked
-              ? "rgba(255, 107, 107, 0.45)"
-              : "rgba(255, 255, 255, 0.2)",
-          }}
-        >
-          <Ionicons
-            name={isLiked ? "heart" : "heart-outline"}
-            size={18}
-            color={isLiked ? "#FF6B6B" : "#FFFFFF"}
-          />
-          <Text
-            style={{
-              fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-              fontFamily: "PlusJakartaSans-SemiBold",
-              color: isLiked ? "#FF6B6B" : "#FFFFFF",
-            }}
-          >
-            {likeCount > 0 ? likeCount.toLocaleString() : "0"}
-          </Text>
-        </TouchableOpacity>
-
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 7,
-            paddingHorizontal: 16,
-            paddingVertical: 7,
-            borderRadius: 20,
-            backgroundColor: "rgba(255, 255, 255, 0.12)",
-            borderWidth: 1,
-            borderColor: "rgba(255, 255, 255, 0.2)",
-          }}
-        >
-          <Ionicons name="eye-outline" size={18} color="rgba(255, 255, 255, 0.9)" />
-          <Text
-            style={{
-              fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.SM,
-              fontFamily: "PlusJakartaSans-SemiBold",
-              color: "#FFFFFF",
-            }}
-          >
-            {viewCount > 0 ? viewCount.toLocaleString() : "0"}
-          </Text>
-        </View>
-      </View>
+        {title}
+      </Text>
+      <PlayerActionChips
+        isLiked={isLiked}
+        isTogglingLike={isTogglingLike}
+        isInLibrary={isInLibrary}
+        isTogglingSave={isTogglingSave}
+        onToggleLike={onToggleLike}
+        onOpenPlaylistView={onOpenPlaylistView}
+        onToggleSave={onToggleSave}
+        onShare={onShare}
+      />
     </View>
   );
 }

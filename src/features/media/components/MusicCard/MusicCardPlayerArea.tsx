@@ -13,7 +13,30 @@ import { SafeImage } from "../../../../../app/components/SafeImage";
 import AudioControlsOverlay from "../../../../shared/components/AudioControlsOverlay";
 import { FeedMediaTypeOverlay } from "../../../../shared/components/FeedMediaTypeOverlay";
 import { AudioCardSkeleton } from "../../../../shared/components/Skeleton";
+import { useAudioDurationForTrack, useAudioProgressForTrack } from "@/store/audioPlayer/audioProgressStore";
 import type { MediaItem } from "../../../../shared/types";
+
+function MusicCardSeekBar(props: {
+  audioId: string;
+  hasDuration: boolean;
+  isMuted: boolean;
+  onToggleMute: () => void;
+  onSeekRelative: (deltaSec: number) => void;
+  onSeekToPercent: (pct: number) => void;
+}) {
+  const progress = useAudioProgressForTrack(props.audioId);
+  const clockDuration = useAudioDurationForTrack(props.audioId);
+  return (
+    <AudioControlsOverlay
+      progress={progress}
+      isMuted={props.isMuted}
+      onToggleMute={props.onToggleMute}
+      onSeekRelative={props.onSeekRelative}
+      onSeekToPercent={props.onSeekToPercent}
+      seekEnabled={props.hasDuration || clockDuration > 0}
+    />
+  );
+}
 
 export function MusicCardPlayerArea(props: {
   audio: MediaItem;
@@ -21,7 +44,7 @@ export function MusicCardPlayerArea(props: {
   isSermon: boolean;
   attemptedPlay: boolean;
   hasDuration: boolean;
-  progress: number;
+  audioId: string;
   isMuted: boolean;
   isPlaying: boolean;
   onToggleOverlay: () => void;
@@ -36,7 +59,7 @@ export function MusicCardPlayerArea(props: {
     isSermon,
     attemptedPlay,
     hasDuration,
-    progress,
+    audioId,
     isMuted,
     isPlaying,
     onToggleOverlay,
@@ -87,13 +110,13 @@ export function MusicCardPlayerArea(props: {
           </Text>
         </View>
 
-        <AudioControlsOverlay
-          progress={progress}
+        <MusicCardSeekBar
+          audioId={audioId}
+          hasDuration={hasDuration}
           isMuted={isMuted}
           onToggleMute={onToggleMute}
           onSeekRelative={onSeekRelative}
           onSeekToPercent={onSeekToPercent}
-          seekEnabled={hasDuration}
         />
 
         <View className="absolute bottom-4 left-3" pointerEvents="box-none">

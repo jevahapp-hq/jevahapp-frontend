@@ -127,7 +127,7 @@ export function useVideoComponentData({
       .map((video) => {
         const originalVideo = uploadedVideos.find((v) => v.fileUrl === video.fileUrl);
         const { score, recency } = calculateTrendingScore(video, originalVideo || {});
-        return { ...video, trendingScore: score, recency, createdAt: originalVideo?.createdAt } as any;
+        return { ...video, trendingScore: score, recency, createdAt: originalVideo?.createdAt, _id: originalVideo?._id } as any;
       })
       .filter((v) => (v as any).trendingScore > 0);
 
@@ -151,6 +151,7 @@ export function useVideoComponentData({
             trendingScore,
             globalViews,
             views,
+            _id,
           }: any) => {
             const scoreNum = Number(trendingScore || 0);
             return {
@@ -162,6 +163,7 @@ export function useVideoComponentData({
               isHot: scoreNum > 1200,
               isRising: scoreNum > 600 && scoreNum <= 1200,
               trendingScore: scoreNum,
+              _id,
             } as RecommendedItem;
           }
         );
@@ -172,7 +174,7 @@ export function useVideoComponentData({
       .map((video) => {
         const originalVideo = uploadedVideos.find((v) => v.fileUrl === video.fileUrl);
         const createdAt = new Date(originalVideo?.createdAt || Date.now()).getTime();
-        return { ...video, createdAt } as any;
+        return { ...video, createdAt, _id: originalVideo?._id } as any;
       })
       .sort((a: any, b: any) => {
         const bv = b.globalViews ?? b.views ?? 0;
@@ -181,7 +183,7 @@ export function useVideoComponentData({
         return (b.createdAt ?? 0) - (a.createdAt ?? 0);
       })
       .slice(0, 20)
-      .map(({ fileUrl, title, subTitle, imageUrl, globalViews, views }: any) => ({
+      .map(({ fileUrl, title, subTitle, imageUrl, globalViews, views, _id }: any) => ({
         fileUrl,
         title,
         subTitle,
@@ -190,6 +192,7 @@ export function useVideoComponentData({
         isHot: false,
         isRising: false,
         trendingScore: 0,
+        _id,
       } as RecommendedItem));
 
     return fallback;
@@ -251,13 +254,17 @@ export function useVideoComponentData({
         ? scoredFiltered
         : allIndexedVideos.map(scoreVideo).sort((a, b) => b.recommendationScore - a.recommendationScore);
 
-    return source.slice(0, 12).map(({ fileUrl, title, subTitle, views, imageUrl }) => ({
-      fileUrl,
-      title,
-      subTitle,
-      views,
-      imageUrl,
-    }));
+    return source.slice(0, 12).map((video) => {
+      const original = uploadedVideos.find((v) => v.fileUrl === video.fileUrl);
+      return {
+        fileUrl: video.fileUrl,
+        title: video.title,
+        subTitle: video.subTitle,
+        views: video.views,
+        imageUrl: video.imageUrl,
+        _id: original?._id,
+      };
+    });
   }, [
     uploadedVideos,
     previouslyViewedState,

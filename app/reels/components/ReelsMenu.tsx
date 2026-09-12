@@ -17,10 +17,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UI_CONFIG } from "../../../src/shared/constants";
+import { useContentSaveState } from "../../../src/shared/hooks/useContentSaveState";
+import { useLibraryStore } from "@/store/useLibraryStore";
 
 interface ReelsMenuProps {
   visible: boolean;
   modalKey: string;
+  contentId?: string;
   currentVideo: any;
   isOwner: boolean;
   libraryStore: any;
@@ -37,9 +40,10 @@ interface ReelsMenuProps {
 export const ReelsMenu: React.FC<ReelsMenuProps> = ({
   visible,
   modalKey,
+  contentId,
   currentVideo,
   isOwner,
-  libraryStore,
+  libraryStore: _libraryStore,
   checkIfDownloaded,
   onClose,
   onViewDetails,
@@ -90,9 +94,15 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
     ],
   }));
 
+  const saveId = String(contentId || currentVideo?._id || currentVideo?.id || "");
+  const save = useContentSaveState(saveId, currentVideo);
+  const librarySaved = useLibraryStore(
+    (s) => s.isItemSaved(saveId) || s.isItemSaved(modalKey)
+  );
+  const isSaved = save.saved || librarySaved;
+
   if (!mounted) return null;
 
-  const isSaved = libraryStore.isItemSaved(modalKey);
   const isDownloaded = checkIfDownloaded(currentVideo?._id || modalKey);
 
   const MenuItem = ({
@@ -101,6 +111,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
     onPress,
     isDestructive = false,
     isSuccess = false,
+    iconColor,
     IconComponent = Ionicons,
   }: {
     label: string;
@@ -108,6 +119,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
     onPress: () => void;
     isDestructive?: boolean;
     isSuccess?: boolean;
+    iconColor?: string;
     IconComponent?: any;
   }) => (
     <TouchableOpacity
@@ -142,9 +154,11 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
         color={
           isDestructive
             ? UI_CONFIG.COLORS.ERROR
-            : isSuccess
-              ? UI_CONFIG.COLORS.SUCCESS
-              : "#FFFFFF"
+            : iconColor
+              ? iconColor
+              : isSuccess
+                ? UI_CONFIG.COLORS.SUCCESS
+                : "#FFFFFF"
         }
       />
     </TouchableOpacity>
@@ -244,7 +258,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
               label={isSaved ? "Remove from Library" : "Save to Library"}
               icon={isSaved ? "bookmark" : "bookmark-border"}
               onPress={() => onSave(modalKey)}
-              isSuccess={isSaved}
+              iconColor={isSaved ? "#FEA74E" : "#FFFFFF"}
               IconComponent={MaterialIcons}
             />
 

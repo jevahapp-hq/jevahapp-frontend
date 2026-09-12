@@ -1,22 +1,15 @@
 import React from "react";
 import { View } from "react-native";
+import { useAudioProgressStore } from "@/store/audioPlayer/audioProgressStore";
 import { floatingMiniBarStyles as styles } from "../floatingMiniBarStyles";
-
-type Props = {
-  /** 0–1. */
-  progress: number;
-};
 
 /**
  * Hairline progress line along the bottom edge.
- *
- * Driven by a width percentage rather than an animated transform: the store
- * already throttles position updates to ~80ms, and a `scaleX` transform on a
- * 2px bar anchors from the centre unless an extra wrapper is added.
+ * Subscribes to the playback clock so play/pause chrome does not re-render
+ * on every tick.
  */
-export const MiniBarProgress = React.memo(function MiniBarProgress({
-  progress,
-}: Props) {
+export const MiniBarProgress = React.memo(function MiniBarProgress() {
+  const progress = useAudioProgressStore((s) => s.progress);
   const pct = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 0));
 
   return (

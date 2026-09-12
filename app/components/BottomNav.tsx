@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   InteractionManager,
   Pressable,
@@ -21,6 +21,7 @@ import {
   getResponsiveTextStyle,
   JAKARTA,
 } from "../../utils/responsive";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useMediaStore } from "@/store/useUploadStore";
 import { prefetchCreateFlows } from "../utils/prefetchUploadScreen";
@@ -43,34 +44,12 @@ const tabConfig: Record<
 
 const TAB_ORDER = ["Home", "Community", "Library", "Bible"] as const;
 
-function deferMediaCleanup(tab: string, prevTab: string) {
-  if (tab === prevTab) return;
-  InteractionManager.runAfterInteractions(() => {
-    try {
-      useMediaStore.getState().stopAudioFn?.();
-    } catch {
-      // no-op
-    }
-    try {
-      useGlobalVideoStore.getState().pauseAllVideos();
-    } catch {
-      // no-op
-    }
-    try {
-      if (tab === "Bible") {
-        void pausePlaybackSession();
-      }
-    } catch {
-      // no-op
-    }
-  });
-}
-
 export default function BottomNav({
   selectedTab,
   setSelectedTab,
 }: BottomNavProps) {
   const navBarHeight = getBottomNavHeight();
+  const lastHomeVideoKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     retainBottomChrome();
@@ -91,9 +70,60 @@ export default function BottomNav({
 
   const handleTabPress = useCallback(
     (tab: string) => {
+      const previousTab = selectedTab;
       setSelectedTab(tab);
       queueMicrotask(() => playNavTapSound());
-      deferMediaCleanup(tab, selectedTab);
+      if (tab === previousTab) return;
+
+      InteractionManager.runAfterInteractions(() => {
+        try {
+          useMediaStore.getState().stopAudioFn?.();
+        } catch {
+          // no-op
+        }
+
+        if (tab === "Bible") {
+          try {
+            void useGlobalAudioPlayerStore.getState().stop();
+          } catch {
+            // no-op
+          }
+          try {
+            void pausePlaybackSession();
+          } catch {
+            // no-op
+          }
+        }
+
+        if (tab === "Home") {
+          try {
+            const videoStore = useGlobalVideoStore.getState();
+            const key =
+              lastHomeVideoKeyRef.current || videoStore.currentlyPlayingVideo;
+            if (key) videoStore.playVideoGlobally(key);
+          } catch {
+            // no-op
+          }
+          return;
+        }
+
+        if (previousTab === "Home") {
+          try {
+            const videoStore = useGlobalVideoStore.getState();
+            lastHomeVideoKeyRef.current = videoStore.currentlyPlayingVideo;
+            videoStore.pauseAllVideos();
+          } catch {
+            // no-op
+          }
+          return;
+        }
+
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos();
+        } catch {
+          // no-op
+        }
+      });
     },
     [selectedTab, setSelectedTab]
   );
@@ -111,7 +141,7 @@ export default function BottomNav({
     return (
       <View key={tab} style={{ flex: 1 }}>
         <Pressable
-          onPress={() => handleTabPress(tab)}
+          onPressIn={() => handleTabPress(tab)}
           unstable_pressDelay={0}
           android_disableSound
           style={({ pressed }) => ({

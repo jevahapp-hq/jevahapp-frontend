@@ -48,3 +48,11 @@ export function resolveFullPlayerTarget(source?: Source): FullPlayerTarget {
 export function supportsFullScreenPlayer(source?: Source): boolean {
   return resolveFullPlayerTarget(source) !== "none";
 }
+
+/**
+ * Music (feed / catalog / library) owns the full-screen player. The floating
+ * mini bar must not sit over the bottom tabs for those tracks.
+ */
+export function shouldHideMiniPlayerForTrack(source?: Source): boolean {
+  return supportsFullScreenPlayer(source);
+}

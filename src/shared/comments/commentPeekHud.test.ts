@@ -14,3 +14,8 @@ test("HUD stays off when the sheet is closed", () => {
   assert.equal(isCommentPeekHudVisible(false, false), false);
   assert.equal(isCommentPeekHudVisible(false, true), false);
 });
+
+test("fullscreen Reels can disable the peek play HUD", () => {
+  assert.equal(isCommentPeekHudVisible(true, false, false), false);
+  assert.equal(isCommentPeekHudVisible(true, false, true), true);
+});

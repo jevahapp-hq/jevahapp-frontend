@@ -2,7 +2,7 @@
 
 /**
  * Starts Expo with a phone-reachable LAN hostname (never 127.0.0.1).
- * Priority: .env REACT_NATIVE_PACKAGER_HOSTNAME → Wi-Fi IPv4 → lan-network.
+ * Priority: .env.local REACT_NATIVE_PACKAGER_HOSTNAME → Wi-Fi IPv4 → lan-network.
  */
 
 const fs = require("fs");
@@ -10,8 +10,7 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 
-function loadEnvFile() {
-  const envPath = path.join(__dirname, "..", ".env");
+function applyEnvFile(envPath, { override } = { override: false }) {
   if (!fs.existsSync(envPath)) return;
   const text = fs.readFileSync(envPath, "utf8");
   for (const line of text.split(/\r?\n/)) {
@@ -27,10 +26,16 @@ function loadEnvFile() {
     ) {
       value = value.slice(1, -1);
     }
-    if (process.env[key] == null || process.env[key] === "") {
+    if (override || process.env[key] == null || process.env[key] === "") {
       process.env[key] = value;
     }
   }
+}
+
+function loadEnvFile() {
+  const root = path.join(__dirname, "..");
+  applyEnvFile(path.join(root, ".env"));
+  applyEnvFile(path.join(root, ".env.local"), { override: true });
 }
 
 function isUsableLanIp(address) {
@@ -108,7 +113,7 @@ function resolveLanHostname() {
     if (!local.has(fromEnv)) {
       console.warn(
         `REACT_NATIVE_PACKAGER_HOSTNAME=${fromEnv} is not on this machine.\n` +
-          `Using live LAN IP instead: ${live} (update .env to match).`
+          `Using live LAN IP instead: ${live} (update .env.local to match).`
       );
       return live;
     }
@@ -125,7 +130,7 @@ const hostname = resolveLanHostname();
 if (!hostname) {
   console.warn(
     "Could not resolve a LAN IP. Phone/Expo Go will not reach Metro via 127.0.0.1.\n" +
-      "Set REACT_NATIVE_PACKAGER_HOSTNAME in .env to your Wi-Fi IPv4 (ipconfig)."
+      "Set REACT_NATIVE_PACKAGER_HOSTNAME in .env.local to your Wi-Fi IPv4 (ipconfig)."
   );
 } else {
   process.env.REACT_NATIVE_PACKAGER_HOSTNAME = hostname;

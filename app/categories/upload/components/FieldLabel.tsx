@@ -6,13 +6,13 @@ export const FIELD_HELP: Record<string, string> = {
   title:
     "A short, clear name for your post (what people see first in the feed).",
   description:
-    "Optional story or context. You can also generate one with AI after you add a title, file, and cover.",
+    "Optional story or context. You can also generate one with AI after you add a title and file.",
   category:
     "The topic lane this post belongs in (Worship, Youth, Teachings, etc.).",
   contentType:
     "The format of your file — Videos, GIF, Music, Books, Podcasts, or Sermons. Match the file you uploaded.",
   cover:
-    "A square image that represents your post. Required for a strong first impression.",
+    "Optional. A square image that represents your post. You can skip this — we'll generate a thumbnail if you don't add one.",
 };
 
 export function FieldLabel({

@@ -17,6 +17,11 @@ import AuthHeader from "../components/AuthHeader";
 import SuccessCard from "../components/SuccessCard";
 import unifiedSearchAPI, { UnifiedSearchItem } from "../services/unifiedSearchAPI";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import {
+  useAudioDurationForTrack,
+  useAudioPositionForTrack,
+  useAudioProgressForTrack,
+} from "@/store/audioPlayer/audioProgressStore";
 import { useDownloadStore } from "@/store/useDownloadStore";
 import { MediaItem, useMediaStore } from "@/store/useUploadStore";
 import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
@@ -49,9 +54,6 @@ export default function ExploreSearch() {
   
   const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
   const sessionPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
-  const sessionProgress = useGlobalAudioPlayerStore((s) => s.progress);
-  const sessionDuration = useGlobalAudioPlayerStore((s) => s.duration);
-  const sessionPosition = useGlobalAudioPlayerStore((s) => s.position);
   const playingAudio =
     currentTrackId && sessionPlaying ? currentTrackId : null;
   
@@ -402,24 +404,12 @@ export default function ExploreSearch() {
               </View>
               
               {/* Progress bar for audio */}
-              {playingAudio === itemId && sessionDuration > 0 && (
-                <View className="w-full">
-                  <View className="w-full h-1 bg-white/30 rounded-full">
-                    <View 
-                      className="h-1 bg-white rounded-full" 
-                      style={{ width: `${(sessionProgress || 0) * 100}%` }}
-                    />
-                  </View>
-                  <View className="flex-row justify-between mt-1">
-                    <Text className="text-white text-xs font-jakarta">
-                      {formatTime(sessionPosition || 0)}
-                    </Text>
-                    <Text className="text-white text-xs font-jakarta">
-                      {formatTime(sessionDuration || 0)}
-                    </Text>
-                  </View>
-                </View>
-              )}
+              {playingAudio === itemId ? (
+                <SearchResultAudioProgress
+                  trackId={itemId}
+                  formatTime={formatTime}
+                />
+              ) : null}
             </View>
           </View>
         )}
@@ -710,5 +700,36 @@ export default function ExploreSearch() {
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SearchResultAudioProgress({
+  trackId,
+  formatTime,
+}: {
+  trackId: string;
+  formatTime: (ms: number) => string;
+}) {
+  const progress = useAudioProgressForTrack(trackId);
+  const position = useAudioPositionForTrack(trackId);
+  const duration = useAudioDurationForTrack(trackId);
+  if (duration <= 0) return null;
+  return (
+    <View className="w-full">
+      <View className="w-full h-1 bg-white/30 rounded-full">
+        <View
+          className="h-1 bg-white rounded-full"
+          style={{ width: `${(progress || 0) * 100}%` }}
+        />
+      </View>
+      <View className="flex-row justify-between mt-1">
+        <Text className="text-white text-xs font-jakarta">
+          {formatTime(position || 0)}
+        </Text>
+        <Text className="text-white text-xs font-jakarta">
+          {formatTime(duration || 0)}
+        </Text>
+      </View>
+    </View>
   );
 }

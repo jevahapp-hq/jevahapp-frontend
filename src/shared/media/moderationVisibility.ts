@@ -26,12 +26,51 @@ export type ModeratableItem = {
 
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 
+export function normalizeModerationStatus(
+  value?: string | null
+): string {
+  return String(value || "").trim().toLowerCase();
+}
+
 export function isApproved(item: ModeratableItem): boolean {
-  return String(item?.moderationStatus || "").toLowerCase() === "approved";
+  return normalizeModerationStatus(item?.moderationStatus) === "approved";
 }
 
 export function isRejected(item: ModeratableItem): boolean {
-  return String(item?.moderationStatus || "").toLowerCase() === "rejected";
+  return normalizeModerationStatus(item?.moderationStatus) === "rejected";
+}
+
+/** Pending / in-review / omitted-as-unapproved — banner + extra row space. */
+export function isUnderReview(item: ModeratableItem): boolean {
+  const status = normalizeModerationStatus(item?.moderationStatus);
+  return (
+    status === "under_review" ||
+    status === "pending" ||
+    status === "in_review"
+  );
+}
+
+/**
+ * The ⋮ More Options control must not be gated on moderation status.
+ * Card visibility is already decided by `canViewerSeeMedia`; this only
+ * answers "should the owner (or any viewer of this card) get the menu?"
+ */
+export function shouldShowMediaActionsMenu(item: ModeratableItem): boolean {
+  return item != null;
+}
+
+/**
+ * Delete is owner-only. Never infer ownership from review status or a missing
+ * uploader id — that would show Delete on someone else's video.
+ */
+export function canViewerDeleteMedia(
+  item: ModeratableItem,
+  viewerId?: string | null
+): boolean {
+  if (!item || !viewerId) return false;
+  const uploaderId = extractUploaderId(item);
+  if (!uploaderId) return false;
+  return uploaderId === String(viewerId);
 }
 
 /**
@@ -48,9 +87,6 @@ export function extractUploaderId(item: ModeratableItem): string | null {
   }
   if (typeof uploadedBy === "string" && OBJECT_ID.test(uploadedBy.trim())) {
     return uploadedBy.trim();
-  }
-  if (item.userId && OBJECT_ID.test(String(item.userId).trim())) {
-    return String(item.userId).trim();
   }
   if (item.author?._id) return String(item.author._id);
   if (item.authorInfo?._id) return String(item.authorInfo._id);

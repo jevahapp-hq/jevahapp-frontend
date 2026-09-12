@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { View } from "react-native";
 import { UI_CONFIG } from "@/shared/constants";
-import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 
 export interface PlayerHeaderProps {
   onClose: () => void;
@@ -10,21 +9,13 @@ export interface PlayerHeaderProps {
 }
 
 const iconBtn = {
-  width: 48,
-  height: 48,
-  borderRadius: 24,
+  width: 40,
+  height: 40,
+  borderRadius: 20,
   justifyContent: "center" as const,
   alignItems: "center" as const,
-  backgroundColor: "rgba(255, 255, 255, 0.14)",
-  borderWidth: 1,
-  borderColor: "rgba(255, 255, 255, 0.22)",
-  elevation: 20,
-  zIndex: 20,
+  backgroundColor: "rgba(255,255,255,0.08)",
 };
-
-function minimizeNow() {
-  useCopyrightFreeOverlayStore.getState().minimize();
-}
 
 export function PlayerHeader({ onClose, onOptionsPress }: PlayerHeaderProps) {
   return (
@@ -37,40 +28,31 @@ export function PlayerHeader({ onClose, onOptionsPress }: PlayerHeaderProps) {
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: UI_CONFIG.SPACING.LG,
-        paddingVertical: UI_CONFIG.SPACING.SM,
-        height: 56,
+        height: 52,
         zIndex: 30,
-        elevation: 24,
       }}
     >
       <View
         collapsable={false}
         accessibilityRole="button"
-        accessibilityLabel="Minimize player"
+        accessibilityLabel="Close player"
         onStartShouldSetResponder={() => true}
-        onResponderGrant={() => {
-          minimizeNow();
-          onClose();
-        }}
+        onResponderGrant={onClose}
         style={iconBtn}
       >
-        <Ionicons name="chevron-down" size={24} color="#FFFFFF" pointerEvents="none" />
+        <Ionicons name="close" size={22} color="#FFFFFF" pointerEvents="none" />
       </View>
 
       <View
         pointerEvents="none"
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
       >
         <View
           style={{
-            width: 38,
+            width: 36,
             height: 4,
             borderRadius: 2,
-            backgroundColor: "rgba(255, 255, 255, 0.4)",
+            backgroundColor: "rgba(255,255,255,0.35)",
           }}
         />
       </View>
@@ -83,12 +65,7 @@ export function PlayerHeader({ onClose, onOptionsPress }: PlayerHeaderProps) {
         onResponderGrant={onOptionsPress}
         style={iconBtn}
       >
-        <Ionicons
-          name="ellipsis-horizontal"
-          size={22}
-          color="#FFFFFF"
-          pointerEvents="none"
-        />
+        <Ionicons name="list" size={20} color="#FFFFFF" pointerEvents="none" />
       </View>
     </View>
   );

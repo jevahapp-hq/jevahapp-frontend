@@ -39,6 +39,8 @@ export interface CommentModalContextType {
   mediaScale: number;
   /** Media `_id` the sheet is open on — used to bind peek playback HUD. */
   contentId?: string;
+  /** False on fullscreen Reels — no play button HUD over the video. */
+  showPeekHud: boolean;
   showCommentModal: (
     comments: Comment[],
     contentId?: string,
@@ -82,6 +84,7 @@ export const COMMENT_MODAL_NOOP: CommentModalContextType = {
   mediaShiftY: 0,
   mediaScale: 1,
   contentId: undefined,
+  showPeekHud: true,
   showCommentModal: () => {},
   updateCommentMediaLayout: () => {},
   beginCommentDismiss: () => {},

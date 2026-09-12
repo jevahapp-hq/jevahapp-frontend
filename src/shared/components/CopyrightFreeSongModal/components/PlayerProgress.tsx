@@ -1,12 +1,32 @@
-import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import React, { useMemo } from "react";
 import { Text, View } from "react-native";
 import { UI_CONFIG } from "@/shared/constants";
+import {
+  useAudioDurationForTrack,
+  useAudioPositionForTrack,
+  useAudioProgressForTrack,
+} from "@/store/audioPlayer/audioProgressStore";
+import { usePlayerSeek } from "../hooks/usePlayerSeek";
+
+const BAR_COUNT = 72;
+
+function waveformHeights(seed: string): number[] {
+  let h = 0;
+  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return Array.from({ length: BAR_COUNT }, (_, i) => {
+    const envelope = 0.35 + Math.sin((i / BAR_COUNT) * Math.PI) * 0.65;
+    const n =
+      Math.sin((i + (h % 19)) * 0.9) * 0.28 +
+      Math.sin((i + 5) * 2.15) * 0.22 +
+      Math.sin((i + 11) * 0.37) * 0.18;
+    return Math.max(0.18, Math.min(1, envelope * (0.42 + Math.abs(n))));
+  });
+}
 
 export interface PlayerProgressProps {
-  displayProgress: number;
-  displayPositionMs: number;
-  durationMs: number;
+  song: any;
+  isSeeking: boolean;
+  seekProgress: number;
   formatTime: (ms: number) => string;
   progressBarRef: React.RefObject<View | null>;
   panHandlers: any;
@@ -14,57 +34,40 @@ export interface PlayerProgressProps {
 }
 
 export function PlayerProgress({
-  displayProgress,
-  displayPositionMs,
-  durationMs,
+  song,
+  isSeeking,
+  seekProgress,
   formatTime,
   progressBarRef,
   panHandlers,
   onBarLayout,
 }: PlayerProgressProps) {
+  const songId = song?.id || song?._id || null;
+  const audioProgress = useAudioProgressForTrack(songId);
+  const audioPosition = useAudioPositionForTrack(songId);
+  const audioDuration = useAudioDurationForTrack(songId);
+  const { durationMs, displayProgress, displayPositionMs } = usePlayerSeek({
+    song,
+    isSeeking,
+    seekProgress,
+    audioProgress,
+    audioDuration,
+    audioPosition,
+  });
   const seekEnabled = durationMs > 0;
   const pct = Math.max(0, Math.min(1, displayProgress));
+  const heights = useMemo(() => waveformHeights(String(songId || "track")), [songId]);
+  const playedThrough = Math.round(pct * (BAR_COUNT - 1));
 
   return (
-    <>
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          marginBottom: 10,
-          paddingHorizontal: 2,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 13,
-            fontFamily: "PlusJakartaSans-SemiBold",
-            color: "rgba(255, 255, 255, 0.85)",
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {formatTime(displayPositionMs)}
-        </Text>
-        <Text
-          style={{
-            fontSize: 13,
-            fontFamily: "PlusJakartaSans-SemiBold",
-            color: "rgba(255, 255, 255, 0.7)",
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {seekEnabled ? formatTime(durationMs) : "--:--"}
-        </Text>
-      </View>
-
+    <View>
       <View
         ref={progressBarRef}
         onLayout={onBarLayout}
         collapsable={false}
         style={{
-          height: 30,
+          height: 36,
           justifyContent: "center",
-          marginBottom: UI_CONFIG.SPACING.LG,
           opacity: seekEnabled ? 1 : 0.45,
         }}
         pointerEvents={seekEnabled ? "auto" : "none"}
@@ -72,59 +75,56 @@ export function PlayerProgress({
       >
         <View
           style={{
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: "rgba(255, 255, 255, 0.18)",
-            overflow: "visible",
-            justifyContent: "center",
+            flexDirection: "row",
+            alignItems: "center",
+            height: 28,
+            gap: 1.5,
           }}
         >
-          <View
-            style={{
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: "rgba(255, 255, 255, 0.18)",
-              overflow: "hidden",
-            }}
-          >
+          {heights.map((h, i) => (
             <View
+              key={i}
               style={{
-                height: "100%",
-                width: `${pct * 100}%`,
-                borderRadius: 3,
-                overflow: "hidden",
+                flex: 1,
+                height: `${Math.round(h * 100)}%`,
+                borderRadius: 1,
+                backgroundColor:
+                  i <= playedThrough ? UI_CONFIG.COLORS.PRIMARY : "rgba(255,255,255,0.22)",
               }}
-            >
-              <LinearGradient
-                colors={["#256E63", "#5EEAD4", "#FEA74E"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ width: "100%", height: "100%" }}
-              />
-            </View>
-          </View>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: `${pct * 100}%`,
-              marginLeft: -10,
-              width: 20,
-              height: 20,
-              marginTop: -7,
-              borderRadius: 10,
-              backgroundColor: "#FFFFFF",
-              shadowColor: "#5EEAD4",
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.8,
-              shadowRadius: 8,
-              elevation: 10,
-              borderWidth: 2,
-              borderColor: "#256E63",
-            }}
-          />
+            />
+          ))}
         </View>
       </View>
-    </>
+
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: 2,
+          paddingHorizontal: 2,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 11,
+            fontFamily: "PlusJakartaSans-Medium",
+            color: "rgba(255,255,255,0.55)",
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {formatTime(displayPositionMs)}
+        </Text>
+        <Text
+          style={{
+            fontSize: 11,
+            fontFamily: "PlusJakartaSans-Medium",
+            color: "rgba(255,255,255,0.4)",
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {seekEnabled ? formatTime(durationMs) : "0:00"}
+        </Text>
+      </View>
+    </View>
   );
 }

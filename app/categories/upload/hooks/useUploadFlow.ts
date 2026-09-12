@@ -9,6 +9,10 @@ import { useRouter } from "expo-router";
 import { buildErrorResult } from "../components/UploadResultModal";
 import { getUploadTimeoutMs, uploadMedia } from "../api/uploadMedia";
 import { checkAuthenticationStatus } from "../utils";
+import {
+  alertUploadGuidelineIssues,
+  collectDeviceGuidelineErrors,
+} from "../utils/uploadGuidelineAlert";
 import type { UploadFlowDeps } from "./uploadFlow/types";
 import { ensureUploadAuthenticated, normalizeUploadUser } from "./uploadFlow/uploadAuthGate";
 import {
@@ -265,8 +269,18 @@ export function useUploadFlow(deps: UploadFlowDeps) {
     const validation = validateMediaEligibilityLocal();
     setEligibilityStatus(validation);
 
+    const guidelineErrors = collectDeviceGuidelineErrors(file, selectedType);
+    if (guidelineErrors.length) {
+      alertUploadGuidelineIssues(guidelineErrors);
+      return;
+    }
+
     if (!validation.isValid) {
-      // Soft toast + inline checklist (IG-style) — no blocking Alert wall
+      Alert.alert(
+        "Can't post yet",
+        validation.errors[0] || "Complete the remaining steps below.",
+        [{ text: "OK" }]
+      );
       onSoftNotice?.(
         validation.errors[0] || "Complete the remaining steps below."
       );

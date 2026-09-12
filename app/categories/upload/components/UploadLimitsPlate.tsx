@@ -43,6 +43,8 @@ function getLimitRows(selectedType: string): LimitRow[] {
   if (selectedType === "sermon" || selectedType === "videos") {
     return [
       { icon: "cloud-upload-outline", text: videoCap },
+      { icon: "videocam-outline", text: "MP4 or MOV from your photo library" },
+      { icon: "image-outline", text: "Cover photo is optional" },
       { icon: "film-outline", text: "Library cap: 30 videos" },
       { icon: "time-outline", text: "Max 10 uploads per hour" },
     ];
@@ -62,7 +64,7 @@ function getLimitRows(selectedType: string): LimitRow[] {
     ];
   }
   return [
-    { icon: "videocam-outline", text: lite ? "Videos up to 64 MB on this device" : "Videos up to 300 MB" },
+    { icon: "videocam-outline", text: lite ? "Videos up to 64 MB on this device" : "Videos up to 300 MB (MP4)" },
     { icon: "musical-note-outline", text: "Music up to 50 MB" },
     { icon: "book-outline", text: "Books up to 100 MB" },
   ];

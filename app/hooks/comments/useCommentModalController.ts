@@ -28,6 +28,7 @@ import { resolveUserAvatarUrl } from "../../utils/defaultUserAvatar";
 
 import type { CommentModalContextType, Comment, SubmitCommentInput, EditCommentInput } from "../../context/commentModalTypes";
 import { mapServerCommentsToSheet } from "./mapServerComment";
+import { setMiniPlayerSuppression } from "../../../src/shared/audio/miniPlayerGate";
 
 export function useCommentModalController(): CommentModalContextType {
 
@@ -55,6 +56,7 @@ export function useCommentModalController(): CommentModalContextType {
   const [mediaPeekHeight, setMediaPeekHeight] = useState(MEDIA_PEEK_HEIGHT);
   const [mediaShiftY, setMediaShiftY] = useState(0);
   const [mediaScale, setMediaScale] = useState(1);
+  const [showPeekHud, setShowPeekHud] = useState(true);
 
   const { addComment: addCommentToStore, toggleCommentLike } =
     useInteractionStore();
@@ -100,6 +102,7 @@ export function useCommentModalController(): CommentModalContextType {
     setMediaPeekHeight(layout.peekHeight);
     setMediaShiftY(layout.shiftY);
     setMediaScale(layout.mediaScale);
+    setShowPeekHud(anchor?.showPeekHud !== false);
 
     if (
       contentId &&
@@ -112,6 +115,7 @@ export function useCommentModalController(): CommentModalContextType {
     // Paint sheet IMMEDIATELY — no awaits on open path
     setIsClosing(false);
     setIsVisible(true);
+    setMiniPlayerSuppression("comments", true);
     setLoadError(null);
     setComposerError(null);
     setIsOpening(false);
@@ -261,6 +265,9 @@ export function useCommentModalController(): CommentModalContextType {
       setMediaScale((prev) =>
         Math.abs(prev - layout.mediaScale) < 0.01 ? prev : layout.mediaScale
       );
+      if (anchor && typeof anchor.showPeekHud === "boolean") {
+        setShowPeekHud(anchor.showPeekHud);
+      }
     },
     []
   );
@@ -291,10 +298,12 @@ export function useCommentModalController(): CommentModalContextType {
     setIsVisible(false);
     setIsClosing(false);
     setIsOpening(false);
+    setMiniPlayerSuppression("comments", false);
     setLoadError(null);
     setMediaPeekHeight(MEDIA_PEEK_HEIGHT);
     setMediaShiftY(0);
     setMediaScale(1);
+    setShowPeekHud(true);
     clearTyping();
     stopLocalTypingBroadcast();
     // Do NOT clear comments — keeps reopen instant
@@ -930,6 +939,7 @@ export function useCommentModalController(): CommentModalContextType {
     mediaShiftY,
     mediaScale,
     contentId: currentContentId || undefined,
+    showPeekHud,
     showCommentModal,
     updateCommentMediaLayout,
     beginCommentDismiss,

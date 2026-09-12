@@ -1,13 +1,26 @@
-import { Audio } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioStatus,
+} from "expo-audio";
+import { releaseAudioPlayer } from "../../shared/audio/releaseAudioPlayer";
+import {
+  getAudioPlaybackClock,
+  getLastAudioProgressCommitTs,
+  resetAudioPlaybackClock,
+  writeAudioPlaybackClock,
+} from "./audioProgressStore";
 import {
   audioLoadErrorMessage,
   isUnavailableAudioError,
 } from "./audioLoadError";
 import { normalizeAudioSource } from "./normalizeAudioSource";
+import { decidePlaybackTick } from "./playbackStatusTick";
 import {
   resolveAudioDurationMs,
   trackDurationToMs,
 } from "./resolveAudioDurationMs";
+import { detachStatusSubscription } from "./statusSubscription";
 import type {
   AudioPlayerGet,
   AudioPlayerSet,
@@ -28,11 +41,11 @@ export function createSetTrack(
 
       if (currentTrack && currentTrack.id !== track.id && soundInstance) {
         try {
-          const status = await soundInstance.getStatusAsync();
-          if (status.isLoaded && status.isPlaying) {
-            await soundInstance.pauseAsync();
-            await soundInstance.unloadAsync();
+          if (soundInstance.playing) {
+            soundInstance.pause();
           }
+          detachStatusSubscription(get, set);
+          releaseAudioPlayer(soundInstance);
         } catch (error) {
           console.warn("Error stopping previous track:", error);
         }
@@ -40,11 +53,28 @@ export function createSetTrack(
 
       if (currentTrack?.id === track.id && soundInstance) {
         try {
-          const status = await soundInstance.getStatusAsync();
-          if (status.isLoaded) {
-            if (shouldPlayImmediately && !status.isPlaying) {
-              await soundInstance.playAsync();
-              set({ isPlaying: true, isSessionActive: true });
+          if (soundInstance.isLoaded) {
+            if (shouldPlayImmediately) {
+              try {
+                await soundInstance.seekTo(0);
+              } catch (seekError) {
+                console.warn("Error restarting current track:", seekError);
+              }
+              const dur = get().duration;
+              resetAudioPlaybackClock(track.id, dur);
+              writeAudioPlaybackClock({
+                trackId: track.id,
+                position: 0,
+                progress: 0,
+                duration: dur,
+              });
+              soundInstance.play();
+              set({
+                isPlaying: true,
+                isSessionActive: true,
+                position: 0,
+                progress: 0,
+              });
             }
             return;
           }
@@ -60,7 +90,8 @@ export function createSetTrack(
 
       if (soundInstance) {
         try {
-          await soundInstance.unloadAsync();
+          detachStatusSubscription(get, set);
+          releaseAudioPlayer(soundInstance);
         } catch (error) {
           console.warn("Error unloading previous audio:", error);
         }
@@ -70,6 +101,8 @@ export function createSetTrack(
 
       // `setTrack` is the only entry point that builds an engine, so it is the
       // one place a session legitimately begins.
+      const seededDuration = trackDurationToMs(track.duration);
+      resetAudioPlaybackClock(track.id, seededDuration);
       set({
         currentTrack: track,
         isPlaying: false,
@@ -78,19 +111,19 @@ export function createSetTrack(
         loadError: null,
         position: 0,
         progress: 0,
-        duration: trackDurationToMs(track.duration),
+        duration: seededDuration,
         soundInstance: null,
         __loadGeneration: loadGeneration,
         __lastStatusUpdateTs: 0,
       });
 
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
+        await setAudioModeAsync({
+          allowsRecording: false,
+          shouldPlayInBackground: true,
+          playsInSilentMode: true,
+          interruptionMode: "doNotMix",
+          shouldRouteThroughEarpiece: false,
         });
 
         try {
@@ -102,20 +135,19 @@ export function createSetTrack(
         }
 
         const source = normalizeAudioSource(track.audioUrl);
+        // 250ms is enough for a progress bar; faster native ticks only
+        // starve the JS thread that play/pause has to run on.
+        const player = createAudioPlayer(source, { updateInterval: 250 });
+        player.muted = get().isMuted;
+        player.loop = false;
 
-        const { sound } = await Audio.Sound.createAsync(
-          source,
-          {
-            shouldPlay: shouldPlayImmediately,
-            isMuted: get().isMuted,
-            progressUpdateIntervalMillis: 250,
-            isLooping: false,
-          },
-          (status) => {
+        const subscription = player.addListener(
+          "playbackStatusUpdate",
+          (status: AudioStatus) => {
             if (!status.isLoaded) return;
 
             const prev = get();
-            // An unloaded sound can emit one last callback. It must never
+            // An unloaded player can emit one last callback. It must never
             // overwrite the position/duration of the track that replaced it.
             if (
               prev.__loadGeneration !== loadGeneration ||
@@ -129,20 +161,32 @@ export function createSetTrack(
             ) {
               return;
             }
+
+            const playerDurationMs = (status.duration || 0) * 1000;
             const newDuration = resolveAudioDurationMs({
-              playerDurationMs: status.durationMillis,
+              playerDurationMs,
               knownMs: prev.duration,
               trackDurationSec: prev.currentTrack?.duration,
             });
 
             if (status.didJustFinish) {
               const finishedPosition =
-                newDuration || status.positionMillis || prev.duration;
+                newDuration ||
+                (status.currentTime || 0) * 1000 ||
+                prev.duration;
+              const finishedProgress = finishedPosition > 0 ? 1 : 0;
+              const finishedDuration = newDuration || prev.duration;
+              writeAudioPlaybackClock({
+                trackId: track.id,
+                position: finishedPosition,
+                progress: finishedProgress,
+                duration: finishedDuration,
+              });
               set({
                 isPlaying: false,
-                progress: finishedPosition > 0 ? 1 : 0,
+                progress: finishedProgress,
                 position: finishedPosition,
-                duration: newDuration || prev.duration,
+                duration: finishedDuration,
               });
               const st: any = get();
               if (st.__isAdvancing || st.__completionTimeout) return;
@@ -168,44 +212,62 @@ export function createSetTrack(
               return;
             }
 
-            const newPosition = status.positionMillis || 0;
+            const newPosition = (status.currentTime || 0) * 1000;
             const newProgress =
               newDuration > 0
                 ? Math.max(0, Math.min(1, newPosition / newDuration))
                 : 0;
+            const clock = getAudioPlaybackClock();
             const now = Date.now();
-            const lastTs = (prev as any).__lastStatusUpdateTs || 0;
-            const timeSinceLastUpdate = now - lastTs;
-            const positionChangedSignificantly =
-              Math.abs(prev.position - newPosition) > 400;
-            const playingChanged = prev.isPlaying !== status.isPlaying;
-            const durationChanged =
-              newDuration > 0 && prev.duration !== newDuration;
-            const shouldUpdatePosition =
-              timeSinceLastUpdate > 250 || positionChangedSignificantly;
+            const tick = decidePlaybackTick({
+              now,
+              lastCommitTs: getLastAudioProgressCommitTs(),
+              prevPosition: clock.position,
+              nextPosition: newPosition,
+              prevProgress: clock.progress,
+              nextProgress: newProgress,
+              prevPlaying: prev.isPlaying,
+              nextPlaying: status.playing,
+              prevDuration: clock.duration || prev.duration,
+              nextDuration: newDuration,
+            });
 
-            if (!shouldUpdatePosition && !playingChanged && !durationChanged) {
+            if (
+              !tick.commitPosition &&
+              !tick.playingChanged &&
+              !tick.durationChanged
+            ) {
               return;
             }
 
-            const updates: Record<string, unknown> = {};
-            if (
-              shouldUpdatePosition &&
-              (Math.abs(prev.position - newPosition) > 150 ||
-                Math.abs(prev.progress - newProgress) > 0.005)
-            ) {
-              updates.position = newPosition;
-              updates.progress = newProgress;
+            if (tick.commitPosition) {
+              writeAudioPlaybackClock(
+                {
+                  trackId: track.id,
+                  position: newPosition,
+                  progress: newProgress,
+                  duration: newDuration || clock.duration,
+                },
+                now
+              );
             }
-            if (playingChanged) {
-              updates.isPlaying = status.isPlaying;
+
+            const sessionUpdates: Record<string, unknown> = {};
+            if (tick.playingChanged) {
+              sessionUpdates.isPlaying = status.playing;
             }
-            if (durationChanged) {
-              updates.duration = newDuration;
+            if (tick.durationChanged) {
+              sessionUpdates.duration = newDuration;
+              if (!tick.commitPosition) {
+                writeAudioPlaybackClock({
+                  trackId: track.id,
+                  duration: newDuration,
+                });
+              }
             }
-            if (Object.keys(updates).length > 0) {
-              updates.__lastStatusUpdateTs = now;
-              set(updates as any);
+            if (Object.keys(sessionUpdates).length > 0) {
+              sessionUpdates.__lastStatusUpdateTs = now;
+              set(sessionUpdates as any);
             }
           }
         );
@@ -215,21 +277,36 @@ export function createSetTrack(
           get().currentTrack?.id !== track.id
         ) {
           // A newer request won while this remote source was loading.
-          void sound.unloadAsync().catch(() => {});
+          try {
+            subscription.remove();
+          } catch {
+            // ignore
+          }
+          releaseAudioPlayer(player);
           return;
         }
 
+        const loadedDuration = resolveAudioDurationMs({
+          playerDurationMs: (player.duration || 0) * 1000,
+          knownMs: trackDurationToMs(track.duration),
+          trackDurationSec: track.duration,
+        });
+        writeAudioPlaybackClock({
+          trackId: track.id,
+          duration: loadedDuration,
+        });
         set({
-          soundInstance: sound,
+          soundInstance: player,
+          __statusSubscription: subscription,
           isLoading: false,
           loadError: null,
-          duration: resolveAudioDurationMs({
-            playerDurationMs: 0,
-            knownMs: trackDurationToMs(track.duration),
-            trackDurationSec: track.duration,
-          }),
+          duration: loadedDuration,
           isPlaying: shouldPlayImmediately,
         });
+
+        if (shouldPlayImmediately) {
+          player.play();
+        }
       } catch (error) {
         if (
           get().__loadGeneration !== loadGeneration ||
@@ -247,14 +324,19 @@ export function createSetTrack(
           );
         }
 
-        const failed = { ...(get().__failedTrackIds || {}), [track.id]: true as const };
+        const failed = {
+          ...(get().__failedTrackIds || {}),
+          [track.id]: true as const,
+        };
         set({
           isLoading: false,
           isPlaying: false,
           soundInstance: null,
+          __statusSubscription: null,
           loadError: message,
           __failedTrackIds: failed,
         });
+        resetAudioPlaybackClock();
 
         const { queue, currentIndex } = get();
         for (let i = currentIndex + 1; i < queue.length; i++) {

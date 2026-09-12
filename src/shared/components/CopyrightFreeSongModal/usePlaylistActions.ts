@@ -1,7 +1,38 @@
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
+import { isCopyrightFreeSong } from "@/shared/audio";
 import { usePlaylistStore } from "@/store/usePlaylistStore";
 import { playlistAPI } from "@/app/utils/playlistAPI";
+
+function songIdOf(song: any): string {
+  return String(song?._id || song?.id || "");
+}
+
+function addTrackBody(song: any, songId: string) {
+  if (isCopyrightFreeSong(song)) {
+    return { copyrightFreeSongId: songId, position: undefined as number | undefined };
+  }
+  return { mediaId: songId, position: undefined as number | undefined };
+}
+
+function playlistSongFromPlaying(song: any, songId: string) {
+  const copyrightFree = isCopyrightFreeSong(song);
+  return {
+    id: songId,
+    title: song.title || "Untitled",
+    artist: song.artist || song.artistName || "Unknown",
+    audioUrl: song.audioUrl || song.fileUrl,
+    thumbnailUrl: song.thumbnailUrl || song.imageUrl,
+    duration: Number(song.duration || 0),
+    category: song.category || song.contentType,
+    description: song.description || song.title,
+    addedAt: new Date().toISOString(),
+    trackType: copyrightFree ? ("copyrightFree" as const) : ("media" as const),
+    ...(copyrightFree
+      ? { copyrightFreeSongId: songId }
+      : { mediaId: songId }),
+  };
+}
 
 export function usePlaylistActions(
   song: any,
@@ -36,26 +67,14 @@ export function usePlaylistActions(
       setShowCreatePlaylist?.(false);
       await loadPlaylistsFromBackend();
       if (song) {
-        const songId = song._id || song.id;
+        const songId = songIdOf(song);
         if (songId) {
-          const addResult = await playlistAPI.addTrackToPlaylist(playlistId, {
-            copyrightFreeSongId: songId,
-            position: undefined,
-          });
+          const addResult = await playlistAPI.addTrackToPlaylist(
+            playlistId,
+            addTrackBody(song, songId)
+          );
           if (addResult.success) {
-            addSongToPlaylist(playlistId, {
-              id: String(songId),
-              title: song.title || "Untitled",
-              artist: song.artist || song.artistName || "Unknown",
-              audioUrl: song.audioUrl || song.fileUrl,
-              thumbnailUrl: song.thumbnailUrl || song.imageUrl,
-              duration: Number(song.duration || 0),
-              category: song.category || song.contentType,
-              description: song.description || song.title,
-              addedAt: new Date().toISOString(),
-              trackType: "copyrightFree",
-              copyrightFreeSongId: String(songId),
-            });
+            addSongToPlaylist(playlistId, playlistSongFromPlaying(song, songId));
             await loadPlaylistsFromBackend();
             setShowPlaylistModal?.(false);
             Alert.alert("Success", "Playlist created and song added!");
@@ -89,19 +108,19 @@ export function usePlaylistActions(
 
   const handleAddToExistingPlaylist = useCallback(
     async (playlistId: string) => {
-      if (!song) return;
+      if (!song) return false;
       try {
         setIsLoadingPlaylists(true);
-        const songId = song._id || song.id;
+        const songId = songIdOf(song);
         if (!songId) {
           Alert.alert("Error", "Invalid song ID");
           setIsLoadingPlaylists(false);
-          return;
+          return false;
         }
-        const result = await playlistAPI.addTrackToPlaylist(playlistId, {
-          copyrightFreeSongId: songId,
-          position: undefined,
-        });
+        const result = await playlistAPI.addTrackToPlaylist(
+          playlistId,
+          addTrackBody(song, songId)
+        );
         if (!result.success) {
           if (result.error?.includes("already in the playlist")) {
             Alert.alert("Info", "This song is already in the playlist");
@@ -109,33 +128,21 @@ export function usePlaylistActions(
             Alert.alert("Error", result.error || "Failed to add song to playlist");
           }
           setIsLoadingPlaylists(false);
-          return;
+          return false;
         }
-        // Optimistic local update so the song is visible before/without full refetch.
-        addSongToPlaylist(playlistId, {
-          id: String(songId),
-          title: song.title || "Untitled",
-          artist: song.artist || song.artistName || "Unknown",
-          audioUrl: song.audioUrl || song.fileUrl,
-          thumbnailUrl: song.thumbnailUrl || song.imageUrl,
-          duration: Number(song.duration || 0),
-          category: song.category || song.contentType,
-          description: song.description || song.title,
-          addedAt: new Date().toISOString(),
-          trackType: "copyrightFree",
-          copyrightFreeSongId: String(songId),
-        });
+        addSongToPlaylist(playlistId, playlistSongFromPlaying(song, songId));
         await loadPlaylistsFromBackend();
         setNewPlaylistName("");
         setNewPlaylistDescription("");
         setShowCreatePlaylist?.(false);
-        setShowPlaylistModal?.(false);
-        Alert.alert("Success", "Song added to playlist!");
         setIsLoadingPlaylists(false);
+        Alert.alert("Added", "Song added to playlist.");
+        return true;
       } catch (error) {
         console.error("Error adding song to playlist:", error);
         Alert.alert("Error", "Failed to add song to playlist");
         setIsLoadingPlaylists(false);
+        return false;
       }
     },
     [song, loadPlaylistsFromBackend, addSongToPlaylist, setShowCreatePlaylist, setShowPlaylistModal]

@@ -4,12 +4,16 @@ import {
   playOrToggleDecision,
   shouldReplaceAudioQueue,
 } from "./playOrToggleDecision";
+import { resolvePlaybackQueue } from "./sessionAudioQueue";
 
 /**
  * Single-session play: one Sound for the whole app.
  * Same track + playing → pause. Same track + paused → resume. Else load & play.
  */
-export async function playOrToggleTrack(track: AudioTrack): Promise<void> {
+export async function playOrToggleTrack(
+  track: AudioTrack,
+  options?: { queue?: AudioTrack[] }
+): Promise<void> {
   if (!track?.id || !track.audioUrl) return;
   const store = useGlobalAudioPlayerStore.getState();
 
@@ -18,11 +22,13 @@ export async function playOrToggleTrack(track: AudioTrack): Promise<void> {
     return;
   }
 
-  if (shouldReplaceAudioQueue(track.source)) {
+  const queue = resolvePlaybackQueue(track, options?.queue);
+  const queueIndex = Math.max(0, queue.findIndex((t) => t.id === track.id));
+  if (shouldReplaceAudioQueue(track.source) || (options?.queue?.length ?? 0) > 0) {
     useGlobalAudioPlayerStore.setState({
-      queue: [track],
-      originalQueue: [track],
-      currentIndex: 0,
+      queue,
+      originalQueue: queue,
+      currentIndex: queueIndex,
       isShuffled: false,
     });
   }

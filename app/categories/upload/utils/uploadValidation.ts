@@ -4,7 +4,9 @@
 
 export type { ValidationResult, UploadFormData } from "./eligibilityRules";
 export {
+  collectFileGuidelineErrors,
   formatFriendlyRejectionMessage,
+  formatUploadGuidelineMessage,
   validateMediaEligibility,
 } from "./eligibilityRules";
 

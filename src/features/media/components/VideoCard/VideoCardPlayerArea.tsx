@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  StyleSheet,
+  Pressable,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { FeedMediaTypeOverlay } from "../../../../shared/components/FeedMediaTypeOverlay";
@@ -16,12 +17,10 @@ import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlayba
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon } from "../../../../shared/utils";
 import { useCommentModal } from "@/app/context/CommentModalContext";
-import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import {
   FEED_VIDEO_PLAYER_HEIGHT,
   FeedVideoPoster,
   FeedVideoSurface,
-  fitRectInBox,
   useInstantFeedVideoPlayer,
 } from "../../video-feed";
 import { normalizeDurationMs } from "../../../../shared/media/normalizeDurationMs";
@@ -31,6 +30,12 @@ import { useHealMissingDuration } from "./hooks/useHealMissingDuration";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
+import { captureVideoFrameSnapshot, useVideoFrameSnapshot } from "../../video-feed/videoFrameSnapshotCache";
+import { savePlayhead } from "../../video-feed/playheadCache";
+import {
+  readPlayerCurrentTimeSec,
+  runWithLivePlayer,
+} from "../../video-feed/safeVideoPlayer";
 
 export interface VideoCardPlayerAreaProps {
   video: MediaItem;
@@ -68,19 +73,33 @@ export interface VideoCardPlayerAreaProps {
   onSurfaceReadyChange?: (ready: boolean) => void;
 }
 
-/** Same size as a live player, with a poster so the row is never a white hole. */
-function VideoPlayerSlot({ video }: { video?: MediaItem }) {
+/** Same size as a live player. Prefer the paused frame over the cover art. */
+function VideoPlayerSlot({
+  video,
+  url,
+}: {
+  video?: MediaItem;
+  url?: string | null;
+}) {
+  const snapshot = useVideoFrameSnapshot(url ?? null);
   return (
     <View
       collapsable={false}
       style={{
         height: FEED_VIDEO_PLAYER_HEIGHT,
         width: "100%",
-        overflow: "hidden",
-        backgroundColor: "#121212",
+        backgroundColor: "#1A0E0A",
       }}
     >
-      <FeedVideoPoster item={video} />
+      {snapshot ? (
+        <Image
+          source={snapshot}
+          style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}
+          contentFit="cover"
+        />
+      ) : (
+        <FeedVideoPoster item={video} />
+      )}
     </View>
   );
 }
@@ -110,7 +129,16 @@ export function VideoCardPlayerArea(props: VideoCardPlayerAreaProps) {
   }
 
   if (!shouldRenderPlayer || !videoUrl) {
-    return <VideoPlayerSlot video={video} />;
+    return (
+      <Pressable
+        onPress={() => props.onTogglePlay(contentKey)}
+        android_disableSound
+        accessibilityRole="button"
+        accessibilityLabel="Play or pause video"
+      >
+        <VideoPlayerSlot video={video} url={videoUrl} />
+      </Pressable>
+    );
   }
 
   return (
@@ -147,16 +175,15 @@ function VideoCardPlayerInner(
   const [, setVideoLoaded] = useState(false);
   const videoLoadedRef = useRef(false);
   const [isPlayTogglePending, setIsPlayTogglePending] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [localPosition, setLocalPosition] = useState(0);
   const [localDuration, setLocalDuration] = useState(0);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
-  const [contentAspect, setContentAspect] = useState(0);
-  const [boxWidth, setBoxWidth] = useState(0);
 
   /**
    * Declared here, above every hook that reads `isMountedRef`, because React
@@ -174,25 +201,14 @@ function VideoCardPlayerInner(
 
   const videoRef = useRef<VideoPlayer | null>(null);
 
-  const fittedFrame = useMemo(
-    () =>
-      contentAspect > 0 && boxWidth > 0
-        ? fitRectInBox(
-            contentAspect,
-            boxWidth,
-            FEED_VIDEO_PLAYER_HEIGHT
-          )
-        : null,
-    [contentAspect, boxWidth]
-  );
-
   const {
     player,
     firstFrameReady,
+    firstFramePainted,
     handleFirstFrameRender,
-    freezeOnFirstFrame,
   } = useInstantFeedVideoPlayer({
     source: videoUrl,
+    loop: true,
     timeUpdateEventInterval: 0.25,
   });
 
@@ -202,6 +218,8 @@ function VideoCardPlayerInner(
   }, [firstFrameReady, onSurfaceReadyChange]);
 
   videoRef.current = player;
+
+  const lastFrame = useVideoFrameSnapshot(videoUrl);
 
   const {
     isPlaying,
@@ -216,13 +234,11 @@ function VideoCardPlayerInner(
 
   useEffect(() => {
     if (!player || isFeedActive) return;
-    try {
-      player.muted = true;
-      player.volume = 0;
-      player.pause();
-    } catch {
-      // no-op
-    }
+    runWithLivePlayer(player, (p) => {
+      if (!p.muted) p.muted = true;
+      if ((Number(p.volume) || 0) !== 0) p.volume = 0;
+      if (p.playing) p.pause();
+    });
   }, [player, isFeedActive]);
 
   useEffect(() => {
@@ -231,21 +247,42 @@ function VideoCardPlayerInner(
     const audiblyActive = isFeedActive && shouldPlayThisVideo;
 
     if (audiblyActive) {
-      player.muted = isMuted;
-      player.volume = isMuted ? 0 : videoVolume;
-      if (!player.playing) player.play();
+      if (snapshotTimeoutRef.current) {
+        clearTimeout(snapshotTimeoutRef.current);
+        snapshotTimeoutRef.current = null;
+      }
+      runWithLivePlayer(player, (p) => {
+        const targetMuted = isMuted;
+        const targetVol = isMuted ? 0 : videoVolume;
+        if (p.muted !== targetMuted) p.muted = targetMuted;
+        if (Math.abs((Number(p.volume) || 0) - targetVol) > 0.02) {
+          p.volume = targetVol;
+        }
+        // Already decoding from muted prime — calling play() again cracks Android.
+        if (!p.playing) p.play();
+      });
       setShowOverlay(false);
     } else {
-      // Neighbors, hidden tabs, and primed cards stay silent — no echo.
-      player.muted = true;
-      player.volume = 0;
-      if (player.playing) player.pause();
-      // Hold the watching video's frame (comments peek + user pause).
-      // Only rewind off-screen neighbors back to the poster frame.
-      const store = useGlobalVideoStore.getState();
-      const isWatching =
-        commentsOpen || key === store.currentlyVisibleVideo || key === store.currentlyPlayingVideo;
-      if (!isWatching) freezeOnFirstFrame();
+      runWithLivePlayer(player, (p) => {
+        if (!p.muted) p.muted = true;
+        if ((Number(p.volume) || 0) !== 0) p.volume = 0;
+        if (!p.playing) return;
+        const t = readPlayerCurrentTimeSec(p);
+        if (t > 0.15) savePlayhead(videoUrl, t);
+        p.pause();
+        // Extracting a thumbnail on a live decoder hitches the video that
+        // just became active. Wait until this player has been paused.
+        if (t > 1.5) {
+          if (snapshotTimeoutRef.current) {
+            clearTimeout(snapshotTimeoutRef.current);
+          }
+          const url = videoUrl;
+          snapshotTimeoutRef.current = setTimeout(() => {
+            snapshotTimeoutRef.current = null;
+            captureVideoFrameSnapshot(url, p, t);
+          }, 800);
+        }
+      });
     }
   }, [
     shouldPlayThisVideo,
@@ -254,8 +291,7 @@ function VideoCardPlayerInner(
     player,
     isMuted,
     videoVolume,
-    freezeOnFirstFrame,
-    commentsOpen,
+    videoUrl,
   ]);
 
   const showOverlayTemporarily = useCallback(() => {
@@ -275,10 +311,9 @@ function VideoCardPlayerInner(
   }, []);
 
   useEffect(() => {
-    if (!firstFrameReady) return;
     if (!isPlaying) showOverlayPermanently();
     else showOverlayTemporarily();
-  }, [isPlaying, firstFrameReady, showOverlayPermanently, showOverlayTemporarily]);
+  }, [isPlaying, showOverlayPermanently, showOverlayTemporarily]);
 
   useEffect(() => {
     if (shouldPlayThisVideo && firstFrameReady) {
@@ -288,12 +323,22 @@ function VideoCardPlayerInner(
 
   useEffect(() => {
     if (!player) return;
-    const sub = player.addListener("statusChange", ({ status, error }) => {
-      if (status === "error" || error) {
-        setFailedVideoLoad(true);
-      }
-    });
-    return () => sub.remove();
+    try {
+      const sub = player.addListener("statusChange", ({ status, error }) => {
+        if (status === "error" || error) {
+          setFailedVideoLoad(true);
+        }
+      });
+      return () => {
+        try {
+          sub.remove();
+        } catch {
+          // no-op
+        }
+      };
+    } catch {
+      return;
+    }
   }, [player]);
 
   const handleVideoError = useCallback((error: unknown) => {
@@ -391,6 +436,7 @@ function VideoCardPlayerInner(
   useEffect(() => {
     return () => {
       if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
+      if (snapshotTimeoutRef.current) clearTimeout(snapshotTimeoutRef.current);
       if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
     };
   }, [tapTimeoutRef]);
@@ -400,10 +446,19 @@ function VideoCardPlayerInner(
   }, [onToggleMute, key]);
 
   if (failedVideoLoad || !player) {
-    return <VideoPlayerSlot video={video} />;
+    return (
+      <Pressable
+        onPress={() => onTogglePlay(key)}
+        android_disableSound
+        accessibilityRole="button"
+        accessibilityLabel="Play or pause video"
+      >
+        <VideoPlayerSlot video={video} url={videoUrl} />
+      </Pressable>
+    );
   }
 
-  const showChrome = firstFrameReady;
+  const showChrome = !hideChrome;
 
   return (
     <View
@@ -411,57 +466,125 @@ function VideoCardPlayerInner(
       collapsable={false}
       style={{
         height: FEED_VIDEO_PLAYER_HEIGHT,
-        backgroundColor: "#121212",
+        width: "100%",
+        backgroundColor: "#1A0E0A",
         overflow: "hidden",
       }}
-      onLayout={(e) => {
-        const w = e.nativeEvent.layout.width;
-        if (w > 0 && Math.abs(w - boxWidth) > 0.5) setBoxWidth(w);
-      }}
     >
-      <TouchableWithoutFeedback onPress={handleVideoTap}>
-        <View style={{ flex: 1 }}>
-          <FeedVideoPoster
-            item={video}
-            onAspectRatio={(aspect) => {
-              if (aspect > 0 && Math.abs(aspect - contentAspect) > 0.01) {
-                setContentAspect(aspect);
-              }
+      <View style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}>
+          <FeedVideoSurface
+            player={player}
+            visible
+            onFirstFrameRender={handleFirstFrameRender}
+          />
+          {!firstFramePainted ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 2,
+              }}
+            >
+              {lastFrame ? (
+                <Image
+                  source={lastFrame}
+                  style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}
+                  contentFit="cover"
+                />
+              ) : (
+                <FeedVideoPoster
+                  item={video}
+                  showBadge={false}
+                  showGradients={false}
+                />
+              )}
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={handleVideoTap}
+            android_disableSound
+            accessibilityRole="button"
+            accessibilityLabel="Play or pause video"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 48,
+              zIndex: 18,
+              elevation: 18,
             }}
           />
-          <View
+
+          <LinearGradient
+            colors={["rgba(40,18,12,0.55)", "transparent"]}
             pointerEvents="none"
             style={{
-              ...StyleSheet.absoluteFillObject,
-              opacity: firstFrameReady ? 1 : 0,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 88,
+              zIndex: 3,
             }}
-          >
-            <FeedVideoSurface
-              player={player}
-              visible={firstFrameReady}
-              onFirstFrameRender={handleFirstFrameRender}
-              fitWidth={fittedFrame?.width}
-              fitHeight={fittedFrame?.height}
-            />
-          </View>
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(40,18,12,0.72)"]}
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 110,
+              zIndex: 3,
+            }}
+          />
 
-          {showChrome && !hideChrome &&
+          {showChrome &&
             video.moderationStatus &&
             video.moderationStatus !== "approved" && (
-              <View style={{ position: "absolute", top: 50, left: 12, zIndex: 11 }}>
+              <View
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  right: 56,
+                  zIndex: 11,
+                  overflow: "visible",
+                  maxWidth: "100%",
+                }}
+              >
                 <ModerationBadge status={video.moderationStatus} />
               </View>
             )}
 
-          {showChrome && !hideChrome && (
-            <FeedMediaTypeOverlay
-              item={video}
-              contentType={video.contentType || "video"}
-              showCenter={false}
-            />
+          {showChrome && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+              }}
+            >
+              <FeedMediaTypeOverlay
+                item={video}
+                contentType={video.contentType || "video"}
+                showCenter={false}
+              />
+            </View>
           )}
 
-          {showChrome && !hideChrome && (
+          {showChrome && (
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => onVideoTap(key, video, index)}
@@ -469,20 +592,20 @@ function VideoCardPlayerInner(
                 position: "absolute",
                 top: 12,
                 right: 12,
-                backgroundColor: "rgba(0,0,0,0.6)",
-                borderRadius: 6,
+                backgroundColor: "rgba(0,0,0,0.55)",
+                borderRadius: 8,
                 paddingHorizontal: 8,
                 paddingVertical: 6,
                 flexDirection: "row",
                 alignItems: "center",
-                zIndex: 10,
+                zIndex: 20,
               }}
             >
               <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           )}
 
-          {showChrome && !hideChrome && (
+          {showChrome && !isPlaying && (
             <MediaPlayButton
               isPlaying={isPlaying}
               onPress={() => handleTogglePlay(setIsPlayTogglePending)}
@@ -492,24 +615,23 @@ function VideoCardPlayerInner(
             />
           )}
 
-          {showChrome && !hideChrome && (
+          {showChrome && (
             <View
               style={{
                 position: "absolute",
-                bottom: 64,
+                bottom: 36,
                 left: 12,
                 right: 12,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
                 pointerEvents: "none",
+                zIndex: 10,
               }}
             >
               <Text
                 style={{
-                  fontSize: 12,
+                  fontSize: 14,
                   fontFamily: "PlusJakartaSans_600SemiBold",
                   color: "#FFFFFF",
-                  lineHeight: 16,
+                  lineHeight: 18,
                   textShadowColor: "rgba(0, 0, 0, 0.75)",
                   textShadowOffset: { width: 0, height: 1 },
                   textShadowRadius: 3,
@@ -521,57 +643,56 @@ function VideoCardPlayerInner(
               </Text>
             </View>
           )}
-        </View>
-      </TouchableWithoutFeedback>
 
-      {showChrome && !hideChrome ? (
-        <VideoProgressBar
-          progress={
-            localDuration > 0
-              ? localPosition / localDuration
-              : Math.max(0, Math.min(1, videoProgress || 0))
-          }
-          currentMs={localPosition}
-          durationMs={
-            localDuration > 0
-              ? localDuration
-              : videoDurationMs || lastKnownDurationRef.current || knownDurationMs
-          }
-          isMuted={isMuted}
-          onToggleMute={handleToggleMuteInternal}
-          onSeekToPercent={(pct: number) => {
-            const clamped = Math.max(0, Math.min(1, pct));
-            const dur =
-              localDuration > 0
-                ? localDuration
-                : videoDurationMs > 0
-                  ? videoDurationMs
-                  : knownDurationMs > 0
-                    ? knownDurationMs
-                    : getPlayerDurationMs(videoRef.current, 0);
-            if (dur > 0) {
-              setLocalPosition(clamped * dur);
-              if (!(lastKnownDurationRef.current > 0)) {
-                lastKnownDurationRef.current = dur;
+          {showChrome ? (
+            <VideoProgressBar
+              progress={
+                localDuration > 0
+                  ? localPosition / localDuration
+                  : Math.max(0, Math.min(1, videoProgress || 0))
               }
-            }
-            seekToPercent(clamped);
-          }}
-          onScrubStart={() => setIsDragging(true)}
-          onScrubEnd={() => setIsDragging(false)}
-            showControls
-            bottomOffset={24}
-            enlargeOnDrag
-            knobSize={8}
-            knobSizeDragging={10}
-            trackHeights={{ normal: 4, dragging: 8 }}
-            seekDuringDrag
-            liveSeekThrottleMs={32}
-            enableHaptics
-          verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
-          style={{ zIndex: 200, elevation: 200 }}
-        />
-      ) : null}
+              currentMs={localPosition}
+              durationMs={
+                localDuration > 0
+                  ? localDuration
+                  : videoDurationMs || lastKnownDurationRef.current || knownDurationMs
+              }
+              isMuted={isMuted}
+              onToggleMute={handleToggleMuteInternal}
+              onSeekToPercent={(pct: number) => {
+                const clamped = Math.max(0, Math.min(1, pct));
+                const dur =
+                  localDuration > 0
+                    ? localDuration
+                    : videoDurationMs > 0
+                      ? videoDurationMs
+                      : knownDurationMs > 0
+                        ? knownDurationMs
+                        : getPlayerDurationMs(videoRef.current, 0);
+                if (dur > 0) {
+                  setLocalPosition(clamped * dur);
+                  if (!(lastKnownDurationRef.current > 0)) {
+                    lastKnownDurationRef.current = dur;
+                  }
+                }
+                seekToPercent(clamped);
+              }}
+              onScrubStart={() => setIsDragging(true)}
+              onScrubEnd={() => setIsDragging(false)}
+              showControls
+              bottomOffset={10}
+              enlargeOnDrag
+              knobSize={8}
+              knobSizeDragging={10}
+              trackHeights={{ normal: 4, dragging: 8 }}
+              seekDuringDrag
+              liveSeekThrottleMs={32}
+              enableHaptics
+              verticalScrub={{ enabled: true, sensitivityBase: 60, maxSlowdown: 5 }}
+              style={{ zIndex: 200, elevation: 200 }}
+            />
+          ) : null}
+        </View>
     </View>
   );
 }

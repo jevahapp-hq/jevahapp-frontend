@@ -1,37 +1,24 @@
 /**
- * Full player is a root overlay, not a native Android Modal window.
- * Minimize synchronously unmounts it; audio keeps playing on the mini bar.
- *
- * Chevron taps use a last-child 64px hit target (box-none elsewhere) because
- * Android elevation on album art / pan responders steal Pressable taps.
+ * Full-screen now playing. Native Modal is required so this sits above
+ * Android's native screen window — an in-tree overlay is painted behind
+ * the Music tab, which made taps look like they only started audio.
  */
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import {
   BackHandler,
-  Dimensions,
+  Modal,
   StatusBar,
   StyleSheet,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { stopAndDismissNowPlaying } from "@/shared/audio/stopNowPlaying";
+import { setFullscreenBackExit } from "@/features/media/video-feed/fullscreenBackSession";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
-import { trackDurationToMs } from "@/store/audioPlayer/resolveAudioDurationMs";
 import CopyrightFreeSongModal from "@/components/CopyrightFreeSongModal";
 import { playCopyrightFreeSong } from "./CopyrightFreeSongs/hooks/useCopyrightFreeSongsPlayback";
-
-const SCREEN_HEIGHT = Dimensions.get("window").height;
-const SWIPE_DISMISS_DISTANCE = 64;
-const SWIPE_DISMISS_VELOCITY = 550;
-const OFFSCREEN_Y = SCREEN_HEIGHT * 1.5;
 
 function formatClock(milliseconds: number) {
   const seconds = Math.floor(milliseconds / 1000);
@@ -45,10 +32,6 @@ function sameTrack(song: any, track: { id?: string } | null): boolean {
   return track.id === song.id || track.id === song._id;
 }
 
-function minimizePlayer() {
-  useCopyrightFreeOverlayStore.getState().minimize();
-}
-
 export default function CopyrightFreeSongOverlayHost() {
   const insets = useSafeAreaInsets();
   const surface = useCopyrightFreeOverlayStore((s) => s.surface);
@@ -58,23 +41,11 @@ export default function CopyrightFreeSongOverlayHost() {
 
   const currentTrack = useGlobalAudioPlayerStore((s) => s.currentTrack);
   const isPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
-  const progress = useGlobalAudioPlayerStore((s) => s.progress);
-  const duration = useGlobalAudioPlayerStore((s) => s.duration);
-  const position = useGlobalAudioPlayerStore((s) => s.position);
   const isMuted = useGlobalAudioPlayerStore((s) => s.isMuted);
   const togglePlayPause = useGlobalAudioPlayerStore((s) => s.togglePlayPause);
-  const translateY = useSharedValue(0);
 
   const isCurrent = sameTrack(song, currentTrack);
-  const isFull = surface === "full";
-  const engineDuration =
-    isCurrent && duration > 0 ? duration : trackDurationToMs(song?.duration);
-  const engineProgress =
-    isCurrent && engineDuration > 0
-      ? Math.max(0, Math.min(1, position / engineDuration))
-      : isCurrent
-        ? Math.max(0, Math.min(1, progress || 0))
-        : 0;
+  const isFull = surface === "full" && !!song;
 
   const handlePlay = useCallback(
     (next: any) => {
@@ -83,46 +54,9 @@ export default function CopyrightFreeSongOverlayHost() {
     [songs]
   );
 
-  const handleMinimize = useCallback(() => {
-    // Move the surface out of sight before React runs socket/player cleanup.
-    translateY.value = OFFSCREEN_Y;
-    minimizePlayer();
-  }, [translateY]);
-
-  const finishSwipeDismiss = useCallback(() => {
-    minimizePlayer();
+  const handleStopAndDismiss = useCallback(() => {
+    stopAndDismissNowPlaying();
   }, []);
-
-  const dismissGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY(10)
-        .failOffsetX([-32, 32])
-        .onUpdate((event) => {
-          translateY.value = Math.max(0, event.translationY);
-        })
-        .onEnd((event) => {
-          const shouldDismiss =
-            event.translationY > SWIPE_DISMISS_DISTANCE ||
-            event.velocityY > SWIPE_DISMISS_VELOCITY;
-          if (shouldDismiss) {
-            // Never wait for an animation completion callback. Move fully out
-            // of the viewport on the UI thread and switch to mini immediately.
-            translateY.value = OFFSCREEN_Y;
-            runOnJS(finishSwipeDismiss)();
-            return;
-          }
-          translateY.value = withSpring(0, {
-            damping: 20,
-            stiffness: 280,
-          });
-        }),
-    [finishSwipeDismiss, translateY]
-  );
-
-  const surfaceStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
 
   const handleSeek = useCallback(
     (progressValue: number) => {
@@ -141,70 +75,71 @@ export default function CopyrightFreeSongOverlayHost() {
 
   useEffect(() => {
     if (!isFull || !currentTrack) return;
+    if (sameTrack(song, currentTrack)) return;
     const match = songs.find(
       (s) => s.id === currentTrack.id || s._id === currentTrack.id
     );
-    if (match && !sameTrack(song, currentTrack)) {
-      useCopyrightFreeOverlayStore.getState().setSong(match);
-    }
+    useCopyrightFreeOverlayStore.getState().setSong(match ?? currentTrack);
   }, [isFull, currentTrack?.id, songs, song?.id, song?._id]);
 
   useEffect(() => {
     if (!isFull) return;
-    translateY.value = 0;
-    // A hidden feed video must not keep producing timeUpdate renders behind
-    // the full audio player. Besides wasting work, that can delay JS taps.
     useGlobalVideoStore.getState().pauseAllVideosImperatively();
+    setFullscreenBackExit(handleStopAndDismiss);
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      minimizePlayer();
+      handleStopAndDismiss();
       return true;
     });
-    return () => sub.remove();
-  }, [isFull, translateY]);
-
-  if (!song || !isFull) return null;
+    return () => {
+      setFullscreenBackExit(null);
+      sub.remove();
+    };
+  }, [isFull, handleStopAndDismiss]);
 
   const top =
     (insets.top || StatusBar.currentHeight || 12) + 4 + 4;
 
   return (
-    <GestureDetector gesture={dismissGesture}>
-      <Animated.View
-        accessibilityViewIsModal
-        collapsable={false}
-        style={[styles.root, surfaceStyle]}
-      >
+    <Modal
+      visible={isFull}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={handleStopAndDismiss}
+      statusBarTranslucent
+      hardwareAccelerated
+      supportedOrientations={["portrait"]}
+    >
+      <View style={styles.root}>
         <StatusBar barStyle="light-content" />
-        <CopyrightFreeSongModal
-          presentation="inline"
-          visible
-          song={song}
-          variant={initialAction === "options" ? "options" : "player"}
-          initialAction={initialAction}
-          onClose={handleMinimize}
-          onPlay={handlePlay}
-          isPlaying={isCurrent && isPlaying}
-          audioProgress={engineProgress}
-          audioDuration={engineDuration}
-          audioPosition={isCurrent ? position : 0}
-          isMuted={isCurrent ? isMuted : false}
-          onTogglePlay={() => {
-            if (isCurrent) {
-              void togglePlayPause();
-            } else {
-              void playCopyrightFreeSong(song, songs);
-            }
-          }}
-          onToggleMute={() => {
-            if (isCurrent) {
-              void useGlobalAudioPlayerStore.getState().toggleMute();
-            }
-          }}
-          onSeek={(progressValue) => {
-            void handleSeek(progressValue);
-          }}
-          formatTime={formatClock}
-        />
+        {song ? (
+          <CopyrightFreeSongModal
+            presentation="inline"
+            visible
+            song={song}
+            variant={initialAction === "options" ? "options" : "player"}
+            initialAction={initialAction}
+            onClose={handleStopAndDismiss}
+            onPlay={handlePlay}
+            isPlaying={isCurrent && isPlaying}
+            isMuted={isCurrent ? isMuted : false}
+            onTogglePlay={() => {
+              if (isCurrent) {
+                void togglePlayPause();
+              } else {
+                void playCopyrightFreeSong(song, songs);
+              }
+            }}
+            onToggleMute={() => {
+              if (isCurrent) {
+                void useGlobalAudioPlayerStore.getState().toggleMute();
+              }
+            }}
+            onSeek={(progressValue) => {
+              void handleSeek(progressValue);
+            }}
+            formatTime={formatClock}
+          />
+        ) : null}
         <View
           pointerEvents="box-none"
           style={StyleSheet.absoluteFill}
@@ -213,9 +148,9 @@ export default function CopyrightFreeSongOverlayHost() {
           <View
             collapsable={false}
             accessibilityRole="button"
-            accessibilityLabel="Minimize player"
+            accessibilityLabel="Close player"
             onStartShouldSetResponder={() => true}
-            onResponderGrant={handleMinimize}
+            onResponderGrant={handleStopAndDismiss}
             style={{
               position: "absolute",
               top,
@@ -226,16 +161,14 @@ export default function CopyrightFreeSongOverlayHost() {
             }}
           />
         </View>
-      </Animated.View>
-    </GestureDetector>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#0A0D14",
-    zIndex: 100000,
-    elevation: 100,
+    flex: 1,
+    backgroundColor: "#07110F",
   },
 });

@@ -1,5 +1,6 @@
 import type { ContentStats } from "@/app/utils/contentInteractionAPI";
 import { ensureAuthenticatedForInteraction } from "@/app/utils/auth/requireAuthForInteraction";
+import { persistContentInteraction } from "@/app/utils/contentInteractionPersist";
 import type { ToggleSaveOptions } from "../types";
 import type { StoreGet, StoreSet } from "../types";
 
@@ -82,6 +83,17 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
           };
         });
 
+        const optimistic = get().contentStats[contentId];
+        if (optimistic) {
+          void persistContentInteraction(contentId, {
+            saves: optimistic.saves,
+            saved: optimistic.userInteractions?.saved,
+            likes: optimistic.likes,
+            comments: optimistic.comments,
+            views: optimistic.views,
+          });
+        }
+
         const result = await api.toggleSave(contentId, contentType);
 
         set((state: any) => {
@@ -119,6 +131,15 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
         if (result.saved) get().loadUserSavedContent();
 
         const latest = get().contentStats[contentId];
+        if (latest) {
+          void persistContentInteraction(contentId, {
+            saves: latest.saves,
+            saved: latest.userInteractions?.saved,
+            likes: latest.likes,
+            comments: latest.comments,
+            views: latest.views,
+          });
+        }
         return {
           saved: latest?.userInteractions?.saved ?? result.saved,
           totalSaves: latest?.saves ?? result.totalSaves,
@@ -134,6 +155,13 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
+        const rolledBack = get().contentStats[contentId];
+        if (rolledBack) {
+          void persistContentInteraction(contentId, {
+            saves: rolledBack.saves,
+            saved: rolledBack.userInteractions?.saved,
+          });
+        }
         throw error instanceof Error
           ? error
           : new Error(typeof error === "string" ? error : "Save failed");

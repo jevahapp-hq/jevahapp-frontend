@@ -9,6 +9,7 @@ import MediaDetailsModal from "../../../src/shared/components/MediaDetailsModal"
 import ReportMediaModal from "../../../src/shared/components/ReportMediaModal";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
+import { useCommentModal } from "../../context/CommentModalContext";
 import { ReelsHeader } from "./ReelsHeader";
 
 export interface ReelsModalsProps {
@@ -48,6 +49,7 @@ export function ReelsModals({
   getResponsiveSize,
   getTouchTargetSize,
 }: ReelsModalsProps) {
+  const { isVisible: commentsOpen } = useCommentModal();
   return (
     <>
       <ReelsHeader
@@ -56,23 +58,25 @@ export function ReelsModals({
         getResponsiveSize={getResponsiveSize}
         getTouchTargetSize={getTouchTargetSize}
       />
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-          backgroundColor: "transparent",
-          pointerEvents: "box-none" as const,
-          paddingBottom: isIOS ? 20 : 0,
-        }}
-      >
-        <BottomNavOverlay
-          selectedTab={activeTab}
-          onTabChange={onTabChange}
-        />
-      </View>
+      {!commentsOpen ? (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 100,
+            backgroundColor: "transparent",
+            pointerEvents: "box-none" as const,
+            paddingBottom: isIOS ? 20 : 0,
+          }}
+        >
+          <BottomNavOverlay
+            selectedTab={activeTab}
+            onTabChange={onTabChange}
+          />
+        </View>
+      ) : null}
       <DeleteMediaConfirmation
         visible={showDeleteModal}
         mediaId={currentVideo._id || ""}

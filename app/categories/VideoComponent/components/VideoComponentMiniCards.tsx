@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { MiniCardSkeleton } from "../../../../src/shared/components/Skeleton";
+import { useReelsStore } from "@/store/useReelsStore";
 import { getVideoKey } from "../utils";
 import { RecommendedItem } from "../types";
 
@@ -109,7 +110,7 @@ export function VideoComponentMiniCards({
   };
 
   const handleMiniCardPress = (item: RecommendedItem, index: number) => {
-    const videoListForNavigation = items.map((v) => ({
+    const videoListForNavigation = items.map((v, idx) => ({
       title: v.title,
       speaker: v.subTitle || "Unknown",
       timeAgo: "Recent",
@@ -118,9 +119,24 @@ export function VideoComponentMiniCards({
       saved: 0,
       favorite: 0,
       fileUrl: v.fileUrl,
-      imageUrl: v.fileUrl,
+      imageUrl: typeof v.imageUrl === "string" ? v.imageUrl : v.fileUrl,
       speakerAvatar: require("../../../../assets/images/Avatar-1.png").toString(),
+      _id: (v as any)._id || `temp-${idx}`,
+      id: (v as any)._id || `temp-${idx}`,
+      contentType: "video",
     }));
+    const contentId = String((item as any)._id || videoListForNavigation[index]?._id || "").trim();
+    const reels = useReelsStore.getState();
+    reels.setVideoList(videoListForNavigation as any);
+    reels.setCurrentIndex(index);
+    if (contentId) {
+      reels.setResumePlayback({
+        contentId,
+        positionMs: 0,
+        reelsIndex: index,
+        target: "reels",
+      });
+    }
     router.push({
       pathname: "/reels/Reelsviewscroll",
       params: {
@@ -134,7 +150,6 @@ export function VideoComponentMiniCards({
         imageUrl: item.fileUrl,
         speakerAvatar: require("../../../../assets/images/Avatar-1.png").toString(),
         category: "videos",
-        videoList: JSON.stringify(videoListForNavigation),
         currentIndex: String(index),
         source: "VideoComponent",
       },

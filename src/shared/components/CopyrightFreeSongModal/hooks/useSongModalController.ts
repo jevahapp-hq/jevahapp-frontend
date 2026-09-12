@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, InteractionManager, Platform, Share, StatusBar, View } from "react-native";
+import { Alert, Dimensions, InteractionManager, Platform, Share, StatusBar, View } from "react-native";
 import {
   initialWindowMetrics as safeAreaInitialMetrics,
   useSafeAreaInsets,
@@ -7,8 +7,13 @@ import {
 import { isCopyrightFreeSong } from "@/shared/audio";
 import { resolveAlbumArtSource } from "@/shared/brand/albumArt";
 import copyrightFreeMusicAPI from "@/app/services/copyrightFreeMusicAPI";
+import { playlistAPI } from "@/app/utils/playlistAPI";
+import { mapPlaylistTracksToSongs } from "@/app/utils/playlistTrackMapper";
+import { useDownloadHandler } from "@/app/utils/downloadUtils";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
-import { usePlaylistStore, type Playlist } from "@/store/usePlaylistStore";
+import { cycleRepeatOne } from "@/store/audioPlayer/queueAdvance";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
+import { usePlaylistStore, type Playlist, type PlaylistSong } from "@/store/usePlaylistStore";
 import type { CopyrightFreeSongModalProps } from "../types";
 import {
   useCopyrightFreeSongRealtime,
@@ -116,9 +121,35 @@ export function useSongModalController({
 
   const repeatMode = useGlobalAudioPlayerStore((s) => s.repeatMode);
   const isShuffled = useGlobalAudioPlayerStore((s) => s.isShuffled);
-  const setRepeatMode = useGlobalAudioPlayerStore((s) => s.setRepeatMode);
   const toggleShuffle = useGlobalAudioPlayerStore((s) => s.toggleShuffle);
+  const setRepeatMode = useGlobalAudioPlayerStore((s) => s.setRepeatMode);
+  const audioQueue = useGlobalAudioPlayerStore((s) => s.queue);
+  const overlaySongs = useCopyrightFreeOverlayStore((s) => s.songs);
   const { playlists, loadPlaylistsFromBackend } = usePlaylistStore();
+  const { handleDownload: downloadItem } = useDownloadHandler();
+
+  const queueSongs = useMemo(() => {
+    if (overlaySongs?.length) return overlaySongs;
+    return (audioQueue || []).map((track) => ({
+      id: track.id,
+      _id: track.id,
+      title: track.title,
+      artist: track.artist,
+      thumbnailUrl: track.thumbnailUrl,
+      audioUrl: track.audioUrl,
+      duration: track.duration,
+      source: track.source,
+    }));
+  }, [overlaySongs, audioQueue]);
+
+  const handleSelectQueueSong = useCallback(
+    (next: any) => {
+      if (!next) return;
+      useCopyrightFreeOverlayStore.getState().setSong(next);
+      onPlay?.(next);
+    },
+    [onPlay]
+  );
 
   const { playlistViewAnimatedStyle, playlistDetailAnimatedStyle } =
     useModalSheetAnimations({
@@ -155,13 +186,9 @@ export function useSongModalController({
     visible: visible && isCfSong,
     song,
     isPlaying,
-    audioProgress,
-    audioPosition,
-    audioDuration,
     hasTrackedView,
     setHasTrackedView,
     setViewCount,
-    likeCount,
   });
 
   useCopyrightFreeSongRealtime({
@@ -176,7 +203,6 @@ export function useSongModalController({
   });
 
   const seekGesture = useSeekPanResponder({
-    audioProgress,
     onSeek,
     progressBarRef,
     setIsSeeking,
@@ -245,6 +271,119 @@ export function useSongModalController({
   }, [showOptionsModal, song, likeCount, setViewCount]);
 
   const handleClosePlaylistModal = useCallback(() => setShowPlaylistModal(false), []);
+
+  const hydratePlaylist = useCallback(async (playlist: Playlist): Promise<Playlist> => {
+    try {
+      const result = await playlistAPI.getPlaylistById(playlist.id);
+      if (!result.success || !result.data) return playlist;
+      const songs = mapPlaylistTracksToSongs(result.data.tracks);
+      return {
+        id: result.data._id,
+        name: result.data.name,
+        description: result.data.description,
+        songs: songs.length > 0 ? songs : playlist.songs || [],
+        createdAt: result.data.createdAt,
+        updatedAt: result.data.updatedAt,
+        thumbnailUrl:
+          songs[0]?.thumbnailUrl ||
+          playlist.thumbnailUrl ||
+          result.data.tracks?.[0]?.content?.thumbnailUrl,
+        totalTracks:
+          result.data.totalTracks || songs.length || playlist.songs?.length,
+      };
+    } catch {
+      return playlist;
+    }
+  }, []);
+
+  const openPlaylistDetail = useCallback(
+    async (playlist: Playlist) => {
+      const full = await hydratePlaylist(playlist);
+      setSelectedPlaylistForDetail(full);
+      setShowPlaylistModal(false);
+      setShowPlaylistDetail(true);
+    },
+    [hydratePlaylist]
+  );
+
+  const playSelectedPlaylistAt = useCallback(
+    async (index: number) => {
+      const selected = selectedPlaylistForDetail;
+      if (!selected) return;
+      const playable = selected.songs.filter((s) => s.audioUrl);
+      if (playable.length === 0) {
+        Alert.alert("Empty playlist", "Add a song first.");
+        return;
+      }
+      const start = Math.max(0, Math.min(index, playable.length - 1));
+      const queue = playable.map((s) => ({
+        id: s.id,
+        title: s.title,
+        artist: s.artist,
+        audioUrl: s.audioUrl,
+        thumbnailUrl: s.thumbnailUrl,
+        duration: s.duration,
+        category: s.category,
+        description: s.description,
+        source:
+          s.trackType === "copyrightFree"
+            ? ("copyright-free" as const)
+            : ("library" as const),
+      }));
+      useGlobalAudioPlayerStore.setState({
+        queue,
+        originalQueue: queue,
+        currentIndex: start,
+      });
+      await useGlobalAudioPlayerStore.getState().setTrack(queue[start], true);
+      const ui = playable.map((s) => ({
+        id: s.id,
+        _id: s.id,
+        title: s.title,
+        artist: s.artist,
+        audioUrl: s.audioUrl,
+        thumbnailUrl: s.thumbnailUrl,
+        duration: s.duration,
+      }));
+      useCopyrightFreeOverlayStore.getState().open(ui[start], { queue: ui });
+    },
+    [selectedPlaylistForDetail]
+  );
+
+  const handleRemovePlaylistTrack = useCallback(
+    async (track: PlaylistSong) => {
+      const selected = selectedPlaylistForDetail;
+      if (!selected) return;
+      Alert.alert("Remove Track", "Remove this track from the playlist?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await playlistAPI.removeTrackFromPlaylist(
+                selected.id,
+                track.id,
+                track.trackType || "copyrightFree"
+              );
+              if (!result.success) {
+                Alert.alert("Error", result.error || "Failed to remove track");
+                return;
+              }
+              await loadPlaylistsFromBackend();
+              const refreshed =
+                usePlaylistStore.getState().playlists.find((p) => p.id === selected.id) ||
+                selected;
+              setSelectedPlaylistForDetail(await hydratePlaylist(refreshed));
+            } catch {
+              Alert.alert("Error", "Failed to remove track");
+            }
+          },
+        },
+      ]);
+    },
+    [selectedPlaylistForDetail, loadPlaylistsFromBackend, hydratePlaylist]
+  );
 
   const handleShare = useCallback(async () => {
     if (!song) return;
@@ -315,19 +454,47 @@ export function useSongModalController({
     }
   }, [song, likeCount, setViewCount, setShareCount, setLikeCount]);
 
-  const handleSkip = useCallback(
-    (seconds: number) => {
-      if (!onSeek) return;
-      const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
-      if (!durationMs || durationMs <= 0) return;
-      const newPositionMs = Math.max(
-        0,
-        Math.min(durationMs, (audioPosition || 0) + seconds * 1000)
-      );
-      onSeek(newPositionMs / durationMs);
-    },
-    [onSeek, audioDuration, audioPosition, song]
-  );
+  const handlePrevious = useCallback(() => {
+    void useGlobalAudioPlayerStore.getState().previous();
+  }, []);
+
+  const handleNext = useCallback(() => {
+    void useGlobalAudioPlayerStore.getState().next({ fromUser: true });
+  }, []);
+
+  const handleRepeatCycle = useCallback(() => {
+    const store = useGlobalAudioPlayerStore.getState();
+    const nextMode = cycleRepeatOne(store.repeatMode);
+    setRepeatMode(nextMode);
+    if (nextMode !== "one") return;
+    void (async () => {
+      const sound = store.soundInstance;
+      if (sound?.isLoaded) {
+        try {
+          await sound.seekTo(0);
+        } catch {
+          // play() will still try
+        }
+      }
+      await useGlobalAudioPlayerStore.getState().play();
+    })();
+  }, [setRepeatMode]);
+
+  const handleDownload = useCallback(async () => {
+    if (!song) return;
+    const id = String(song._id || song.id || "");
+    const fileUrl = song.audioUrl || song.fileUrl;
+    if (!id || !fileUrl) return;
+    await downloadItem({
+      id,
+      title: song.title || "Track",
+      description: song.description || "",
+      author: song.artist || "",
+      contentType: "audio",
+      fileUrl,
+      thumbnailUrl: song.thumbnailUrl || song.imageUrl,
+    });
+  }, [song, downloadItem]);
 
   const imageSource = useMemo(
     () =>
@@ -343,18 +510,12 @@ export function useSongModalController({
     const chrome = safeTop + contentBottomInset + 140;
     const usable = screenHeight - chrome;
     return Math.min(
-      screenWidth * 0.62,
-      screenHeight * 0.30,
-      Math.max(usable * 0.42, 180),
-      260
+      screenWidth * 0.52,
+      screenHeight * 0.22,
+      Math.max(usable * 0.24, 140),
+      200
     );
   }, [safeTop, contentBottomInset]);
-
-  const handleRepeatCycle = useCallback(() => {
-    if (repeatMode === "none") setRepeatMode("all");
-    else if (repeatMode === "all") setRepeatMode("one");
-    else setRepeatMode("none");
-  }, [repeatMode, setRepeatMode]);
 
   return {
     song,
@@ -408,12 +569,19 @@ export function useSongModalController({
     handleToggleLike,
     handleToggleSave,
     handleShare,
-    handleSkip,
+    handlePrevious,
+    handleNext,
     handleRepeatCycle,
+    handleDownload,
+    handleSelectQueueSong,
+    queueSongs,
     handleDeletePlaylist,
     handleCreatePlaylist,
     handleAddToExistingPlaylist,
     handleClosePlaylistModal,
+    openPlaylistDetail,
+    playSelectedPlaylistAt,
+    handleRemovePlaylistTrack,
     imageSource,
     albumArtSize,
     safeTop,

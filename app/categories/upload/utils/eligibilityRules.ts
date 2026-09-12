@@ -1,6 +1,6 @@
 import { FileInfo, detectFileType } from "./fileTypeDetection";
-import { validateMimeCompatibility } from "./mimeCompatibility";
-import { validateFileSizeLimits } from "./sizeLimits";
+import { getTypeMaxBytes } from "./sizeLimits";
+import { buildFileGuidelineErrors } from "./uploadFileInspect";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -152,12 +152,7 @@ export const validateMediaEligibility = (
 
   // Validate file type - detect actual file type first, then check compatibility
   if (file) {
-    errors.push(...validateMimeCompatibility(file, selectedType));
-  }
-
-  // Validate file size based on actual file type and selected content type
-  if (file && file.size) {
-    errors.push(...validateFileSizeLimits(file, selectedType));
+    errors.push(...collectFileGuidelineErrors(file, selectedType));
   }
 
   return {
@@ -166,3 +161,23 @@ export const validateMediaEligibility = (
     warnings,
   };
 };
+
+/**
+ * Format / size / type rules for the picked file (not title/category).
+ * Used to prompt the user when content does not meet upload guidelines.
+ */
+export function collectFileGuidelineErrors(
+  file: FileInfo | null,
+  selectedType: string
+): string[] {
+  if (!file) return [];
+  return buildFileGuidelineErrors(
+    file,
+    selectedType,
+    getTypeMaxBytes(selectedType || "videos")
+  );
+}
+
+export function formatUploadGuidelineMessage(errors: string[]): string {
+  return errors.filter(Boolean).join("\n\n");
+}

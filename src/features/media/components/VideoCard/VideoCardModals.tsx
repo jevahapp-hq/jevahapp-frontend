@@ -18,8 +18,7 @@ export interface VideoCardModalsProps {
   setShowDetailsModal: (v: boolean) => void;
   onSave: (key: string, item: MediaItem) => void;
   video: MediaItem;
-  contentStats: Record<string, any>;
-  contentId: string;
+  isSaved: boolean;
   checkIfDownloaded: (id: string | undefined) => boolean;
   handleDeletePress: () => void;
   userIsAdmin: boolean;
@@ -42,8 +41,7 @@ export function VideoCardModals({
   setShowDetailsModal,
   onSave,
   video,
-  contentStats,
-  contentId,
+  isSaved,
   checkIfDownloaded,
   handleDeletePress,
   userIsAdmin,
@@ -72,14 +70,14 @@ export function VideoCardModals({
         }}
         onSaveToLibrary={() => onSave(modalKey, video)}
         onDownload={() => onDownload(video)}
-        isSaved={!!contentStats[contentId]?.userInteractions?.saved}
+        isSaved={isSaved}
         isDownloaded={checkIfDownloaded(video._id || video.fileUrl)}
         contentTitle={video.title}
         mediaId={video._id}
         uploadedBy={getUploadedBy(video)}
         mediaItem={video}
-        onDelete={handleDeletePress}
-        showDelete={userIsAdmin || isOwner}
+        onDelete={isOwner ? handleDeletePress : undefined}
+        showDelete={isOwner}
         onReport={() => setShowReportModal(true)}
       />
       <DeleteMediaConfirmation

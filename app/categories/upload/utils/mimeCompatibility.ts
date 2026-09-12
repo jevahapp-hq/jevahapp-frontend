@@ -11,8 +11,13 @@ export const VALID_AUDIO_MIMES = [
   "audio/x-m4a",
 ];
 
-export const VALID_VIDEO_FORMATS = ["mp4"];
-export const VALID_VIDEO_MIMES = ["video/mp4"];
+export const VALID_VIDEO_FORMATS = ["mp4", "mov", "m4v"];
+export const VALID_VIDEO_MIMES = [
+  "video/mp4",
+  "video/quicktime",
+  "video/x-m4v",
+  "video/mpeg",
+];
 
 export const VALID_BOOK_FORMATS = ["pdf", "epub"];
 export const VALID_BOOK_MIMES = [
@@ -89,7 +94,9 @@ export function validateMimeCompatibility(
         VALID_VIDEO_MIMES
       )
     ) {
-      errors.push("Invalid video format. Supported: MP4");
+      errors.push(
+        "Please use MP4 or MOV (camera-roll videos). MKV, AVI, and WebM are not supported."
+      );
     }
   } else if (selectedType === "books" || selectedType === "ebook") {
     // Books require ebook files
@@ -124,7 +131,9 @@ export function validateMimeCompatibility(
           VALID_VIDEO_MIMES
         )
       ) {
-        errors.push("GIF clips must be MP4 (max 8 seconds) or an animated .gif");
+        errors.push(
+          "GIF clips must be MP4/MOV (max 8 seconds) or an animated .gif"
+        );
       }
     } else {
       errors.push(
@@ -146,7 +155,9 @@ export function validateMimeCompatibility(
           VALID_VIDEO_MIMES
         )
       ) {
-        errors.push("Invalid video format. Supported: MP4");
+        errors.push(
+          "Please use MP4 or MOV (camera-roll videos). MKV, AVI, and WebM are not supported."
+        );
       }
     } else if (actualFileType === "audio") {
       if (

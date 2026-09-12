@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { AudioMode } from "expo-av";
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
+import { setAudioModeAsync } from "expo-audio";
 
 interface AudioSessionState {
   isMuted: boolean;
@@ -18,7 +17,6 @@ class AudioManager {
     globalMuteEnabled: false,
   };
   private listeners: Array<(state: AudioSessionState) => void> = [];
-  private audioMode: AudioMode | null = null;
 
   private constructor() {
     this.initializeAudioSession();
@@ -43,14 +41,12 @@ class AudioManager {
       }
 
       // Configure audio session for video playback
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        playsInSilentMode: true,
+        shouldRouteThroughEarpiece: false,
+        interruptionMode: "doNotMix",
       });
 
       console.log("🎵 AudioManager initialized with state:", this.audioSession);
@@ -83,14 +79,12 @@ class AudioManager {
       this.audioSession.lastMuteState = this.audioSession.isMuted;
 
       // Update audio session
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        playsInSilentModeIOS: !this.audioSession.isMuted,
-        shouldDuckAndroid: !this.audioSession.isMuted,
-        playThroughEarpieceAndroid: false,
-        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        playsInSilentMode: !this.audioSession.isMuted,
+        shouldRouteThroughEarpiece: false,
+        interruptionMode: "doNotMix",
       });
 
       // Persist state
@@ -118,14 +112,12 @@ class AudioManager {
       this.audioSession.lastMuteState = muted;
 
       // Update audio session
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        playsInSilentModeIOS: !muted,
-        shouldDuckAndroid: !muted,
-        playThroughEarpieceAndroid: false,
-        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        playsInSilentMode: !muted,
+        shouldRouteThroughEarpiece: false,
+        interruptionMode: "doNotMix",
       });
 
       // Persist state

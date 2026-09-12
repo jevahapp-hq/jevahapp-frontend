@@ -10,4 +10,5 @@ export * from "./authStatus";
 export * from "./resolveUploadContentType";
 export * from "./probeVideoDuration";
 export * from "./uploadDraft";
+export * from "./uploadGuidelineAlert";
 

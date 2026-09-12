@@ -2,7 +2,7 @@
  * Poll / hydrate creator session. Soft-fails to apply CTA if API missing.
  */
 import { useCallback, useEffect, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { creatorsApi } from "../services/creators";
 import type { CreatorMe } from "../services/creators/types";
 import { emptyCreatorMe } from "../services/creators/types";

@@ -1,197 +1,128 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import React from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { UI_CONFIG } from "@/shared/constants";
 
 export interface PlayerTransportProps {
   isPlaying: boolean;
-  isShuffled: boolean;
   repeatMode: "none" | "all" | "one";
   onTogglePlay: () => void;
-  onSkip: (seconds: number) => void;
+  onPrevious: () => void;
+  onNext: () => void;
   onRepeatCycle: () => void;
-  onToggleShuffle: () => void;
-}
-
-function RepeatIcon({ mode }: { mode: "none" | "all" | "one" }) {
-  const active = mode !== "none";
-  const color = active ? "#5EEAD4" : "rgba(255, 255, 255, 0.55)";
-  if (mode === "one") {
-    return <MaterialIcons name="repeat-one" size={22} color={color} />;
-  }
-  return <Ionicons name="repeat" size={20} color={color} />;
+  onOptionsPress: () => void;
 }
 
 export function PlayerTransport({
   isPlaying,
-  isShuffled,
   repeatMode,
   onTogglePlay,
-  onSkip,
+  onPrevious,
+  onNext,
   onRepeatCycle,
-  onToggleShuffle,
+  onOptionsPress,
 }: PlayerTransportProps) {
-  const content = (
-    <View style={styles.cardContent}>
-      <View style={styles.controlsRow}>
-        <TouchableOpacity
-          onPress={onToggleShuffle}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={[
-            styles.miniControl,
-            isShuffled ? styles.miniControlActive : undefined,
-          ]}
-        >
-          <Ionicons
-            name="shuffle"
-            size={20}
-            color={isShuffled ? "#5EEAD4" : "rgba(255, 255, 255, 0.55)"}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => onSkip(-15)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.controlSecondary}
-        >
-          <Ionicons name="play-skip-back" size={26} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={onTogglePlay}
-          activeOpacity={0.85}
-          style={styles.playButton}
-        >
-          <Ionicons
-            name={isPlaying ? "pause" : "play"}
-            size={38}
-            color="#05070C"
-            style={{ marginLeft: isPlaying ? 0 : 3 }}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => onSkip(15)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.controlSecondary}
-        >
-          <Ionicons name="play-skip-forward" size={26} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={onRepeatCycle}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel={
-            repeatMode === "none"
-              ? "Repeat off. Tap for repeat all."
-              : repeatMode === "all"
-                ? "Repeat all. Tap for repeat one."
-                : "Repeat one. Tap to turn off."
-          }
-          style={[
-            styles.miniControl,
-            repeatMode !== "none" ? styles.miniControlActive : undefined,
-          ]}
-        >
-          <RepeatIcon mode={repeatMode} />
-          {repeatMode === "all" ? (
-            <Text style={styles.repeatHint}>ALL</Text>
-          ) : null}
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const repeatOn = repeatMode !== "none";
 
   return (
-    <View style={styles.container}>
-      {/**
-       * BlurView as a sibling, not a parent. On Android it swallows taps when
-       * it wraps TouchableOpacity children — the whole transport looked dead.
-       */}
-      {Platform.OS !== "web" ? (
-        <BlurView
-          intensity={30}
-          tint="dark"
-          pointerEvents="none"
-          style={StyleSheet.absoluteFill}
+    <View style={styles.row}>
+      <TouchableOpacity
+        onPress={onOptionsPress}
+        activeOpacity={0.7}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel="More options"
+        style={styles.sideHit}
+      >
+        <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onPrevious}
+        activeOpacity={0.7}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel="Previous track"
+        style={styles.sideHit}
+      >
+        <Ionicons name="play-skip-back" size={30} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onTogglePlay}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={isPlaying ? "Pause" : "Play"}
+        style={styles.playButton}
+      >
+        <Ionicons
+          name={isPlaying ? "pause" : "play"}
+          size={34}
+          color="#FFFFFF"
+          style={{ marginLeft: isPlaying ? 0 : 3 }}
         />
-      ) : (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.webFallback]} />
-      )}
-      {content}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onNext}
+        activeOpacity={0.7}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel="Next track"
+        style={styles.sideHit}
+      >
+        <Ionicons name="play-skip-forward" size={30} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onRepeatCycle}
+        activeOpacity={0.7}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel={
+          repeatMode === "none"
+            ? "Repeat off"
+            : repeatMode === "one"
+              ? "Repeat one"
+              : "Repeat all"
+        }
+        style={styles.sideHit}
+      >
+        {repeatMode === "one" ? (
+          <MaterialIcons name="repeat-one" size={24} color={UI_CONFIG.COLORS.PRIMARY} />
+        ) : (
+          <Ionicons
+            name="repeat"
+            size={22}
+            color={repeatOn ? UI_CONFIG.COLORS.PRIMARY : "#FFFFFF"}
+          />
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    borderRadius: 32,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.16)",
-    marginBottom: 20,
-    overflow: "hidden",
-  },
-  webFallback: {
-    backgroundColor: "rgba(18, 24, 38, 0.75)",
-  },
-  cardContent: {
-    width: "100%",
-  },
-  controlsRow: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 2,
   },
-  controlSecondary: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: "center",
+  sideHit: {
+    width: 48,
+    height: 48,
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.18)",
+    justifyContent: "center",
   },
   playButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: UI_CONFIG.COLORS.PRIMARY,
     alignItems: "center",
-    shadowColor: "#5EEAD4",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 18,
-    elevation: 16,
-  },
-  miniControl: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
     justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-  },
-  miniControlActive: {
-    backgroundColor: "rgba(94, 234, 212, 0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(94, 234, 212, 0.5)",
-  },
-  repeatHint: {
-    position: "absolute",
-    bottom: 2,
-    fontSize: 7,
-    fontFamily: "PlusJakartaSans-Bold",
-    color: "#5EEAD4",
-    letterSpacing: 0.4,
   },
 });

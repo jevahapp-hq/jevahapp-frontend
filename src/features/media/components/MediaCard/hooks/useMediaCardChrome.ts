@@ -14,8 +14,9 @@ export function useMediaCardChrome(options: {
   parentModalOpen?: boolean;
   onDelete?: (item: MediaItem) => void;
   checkAdmin?: boolean;
+  viewerId?: string | null;
 }) {
-  const { item, parentModalOpen = false, onDelete, checkAdmin = true } = options;
+  const { item, parentModalOpen = false, onDelete, checkAdmin = true, viewerId } = options;
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -38,6 +39,7 @@ export function useMediaCardChrome(options: {
   } = useMediaDeletion({
     mediaItem: item,
     isModalVisible: isModalVisible || parentModalOpen,
+    viewerId,
     onDeleteSuccess: (deleted) => {
       closeModal();
       onDelete?.(deleted);

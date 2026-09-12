@@ -19,9 +19,13 @@ export type { AudioTrack };
  * - Proper guards against re-entrant operations
  * - Comprehensive error handling
  *
- * WARNING: Components should use the hook `useGlobalAudioPlayerStore()` instead of
- * `useGlobalAudioPlayerStore.getState()` in render functions to avoid cascading updates.
- * Multiple `getState()` calls in render can trigger excessive re-renders.
+ * WARNING: Never call `useGlobalAudioPlayerStore()` without a selector.
+ * Subscribe only to identity/transport fields (`currentTrack`, `isPlaying`,
+ * `isLoading`, `isMuted`, …). Playback position lives on
+ * `useAudioProgressStore` — a full-store subscription (or a `progress` /
+ * `position` selector here) re-renders the Music page on every audio tick
+ * and makes play/pause feel stuck.
+ * Imperative `getState()` is fine outside render.
  */
 
 export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
@@ -52,6 +56,7 @@ export const useGlobalAudioPlayerStore = create<GlobalAudioPlayerState>()(
       __loadGeneration: 0,
       __ignoreStatusUntil: 0,
       __failedTrackIds: {},
+      __statusSubscription: null,
 
       ...createSetTrack(get, set),
       ...createTransportActions(get, set),

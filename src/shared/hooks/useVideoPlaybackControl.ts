@@ -55,10 +55,16 @@ export const useVideoPlaybackControl = ({
       return;
     }
 
-    const isExpoVideo =
-      typeof p.play === "function" &&
-      typeof p.pause === "function" &&
-      !p.pauseAsync;
+    let isExpoVideo = false;
+    try {
+      isExpoVideo =
+        typeof p.play === "function" &&
+        typeof p.pause === "function" &&
+        !p.pauseAsync;
+    } catch {
+      unregisterVideoPlayer(videoKey);
+      return;
+    }
 
     const playerRef = {
       pause: async () => {
@@ -89,7 +95,7 @@ export const useVideoPlaybackControl = ({
               useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
             current.muted = muted;
             current.volume = muted ? 0 : 1;
-            current.play();
+            if (!current.playing) current.play();
           }
         } catch {
           // no-op
@@ -100,9 +106,9 @@ export const useVideoPlaybackControl = ({
       seekToPercent: (percent: number) => {
         const current = videoRef.current;
         if (!current || !isExpoVideo) return;
-        const durationSec = Number(current.duration) || 0;
-        if (durationSec <= 0) return;
         try {
+          const durationSec = Number(current.duration) || 0;
+          if (durationSec <= 0) return;
           current.currentTime =
             Math.max(0, Math.min(1, percent)) * durationSec;
         } catch {
@@ -114,16 +120,20 @@ export const useVideoPlaybackControl = ({
         if (!current || !isExpoVideo) {
           return { progress: 0, currentMs: 0, durationMs: 0 };
         }
-        const durationSec = Number(current.duration) || 0;
-        const currentSec = Number(current.currentTime) || 0;
-        return {
-          currentMs: currentSec * 1000,
-          durationMs: durationSec * 1000,
-          progress:
-            durationSec > 0
-              ? Math.max(0, Math.min(1, currentSec / durationSec))
-              : 0,
-        };
+        try {
+          const durationSec = Number(current.duration) || 0;
+          const currentSec = Number(current.currentTime) || 0;
+          return {
+            currentMs: currentSec * 1000,
+            durationMs: durationSec * 1000,
+            progress:
+              durationSec > 0
+                ? Math.max(0, Math.min(1, currentSec / durationSec))
+                : 0,
+          };
+        } catch {
+          return { progress: 0, currentMs: 0, durationMs: 0 };
+        }
       },
     };
 
@@ -148,28 +158,32 @@ export const useVideoPlaybackControl = ({
     const p = videoRef.current;
     if (!p) return;
 
-    const isExpoVideo =
-      typeof p.play === "function" &&
-      typeof p.pause === "function" &&
-      !p.pauseAsync;
+    try {
+      const isExpoVideo =
+        typeof p.play === "function" &&
+        typeof p.pause === "function" &&
+        !p.pauseAsync;
+      if (!isExpoVideo) return;
 
-    if (shouldPlayThisVideo) {
-      if (isExpoVideo) {
+      if (shouldPlayThisVideo) {
         const muted =
           useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
-        p.muted = muted;
-        p.volume = muted ? 0 : 1;
+        if (p.muted !== muted) p.muted = muted;
+        const targetVol = muted ? 0 : 1;
+        if (Math.abs((Number(p.volume) || 0) - targetVol) > 0.02) {
+          p.volume = targetVol;
+        }
         if (!p.playing) p.play();
-      }
-    } else {
-      if (isExpoVideo) {
-        p.muted = true;
-        p.volume = 0;
+      } else {
+        if (!p.muted) p.muted = true;
+        if ((Number(p.volume) || 0) !== 0) p.volume = 0;
         if (p.playing) {
           p.pause();
           setOverlayVisible(videoKey, true);
         }
       }
+    } catch {
+      // Native player already released.
     }
   }, [
     shouldPlayThisVideo,

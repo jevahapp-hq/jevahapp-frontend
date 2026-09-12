@@ -1,5 +1,5 @@
 {
-  "editor.codeActionsOnSave": {
+  "editor.codeActionsOnSave": {2
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"

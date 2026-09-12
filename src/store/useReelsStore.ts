@@ -24,6 +24,8 @@ export type ResumePlayback = {
   positionMs: number;
   /** Feed FlashList/player key to restore visibility after Reels. */
   feedKey?: string;
+  /** Reels list index at exit — independent of whether fullscreen is open. */
+  reelsIndex?: number;
   /**
    * Which surface may apply this seek.
    * Prevents background feed cards from consuming resume while Reels is open.
@@ -44,6 +46,7 @@ interface ReelsState {
     contentId: string,
     target?: ResumePlayback["target"]
   ) => ResumePlayback | null;
+  clearResumePlayback: () => void;
   clearReelsData: () => void;
 }
 
@@ -68,12 +71,19 @@ export const useReelsStore = create<ReelsState>((set, get) => ({
     if (!resume || String(resume.contentId) !== String(contentId)) return null;
     if (resume.target !== target) return null;
     if (!(resume.positionMs > 400)) {
-      set({ resumePlayback: null });
       return null;
     }
-    set({ resumePlayback: null });
+    // Keep feedKey / contentId so exiting fullscreen can restore the same
+    // row even if a still-mounted card applies the seek first.
+    set({
+      resumePlayback: {
+        ...resume,
+        positionMs: 0,
+      },
+    });
     return resume;
   },
+  clearResumePlayback: () => set({ resumePlayback: null }),
   clearReelsData: () =>
     set({ videoList: [], currentIndex: 0, resumePlayback: null }),
 }));

@@ -6,14 +6,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 import { AvatarWithInitialFallback } from "../../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../../shared/components/CardFooterActions";
-import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
 import ThreeDotsMenuButton from "../../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
+import { UnderReviewBanner } from "../../../../shared/components/UnderReviewBanner";
 import type { MediaItem } from "../../../../shared/types";
 import {
   getTimeAgo as defaultGetTimeAgo,
   getUserAvatarFromContent as defaultGetAvatar,
   getUserDisplayNameFromContent as defaultGetName,
 } from "../../../../shared/utils";
+import {
+  isUnderReview,
+  shouldShowMediaActionsMenu,
+} from "../../../../shared/media/moderationVisibility";
 
 export interface MediaCardFooterProps {
   item: MediaItem;
@@ -89,21 +93,14 @@ export function MediaCardFooter({
             </View>
           </View>
 
-          {item.moderationStatus === "under_review" ? (
-            <View style={styles.reviewBox}>
-              {showModerationBadge ? (
-                <View style={styles.reviewBadge}>
-                  <ModerationBadge status="under_review" />
-                </View>
-              ) : null}
-              <Text style={styles.reviewText}>
-                This content is currently under review and is only visible to
-                you. It will be made public once approved.
-              </Text>
-            </View>
+          {isUnderReview(item) ? (
+            <UnderReviewBanner
+              status={item.moderationStatus}
+              showBadge={showModerationBadge}
+            />
           ) : null}
 
-          {/* One line: views → share → ⋮ */}
+          {/* One line: views → share → ⋮ — menu is reserved so review banner cannot hide it */}
           <View style={styles.actionsLine} pointerEvents="box-none">
             <View style={styles.actionsFlex}>
               <CardFooterActions
@@ -124,14 +121,16 @@ export function MediaCardFooter({
                 useEnhancedComponents={false}
               />
             </View>
-            <View style={styles.menuSlot}>
-              <ThreeDotsMenuButton
-                onPress={openModal}
-                size={18}
-                hitSlop={8}
-                style={menuStyle as any}
-              />
-            </View>
+            {shouldShowMediaActionsMenu(item) ? (
+              <View style={styles.menuSlot}>
+                <ThreeDotsMenuButton
+                  onPress={openModal}
+                  size={18}
+                  hitSlop={8}
+                  style={menuStyle as any}
+                />
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -144,6 +143,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 8,
     paddingBottom: 6,
+    overflow: "visible",
     zIndex: 100,
   },
   metaRow: {
@@ -166,6 +166,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     marginLeft: 10,
     paddingRight: 4,
+    overflow: "visible",
   },
   nameRow: {
     flexDirection: "row",
@@ -189,26 +190,6 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginLeft: 4,
   },
-  reviewBox: {
-    marginTop: 6,
-    marginBottom: 4,
-    backgroundColor: "#FFF7ED",
-    borderColor: "#FFEDD5",
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 8,
-  },
-  reviewBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  reviewText: {
-    fontSize: 11,
-    color: "#C2410C",
-    lineHeight: 16,
-    flexShrink: 1,
-  },
   actionsLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -225,5 +206,7 @@ const styles = StyleSheet.create({
     width: 40,
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 30,
+    elevation: 30,
   },
 });

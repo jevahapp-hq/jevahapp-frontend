@@ -225,8 +225,7 @@
 
 
 import { Feather } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import {
     Dimensions,

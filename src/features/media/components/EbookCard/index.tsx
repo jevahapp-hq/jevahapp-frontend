@@ -26,6 +26,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   onDownload,
   onDelete,
   checkIfDownloaded,
+  viewerId,
 }) => {
   const { showCommentModal, isVisible: commentsFocused } = useCommentModal();
   const contentId = ebook._id || `ebook-${index}`;
@@ -34,7 +35,8 @@ export const EbookCard: React.FC<EbookCardProps> = ({
   const chrome = useMediaCardChrome({
     item: ebook,
     onDelete,
-    checkAdmin: true,
+    checkAdmin: false,
+    viewerId,
   });
 
   const stats = useMediaCardStoreStats(contentId, ebook, "media");
@@ -72,7 +74,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
           openModal={chrome.openModal}
           likeColor="#FF1744"
           showModerationBadge
-          footerClassName="flex-row items-center justify-between mt-1 px-2"
+          footerClassName="mt-1 px-2"
           menuStyle={{ marginRight: 8 }}
         />
       ) : null}
@@ -87,7 +89,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         isSaved={!!(ebook as any)?.saved || stats.userSaveState}
         isDownloaded={checkIfDownloaded(ebook._id || ebook.fileUrl)}
         handleDeletePress={chrome.handleDeletePress}
-        showDelete={chrome.userIsAdmin || chrome.isOwner}
+        showDelete={chrome.isOwner}
         showDeleteModal={chrome.showDeleteModal}
         closeDeleteModal={chrome.closeDeleteModal}
         handleDeleteConfirm={chrome.handleDeleteConfirm}

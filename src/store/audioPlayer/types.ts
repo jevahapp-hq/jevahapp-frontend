@@ -1,4 +1,4 @@
-import { Audio } from "expo-av";
+import type { AudioPlayer } from "expo-audio";
 import type { StoreApi } from "zustand";
 
 export interface AudioTrack {
@@ -42,13 +42,15 @@ export interface GlobalAudioPlayerState {
    */
   isSessionActive: boolean;
 
-  // Playback state
+  // Playback snapshot (not the live clock). High-frequency position lives in
+  // `useAudioProgressStore`. These fields update on load / seek / pause / finish
+  // so `getState()` stays useful without notifying React on every tick.
   position: number; // in milliseconds
   duration: number; // in milliseconds
   progress: number; // 0-1
 
   // Audio instance
-  soundInstance: Audio.Sound | null;
+  soundInstance: AudioPlayer | null;
 
   // Queue (for future playlist support)
   queue: AudioTrack[];
@@ -68,7 +70,7 @@ export interface GlobalAudioPlayerState {
   toggleMute: () => Promise<void>;
   setRate: (rate: number) => Promise<void>;
   stop: () => Promise<void>;
-  next: () => Promise<void>;
+  next: (opts?: { fromUser?: boolean }) => Promise<void>;
   previous: () => Promise<void>;
   playAtIndex: (index: number) => Promise<void>;
   clear: () => Promise<void>;
@@ -87,8 +89,10 @@ export interface GlobalAudioPlayerState {
   __completionTimeout?: boolean;
   __completionTimeoutId?: any;
   __lastStatusUpdateTs?: number;
-  /** Invalidates callbacks emitted by a previously unloaded Audio.Sound. */
+  /** Invalidates callbacks emitted by a previously unloaded AudioPlayer. */
   __loadGeneration?: number;
+  /** Status listener for the current expo-audio player. */
+  __statusSubscription?: { remove: () => void } | null;
   /** Ignore player position callbacks until this timestamp (after a seek). */
   __ignoreStatusUntil?: number;
   /** Track ids that 404'd this session — skip them instead of looping. */

@@ -28,6 +28,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   onDelete,
   onLayout,
   focusRef,
+  viewerId,
 }) => {
   const { showCommentModal, isVisible: commentsFocused } = useCommentModal();
   const contentId = audio._id || `music-${index}`;
@@ -37,7 +38,8 @@ export const MusicCard: React.FC<MusicCardProps> = ({
   const chrome = useMediaCardChrome({
     item: audio,
     onDelete,
-    checkAdmin: true,
+    checkAdmin: false,
+    viewerId,
   });
 
   const stats = useMediaCardStoreStats(
@@ -52,9 +54,6 @@ export const MusicCard: React.FC<MusicCardProps> = ({
     contentId: String(audio._id || ""),
     contentType: audio.contentType || "media",
     isPlaying: playback.isPlaying,
-    positionMs: playback.position || 0,
-    progress: playback.progress || 0,
-    durationMs: playback.duration || 0,
   });
 
   const thumbnailSource = audio?.imageUrl || audio?.thumbnailUrl;
@@ -90,10 +89,10 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           isSermon={isSermon}
           attemptedPlay={playback.attemptedPlay}
           hasDuration={playback.hasDuration}
-          progress={playback.progress}
+          audioId={playback.audioId}
           isMuted={playback.isMuted}
           isPlaying={playback.isPlaying}
-          onToggleOverlay={() => playback.setShowOverlay((v) => !v)}
+          onToggleOverlay={() => void playback.handlePlayPress()}
           onToggleMute={() => void playback.toggleMute()}
           onSeekRelative={playback.seekBySeconds}
           onSeekToPercent={playback.onSeekToPercent}
@@ -131,7 +130,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         isSaved={!!audio.saves || stats.userSaveState}
         isDownloaded={false}
         handleDeletePress={chrome.handleDeletePress}
-        showDelete={chrome.userIsAdmin || chrome.isOwner}
+        showDelete={chrome.isOwner}
         showDeleteModal={chrome.showDeleteModal}
         closeDeleteModal={chrome.closeDeleteModal}
         handleDeleteConfirm={chrome.handleDeleteConfirm}

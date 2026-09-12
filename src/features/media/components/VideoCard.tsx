@@ -46,6 +46,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   shouldRenderPlayer = false,
   isFeedActive = true,
   playbackKey,
+  viewerId,
 }) => {
   const contentId = video._id || getContentKey(video);
   const key = playbackKey ?? getContentKey(video);
@@ -84,6 +85,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   } = useMediaDeletion({
     mediaItem: video,
     isModalVisible: isModalVisible || modalVisible === modalKey,
+    viewerId,
     onDeleteSuccess: (deletedVideo) => {
       closeModal();
       if (onDelete) {
@@ -148,7 +150,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       collapsable={false}
       style={{
         marginBottom: showFooterSlot ? 64 : 0,
-        // Allow under-review banner + ⋮ menu to remain visible; player clips itself.
+        // Player clips itself. Keep the under-review banner + ⋮ menu visible.
         overflow: "visible",
       }}
       onLayout={
@@ -185,7 +187,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       {showFooterSlot && (
         <View
-          style={{ opacity: footerVisible ? 1 : 0 }}
+          style={{
+            opacity: footerVisible ? 1 : 0,
+            overflow: "visible",
+            zIndex: 40,
+            elevation: 40,
+          }}
           pointerEvents={footerVisible ? "auto" : "none"}
           collapsable={false}
         >
@@ -225,8 +232,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         setShowDetailsModal={setShowDetailsModal}
         onSave={onSave}
         video={video}
-        contentStats={contentStats}
-        contentId={contentId}
+        isSaved={!!userSaveState}
         checkIfDownloaded={checkIfDownloaded as any}
         handleDeletePress={handleDeletePress}
         userIsAdmin={false}

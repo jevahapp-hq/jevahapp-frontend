@@ -3,7 +3,7 @@
  * Handles loading persisted stats, favorites, viewed videos, and audio initialization
  */
 
-import { Audio } from "expo-av";
+import { setAudioModeAsync } from "expo-audio";
 import { useEffect, useState } from "react";
 import {
   getFavoriteState,
@@ -90,12 +90,12 @@ export function useVideoComponentPersisted({
   useEffect(() => {
     const initializeAudio = async () => {
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
+        await setAudioModeAsync({
+          allowsRecording: false,
+          shouldPlayInBackground: false,
+          playsInSilentMode: true,
+          shouldRouteThroughEarpiece: false,
+          interruptionMode: "doNotMix",
         });
 
         setVideoVolume(1.0);

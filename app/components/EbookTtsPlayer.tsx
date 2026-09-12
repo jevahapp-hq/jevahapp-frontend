@@ -8,6 +8,10 @@ import {
   getEbookTts,
 } from "../services/ebookTtsApi";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
+import {
+  useAudioDurationForTrack,
+  useAudioPositionForTrack,
+} from "@/store/audioPlayer/audioProgressStore";
 import { playOrToggleTrack } from "../../src/shared/audio/playOrToggleTrack";
 
 type Props = {
@@ -40,12 +44,10 @@ export default function EbookTtsPlayer({
   const ttsId = `ebook-tts-${ebookId}`;
   const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
   const sessionPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
-  const sessionDuration = useGlobalAudioPlayerStore((s) => s.duration);
-  const sessionPosition = useGlobalAudioPlayerStore((s) => s.position);
   const isCurrent = currentTrackId === ttsId;
   const isPlaying = isCurrent && sessionPlaying;
-  const durationMs = isCurrent ? sessionDuration : 0;
-  const positionMs = isCurrent ? sessionPosition : 0;
+  const durationMs = useAudioDurationForTrack(ttsId);
+  const positionMs = useAudioPositionForTrack(ttsId);
 
   // Text sync highlighting (segments.v1)
   const [segments, setSegments] = useState<TtsSegment[]>([]);

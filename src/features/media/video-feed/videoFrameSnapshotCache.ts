@@ -3,22 +3,12 @@ import { useEffect, useState } from "react";
 import { FEED_VIDEO_START_POSITION_SECONDS } from "./feedVideoConfig";
 
 /**
- * First-frame snapshots, keyed by video URL.
+ * Last-frame snapshots, keyed by video URL.
  *
- * The feed can only keep a bounded number of live players (hardware
- * decoder budget), so a video scrolled far enough away eventually loses
- * its player — and with it, the frame its surface was showing. When that
- * video comes back, a brand-new decoder needs a moment before it paints,
- * and the cell would show black.
- *
- * Every video starts from the beginning whenever it (re)enters the
- * viewport (product rule), so the cover image for that gap is the video's
- * OWN first frame (~0.02s) — captured natively from the player itself, not a
- * poster/thumbnail asset (those are banned in this feed).
- * `VideoThumbnail` is a `SharedRef<'image'>`, so expo-image renders it
- * with zero copies to JS. VideoCardPlayerArea overlays it until the fresh
- * player paints frame 0 underneath — identical pixels, invisible swap.
+ * When a feed card loses its decoder, we overlay the frame it paused on
+ * so scrolling back does not flash the cover thumbnail.
  */
+
 
 /** Bounds native bitmap memory: ~480p RGBA ≈ 1.6MB × 16 ≈ 26MB worst case. */
 const MAX_ENTRIES = 16;
@@ -30,7 +20,7 @@ const SNAPSHOT_MAX_WIDTH = 480;
  * memory (dangerous inside Expo Go). Skipped captures simply retry on the
  * video's next freeze / ready event.
  */
-const MAX_CONCURRENT_CAPTURES = 2;
+const MAX_CONCURRENT_CAPTURES = 1;
 
 const snapshots = new Map<string, VideoThumbnail>();
 const inFlight = new Set<string>();
@@ -90,33 +80,38 @@ export function useVideoFrameSnapshot(
 }
 
 /**
- * Fire-and-forget capture of the video's ~0.02s frame. A video only ever
- * needs one (that start frame never changes). Failures (web, some HLS
- * sources, player released mid-capture) just leave the previous behavior:
- * a black gap bounded by the decoder spin-up.
+ * Capture the frame at `timeSec` (or the player's current time).
+ * Overwrites any older snapshot for this URL.
  */
 export function captureVideoFrameSnapshot(
   url: string | null,
-  player: VideoPlayer
+  player: VideoPlayer,
+  timeSec?: number
 ) {
-  if (!url || snapshots.has(url) || inFlight.has(url)) return;
+  if (!url || inFlight.has(url)) return;
   if (inFlight.size >= MAX_CONCURRENT_CAPTURES) return;
+
+  let at: number;
+  try {
+    at =
+      typeof timeSec === "number" && Number.isFinite(timeSec) && timeSec > 0
+        ? timeSec
+        : Number(player.currentTime) || FEED_VIDEO_START_POSITION_SECONDS;
+  } catch {
+    return;
+  }
 
   inFlight.add(url);
   (async () => {
     try {
       // MUST be an array: passing a single number natively crashes iOS on
       // SDK 54 (fixed in SDK 55) — https://github.com/expo/expo/issues/43372
-      // Captured at the same position players park/start at, so the
-      // overlay pixels match the live surface exactly.
-      const [thumbnail] = await player.generateThumbnailsAsync(
-        [FEED_VIDEO_START_POSITION_SECONDS],
-        { maxWidth: SNAPSHOT_MAX_WIDTH }
-      );
+      const [thumbnail] = await player.generateThumbnailsAsync([at], {
+        maxWidth: SNAPSHOT_MAX_WIDTH,
+      });
       if (!thumbnail) return;
 
       snapshots.set(url, thumbnail);
-      // Evict oldest first (Map preserves insertion order).
       while (snapshots.size > MAX_ENTRIES) {
         const oldest = snapshots.keys().next().value;
         if (oldest === undefined) break;
@@ -125,7 +120,7 @@ export function captureVideoFrameSnapshot(
       }
       notifySnapshot(url);
     } catch {
-      // no-op — black fallback is the status quo.
+      // no-op — poster fallback if capture fails
     } finally {
       inFlight.delete(url);
     }

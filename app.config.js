@@ -92,6 +92,7 @@ export default {
       "expo-font",
       "expo-asset",
       "expo-media-library",
+      "expo-audio",
       [
         "expo-build-properties",
         {

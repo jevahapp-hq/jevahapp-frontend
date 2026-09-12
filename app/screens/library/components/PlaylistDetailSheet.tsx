@@ -24,6 +24,7 @@ export function PlaylistDetailSheet({
   onPlayTrack,
   onRemoveTrack,
   onDeletePlaylist,
+  embedded = false,
 }: {
   visible: boolean;
   playlist: Playlist | null;
@@ -32,6 +33,7 @@ export function PlaylistDetailSheet({
   onPlayTrack: (track: PlaylistSong, index: number) => void;
   onRemoveTrack: (track: PlaylistSong) => void;
   onDeletePlaylist: () => void;
+  embedded?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const songs = playlist?.songs || [];
@@ -39,13 +41,9 @@ export function PlaylistDetailSheet({
     playlist?.thumbnailUrl || songs[0]?.thumbnailUrl
   );
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
-    >
+  if (!visible) return null;
+
+  const body = (
       <View style={{ flex: 1, backgroundColor: "#07110F" }}>
         <LinearGradient
           colors={["#1A3D38", "#0F1C1A", "#07110F"]}
@@ -298,6 +296,18 @@ export function PlaylistDetailSheet({
           </ScrollView>
         )}
       </View>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
+      {body}
     </Modal>
   );
 }

@@ -11,7 +11,6 @@ export interface SermonCardProps {
   playType?: PlayType;
   videoRefs: MutableRefObject<Record<string, any>>;
   playingAudioId: string | null;
-  audioProgressMap: Record<string, number>;
   contentStats: Record<string, any>;
   userFavorites: Record<string, boolean>;
   globalFavoriteCounts: Record<string, number>;
@@ -46,7 +45,6 @@ export default function SermonCard({
   playType: _playType = "center",
   videoRefs,
   playingAudioId,
-  audioProgressMap,
   contentStats,
   userFavorites,
   globalFavoriteCounts,
@@ -103,7 +101,6 @@ export default function SermonCard({
       index={index}
       sectionId={sectionId}
       playingAudioId={playingAudioId}
-      audioProgressMap={audioProgressMap}
       contentStats={contentStats}
       userFavorites={userFavorites}
       globalFavoriteCounts={globalFavoriteCounts}

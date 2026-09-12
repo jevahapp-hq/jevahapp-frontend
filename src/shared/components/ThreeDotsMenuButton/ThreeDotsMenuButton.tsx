@@ -61,6 +61,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 50,
+    elevation: 50,
   },
   pressed: {
     opacity: 0.65,

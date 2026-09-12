@@ -388,7 +388,7 @@ export function CommentComposer({
   ) : null;
 
   return (
-    <View style={[styles.composer, { paddingBottom: bottomPad }]}>
+    <View style={[styles.composer, { paddingBottom: bottomPad }]} collapsable={false}>
       {errorBanner ? (
         <View style={styles.banner}>
           <Text style={styles.bannerText}>{errorBanner}</Text>
@@ -448,12 +448,16 @@ export function CommentComposer({
               isAuthenticated
                 ? editingComment
                   ? "Edit comment..."
-                  : "Add comment..."
+                  : replyingTo
+                    ? `Reply to ${replyingTo.name}...`
+                    : "Add comment..."
                 : "Sign in to comment"
             }
             placeholderTextColor={C.meta}
             style={styles.input}
             multiline
+            scrollEnabled
+            textAlignVertical="top"
             editable={isAuthenticated && !isSubmitting}
             pointerEvents={isAuthenticated ? "auto" : "none"}
             maxLength={COMMENT_MAX_LENGTH}
@@ -543,6 +547,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.sheet,
     paddingTop: 8,
     paddingHorizontal: 12,
+    flexShrink: 0,
   },
   banner: {
     flexDirection: "row",
@@ -620,7 +625,7 @@ const styles = StyleSheet.create({
   inputShell: {
     flex: 1,
     minHeight: 40,
-    maxHeight: 120,
+    maxHeight: 160,
     backgroundColor: C.inputBg,
     borderRadius: 20,
     paddingLeft: 14,
@@ -633,7 +638,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: C.text,
-    maxHeight: 100,
+    maxHeight: 140,
     paddingTop: 6,
     paddingBottom: 6,
   },

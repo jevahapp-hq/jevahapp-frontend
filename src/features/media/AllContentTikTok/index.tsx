@@ -16,14 +16,21 @@ import {
   getTimeAgo,
   getUserAvatarFromContent,
 } from "../../../shared/utils";
+import { detectMediaType, isAudioSermon } from "../../../shared/utils/mediaTypeDetection";
+import { mapMediaItemToTrack } from "../../../shared/audio/mapToAudioTrack";
+import { rememberSessionAudioQueue } from "../../../shared/audio/sessionAudioQueue";
 import { useMedia } from "../../../shared/hooks/useMedia";
 import { useDefaultContentQuery } from "../../../shared/media/useDefaultContentQuery";
 import { filterVisibleMedia } from "../../../shared/media/moderationVisibility";
 import { feedQueryContentType } from "./hooks/useAllContentTikTokFeedSource";
+import {
+  refreshFeedAfterDelete,
+  removeMediaFromFeedCaches,
+} from "../../../shared/utils/removeMediaFromFeedCaches";
 import { EmptyState, ErrorState, LoadingState } from "./components/ContentFeedStates";
 import { ContentItemRenderer } from "./components/ContentItemRenderer";
 import { AllContentTikTokList } from "./components/AllContentTikTokList";
-import { FEED_HARD_MAX_PLAYERS, getFeedVideoRowSize } from "../video-feed";
+import { FEED_HARD_MAX_PLAYERS, findMediaRowIndex, getFeedVideoRowSize } from "../video-feed";
 import {
   useAdjacentCommentsPrefetch,
   useAdjacentVideoPrefetch,
@@ -48,6 +55,7 @@ import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "@/store/useDownloadStore";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useInteractionStore } from "@/store/useInteractionStore";
+import { useReelsStore } from "@/store/useReelsStore";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
   getLiteListWindow,
@@ -55,8 +63,9 @@ import {
   isLiteProfileActive,
   shouldPrefetchFeedComments,
 } from "../../../shared/lite/liteProfile";
-import type { AllContentTikTokProps } from "./types";
+import type { AllContentTikTokProps, FeedRow } from "./types";
 import { buildFeedRows, indexMediaRows } from "./utils/buildFeedRows";
+import { scrollFeedToResume } from "./utils/scrollFeedToResume";
 
 export type { AllContentTikTokProps } from "./types";
 
@@ -89,7 +98,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   );
   const liteActive = isLiteProfileActive();
   const listWindow = getLiteListWindow();
-  const maxPlayers = liteActive ? 2 : FEED_HARD_MAX_PLAYERS;
+  const maxPlayers = FEED_HARD_MAX_PLAYERS;
   const queryType = feedQueryContentType(activeTab);
   const isTypedTab = queryType !== "ALL";
   const tabKind = String(activeTab).toLowerCase();
@@ -137,11 +146,21 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   });
 
   const queryClient = useQueryClient();
-  const handleDeleteSuccess = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["all-content"] });
-  }, [queryClient]);
+  const handleDeleteSuccess = useCallback(
+    (deleted?: MediaItem | { _id?: string; id?: string }) => {
+      const id = String(deleted?._id || (deleted as any)?.id || "").trim();
+      if (id) {
+        removeMediaFromFeedCaches(queryClient, id);
+      }
+      refreshFeedAfterDelete(queryClient);
+      void refreshAllContent();
+    },
+    [queryClient, refreshAllContent]
+  );
 
-  const { isVisible: commentsOpen } = useCommentModal();
+  const { isVisible: commentsVisible, isClosing: commentsClosing } =
+    useCommentModal();
+  const commentsOpen = commentsVisible || commentsClosing;
   const commentsOpenRef = useRef(commentsOpen);
   useEffect(() => {
     commentsOpenRef.current = commentsOpen;
@@ -149,12 +168,14 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const {
     playingAudioId,
-    audioProgressMap,
     playAudio,
     pauseAllAudio,
   } = useAllContentTikTokAudio();
 
   const currentlyVisibleVideoRef = useRef<string | null>(null);
+  const listRef = useRef<any>(null);
+  const listDataRef = useRef<FeedRow[]>([]);
+  const pendingResumeKeyRef = useRef<string | null>(null);
   const {
     playMedia,
     pauseMedia,
@@ -194,11 +215,20 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     useGlobalVideoStore.setState({ currentlyVisibleVideo });
   }, [currentlyVisibleVideo]);
 
+  useEffect(() => {
+    if (commentsVisible && currentlyVisibleVideo) {
+      pendingResumeKeyRef.current = currentlyVisibleVideo;
+    }
+  }, [commentsVisible, currentlyVisibleVideo]);
+
   useAllContentTikTokLifecycle({
     pauseAllMedia,
     pauseAllAudio,
     setCurrentlyVisibleVideo,
     currentlyVisibleVideoRef,
+    listRef,
+    listDataRef,
+    pendingResumeKeyRef,
   });
 
   useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
@@ -258,6 +288,16 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     setIsLoadingContent,
   });
 
+  useEffect(() => {
+    const tracks = filteredMediaList
+      .filter(
+        (item) => detectMediaType(item) === "audio" || isAudioSermon(item)
+      )
+      .map((item) => mapMediaItemToTrack(item, "feed"))
+      .filter((t): t is NonNullable<typeof t> => !!t);
+    rememberSessionAudioQueue(tracks);
+  }, [filteredMediaList]);
+
   const {
     getUserLikeState,
     getLikeCount,
@@ -301,8 +341,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     contentType: activeTab,
     filteredMediaList,
     categorizedContent,
+    mostRecentItem,
+    firstFour,
+    rest,
     contentStats,
     getContentKey,
+    getFeedPlaybackKey,
     getTimeAgo,
     getLikeCount,
     getCommentCount,
@@ -338,7 +382,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         videoVolume={videoVolume}
         currentlyVisibleVideo={currentlyVisibleVideo}
         playingAudioId={playingAudioId}
-        audioProgressMap={audioProgressMap}
         modalVisible={modalVisible}
         comments={comments}
         onVideoTap={handleVideoTap}
@@ -372,7 +415,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       videoVolume,
       currentlyVisibleVideo,
       playingAudioId,
-      audioProgressMap,
       modalVisible,
       comments,
       handleVideoTap,
@@ -418,6 +460,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       liteActive,
     ]
   );
+  listDataRef.current = listData;
 
   const mediaSeqByKeyRef = useRef<Record<string, number>>({});
   const mediaKeyBySeqRef = useRef<Record<number, string>>({});
@@ -427,6 +470,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     mediaSeqByKeyRef.current = indexed.byKey;
     mediaKeyBySeqRef.current = indexed.bySeq;
     mediaItemBySeqRef.current = indexed.itemBySeq;
+    listDataRef.current = listData;
+    const pending = pendingResumeKeyRef.current;
+    if (!pending) return;
+    const resume = useReelsStore.getState().resumePlayback;
+    const index = findMediaRowIndex(listData, pending, resume?.contentId);
+    if (index < 0) return;
+    requestAnimationFrame(() => {
+      scrollFeedToResume(listRef, listData, index);
+    });
   }, [listData]);
 
   const { hasDeterminedVisibilityRef, viewabilityConfigCallbackPairs } =
@@ -441,6 +493,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       playMedia,
       setCurrentlyVisibleVideo,
       setFocusedFeedKey,
+      pendingResumeKeyRef,
     });
 
   const { mountedVideoKeys } = useFeedPlayerMounts({
@@ -496,12 +549,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           )
         : loading);
 
-  if (error && mediaList.length === 0 && !tabLoading) {
+  if (!isFeedActive) {
+    if (filteredMediaList.length === 0) {
+      return <View style={{ flex: 1 }} />;
+    }
+  } else if (error && mediaList.length === 0 && !tabLoading) {
     return <ErrorState message={error} />;
-  }
-
-  if (!isFeedActive && filteredMediaList.length === 0) {
-    return <View style={{ flex: 1 }} />;
   }
 
   if (isFeedActive && filteredMediaList.length === 0 && tabLoading) {
@@ -521,6 +574,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           />
         )}
         <AllContentTikTokList
+          listRef={listRef}
           listData={listData}
           mountedVideoKeys={mountedVideoKeys}
           currentlyVisibleVideo={currentlyVisibleVideo}

@@ -8,62 +8,73 @@ import SocketManager from "@/app/services/SocketManager";
 import { getApiBaseUrl } from "@/app/utils/api";
 import { qualifiesPlaybackView } from "@/app/utils/contentInteraction/viewQualification";
 import TokenUtils from "@/app/utils/tokenUtils";
+import {
+  getAudioPlaybackClock,
+  useAudioProgressStore,
+} from "@/store/audioPlayer/audioProgressStore";
 
 export function useCopyrightFreeSongViewTracking({
   visible,
   song,
   isPlaying,
-  audioProgress,
-  audioPosition,
-  audioDuration,
   hasTrackedView,
   setHasTrackedView,
   setViewCount,
-  likeCount,
 }: {
   visible: boolean;
   song: any;
   isPlaying: boolean;
-  audioProgress: number;
-  audioPosition: number;
-  audioDuration: number;
   hasTrackedView: boolean;
   setHasTrackedView: (v: boolean) => void;
   setViewCount: React.Dispatch<React.SetStateAction<number>>;
-  likeCount: number;
 }) {
   const isRecordingViewRef = useRef(false);
+  const hasTrackedRef = useRef(false);
+
+  useEffect(() => {
+    hasTrackedRef.current = hasTrackedView;
+  }, [hasTrackedView]);
 
   useEffect(() => {
     const songId = song?._id || song?.id;
-    if (!visible || !songId || hasTrackedView || !isPlaying || isRecordingViewRef.current) {
+    if (!visible || !songId || hasTrackedView || !isPlaying) {
       return;
     }
 
-    const durationMs = audioDuration || (song?.duration ? song.duration * 1000 : 0);
-    const positionMs = audioPosition || 0;
-    const { qualifies, finished } = qualifiesPlaybackView({
-      family: "copyrightFree",
-      isPlaying,
-      positionMs,
-      progress: audioProgress || 0,
-      durationMs,
-    });
+    const tryRecord = () => {
+      if (hasTrackedRef.current || isRecordingViewRef.current) return;
+      const clock = getAudioPlaybackClock();
+      if (
+        clock.trackId &&
+        clock.trackId !== song?.id &&
+        clock.trackId !== song?._id
+      ) {
+        return;
+      }
 
-    if (qualifies) {
-      (async () => {
-        if (isRecordingViewRef.current) return;
-        isRecordingViewRef.current = true;
+      const durationMs =
+        clock.duration || (song?.duration ? song.duration * 1000 : 0);
+      const positionMs = clock.position || 0;
+      const { qualifies, finished } = qualifiesPlaybackView({
+        family: "copyrightFree",
+        isPlaying: true,
+        positionMs,
+        progress: clock.progress || 0,
+        durationMs,
+      });
 
+      if (!qualifies) return;
+
+      isRecordingViewRef.current = true;
+      void (async () => {
         try {
           const result = await copyrightFreeMusicAPI.recordView(songId, {
             durationMs: finished ? durationMs : positionMs,
-            progressPct: Math.round((audioProgress || 0) * 100),
+            progressPct: Math.round((clock.progress || 0) * 100),
             isComplete: finished,
           });
 
           if (result.success && result.data) {
-            // Only bump UI when BE counted this view
             if (result.data.counted === true) {
               setViewCount((prev) =>
                 typeof result.data.viewCount === "number"
@@ -71,6 +82,7 @@ export function useCopyrightFreeSongViewTracking({
                   : prev + 1
               );
             }
+            hasTrackedRef.current = true;
             setHasTrackedView(true);
           }
         } catch (error) {
@@ -79,20 +91,19 @@ export function useCopyrightFreeSongViewTracking({
           isRecordingViewRef.current = false;
         }
       })();
-    }
+    };
+
+    tryRecord();
+    return useAudioProgressStore.subscribe(tryRecord);
   }, [
     visible,
     song?._id,
     song?.id,
     song?.duration,
     isPlaying,
-    audioPosition,
-    audioProgress,
-    audioDuration,
     hasTrackedView,
     setHasTrackedView,
     setViewCount,
-    likeCount,
   ]);
 }
 
@@ -225,7 +236,6 @@ export function useSeekPanResponder({
   setIsSeeking,
   setSeekProgress,
 }: {
-  audioProgress: number;
   onSeek?: (progress: number) => void;
   progressBarRef: React.RefObject<unknown>;
   setIsSeeking: (v: boolean) => void;

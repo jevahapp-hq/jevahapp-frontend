@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { Dimensions, StyleSheet, View } from "react-native";
 import { FeedMediaTypeOverlay } from "../../../shared/components/FeedMediaTypeOverlay";
@@ -28,17 +29,21 @@ export function posterUriFromMedia(item?: MediaItem | null): string | null {
 }
 
 /**
- * Feed poster: blurred cover fills the box (no black bars), sharp frame sits
- * on top uncropped. Same pattern as YouTube / X when the file isn't the box ratio.
+ * APK card: thumbnail paints first at full width. Cover-fill is clipped to
+ * the 400px box. Fullscreen callers should use FittedMediaImage instead.
  */
 export function FeedVideoPoster({
   item,
   height = FEED_VIDEO_PLAYER_HEIGHT,
-  onAspectRatio,
+  showBadge = true,
+  showGradients = true,
+  contentFit = "cover",
 }: {
   item?: MediaItem | null;
   height?: number;
-  onAspectRatio?: (aspect: number) => void;
+  showBadge?: boolean;
+  showGradients?: boolean;
+  contentFit?: "cover" | "contain";
 }) {
   const raw = posterUriFromMedia(item);
   const uri = raw
@@ -50,30 +55,48 @@ export function FeedVideoPoster({
     <View style={[styles.wrap, { height }]} collapsable={false}>
       {uri ? (
         <>
+          {contentFit === "cover" ? (
+            <Image
+              source={{ uri }}
+              style={styles.tallerBackdrop}
+              contentFit="cover"
+              cachePolicy={cachePolicy}
+              recyclingKey={`${uri}-back`}
+              priority="high"
+            />
+          ) : null}
           <Image
-            source={{ uri }}
+            source={{ uri: raw || uri }}
             style={styles.img}
-            contentFit="cover"
-            blurRadius={28}
+            contentFit={contentFit}
+            contentPosition="center"
             cachePolicy={cachePolicy}
-            recyclingKey={`${uri}-blur`}
-          />
-          <View style={styles.dim} pointerEvents="none" />
-          <Image
-            source={{ uri }}
-            style={styles.img}
-            contentFit="contain"
-            cachePolicy={cachePolicy}
-            recyclingKey={uri}
-            onLoad={(e) => {
-              const w = e.source?.width;
-              const h = e.source?.height;
-              if (w > 0 && h > 0) onAspectRatio?.(w / h);
-            }}
+            recyclingKey={raw || uri}
+            priority="high"
           />
         </>
       ) : null}
-      <FeedMediaTypeOverlay item={item} contentType={item?.contentType} />
+      {showGradients ? (
+        <>
+          <LinearGradient
+            colors={["rgba(40,18,12,0.55)", "transparent"]}
+            style={styles.topFade}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(40,18,12,0.72)"]}
+            style={styles.bottomFade}
+            pointerEvents="none"
+          />
+        </>
+      ) : null}
+      {showBadge ? (
+        <FeedMediaTypeOverlay
+          item={item}
+          contentType={item?.contentType}
+          showCenter={false}
+        />
+      ) : null}
     </View>
   );
 }
@@ -82,15 +105,31 @@ const styles = StyleSheet.create({
   wrap: {
     width: "100%",
     overflow: "hidden",
-    backgroundColor: "#121212",
+    backgroundColor: "#1A0E0A",
+  },
+  tallerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    transform: [{ scaleY: 1.18 }],
   },
   img: {
     ...StyleSheet.absoluteFillObject,
     width: "100%",
     height: "100%",
   },
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.38)",
+  topFade: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 88,
+  },
+  bottomFade: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 110,
   },
 });

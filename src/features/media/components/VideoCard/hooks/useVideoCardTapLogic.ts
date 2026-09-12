@@ -42,54 +42,13 @@ export function useVideoCardTapLogic({
   const toggleProcessingRef = useRef(false);
 
   const handleVideoTap = useCallback(() => {
-    const now = Date.now();
-    const timeSinceLastTap = now - lastTapRef.current;
-    const isCurrentlyPlaying = isPlaying || (isAudioSermon && audioIsPlaying);
-
-    if (timeSinceLastTap > 400) tapCountRef.current = 0;
-    tapCountRef.current += 1;
-    lastTapRef.current = now;
-
+    tapCountRef.current = 0;
     if (tapTimeoutRef.current) {
       clearTimeout(tapTimeoutRef.current);
       tapTimeoutRef.current = null;
     }
-
-    if (tapCountRef.current === 2 && timeSinceLastTap <= 400) {
-      tapCountRef.current = 0;
-      if (isCurrentlyPlaying) {
-        if (isAudioSermon) audioControlsPause();
-        else {
-          togglePlayback();
-          try {
-            videoRef.current?.pause();
-          } catch (error) {
-            console.error("❌ Pause failed:", error);
-          }
-        }
-      }
-      onVideoTap(key, video, index);
-      return;
-    }
-
-    tapTimeoutRef.current = setTimeout(() => {
-      if (tapCountRef.current === 1) onTogglePlay(key);
-      tapCountRef.current = 0;
-      tapTimeoutRef.current = null;
-    }, 200) as any;
-  }, [
-    isPlaying,
-    onTogglePlay,
-    key,
-    onVideoTap,
-    video,
-    index,
-    isAudioSermon,
-    audioControlsPause,
-    audioIsPlaying,
-    togglePlayback,
-    videoRef,
-  ]);
+    onTogglePlay(key);
+  }, [onTogglePlay, key]);
 
   const handleTogglePlay = useCallback(
     (setIsPlayTogglePending: (v: boolean) => void) => {

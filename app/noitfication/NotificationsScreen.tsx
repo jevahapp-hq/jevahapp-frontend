@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
     ActivityIndicator,
@@ -15,6 +16,7 @@ import AuthHeader from "../components/AuthHeader";
 import { SafeImage } from "../components/SafeImage";
 import { useNotifications } from "../hooks/useNotifications";
 import { notificationAPIService } from "../services/NotificationAPIService";
+import { isNotificationRead, groupNotificationsByRecency } from "@/shared/notifications/notificationCache";
 
 export default function NotificationsScreen() {
   const {
@@ -42,6 +44,12 @@ export default function NotificationsScreen() {
     }
   }, [refreshNotifications]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void refreshNotifications();
+    }, [refreshNotifications])
+  );
+
   const handleMarkAllAsRead = useCallback(async () => {
     try {
       await markAllAsRead();
@@ -59,10 +67,13 @@ export default function NotificationsScreen() {
 
   const handleNotificationPress = useCallback(
     async (notification: any) => {
-      if (!notification.isRead) {
-        await markAsRead(notification._id);
+      if (!isNotificationRead(notification)) {
+        try {
+          await markAsRead(notification._id || notification.id);
+        } catch {
+          Alert.alert("Error", "Couldn't update this notification. Please try again.");
+        }
       }
-      // TODO: Navigate to relevant content or user profile
     },
     [markAsRead]
   );
@@ -80,50 +91,12 @@ export default function NotificationsScreen() {
     return notificationAPIService.getNotificationColor(type);
   }, []);
 
-  const groupNotificationsByTime = useCallback(
-    (notifications: any[]): any[] => {
-      const now = new Date();
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      const newNotifications = notifications.filter(
-        (notif) => new Date(notif.createdAt) > oneDayAgo
-      );
-      const weekNotifications = notifications.filter(
-        (notif) =>
-          new Date(notif.createdAt) > oneWeekAgo &&
-          new Date(notif.createdAt) <= oneDayAgo
-      );
-      const monthNotifications = notifications.filter(
-        (notif) =>
-          new Date(notif.createdAt) > oneMonthAgo &&
-          new Date(notif.createdAt) <= oneWeekAgo
-      );
-
-      const sections: any[] = [];
-
-      if (newNotifications.length > 0) {
-        sections.push({ category: "New", items: newNotifications });
-      }
-      if (weekNotifications.length > 0) {
-        sections.push({ category: "Last 7 days", items: weekNotifications });
-      }
-      if (monthNotifications.length > 0) {
-        sections.push({ category: "Last 30 days", items: monthNotifications });
-      }
-
-      return sections;
-    },
-    []
-  );
-
   const renderNotificationItem = (notification: any) => (
     <TouchableOpacity
-      key={notification._id}
+      key={notification._id || notification.id}
       onPress={() => handleNotificationPress(notification)}
       className={`bg-white rounded-[12px] shadow-sm p-4 mb-4 ${
-        !notification.isRead ? "border-l-4 border-[#256E63]" : ""
+        !isNotificationRead(notification) ? "border-l-4 border-[#256E63]" : ""
       }`}
     >
       <View className="flex-row items-start">
@@ -157,7 +130,7 @@ export default function NotificationsScreen() {
             }
             showFallback={true}
           />
-          {!notification.isRead && (
+          {!isNotificationRead(notification) && (
             <View 
               style={{
                 position: 'absolute',
@@ -265,7 +238,16 @@ export default function NotificationsScreen() {
     );
   }
 
-  const groupedNotifications = groupNotificationsByTime(notifications);
+  const groupedNotifications =
+    notifications.length > 0
+      ? groupNotificationsByRecency(notifications)
+      : [];
+  const sections =
+    groupedNotifications.length > 0
+      ? groupedNotifications
+      : notifications.length > 0
+        ? [{ category: "Notifications", items: notifications }]
+        : [];
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -311,7 +293,7 @@ export default function NotificationsScreen() {
         }}
         scrollEventThrottle={400}
       >
-        {groupedNotifications.length === 0 ? (
+        {sections.length === 0 ? (
           <View className="flex-1 justify-center items-center py-20">
             <Text className="text-6xl mb-4">🔔</Text>
             <Text className="text-xl font-semibold text-gray-800 mb-2">
@@ -323,7 +305,7 @@ export default function NotificationsScreen() {
             </Text>
           </View>
         ) : (
-          groupedNotifications.map((section, idx) => (
+          sections.map((section, idx) => (
             <View key={idx} className="mt-5">
               <Text className="text-[#1D2939] font-jakarta-semibold mb-2">
                 {section.category}

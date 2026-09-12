@@ -22,6 +22,7 @@ export function useFeedViewability(options: {
   playMedia: (key: string, type: "video" | "audio") => void;
   setCurrentlyVisibleVideo: (key: string | null) => void;
   setFocusedFeedKey: (updater: (prev: string | null) => string | null) => void;
+  pendingResumeKeyRef?: MutableRefObject<string | null>;
 }) {
   const {
     isFeedActiveRef,
@@ -34,6 +35,7 @@ export function useFeedViewability(options: {
     playMedia,
     setCurrentlyVisibleVideo,
     setFocusedFeedKey,
+    pendingResumeKeyRef,
   } = options;
 
   const hasDeterminedVisibilityRef = useRef(false);
@@ -77,6 +79,14 @@ export function useFeedViewability(options: {
       }
     }
 
+    const pending = pendingResumeKeyRef?.current;
+    if (pending && topVideoKey !== pending) {
+      return;
+    }
+    if (pending && topVideoKey === pending) {
+      pendingResumeKeyRef.current = null;
+    }
+
     const prevKey = currentlyVisibleVideoRef.current;
     if (topVideoKey !== prevKey) {
       if (prevKey && useGlobalVideoStore.getState().playingVideos[prevKey]) {
@@ -94,6 +104,7 @@ export function useFeedViewability(options: {
     isAutoPlayEnabledRef,
     isFeedActiveRef,
     setCurrentlyVisibleVideo,
+    pendingResumeKeyRef,
   ]);
 
   const handleVideoViewabilityRef = useRef(handleVideoViewabilityImpl);

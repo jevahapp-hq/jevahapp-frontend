@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { API_BASE_URL, APIClient } from "../utils/api";
 import { TokenUtils } from "../utils/tokenUtils";
+import { extractNotificationListPayload } from "@/shared/notifications/notificationCache";
 
 export interface Notification {
   _id: string;
@@ -9,6 +10,8 @@ export interface Notification {
   title: string;
   message: string;
   isRead: boolean;
+  /** Some backends send `read` instead of `isRead`. */
+  read?: boolean;
   type: NotificationType;
   metadata: {
     actorName?: string;
@@ -46,6 +49,7 @@ export interface NotificationResponse {
   notifications: Notification[];
   total: number;
   unreadCount: number;
+  unread?: number;
 }
 
 export interface NotificationPreferences {
@@ -60,6 +64,31 @@ export interface NotificationStats {
   total: number;
   unread: number;
   byType: { [key: string]: number };
+}
+
+function asNonNegativeInt(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : fallback;
+}
+
+function normalizeNotificationList(
+  payload: unknown
+): NotificationResponse {
+  const extracted = extractNotificationListPayload(payload);
+  return {
+    notifications: extracted.notifications as Notification[],
+    total: extracted.total,
+    unreadCount: extracted.unreadCount,
+  };
+}
+
+function normalizeStats(data: NotificationStats | undefined): NotificationStats {
+  const raw = data ?? { total: 0, unread: 0, byType: {} };
+  return {
+    total: asNonNegativeInt(raw.total),
+    unread: asNonNegativeInt(raw.unread ?? (raw as { unreadCount?: number }).unreadCount),
+    byType: raw.byType && typeof raw.byType === "object" ? raw.byType : {},
+  };
 }
 
 class NotificationAPIService {
@@ -137,21 +166,22 @@ class NotificationAPIService {
         timeoutMs: 30000, // longer first-load tolerance
         retryOnAbort: true,
       });
+      const normalized = normalizeNotificationList(result);
       if (page === 1 && !type && !unreadOnly) {
         try {
           const key = await this.getUserScopedKey(this.cacheKeys.list);
-          await AsyncStorage.setItem(key, JSON.stringify(result.data));
+          await AsyncStorage.setItem(key, JSON.stringify(normalized));
         } catch {}
       }
-      return result.data;
+      return normalized;
     } catch (error) {
       if ((error as any)?.name === "AbortError") {
         console.warn(
-          "⏱️ Notifications request aborted (timeout). Returning empty."
+          "⏱️ Notifications request aborted (timeout). Keeping previous cache."
         );
-        return { notifications: [], total: 0, unreadCount: 0 };
+      } else {
+        console.error("Error fetching notifications:", error);
       }
-      console.error("Error fetching notifications:", error);
       throw error;
     }
   }
@@ -165,6 +195,28 @@ class NotificationAPIService {
       });
     } catch (error) {
       console.error("Error marking notification as read:", error);
+      throw error;
+    }
+  }
+
+  async markAsUnread(notificationId: string): Promise<void> {
+    try {
+      const headers = await this.getAuthHeaders();
+      try {
+        await this.api.request(`/api/notifications/${notificationId}/unread`, {
+          method: "PATCH",
+          headers,
+        });
+        return;
+      } catch {
+        await this.api.request(`/api/notifications/${notificationId}/read`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ isRead: false, read: false }),
+        });
+      }
+    } catch (error) {
+      console.error("Error marking notification as unread:", error);
       throw error;
     }
   }
@@ -237,17 +289,18 @@ class NotificationAPIService {
         timeoutMs: 30000,
         retryOnAbort: true,
       });
+      const normalized = normalizeStats(result.data ?? result);
       try {
         const key = await this.getUserScopedKey(this.cacheKeys.stats);
-        await AsyncStorage.setItem(key, JSON.stringify(result.data));
+        await AsyncStorage.setItem(key, JSON.stringify(normalized));
       } catch {}
-      return result.data;
+      return normalized;
     } catch (error) {
       if ((error as any)?.name === "AbortError") {
-        console.warn("⏱️ Stats request aborted (timeout). Returning zeros.");
-        return { total: 0, unread: 0, byType: {} };
+        console.warn("⏱️ Stats request aborted (timeout). Keeping previous cache.");
+      } else {
+        console.error("Error fetching notification stats:", error);
       }
-      console.error("Error fetching notification stats:", error);
       throw error;
     }
   }
@@ -256,7 +309,9 @@ class NotificationAPIService {
     try {
       const key = await this.getUserScopedKey(this.cacheKeys.list);
       const raw = await AsyncStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as NotificationResponse) : null;
+      return raw
+        ? normalizeNotificationList(JSON.parse(raw) as NotificationResponse)
+        : null;
     } catch {
       return null;
     }
@@ -266,7 +321,7 @@ class NotificationAPIService {
     try {
       const key = await this.getUserScopedKey(this.cacheKeys.stats);
       const raw = await AsyncStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as NotificationStats) : null;
+      return raw ? normalizeStats(JSON.parse(raw) as NotificationStats) : null;
     } catch {
       return null;
     }

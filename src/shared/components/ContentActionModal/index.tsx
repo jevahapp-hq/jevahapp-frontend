@@ -1,5 +1,4 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
 import {
   Dimensions,
   Modal,
@@ -13,7 +12,6 @@ import {
   PanGestureHandler,
 } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
-import { isAdmin } from "../../../../app/utils/mediaDeleteAPI";
 import { UI_CONFIG } from "../../constants";
 import { useMediaOwnership } from "../../hooks/useMediaOwnership";
 import ActionRow from "./ActionRow";
@@ -50,14 +48,6 @@ export default function ContentActionModal({
     backdropStyle,
   } = useSheetTransition(isVisible, onClose);
 
-  const [userIsAdmin, setUserIsAdmin] = useState(false);
-
-  useEffect(() => {
-    if (internalVisible) {
-      isAdmin().then(setUserIsAdmin).catch(() => setUserIsAdmin(false));
-    }
-  }, [internalVisible]);
-
   const shouldCheckOwnership =
     showDelete === undefined && (!!mediaItem || !!uploadedBy);
   const { isOwner: isOwnerFromHook } = useMediaOwnership({
@@ -70,8 +60,8 @@ export default function ContentActionModal({
   const isOwner =
     showDelete === true ? true : showDelete === false ? false : isOwnerFromHook;
 
-  const shouldShowDelete = userIsAdmin || isOwner;
-  const shouldShowReport = !userIsAdmin && !isOwner;
+  const shouldShowDelete = isOwner;
+  const shouldShowReport = !isOwner;
 
   const handleAction = (action: () => void) => {
     try {
@@ -229,7 +219,7 @@ export default function ContentActionModal({
                 <MaterialIcons
                   name={isSaved ? "bookmark" : "bookmark-border"}
                   size={20}
-                  color={isSaved ? "#FF8A00" : "#FEA74E"}
+                  color={isSaved ? "#FEA74E" : "#98A2B3"}
                 />
               }
               onPress={() => handleAction(onSaveToLibrary)}

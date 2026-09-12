@@ -5,6 +5,7 @@
 
 import { Share } from "react-native";
 import { MediaItem } from "../../../../src/shared/types";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
 import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
 import { convertToDownloadableItem } from "../../../utils/downloadUtils";
@@ -344,24 +345,28 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
   };
 
   const togglePlay = (key: string, video?: VideoCardData) => {
-    const isCurrentlyPlaying = globalVideoStore.playingVideos[key] || false;
+    const state = useGlobalVideoStore.getState();
+    const isCurrentlyPlaying =
+      state.currentlyPlayingVideo === key ||
+      !!state.playingVideos[key];
     Object.keys(miniCardPlaying).forEach((k) => {
       setMiniCardPlaying((prev) => ({ ...prev, [k]: false }));
       setShowOverlayMini((prev) => ({ ...prev, [k]: true }));
     });
-    const shouldStartPlaying = !isCurrentlyPlaying;
-    if (shouldStartPlaying) {
-      const completedBefore = globalVideoStore.hasCompleted[key] ?? false;
-      if (video && completedBefore) {
-        incrementView(key, video);
-        globalVideoStore.setVideoCompleted(key, false);
-      }
-      setHasPlayed((prev) => ({ ...prev, [key]: true }));
-      if (globalVideoStore.mutedVideos[key]) {
-        globalVideoStore.toggleVideoMute(key);
-      }
+    if (isCurrentlyPlaying) {
+      state.pauseVideo(key);
+      return;
     }
-    globalVideoStore.playVideoGlobally(key);
+    const completedBefore = state.hasCompleted[key] ?? false;
+    if (video && completedBefore) {
+      incrementView(key, video);
+      state.setVideoCompleted(key, false);
+    }
+    setHasPlayed((prev) => ({ ...prev, [key]: true }));
+    if (state.mutedVideos[key]) {
+      state.toggleVideoMute(key);
+    }
+    state.playVideoGlobally(key);
   };
 
   const handleVideoReload = (key: string, setVideoErrors: React.Dispatch<React.SetStateAction<Record<string, boolean>>>) => {
@@ -371,19 +376,7 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
   };
 
   const handleVideoTap = (key: string, video?: VideoCardData) => {
-    const isCurrentlyPlaying = globalVideoStore.playingVideos[key] ?? false;
-    const wasCompleted = globalVideoStore.hasCompleted[key] ?? false;
-
-    Object.keys(miniCardPlaying).forEach((k) => {
-      setMiniCardPlaying((prev) => ({ ...prev, [k]: false }));
-      setShowOverlayMini((prev) => ({ ...prev, [k]: true }));
-    });
-
-    if (!isCurrentlyPlaying && video && wasCompleted) {
-      incrementView(key, video);
-      globalVideoStore.setVideoCompleted(key, false);
-    }
-    globalVideoStore.playVideoGlobally(key);
+    togglePlay(key, video);
   };
 
   const handleVideoTapWrapper = (key: string, _video: MediaItem) => {

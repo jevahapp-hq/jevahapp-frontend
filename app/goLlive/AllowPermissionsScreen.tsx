@@ -2,8 +2,7 @@
 
 import React from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
 import {
     getIconSize,

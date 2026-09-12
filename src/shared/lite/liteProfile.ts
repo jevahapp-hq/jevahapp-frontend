@@ -174,7 +174,7 @@ export function getLitePrefetchAhead(): number | undefined {
 
 /** Adjacent-card Range prefetch (players stay current+next). */
 export function getLiteWarmupUrlCount(): number {
-  return isLiteProfileActive() ? 1 : 3;
+  return isLiteProfileActive() ? 2 : 4;
 }
 
 /**

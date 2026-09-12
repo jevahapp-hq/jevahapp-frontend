@@ -86,6 +86,13 @@ export const detectFileType = (file: FileInfo | null): FileType => {
   return "unknown";
 };
 
+export function isVideoMediaFile(file: FileInfo | null): boolean {
+  if (!file) return false;
+  if (detectFileType(file) === "video") return true;
+  if (file.mimeType?.toLowerCase().startsWith("video/")) return true;
+  return /\.(mp4|mov|avi|mkv|webm)$/i.test(file.name || "");
+}
+
 /**
  * Check if file is an image
  */

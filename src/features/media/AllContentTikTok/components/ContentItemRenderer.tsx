@@ -23,7 +23,6 @@ export interface ContentItemRendererProps {
   videoVolume: number;
   currentlyVisibleVideo: string | null;
   playingAudioId: string | null;
-  audioProgressMap: Record<string, number>;
   modalVisible: string | null;
   comments: any;
   onVideoTap: (key: string, video: MediaItem, index: number) => void;
@@ -37,7 +36,7 @@ export interface ContentItemRendererProps {
   onModalToggle: (val: string | null) => void;
   onLayout: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   onPause: () => void;
-  onDelete: () => void;
+  onDelete: (item?: MediaItem) => void;
   playAudio: (uri: string, id: string) => void;
   pauseAllAudio: () => void;
   checkIfDownloaded: (item: any) => boolean;
@@ -62,7 +61,6 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     videoVolume,
     currentlyVisibleVideo,
     playingAudioId,
-    audioProgressMap,
     modalVisible,
     comments,
     onVideoTap,
@@ -130,6 +128,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     shouldRenderPlayer: props.shouldRenderPlayer,
     playbackKey,
     isFeedActive,
+    viewerId: currentUserId,
   };
 
   const musicCardProps = {
@@ -142,10 +141,10 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onDownload: () => onDownload(item),
     onPlay: playAudio,
     isPlaying: playingAudioId === musicId,
-    progress: audioProgressMap[musicId] || 0,
     onLayout,
     onPause: pauseAllAudio,
     onDelete,
+    viewerId: currentUserId,
   };
 
   const ebookCardProps = {
@@ -158,6 +157,7 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     onDownload: () => onDownload(item),
     checkIfDownloaded,
     onDelete,
+    viewerId: currentUserId,
   };
 
   /**
@@ -218,7 +218,6 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     (prev.currentlyVisibleVideo === prevPlaybackKey) ===
       (next.currentlyVisibleVideo === nextPlaybackKey) &&
     (prev.playingAudioId === prevMusicId) === (next.playingAudioId === nextMusicId) &&
-    (prev.audioProgressMap[prevMusicId] ?? 0) === (next.audioProgressMap[nextMusicId] ?? 0) &&
     (prev.modalVisible === prevKey) === (next.modalVisible === nextKey) &&
     prev.currentUserId === next.currentUserId &&
     // Without this, FlashList never remounts <Video> when the preload window

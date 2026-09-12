@@ -26,7 +26,8 @@ export function useAllContentTikTokWarmup(
     warmedIdRef.current = headId || "anon";
 
     prefetchLiteFeedPosters(filteredMediaList, getLiteDiskWarmupCount());
-    // Video Range heads stay tiny (1–2) so avatars/icons are not starved.
+    // Video Range heads: first screen, decoder-free. APK paints the poster
+    // immediately while these requests warm the CDN.
     const urls = filteredMediaList
       .slice(0, getLiteWarmupUrlCount())
       .map((item) => getVideoUrlFromMedia(item))

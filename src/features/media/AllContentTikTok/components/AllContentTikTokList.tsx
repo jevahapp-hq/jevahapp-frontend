@@ -1,6 +1,6 @@
 import { FlashList } from "@shopify/flash-list";
 import React, { useCallback, useMemo } from "react";
-import { RefreshControl, View } from "react-native";
+import { RefreshControl, useWindowDimensions, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
 import { detectMediaType, isAudioSermon } from "../../../../shared/utils";
 import { getFeedVideoRowSize } from "../../video-feed";
@@ -12,6 +12,7 @@ import { LiveComingSoonCard } from "./LiveComingSoonCard";
 const FeedList = FlashList as any;
 
 type Props = {
+  listRef?: React.Ref<any>;
   listData: FeedRow[];
   mountedVideoKeys: Set<string>;
   currentlyVisibleVideo: string | null;
@@ -35,6 +36,7 @@ type Props = {
 };
 
 export function AllContentTikTokList({
+  listRef,
   listData,
   mountedVideoKeys,
   currentlyVisibleVideo,
@@ -51,6 +53,7 @@ export function AllContentTikTokList({
   viewabilityConfigCallbackPairs,
   renderContentByType,
 }: Props) {
+  const { width: viewportWidth } = useWindowDimensions();
   const getItemType = useCallback((row: FeedRow) => {
     if (row.rowType !== "media") return row.rowType;
     if (isAudioSermon(row.item)) return "media-audio";
@@ -73,14 +76,15 @@ export function AllContentTikTokList({
         return;
       }
       if (row.rowType === "media") {
-        if (!isAudioSermon(row.item) && detectMediaType(row.item) === "video") {
-          layout.size = getFeedVideoRowSize({
-            moderationStatus: (row.item as MediaItem)?.moderationStatus,
-          });
-        }
+        // Videos always pin to the measured row. Music/ebooks also need the
+        // extra when the under-review banner is showing, or FlashList clips it.
+        layout.size = getFeedVideoRowSize({
+          moderationStatus: (row.item as MediaItem)?.moderationStatus,
+          viewportWidth,
+        });
       }
     },
-    []
+    [viewportWidth]
   );
 
   const renderRow = useCallback(
@@ -121,6 +125,7 @@ export function AllContentTikTokList({
       playing: currentlyPlayingVideo,
       active: isFeedActive,
       authors: authorStoreVersion,
+      viewportWidth,
     }),
     [
       currentlyVisibleVideo,
@@ -128,11 +133,13 @@ export function AllContentTikTokList({
       currentlyPlayingVideo,
       isFeedActive,
       authorStoreVersion,
+      viewportWidth,
     ]
   );
 
   return (
     <FeedList
+      ref={listRef}
       data={listData}
       renderItem={renderRow}
       keyExtractor={keyExtractor}
@@ -151,7 +158,9 @@ export function AllContentTikTokList({
       scrollEnabled={!commentsOpen}
       viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
       scrollEventThrottle={16}
-      estimatedItemSize={estimatedItemSize || getFeedVideoRowSize()}
+      estimatedItemSize={
+        estimatedItemSize || getFeedVideoRowSize({ viewportWidth })
+      }
       keyboardShouldPersistTaps="handled"
       onEndReached={onEndReached}
       onEndReachedThreshold={0.75}

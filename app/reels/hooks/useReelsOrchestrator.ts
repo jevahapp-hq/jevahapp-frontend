@@ -13,6 +13,7 @@ import { useUserProfile } from "../../hooks/useUserProfile";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useInteractionStore } from "@/store/useInteractionStore";
 import { useContentLikeState } from "../../../src/shared/hooks/useContentLikeState";
+import { useContentSaveState } from "../../../src/shared/hooks/useContentSaveState";
 import { useHydrateContentStats } from "../../../src/shared/hooks/useHydrateContentStats";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { useReelsStore } from "@/store/useReelsStore";
@@ -28,6 +29,7 @@ import { useReelsResponsive } from "./useReelsResponsive";
 import { useReelsScroll } from "./useReelsScroll";
 import { useReelsVideoList } from "./useReelsVideoList";
 import { useReelsVideoPlayback } from "./useReelsVideoPlayback";
+import { resolveReelsStartIndex } from "../../../src/features/media/video-feed";
 
 /**
  * useReelsOrchestrator - The "Master Hook" for the Reels feature.
@@ -52,6 +54,8 @@ export function useReelsOrchestrator() {
     const [menuVisible, setMenuVisible] = useState(false);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [successMessage, setSuccessMessage] = useState("");
+    const [showSuccessCard, setShowSuccessCard] = useState(false);
 
     // Stores & Context
     const pauseVideo = useGlobalVideoStore((s) => s.pauseVideo);
@@ -119,10 +123,43 @@ export function useReelsOrchestrator() {
         reelsStoreSetVideoList: reelsStore.setVideoList,
     });
 
-    const reelsIndex = reelsStore.currentIndex ?? parseInt(params.currentIndex);
-    const currentVideoIndex = reelsIndex || 0;
+    const startIndexLockedRef = useRef(false);
+    const initialStartIndex = resolveReelsStartIndex({
+        paramIndex: params.currentIndex,
+        storeIndex: useReelsStore.getState().currentIndex,
+        resumeIndex: useReelsStore.getState().resumePlayback?.reelsIndex,
+        contentId: useReelsStore.getState().resumePlayback?.contentId,
+        videoList: useReelsStore.getState().videoList,
+    });
+    const pendingStartIndexRef = useRef<number | null>(initialStartIndex);
 
-    const [currentIndex_state, setCurrentIndex_state] = useState(currentVideoIndex);
+    const resolveStartIndex = useCallback(() => {
+        const reels = useReelsStore.getState();
+        return resolveReelsStartIndex({
+            paramIndex: params.currentIndex,
+            storeIndex: reels.currentIndex,
+            resumeIndex: reels.resumePlayback?.reelsIndex,
+            contentId: reels.resumePlayback?.contentId,
+            videoList:
+                parsedVideoList.length > 0 ? parsedVideoList : reels.videoList,
+        });
+    }, [params.currentIndex, parsedVideoList]);
+
+    const [currentIndex_state, setCurrentIndex_state] = useState(initialStartIndex);
+
+    useEffect(() => {
+        if (startIndexLockedRef.current) return;
+        const list =
+            parsedVideoList.length > 0
+                ? parsedVideoList
+                : useReelsStore.getState().videoList;
+        if (!list.length) return;
+        const next = resolveStartIndex();
+        startIndexLockedRef.current = true;
+        pendingStartIndexRef.current = next;
+        setCurrentIndex_state(next);
+        useReelsStore.getState().setCurrentIndex(next);
+    }, [parsedVideoList, resolveStartIndex]);
 
     const current = useReelsCurrentVideo({
         parsedVideoList,
@@ -141,6 +178,11 @@ export function useReelsOrchestrator() {
     );
     const activeIsLiked = activeLike.liked;
     const activeLikesCount = activeLike.likeCount;
+    const activeSave = useContentSaveState(
+        current.contentIdForHooks,
+        current.currentVideo as any
+    );
+    const activeIsSaved = activeSave.saved;
 
     /** Live metadata edits from the author's other devices. */
     const handleMediaUpdated = useCallback(
@@ -177,6 +219,7 @@ export function useReelsOrchestrator() {
     } = useMediaDeletion({
         mediaItem: current.currentVideo,
         isModalVisible: menuVisible,
+        viewerId: currentUser?._id || currentUser?.id || null,
     });
 
     const descriptionEdit = useReelsDescriptionEdit({
@@ -215,6 +258,13 @@ export function useReelsOrchestrator() {
         // Basic trigger logic if needed
     }, []);
 
+    const videoPositionRef = useRef(videoPosition);
+    videoPositionRef.current = videoPosition;
+    const getVideoPositionMs = useCallback(
+        () => videoPositionRef.current,
+        []
+    );
+
     const handlers = useReelsHandlers({
         router,
         contentId: current.contentId,
@@ -241,12 +291,23 @@ export function useReelsOrchestrator() {
         // *like* for content the user had already liked in the feed.
         toggleLike: async (cid, ct) =>
             await toggleLike(cid, ct, activeLike.toggleSeed),
-        showCommentModal: (comments, cid, type, speaker) => showCommentModal(comments, cid, type as any, speaker),
+        showCommentModal: (comments, cid, type, speaker, creator, anchor) =>
+            showCommentModal(
+                comments,
+                cid,
+                type as any,
+                speaker,
+                creator,
+                anchor
+            ),
         libraryStore,
         handleDownload,
         openDeleteModal,
         handleDeleteConfirmInternal,
         triggerHapticFeedback,
+        getVideoPositionMs,
+        setSuccessMessage,
+        setShowSuccessCard,
     });
 
     const playback = useReelsVideoPlayback({
@@ -271,6 +332,7 @@ export function useReelsOrchestrator() {
         getSpeakerName: current.getSpeakerName,
         userHasManuallyPaused,
         globalVideoStore,
+        pendingStartIndexRef,
     });
 
     const toggleVideoPlay = useCallback(() => {
@@ -313,6 +375,7 @@ export function useReelsOrchestrator() {
         videoRefs,
         currentIndex_state,
         setCurrentIndex_state,
+        pendingStartIndexRef,
         hasError,
         setHasError,
         errorMessage,
@@ -332,6 +395,9 @@ export function useReelsOrchestrator() {
         setShowDetailsModal,
         showReportModal,
         setShowReportModal,
+        successMessage,
+        showSuccessCard,
+        setShowSuccessCard,
         setVideoDuration, // Added missing
         setVideoPosition, // Added missing
 
@@ -352,6 +418,7 @@ export function useReelsOrchestrator() {
         // Interactions
         activeIsLiked,
         activeLikesCount,
+        activeIsSaved,
         isOwner,
         showDeleteModal,
         closeDeleteModal,

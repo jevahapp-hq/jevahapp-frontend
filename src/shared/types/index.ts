@@ -151,6 +151,8 @@ export interface VideoCardProps {
   playbackKey?: string;
   /** When false, player stays paused and muted (hidden category pane). */
   isFeedActive?: boolean;
+  /** Logged-in viewer — owner-only delete; must not hide the ⋮ menu. */
+  viewerId?: string | null;
 }
 
 // Music/Audio-specific interfaces
@@ -172,6 +174,7 @@ export interface MusicCardProps {
   onLayout?: (event: any, key: string, type: "video" | "music", uri?: string) => void;
   onPause?: (id: string) => void;
   focusRef?: (node: any) => void;
+  viewerId?: string | null;
 }
 
 // Ebook-specific interfaces
@@ -188,6 +191,7 @@ export interface EbookCardProps {
   onDownload: (item: MediaItem) => void;
   onDelete?: (item: MediaItem) => void;
   checkIfDownloaded: (itemId: string) => boolean;
+  viewerId?: string | null;
 }
 
 // Shared media card interface

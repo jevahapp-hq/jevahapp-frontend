@@ -7,50 +7,47 @@ interface FeedVideoSurfaceProps {
   visible: boolean;
   onFirstFrameRender: () => void;
   height?: number;
-  /** Fitted frame so the native player doesn't paint black letterbox over the blur. */
-  fitWidth?: number;
-  fitHeight?: number;
+  width?: number;
+  /**
+   * Feed cards cover-fill the 400px box. Fullscreen (Reels) uses contain so
+   * landscape / square / oversized media letterbox instead of overflowing.
+   */
+  contentFit?: "contain" | "cover";
 }
 
 /**
- * Fixed-size clipped surface. Never escapes the cell.
- *
- * When fitWidth/fitHeight are set, the VideoView is the video's aspect (no crop)
- * and the rest of the box stays transparent so the blurred poster shows through.
- * Reels keeps full-screen cover.
+ * APK player: full thumbnail width, cover-fill. No opacity, overflow clip,
+ * or extra surfaceType — those blank the picture while audio still plays.
+ * Immediate parent stays transparent so Android SurfaceView can punch through.
  */
 export function FeedVideoSurface({
   player,
-  visible,
+  visible: _visible,
   onFirstFrameRender,
   height = FEED_VIDEO_PLAYER_HEIGHT,
-  fitWidth,
-  fitHeight,
+  width,
+  contentFit = "cover",
 }: FeedVideoSurfaceProps) {
-  const fitted =
-    typeof fitWidth === "number" &&
-    typeof fitHeight === "number" &&
-    fitWidth > 1 &&
-    fitHeight > 1;
-
   return (
     <View
-      style={[styles.host, { height }, fitted ? styles.hostCenter : null]}
-      pointerEvents="none"
+      style={[
+        styles.host,
+        { height },
+        width != null ? { width } : null,
+        contentFit === "contain" ? styles.containHost : null,
+      ]}
       collapsable={false}
+      pointerEvents="none"
     >
       <VideoView
         player={player}
-        style={
-          fitted
-            ? { width: fitWidth, height: fitHeight, opacity: visible ? 1 : 0 }
-            : [styles.videoFill, { opacity: visible ? 1 : 0 }]
-        }
-        contentFit={fitted ? "cover" : "contain"}
+        style={styles.video}
+        contentFit={contentFit}
         nativeControls={false}
         fullscreenOptions={{ enable: false }}
         allowsPictureInPicture={false}
         useExoShutter={false}
+        pointerEvents="none"
         onFirstFrameRender={onFirstFrameRender}
       />
     </View>
@@ -60,15 +57,17 @@ export function FeedVideoSurface({
 const styles = StyleSheet.create({
   host: {
     width: "100%",
-    overflow: "hidden",
+    position: "absolute",
+    top: 0,
+    left: 0,
     backgroundColor: "transparent",
   },
-  hostCenter: {
-    justifyContent: "center",
-    alignItems: "center",
+  containHost: {
+    backgroundColor: "#000",
   },
-  videoFill: {
-    ...StyleSheet.absoluteFillObject,
+  video: {
+    width: "100%",
+    height: "100%",
     backgroundColor: "transparent",
   },
 });

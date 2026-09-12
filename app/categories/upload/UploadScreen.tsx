@@ -267,9 +267,11 @@ export default function UploadScreen() {
                 <MediaPickers
                   file={form.file}
                   thumbnail={form.thumbnail}
+                  selectedType={form.selectedType}
                   orientation={form.orientation}
                   onPickMedia={pickMedia}
                   onPickThumbnail={pickThumbnail}
+                  previewActive={!form.loading}
                 />
               </View>
 

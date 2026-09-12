@@ -17,14 +17,14 @@ export function MediaCardShell(props: {
     onLayout,
     focusRef,
     className = "flex flex-col mb-16",
-    style = { marginBottom: 64 },
+    style = { marginBottom: 64, overflow: "visible" as const },
   } = props;
 
   return (
     <View
       ref={focusRef}
       className={className}
-      style={style}
+      style={[{ overflow: "visible" }, style]}
       onLayout={onLayout}
       collapsable={false}
     >

@@ -61,7 +61,10 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
       createdAt: stamped.createdAt || stamped.created_at || new Date().toISOString(),
       duration: stamped.duration,
       fileMimeType: stamped.fileMimeType || stamped.mimeType,
-      moderationStatus: stamped.moderationStatus,
+      moderationStatus:
+        stamped.moderationStatus ||
+        stamped.moderation_status ||
+        undefined,
       processingStatus: (() => {
         const raw =
           stamped.processingStatus ||

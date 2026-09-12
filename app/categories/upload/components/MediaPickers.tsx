@@ -1,6 +1,6 @@
 /**
  * Media (left) + cover thumbnail (right) — always side-by-side flex.
- * Video is a poster, not a decoder (2GB devices OOM if both preview and Post run).
+ * Video tile shows the selected clip (or a guideline error), never the cover.
  */
 
 import { Feather } from "@expo/vector-icons";
@@ -11,27 +11,35 @@ import {
   getResponsiveSpacing,
 } from "../../../../utils/responsive";
 import type { MediaFile } from "../types";
+import { isVideoMediaFile } from "../utils/fileTypeDetection";
+import { collectDeviceGuidelineErrors } from "../utils/uploadGuidelineAlert";
 import { MediaVideoPreview } from "./MediaVideoPreview";
 
 type MediaPickersProps = {
   file: MediaFile | null;
   thumbnail: MediaFile | null;
+  selectedType: string;
   orientation: "portrait" | "landscape";
   onPickMedia: () => void;
   onPickThumbnail: () => void;
+  previewActive: boolean;
 };
 
-export function MediaPickers({
-  file,
-  thumbnail,
-  onPickMedia,
-  onPickThumbnail,
-}: MediaPickersProps) {
+export function MediaPickers(props: MediaPickersProps) {
+  const file = props.file;
+  const thumbnail = props.thumbnail;
+  const selectedType = props.selectedType;
+  const onPickMedia = props.onPickMedia;
+  const onPickThumbnail = props.onPickThumbnail;
+  const previewActive = props.previewActive;
   const pad = getResponsiveSpacing(16, 20, 24, 32);
   const gap = getResponsiveSpacing(12, 16, 20, 24);
   const iconSize = getResponsiveSize(26, 30, 34);
   const labelSize = getResponsiveFontSize(11, 12, 13);
-  const isVideo = !!file?.mimeType?.startsWith("video");
+  const isVideo = isVideoMediaFile(file);
+  const guidelineError = file
+    ? collectDeviceGuidelineErrors(file, selectedType)[0] || null
+    : null;
 
   return (
     <View style={[styles.row, { paddingHorizontal: pad, gap }]}>
@@ -48,10 +56,12 @@ export function MediaPickers({
               Select Media
             </Text>
           </View>
-        ) : isVideo ? (
+        ) : isVideo || guidelineError ? (
           <MediaVideoPreview
             uri={file.uri}
-            coverUri={thumbnail?.uri || null}
+            fileName={file.name}
+            guidelineError={guidelineError}
+            active={previewActive && !guidelineError}
           />
         ) : (
           <Image
@@ -66,13 +76,13 @@ export function MediaPickers({
         onPress={onPickThumbnail}
         style={[styles.tile, styles.thumbTile]}
         activeOpacity={0.8}
-        accessibilityLabel="Select cover photo"
+        accessibilityLabel="Select cover photo (optional)"
       >
         {!thumbnail ? (
           <View style={styles.placeholder}>
             <Feather name="image" size={iconSize} color="#6B7280" />
             <Text style={[styles.label, { fontSize: labelSize }]}>
-              Cover Photo
+              Cover (optional)
             </Text>
           </View>
         ) : (

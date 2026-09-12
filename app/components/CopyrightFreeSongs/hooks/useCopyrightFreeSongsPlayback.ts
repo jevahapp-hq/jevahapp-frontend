@@ -8,16 +8,25 @@ import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlaySto
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 
 function mapSongToTrack(song: any) {
+  const source =
+    song?.source === "feed" ||
+    song?.source === "library" ||
+    song?.source === "hymn" ||
+    song?.source === "ebook"
+      ? song.source
+      : song?.lane === "artist" || song?.contentType === "artist-music"
+        ? ("library" as const)
+        : ("copyright-free" as const);
   return {
-    id: song.id,
+    id: song.id || song._id,
     title: song.title,
     artist: song.artist,
-    audioUrl: song.audioUrl,
-    thumbnailUrl: song.thumbnailUrl,
+    audioUrl: song.audioUrl || song.fileUrl,
+    thumbnailUrl: song.thumbnailUrl || song.imageUrl,
     duration: song.duration,
     category: song.category,
     description: song.description,
-    source: "copyright-free" as const,
+    source,
   };
 }
 
@@ -71,11 +80,9 @@ export function useCopyrightFreeSongsPlayback({
 }: {
   songs: any[];
 }) {
-  const {
-    currentTrack,
-    isPlaying: globalIsPlaying,
-    isLoading: globalIsLoading,
-  } = useGlobalAudioPlayerStore();
+  const currentTrack = useGlobalAudioPlayerStore((s) => s.currentTrack);
+  const globalIsPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const globalIsLoading = useGlobalAudioPlayerStore((s) => s.isLoading);
 
   useEffect(() => {
     useCopyrightFreeOverlayStore.getState().setQueue(songs);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { resolveFullPlayerTarget } from "@/shared/audio/audioSourcePolicy";
+import { stopAndDismissNowPlaying } from "@/shared/audio/stopNowPlaying";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { useNotification } from "../../../../app/context/NotificationContext";
@@ -11,12 +12,13 @@ export default function FloatingAudioPlayer() {
   const currentTrack = useGlobalAudioPlayerStore((s) => s.currentTrack);
   const isPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
   const isLoading = useGlobalAudioPlayerStore((s) => s.isLoading);
-  const progress = useGlobalAudioPlayerStore((s) => s.progress);
   const isSessionActive = useGlobalAudioPlayerStore((s) => s.isSessionActive);
   const loadError = useGlobalAudioPlayerStore((s) => s.loadError);
   const togglePlayPause = useGlobalAudioPlayerStore((s) => s.togglePlayPause);
-  const next = useGlobalAudioPlayerStore((s) => s.next);
-  const clear = useGlobalAudioPlayerStore((s) => s.clear);
+  const previous = useGlobalAudioPlayerStore((s) => s.previous);
+  const skipForward = useCallback(() => {
+    void useGlobalAudioPlayerStore.getState().next({ fromUser: true });
+  }, []);
 
   const { showNotification } = useNotification();
   const lastErrorRef = useRef<string | null>(null);
@@ -58,8 +60,8 @@ export default function FloatingAudioPlayer() {
   }, [currentTrack]);
 
   const handleClear = useCallback(() => {
-    void clear();
-  }, [clear]);
+    stopAndDismissNowPlaying();
+  }, []);
 
   const { handleCloseMini, dragX, dragY, handlePan, surfaceGesture } =
     useFloatingPlayerActions({
@@ -76,7 +78,6 @@ export default function FloatingAudioPlayer() {
       currentTrack={currentTrack}
       isPlaying={isPlaying}
       isLoading={isLoading}
-      progress={progress}
       dragX={dragX}
       dragY={dragY}
       handlePan={handlePan}
@@ -84,7 +85,8 @@ export default function FloatingAudioPlayer() {
       overlayCovered={overlayCovered}
       onOpenFullPlayer={openFullPlayer}
       onTogglePlayPause={togglePlayPause}
-      onNext={next}
+      onPrevious={previous}
+      onNext={skipForward}
       onClose={handleCloseMini}
     />
   );

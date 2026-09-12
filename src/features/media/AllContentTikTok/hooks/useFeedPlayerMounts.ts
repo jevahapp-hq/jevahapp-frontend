@@ -7,10 +7,8 @@ import {
   getBestVideoUrl,
   getVideoUrlFromMedia,
 } from "../../../../shared/utils/videoUrlManager";
-import { shouldMountLitePlayer } from "../../../../shared/lite/liteProfile";
 import {
   FEED_INITIAL_MOUNT_COUNT,
-  FEED_PRELOAD_NEIGHBOR_DISTANCE,
   FEED_PRELOAD_WARM_DISTANCE,
   FEED_WARM_IDLE_MOUNT_COUNT,
 } from "../../video-feed";
@@ -23,7 +21,7 @@ export function useFeedPlayerMounts(options: {
   currentlyVisibleVideo: string | null;
   isFeedActive: boolean;
   keepVideoDecoders: boolean;
-  liteActive: boolean;
+  liteActive?: boolean;
   maxPlayers: number;
   hasDeterminedVisibilityRef: { current: boolean };
   mediaSeqByKeyRef: { current: Record<string, number> };
@@ -35,7 +33,6 @@ export function useFeedPlayerMounts(options: {
     currentlyVisibleVideo,
     isFeedActive,
     keepVideoDecoders,
-    liteActive,
     maxPlayers,
     hasDeterminedVisibilityRef,
     mediaSeqByKeyRef,
@@ -81,23 +78,18 @@ export function useFeedPlayerMounts(options: {
     ) {
       const activeSeq = seqByKey[currentlyVisibleVideo];
       hot.add(currentlyVisibleVideo);
-      const neighbor = liteActive ? 1 : FEED_PRELOAD_NEIGHBOR_DISTANCE;
-      for (let d = 1; d <= neighbor; d++) {
-        const before = keyBySeq[activeSeq - d];
-        const after = keyBySeq[activeSeq + d];
-        if (after && shouldMountLitePlayer(activeSeq + d, activeSeq)) {
-          hot.add(after);
-        }
-        if (!liteActive && before) hot.add(before);
-      }
-      warmSeqRange(activeSeq, liteActive ? 1 : FEED_PRELOAD_WARM_DISTANCE);
+      // Keep the previous card mounted and paused so scrolling back shows
+      // the last frame, not the cover thumbnail.
+      const prev = keyBySeq[activeSeq - 1];
+      if (prev) hot.add(prev);
+      warmSeqRange(activeSeq, FEED_PRELOAD_WARM_DISTANCE);
     } else if (!hasDeterminedVisibilityRef.current) {
-      const initial = liteActive ? 2 : FEED_INITIAL_MOUNT_COUNT;
+      const initial = FEED_INITIAL_MOUNT_COUNT;
       for (let i = 0; i < initial; i++) {
         const k = keyBySeq[i];
         if (k) hot.add(k);
       }
-      warmSeqRange(0, liteActive ? 1 : FEED_PRELOAD_WARM_DISTANCE);
+      warmSeqRange(0, FEED_PRELOAD_WARM_DISTANCE);
     }
 
     if (hot.size === 0) return;
@@ -141,7 +133,6 @@ export function useFeedPlayerMounts(options: {
     warmSeqRange,
     isFeedActive,
     keepVideoDecoders,
-    liteActive,
     maxPlayers,
     hasDeterminedVisibilityRef,
     mediaKeyBySeqRef,

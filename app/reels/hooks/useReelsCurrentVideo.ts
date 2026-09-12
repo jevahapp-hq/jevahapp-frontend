@@ -155,7 +155,11 @@ export function useReelsCurrentVideo({
       views: currentVideo.views || 0,
       saved: currentVideo.saved || 0,
       sheared: currentVideo.sheared || 0,
-      comment: 0,
+      comment:
+        currentVideo.commentCount ??
+        currentVideo.comments ??
+        currentVideo.comment ??
+        0,
     }),
     [currentVideo, imageUrl]
   );

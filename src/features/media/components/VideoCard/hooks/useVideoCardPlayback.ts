@@ -214,21 +214,134 @@ export function useVideoCardPlayback({
       }
     };
 
-    const statusSub = player.addListener("statusChange", ({ status, error }) => {
-      if (!isMountedRef.current) return;
+    let statusSub: { remove: () => void } | undefined;
+    let sourceLoadSub: { remove: () => void } | undefined;
+    let timeSub: { remove: () => void } | undefined;
+    let endSub: { remove: () => void } | undefined;
 
-      if (status === "error") {
-        setFailedVideoLoadRef.current(true);
-        handleVideoErrorRef.current(error ?? new Error("Video playback error"));
-        return;
-      }
+    try {
+      statusSub = player.addListener("statusChange", ({ status, error }) => {
+        if (!isMountedRef.current) return;
 
-      if (status === "readyToPlay") {
+        if (status === "error") {
+          setFailedVideoLoadRef.current(true);
+          handleVideoErrorRef.current(error ?? new Error("Video playback error"));
+          return;
+        }
+
+        if (status === "readyToPlay") {
+          setFailedVideoLoadRef.current(false);
+          setVideoLoadedRef.current(true);
+          videoLoadedRef.current = true;
+          try {
+            applyDurationSeconds(player.duration);
+          } catch {
+            // Native player already released.
+          }
+
+          const resume = useReelsStore
+            .getState()
+            .consumeResumePlayback(contentId, "feed");
+          if (resume && resume.positionMs > 400) {
+            void seekPlayerToMs(player, resume.positionMs).then((ok) => {
+              if (!ok || !isMountedRef.current) return;
+              lastPositionMsRef.current = resume.positionMs;
+              lastProgressRef.current =
+                lastKnownDurationRef.current > 0
+                  ? resume.positionMs / lastKnownDurationRef.current
+                  : 0;
+              setVideoPositionMs(resume.positionMs);
+              setVideoProgress(lastProgressRef.current);
+            });
+          }
+        }
+      });
+
+      sourceLoadSub = player.addListener("sourceLoad", ({ duration }) => {
+        if (!isMountedRef.current) return;
         setFailedVideoLoadRef.current(false);
         setVideoLoadedRef.current(true);
         videoLoadedRef.current = true;
-        applyDurationSeconds(player.duration);
+        applyDurationSeconds(duration);
+      });
 
+      timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
+        try {
+          applyPositionSeconds(currentTime, player.playing);
+          if (player.duration > 0) applyDurationSeconds(player.duration);
+        } catch {
+          // Native player already released.
+        }
+      });
+
+      endSub = player.addListener("playToEnd", () => {
+        if (!isMountedRef.current) return;
+
+        try {
+          // Some Android builds fire playToEnd on a rebuffer mid-watch.
+          // Restart only at the real end, or once native loop has already
+          // snapped back to 0.
+          const durationSec = Number(player.duration) || 0;
+          const now = Number(player.currentTime) || 0;
+          const atEnd =
+            durationSec <= 1 || now >= durationSec - 0.4 || now < 0.2;
+          if (!atEnd) return;
+        } catch {
+          // Native player already released.
+          return;
+        }
+
+        let durationMs = lastKnownDurationRef.current;
+        try {
+          durationMs = durationMs || player.duration * 1000;
+        } catch {
+          // Native player already released.
+        }
+
+        if (!hasTrackedViewRef.current) {
+          try {
+            contentInteractionAPI
+              .recordView(contentId, "media", {
+                durationMs,
+                progressPct: 100,
+                isComplete: true,
+              })
+              .then((result) => {
+                setHasTrackedViewRef.current(true);
+                hasTrackedViewRef.current = true;
+                if (result?.totalViews != null && storeRef.current?.mutateStats) {
+                  storeRef.current.mutateStats(contentId, () => ({
+                    views: Number(result.totalViews) || 0,
+                  }));
+                }
+              })
+              .catch(() => {});
+          } catch {
+            // no-op
+          }
+        }
+
+        lastPositionMsRef.current = 0;
+        lastProgressRef.current = 0;
+        setVideoPositionMs(0);
+        setVideoProgress(0);
+
+        try {
+          if (!player.loop) player.currentTime = 0;
+          if (!player.playing) player.play();
+        } catch {
+          // no-op
+        }
+      });
+    } catch {
+      // Native player already released — skip listeners.
+    }
+
+    try {
+      if (player.status === "readyToPlay") {
+        setFailedVideoLoadRef.current(false);
+        setVideoLoadedRef.current(true);
+        videoLoadedRef.current = true;
         const resume = useReelsStore
           .getState()
           .consumeResumePlayback(contentId, "feed");
@@ -245,81 +358,8 @@ export function useVideoCardPlayback({
           });
         }
       }
-    });
-
-    const sourceLoadSub = player.addListener("sourceLoad", ({ duration }) => {
-      if (!isMountedRef.current) return;
-      setFailedVideoLoadRef.current(false);
-      setVideoLoadedRef.current(true);
-      videoLoadedRef.current = true;
-      applyDurationSeconds(duration);
-    });
-
-    const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
-      applyPositionSeconds(currentTime, player.playing);
-      if (player.duration > 0) applyDurationSeconds(player.duration);
-    });
-
-    const endSub = player.addListener("playToEnd", () => {
-      if (!isMountedRef.current) return;
-
-      const durationMs = lastKnownDurationRef.current || player.duration * 1000;
-      const wasPlaying = player.playing;
-
-      if (!hasTrackedViewRef.current) {
-        try {
-          contentInteractionAPI
-            .recordView(contentId, "media", {
-              durationMs,
-              progressPct: 100,
-              isComplete: true,
-            })
-            .then((result) => {
-              setHasTrackedViewRef.current(true);
-              hasTrackedViewRef.current = true;
-              if (result?.totalViews != null && storeRef.current?.mutateStats) {
-                storeRef.current.mutateStats(contentId, () => ({
-                  views: Number(result.totalViews) || 0,
-                }));
-              }
-            })
-            .catch(() => {});
-        } catch {
-          // no-op
-        }
-      }
-
-      try {
-        player.currentTime = 0;
-        lastPositionMsRef.current = 0;
-        lastProgressRef.current = 0;
-        setVideoPositionMs(0);
-        setVideoProgress(0);
-        if (wasPlaying) player.play();
-      } catch {
-        // no-op
-      }
-    });
-
-    if (player.status === "readyToPlay") {
-      setFailedVideoLoadRef.current(false);
-      setVideoLoadedRef.current(true);
-      videoLoadedRef.current = true;
-      const resume = useReelsStore
-        .getState()
-        .consumeResumePlayback(contentId, "feed");
-      if (resume && resume.positionMs > 400) {
-        void seekPlayerToMs(player, resume.positionMs).then((ok) => {
-          if (!ok || !isMountedRef.current) return;
-          lastPositionMsRef.current = resume.positionMs;
-          lastProgressRef.current =
-            lastKnownDurationRef.current > 0
-              ? resume.positionMs / lastKnownDurationRef.current
-              : 0;
-          setVideoPositionMs(resume.positionMs);
-          setVideoProgress(lastProgressRef.current);
-        });
-      }
+    } catch {
+      // Native player already released.
     }
     const immediateMs = getPlayerDurationMs(player, 0);
     if (immediateMs > 0) commitDurationMs(immediateMs);
@@ -345,10 +385,14 @@ export function useVideoCardPlayback({
 
     return () => {
       if (pollId) clearInterval(pollId);
-      statusSub.remove();
-      sourceLoadSub.remove();
-      timeSub.remove();
-      endSub.remove();
+      try {
+        statusSub?.remove();
+        sourceLoadSub?.remove();
+        timeSub?.remove();
+        endSub?.remove();
+      } catch {
+        // Native player already released.
+      }
     };
   }, [
     player,

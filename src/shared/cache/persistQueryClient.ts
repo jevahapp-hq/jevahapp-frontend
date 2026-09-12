@@ -34,6 +34,8 @@ export function clearPersistedQueryCache(): void {
   registeredClient?.removeQueries({ queryKey: ["account-media"] });
   registeredClient?.removeQueries({ queryKey: ["account-videos"] });
   registeredClient?.removeQueries({ queryKey: ["account-analytics"] });
+  registeredClient?.removeQueries({ queryKey: ["notifications"] });
+  registeredClient?.removeQueries({ queryKey: ["notification-stats"] });
   mmkvRemove(persistDiskKey());
   mmkvRemove(RQ_PERSIST_DISK_KEY);
 }

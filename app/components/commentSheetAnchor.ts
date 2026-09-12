@@ -11,6 +11,12 @@ export type CommentMediaAnchor = {
   mediaBottomY: number;
   /** Measured player height (for scale-into-peek) */
   mediaHeight?: number;
+  /**
+   * Feed cards need the peek play/seek HUD. Fullscreen Reels already has
+   * tap-to-pause and its own scrubber — leave this false so a play button
+   * does not replace the bottom tabs.
+   */
+  showPeekHud?: boolean;
 };
 
 export type CommentSheetLayoutLive = {
@@ -63,4 +69,19 @@ export function resolveCommentSheetLayout(
   const shiftY = -mediaTopY;
 
   return { peekHeight, shiftY, mediaScale: 1 };
+}
+
+/**
+ * Fullscreen Reels: dock the sheet under a ~42% peek, no extra play HUD.
+ * The native Modal hosts the sheet so it is not covered by the video surface.
+ */
+export function fullscreenReelsCommentAnchor(
+  windowHeight = getWindowHeight()
+): CommentMediaAnchor {
+  const peekHeight = Math.max(220, Math.round(windowHeight * 0.42));
+  return {
+    mediaBottomY: peekHeight,
+    mediaHeight: peekHeight,
+    showPeekHud: false,
+  };
 }

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { videoKeyMatchesContentId } from "../features/media/video-feed/videoPlayerKey";
 
 export type VideoPlaybackSnapshot = {
   progress: number;
@@ -18,10 +19,6 @@ type VideoPlayerRef = {
 };
 
 const videoPlayerRegistry = new Map<string, VideoPlayerRef>();
-
-function keyMatchesContent(key: string, contentId: string): boolean {
-  return key === contentId || key.endsWith(`::${contentId}`);
-}
 
 /** Snapshot from the live player (not Zustand progress, which can lag). */
 export function getVideoPlaybackSnapshot(
@@ -42,11 +39,16 @@ export function resolveRegisteredVideoKey(
 
   if (contentId) {
     for (const hint of hints) {
-      if (keyMatchesContent(hint, contentId)) return hint;
+      if (videoKeyMatchesContentId(hint, contentId)) return hint;
     }
+    let feedKey: string | null = null;
     for (const key of videoPlayerRegistry.keys()) {
-      if (keyMatchesContent(key, contentId)) return key;
+      if (!videoKeyMatchesContentId(key, contentId)) continue;
+      // Prefer the fullscreen reel player over a paused feed card.
+      if (key.startsWith("reel-")) return key;
+      if (!feedKey) feedKey = key;
     }
+    if (feedKey) return feedKey;
   }
 
   return hints[0] ?? null;

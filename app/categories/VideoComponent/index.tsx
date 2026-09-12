@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import VideoCard from "../../../src/features/media/components/VideoCard";
 import { VideoCardSkeleton } from "../../../src/shared/components/Skeleton";
+import type { MediaItem } from "../../../src/shared/types";
 import SuccessCard from "../../components/SuccessCard";
 import { useCommentModal } from "../../context/CommentModalContext";
 import { useDownloadStore } from "@/store/useDownloadStore";
@@ -15,12 +16,15 @@ import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useInteractionStore } from "@/store/useInteractionStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
+import { useReelsStore } from "@/store/useReelsStore";
+import { useVideoNavigation } from "../../hooks/useVideoNavigation";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
 } from "../../utils/downloadUtils";
 import { getPersistedStats } from "../../utils/persistentStorage";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../../utils/userValidation";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { VideoComponentMiniCards } from "./components/VideoComponentMiniCards";
 import {
   useVideoComponentData,
@@ -33,6 +37,8 @@ import { getVideoKey } from "./utils";
 
 export default function VideoComponent() {
   const { handleDownload, checkIfDownloaded } = useDownloadHandler();
+  const { user } = useUserProfile();
+  const currentUserId = user?._id || user?.id || null;
 
   const { loadDownloadedItems } = useDownloadStore();
   const mediaStore = useMediaStore();
@@ -160,7 +166,6 @@ export default function VideoComponent() {
     handleSave,
     handleLike,
     handleComment,
-    handleVideoTapWrapper,
     handleMiniCardPlay,
     handleVideoReload,
     getTimeAgo,
@@ -168,12 +173,73 @@ export default function VideoComponent() {
     getContentKey,
   } = handlers;
 
+  const { navigateToReels } = useVideoNavigation();
+
   const onMiniCardDownload = useCallback(
     (item: any) => handlers.handleMiniCardDownload(item, closeAllMenus),
     [handlers, closeAllMenus]
   );
 
+  const handleFullscreenTap = useCallback(
+    (key: string, video: MediaItem, index: number) => {
+      const allVideos = uploadedVideos.map((item: any) =>
+        convertToMediaItem(item)
+      );
+      const contentKey = String(video._id || key);
+      const actualIndex = allVideos.findIndex((item) => {
+        const id = String(item._id || getContentKey(item));
+        return id === contentKey || getContentKey(item) === key;
+      });
+      navigateToReels({
+        video,
+        index: actualIndex >= 0 ? actualIndex : index,
+        allVideos,
+        contentStats,
+        globalFavoriteCounts,
+        getContentKey,
+        getTimeAgo,
+        getDisplayName: (speaker) =>
+          getUserDisplayNameFromContent(video, speaker || "Creator"),
+        source: "VideoComponent",
+        category: "videos",
+        feedKey: key,
+      });
+    },
+    [
+      uploadedVideos,
+      convertToMediaItem,
+      getContentKey,
+      navigateToReels,
+      contentStats,
+      globalFavoriteCounts,
+      getTimeAgo,
+    ]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const resume = useReelsStore.getState().resumePlayback;
+      const contentId = String(resume?.contentId || "").trim();
+      if (!contentId || uploadedVideos.length === 0) return;
+      const match = uploadedVideos.find(
+        (item: any) => String(item._id || item.id || "") === contentId
+      );
+      if (!match) return;
+      const key = getVideoKey(match.fileUrl);
+      const layout = videoLayoutsRef.current[key];
+      if (layout && scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({
+          y: Math.max(0, layout.y - 72),
+          animated: false,
+        });
+      }
+      globalVideoStore.playVideoGlobally(key);
+    }, [uploadedVideos, globalVideoStore])
+  );
+
   useEffect(() => {
+    const resumeId = useReelsStore.getState().resumePlayback?.contentId;
+    if (resumeId) return;
     if (globalVideoStore.isAutoPlayEnabled && !globalVideoStore.currentlyVisibleVideo && uploadedVideos.length > 0) {
       const timer = setTimeout(() => {
         const videoLayouts = Object.entries(videoLayoutsRef.current).sort((a, b) => a[1].y - b[1].y);
@@ -269,7 +335,7 @@ export default function VideoComponent() {
         globalFavoriteCounts={globalFavoriteCounts}
         videoVolume={1.0}
         currentlyVisibleVideo={globalVideoStore.currentlyVisibleVideo}
-        onVideoTap={handleVideoTapWrapper}
+        onVideoTap={handleFullscreenTap}
         onTogglePlay={(key) => togglePlay(key, video)}
         onToggleMute={toggleMuteVideo}
         onLike={(key) => handleLike(key, video)}
@@ -290,6 +356,11 @@ export default function VideoComponent() {
           videoLayoutsRef.current[key] = { y, height };
         }}
         isAutoPlayEnabled={globalVideoStore.isAutoPlayEnabled}
+        viewerId={currentUserId}
+        onDelete={(item) => {
+          const id = String(item?._id || "").trim();
+          if (id) mediaStore.removeMedia(id);
+        }}
         /**
          * Completes the intent behind the `playType` argument, which was being
          * passed but never read. Without this, `VideoCard` defaults

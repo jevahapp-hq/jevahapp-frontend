@@ -15,7 +15,9 @@ export type MiniPlayerSuppressionReason =
   /** The bottom-nav create sheet (Upload / Go Live) is expanded. */
   | "create-sheet"
   /** First-run coach marks are walking the user through the UI. */
-  | "login-tour";
+  | "login-tour"
+  /** Comment sheet owns the bottom of the screen. */
+  | "comments";
 
 const held = new Set<MiniPlayerSuppressionReason>();
 const listeners = new Set<() => void>();

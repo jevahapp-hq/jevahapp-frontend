@@ -112,7 +112,7 @@ export default function LibraryScreen({
   const pagePad = getResponsiveSpacing(16, 20, 24, 32);
 
   return (
-    <View className="flex-col bg-white flex-1">
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <Text
         className="mt-12 text-[24px] font-jakarta-semibold text-[#344054]"
         style={{ paddingHorizontal: pagePad }}
@@ -143,18 +143,18 @@ export default function LibraryScreen({
       {/* Category tabs - matching AllContent style exactly */}
       <View
         style={{
+          height: 76,
           paddingHorizontal: getResponsiveSpacing(16, 20, 24, 32),
           backgroundColor: "#FCFCFD",
+          justifyContent: "center",
         }}
       >
         <ScrollView
           ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{
-            paddingVertical: getResponsiveSpacing(12, 16, 20, 24),
-            marginTop: getResponsiveSpacing(20, 24, 28, 32),
-          }}
+          style={{ height: 76 }}
+          contentContainerStyle={{ alignItems: "center" }}
         >
           {categories.map((category) => (
             <TouchableOpacity
@@ -204,7 +204,7 @@ export default function LibraryScreen({
       {/* Content area - conditional rendering to avoid VirtualizedList nesting */}
       {selectedCategory === "PLAYLISTS" ? (
         // PlaylistsLibrary handles its own scrolling with FlatList
-        <View className="flex-1 mt-2">{renderContent()}</View>
+        <View style={{ flex: 1, marginTop: 8 }}>{renderContent()}</View>
       ) : (
         // Other categories can use ScrollView
         <View style={{ flex: 1, width: "100%", backgroundColor: "#FCFCFD" }}>

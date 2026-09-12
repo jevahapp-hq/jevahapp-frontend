@@ -1,6 +1,7 @@
 /**
  * Library audio is the app-wide playback session.
  * Video tiles are posters — tap opens Reels, they do not mount a player.
+ * Do not subscribe to progress/position here — that re-renders the library list.
  */
 import { useCallback, useRef, useState } from "react";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
@@ -13,9 +14,6 @@ export function useAllLibraryPlayback() {
   const currentTrackId = useGlobalAudioPlayerStore((s) => s.currentTrack?.id);
   const currentSource = useGlobalAudioPlayerStore((s) => s.currentTrack?.source);
   const isPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
-  const progress = useGlobalAudioPlayerStore((s) => s.progress);
-  const duration = useGlobalAudioPlayerStore((s) => s.duration);
-  const position = useGlobalAudioPlayerStore((s) => s.position);
   const isMuted = useGlobalAudioPlayerStore((s) => s.isMuted);
 
   const playingAudio =
@@ -69,12 +67,6 @@ export function useAllLibraryPlayback() {
     playingAudio,
     videoRefs,
     audioRefs: { current: {} as Record<string, any> },
-    audioProgress:
-      playingAudio && currentTrackId ? { [currentTrackId]: progress } : {},
-    audioDuration:
-      playingAudio && currentTrackId ? { [currentTrackId]: duration } : {},
-    audioPosition:
-      playingAudio && currentTrackId ? { [currentTrackId]: position } : {},
     audioMuted:
       playingAudio && currentTrackId ? { [currentTrackId]: isMuted } : {},
     togglePlay,

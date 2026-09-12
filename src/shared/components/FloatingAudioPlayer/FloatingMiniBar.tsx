@@ -28,7 +28,6 @@ type FloatingMiniBarProps = {
   currentTrack: Track;
   isPlaying: boolean;
   isLoading: boolean;
-  progress: number;
   dragX: SharedValue<number>;
   dragY: SharedValue<number>;
   handlePan: any;
@@ -36,6 +35,7 @@ type FloatingMiniBarProps = {
   overlayCovered: boolean;
   onOpenFullPlayer?: () => void;
   onTogglePlayPause: () => void;
+  onPrevious: () => void;
   onNext: () => void;
   onClose: () => void;
 };
@@ -50,7 +50,6 @@ export function FloatingMiniBar({
   currentTrack,
   isPlaying,
   isLoading,
-  progress,
   dragX,
   dragY,
   handlePan,
@@ -58,6 +57,7 @@ export function FloatingMiniBar({
   overlayCovered,
   onOpenFullPlayer,
   onTogglePlayPause,
+  onPrevious,
   onNext,
   onClose,
 }: FloatingMiniBarProps) {
@@ -125,12 +125,13 @@ export function FloatingMiniBar({
             isPlaying={isPlaying}
             isLoading={isLoading}
             onTogglePlayPause={onTogglePlayPause}
+            onPrevious={onPrevious}
             onNext={onNext}
             onClose={onClose}
           />
         </View>
 
-        <MiniBarProgress progress={progress} />
+        <MiniBarProgress />
     </Animated.View>
   );
 }

@@ -1,13 +1,13 @@
 import { memo, useEffect, useMemo, useState, type MutableRefObject } from "react";
 import {
-  Image,
+  Pressable,
   Text,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../src/shared/utils/videoUrlManager";
+import { FittedMediaImage } from "../../../src/features/media/video-feed";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { getBottomNavHeight } from "../../utils/responsiveOptimized";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
@@ -87,6 +87,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
     passedVideoKey,
     videoRefs,
     screenHeight,
+    screenWidth,
     isIOS,
     currentIndex_state,
     videoDuration,
@@ -157,8 +158,9 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   const isMuted = useGlobalVideoStore(
     (s) => s.mutedVideos[videoKey] ?? false
   );
-  // Mount active + ±1 so swipe-in doesn't wait on cold native player alloc.
-  const shouldMountPlayer = Math.abs(index - currentIndex_state) <= 1;
+  // Mount the active reel plus the next one only — three live players crackle.
+  const shouldMountPlayer =
+    index === currentIndex_state || index === currentIndex_state + 1;
 
   const posterUri = useMemo(() => {
     const raw =
@@ -200,111 +202,156 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   }
 
   return (
-    <View style={{ height: screenHeight, width: "100%", backgroundColor: "#000000" }}>
-      <TouchableWithoutFeedback onPress={() => isActive && onToggleVideoPlay()}>
-        <View style={{ width: "100%", height: "100%" }}>
-          {shouldMountPlayer ? (
-            <ReelsVideoPlayer
-              videoKey={videoKey}
-              contentId={String(enriched._id || enriched.id || "")}
-              videoUrl={videoUrl}
-              isActive={isActive}
-              isMuted={isMuted}
-              videoVolume={1.0}
-              isPlaying={isPlaying}
-              videoRefs={videoRefs}
-              onToggleVideoPlay={onToggleVideoPlay}
-              setVideoDuration={setVideoDuration}
-              setVideoPosition={setVideoPosition}
-              setLocalPosition={setLocalPosition}
-              setLocalDuration={setLocalDuration}
-              isDragging={isDragging}
-              globalVideoStore={globalVideoStore}
-              showPauseOverlay={showPauseOverlay}
-              getResponsiveSize={getResponsiveSize}
-              triggerHapticFeedback={triggerHapticFeedback}
+    <View
+      collapsable={false}
+      style={{
+        height: screenHeight,
+        width: screenWidth,
+        backgroundColor: "#000",
+        overflow: "visible",
+      }}
+    >
+      {shouldMountPlayer ? (
+        <ReelsVideoPlayer
+          videoKey={videoKey}
+          contentId={String(enriched._id || enriched.id || "")}
+          videoUrl={videoUrl}
+          posterUri={posterUri}
+          screenHeight={screenHeight}
+          screenWidth={screenWidth}
+          isActive={isActive}
+          isMuted={isMuted}
+          videoVolume={1.0}
+          isPlaying={isPlaying}
+          videoRefs={videoRefs}
+          onToggleVideoPlay={onToggleVideoPlay}
+          setVideoDuration={setVideoDuration}
+          setVideoPosition={setVideoPosition}
+          setLocalPosition={setLocalPosition}
+          setLocalDuration={setLocalDuration}
+          isDragging={isDragging}
+          globalVideoStore={globalVideoStore}
+          showPauseOverlay={showPauseOverlay}
+          getResponsiveSize={getResponsiveSize}
+          triggerHapticFeedback={triggerHapticFeedback}
+        />
+      ) : (
+        <View
+          style={{
+            width: screenWidth,
+            height: screenHeight,
+            backgroundColor: "#000",
+            overflow: "hidden",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {posterUri ? (
+            <FittedMediaImage
+              uri={posterUri}
+              width={screenWidth}
+              height={screenHeight}
+              contentFit="contain"
             />
-          ) : (
-            <View style={{ width: "100%", height: "100%", backgroundColor: "#000" }}>
-              {posterUri ? (
-                <Image
-                  source={{ uri: posterUri }}
-                  style={{ width: "100%", height: "100%" }}
-                  resizeMode="contain"
-                />
-              ) : null}
-            </View>
-          )}
-
-          {showSkeletons && (
-            <View className="absolute inset-0" style={{ justifyContent: "flex-end", padding: getResponsiveSpacing(12, 16, 20), zIndex: 5 }} pointerEvents="none">
-              <View style={{ marginBottom: getResponsiveSpacing(8, 10, 12) }}>
-                <Skeleton dark height={getResponsiveSize(20, 22, 24)} width={"65%"} borderRadius={0} />
-              </View>
-              <View style={{ marginBottom: getResponsiveSpacing(6, 8, 10) }}>
-                <Skeleton dark height={getResponsiveSize(14, 16, 18)} width={"40%"} borderRadius={0} />
-              </View>
-              <Skeleton dark height={getResponsiveSize(6, 7, 8)} width={"90%"} borderRadius={0} style={{ opacity: 0.8 }} />
-            </View>
-          )}
-
-          {isActive && (
-            <>
-              <ReelsActionButtons
-                videoKey={videoKey}
-                modalKey={modalKey}
-                screenHeight={screenHeight}
-                activeIsLiked={activeIsLiked}
-                activeLikesCount={activeLikesCount}
-                canUseBackendLikes={canUseBackendLikes}
-                videoStats={videoStats}
-                video={video}
-                enrichedVideoData={enriched}
-                libraryStore={libraryStore}
-                onLike={onLike}
-                onComment={() => onComment(videoKey)}
-                onSave={() => onSave(videoKey)}
-                onShare={() => onShare(videoKey)}
-                getResponsiveSpacing={getResponsiveSpacing}
-                getResponsiveSize={getResponsiveSize}
-                getResponsiveFontSize={getResponsiveFontSize}
-                getTouchTargetSize={getTouchTargetSize}
-                triggerHapticFeedback={triggerHapticFeedback}
-              />
-              <ReelsSpeakerInfo
-                enrichedVideoData={enriched}
-                source={source}
-                menuVisible={menuVisible}
-                onMenuToggle={onMenuToggle}
-                getSpeakerName={getSpeakerName}
-                getResponsiveSpacing={getResponsiveSpacing}
-                getResponsiveSize={getResponsiveSize}
-                getResponsiveFontSize={getResponsiveFontSize}
-                triggerHapticFeedback={triggerHapticFeedback}
-                currentUser={currentUser ?? undefined}
-                getAvatarUrl={getAvatarUrl}
-                canEditDescription={canEditDescription}
-                onEditDescription={onEditDescription}
-              />
-              <ReelsMenu
-                visible={menuVisible}
-                modalKey={modalKey}
-                currentVideo={currentVideo}
-                isOwner={isOwner}
-                libraryStore={libraryStore}
-                checkIfDownloaded={checkIfDownloaded}
-                onClose={onMenuClose}
-                onViewDetails={onViewDetails}
-                onSave={() => onSave(videoKey)}
-                onDelete={onDelete}
-                onReport={onReport}
-                onDownload={onDownload}
-                onShare={() => onShare(videoKey)}
-              />
-            </>
-          )}
+          ) : null}
         </View>
-      </TouchableWithoutFeedback>
+      )}
+
+      <Pressable
+        onPress={() => isActive && onToggleVideoPlay()}
+        android_disableSound
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 48,
+          zIndex: 8,
+        }}
+      />
+
+      {showSkeletons && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: getResponsiveSpacing(12, 16, 20),
+            zIndex: 9,
+          }}
+        >
+          <View style={{ marginBottom: getResponsiveSpacing(8, 10, 12) }}>
+            <Skeleton dark height={getResponsiveSize(20, 22, 24)} width={"65%"} borderRadius={0} />
+          </View>
+          <View style={{ marginBottom: getResponsiveSpacing(6, 8, 10) }}>
+            <Skeleton dark height={getResponsiveSize(14, 16, 18)} width={"40%"} borderRadius={0} />
+          </View>
+          <Skeleton dark height={getResponsiveSize(6, 7, 8)} width={"90%"} borderRadius={0} style={{ opacity: 0.8 }} />
+        </View>
+      )}
+
+      {isActive && (
+        <>
+          <ReelsActionButtons
+            videoKey={videoKey}
+            modalKey={modalKey}
+            contentId={String(
+              enriched._id || enriched.id || currentVideo?._id || currentVideo?.id || ""
+            )}
+            screenHeight={screenHeight}
+            activeIsLiked={activeIsLiked}
+            activeLikesCount={activeLikesCount}
+            canUseBackendLikes={canUseBackendLikes}
+            videoStats={videoStats}
+            video={video}
+            enrichedVideoData={enriched}
+            onLike={onLike}
+            onComment={() => onComment(videoKey)}
+            onSave={() => onSave(videoKey)}
+            onShare={() => onShare(videoKey)}
+            getResponsiveSpacing={getResponsiveSpacing}
+            getResponsiveSize={getResponsiveSize}
+            getResponsiveFontSize={getResponsiveFontSize}
+            getTouchTargetSize={getTouchTargetSize}
+            triggerHapticFeedback={triggerHapticFeedback}
+          />
+          <ReelsSpeakerInfo
+            enrichedVideoData={enriched}
+            source={source}
+            menuVisible={menuVisible}
+            onMenuToggle={onMenuToggle}
+            getSpeakerName={getSpeakerName}
+            getResponsiveSpacing={getResponsiveSpacing}
+            getResponsiveSize={getResponsiveSize}
+            getResponsiveFontSize={getResponsiveFontSize}
+            triggerHapticFeedback={triggerHapticFeedback}
+            currentUser={currentUser ?? undefined}
+            getAvatarUrl={getAvatarUrl}
+            canEditDescription={canEditDescription}
+            onEditDescription={onEditDescription}
+          />
+          <ReelsMenu
+            visible={menuVisible}
+            modalKey={modalKey}
+            contentId={String(
+              enriched._id || enriched.id || currentVideo?._id || currentVideo?.id || ""
+            )}
+            currentVideo={currentVideo}
+            isOwner={isOwner}
+            libraryStore={libraryStore}
+            checkIfDownloaded={checkIfDownloaded}
+            onClose={onMenuClose}
+            onViewDetails={onViewDetails}
+            onSave={() => onSave(videoKey)}
+            onDelete={onDelete}
+            onReport={onReport}
+            onDownload={onDownload}
+            onShare={() => onShare(videoKey)}
+          />
+        </>
+      )}
 
       {isActive ? (
         <VideoProgressBar

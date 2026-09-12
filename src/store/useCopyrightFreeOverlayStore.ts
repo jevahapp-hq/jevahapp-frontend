@@ -6,9 +6,8 @@ export type OverlayInitialAction = "options" | "playlist" | null;
  * Which chrome is in front. Audio is owned by the global player store —
  * this only decides whether the user sees the full sheet or the mini bar.
  *
- * YouTube Music / Spotify contract:
- *   full  → sheet mounted on screen, mini bar hidden
- *   mini  → sheet unmounted, mini bar interactive. Audio keeps playing.
+ * Music uses the full Audiomack-style sheet. Closing it stops playback.
+ * Hymns / ebook TTS still use the mini bar (`surface: "mini"`).
  */
 export type PlayerSurface = "full" | "mini";
 
@@ -27,7 +26,9 @@ type CopyrightFreeOverlayState = {
   open: (song: any, opts?: OverlayOpenOpts) => void;
   minimize: () => void;
   expand: () => void;
-  /** @deprecated use `minimize`. Swipe / chevron — does not stop audio. */
+  /** Tear down the sheet without stopping audio (hymn / ebook mini bar). */
+  dismiss: () => void;
+  /** Red X / back / swipe — hide the popup and stop the track. */
   close: () => void;
   /** @deprecated use `expand`. */
   reopen: () => void;
@@ -68,7 +69,14 @@ export const useCopyrightFreeOverlayStore = create<CopyrightFreeOverlayState>(
       if (!song) return;
       set({ surface: "full", visible: true, initialAction: null });
     },
-    close: () => get().minimize(),
+    dismiss: () =>
+      set({
+        surface: "mini",
+        visible: false,
+        song: null,
+        initialAction: null,
+      }),
+    close: () => get().dismiss(),
     reopen: () => get().expand(),
     warm: (song) =>
       set((state) => (state.song ? state : { ...state, song })),

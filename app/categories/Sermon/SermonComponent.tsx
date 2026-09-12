@@ -38,7 +38,7 @@ export default function SermonComponent() {
     previouslyViewed,
   } = useSermonContent(mediaStore.mediaList);
 
-  const { playingAudioId, audioProgressMap, playAudio } = useSermonAudio();
+  const { playingAudioId, playAudio } = useSermonAudio();
 
   const {
     comments,
@@ -86,7 +86,6 @@ export default function SermonComponent() {
   const cardProps = {
     videoRefs,
     playingAudioId,
-    audioProgressMap,
     contentStats,
     userFavorites,
     globalFavoriteCounts,

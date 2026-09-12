@@ -87,10 +87,13 @@ export function useFeedPlaybackSession(options: {
   useEffect(() => {
     if (!isFeedActive) {
       if (wasFeedActiveRef.current) {
-        try {
-          pauseAllMedia();
-        } catch {
-          /* ignore */
+        const key = currentlyVisibleVideoRef.current;
+        if (key) {
+          try {
+            pauseMedia(key);
+          } catch {
+            /* ignore */
+          }
         }
         pauseAllAudio();
       }

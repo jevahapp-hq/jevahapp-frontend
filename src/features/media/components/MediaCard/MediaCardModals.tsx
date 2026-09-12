@@ -78,7 +78,7 @@ export function MediaCardModals({
           (item as any).authorInfo?._id
         }
         mediaItem={item}
-        onDelete={handleDeletePress}
+        onDelete={showDelete ? handleDeletePress : undefined}
         showDelete={showDelete}
         onReport={() => setShowReportModal(true)}
       />

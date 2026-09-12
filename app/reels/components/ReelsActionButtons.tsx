@@ -1,12 +1,23 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import { useContentSaveState } from "../../../src/shared/hooks/useContentSaveState";
+import {
+  commentCountFromMetadata,
+  resolveCommentDisplayCount,
+} from "../../../src/shared/media/engagementDisplay";
 import { LikeHeartButton } from "../../../src/shared/components/like";
 import { formatCount } from "../../../src/shared/utils/formatCount";
+import {
+  useContentCount,
+  useContentStats,
+} from "@/store/useInteractionStore";
+import { useLibraryStore } from "@/store/useLibraryStore";
 
 interface ReelsActionButtonsProps {
   videoKey: string;
   modalKey: string;
+  contentId: string;
   screenHeight: number;
   activeIsLiked: boolean;
   activeLikesCount: number;
@@ -14,7 +25,6 @@ interface ReelsActionButtonsProps {
   videoStats: Record<string, any>;
   video: any;
   enrichedVideoData: any;
-  libraryStore: any;
   onLike: () => void;
   onComment: (key: string) => void;
   onSave: (key: string) => void;
@@ -29,6 +39,7 @@ interface ReelsActionButtonsProps {
 export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
   videoKey,
   modalKey,
+  contentId,
   screenHeight,
   activeIsLiked,
   activeLikesCount,
@@ -36,7 +47,6 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
   videoStats,
   video,
   enrichedVideoData,
-  libraryStore,
   onLike,
   onComment,
   onSave,
@@ -63,15 +73,23 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
     video.favorite,
   ]);
 
-  const commentDisplayCount = useMemo(() => {
-    return videoStats[videoKey]?.comment === 1
-      ? (video.comment ?? 0) + 1
-      : video.comment ?? 0;
-  }, [videoStats, videoKey, video.comment]);
+  const liveStats = useContentStats(contentId);
+  const storeComments = useContentCount(contentId, "comments");
+  const save = useContentSaveState(contentId, enrichedVideoData || video);
+  const librarySaved = useLibraryStore((s) =>
+    s.isItemSaved(contentId) || s.isItemSaved(videoKey) || s.isItemSaved(modalKey)
+  );
+  const isSaved = save.saved || librarySaved;
 
-  const saveDisplayCount = useMemo(() => {
-    return videoStats[videoKey]?.totalSaves || video.saved || 0;
-  }, [videoStats, videoKey, video.saved]);
+  const commentDisplayCount = useMemo(() => {
+    return resolveCommentDisplayCount({
+      storeComments,
+      commentsConfirmed: liveStats?.commentsConfirmed,
+      fallback: commentCountFromMetadata(enrichedVideoData || video),
+    });
+  }, [storeComments, liveStats?.commentsConfirmed, enrichedVideoData, video]);
+
+  const saveDisplayCount = save.saveCount;
 
   const shareDisplayCount = useMemo(() => {
     return videoStats[videoKey]?.sheared || video.sheared || 0;
@@ -122,21 +140,19 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           size={getResponsiveSize(28, 32, 36)}
           color="white"
         />
-        {commentDisplayCount > 0 && (
-            <Text
-              style={{
-                fontSize: getResponsiveFontSize(9, 10, 11),
-                color: "#FFFFFF",
-                marginTop: getResponsiveSpacing(2, 4, 5),
-                fontFamily: "PlusJakartaSans-SemiBold",
-                textShadowColor: "rgba(0, 0, 0, 0.5)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 2,
-              }}
-            >
-              {formatCount(commentDisplayCount)}
-            </Text>
-          )}
+        <Text
+          style={{
+            fontSize: getResponsiveFontSize(9, 10, 11),
+            color: "#FFFFFF",
+            marginTop: getResponsiveSpacing(2, 4, 5),
+            fontFamily: "PlusJakartaSans-SemiBold",
+            textShadowColor: "rgba(0, 0, 0, 0.5)",
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 2,
+          }}
+        >
+          {formatCount(commentDisplayCount)}
+        </Text>
       </TouchableOpacity>
 
       {/* Save Button */}
@@ -153,16 +169,13 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           minHeight: getTouchTargetSize(),
         }}
         activeOpacity={0.7}
-        accessibilityLabel={`${libraryStore.isItemSaved(modalKey) ? "Remove from" : "Save to"
-          } library`}
+        accessibilityLabel={`${isSaved ? "Remove from" : "Save to"} library`}
         accessibilityRole="button"
       >
         <MaterialIcons
-          name={
-            libraryStore.isItemSaved(videoKey) ? "bookmark" : "bookmark-border"
-          }
+          name={isSaved ? "bookmark" : "bookmark-border"}
           size={getResponsiveSize(28, 32, 36)}
-          color={libraryStore.isItemSaved(videoKey) ? "#FEA74E" : "#FFFFFF"}
+          color={isSaved ? "#FEA74E" : "#FFFFFF"}
         />
         {saveDisplayCount > 0 && (
           <Text

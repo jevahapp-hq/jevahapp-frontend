@@ -7,6 +7,7 @@ import {
 } from "../../../services/music-catalog/trackTypes";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { enqueueFeedEvent } from "../../../../src/shared/feed/feedRanker";
+import { openFullNowPlaying } from "./useSongModal";
 
 /**
  * Handle play/pause for a song.
@@ -34,90 +35,84 @@ export function useMusicPlayPress(songs: any[]) {
       if (!song?.audioUrl) {
         return;
       }
-      if (currentTrack?.id === song.id && globalIsPlaying) {
-        await togglePlayPause();
+
+      openFullNowPlaying(song, songs);
+
+      if (currentTrack?.id === song.id) {
+        if (!globalIsPlaying) {
+          await togglePlayPause();
+        }
+        return;
+      }
+
+      if (currentTrack?.id && currentTrack.id !== song.id) {
         const watched = Date.now() - playStartedAt.current;
-        if (watched > 0) {
-          const position = useGlobalAudioPlayerStore.getState().position;
+        if (watched > 0 && watched < 15000) {
           enqueueFeedEvent({
-            contentId: String(song.id),
+            contentId: String(currentTrack.id),
             contentType: "music",
-            eventType: "watch_time",
+            eventType: "skip",
             watchMs: watched,
-            progressPct: position,
             source: "music_for_you",
           });
         }
-      } else {
-        if (currentTrack?.id && currentTrack.id !== song.id) {
-          const watched = Date.now() - playStartedAt.current;
-          if (watched > 0 && watched < 15000) {
-            enqueueFeedEvent({
-              contentId: String(currentTrack.id),
-              contentType: "music",
-              eventType: "skip",
-              watchMs: watched,
-              source: "music_for_you",
-            });
-          }
-        }
+      }
 
-        const songIndex = songs.findIndex((s) => s.id === song.id);
+      const songIndex = songs.findIndex((s) => s.id === song.id);
 
-        if (songIndex !== -1) {
-          const mappedQueue = songs
-            .filter((s) => !!s.audioUrl && isTrackPlayable(s))
-            .map((s) => ({
-              id: s.id,
-              title: s.title,
-              artist: s.artist,
-              audioUrl: s.audioUrl,
-              thumbnailUrl: s.thumbnailUrl,
-              duration: s.duration,
-              category: s.category,
-              description: s.description,
-              source:
-                s?.lane === "artist" || s?.contentType === "artist-music"
-                  ? ("library" as const)
-                  : ("copyright-free" as const),
-            }));
-
-          const queueIndex = mappedQueue.findIndex((s) => s.id === song.id);
-          useGlobalAudioPlayerStore.setState({
-            queue: mappedQueue,
-            currentIndex: Math.max(0, queueIndex),
-          });
-        }
-
-        playStartedAt.current = Date.now();
-        enqueueFeedEvent({
-          contentId: String(song.id),
-          contentType: "music",
-          eventType: "impression",
-          source: "music_for_you",
-        });
-
-        await setTrack(
-          {
-            id: song.id,
-            title: song.title,
-            artist: song.artist,
-            audioUrl: song.audioUrl,
-            thumbnailUrl: song.thumbnailUrl,
-            duration: song.duration,
-            category: song.category,
-            description: song.description,
+      if (songIndex !== -1) {
+        const mappedQueue = songs
+          .filter((s) => !!s.audioUrl && isTrackPlayable(s))
+          .map((s) => ({
+            id: s.id,
+            title: s.title,
+            artist: s.artist,
+            audioUrl: s.audioUrl,
+            thumbnailUrl: s.thumbnailUrl,
+            duration: s.duration,
+            category: s.category,
+            description: s.description,
             source:
-              song?.lane === "artist" || song?.contentType === "artist-music"
-                ? "library"
-                : "copyright-free",
-          },
-          true
-        );
+              s?.lane === "artist" || s?.contentType === "artist-music"
+                ? ("library" as const)
+                : ("copyright-free" as const),
+          }));
 
-        if (song?.lane === "artist" || song?.contentType === "artist-music") {
-          void musicCatalogApi.recordPlay(song.id);
-        }
+        const queueIndex = mappedQueue.findIndex((s) => s.id === song.id);
+        useGlobalAudioPlayerStore.setState({
+          queue: mappedQueue,
+          currentIndex: Math.max(0, queueIndex),
+        });
+      }
+
+      playStartedAt.current = Date.now();
+      enqueueFeedEvent({
+        contentId: String(song.id),
+        contentType: "music",
+        eventType: "impression",
+        source: "music_for_you",
+      });
+
+      await setTrack(
+        {
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          audioUrl: song.audioUrl,
+          thumbnailUrl: song.thumbnailUrl,
+          duration: song.duration,
+          category: song.category,
+          description: song.description,
+          source:
+            song?.lane === "artist" || song?.contentType === "artist-music"
+              ? "library"
+              : "copyright-free",
+        },
+        true
+      );
+
+      if (song?.lane === "artist" || song?.contentType === "artist-music") {
+        void musicCatalogApi.recordPlay(song.id);
       }
     },
     [currentTrack, globalIsPlaying, setTrack, togglePlayPause, songs]

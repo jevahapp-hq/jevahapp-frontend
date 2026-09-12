@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useUserProfile } from "../../../app/hooks/useUserProfile";
-import { ModerationBadge } from "../../shared/components/ModerationBadge";
+import { UnderReviewBanner } from "../../shared/components/UnderReviewBanner";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -229,14 +229,16 @@ export default function MediaDetailsModal({
             </TouchableOpacity>
           </View>
 
-          {moderationStatus === 'under_review' && (
-            <View style={{ marginBottom: 16 }}>
-              <ModerationBadge status="under_review" />
-              <Text style={{ fontSize: 12, color: '#D97706', marginTop: 4 }}>
-                This content is currently under review and is only visible to you.
-              </Text>
-            </View>
-          )}
+          <View
+            style={{
+              marginBottom: 8,
+              overflow: "visible" as const,
+              minWidth: 0,
+              width: "100%",
+            }}
+          >
+            <UnderReviewBanner status={moderationStatus} showBadge />
+          </View>
 
           {/* Meta tags */}
           <View

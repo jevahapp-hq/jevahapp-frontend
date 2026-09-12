@@ -3,10 +3,15 @@
  */
 import { useCommentModal } from "@/app/context/CommentModalContext";
 import { Ionicons } from "@expo/vector-icons";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { AvatarWithInitialFallback } from "../../../../shared/components/AvatarWithInitialFallback/AvatarWithInitialFallback";
 import CardFooterActions from "../../../../shared/components/CardFooterActions";
 import ThreeDotsMenuButton from "../../../../shared/components/ThreeDotsMenuButton/ThreeDotsMenuButton";
+import { UnderReviewBanner } from "../../../../shared/components/UnderReviewBanner";
+import {
+  isUnderReview,
+  shouldShowMediaActionsMenu,
+} from "../../../../shared/media/moderationVisibility";
 import type { MediaItem } from "../../../../shared/types";
 
 export interface VideoCardFooterProps {
@@ -61,15 +66,16 @@ export function VideoCardFooter({
   const { isVisible: commentsOpen, isClosing } = useCommentModal();
   if (!video) return null;
   const hideFooter = commentsOpen || isClosing;
+  const showMenu = shouldShowMediaActionsMenu(video);
+  const showReviewBanner = isUnderReview(video);
 
   return (
     <View
-      className="flex-row items-start justify-between mt-2 px-2"
       pointerEvents={hideFooter ? "none" : "box-none"}
-      style={{ opacity: hideFooter ? 0 : 1 }}
+      style={[styles.root, hideFooter ? styles.hidden : null]}
     >
-      <View className="flex flex-row items-start flex-1 min-w-0" pointerEvents="box-none">
-        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center relative ml-1 overflow-hidden mt-0.5">
+      <View style={styles.body} pointerEvents="box-none">
+        <View style={styles.avatar}>
           <AvatarWithInitialFallback
             imageSource={getUserAvatarFromContent(video) as any}
             name={getUserDisplayNameFromContent(video)}
@@ -79,8 +85,8 @@ export function VideoCardFooter({
             textColor="#344054"
           />
         </View>
-        <View className="ml-3 flex-1 min-w-0 pr-2">
-          <View className="flex-row items-center flex-wrap">
+        <View style={styles.meta} pointerEvents="box-none">
+          <View style={styles.nameRow}>
             <Text className="text-sm font-semibold text-gray-800">
               {getUserDisplayNameFromContent(video)}
             </Text>
@@ -91,17 +97,9 @@ export function VideoCardFooter({
               </Text>
             </View>
           </View>
-          {video.moderationStatus === "under_review" && (
-            <View className="mt-1.5 mb-1 bg-orange-50 px-2.5 py-2 rounded-md border border-orange-100">
-              <Text
-                className="text-[11px] text-orange-700"
-                style={{ lineHeight: 16 }}
-              >
-                This content is currently under review and is only visible to
-                you. It will be made public once approved.
-              </Text>
-            </View>
-          )}
+          {showReviewBanner ? (
+            <UnderReviewBanner status={video.moderationStatus} />
+          ) : null}
           <CardFooterActions
             viewCount={viewCount}
             liked={!!userLikeState}
@@ -125,14 +123,68 @@ export function VideoCardFooter({
           />
         </View>
       </View>
-      <View style={{ marginTop: 2 }}>
-        <ThreeDotsMenuButton
-          onPress={() => {
-            openModal();
-            if (onModalToggle) onModalToggle(modalKey);
-          }}
-        />
-      </View>
+      {showMenu ? (
+        <View style={styles.menuSlot} pointerEvents="box-none">
+          <ThreeDotsMenuButton
+            onPress={() => {
+              openModal();
+              if (onModalToggle) onModalToggle(modalKey);
+            }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 8,
+    overflow: "visible",
+    zIndex: 20,
+  },
+  hidden: {
+    opacity: 0,
+  },
+  body: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
+    marginTop: 2,
+    overflow: "hidden",
+  },
+  meta: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+    paddingRight: 8,
+    overflow: "visible",
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  menuSlot: {
+    flexShrink: 0,
+    width: 44,
+    marginTop: 2,
+    zIndex: 50,
+    elevation: 50,
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+});

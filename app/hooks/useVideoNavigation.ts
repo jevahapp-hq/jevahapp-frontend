@@ -20,6 +20,8 @@ interface VideoNavigationOptions {
   getDisplayName: (speaker?: string, uploadedBy?: string | object) => string;
   source?: string; // Source component that navigated to reels
   category?: string; // Category context for proper back navigation
+  /** Tab-prefixed FlashList/player key (`ALL::id`). Independent of fullscreen. */
+  feedKey?: string;
 }
 
 function mapVideoForReels(
@@ -96,9 +98,10 @@ export const useVideoNavigation = () => {
     getDisplayName,
     source,
     category,
+    feedKey: feedKeyOverride,
   }: VideoNavigationOptions) => {
     const contentId = String(video._id || (video as any).id || "").trim();
-    const feedKey = getContentKey(video);
+    const feedKey = feedKeyOverride || getContentKey(video);
     const registeredKey =
       resolveRegisteredVideoKey(contentId) || feedKey || null;
     const snapshot = registeredKey
@@ -110,6 +113,7 @@ export const useVideoNavigation = () => {
         contentId,
         positionMs: snapshot.currentMs,
         feedKey,
+        reelsIndex: index,
         target: "reels",
       });
     } else if (contentId) {
@@ -118,6 +122,7 @@ export const useVideoNavigation = () => {
         contentId,
         positionMs: 0,
         feedKey,
+        reelsIndex: index,
         target: "reels",
       });
     }

@@ -3,14 +3,17 @@
  * Reusable hook for checking media ownership across components
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDeleteMedia } from "../../../app/hooks/useDeleteMedia";
+import { canViewerDeleteMedia } from "../media/moderationVisibility";
 import { getUploadedBy } from "../utils/mediaHelpers";
 
 interface UseMediaOwnershipOptions {
   mediaItem: any;
   isModalVisible?: boolean;
   checkOnModalOpen?: boolean;
+  /** Logged-in viewer id — sync owner check so Delete is ready when the menu opens. */
+  viewerId?: string | null;
 }
 
 interface UseMediaOwnershipReturn {
@@ -20,21 +23,27 @@ interface UseMediaOwnershipReturn {
 }
 
 /**
- * Hook to check if the current user owns a media item
- * Automatically checks ownership when modal opens (if checkOnModalOpen is true)
+ * Hook to check if the current user owns a media item.
+ * Prefer the synchronous viewerId path so under-review cards can show Delete
+ * immediately; fall back to the async storage check when viewerId is unknown.
  */
 export const useMediaOwnership = ({
   mediaItem,
   isModalVisible = false,
   checkOnModalOpen = true,
+  viewerId,
 }: UseMediaOwnershipOptions): UseMediaOwnershipReturn => {
-  const [isOwner, setIsOwner] = useState(false);
+  const syncOwner = useMemo(
+    () => canViewerDeleteMedia(mediaItem, viewerId),
+    [mediaItem, viewerId]
+  );
+  const [asyncOwner, setAsyncOwner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { checkOwnership } = useDeleteMedia();
 
   const performOwnershipCheck = useCallback(async () => {
     if (!mediaItem) {
-      setIsOwner(false);
+      setAsyncOwner(false);
       return;
     }
 
@@ -42,27 +51,27 @@ export const useMediaOwnership = ({
     try {
       const uploadedBy = getUploadedBy(mediaItem);
       const result = await checkOwnership(uploadedBy, mediaItem);
-      setIsOwner(result);
+      setAsyncOwner(result);
     } catch (error) {
       console.error("❌ Ownership check failed:", error);
-      setIsOwner(false);
+      setAsyncOwner(false);
     } finally {
       setIsLoading(false);
     }
   }, [mediaItem, checkOwnership]);
 
-  // Auto-check ownership when modal opens
   useEffect(() => {
-    if (checkOnModalOpen && isModalVisible) {
-      performOwnershipCheck();
-    } else if (!isModalVisible) {
-      // Reset when modal closes
-      setIsOwner(false);
+    if (viewerId) {
+      setAsyncOwner(false);
+      return;
     }
-  }, [isModalVisible, checkOnModalOpen, performOwnershipCheck]);
+    if (checkOnModalOpen && isModalVisible) {
+      void performOwnershipCheck();
+    }
+  }, [isModalVisible, checkOnModalOpen, performOwnershipCheck, viewerId]);
 
   return {
-    isOwner,
+    isOwner: viewerId ? syncOwner : asyncOwner,
     isLoading,
     checkOwnership: performOwnershipCheck,
   };

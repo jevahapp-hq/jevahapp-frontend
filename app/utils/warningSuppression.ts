@@ -48,7 +48,7 @@ export const suppressCommonWarnings = () => {
         "componentWillUpdate has been renamed",
 
         // Expo warnings
-        "expo-av",
+        "expo-audio",
         "expo-haptics",
 
         // Network warnings (if any)

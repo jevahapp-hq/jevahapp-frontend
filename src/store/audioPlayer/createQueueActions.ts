@@ -1,3 +1,7 @@
+import { releaseAudioPlayer } from "../../shared/audio/releaseAudioPlayer";
+import { getAudioPlaybackClock, resetAudioPlaybackClock, writeAudioPlaybackClock } from "./audioProgressStore";
+import { pickNextPlayableIndex } from "./queueAdvance";
+import { detachStatusSubscription } from "./statusSubscription";
 import type {
   AudioPlayerGet,
   AudioPlayerSet,
@@ -17,69 +21,98 @@ export function createQueueActions(
   | "toggleShuffle"
 > {
   return {
-    next: async () => {
-      const { queue, currentIndex, setTrack, repeatMode, position, duration } = get();
+    next: async (opts) => {
+      const fromUser = Boolean(opts?.fromUser);
+      const { queue, currentIndex, setTrack, repeatMode, duration } = get();
+      const clock = getAudioPlaybackClock();
+      const position = clock.position ?? get().position;
+      const effectiveDuration = clock.duration || duration;
+      const failed = get().__failedTrackIds || {};
+      const nextIndex = pickNextPlayableIndex({
+        length: queue.length,
+        currentIndex,
+        repeatMode,
+        fromUser,
+        isFailed: (i) => {
+          const id = queue[i]?.id;
+          return !id || !!failed[id];
+        },
+      });
 
-      // Soft ranking skip if leaving early
-      try {
-        const current = queue[currentIndex];
-        if (current?.id && (position || 0) < 15000) {
-          const { enqueueFeedEvent } = await import(
-            "../../../src/shared/feed/feedRanker"
-          );
-          enqueueFeedEvent({
-            contentId: String(current.id),
-            contentType: "music",
-            eventType: "skip",
-            watchMs: Math.round(position || 0),
-            source: "music_for_you",
-          });
+      // Soft ranking skip if the user taps next early — not when looping
+      if (fromUser && nextIndex !== currentIndex) {
+        try {
+          const current = queue[currentIndex];
+          if (current?.id && (position || 0) < 15000) {
+            const { enqueueFeedEvent } = await import(
+              "../../../src/shared/feed/feedRanker"
+            );
+            enqueueFeedEvent({
+              contentId: String(current.id),
+              contentType: "music",
+              eventType: "skip",
+              watchMs: Math.round(position || 0),
+              source: "music_for_you",
+            });
+          }
+        } catch {
+          // soft-fail
         }
-      } catch {
-        // soft-fail
       }
 
-      // Handle repeat one: restart the same song unless it 404'd
-      if (repeatMode === "one") {
+      if (nextIndex === currentIndex && nextIndex >= 0) {
+        const sound = get().soundInstance;
         const currentTrack = queue[currentIndex];
-        const failed = get().__failedTrackIds || {};
-        if (currentTrack && !failed[currentTrack.id]) {
-          await setTrack(currentTrack, true);
+        if (sound?.isLoaded) {
+          try {
+            await sound.seekTo(0);
+          } catch {
+            if (currentTrack) await setTrack(currentTrack, true);
+            return;
+          }
+          const dur = effectiveDuration || get().duration;
+          resetAudioPlaybackClock(currentTrack?.id ?? null, dur);
+          writeAudioPlaybackClock({
+            trackId: currentTrack?.id ?? null,
+            position: 0,
+            progress: 0,
+            duration: dur,
+          });
+          sound.play();
+          set({
+            isPlaying: true,
+            isSessionActive: true,
+            position: 0,
+            progress: 0,
+          });
           return;
         }
+        if (currentTrack) {
+          await setTrack(currentTrack, true);
+        }
+        return;
       }
 
-      const failed = get().__failedTrackIds || {};
-      if (queue.length > 0) {
-        const pick = (from: number, to: number) => {
-          for (let i = from; i < to; i++) {
-            const t = queue[i];
-            if (t?.id && !failed[t.id]) return i;
-          }
-          return -1;
-        };
-        let nextIndex = pick(currentIndex + 1, queue.length);
-        if (nextIndex < 0 && repeatMode === "all") {
-          // Wrap the whole queue, including a 1-track list (repeat all).
-          nextIndex = pick(0, queue.length);
-        }
-        if (nextIndex >= 0) {
-          set({ currentIndex: nextIndex });
-          await setTrack(queue[nextIndex], true);
+      if (nextIndex >= 0) {
+        set({ currentIndex: nextIndex });
+        await setTrack(queue[nextIndex], true);
+      } else if (queue.length > 0) {
+        const reachedNaturalEnd =
+          effectiveDuration > 0 &&
+          position >= Math.max(0, effectiveDuration - 1000);
+        if (reachedNaturalEnd) {
+          writeAudioPlaybackClock({
+            position: effectiveDuration,
+            progress: 1,
+            duration: effectiveDuration,
+          });
+          set({
+            isPlaying: false,
+            position: effectiveDuration,
+            progress: 1,
+          });
         } else {
-          const reachedNaturalEnd =
-            duration > 0 && position >= Math.max(0, duration - 1000);
-          if (reachedNaturalEnd) {
-            // Keep an ended track visually at 100%. Resetting to zero here
-            // makes the UI claim the track never played.
-            set({
-              isPlaying: false,
-              position: duration,
-              progress: 1,
-            });
-          } else {
-            await get().stop();
-          }
+          await get().stop();
         }
       } else {
         await get().stop();
@@ -116,6 +149,8 @@ export function createQueueActions(
 
     clear: async () => {
       const sound = get().soundInstance;
+      detachStatusSubscription(get, set);
+      resetAudioPlaybackClock();
       // Hide the mini bar immediately — never wait on pause/unload.
       set({
         currentTrack: null,
@@ -129,14 +164,11 @@ export function createQueueActions(
         duration: 0,
         progress: 0,
         __completionTimeout: false,
+        __statusSubscription: null,
       });
       if (!sound) return;
       try {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          if (status.isPlaying) await sound.pauseAsync();
-          await sound.unloadAsync();
-        }
+        releaseAudioPlayer(sound);
       } catch {
         // already torn down
       }

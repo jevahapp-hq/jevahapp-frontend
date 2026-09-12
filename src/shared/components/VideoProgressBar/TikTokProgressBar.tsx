@@ -218,7 +218,6 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
           flexDirection: "row",
           alignItems: "center",
           gap: 8,
-          paddingHorizontal: 12,
         },
         positionStyle,
         style,
@@ -273,7 +272,7 @@ export const TikTokProgressBar: React.FC<ProgressBarProps> = ({
 
       <TouchableOpacity
         onPress={onToggleMute}
-        className="bg-black/50 p-2 rounded-full"
+        className="p-1"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Ionicons

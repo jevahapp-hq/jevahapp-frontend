@@ -2,40 +2,60 @@
  * Feed video performance constants.
  * Tuned for device health: Android only has a few hardware decoder slots.
  * Mounting 10+ players (× multiple category panes) hangs the app.
- * Pattern: Mux Slop Social / Tendbble — active + 1 ahead, warm network only beyond that.
+ * Pattern: Mux Slop Social / Tendbble — active + previous paused, warm network only beyond that.
  *
- * Feed cards are a fixed box (not 9:16 Reels). The player uses contain so
- * uploaded video is fully visible inside the box instead of cropped.
+ * Feed cards are a fixed 400px box. Thumbnail + live video both cover-fill
+ * the box (APK). Keep the previous card's paused frame so scrolling back
+ * does not flash the cover thumbnail.
  */
+import {
+  getUnderReviewExtraRowSize,
+  needsUnderReviewRowSpace,
+} from "../../../shared/media/underReviewBannerLayout";
+
 export const FEED_VIDEO_PLAYER_HEIGHT = 400;
 /** Footer + bottom margin — keep FlashList row size stable. */
 export const FEED_VIDEO_FOOTER_ESTIMATE = 88;
-/** Extra footer space when under-review banner is shown (menu must stay visible). */
-export const FEED_VIDEO_UNDER_REVIEW_EXTRA = 72;
+/**
+ * Floor for under-review extra (2-line banner). Real extra is computed from
+ * viewport width so wrapped copy is not clipped on small phones.
+ */
+export const FEED_VIDEO_UNDER_REVIEW_EXTRA = 96;
 export const FEED_VIDEO_CARD_MARGIN = 64;
 export const FEED_VIDEO_ROW_SIZE =
   FEED_VIDEO_PLAYER_HEIGHT + FEED_VIDEO_FOOTER_ESTIMATE + FEED_VIDEO_CARD_MARGIN;
 
 export function getFeedVideoRowSize(options?: {
   moderationStatus?: string | null;
+  viewportWidth?: number;
 }): number {
-  const status = options?.moderationStatus;
-  const underReviewExtra =
-    status && status !== "approved" ? FEED_VIDEO_UNDER_REVIEW_EXTRA : 0;
-  return FEED_VIDEO_ROW_SIZE + underReviewExtra;
+  if (!needsUnderReviewRowSpace(options?.moderationStatus)) {
+    return FEED_VIDEO_ROW_SIZE;
+  }
+  const extra = Math.max(
+    FEED_VIDEO_UNDER_REVIEW_EXTRA,
+    getUnderReviewExtraRowSize(options?.viewportWidth ?? 390)
+  );
+  return FEED_VIDEO_ROW_SIZE + extra;
 }
 
-/** Real decoder window around the active video. */
+/** Real decoder window: current playing + previous paused at last playhead. */
 export const FEED_PRELOAD_NEIGHBOR_DISTANCE = 1;
 /** Network warm (no decoder) ahead of the mount window. */
 export const FEED_PRELOAD_WARM_DISTANCE = 3;
 /** Mount this many at cold start before viewability fires. */
-export const FEED_INITIAL_MOUNT_COUNT = 2;
-/** Hidden category panes: keep at most this many paused decoders warm. */
-export const FEED_WARM_IDLE_MOUNT_COUNT = 1;
-/** Hard ceiling — 1 audible + 1 preload (TikTok-style). */
+export const FEED_INITIAL_MOUNT_COUNT = 1;
+/** Hidden category panes: never keep a paused decoder (it steals the surface). */
+export const FEED_WARM_IDLE_MOUNT_COUNT = 0;
+/** Current playing + previous paused. Hidden tabs still mount 0. */
 export const FEED_HARD_MAX_PLAYERS = 2;
 
 /** Viewability: start autoplay once ~30% of the card is visible. */
 export const FEED_VIDEO_VISIBLE_PERCENT = 30;
 export const FEED_VIDEO_MIN_VIEW_MS = 180;
+
+/**
+ * A hair past 0 so the decoder actually paints a frame instead of sitting
+ * black at exactly 0. Also the snapshot underlay timestamp.
+ */
+export const FEED_VIDEO_START_POSITION_SECONDS = 0.01;

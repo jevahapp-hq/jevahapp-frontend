@@ -62,8 +62,10 @@ export default function PublicReleaseScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { setTrack, currentTrack, isPlaying, togglePlayPause } =
-    useGlobalAudioPlayerStore();
+  const currentTrack = useGlobalAudioPlayerStore((s) => s.currentTrack);
+  const isPlaying = useGlobalAudioPlayerStore((s) => s.isPlaying);
+  const setTrack = useGlobalAudioPlayerStore((s) => s.setTrack);
+  const togglePlayPause = useGlobalAudioPlayerStore((s) => s.togglePlayPause);
 
   const load = useCallback(async () => {
     if (!idOrSlug) {

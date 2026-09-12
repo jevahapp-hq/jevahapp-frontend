@@ -6,6 +6,7 @@ import { Alert, Share } from "react-native";
 import { useCommentModal } from "../../../../../app/context/CommentModalContext";
 import { mapContentTypeForBackend } from "../../../../../app/utils/engagementHelpers";
 import { resolveLikeSeed } from "../../../../shared/hooks/useContentLikeState";
+import { resolveSaveSeed } from "../../../../shared/hooks/useContentSaveState";
 import { useVideoNavigation } from "../../../../../app/hooks/useVideoNavigation";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { useInteractionStore } from "@/store/useInteractionStore";
@@ -16,7 +17,9 @@ import {
 } from "../../../../../app/utils/downloadUtils";
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import { detectMediaType } from "../../../../shared/utils";
+import { playbackKeyToContentKey } from "../../video-feed";
 import { recordFeedAffinity } from "../utils/feedAffinityStore";
+import { buildReelsVideoList } from "../utils/buildReelsVideoList";
 import { mirrorFeedEngagementEvent } from "../../../../shared/feed";
 
 let lastLikeRateLimitAlertAt = 0;
@@ -40,8 +43,12 @@ export interface UseAllContentTikTokHandlersParams {
     ebooks: MediaItem[];
     sermons: MediaItem[];
   };
+  mostRecentItem?: MediaItem | null;
+  firstFour?: MediaItem[];
+  rest?: MediaItem[];
   contentStats: Record<string, any>;
   getContentKey: (item: MediaItem) => string;
+  getFeedPlaybackKey?: (item: MediaItem) => string;
   getTimeAgo: (date: string) => string;
   getLikeCount: (contentId: string) => number;
   getCommentCount: (contentId: string) => number;
@@ -62,7 +69,11 @@ export interface UseAllContentTikTokHandlersParams {
     contentType: string,
     options?: { initialLikes?: number; initialLiked?: boolean }
   ) => Promise<any>;
-  toggleSave: (contentId: string, contentType: string) => Promise<void>;
+  toggleSave: (
+    contentId: string,
+    contentType: string,
+    options?: { initialSaved?: boolean; initialSaves?: number }
+  ) => Promise<{ saved: boolean; totalSaves: number; authRequired?: boolean } | void>;
   recordShare: (contentId: string, contentType: string, shareMethod?: string) => Promise<void>;
   loadDownloadedItems: () => Promise<void>;
 }
@@ -72,7 +83,11 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     contentType,
     filteredMediaList,
     categorizedContent,
+    mostRecentItem,
+    firstFour,
+    rest,
     getContentKey: getKey,
+    getFeedPlaybackKey,
     getTimeAgo,
     getLikeCount,
     getCommentCount,
@@ -134,16 +149,35 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       };
 
       if (video && index !== undefined) {
-        const allVideoContent = [
-          ...categorizedContent.videos,
-          ...categorizedContent.sermons.filter(
-            (s) => detectMediaType(s) === "video"
-          ),
-        ];
-        const actualIndex = allVideoContent.findIndex(
-          (v) => getKey(v) === key
-        );
+        const allVideoContent = buildReelsVideoList({
+          mostRecentItem,
+          firstFour,
+          rest,
+          fallbackVideos: [
+            ...categorizedContent.videos,
+            ...categorizedContent.sermons.filter(
+              (s) => detectMediaType(s) === "video"
+            ),
+          ],
+        });
+        const contentKey = playbackKeyToContentKey(key);
+        const actualIndex = allVideoContent.findIndex((v) => {
+          const k = getKey(v);
+          const id = String(v._id || (v as any).id || "");
+          return (
+            k === key ||
+            k === contentKey ||
+            id === contentKey ||
+            id === key
+          );
+        });
         const finalIndex = actualIndex >= 0 ? actualIndex : index;
+        const feedKey =
+          key.includes("::")
+            ? key
+            : getFeedPlaybackKey
+              ? getFeedPlaybackKey(video)
+              : key;
 
         navigateToReels({
           video: video as any,
@@ -156,6 +190,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           getDisplayName: buildDisplayName,
           source: "AllContentTikTok",
           category: contentType as any,
+          feedKey,
         });
       }
     },
@@ -163,7 +198,11 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       navigateToReels,
       categorizedContent.videos,
       categorizedContent.sermons,
+      mostRecentItem,
+      firstFour,
+      rest,
       getKey,
+      getFeedPlaybackKey,
       getTimeAgo,
       contentType,
     ]
@@ -212,6 +251,8 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       anchor?: { mediaBottomY: number; mediaHeight?: number } | null
     ) => {
       const contentId = item._id || key;
+      const playbackKey = getFeedPlaybackKey?.(item) || key;
+      setCurrentlyVisibleVideo(playbackKey);
       const mapped = mapContentTypeForBackend(item.contentType || "media");
       const uploadedBy = item.uploadedBy as any;
       const creatorId =
@@ -263,7 +304,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         anchor ?? null
       );
     },
-    [showCommentModal]
+    [showCommentModal, getFeedPlaybackKey, setCurrentlyVisibleVideo]
   );
 
   const handleSave = useCallback(
@@ -271,17 +312,18 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       try {
         const contentId = item._id || key;
         const contentType = item.contentType || "media";
-        const prevSaved = Boolean(
-          useInteractionStore.getState().contentStats[contentId]?.userInteractions
-            ?.saved
-        );
+        const seed = resolveSaveSeed(contentId, item as any);
+        const prevSaved = seed.initialSaved;
 
         // Instant feedback — don't wait for API or AsyncStorage
         setSuccessMessage(prevSaved ? "Removed from library!" : "Saved to library!");
         setShowSuccessCard(true);
         setModalVisible(null);
 
-        const result = await toggleSave(contentId, contentType);
+        const result = await toggleSave(contentId, contentType, {
+          initialSaved: seed.initialSaved,
+          initialSaves: seed.initialSaves,
+        });
         if (result?.authRequired) {
           setShowSuccessCard(false);
           return;
@@ -289,10 +331,10 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
 
         // Correct toast if server flipped differently than optimistic guess
         setSuccessMessage(
-          result.saved ? "Saved to library!" : "Removed from library!"
+          result?.saved ? "Saved to library!" : "Removed from library!"
         );
 
-        if (result.saved) {
+        if (result?.saved) {
           mirrorFeedEngagementEvent(
             contentId,
             "save",
@@ -332,6 +374,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
           void libraryStore.addToLibrary(libraryItem);
         } else {
           void libraryStore.removeFromLibrary(contentId);
+          void libraryStore.removeFromLibrary(key);
         }
       } catch (error) {
         console.error("❌ Save error:", error);
@@ -413,25 +456,35 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
   const togglePlay = useCallback(
     (key: string) => {
       // Playback keys may be scoped as `${tab}::${contentKey}`.
-      const contentKey = key.includes("::") ? key.split("::").slice(1).join("::") : key;
+      const contentKey = playbackKeyToContentKey(key);
       const mediaItem = filteredMediaList.find(
         (item) => getKey(item) === contentKey || getKey(item) === key
       );
       const mediaType = detectMediaType(mediaItem || null);
       const isAudio = mediaType === "audio";
+      const videoState = useGlobalVideoStore.getState();
       const isCurrentlyPlaying = isAudio
         ? playingAudioId === key ||
           playingAudioId === contentKey ||
           playingAudioId === mediaItem?._id ||
           (!!playingAudioId &&
             (key.includes(playingAudioId) || contentKey.includes(playingAudioId)))
-        : useGlobalVideoStore.getState().playingVideos[key] ??
-          useGlobalVideoStore.getState().playingVideos[contentKey] ??
-          false;
+        : videoState.currentlyPlayingVideo === key ||
+          videoState.currentlyPlayingVideo === contentKey ||
+          videoState.playingVideos[key] === true ||
+          videoState.playingVideos[contentKey] === true;
 
       if (isCurrentlyPlaying) {
         if (isAudio) pauseAllAudio();
-        else pauseMedia(key);
+        else {
+          const playingKey =
+            videoState.currentlyPlayingVideo === contentKey
+              ? contentKey
+              : key;
+          pauseMedia(playingKey);
+          if (playingKey !== contentKey) pauseMedia(contentKey);
+          if (playingKey !== key) pauseMedia(key);
+        }
         return;
       }
 

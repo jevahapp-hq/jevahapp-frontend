@@ -1,4 +1,4 @@
-/** expo-av wraps missing CDN files as "Response code: 404". */
+/** expo-audio / CDN missing files often surface as "Response code: 404". */
 export function isUnavailableAudioError(error: unknown): boolean {
   const msg = String(
     (error as { message?: string })?.message || error || ""

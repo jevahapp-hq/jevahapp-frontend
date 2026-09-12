@@ -4,15 +4,15 @@
 import {
   Modal,
   StatusBar,
+  StyleSheet,
   View,
 } from "react-native";
 
+import { PlaylistDetailSheet } from "../../../../app/screens/library/components/PlaylistDetailSheet";
 import { SongModalCreatePlaylist } from "./SongModalCreatePlaylist";
 import { SongModalOptions } from "./SongModalOptions";
 import { SongModalPlayer } from "./SongModalPlayer";
-import { SongModalPlaylistDetail } from "./SongModalPlaylistDetail";
 import { SongModalPlaylistSelection } from "./SongModalPlaylistSelection";
-import { SongModalPlaylistView } from "./SongModalPlaylistView";
 import { useSongModalController } from "./hooks/useSongModalController";
 import type { CopyrightFreeSongModalProps } from "./types";
 
@@ -42,18 +42,11 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
                     albumArtSize={m.albumArtSize}
                     imageSource={m.imageSource}
                     isLiked={m.isLiked}
-                    likeCount={m.likeCount}
-                    viewCount={m.viewCount}
                     isTogglingLike={m.isTogglingLike}
                     isPlaying={!!m.isPlaying}
                     isSeeking={m.isSeeking}
                     seekProgress={m.seekProgress}
-                    audioProgress={m.audioProgress}
-                    audioDuration={m.audioDuration}
-                    audioPosition={m.audioPosition}
                     repeatMode={m.repeatMode}
-                    isShuffled={m.isShuffled}
-                    isMuted={!!m.isMuted}
                     progressBarRef={m.progressBarRef}
                     panHandlers={m.panHandlers}
                     onBarLayout={m.onBarLayout}
@@ -64,12 +57,16 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
                     onTogglePlay={() =>
                       m.onTogglePlay ? m.onTogglePlay() : m.onPlay?.(m.song)
                     }
-                    onToggleMute={() => m.onToggleMute?.()}
-                    onSkip={m.handleSkip}
+                    onPrevious={m.handlePrevious}
+                    onNext={m.handleNext}
                     onRepeatCycle={m.handleRepeatCycle}
-                    onToggleShuffle={m.toggleShuffle}
-                    onOpenPlaylistView={() => m.setShowPlaylistView(true)}
+                    onOpenPlaylistView={() => m.setShowPlaylistModal(true)}
+                    onSelectQueueSong={m.handleSelectQueueSong}
+                    queueSongs={m.queueSongs}
                     onShare={m.handleShare}
+                    isInLibrary={m.isInLibrary}
+                    isTogglingSave={m.isTogglingSave}
+                    onToggleSave={m.handleToggleSave}
                   />
             </View>
           </View>
@@ -79,7 +76,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
   const playerBody = player;
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: "#07110F" }}>
       {isInline ? (
         playerBody
       ) : isOverlay ? (
@@ -100,40 +97,29 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
           presentationStyle="overFullScreen"
         >
           <StatusBar barStyle="light-content" />
-          <View style={{ flex: 1, backgroundColor: "#0A0D14" }}>{playerBody}</View>
+          <View style={{ flex: 1, backgroundColor: "#07110F" }}>{playerBody}</View>
         </Modal>
       )}
 
-      {m.showPlaylistView ? (
-        <SongModalPlaylistView
-          visible={m.showPlaylistView}
-          playlists={m.playlists}
-          isLoadingPlaylists={m.isLoadingPlaylists}
-          animatedStyle={m.playlistViewAnimatedStyle}
-          bottomInset={m.safeBottom}
-          onClose={() => m.setShowPlaylistView(false)}
-          onSelectPlaylist={(playlist) => {
-            m.setSelectedPlaylistForDetail(playlist);
-            m.setShowPlaylistView(false);
-            m.setShowPlaylistDetail(true);
-          }}
-        />
-      ) : null}
-
       {m.showPlaylistModal ? (
-        <SongModalPlaylistSelection
-          visible={m.showPlaylistModal}
-          playlists={m.playlists}
-          isLoadingPlaylists={m.isLoadingPlaylists}
-          onClose={m.handleClosePlaylistModal}
-          onCreateNew={async () => {
-            await m.loadPlaylistsFromBackend();
-            m.setShowCreatePlaylist(true);
-            m.setShowPlaylistModal(false);
-          }}
-          onAddToPlaylist={m.handleAddToExistingPlaylist}
-          onDeletePlaylist={m.handleDeletePlaylist}
-        />
+        <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]} pointerEvents="box-none">
+          <SongModalPlaylistSelection
+            visible={m.showPlaylistModal}
+            embedded={isOverlay || isInline}
+            playlists={m.playlists}
+            isLoadingPlaylists={m.isLoadingPlaylists}
+            onClose={m.handleClosePlaylistModal}
+            onCreateNew={async () => {
+              await m.loadPlaylistsFromBackend();
+              m.setShowCreatePlaylist(true);
+              m.setShowPlaylistModal(false);
+            }}
+            currentSongId={m.song?._id || m.song?.id}
+            onAddToPlaylist={m.handleAddToExistingPlaylist}
+            onOpenPlaylist={m.openPlaylistDetail}
+            onDeletePlaylist={m.handleDeletePlaylist}
+          />
+        </View>
       ) : null}
 
       {m.showCreatePlaylist ? (
@@ -154,22 +140,33 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
       ) : null}
 
       {m.showPlaylistDetail ? (
-        <SongModalPlaylistDetail
-          visible={m.showPlaylistDetail}
-          playlist={m.selectedPlaylistForDetail}
-          animatedStyle={m.playlistDetailAnimatedStyle}
-          bottomInset={m.safeBottom}
-          onClose={() => {
-            m.setShowPlaylistDetail(false);
-            m.setSelectedPlaylistForDetail(null);
-          }}
-          onBack={() => {
-            m.setShowPlaylistDetail(false);
-            m.setSelectedPlaylistForDetail(null);
-            setTimeout(() => m.setShowPlaylistView(true), 100);
-          }}
-          onPlaySong={(s) => m.onPlay?.(s)}
-        />
+        <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]} pointerEvents="box-none">
+          <PlaylistDetailSheet
+            visible={m.showPlaylistDetail}
+            embedded={isOverlay || isInline}
+            playlist={m.selectedPlaylistForDetail}
+            onClose={() => {
+              m.setShowPlaylistDetail(false);
+              m.setSelectedPlaylistForDetail(null);
+              m.setShowPlaylistModal(true);
+            }}
+            onPlayAll={() => {
+              void m.playSelectedPlaylistAt(0);
+            }}
+            onPlayTrack={(_track, index) => {
+              void m.playSelectedPlaylistAt(index);
+            }}
+            onRemoveTrack={(track) => {
+              void m.handleRemovePlaylistTrack(track);
+            }}
+            onDeletePlaylist={() => {
+              if (!m.selectedPlaylistForDetail) return;
+              m.handleDeletePlaylist(m.selectedPlaylistForDetail.id);
+              m.setShowPlaylistDetail(false);
+              m.setSelectedPlaylistForDetail(null);
+            }}
+          />
+        </View>
       ) : null}
 
       {m.showOptionsModal ? (
@@ -195,7 +192,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
           onToggleSave={m.handleToggleSave}
         />
       ) : null}
-    </>
+    </View>
   );
 }
 

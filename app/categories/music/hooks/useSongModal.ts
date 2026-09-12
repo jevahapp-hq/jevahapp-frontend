@@ -1,3 +1,4 @@
+import { stopAndDismissNowPlaying } from "@/shared/audio/stopNowPlaying";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 
 function stampPlaybackSource(item: any) {
@@ -12,9 +13,22 @@ function stampPlaybackSource(item: any) {
   return item;
 }
 
+/** Bring the tapped track up as a true full-screen now-playing surface. */
+export function openFullNowPlaying(item: any, queue?: any[]) {
+  if (!item) return;
+  const store = useCopyrightFreeOverlayStore.getState();
+  const nextQueue =
+    Array.isArray(queue) && queue.length > 0
+      ? queue
+      : store.songs.length
+        ? store.songs
+        : undefined;
+  store.open(stampPlaybackSource(item), { queue: nextQueue });
+}
+
 export function useSongModal() {
   const openSongPlayer = (item: any) => {
-    useCopyrightFreeOverlayStore.getState().open(stampPlaybackSource(item));
+    openFullNowPlaying(item);
   };
 
   const openSongOptions = (item: any) => {
@@ -24,7 +38,7 @@ export function useSongModal() {
   };
 
   const closeSongModal = () => {
-    useCopyrightFreeOverlayStore.getState().close();
+    stopAndDismissNowPlaying();
   };
 
   return {

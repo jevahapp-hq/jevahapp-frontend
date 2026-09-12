@@ -2,6 +2,7 @@ import {
   clampSeekPositionMs,
   resolveAudioDurationMs,
 } from "./resolveAudioDurationMs";
+import { writeAudioPlaybackClock } from "./audioProgressStore";
 import type {
   AudioPlayerGet,
   AudioPlayerSet,
@@ -24,13 +25,19 @@ export function createSeekActions(
       const clampedPosition = clampSeekPositionMs(position, effectiveDuration);
       const progress = clampedPosition / effectiveDuration;
       // Paint the knob immediately — native seek on remote files is slow.
+      writeAudioPlaybackClock({
+        trackId: currentTrack?.id ?? null,
+        position: clampedPosition,
+        progress,
+        duration: effectiveDuration,
+      });
       set({
         position: clampedPosition,
         progress,
         duration: effectiveDuration,
         __ignoreStatusUntil: Date.now() + 450,
       });
-      void soundInstance.setPositionAsync(clampedPosition).catch((error) => {
+      void soundInstance.seekTo(clampedPosition / 1000).catch((error) => {
         if (__DEV__) {
           console.warn("Audio seek failed:", (error as Error)?.message || error);
         }

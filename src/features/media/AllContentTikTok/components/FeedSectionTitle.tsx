@@ -4,18 +4,17 @@
  */
 import React from "react";
 import { Text, View } from "react-native";
-import { UI_CONFIG } from "../../../../shared/constants";
 
 export function FeedSectionTitle({ title }: { title: string }) {
   return (
-    <View style={{ marginTop: UI_CONFIG.SPACING.XL, marginBottom: UI_CONFIG.SPACING.MD }}>
+    <View style={{ marginTop: 12, marginBottom: 8 }}>
       <Text
         style={{
-          fontSize: UI_CONFIG.TYPOGRAPHY.FONT_SIZES.LG,
-          fontFamily: "PlusJakartaSans-Bold",
-          fontWeight: "700",
-          color: UI_CONFIG.COLORS.TEXT_PRIMARY,
-          paddingHorizontal: UI_CONFIG.SPACING.MD,
+          fontSize: 16,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontWeight: "600",
+          color: "#344054",
+          paddingHorizontal: 16,
         }}
       >
         {title}

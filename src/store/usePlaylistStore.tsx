@@ -108,7 +108,7 @@ export const usePlaylistStore = create<PlaylistState>()(
                   ...p,
                   songs: [...p.songs, playlistSong],
                   updatedAt: new Date().toISOString(),
-                  thumbnailUrl: playlistSong.thumbnailUrl, // Use first song's thumbnail
+                  thumbnailUrl: p.thumbnailUrl || playlistSong.thumbnailUrl,
                 }
               : p
           ),
@@ -194,6 +194,13 @@ export const usePlaylistStore = create<PlaylistState>()(
             // Transform backend playlists to frontend format
             const transformedPlaylists: Playlist[] = result.data.playlists.map((backendPlaylist: BackendPlaylist) => {
               const songs = mapPlaylistTracksToSongs(backendPlaylist.tracks);
+              const firstTrack = backendPlaylist.tracks?.[0] as any;
+              const cover =
+                songs[0]?.thumbnailUrl ||
+                firstTrack?.content?.thumbnailUrl ||
+                firstTrack?.thumbnailUrl ||
+                (backendPlaylist as any).thumbnailUrl ||
+                (backendPlaylist as any).coverUrl;
 
               return {
                 id: backendPlaylist._id,
@@ -202,7 +209,7 @@ export const usePlaylistStore = create<PlaylistState>()(
                 songs,
                 createdAt: backendPlaylist.createdAt,
                 updatedAt: backendPlaylist.updatedAt,
-                thumbnailUrl: songs[0]?.thumbnailUrl,
+                thumbnailUrl: cover,
                 totalTracks: backendPlaylist.totalTracks || songs.length,
               };
             });

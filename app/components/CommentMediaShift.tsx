@@ -17,12 +17,12 @@ import {
 } from "./commentSheetLayout";
 
 export function CommentMediaShift({ children }: { children: ReactNode }) {
-  const { isVisible, isClosing, mediaShiftY, mediaScale } = useCommentModal();
+  const { isVisible, isClosing, mediaShiftY, mediaScale, showPeekHud } = useCommentModal();
   const shiftY = useSharedValue(0);
   const scale = useSharedValue(1);
   const wasPeekRef = useRef(false);
 
-  const peeking = isCommentPeekHudVisible(isVisible, isClosing);
+  const peeking = isCommentPeekHudVisible(isVisible, isClosing, showPeekHud);
 
   useEffect(() => {
     if (peeking) {
@@ -43,16 +43,21 @@ export function CommentMediaShift({ children }: { children: ReactNode }) {
   }, [peeking, mediaShiftY, mediaScale, shiftY, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    flex: 1,
     transform: [{ translateY: shiftY.value }, { scale: scale.value }],
   }));
 
+  // Always keep the same native child. Swapping View ↔ Animated.View on
+  // comment dismiss remounted Home / Reels and jumped away from the video
+  // the user had just opened comments on. `styles.fill` keeps flex even if
+  // Reanimated's transform style is empty.
   return (
-    <View
-      style={styles.clip}
-      pointerEvents="auto"
-    >
-      <Animated.View style={animatedStyle}>{children}</Animated.View>
+    <View style={styles.clip} pointerEvents="auto" collapsable={false}>
+      <Animated.View
+        style={[styles.fill, animatedStyle]}
+        collapsable={false}
+      >
+        {children}
+      </Animated.View>
     </View>
   );
 }
@@ -60,7 +65,9 @@ export function CommentMediaShift({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   clip: {
     flex: 1,
-    overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: "#FCFCFD",
+  },
+  fill: {
+    flex: 1,
   },
 });
