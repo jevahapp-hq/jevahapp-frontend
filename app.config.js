@@ -23,7 +23,13 @@ export default {
     orientation: "portrait",
     icon: "./assets/images/Jevah.png",
     scheme: isLiteVariant ? ["jevahlite", "jevah"] : ["jevahapp", "jevah"],
-    userInterfaceStyle: "automatic",
+    userInterfaceStyle: "light",
+    backgroundColor: "#FCFCFD",
+    splash: {
+      image: "./assets/images/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#FCFCFD",
+    },
     newArchEnabled: true,
     owner: "bldlne",
     extra: {
@@ -55,6 +61,11 @@ export default {
           "This app needs access to your camera for media upload.",
         UIBackgroundModes: ["audio"],
       },
+      splash: {
+        image: "./assets/images/splash-icon.png",
+        resizeMode: "contain",
+        backgroundColor: "#FCFCFD",
+      },
     },
     android: {
       package: ANDROID_PACKAGE[appVariant],
@@ -80,6 +91,14 @@ export default {
         process.env.EXPO_PUBLIC_API_ENV === "dev" ||
         process.env.EXPO_PUBLIC_API_ENV === "development",
       softwareKeyboardLayoutMode: "pan",
+      navigationBar: {
+        backgroundColor: "#FCFCFD",
+      },
+      splash: {
+        image: "./assets/images/splash-icon.png",
+        resizeMode: "contain",
+        backgroundColor: "#FCFCFD",
+      },
     },
     web: {
       bundler: "metro",
@@ -93,6 +112,15 @@ export default {
       "expo-asset",
       "expo-media-library",
       "expo-audio",
+      [
+        "expo-splash-screen",
+        {
+          backgroundColor: "#FCFCFD",
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 180,
+          resizeMode: "contain",
+        },
+      ],
       [
         "expo-build-properties",
         {

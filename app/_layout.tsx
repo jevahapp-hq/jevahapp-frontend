@@ -6,20 +6,8 @@ import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
-} from "@expo-google-fonts/plus-jakarta-sans";
-import {
-  Rubik_400Regular,
-  Rubik_500Medium,
-  Rubik_600SemiBold,
-  Rubik_700Bold,
-} from "@expo-google-fonts/rubik";
-import {
-  Poppins_400Regular,
-  Poppins_500Medium,
-  Poppins_600SemiBold,
-  Poppins_700Bold,
   useFonts,
-} from "@expo-google-fonts/poppins";
+} from "@expo-google-fonts/plus-jakarta-sans";
 import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
@@ -27,7 +15,7 @@ import { Slot } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { BackHandler, InteractionManager, Platform, Text, View } from "react-native";
+import { BackHandler, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
@@ -43,19 +31,18 @@ import { useArtistDeepLinks } from "./hooks/useArtistDeepLinks";
 import { useDownloadStore } from "@/store/useDownloadStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
-import { hydrateFallbackKvByPrefix, hydrateFallbackKvFromAsyncStorage, appMmkv } from "../src/shared/cache/mmkvStorage";
+import { appMmkv } from "../src/shared/cache/mmkvStorage";
 import { hydrateFeedQueryCache } from "../src/shared/cache/hydrateFeedQueryCache";
 import {
-  ASYNC_FALLBACK_JSON_CACHE_KEYS,
-  MUSIC_CATALOG_PREFIX,
-} from "../src/shared/cache/persistKeys";
+  startBootCacheHydration,
+  whenBootCacheReady,
+} from "../src/shared/cache/bootCache";
 import {
   hydratePersistedQueryCache,
   registerPersistedQueryClient,
   subscribePersistedQueryCache,
   swrPersistedQueryCache,
 } from "../src/shared/cache/persistQueryClient";
-import { AUTHOR_DISK_KEY } from "../src/shared/author";
 import {
   allContentQueryKey,
   getFeedPageSize,
@@ -68,16 +55,11 @@ import {
 } from "../src/shared/lite/liteProfile";
 import { hasBackendSessionSync } from "./utils/sessionAuth";
 import { runFullscreenBackExit } from "../src/features/media/video-feed/fullscreenBackSession";
-import { PERF, getAllPerfSummaries, perfMark, perfMeasure } from "../src/shared/utils/perfMarks";
+import { PERF, getAllPerfSummaries, perfMark } from "../src/shared/utils/perfMarks";
+import { hideAppSplash } from "../src/shared/utils/appSplash";
 import { warmupBackend } from "./utils/apiWarmup";
+import { loadDeferredFonts } from "./utils/loadDeferredFonts";
 import { PerformanceOptimizer } from "./utils/performance";
-
-let splashPerfRecorded = false;
-function recordSplashHide(): void {
-  if (splashPerfRecorded) return;
-  splashPerfRecorded = true;
-  perfMeasure(PERF.SPLASH_HIDE, PERF.APP_START);
-}
 
 if (__DEV__) {
   (globalThis as any).__jevahDumpPerf = () => {
@@ -168,11 +150,11 @@ try {
 
 registerPersistedQueryClient(queryClient);
 subscribePersistedQueryCache(queryClient);
+void startBootCacheHydration(queryClient);
 
 export default function RootLayout() {
   useArtistDeepLinks();
   const [fontsLoaded, fontError] = useFonts({
-    // Primary — Plus Jakarta Sans
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
@@ -184,26 +166,6 @@ export default function RootLayout() {
     "PlusJakartaSans-SemiBold": PlusJakartaSans_600SemiBold,
     "PlusJakartaSans-Bold": PlusJakartaSans_700Bold,
     "PlusJakartaSans-ExtraBold": PlusJakartaSans_800ExtraBold,
-    // Secondary — Rubik
-    Rubik_400Regular,
-    Rubik_500Medium,
-    Rubik_600SemiBold,
-    Rubik_700Bold,
-    Rubik: Rubik_400Regular,
-    "Rubik-Regular": Rubik_400Regular,
-    "Rubik-Medium": Rubik_500Medium,
-    "Rubik-SemiBold": Rubik_600SemiBold,
-    "Rubik-Bold": Rubik_700Bold,
-    // Tertiary — Poppins
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    Poppins: Poppins_400Regular,
-    "Poppins-Regular": Poppins_400Regular,
-    "Poppins-Medium": Poppins_500Medium,
-    "Poppins-SemiBold": Poppins_600SemiBold,
-    "Poppins-Bold": Poppins_700Bold,
     ...Ionicons.font,
     ...MaterialIcons.font,
     ...Feather.font,
@@ -238,31 +200,15 @@ export default function RootLayout() {
   );
   const loadSavedItems = useLibraryStore((state) => state.loadSavedItems);
 
-  // Never trap users on native splash — fail-open quickly
+  // Keep native splash until Home paints. Expo Go route load can take seconds.
   useEffect(() => {
-    const fallback = setTimeout(() => {
-      SplashScreen.hideAsync()
-        .then(() => recordSplashHide())
-        .catch(() => {});
-    }, 400);
+    const fallback = setTimeout(() => hideAppSplash(), __DEV__ ? 12000 : 1800);
     return () => clearTimeout(fallback);
   }, []);
 
-  // Hide splash as soon as fonts resolve OR on first paint of the shell
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync()
-        .then(() => recordSplashHide())
-        .catch(() => {});
-      return;
-    }
-    // Don't wait on fonts forever — paint shell ASAP
-    const raf = requestAnimationFrame(() => {
-      SplashScreen.hideAsync()
-        .then(() => recordSplashHide())
-        .catch(() => {});
-    });
-    return () => cancelAnimationFrame(raf);
+    if (!fontsLoaded && !fontError) return;
+    void loadDeferredFonts();
   }, [fontsLoaded, fontError]);
 
   // Migrate legacy AsyncStorage onboarding → MMKV once (sync Redirect path)
@@ -288,118 +234,93 @@ export default function RootLayout() {
     void Promise.resolve(loadPersistedMedia()).catch(() => {});
   }, [loadPersistedMedia, isInitialized]);
 
-  // Critical path: hydrate + warmup + feed prefetch (don't contend with Home paint)
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    const task = InteractionManager.runAfterInteractions(() => {
-      void (async () => {
-        try {
-          await hydrateLiteProfile();
-        } catch {}
-
-        try {
-          await hydrateFallbackKvFromAsyncStorage([
-            AUTHOR_DISK_KEY,
-            "content-cache-store",
-            "rq-all-content-seed",
-            "rq-all-content-seed:lite",
-            "rq-all-content-seed:full",
-            "feed-page:ALL:public",
-            "feed-page:ALL:auth",
-            "feed-page:ALL:public:lite",
-            "feed-page:ALL:auth:lite",
-            "feed-page:ALL:public:full",
-            "feed-page:ALL:auth:full",
-            "video-feed-data",
-            ...ASYNC_FALLBACK_JSON_CACHE_KEYS,
-          ]);
-          hydrateFeedQueryCache(queryClient);
-          hydratePersistedQueryCache(queryClient);
-          try {
-            const { CacheManager } = await import("./utils/cache/CacheManager");
-            CacheManager.rehydrateFromDisk();
-          } catch {}
-          try {
-            const { URLManager } = await import("./utils/urlManager");
-            URLManager.rehydrateFromDisk();
-          } catch {}
-          try {
-            const { default: copyrightFreeMusicAPI } = await import(
-              "./services/copyrightFreeMusicAPI"
-            );
-            copyrightFreeMusicAPI.rehydrateFromDisk();
-          } catch {}
-        } catch {}
-
-        try {
-          await hydrateFallbackKvByPrefix(["bible_", MUSIC_CATALOG_PREFIX]);
-        } catch {}
-
-        void warmupBackend(3000).catch(() => {});
-
-        const pageSize = getFeedPageSize();
-        const useAuth = hasBackendSessionSync();
-        swrPersistedQueryCache(queryClient, useAuth);
-        // Chronological public first — has authorInfo, no For You wait.
-        queryClient
-          .prefetchInfiniteQuery({
-            queryKey: allContentQueryKey("ALL", pageSize, useAuth, useAuth),
-            queryFn: async ({ pageParam }) => {
-              const { fetchAllContentPage } = await import(
-                "../src/shared/media/fetchAllContentPage"
-              );
-              return fetchAllContentPage({
-                contentType: "ALL",
-                page: typeof pageParam === "number" ? pageParam : 1,
-                limit: pageSize,
-                useAuth,
-                forceChronological: true,
-              });
-            },
-            initialPageParam: useAuth ? null : 1,
-            staleTime: getFeedStaleMs(),
-            maxPages: getFeedMaxPages(),
-          })
-          .catch(() => {});
-      })();
-    });
-
-    return () => task.cancel();
-  }, [isInitialized]);
-
-  // Secondary: downloads / library / misc preload — after first interactions settle
+  // Critical path: disk seed is already running. Warm network + tab modules now.
   useEffect(() => {
     if (!isInitialized) return;
     let cancelled = false;
-    let innerClear: (() => void) | undefined;
-    const task = InteractionManager.runAfterInteractions(() => {
-      const t = setTimeout(() => {
-        if (cancelled) return;
-        void (async () => {
-          try {
-            await loadDownloadedItems();
-          } catch {}
-          try {
-            await loadSavedItems();
-          } catch {}
-          try {
-            await PerformanceOptimizer.getInstance().preloadCriticalData();
-          } catch {}
-          try {
-            const { preloadNavTapSound } = await import(
-              "../src/shared/utils/uiSounds"
+
+    void (async () => {
+      try {
+        await whenBootCacheReady();
+      } catch {}
+      if (cancelled) return;
+
+      try {
+        await hydrateLiteProfile();
+      } catch {}
+
+      try {
+        const { CacheManager } = await import("./utils/cache/CacheManager");
+        CacheManager.rehydrateFromDisk();
+      } catch {}
+      try {
+        const { URLManager } = await import("./utils/urlManager");
+        URLManager.rehydrateFromDisk();
+      } catch {}
+      try {
+        const { default: copyrightFreeMusicAPI } = await import(
+          "./services/copyrightFreeMusicAPI"
+        );
+        copyrightFreeMusicAPI.rehydrateFromDisk();
+      } catch {}
+
+      void warmupBackend(3000).catch(() => {});
+
+      const pageSize = getFeedPageSize();
+      const useAuth = hasBackendSessionSync();
+      swrPersistedQueryCache(queryClient, useAuth);
+      queryClient
+        .prefetchInfiniteQuery({
+          queryKey: allContentQueryKey("ALL", pageSize, useAuth, useAuth),
+          queryFn: async ({ pageParam }) => {
+            const { fetchAllContentPage } = await import(
+              "../src/shared/media/fetchAllContentPage"
             );
-            preloadNavTapSound();
-          } catch {}
-        })();
-      }, 600);
-      innerClear = () => clearTimeout(t);
-    });
+            return fetchAllContentPage({
+              contentType: "ALL",
+              page: typeof pageParam === "number" ? pageParam : 1,
+              limit: pageSize,
+              useAuth,
+              forceChronological: true,
+            });
+          },
+          initialPageParam: useAuth ? null : 1,
+          staleTime: getFeedStaleMs(),
+          maxPages: getFeedMaxPages(),
+        })
+        .catch(() => {});
+    })();
+
     return () => {
       cancelled = true;
-      task.cancel();
-      innerClear?.();
+    };
+  }, [isInitialized]);
+
+  // Library / downloads: start immediately so Library tab has disk items on tap.
+  useEffect(() => {
+    if (!isInitialized) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (!cancelled) await loadSavedItems();
+      } catch {}
+      try {
+        if (!cancelled) await loadDownloadedItems();
+      } catch {}
+      try {
+        if (!cancelled) {
+          await PerformanceOptimizer.getInstance().preloadCriticalData();
+        }
+      } catch {}
+      try {
+        const { preloadNavTapSound } = await import(
+          "../src/shared/utils/uiSounds"
+        );
+        preloadNavTapSound();
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
     };
   }, [isInitialized, loadDownloadedItems, loadSavedItems]);
 
@@ -460,7 +381,7 @@ export default function RootLayout() {
             afterSignInUrl="/"
             afterSignUpUrl="/"
           >
-            <GestureHandlerRootView style={{ flex: 1 }}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#FCFCFD" }}>
                 <NotificationProvider>
                   <CommentModalProvider>
                     <LikeQueueBootstrap />

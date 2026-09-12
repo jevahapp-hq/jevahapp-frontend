@@ -11,9 +11,13 @@ import {
 } from "../config/feedCachePolicy";
 import { isLiteProfileActive } from "../lite/liteProfile";
 import { appMmkv, mmkvGetJson, mmkvSetJson } from "./mmkvStorage";
+import {
+  FEED_PAGE_V3_PREFIX,
+  RQ_FEED_SEED_V3_KEY,
+} from "./persistKeys";
 
-const FEED_PAGE_PREFIX = "feed-page-v3:";
-const RQ_FEED_KEY = "rq-all-content-seed-v3";
+const FEED_PAGE_PREFIX = FEED_PAGE_V3_PREFIX;
+const RQ_FEED_KEY = RQ_FEED_SEED_V3_KEY;
 
 export type FeedPageSeed = {
   media: MediaItem[];

@@ -8,6 +8,7 @@ import {
   hasBackendSession,
   hasBackendSessionSync,
 } from "./utils/sessionAuth";
+import { hideAppSplash } from "../src/shared/utils/appSplash";
 import "../global.css";
 
 const WelcomeLanding = React.lazy(() => import("./components/WelcomeLanding"));
@@ -113,6 +114,13 @@ function WelcomeAsyncGate() {
       router.replace("/categories/HomeScreen");
     }
   }, [onboardingReady, skipIntro, hasSession, redirected]);
+
+  // Login / intro: Home is not coming — drop splash so the white gate is not the UI.
+  useEffect(() => {
+    if (!onboardingReady) return;
+    if (skipIntro && hasSession) return;
+    hideAppSplash();
+  }, [onboardingReady, skipIntro, hasSession]);
 
   // No session: after Clerk loads, send to login
   useEffect(() => {

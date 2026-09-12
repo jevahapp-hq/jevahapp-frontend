@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  Image,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -15,55 +13,47 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HymnMiniCard, { HymnItem } from "../home/components/HymnMiniCard";
 import { UI_CONFIG } from "../../src/shared/constants";
 import { ListSkeletonStack } from "../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
+import localHymns from "../../assets/hymns.json";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 columns with padding
+const INITIAL_HYMNS: HymnItem[] = Array.isArray(localHymns)
+  ? (localHymns as HymnItem[])
+  : [];
 
 export default function Hymns() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [hymns, setHymns] = useState<HymnItem[]>([]);
-  const [loadingHymns, setLoadingHymns] = useState(false);
+  const [hymns, setHymns] = useState<HymnItem[]>(INITIAL_HYMNS);
+  const [loadingHymns, setLoadingHymns] = useState(INITIAL_HYMNS.length === 0);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Fetch local hymns JSON; fallback to Hymnary sample (MVP)
   useEffect(() => {
+    if (INITIAL_HYMNS.length) return;
     const fetchHymns = async () => {
       try {
         setLoadingHymns(true);
-        try {
-          const mod = await import("../../assets/hymns.json");
-          const local = (mod as any).default as HymnItem[];
-          if (Array.isArray(local) && local.length) {
-            setHymns(local);
-            return;
-          }
-        } catch {}
-
-        // Fallback to external sample
-        try {
-          const res = await fetch(
-            "https://hymnary.org/api/scripture?reference=Psalm+136"
-          );
-          const json = await res.json();
-          const items = Object.values(json || {})
-            .slice(0, 50) // Get more hymns for the grid
-            .map((h: any) => ({
-              id: h.title || Math.random().toString(36).slice(2),
-              title: h.title,
-              author: h.author || h.paraphraser || h.translator || "Unknown",
-              meter: h.meter,
-              refs: String(h["scripture references"] || "").trim(),
-            }));
-          setHymns(items as HymnItem[]);
-        } catch {}
+        const res = await fetch(
+          "https://hymnary.org/api/scripture?reference=Psalm+136"
+        );
+        const json = await res.json();
+        const items = Object.values(json || {})
+          .slice(0, 50)
+          .map((h: any) => ({
+            id: h.title || Math.random().toString(36).slice(2),
+            title: h.title,
+            author: h.author || h.paraphraser || h.translator || "Unknown",
+            meter: h.meter,
+            refs: String(h["scripture references"] || "").trim(),
+          }));
+        setHymns(items as HymnItem[]);
       } catch (e) {
         console.warn("Hymnary fetch failed:", e);
       } finally {
         setLoadingHymns(false);
       }
     };
-    fetchHymns();
+    void fetchHymns();
   }, []);
 
   // Filter hymns based on search query

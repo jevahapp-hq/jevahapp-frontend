@@ -1,5 +1,6 @@
 import React, {
   useCallback,
+  useEffect,
   useRef,
   useState,
   Suspense,
@@ -25,6 +26,7 @@ import {
 import Header from "../components/Header";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
 import { useAuth } from "../hooks/useAuth";
+import { prefetchHomeTabModulesPromise } from "../utils/prefetchHomeTabs";
 
 const Music = lazy(() => import("./music"));
 const Hymns = lazy(() => import("./hymns"));
@@ -32,6 +34,7 @@ const LiveComponent = lazy(() => import("./LiveComponent"));
 
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 const FEED_CATEGORIES = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
+const LAZY_CATEGORIES = ["MUSIC", "HYMNS", "LIVE"] as const;
 
 /** Native VideoView ignores opacity and transform — park with layout `left`. */
 const OFFSCREEN_X = 4000;
@@ -125,6 +128,13 @@ export default function HomeTabContent({
       : "ALL";
     return new Set([start]);
   });
+  const [visitedLazyCategories, setVisitedLazyCategories] = useState<
+    Set<string>
+  >(() =>
+    (LAZY_CATEGORIES as readonly string[]).includes(initialCategory)
+      ? new Set([initialCategory])
+      : new Set()
+  );
   const scrollViewRef = useRef<ScrollView>(null);
   const chipRadius = getResponsiveBorderRadius("medium");
   const railPad = getResponsiveSpacing(16, 20, 24, 32);
@@ -138,11 +148,16 @@ export default function HomeTabContent({
         prev.has(category) ? prev : new Set(prev).add(category)
       );
     }
+    if ((LAZY_CATEGORIES as readonly string[]).includes(category)) {
+      setVisitedLazyCategories((prev) =>
+        prev.has(category) ? prev : new Set(prev).add(category)
+      );
+    }
   }, []);
 
-  const isPersistentFeed = (FEED_CATEGORIES as readonly string[]).includes(
-    selectedCategory
-  );
+  useEffect(() => {
+    void prefetchHomeTabModulesPromise();
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -218,22 +233,31 @@ export default function HomeTabContent({
             }
           )}
 
-          {!isPersistentFeed && selectedCategory === "MUSIC" ? (
-            <View style={paneStyle(true)} collapsable={false}>
+          {visitedLazyCategories.has("MUSIC") ? (
+            <View
+              style={paneStyle(selectedCategory === "MUSIC")}
+              collapsable={false}
+            >
               <CategorySuspense>
                 <Music />
               </CategorySuspense>
             </View>
           ) : null}
-          {!isPersistentFeed && selectedCategory === "HYMNS" ? (
-            <View style={paneStyle(true)} collapsable={false}>
+          {visitedLazyCategories.has("HYMNS") ? (
+            <View
+              style={paneStyle(selectedCategory === "HYMNS")}
+              collapsable={false}
+            >
               <CategorySuspense>
                 <Hymns />
               </CategorySuspense>
             </View>
           ) : null}
-          {!isPersistentFeed && selectedCategory === "LIVE" ? (
-            <View style={paneStyle(true)} collapsable={false}>
+          {visitedLazyCategories.has("LIVE") ? (
+            <View
+              style={paneStyle(selectedCategory === "LIVE")}
+              collapsable={false}
+            >
               <CategorySuspense>
                 <LiveComponent />
               </CategorySuspense>

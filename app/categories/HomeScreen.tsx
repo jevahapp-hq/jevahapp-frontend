@@ -7,18 +7,24 @@ import {
   releaseMiniPlayer,
   setMiniPlayerSuppression,
 } from "../../src/shared/audio/miniPlayerGate";
+import { hideAppSplash } from "../../src/shared/utils/appSplash";
 import { useNewUserLoginTour } from "../components/loginTour/useNewUserLoginTour";
-import CommunityTabSkeleton from "../screens/CommunityTabSkeleton";
 import LibraryTabSkeleton from "../screens/library/LibraryTabSkeleton";
 import BibleScreen from "../screens/BibleScreen";
+import CommunityScreen from "../screens/CommunityScreen";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
 import HomeTabContent from "./HomeTabContent";
+import {
+  prefetchHomeTabModules,
+  prefetchHomeTabModulesPromise,
+} from "../utils/prefetchHomeTabs";
 
 const NewUserLoginTour = lazy(
   () => import("../components/loginTour/NewUserLoginTour")
 );
 const LibraryScreen = lazy(() => import("../screens/library/LibraryScreen"));
-const CommunityScreen = lazy(() => import("../screens/CommunityScreen"));
+
+prefetchHomeTabModules();
 
 const tabList = ["Home", "Community", "Library", "Bible"] as const;
 type MainShellTab = (typeof tabList)[number];
@@ -40,7 +46,7 @@ function paneStyle(active: boolean) {
 export default function HomeScreen() {
   const [selectedTab, setSelectedTab] = useState<MainShellTab>("Home");
   const [visitedTabs, setVisitedTabs] = useState<Set<MainShellTab>>(
-    () => new Set(["Home"])
+    () => new Set(["Home", "Community"])
   );
   const { isVisible: isCommentSheetOpen } = useCommentModal();
   const loginTour = useNewUserLoginTour();
@@ -62,13 +68,21 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    void prefetchHomeTabModulesPromise().then(() => {
+      setVisitedTabs((prev) =>
+        prev.has("Library") ? prev : new Set(prev).add("Library")
+      );
+    });
+  }, []);
+
+  useEffect(() => {
     if (defaultTabParam && tabList.includes(defaultTabParam as MainShellTab)) {
       handleTabChange(defaultTabParam);
     }
   }, [defaultTabParam, handleTabChange]);
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={hideAppSplash}>
       <View style={styles.tabHost}>
         <View style={paneStyle(selectedTab === "Home")} collapsable={false}>
           <HomeTabContent isTabActive={selectedTab === "Home"} />
@@ -79,11 +93,9 @@ export default function HomeScreen() {
             style={paneStyle(selectedTab === "Community")}
             collapsable={false}
           >
-            <Suspense fallback={<CommunityTabSkeleton />}>
-              <ContentErrorBoundary>
-                <CommunityScreen embedded />
-              </ContentErrorBoundary>
-            </Suspense>
+            <ContentErrorBoundary>
+              <CommunityScreen embedded />
+            </ContentErrorBoundary>
           </View>
         ) : null}
 
