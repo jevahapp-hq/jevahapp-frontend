@@ -24,6 +24,12 @@ export function PlayerQueueList({
     () => upNextSongs(songs, currentSong),
     [songs, currentSong]
   );
+  const playlistTitle = useMemo(() => {
+    const named = (songs || []).find(
+      (item) => item?.release?.type === "playlist" && item.releaseTitle
+    );
+    return typeof named?.releaseTitle === "string" ? named.releaseTitle : "";
+  }, [songs]);
 
   if (upcoming.length === 0) return null;
 
@@ -44,7 +50,7 @@ export function PlayerQueueList({
           color: "#FFFFFF",
         }}
       >
-        Up next
+        {playlistTitle || "Up next"}
       </Text>
       {upcoming.map((item, index) => {
         const key = songKey(item) || `up-next-${index}`;

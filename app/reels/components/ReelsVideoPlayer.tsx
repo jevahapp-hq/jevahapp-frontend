@@ -19,6 +19,7 @@ import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/vi
 import { useReelsStore } from "@/store/useReelsStore";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
+import { getReelsMediaFrame } from "../hooks/useReelsResponsive";
 
 interface ReelsVideoPlayerProps {
   videoKey: string;
@@ -325,9 +326,11 @@ const ReelsVideoPlayer = memo(
       setVideoPosition,
     ]);
 
+    const mediaFrame = getReelsMediaFrame(screenWidth, screenHeight);
     const surfaceStyle = {
       width: screenWidth,
       height: screenHeight,
+      overflow: "hidden" as const,
     };
 
     if (!player) {
@@ -336,8 +339,8 @@ const ReelsVideoPlayer = memo(
           <PosterLayer
             posterUri={posterUri}
             lastFrame={lastFrame}
-            width={screenWidth}
-            height={screenHeight}
+            width={mediaFrame.width}
+            height={mediaFrame.height}
           />
         </View>
       );
@@ -345,22 +348,25 @@ const ReelsVideoPlayer = memo(
 
     return (
       <View style={[styles.host, surfaceStyle]} collapsable={false}>
-        <View style={styles.poster} pointerEvents="none">
+        <View
+          pointerEvents="none"
+          style={styles.mediaClip}
+        >
           <PosterLayer
             posterUri={posterUri}
             lastFrame={lastFrame}
-            width={screenWidth}
-            height={screenHeight}
+            width={mediaFrame.width}
+            height={mediaFrame.height}
+          />
+          <FeedVideoSurface
+            player={player}
+            visible
+            height={mediaFrame.height}
+            width={mediaFrame.width}
+            contentFit="cover"
+            onFirstFrameRender={handleFirstFrameRender}
           />
         </View>
-        <FeedVideoSurface
-          player={player}
-          visible
-          height={screenHeight}
-          width={screenWidth}
-          contentFit="contain"
-          onFirstFrameRender={handleFirstFrameRender}
-        />
 
         {isActive && !isPlaying && (
           <View style={styles.overlay} pointerEvents="none">
@@ -413,7 +419,7 @@ function PosterLayer({
         source={lastFrame}
         width={width}
         height={height}
-        contentFit="contain"
+        contentFit="cover"
       />
     );
   }
@@ -423,7 +429,7 @@ function PosterLayer({
         uri={posterUri}
         width={width}
         height={height}
-        contentFit="contain"
+        contentFit="cover"
       />
     );
   }
@@ -435,9 +441,9 @@ export default ReelsVideoPlayer;
 const styles = StyleSheet.create({
   host: {
     backgroundColor: "#000",
-    overflow: "visible",
+    overflow: "hidden",
   },
-  poster: {
+  mediaClip: {
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
     backgroundColor: "#000",

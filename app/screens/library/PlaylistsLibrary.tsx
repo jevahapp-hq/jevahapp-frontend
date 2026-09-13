@@ -14,11 +14,13 @@ import {
 } from "react-native";
 import { UI_CONFIG } from "../../../src/shared/constants";
 import { resolveAlbumArtSource } from "../../../src/shared/brand/albumArt";
-import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
-import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { usePlaylistStore, type Playlist } from "@/store/usePlaylistStore";
+import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { playlistAPI } from "../../utils/playlistAPI";
-import { mapPlaylistTracksToSongs } from "../../utils/playlistTrackMapper";
+import {
+  hydratePlaylist,
+  playPlaylistQueue,
+} from "../../utils/openPlaylistNowPlaying";
 import { PlaylistDetailSheet } from "./components/PlaylistDetailSheet";
 
 export default function PlaylistsLibrary() {
@@ -115,33 +117,10 @@ export default function PlaylistsLibrary() {
 
   const handleViewPlaylist = async (playlist: Playlist) => {
     try {
-      // Fetch full playlist details from backend
-      const result = await playlistAPI.getPlaylistById(playlist.id);
-      if (result.success && result.data) {
-        const songs = mapPlaylistTracksToSongs(result.data.tracks);
-        // Prefer detail tracks; fall back to cached list songs if API omitted content.
-        const transformedPlaylist: Playlist = {
-          id: result.data._id,
-          name: result.data.name,
-          description: result.data.description,
-          songs: songs.length > 0 ? songs : playlist.songs || [],
-          createdAt: result.data.createdAt,
-          updatedAt: result.data.updatedAt,
-          thumbnailUrl:
-            songs[0]?.thumbnailUrl ||
-            playlist.thumbnailUrl ||
-            result.data.tracks?.[0]?.content?.thumbnailUrl,
-          totalTracks: result.data.totalTracks || songs.length || playlist.songs?.length,
-        };
-        setSelectedPlaylist(transformedPlaylist);
-        setShowPlaylistDetail(true);
-      } else if (playlist.songs?.length) {
-        // Offline / incomplete API — still show local songs
-        setSelectedPlaylist(playlist);
-        setShowPlaylistDetail(true);
-      } else {
-        Alert.alert("Error", result.error || "Failed to load playlist details");
-      }
+      void useGlobalAudioPlayerStore.getState().pause();
+      const full = await hydratePlaylist(playlist);
+      setSelectedPlaylist(full);
+      setShowPlaylistDetail(true);
     } catch (error) {
       console.error("Error loading playlist details:", error);
       if (playlist.songs?.length) {
@@ -155,42 +134,14 @@ export default function PlaylistsLibrary() {
 
   const playPlaylistAt = async (index: number) => {
     if (!selectedPlaylist) return;
-    const playable = selectedPlaylist.songs.filter((s) => s.audioUrl);
-    if (playable.length === 0) {
+    const { played, playlist: full } = await playPlaylistQueue(
+      selectedPlaylist,
+      index
+    );
+    setSelectedPlaylist(full);
+    if (!played) {
       Alert.alert("Empty playlist", "Add a song first.");
-      return;
     }
-    const start = Math.max(0, Math.min(index, playable.length - 1));
-    const queue = playable.map((s) => ({
-      id: s.id,
-      title: s.title,
-      artist: s.artist,
-      audioUrl: s.audioUrl,
-      thumbnailUrl: s.thumbnailUrl,
-      duration: s.duration,
-      category: s.category,
-      description: s.description,
-      source:
-        s.trackType === "copyrightFree"
-          ? ("copyright-free" as const)
-          : ("library" as const),
-    }));
-    useGlobalAudioPlayerStore.setState({
-      queue,
-      originalQueue: queue,
-      currentIndex: start,
-    });
-    await useGlobalAudioPlayerStore.getState().setTrack(queue[start], true);
-    const ui = playable.map((s) => ({
-      id: s.id,
-      _id: s.id,
-      title: s.title,
-      artist: s.artist,
-      audioUrl: s.audioUrl,
-      thumbnailUrl: s.thumbnailUrl,
-      duration: s.duration,
-    }));
-    useCopyrightFreeOverlayStore.getState().open(ui[start], { queue: ui });
   };
 
   const handleRemoveTrack = async (playlistId: string, trackId: string, trackType?: "media" | "copyrightFree") => {
@@ -215,7 +166,10 @@ export default function PlaylistsLibrary() {
               if (result.success) {
                 await loadPlaylists();
                 if (selectedPlaylist?.id === playlistId) {
-                  await handleViewPlaylist(selectedPlaylist);
+                  const still = usePlaylistStore
+                    .getState()
+                    .playlists.find((p) => p.id === playlistId);
+                  if (still) setSelectedPlaylist(still);
                 }
                 Alert.alert("Success", "Track removed");
               } else {

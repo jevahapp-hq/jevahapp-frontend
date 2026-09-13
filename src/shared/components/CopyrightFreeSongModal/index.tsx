@@ -28,16 +28,11 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
 
   const player = (
         <View style={{ flex: 1 }} pointerEvents={props.visible ? "auto" : "none"}>
-          <View
-            collapsable={false}
-            style={{
-              flex: 1,
-              paddingTop: m.safeTop + 12,
-            }}
-          >
+          <View collapsable={false} style={{ flex: 1 }}>
             <View collapsable={false} style={{ flex: 1 }}>
                   <SongModalPlayer
                     song={m.song}
+                    topInset={m.safeTop}
                     bottomInset={m.contentBottomInset}
                     albumArtSize={m.albumArtSize}
                     imageSource={m.imageSource}
@@ -84,7 +79,13 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
           pointerEvents={props.visible ? "auto" : "none"}
         >
-          {props.visible ? <StatusBar barStyle="light-content" /> : null}
+          {props.visible ? (
+            <StatusBar
+              barStyle="light-content"
+              backgroundColor="transparent"
+              translucent
+            />
+          ) : null}
           {playerBody}
         </View>
       ) : (
@@ -96,7 +97,11 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
           statusBarTranslucent
           presentationStyle="overFullScreen"
         >
-          <StatusBar barStyle="light-content" />
+          <StatusBar
+            barStyle="light-content"
+            backgroundColor="transparent"
+            translucent
+          />
           <View style={{ flex: 1, backgroundColor: "#07110F" }}>{playerBody}</View>
         </Modal>
       )}
@@ -146,9 +151,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
             embedded={isOverlay || isInline}
             playlist={m.selectedPlaylistForDetail}
             onClose={() => {
-              m.setShowPlaylistDetail(false);
-              m.setSelectedPlaylistForDetail(null);
-              m.setShowPlaylistModal(true);
+              void m.resumePlayerAfterPlaylist();
             }}
             onPlayAll={() => {
               void m.playSelectedPlaylistAt(0);
@@ -162,8 +165,7 @@ export default function CopyrightFreeSongModal(props: CopyrightFreeSongModalProp
             onDeletePlaylist={() => {
               if (!m.selectedPlaylistForDetail) return;
               m.handleDeletePlaylist(m.selectedPlaylistForDetail.id);
-              m.setShowPlaylistDetail(false);
-              m.setSelectedPlaylistForDetail(null);
+              void m.resumePlayerAfterPlaylist();
             }}
           />
         </View>

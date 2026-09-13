@@ -14,6 +14,7 @@ export interface SongModalPlayerProps {
   song: any;
   queueSongs?: any[];
   bottomInset?: number;
+  topInset?: number;
   albumArtSize: number;
   imageSource: ImageSourcePropType | null;
   isLiked: boolean;
@@ -45,6 +46,7 @@ export function SongModalPlayer({
   song,
   queueSongs = [],
   bottomInset = 0,
+  topInset = 0,
   albumArtSize,
   imageSource,
   isLiked,
@@ -80,36 +82,41 @@ export function SongModalPlayer({
 
   return (
     <View style={{ flex: 1, backgroundColor: "#07110F" }}>
-      <PlayerBackground />
-      <PlayerHeader onClose={onClose} onOptionsPress={onOptionsPress} />
-
-      <View
+      <PlayerBackground
         style={{
-          paddingHorizontal: UI_CONFIG.SPACING.LG,
-          paddingTop: 8,
-          paddingBottom: 8,
+          paddingTop: topInset + 12,
         }}
       >
-        <View style={{ alignItems: "center" }}>
-          <PlayerArtwork
-            imageSource={imageSource}
-            albumArtSize={albumArtSize}
-            isPlaying={isPlaying}
+        <PlayerHeader onClose={onClose} onOptionsPress={onOptionsPress} />
+
+        <View
+          style={{
+            paddingHorizontal: UI_CONFIG.SPACING.LG,
+            paddingTop: 8,
+            paddingBottom: 8,
+          }}
+        >
+          <View style={{ alignItems: "center" }}>
+            <PlayerArtwork
+              imageSource={imageSource}
+              albumArtSize={albumArtSize}
+              isPlaying={isPlaying}
+            />
+          </View>
+          <PlayerInfo
+            title={song.title}
+            artist={song.artist}
+            isLiked={isLiked}
+            isTogglingLike={isTogglingLike}
+            onToggleLike={onToggleLike}
+            onOpenPlaylistView={onOpenPlaylistView}
+            onToggleSave={onToggleSave}
+            onShare={onShare}
+            isInLibrary={isInLibrary}
+            isTogglingSave={isTogglingSave}
           />
         </View>
-        <PlayerInfo
-          title={song.title}
-          artist={song.artist}
-          isLiked={isLiked}
-          isTogglingLike={isTogglingLike}
-          onToggleLike={onToggleLike}
-          onOpenPlaylistView={onOpenPlaylistView}
-          onToggleSave={onToggleSave}
-          onShare={onShare}
-          isInLibrary={isInLibrary}
-          isTogglingSave={isTogglingSave}
-        />
-      </View>
+      </PlayerBackground>
 
       <ScrollView
         ref={scrollRef}

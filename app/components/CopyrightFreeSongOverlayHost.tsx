@@ -110,7 +110,11 @@ export default function CopyrightFreeSongOverlayHost() {
       supportedOrientations={["portrait"]}
     >
       <View style={styles.root}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
+        />
         {song ? (
           <CopyrightFreeSongModal
             presentation="inline"

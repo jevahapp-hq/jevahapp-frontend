@@ -9,8 +9,8 @@ interface FeedVideoSurfaceProps {
   height?: number;
   width?: number;
   /**
-   * Feed cards cover-fill the 400px box. Fullscreen (Reels) uses contain so
-   * landscape / square / oversized media letterbox instead of overflowing.
+   * Feed cards cover-fill the 400px box. Fullscreen (Reels) also cover-fills
+   * the phone viewport and clips overflow so media never paints off-screen.
    */
   contentFit?: "contain" | "cover";
 }

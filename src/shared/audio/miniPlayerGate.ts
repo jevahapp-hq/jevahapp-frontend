@@ -17,7 +17,9 @@ export type MiniPlayerSuppressionReason =
   /** First-run coach marks are walking the user through the UI. */
   | "login-tour"
   /** Comment sheet owns the bottom of the screen. */
-  | "comments";
+  | "comments"
+  /** Playlist detail sheet has its own transport dock. */
+  | "playlist-sheet";
 
 const held = new Set<MiniPlayerSuppressionReason>();
 const listeners = new Set<() => void>();

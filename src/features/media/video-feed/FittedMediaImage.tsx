@@ -17,6 +17,7 @@ export function FittedMediaImage({
   width,
   height,
   contentFit = "contain",
+  contentPosition = "center",
   style,
 }: {
   uri?: string | null;
@@ -24,6 +25,7 @@ export function FittedMediaImage({
   width: NumericSize;
   height: NumericSize;
   contentFit?: "contain" | "cover" | "fill";
+  contentPosition?: "center" | "top" | "bottom";
   style?: StyleProp<ViewStyle>;
 }) {
   const numericW = width > 0 ? width : 1;
@@ -53,7 +55,7 @@ export function FittedMediaImage({
         source={(displayUri ? { uri: displayUri } : source) as any}
         style={styles.img}
         contentFit={contentFit}
-        contentPosition="center"
+        contentPosition={contentPosition}
         cachePolicy={getLiteImageCachePolicy()}
         recyclingKey={displayUri || undefined}
       />

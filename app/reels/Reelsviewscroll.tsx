@@ -3,7 +3,7 @@
  * Fully modularized and performance optimized.
  */
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, StatusBar, View } from "react-native";
+import { FlatList, StatusBar, StyleSheet, View } from "react-native";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { navigateMainTab } from "../utils/navigation";
 import { useFullscreenBackInterceptor } from "../../src/features/media/video-feed";
@@ -76,7 +76,7 @@ const ReelsView = () => {
             height: cellHeight,
             width: cellWidth,
             backgroundColor: "#000",
-            overflow: "visible",
+            overflow: "hidden",
           }}
         >
           <ReelsVideoItem
@@ -161,6 +161,7 @@ const ReelsView = () => {
         backgroundColor="transparent"
         translucent
       />
+      <View style={styles.screen}>
       <FlatList
         ref={flatListRef}
         data={o.allVideos}
@@ -191,7 +192,7 @@ const ReelsView = () => {
         decelerationRate="fast"
         snapToInterval={cellHeight}
         snapToAlignment="start"
-        style={{ flex: 1, backgroundColor: "#000" }}
+        style={styles.list}
       />
 
       <ReelsModals
@@ -233,8 +234,22 @@ const ReelsView = () => {
           duration={3000}
         />
       ) : null}
+      </View>
     </ErrorBoundary>
   );
 };
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#000",
+    overflow: "hidden",
+  },
+  list: {
+    flex: 1,
+    backgroundColor: "#000",
+    overflow: "hidden",
+  },
+});
 
 export default memo(ReelsView);

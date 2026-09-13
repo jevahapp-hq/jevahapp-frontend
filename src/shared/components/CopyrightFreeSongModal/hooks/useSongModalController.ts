@@ -8,11 +8,15 @@ import { isCopyrightFreeSong } from "@/shared/audio";
 import { resolveAlbumArtSource } from "@/shared/brand/albumArt";
 import copyrightFreeMusicAPI from "@/app/services/copyrightFreeMusicAPI";
 import { playlistAPI } from "@/app/utils/playlistAPI";
-import { mapPlaylistTracksToSongs } from "@/app/utils/playlistTrackMapper";
+import {
+  hydratePlaylist,
+  playPlaylistQueue,
+} from "@/app/utils/openPlaylistNowPlaying";
 import { useDownloadHandler } from "@/app/utils/downloadUtils";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
 import { cycleRepeatOne } from "@/store/audioPlayer/queueAdvance";
 import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
+import { playCopyrightFreeSong } from "@/app/components/CopyrightFreeSongs/hooks/useCopyrightFreeSongsPlayback";
 import { usePlaylistStore, type Playlist, type PlaylistSong } from "@/store/usePlaylistStore";
 import type { CopyrightFreeSongModalProps } from "../types";
 import {
@@ -64,6 +68,7 @@ export function useSongModalController({
   const [optionsSongData, setOptionsSongData] = useState<any | null>(null);
   const [loadingOptionsSong, setLoadingOptionsSong] = useState(false);
   const [hasTrackedView, setHasTrackedView] = useState(false);
+  const playerReturnRef = useRef<{ song: any; queue: any[] } | null>(null);
 
   const insets = useSafeAreaInsets();
   const metricsBottom = safeAreaInitialMetrics?.insets?.bottom ?? 0;
@@ -270,82 +275,60 @@ export function useSongModalController({
       .finally(() => setLoadingOptionsSong(false));
   }, [showOptionsModal, song, likeCount, setViewCount]);
 
-  const handleClosePlaylistModal = useCallback(() => setShowPlaylistModal(false), []);
-
-  const hydratePlaylist = useCallback(async (playlist: Playlist): Promise<Playlist> => {
-    try {
-      const result = await playlistAPI.getPlaylistById(playlist.id);
-      if (!result.success || !result.data) return playlist;
-      const songs = mapPlaylistTracksToSongs(result.data.tracks);
-      return {
-        id: result.data._id,
-        name: result.data.name,
-        description: result.data.description,
-        songs: songs.length > 0 ? songs : playlist.songs || [],
-        createdAt: result.data.createdAt,
-        updatedAt: result.data.updatedAt,
-        thumbnailUrl:
-          songs[0]?.thumbnailUrl ||
-          playlist.thumbnailUrl ||
-          result.data.tracks?.[0]?.content?.thumbnailUrl,
-        totalTracks:
-          result.data.totalTracks || songs.length || playlist.songs?.length,
-      };
-    } catch {
-      return playlist;
-    }
+  const resumePlayerAfterPlaylist = useCallback(async () => {
+    const saved = playerReturnRef.current;
+    playerReturnRef.current = null;
+    setShowPlaylistDetail(false);
+    setSelectedPlaylistForDetail(null);
+    setShowPlaylistModal(false);
+    const songToPlay = saved?.song;
+    if (!songToPlay) return;
+    const queue = saved.queue?.length > 0 ? saved.queue : [songToPlay];
+    const overlay = useCopyrightFreeOverlayStore.getState();
+    overlay.setQueue(queue);
+    overlay.setSong(songToPlay);
+    await playCopyrightFreeSong(songToPlay, queue);
   }, []);
 
-  const openPlaylistDetail = useCallback(
-    async (playlist: Playlist) => {
-      const full = await hydratePlaylist(playlist);
-      setSelectedPlaylistForDetail(full);
-      setShowPlaylistModal(false);
-      setShowPlaylistDetail(true);
-    },
-    [hydratePlaylist]
-  );
+  const handleClosePlaylistModal = useCallback(() => {
+    setShowPlaylistModal(false);
+    if (playerReturnRef.current) {
+      void resumePlayerAfterPlaylist();
+    }
+  }, [resumePlayerAfterPlaylist]);
+
+  const openPlaylistDetail = useCallback(async (playlist: Playlist) => {
+    const overlay = useCopyrightFreeOverlayStore.getState();
+    playerReturnRef.current = {
+      song: overlay.song,
+      queue: overlay.songs?.length
+        ? overlay.songs
+        : overlay.song
+          ? [overlay.song]
+          : [],
+    };
+    setShowPlaylistModal(false);
+    setSelectedPlaylistForDetail(playlist);
+    setShowPlaylistDetail(true);
+    const { played, playlist: full } = await playPlaylistQueue(playlist, 0);
+    setSelectedPlaylistForDetail(full);
+    if (!played) {
+      Alert.alert("Empty playlist", "Add a song first.");
+    }
+  }, []);
 
   const playSelectedPlaylistAt = useCallback(
     async (index: number) => {
       const selected = selectedPlaylistForDetail;
       if (!selected) return;
-      const playable = selected.songs.filter((s) => s.audioUrl);
-      if (playable.length === 0) {
+      const { played, playlist: full } = await playPlaylistQueue(
+        selected,
+        index
+      );
+      setSelectedPlaylistForDetail(full);
+      if (!played) {
         Alert.alert("Empty playlist", "Add a song first.");
-        return;
       }
-      const start = Math.max(0, Math.min(index, playable.length - 1));
-      const queue = playable.map((s) => ({
-        id: s.id,
-        title: s.title,
-        artist: s.artist,
-        audioUrl: s.audioUrl,
-        thumbnailUrl: s.thumbnailUrl,
-        duration: s.duration,
-        category: s.category,
-        description: s.description,
-        source:
-          s.trackType === "copyrightFree"
-            ? ("copyright-free" as const)
-            : ("library" as const),
-      }));
-      useGlobalAudioPlayerStore.setState({
-        queue,
-        originalQueue: queue,
-        currentIndex: start,
-      });
-      await useGlobalAudioPlayerStore.getState().setTrack(queue[start], true);
-      const ui = playable.map((s) => ({
-        id: s.id,
-        _id: s.id,
-        title: s.title,
-        artist: s.artist,
-        audioUrl: s.audioUrl,
-        thumbnailUrl: s.thumbnailUrl,
-        duration: s.duration,
-      }));
-      useCopyrightFreeOverlayStore.getState().open(ui[start], { queue: ui });
     },
     [selectedPlaylistForDetail]
   );
@@ -382,7 +365,7 @@ export function useSongModalController({
         },
       ]);
     },
-    [selectedPlaylistForDetail, loadPlaylistsFromBackend, hydratePlaylist]
+    [selectedPlaylistForDetail, loadPlaylistsFromBackend]
   );
 
   const handleShare = useCallback(async () => {
@@ -579,6 +562,7 @@ export function useSongModalController({
     handleCreatePlaylist,
     handleAddToExistingPlaylist,
     handleClosePlaylistModal,
+    resumePlayerAfterPlaylist,
     openPlaylistDetail,
     playSelectedPlaylistAt,
     handleRemovePlaylistTrack,

@@ -8,7 +8,9 @@ export interface PlayerActionChipsProps {
   isInLibrary?: boolean;
   isTogglingSave?: boolean;
   onToggleLike: () => void;
-  onOpenPlaylistView: () => void;
+  onOpenPlaylistView?: () => void;
+  onPlayAll?: () => void;
+  isPlayAllActive?: boolean;
   onToggleSave?: () => void;
   onShare?: () => void;
 }
@@ -70,6 +72,8 @@ export function PlayerActionChips({
   isTogglingSave = false,
   onToggleLike,
   onOpenPlaylistView,
+  onPlayAll,
+  isPlayAllActive = false,
   onToggleSave,
   onShare,
 }: PlayerActionChipsProps) {
@@ -91,11 +95,21 @@ export function PlayerActionChips({
         active={isLiked}
         disabled={isTogglingLike}
       />
-      <Chip
-        icon="list-outline"
-        label="Playlist"
-        onPress={onOpenPlaylistView}
-      />
+      {onPlayAll ? (
+        <Chip
+          icon={isPlayAllActive ? "pause" : "play"}
+          label="Play all"
+          onPress={onPlayAll}
+          active={isPlayAllActive}
+          activeColor="#256E63"
+        />
+      ) : (
+        <Chip
+          icon="list-outline"
+          label="Playlist"
+          onPress={onOpenPlaylistView}
+        />
+      )}
       <Chip
         icon={isInLibrary ? "bookmark" : "bookmark-outline"}
         label={isInLibrary ? "Saved" : "Save"}

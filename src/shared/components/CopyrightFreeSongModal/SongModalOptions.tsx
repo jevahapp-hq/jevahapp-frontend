@@ -22,8 +22,10 @@ export interface SongModalOptionsProps {
   loadingOptionsSong: boolean;
   bottomInset?: number;
   onClose: () => void;
-  onAddToPlaylist: () => void;
+  onAddToPlaylist?: () => void;
   onToggleSave?: () => void;
+  onRemoveFromPlaylist?: () => void;
+  playlistActionsOnly?: boolean;
 }
 
 export function SongModalOptions({
@@ -39,6 +41,8 @@ export function SongModalOptions({
   onClose,
   onAddToPlaylist,
   onToggleSave,
+  onRemoveFromPlaylist,
+  playlistActionsOnly = false,
 }: SongModalOptionsProps) {
   const displayCount =
     optionsSongData?.views ?? optionsSongData?.viewCount ?? viewCount ?? 0;
@@ -82,7 +86,7 @@ export function SongModalOptions({
             }}
           />
 
-          {song && (
+          {song && !playlistActionsOnly && (
             <>
               <Text
                 style={{
@@ -174,6 +178,73 @@ export function SongModalOptions({
             </>
           )}
 
+          {song && playlistActionsOnly ? (
+            <>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "600",
+                  color: "#111827",
+                  marginBottom: 4,
+                  fontFamily: "PlusJakartaSans-SemiBold",
+                }}
+                numberOfLines={1}
+              >
+                {song.title}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#6B7280",
+                  marginBottom: 12,
+                  fontFamily: "PlusJakartaSans",
+                }}
+                numberOfLines={1}
+              >
+                {song.artist}
+              </Text>
+            </>
+          ) : null}
+
+          {onRemoveFromPlaylist ? (
+            <TouchableOpacity
+              onPress={() => {
+                onClose();
+                onRemoveFromPlaylist();
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 12,
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#FEF2F2",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="remove-circle-outline" size={18} color="#DC2626" />
+              </View>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#111827",
+                  fontWeight: "500",
+                  fontFamily: "PlusJakartaSans-Medium",
+                }}
+              >
+                Remove from playlist
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
           {onToggleSave && (
             <TouchableOpacity
               onPress={onToggleSave}
@@ -219,6 +290,7 @@ export function SongModalOptions({
             </TouchableOpacity>
           )}
 
+          {!playlistActionsOnly && onAddToPlaylist ? (
           <TouchableOpacity
             onPress={() => {
               onClose();
@@ -255,6 +327,7 @@ export function SongModalOptions({
               Add to playlist
             </Text>
           </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             onPress={onClose}

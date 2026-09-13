@@ -16,6 +16,7 @@ import { ReelsMenu } from "./ReelsMenu";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
 import ReelsVideoPlayer from "./ReelsVideoPlayer";
 import type { VideoPlayer } from "expo-video";
+import { getReelsMediaFrame } from "../hooks/useReelsResponsive";
 
 export interface ReelsVideoItemProps {
   videoData: any;
@@ -162,6 +163,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   const shouldMountPlayer =
     index === currentIndex_state || index === currentIndex_state + 1;
 
+  const posterFrame = getReelsMediaFrame(screenWidth, screenHeight);
   const posterUri = useMemo(() => {
     const raw =
       enriched?.thumbnailUrl ||
@@ -208,7 +210,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
         height: screenHeight,
         width: screenWidth,
         backgroundColor: "#000",
-        overflow: "visible",
+        overflow: "hidden",
       }}
     >
       {shouldMountPlayer ? (
@@ -242,16 +244,14 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
             height: screenHeight,
             backgroundColor: "#000",
             overflow: "hidden",
-            justifyContent: "center",
-            alignItems: "center",
           }}
         >
           {posterUri ? (
             <FittedMediaImage
               uri={posterUri}
-              width={screenWidth}
-              height={screenHeight}
-              contentFit="contain"
+              width={posterFrame.width}
+              height={posterFrame.height}
+              contentFit="cover"
             />
           ) : null}
         </View>

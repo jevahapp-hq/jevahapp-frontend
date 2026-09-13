@@ -11,6 +11,7 @@ export interface PlayerTransportProps {
   onNext: () => void;
   onRepeatCycle: () => void;
   onOptionsPress: () => void;
+  optionsPosition?: "start" | "end";
 }
 
 export function PlayerTransport({
@@ -21,21 +22,53 @@ export function PlayerTransport({
   onNext,
   onRepeatCycle,
   onOptionsPress,
+  optionsPosition = "start",
 }: PlayerTransportProps) {
   const repeatOn = repeatMode !== "none";
 
+  const optionsBtn = (
+    <TouchableOpacity
+      onPress={onOptionsPress}
+      activeOpacity={0.7}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityRole="button"
+      accessibilityLabel="More options"
+      style={styles.sideHit}
+    >
+      <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+    </TouchableOpacity>
+  );
+
+  const repeatBtn = (
+    <TouchableOpacity
+      onPress={onRepeatCycle}
+      activeOpacity={0.7}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityRole="button"
+      accessibilityLabel={
+        repeatMode === "none"
+          ? "Repeat off"
+          : repeatMode === "one"
+            ? "Repeat one"
+            : "Repeat all"
+      }
+      style={styles.sideHit}
+    >
+      {repeatMode === "one" ? (
+        <MaterialIcons name="repeat-one" size={24} color={UI_CONFIG.COLORS.PRIMARY} />
+      ) : (
+        <Ionicons
+          name="repeat"
+          size={22}
+          color={repeatOn ? UI_CONFIG.COLORS.PRIMARY : "#FFFFFF"}
+        />
+      )}
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.row}>
-      <TouchableOpacity
-        onPress={onOptionsPress}
-        activeOpacity={0.7}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityRole="button"
-        accessibilityLabel="More options"
-        style={styles.sideHit}
-      >
-        <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
-      </TouchableOpacity>
+      {optionsPosition === "start" ? optionsBtn : repeatBtn}
 
       <TouchableOpacity
         onPress={onPrevious}
@@ -74,30 +107,7 @@ export function PlayerTransport({
         <Ionicons name="play-skip-forward" size={30} color="#FFFFFF" />
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={onRepeatCycle}
-        activeOpacity={0.7}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityRole="button"
-        accessibilityLabel={
-          repeatMode === "none"
-            ? "Repeat off"
-            : repeatMode === "one"
-              ? "Repeat one"
-              : "Repeat all"
-        }
-        style={styles.sideHit}
-      >
-        {repeatMode === "one" ? (
-          <MaterialIcons name="repeat-one" size={24} color={UI_CONFIG.COLORS.PRIMARY} />
-        ) : (
-          <Ionicons
-            name="repeat"
-            size={22}
-            color={repeatOn ? UI_CONFIG.COLORS.PRIMARY : "#FFFFFF"}
-          />
-        )}
-      </TouchableOpacity>
+      {optionsPosition === "start" ? repeatBtn : optionsBtn}
     </View>
   );
 }

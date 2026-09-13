@@ -1,8 +1,20 @@
 import { Platform, Dimensions } from "react-native";
 
+/**
+ * Fill the visible reel cell. Cover-fill the picture; clip leftover width
+ * so sides never paint past the phone.
+ */
+export function getReelsMediaFrame(width: number, height: number) {
+  return {
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  };
+}
+
 export function useReelsResponsive() {
-  const screenHeight = Dimensions.get("window").height;
-  const screenWidth = Dimensions.get("window").width;
+  const windowSize = Dimensions.get("window");
+  const screenHeight = windowSize.height;
+  const screenWidth = windowSize.width;
   const isSmallScreen = screenHeight < 700;
   const isMediumScreen = screenHeight >= 700 && screenHeight < 800;
   const isLargeScreen = screenHeight >= 800;
