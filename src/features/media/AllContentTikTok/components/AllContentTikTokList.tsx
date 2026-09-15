@@ -2,7 +2,7 @@ import { FlashList } from "@shopify/flash-list";
 import React, { useCallback, useMemo } from "react";
 import { RefreshControl, useWindowDimensions, View } from "react-native";
 import { UI_CONFIG } from "../../../../shared/constants";
-import { detectMediaType, isAudioSermon } from "../../../../shared/utils";
+import { detectMediaType, isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import { getFeedVideoRowSize } from "../../video-feed";
 import type { FeedRow } from "../types";
 import type { MediaItem } from "../../../../shared/types";
@@ -58,7 +58,9 @@ export function AllContentTikTokList({
     if (row.rowType !== "media") return row.rowType;
     if (isAudioSermon(row.item)) return "media-audio";
     const mediaType = detectMediaType(row.item);
-    return mediaType === "video" ? "media-video" : "media-audio";
+    if (mediaType === "ebook") return "media-ebook";
+    if (mediaType === "audio") return "media-audio";
+    return "media-video";
   }, []);
 
   const overrideItemLayout = useCallback(

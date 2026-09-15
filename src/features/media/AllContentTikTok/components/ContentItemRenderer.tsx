@@ -6,7 +6,7 @@
 import React from "react";
 import { canViewerSeeMedia } from "../../../../shared/media/moderationVisibility";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon } from "../../../../shared/utils";
+import { detectMediaType, isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import EbookCard from "../../components/EbookCard";
 import MusicCard from "../../components/MusicCard";
 import VideoCard from "../../components/VideoCard";
@@ -179,8 +179,13 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
 
     case "sermon":
     case "teachings":
-      if (isAudioSermonValue) return <MusicCard key={key} {...musicCardProps} />;
+    case "devotional": {
+      const mediaType = String((item as { mediaType?: string }).mediaType || "").toLowerCase();
+      if (mediaType === "audio" || isAudioSermonValue) {
+        return <MusicCard key={key} {...musicCardProps} />;
+      }
       return <VideoCard key={key} {...videoCardProps} />;
+    }
 
     case "audio":
     case "music":
@@ -191,8 +196,14 @@ function ContentItemRendererInner(props: ContentItemRendererProps) {
     case "e-books":
     case "ebooks":
     case "books":
-    default:
       return <EbookCard key={key} {...ebookCardProps} />;
+
+    default: {
+      const kind = detectMediaType(item);
+      if (kind === "video") return <VideoCard key={key} {...videoCardProps} />;
+      if (kind === "audio") return <MusicCard key={key} {...musicCardProps} />;
+      return <EbookCard key={key} {...ebookCardProps} />;
+    }
   }
 }
 
@@ -225,7 +236,10 @@ function arePropsEqual(prev: ContentItemRendererProps, next: ContentItemRenderer
     !!prev.shouldRenderPlayer === !!next.shouldRenderPlayer &&
     prev.isFeedActive === next.isFeedActive &&
     prev.isAutoPlayEnabled === next.isAutoPlayEnabled &&
-    prev.item.moderationStatus === next.item.moderationStatus
+    prev.item.moderationStatus === next.item.moderationStatus &&
+    prev.item.contentType === next.item.contentType &&
+    (prev.item as { mediaType?: string }).mediaType ===
+      (next.item as { mediaType?: string }).mediaType
   );
 }
 

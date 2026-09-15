@@ -1,7 +1,6 @@
 /**
- * Warm Home destinations so Community / Library / Live / Hymns / Music
- * paint on tap. Expo Go compiles lazy chunks on first import — start that
- * work during ALL, not on click.
+ * Warm Home destinations after first paint so Community / Library / Live /
+ * Hymns / Music / Bible compile off the ALL-feed critical path.
  */
 
 let modulesWarmed = false;
@@ -10,17 +9,17 @@ const TAB_MODULE_LOADERS = [
   () => import("../screens/CommunityScreen"),
   () => import("../screens/library/LibraryScreen"),
   () => import("../screens/library/AllLibrary"),
+  () => import("../screens/BibleScreen"),
   () => import("../categories/music"),
   () => import("../categories/hymns"),
   () => import("../categories/LiveComponent"),
-  () => import("../../assets/hymns.json"),
 ] as const;
 
 export function homeTabModuleLoaderCount(): number {
   return TAB_MODULE_LOADERS.length;
 }
 
-/** Fire-and-forget: compile tab graphs as soon as the shell is up. */
+/** Fire-and-forget: compile tab graphs after Home has painted. */
 export function prefetchHomeTabModules(): void {
   if (modulesWarmed) return;
   modulesWarmed = true;

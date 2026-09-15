@@ -35,9 +35,14 @@ export function FittedMediaImage({
     (source && typeof source === "object" && "uri" in source
       ? source.uri
       : null);
+  // Contain: request by width only so the CDN does not crop/zoom to the box.
   const displayUri =
     typeof rawUri === "string" && rawUri
-      ? optimizeImageUrl(rawUri, numericW, numericH) || rawUri
+      ? optimizeImageUrl(
+          rawUri,
+          numericW,
+          contentFit === "contain" ? undefined : numericH
+        ) || rawUri
       : null;
 
   if (!displayUri && !source) return null;
@@ -47,7 +52,12 @@ export function FittedMediaImage({
       pointerEvents="none"
       style={[
         styles.clip,
-        { width, height },
+        {
+          width: numericW,
+          height: numericH,
+          maxWidth: numericW,
+          maxHeight: numericH,
+        },
         style,
       ]}
     >
@@ -71,7 +81,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   img: {
-    width: "100%",
-    height: "100%",
+    ...StyleSheet.absoluteFillObject,
   },
 });

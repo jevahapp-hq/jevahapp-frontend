@@ -27,9 +27,9 @@ export function isCopyrightFreeSong(song: any): boolean {
 
 export function resolveMediaAudioUrl(item: MediaItem | Record<string, unknown>): string {
   const candidates = [
-    (item as any).fileUrl,
-    (item as any).audioUrl,
     (item as any).playbackUrl,
+    (item as any).audioUrl,
+    (item as any).fileUrl,
     (item as any).mediaUrl,
   ];
   for (const raw of candidates) {

@@ -5,7 +5,7 @@
 
 import { enrichContentWithAuthor, resolveAuthorAvatar, resolveAuthorName, stampPayloadAuthor } from "../author";
 import { ContentType, MediaItem } from "../types";
-import { isEbook } from "./mediaTypeDetection";
+import { belongsInVideoCategory, isEbook } from "./mediaTypeDetection";
 import { getTimeAgo as getTimeAgoFromTimeUtils } from "./timeAgo";
 
 /**
@@ -35,12 +35,20 @@ export const transformApiResponseToMediaItem = (item: any): MediaItem | null => 
         }
         return stamped.contentType || "media";
       })(),
-      fileUrl: stamped.fileUrl || stamped.file || stamped.url || "",
+      fileUrl:
+        stamped.fileUrl ||
+        stamped.playbackUrl ||
+        stamped.pdfUrl ||
+        stamped.file ||
+        stamped.url ||
+        "",
       // Preserve backend streaming hints so the player can pick the fastest
       // startable source (e.g. HLS) instead of always falling back to the
       // raw fileUrl, and so media-type detection has mimeType to work with.
       playbackUrl: stamped.playbackUrl,
       hlsUrl: stamped.hlsUrl,
+      pdfUrl: stamped.pdfUrl || stamped.fileUrl,
+      mediaType: stamped.mediaType || stamped.media_type,
       mimeType: stamped.mimeType || stamped.mimetype,
       title: stamped.title || "Untitled",
       speaker,
@@ -130,13 +138,7 @@ export const filterContentByType = (
 
     // Handle aliases
     if (filterType === "video" || filterType === "videos") {
-      return (
-        itemType === "video" ||
-        itemType === "videos" ||
-        itemType === "sermon" ||
-        itemType === "gif" ||
-        itemType === "gifs"
-      );
+      return belongsInVideoCategory(item);
     }
     if (filterType === "audio" || filterType === "music") {
       return itemType === "audio" || itemType === "music";

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { reportMedia } from "../../../app/services/mediaReportService";
+import { resolveReportMediaId } from "../../../app/services/reportMediaId";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
@@ -50,9 +51,15 @@ export default function ReportMediaModal({
       return;
     }
 
+    const id = resolveReportMediaId(mediaId);
+    if (!id) {
+      Alert.alert("Error", "This content can't be reported right now.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await reportMedia(mediaId, selectedReason, description?.trim() || undefined);
+      await reportMedia(id, selectedReason, description?.trim() || undefined);
       
       // Reset form
       setSelectedReason("");

@@ -281,6 +281,8 @@ export function isFeedListPath(path: string): boolean {
     /\/media\/public\/all-content\/?$/.test(p) ||
     /\/media\/all-content\/?$/.test(p) ||
     /\/media\/default\/?$/.test(p) ||
+    /\/sermons\/?$/.test(p) ||
+    /\/ebooks\/?$/.test(p) ||
     /\/feed\/for-you\/?$/.test(p) ||
     /\/feed\/music-for-you\/?$/.test(p) ||
     /\/music\/tracks\/?$/.test(p)

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
-import { detectMediaType, isAudioSermon } from "../../../../shared/utils";
-import type { FeedRow } from "../types";
+import type { MediaItem } from "../../../../shared/types";
+import { detectMediaType, isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import {
+  FEED_AUDIO_MIN_VIEW_MS,
   FEED_VIDEO_MIN_VIEW_MS,
   FEED_VIDEO_VISIBLE_PERCENT,
 } from "../../video-feed";
+import type { FeedRow } from "../types";
 
 type ViewabilityInfo = {
   viewableItems: Array<{ item: FeedRow; isViewable: boolean }>;
@@ -20,6 +23,7 @@ export function useFeedViewability(options: {
   pauseAllAudio: () => void;
   pauseMedia: (key: string) => void;
   playMedia: (key: string, type: "video" | "audio") => void;
+  playAudioSermon?: (item: MediaItem) => void;
   setCurrentlyVisibleVideo: (key: string | null) => void;
   setFocusedFeedKey: (updater: (prev: string | null) => string | null) => void;
   pendingResumeKeyRef?: MutableRefObject<string | null>;
@@ -33,6 +37,7 @@ export function useFeedViewability(options: {
     pauseAllAudio,
     pauseMedia,
     playMedia,
+    playAudioSermon,
     setCurrentlyVisibleVideo,
     setFocusedFeedKey,
     pendingResumeKeyRef,
@@ -60,43 +65,64 @@ export function useFeedViewability(options: {
     playMediaRef.current = playMedia;
   }, [playMedia]);
 
+  const playAudioSermonRef = useRef(playAudioSermon);
+  useEffect(() => {
+    playAudioSermonRef.current = playAudioSermon;
+  }, [playAudioSermon]);
+
   const handleVideoViewabilityImpl = useCallback((info: ViewabilityInfo) => {
     if (!isFeedActiveRef.current) return;
     if (commentsOpenRef.current) return;
 
     hasDeterminedVisibilityRef.current = true;
 
-    let topVideoKey: string | null = null;
+    let topRow: FeedRow | null = null;
     for (const token of info.viewableItems) {
       const row = token.item;
       if (!row || row.rowType !== "media") continue;
-      const mediaType = isAudioSermon(row.item)
-        ? "audio"
-        : detectMediaType(row.item);
-      if (mediaType === "video") {
-        topVideoKey = row.key;
-        break;
-      }
+      topRow = row;
+      break;
     }
 
+    const topKey = topRow?.key ?? null;
+    const topItem = topRow?.item;
+    const isTopAudioSermon = Boolean(topItem && isAudioSermon(topItem));
+    const isTopVideo =
+      Boolean(topItem) &&
+      !isTopAudioSermon &&
+      detectMediaType(topItem) === "video";
+
     const pending = pendingResumeKeyRef?.current;
-    if (pending && topVideoKey !== pending) {
+    if (pending && topKey !== pending) {
       return;
     }
-    if (pending && topVideoKey === pending) {
+    if (pending && topKey === pending) {
       pendingResumeKeyRef.current = null;
     }
 
     const prevKey = currentlyVisibleVideoRef.current;
-    if (topVideoKey !== prevKey) {
+    if (topKey === prevKey) return;
+
+    if (prevKey && useGlobalVideoStore.getState().playingVideos[prevKey]) {
+      pauseMediaRef.current(prevKey);
+    }
+
+    if (isTopAudioSermon) {
       if (prevKey && useGlobalVideoStore.getState().playingVideos[prevKey]) {
         pauseMediaRef.current(prevKey);
       }
-      setCurrentlyVisibleVideo(topVideoKey);
-      currentlyVisibleVideoRef.current = topVideoKey;
-      if (topVideoKey && isAutoPlayEnabledRef.current) {
-        playMediaRef.current(topVideoKey, "video");
-      }
+      return;
+    }
+
+    pauseAllAudioRef.current();
+    if (useCopyrightFreeOverlayStore.getState().surface === "full") {
+      useCopyrightFreeOverlayStore.getState().minimize();
+    }
+
+    setCurrentlyVisibleVideo(isTopVideo ? topKey : null);
+    currentlyVisibleVideoRef.current = isTopVideo ? topKey : null;
+    if (isTopVideo && topKey && isAutoPlayEnabledRef.current) {
+      playMediaRef.current(topKey, "video");
     }
   }, [
     commentsOpenRef,
@@ -117,26 +143,49 @@ export function useFeedViewability(options: {
   }, []);
 
   const handleAudioViewabilityImpl = useCallback((info: ViewabilityInfo) => {
-    const feedAudioId = playingAudioIdRef.current;
-    const activeKeys = feedAudioId ? [feedAudioId] : [];
-    if (activeKeys.length === 0) return;
+    if (!isFeedActiveRef.current) return;
+    if (commentsOpenRef.current) return;
 
-    const stillVisible = info.viewableItems.some((token) => {
-      if (token.item?.rowType !== "media") return false;
-      const item = token.item.item;
-      const id = item?._id ? String(item._id) : "";
-      return activeKeys.some(
-        (key) =>
-          key === token.item.key ||
-          key === id ||
-          key === `music-${id}` ||
-          (id && key.includes(id))
-      );
-    });
-    if (!stillVisible) {
-      pauseAllAudioRef.current();
+    let topRow: FeedRow | null = null;
+    for (const token of info.viewableItems) {
+      const row = token.item;
+      if (!row || row.rowType !== "media") continue;
+      topRow = row;
+      break;
     }
-  }, []);
+
+    const topKey = topRow?.key ?? null;
+    const topItem = topRow?.item;
+    const isTopAudioSermon = Boolean(topItem && isAudioSermon(topItem));
+
+    if (isTopAudioSermon && topItem && topKey) {
+      const prevKey = currentlyVisibleVideoRef.current;
+      if (
+        prevKey &&
+        prevKey !== topKey &&
+        useGlobalVideoStore.getState().playingVideos[prevKey]
+      ) {
+        pauseMediaRef.current(prevKey);
+      }
+      setCurrentlyVisibleVideo(topKey);
+      currentlyVisibleVideoRef.current = topKey;
+      if (isAutoPlayEnabledRef.current) {
+        playAudioSermonRef.current?.(topItem);
+      }
+      return;
+    }
+
+    pauseAllAudioRef.current();
+    if (useCopyrightFreeOverlayStore.getState().surface === "full") {
+      useCopyrightFreeOverlayStore.getState().minimize();
+    }
+  }, [
+    commentsOpenRef,
+    currentlyVisibleVideoRef,
+    isAutoPlayEnabledRef,
+    isFeedActiveRef,
+    setCurrentlyVisibleVideo,
+  ]);
 
   const handleAudioViewabilityRef = useRef(handleAudioViewabilityImpl);
   useEffect(() => {
@@ -175,8 +224,8 @@ export function useFeedViewability(options: {
     minimumViewTime: FEED_VIDEO_MIN_VIEW_MS,
   }).current;
   const audioViewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 60,
-    minimumViewTime: 200,
+    itemVisiblePercentThreshold: FEED_VIDEO_VISIBLE_PERCENT,
+    minimumViewTime: FEED_AUDIO_MIN_VIEW_MS,
   }).current;
   const rowFocusViewabilityConfig = useRef({
     itemVisiblePercentThreshold: 35,

@@ -19,7 +19,9 @@ export type MiniPlayerSuppressionReason =
   /** Comment sheet owns the bottom of the screen. */
   | "comments"
   /** Playlist detail sheet has its own transport dock. */
-  | "playlist-sheet";
+  | "playlist-sheet"
+  /** Ebook listen mode uses on-device TTS, same as the Bible reader. */
+  | "ebook-listen";
 
 const held = new Set<MiniPlayerSuppressionReason>();
 const listeners = new Set<() => void>();

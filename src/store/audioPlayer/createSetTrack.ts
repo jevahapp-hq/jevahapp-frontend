@@ -28,6 +28,24 @@ import type {
   GlobalAudioPlayerState,
 } from "./types";
 
+let audioModeReady: Promise<void> | null = null;
+
+function ensureAudioSession(): Promise<void> {
+  if (!audioModeReady) {
+    audioModeReady = setAudioModeAsync({
+      allowsRecording: false,
+      shouldPlayInBackground: true,
+      playsInSilentMode: true,
+      interruptionMode: "doNotMix",
+      shouldRouteThroughEarpiece: false,
+    }).catch((error) => {
+      audioModeReady = null;
+      throw error;
+    });
+  }
+  return audioModeReady;
+}
+
 export function createSetTrack(
   get: AudioPlayerGet,
   set: AudioPlayerSet
@@ -118,13 +136,12 @@ export function createSetTrack(
       });
 
       try {
-        await setAudioModeAsync({
-          allowsRecording: false,
-          shouldPlayInBackground: true,
-          playsInSilentMode: true,
-          interruptionMode: "doNotMix",
-          shouldRouteThroughEarpiece: false,
-        });
+        // First sermon of the session waits for audio mode; later switches play immediately.
+        if (!audioModeReady) {
+          await ensureAudioSession();
+        } else {
+          void ensureAudioSession();
+        }
 
         try {
           const videoStore =

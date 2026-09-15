@@ -29,6 +29,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../hooks/useAuth";
+import { setPendingSignup } from "../../utils/pendingSignup";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SPRING = { damping: 26, stiffness: 280, mass: 0.8 };
@@ -43,6 +44,8 @@ export type VerifyEmailModalProps = {
   password: string;
   firstName: string;
   lastName: string;
+  /** Register already sent the code — skip resend so the emailed code stays valid. */
+  codeAlreadySent?: boolean;
 };
 
 type Step = "verify" | "emailSent";
@@ -55,6 +58,7 @@ export default function VerifyEmailSheet({
   password,
   firstName,
   lastName,
+  codeAlreadySent = false,
 }: VerifyEmailModalProps) {
   const insets = useSafeAreaInsets();
   const { resendVerification } = useAuth();
@@ -76,9 +80,13 @@ export default function VerifyEmailSheet({
 
   useEffect(() => {
     if (visible) {
-      setStep("verify");
+      setStep(codeAlreadySent ? "emailSent" : "verify");
       setSendError(null);
-      setSendMessage(null);
+      setSendMessage(
+        codeAlreadySent
+          ? "A verification code was sent to your email."
+          : null
+      );
       setSending(false);
       dragY.value = 0;
       dimOpacity.value = withTiming(1, { duration: 220 });
@@ -88,7 +96,7 @@ export default function VerifyEmailSheet({
       dimOpacity.value = 0;
       dragY.value = 0;
     }
-  }, [visible, sheetY, dimOpacity, dragY]);
+  }, [visible, codeAlreadySent, sheetY, dimOpacity, dragY]);
 
   const handleVerifyMe = async () => {
     if (sending) return;
@@ -101,7 +109,6 @@ export default function VerifyEmailSheet({
       const msg =
         res?.message || res?.data?.message || "Verification email sent";
       setSendMessage(msg);
-      onVerify?.();
       setStep("emailSent");
     } catch (e: any) {
       setSendError(e?.message || "Failed to send verification email");
@@ -113,9 +120,16 @@ export default function VerifyEmailSheet({
   };
 
   const handleContinueToCode = () => {
+    setPendingSignup({
+      email: emailAddress,
+      password,
+      firstName,
+      lastName,
+    });
     sheetY.value = withTiming(SCREEN_HEIGHT, { duration: 220 });
     dimOpacity.value = withTiming(0, { duration: 180 });
     onClose();
+    onVerify?.();
     setTimeout(() => {
       router.push({
         pathname: "/auth/codeVerification",

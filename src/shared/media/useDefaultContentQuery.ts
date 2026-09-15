@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useContentCacheStore } from "@/store/useContentCacheStore";
 import { UserProfileCache } from "../../../app/utils/cache/UserProfileCache";
@@ -104,7 +104,10 @@ export function useDefaultContentQuery(options: {
       }
       return failureCount < 1;
     },
-    refetchOnMount: false,
+    refetchOnMount: (q) => {
+      const msg = String((q.state.error as Error | null)?.message || "");
+      return msg.includes("Missing queryFn") ? "always" : false;
+    },
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -180,4 +183,44 @@ export function useDefaultContentQuery(options: {
     fetchDefaultContent,
     refetch: query.refetch,
   };
+}
+
+/** Hydrated `default-content` queries have no queryFn — attach one globally. */
+export function registerDefaultContentQueryDefaults(
+  queryClient: QueryClient
+): void {
+  queryClient.setQueryDefaults(["default-content"], {
+    queryFn: async ({ queryKey }) => {
+      const page = Number(queryKey[1] ?? 1) || 1;
+      const limit = Number(queryKey[2] ?? FEED_PAGE_SIZE) || FEED_PAGE_SIZE;
+      const contentType = String(queryKey[3] ?? "ALL");
+      const search =
+        typeof queryKey[4] === "string" ? queryKey[4] : undefined;
+      const response = await mediaApi.getDefaultContent({
+        page,
+        limit,
+        contentType: apiDefaultContentType(contentType),
+        search,
+      });
+      if (!response.success) {
+        throw new Error(response.error || "Failed to fetch content");
+      }
+      const enrichedMedia = UserProfileCache.enrichContentArray(
+        response.media || []
+      );
+      const transformedMedia = enrichedMedia
+        .map(transformApiResponseToMediaItem)
+        .filter((item): item is MediaItem => item !== null);
+      syncMediaStatsToInteractionStore(transformedMedia);
+      return {
+        media: transformedMedia,
+        total: response.total || 0,
+        page: response.page || page,
+        limit: response.limit || limit,
+        pages: Math.ceil(
+          (response.total || 0) / (response.limit || limit)
+        ),
+      };
+    },
+  });
 }

@@ -144,14 +144,31 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
     typeof media?.playbackUrl === "string" ? media.playbackUrl.trim() : "";
   const hlsUrl = typeof media?.hlsUrl === "string" ? media.hlsUrl.trim() : "";
 
+  const notVideoUrl = (u: string) =>
+    !!u && /\.(pdf|epub|mobi|mp3|wav|m4a|aac|ogg|flac|wma)(\?|#|$)/i.test(u);
+  const safeFileUrl = notVideoUrl(fileUrl) ? "" : fileUrl;
+  const safePlaybackUrl = notVideoUrl(playbackUrl) ? "" : playbackUrl;
+
   const mime = String(
-    media?.fileMimeType || media?.mimeType || media?.contentType || ""
+    media?.fileMimeType || media?.mimeType || ""
   ).toLowerCase();
+  const contentType = String(media?.contentType || "").toLowerCase();
+  const mediaType = String(media?.mediaType || "").toLowerCase();
+  if (
+    mediaType === "audio" ||
+    contentType === "ebook" ||
+    contentType === "ebooks" ||
+    contentType === "e-books" ||
+    contentType === "books" ||
+    contentType === "image"
+  ) {
+    return null;
+  }
   const looksLikeVideoMime =
     mime.startsWith("video/") ||
     mime === "videos" ||
     mime === "video" ||
-    mime.includes("sermon");
+    (contentType === "sermon" && mediaType !== "audio");
 
   const durationSec = Number(media?.duration ?? media?.durationSec) || 0;
   const processingStatus = String(
@@ -170,7 +187,7 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
     !isHls(u) &&
     (/\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u) ||
       // R2 / CDN keys often have no extension — treat fileUrl as progressive for videos
-      (looksLikeVideoMime && u === fileUrl));
+      (looksLikeVideoMime && u === safeFileUrl));
 
   // Lite / server hint: ABR HLS (~360p) over fat progressive MP4
   let preferHlsLite = media?.lite?.preferHls === true;
@@ -182,23 +199,23 @@ export const getVideoUrlFromMedia = (media: any): string | null => {
     // ignore
   }
   if (preferHlsLite && !blockHlsPrimary && hlsUrl) return hlsUrl;
-  if (preferHlsLite && !blockHlsPrimary && playbackUrl && isHls(playbackUrl)) {
-    return playbackUrl;
+  if (preferHlsLite && !blockHlsPrimary && safePlaybackUrl && isHls(safePlaybackUrl)) {
+    return safePlaybackUrl;
   }
 
   // Prefer progressive faststart MP4 (fileUrl / non-HLS playbackUrl) for seek.
   // HLS is fallback only when no MP4 — and never when duration is still unknown
   // on a ready card (incomplete playlist → player.duration=0 → seek broken).
-  if (fileUrl && isProgressive(fileUrl)) return fileUrl;
-  if (fileUrl && looksLikeVideoMime && !isHls(fileUrl)) return fileUrl;
-  if (playbackUrl && isProgressive(playbackUrl)) return playbackUrl;
-  if (playbackUrl && !isHls(playbackUrl)) return playbackUrl;
+  if (safeFileUrl && isProgressive(safeFileUrl)) return safeFileUrl;
+  if (safeFileUrl && looksLikeVideoMime && !isHls(safeFileUrl)) return safeFileUrl;
+  if (safePlaybackUrl && isProgressive(safePlaybackUrl)) return safePlaybackUrl;
+  if (safePlaybackUrl && !isHls(safePlaybackUrl)) return safePlaybackUrl;
   if (!blockHlsPrimary && hlsUrl) return hlsUrl;
-  if (!blockHlsPrimary && playbackUrl) return playbackUrl;
-  if (fileUrl) return fileUrl;
+  if (!blockHlsPrimary && safePlaybackUrl) return safePlaybackUrl;
+  if (safeFileUrl) return safeFileUrl;
   // Last resort: HLS even without duration (nothing else to play)
   if (hlsUrl) return hlsUrl;
-  if (playbackUrl) return playbackUrl;
+  if (safePlaybackUrl) return safePlaybackUrl;
   return null;
 };
 

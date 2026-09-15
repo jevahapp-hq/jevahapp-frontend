@@ -11,6 +11,9 @@ export function mapUploadNetworkError(error: unknown): string {
   if (err?.name === "AbortError" || err?.message?.includes("timeout")) {
     return "This took longer than we waited for. The upload may still be processing — check your profile before trying again.";
   }
+  if (err?.message?.toLowerCase().includes("unsupported formdatapart")) {
+    return "Upload isn't supported on this build. Restart the app and try again.";
+  }
   if (err?.message?.includes("Network request failed")) {
     return "Network connection failed. Please check your internet connection and try again.";
   }

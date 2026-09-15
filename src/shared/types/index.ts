@@ -65,8 +65,12 @@ export interface MediaItem extends BaseEntity {
   moderationStatus?: "approved" | "under_review" | "rejected";
   /** Async media worker status — seekable only when ready + duration > 0 */
   processingStatus?: "ready" | "processing" | "pending" | "failed" | string;
+  /** audio | video from typed catalogs — sermons can be either */
+  mediaType?: "audio" | "video" | string;
   playbackUrl?: string; // HLS or processed playback URL from backend
   hlsUrl?: string; // Legacy HLS field
+  /** PDF source from ebook catalogs */
+  pdfUrl?: string;
   /** Compact feed playback hints when `profile=lite` */
   lite?: {
     preferHls?: boolean;

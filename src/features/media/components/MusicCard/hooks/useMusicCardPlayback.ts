@@ -11,9 +11,17 @@ import {
   resolveMediaAudioUrl,
 } from "../../../../../shared/audio/mapToAudioTrack";
 import { playOrToggleTrack } from "../../../../../shared/audio/playOrToggleTrack";
-import { resolvePlaybackQueue } from "../../../../../shared/audio/sessionAudioQueue";
-import { getUserDisplayNameFromContent } from "../../../../../shared/utils";
+import {
+  getSermonAudioQueue,
+  resolvePlaybackQueue,
+} from "../../../../../shared/audio/sessionAudioQueue";
+import { getUserDisplayNameFromContent } from "../../../../../shared/utils/contentHelpers";
 import type { MediaItem } from "../../../../../shared/types";
+
+function isSermonItem(audio: MediaItem) {
+  const t = String(audio.contentType || "").toLowerCase();
+  return t === "sermon" || t === "teachings" || t === "devotional";
+}
 
 function mediaItemToNowPlaying(audio: MediaItem) {
   const track = mapMediaItemToTrack(audio, "feed");
@@ -29,6 +37,26 @@ function mediaItemToNowPlaying(audio: MediaItem) {
     contentType: audio.contentType || "music",
     source: "feed" as const,
   };
+}
+
+function queueForAudio(audio: MediaItem, track: NonNullable<ReturnType<typeof mapMediaItemToTrack>>) {
+  const sermonQueue = isSermonItem(audio) ? getSermonAudioQueue() : [];
+  return isSermonItem(audio) && sermonQueue.some((t) => t.id === track.id)
+    ? sermonQueue
+    : resolvePlaybackQueue(track);
+}
+
+function overlayQueue(queue: ReturnType<typeof queueForAudio>) {
+  return queue.map((t) => ({
+    id: t.id,
+    _id: t.id,
+    title: t.title,
+    artist: t.artist,
+    thumbnailUrl: t.thumbnailUrl,
+    audioUrl: t.audioUrl,
+    duration: t.duration,
+    source: t.source,
+  }));
 }
 
 export function useMusicCardPlayback(audio: MediaItem, index: number) {
@@ -50,31 +78,34 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
     if (!track) return;
     setAttemptedPlay(true);
     const nowPlaying = mediaItemToNowPlaying(audio);
-    const queue = resolvePlaybackQueue(track);
+    const queue = queueForAudio(audio, track);
+    const overlay = useCopyrightFreeOverlayStore.getState();
     if (nowPlaying) {
-      useCopyrightFreeOverlayStore.getState().open(
-        {
-          ...nowPlaying,
-        },
-        {
-          queue: queue.map((t) => ({
-            id: t.id,
-            _id: t.id,
-            title: t.title,
-            artist: t.artist,
-            thumbnailUrl: t.thumbnailUrl,
-            audioUrl: t.audioUrl,
-            duration: t.duration,
-            source: t.source,
-          })),
-        }
-      );
-    }
-    if (currentTrackId === audioId && isPlaying) {
-      return;
+      if (isSermonItem(audio)) {
+        overlay.warm(nowPlaying);
+        overlay.setQueue(overlayQueue(queue));
+      } else {
+        overlay.open({ ...nowPlaying }, { queue: overlayQueue(queue) });
+      }
     }
     await playOrToggleTrack(track, { queue });
-  }, [audio, audioId, currentTrackId, isPlaying]);
+  }, [audio]);
+
+  const openFullPlayer = useCallback(async () => {
+    const track = mapMediaItemToTrack(audio, "feed");
+    if (!track) return;
+    setAttemptedPlay(true);
+    const nowPlaying = mediaItemToNowPlaying(audio);
+    const queue = queueForAudio(audio, track);
+    if (nowPlaying) {
+      useCopyrightFreeOverlayStore.getState().open(
+        { ...nowPlaying },
+        { queue: overlayQueue(queue) }
+      );
+    }
+    if (currentTrackId === audioId) return;
+    await playOrToggleTrack(track, { queue });
+  }, [audio, audioId, currentTrackId]);
 
   const seekBySeconds = useCallback(
     async (deltaSec: number) => {
@@ -123,6 +154,7 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
     isMuted: isCurrent ? isMuted : false,
     hasDuration: Number(audio.duration) > 0,
     handlePlayPress,
+    openFullPlayer,
     seekBySeconds,
     onSeekToPercent,
     toggleMute,

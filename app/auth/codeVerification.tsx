@@ -21,6 +21,15 @@ import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import SuccessfulCard from "../components/successfulCard";
 import authService from "../services/authService";
+import { pickAuthSession } from "../utils/pickAuthSession";
+import { storeSessionToken } from "../utils/sessionAuth";
+import {
+  clearPendingSignup,
+  fillVerificationBoxes,
+  normalizeVerificationCode,
+  resolveSignupCredentials,
+  shouldLoginAfterVerifyFailure,
+} from "../utils/pendingSignup";
 
 export default function CodeVerification() {
   const router = useRouter();
@@ -31,13 +40,16 @@ export default function CodeVerification() {
   const [showFailure, setShowFailure] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [failureText, setFailureText] = useState("Invalid code");
 
   const dropdownAnim = useRef(new RNAnimated.Value(-200)).current;
-  const emailAddress = params.emailAddress as string;
-  const password = params.password as string;
+  const credentials = resolveSignupCredentials(params as Record<string, unknown>);
+  const emailAddress = credentials.email;
+  const password = credentials.password;
 
   // Refs to control focus across code inputs
   const inputsRef = useRef<Array<TextInput | null>>([]);
+  const verifyLock = useRef(false);
 
   const FLOOR_Y = 280;
   const FINAL_REST_Y = 70;
@@ -57,32 +69,20 @@ export default function CodeVerification() {
   }));
 
   const handleCodeChange = (text: string, index: number) => {
-    // If user pasted/auto-filled multiple characters starting at this index, distribute them
-    if (text.length > 1) {
-      const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
-      const newCode = [...codeArray];
-      let writeIndex = index;
-      for (let i = 0; i < sanitized.length && writeIndex < 6; i += 1) {
-        newCode[writeIndex] = sanitized[i];
-        writeIndex += 1;
-      }
-      setCodeArray(newCode);
-      // Focus the next empty input if available
-      if (writeIndex < 6) {
-        inputsRef.current[writeIndex]?.focus();
-      }
-      return;
-    }
-
-    const char = text.slice(-1).toUpperCase();
-    if (!/^[A-Z0-9]?$/.test(char)) return;
-
-    const newCode = [...codeArray];
-    newCode[index] = char;
+    const newCode = fillVerificationBoxes(codeArray, text, index);
     setCodeArray(newCode);
 
-    // Auto-advance focus when a character is entered
-    if (char !== "" && index < 5) {
+    const filled = newCode.filter(Boolean).length;
+    if (filled >= 6) {
+      inputsRef.current[5]?.focus();
+      return;
+    }
+    if (text.length > 1) {
+      const nextEmpty = newCode.findIndex((char) => !char);
+      inputsRef.current[nextEmpty >= 0 ? nextEmpty : 5]?.focus();
+      return;
+    }
+    if (text && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
   };
@@ -104,11 +104,12 @@ export default function CodeVerification() {
     }
   };
 
-  const triggerBounceDrop = (type: "success" | "failure") => {
+  const triggerBounceDrop = (type: "success" | "failure", message?: string) => {
     if (type === "success") {
       setShowFailure(false);
       setShowSuccess(true);
     } else {
+      setFailureText(message || "Invalid code");
       setShowSuccess(false);
       setShowFailure(true);
     }
@@ -148,111 +149,115 @@ export default function CodeVerification() {
     });
   };
 
+  const completeVerifiedSession = async (
+    token: string | null,
+    user: any | null
+  ) => {
+    if (!token) {
+      Alert.alert(
+        "Email verified",
+        "Your email is verified. Please sign in to continue."
+      );
+      clearPendingSignup();
+      router.replace("/auth/login");
+      return;
+    }
+
+    await storeSessionToken(token);
+    if (user) {
+      await AsyncStorage.setItem("user", JSON.stringify(user));
+    }
+
+    try {
+      const me = await authService.fetchMe();
+      if (me?.success) {
+        const backendUser = (me.data?.data?.user || me.data?.user) as any;
+        if (backendUser && (backendUser.firstName || backendUser.lastName)) {
+          await AsyncStorage.setItem("user", JSON.stringify(backendUser));
+        }
+      }
+    } catch {}
+
+    try {
+      const { useInteractionStore } = await import(
+        "@/store/useInteractionStore"
+      );
+      useInteractionStore.getState().clearCache();
+    } catch {}
+
+    clearPendingSignup();
+    triggerBounceDrop("success");
+  };
+
+  const tryLoginAfterVerify = async () => {
+    if (!password) return { token: null as string | null, user: null as any };
+    const loginResult = await authService.login(emailAddress, password);
+    const loginSession = pickAuthSession(loginResult.data);
+    return {
+      token: loginResult.success ? loginSession.token : null,
+      user: loginSession.user,
+    };
+  };
+
   const onVerifyPress = async () => {
+    if (verifyLock.current) return;
+    verifyLock.current = true;
     setIsVerifying(true);
-    const code = codeArray.join("");
+    const code = normalizeVerificationCode(codeArray.join(""));
+
+    if (!emailAddress) {
+      triggerBounceDrop("failure", "Missing email. Go back and sign up again.");
+      setIsVerifying(false);
+      verifyLock.current = false;
+      return;
+    }
 
     if (code.length !== 6) {
-      triggerBounceDrop("failure");
+      triggerBounceDrop("failure", "Enter the 6-character code");
       setIsVerifying(false);
+      verifyLock.current = false;
       return;
     }
 
     try {
-      console.log("🔍 Verifying email code for:", emailAddress, "code:", code);
-
-      // Use authService for email verification
       const result = await authService.verifyEmailCode(emailAddress, code);
-      console.log("✅ Verify email result:", result);
+      const verifyMessage =
+        result.data?.message || result.error || "";
 
       if (result.success) {
-        // For email verification, we need to login the user after successful verification
-        const loginResult = await authService.login(emailAddress, password);
+        const verifySession = pickAuthSession(result.data);
+        let token = verifySession.token;
+        let user = verifySession.user;
 
-        if (loginResult.success) {
-          // Validate user data before saving
-          if (
-            loginResult.data?.user &&
-            loginResult.data.user.firstName &&
-            loginResult.data.user.lastName
-          ) {
-            await AsyncStorage.setItem(
-              "user",
-              JSON.stringify(loginResult.data.user)
-            );
-            // Immediately refresh canonical profile from backend to avoid stale/default names
-            try {
-              const me = await authService.fetchMe();
-              if (me?.success) {
-                const backendUser = (me.data?.data?.user ||
-                  me.data?.user) as any;
-                if (
-                  backendUser &&
-                  (backendUser.firstName || backendUser.lastName)
-                ) {
-                  await AsyncStorage.setItem(
-                    "user",
-                    JSON.stringify(backendUser)
-                  );
-                  console.log(
-                    "✅ Overwrote user with backend profile after verification"
-                  );
-                }
-              }
-            } catch (refreshErr) {
-              console.warn(
-                "⚠️ Post-verify profile refresh failed:",
-                refreshErr
-              );
-            }
-            console.log("✅ Complete user data saved after verification:", {
-              firstName: loginResult.data.user.firstName,
-              lastName: loginResult.data.user.lastName,
-              hasAvatar: !!loginResult.data.user.avatar,
-            });
-
-            // Clear any previous user's interaction data
-            try {
-              const { useInteractionStore } = await import(
-                "@/store/useInteractionStore"
-              );
-              useInteractionStore.getState().clearCache();
-              console.log("✅ Cleared interaction cache after verification");
-            } catch (cacheError) {
-              console.warn(
-                "⚠️ Failed to clear interaction cache after verification:",
-                cacheError
-              );
-            }
-
-            triggerBounceDrop("success");
-          } else {
-            console.error(
-              "🚨 BLOCKED: Verification login returned incomplete user data!"
-            );
-            console.error("   Incomplete data:", loginResult.data?.user);
-            Alert.alert(
-              "Login Issue",
-              "Incomplete user profile. Please contact support."
-            );
-            triggerBounceDrop("failure");
-            return;
-          }
-        } else {
-          Alert.alert(
-            "Login Failed",
-            loginResult.data?.message || "Try signing in manually."
-          );
-          triggerBounceDrop("failure");
+        if (!token) {
+          const loggedIn = await tryLoginAfterVerify();
+          token = loggedIn.token;
+          user = loggedIn.user || user;
         }
-      } else {
-        // Show specific error message from backend
-        const errorMessage =
-          result.data?.message ||
-          "Invalid verification code. Please try again.";
-        Alert.alert("Verification Failed", errorMessage);
-        triggerBounceDrop("failure");
+
+        await completeVerifiedSession(token, user);
+        return;
       }
+
+      // A valid code can still return 429 if a duplicate verify already
+      // succeeded. Log in with the signup password instead of forcing a resend.
+      if (shouldLoginAfterVerifyFailure(result.status, verifyMessage)) {
+        const loggedIn = await tryLoginAfterVerify();
+        if (loggedIn.token) {
+          await completeVerifiedSession(loggedIn.token, loggedIn.user);
+          return;
+        }
+      }
+
+      const errorMessage =
+        result.status === 429
+          ? result.data?.message ||
+            "Too many attempts. Wait a bit, then tap Verify once with the same code."
+          : result.data?.message ||
+            result.error ||
+            "Invalid verification code. Please try again.";
+      Alert.alert("Verification Failed", errorMessage);
+      triggerBounceDrop("failure", errorMessage);
     } catch (err: any) {
       console.error("❌ Error verifying code:", err);
 
@@ -265,9 +270,10 @@ export default function CodeVerification() {
       }
 
       Alert.alert("Server Error", errorMessage);
-      triggerBounceDrop("failure");
+      triggerBounceDrop("failure", errorMessage);
     } finally {
       setIsVerifying(false);
+      verifyLock.current = false;
     }
   };
 
@@ -281,16 +287,16 @@ export default function CodeVerification() {
       console.log("✅ Resend email verification result:", result);
 
       if (result.success) {
+        setCodeArray(["", "", "", "", "", ""]);
+        inputsRef.current[0]?.focus();
         Alert.alert(
           "Code Resent",
-          "A new verification code has been sent to your email."
+          "A new verification code has been sent to your email. Use the latest code."
         );
       } else {
-        triggerBounceDrop("failure");
-        Alert.alert(
-          "Resend Failed",
-          result.data?.message || "Try again later."
-        );
+        const errorMessage = result.data?.message || "Try again later.";
+        triggerBounceDrop("failure", errorMessage);
+        Alert.alert("Resend Failed", errorMessage);
       }
     } catch (err: any) {
       console.error("❌ Error resending code:", err);
@@ -304,7 +310,7 @@ export default function CodeVerification() {
       }
 
       Alert.alert("Resend Failed", errorMessage);
-      triggerBounceDrop("failure");
+      triggerBounceDrop("failure", errorMessage);
     } finally {
       setIsResending(false);
     }
@@ -345,7 +351,7 @@ export default function CodeVerification() {
       >
         {showSuccess && <SuccessfulCard text="Successfully verified" />}
         {showFailure && (
-          <FailureCard text="Invalid code" onClose={hideDropdown} />
+          <FailureCard text={failureText} onClose={hideDropdown} />
         )}
       </RNAnimated.View>
 
@@ -369,8 +375,10 @@ export default function CodeVerification() {
             onChangeText={(text) => handleCodeChange(text, i)}
             onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
             keyboardType="default"
-            autoCapitalize="characters"
-            textContentType="oneTimeCode"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={i === 0 ? 6 : 1}
+            textContentType={i === 0 ? "oneTimeCode" : "none"}
             autoFocus={i === 0}
             selectTextOnFocus
             style={getInputStyle()}

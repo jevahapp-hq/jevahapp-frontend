@@ -15,6 +15,11 @@ export interface UseInstantFeedVideoPlayerOptions {
    * resume path — seeking here before a frame paints leaves a black surface.
    */
   restorePlayhead?: boolean;
+  /**
+   * Muted play() until readyToPlay. Neighbors in Reels must stay paused —
+   * extra ExoPlayers with doNotMix steal the session and crackle audio.
+   */
+  mutedPrime?: boolean;
 }
 
 /**
@@ -27,6 +32,7 @@ export function useInstantFeedVideoPlayer({
   loop = false,
   timeUpdateEventInterval = 0.5,
   restorePlayhead = true,
+  mutedPrime = true,
 }: UseInstantFeedVideoPlayerOptions) {
   const [firstFrameReady, setFirstFrameReady] = useState(false);
   const firstFrameReadyRef = useRef(false);
@@ -53,7 +59,7 @@ export function useInstantFeedVideoPlayer({
             p.currentTime = saved;
           }
         }
-        p.play();
+        if (mutedPrime) p.play();
       }
     } catch {
       // Native player already released during setup.
@@ -133,7 +139,7 @@ export function useInstantFeedVideoPlayer({
             }
           }
         }
-        player.play();
+        if (mutedPrime) player.play();
       } catch {
         // no-op
       }
@@ -142,7 +148,7 @@ export function useInstantFeedVideoPlayer({
     return () => {
       cancelled = true;
     };
-  }, [player, source, resetReadiness, markReady, restorePlayhead]);
+  }, [player, source, resetReadiness, markReady, restorePlayhead, mutedPrime]);
 
   // Ready when native player can play — don't wait only for onFirstFrameRender
   // (off-screen views sometimes never fire that event).
@@ -183,18 +189,22 @@ export function useInstantFeedVideoPlayer({
     runWithLivePlayer(player, (p) => {
       p.muted = true;
       p.volume = 0;
+      if (!mutedPrime) {
+        if (p.playing) p.pause();
+        return;
+      }
       if (!p.playing) p.play();
     });
-  }, [player, source, firstFrameReady]);
+  }, [player, source, firstFrameReady, mutedPrime]);
 
   const freezeOnFirstFrame = useCallback(() => {
     if (!player) return;
     runWithLivePlayer(player, (p) => {
       const t = readPlayerCurrentTimeSec(p);
       if (source && t > 0.15) savePlayhead(source, t);
-      p.pause();
       p.muted = true;
       p.volume = 0;
+      if (p.playing) p.pause();
     });
   }, [player, source]);
 

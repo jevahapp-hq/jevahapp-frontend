@@ -1,19 +1,12 @@
 import { Redirect, Stack } from "expo-router";
-import { useEffect, useState } from "react";
-import { hasBackendSession } from "../utils/sessionAuth";
+import { hasBackendSessionSync } from "../utils/sessionAuth";
 
 export default function AuthLayout() {
-  const [hasSession, setHasSession] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    hasBackendSession().then(setHasSession);
-  }, []);
-
-  if (hasSession === null) return null;
-
-  if (hasSession) {
+  // Sync MMKV only — awaiting SecureStore here blanked the login screen
+  // after Logout and made sign-out feel stuck.
+  if (hasBackendSessionSync()) {
     return <Redirect href="/categories/HomeScreen" />;
   }
 
-  return <Stack />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

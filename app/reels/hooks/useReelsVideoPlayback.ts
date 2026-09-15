@@ -39,7 +39,7 @@ export function useReelsVideoPlayback({
   setUserHasManuallyPaused,
   setMenuVisible,
   globalVideoStore,
-  userHasManuallyPaused,
+  userHasManuallyPaused: _userHasManuallyPaused,
 }: UseReelsVideoPlaybackParams) {
   /**
    * Seek active reel. `position` is 0–1 fraction (preferred).
@@ -146,37 +146,15 @@ export function useReelsVideoPlayback({
     setShowPauseOverlay(false);
     setUserHasManuallyPaused(false);
     useGlobalVideoStore.setState({ currentlyVisibleVideo: modalKey });
-
-    globalVideoStore.pauseAllVideos();
-    const play = () => {
-      try {
-        globalVideoStore.playVideoGlobally(modalKey);
-      } catch (e) {
-        console.error("Error playing video:", e);
-      }
-    };
-    play();
-    const timeoutId = setTimeout(play, 150);
-    setMenuVisible(false);
-    return () => clearTimeout(timeoutId);
-  }, [modalKey]);
-
-  const isThisPlaying = useGlobalVideoStore(
-    (s) => (modalKey ? s.playingVideos[modalKey] ?? false : false)
-  );
-
-  useEffect(() => {
-    if (modalKey && !isThisPlaying && !userHasManuallyPaused) {
-      const id = setTimeout(() => {
-        try {
-          globalVideoStore.playVideoGlobally(modalKey);
-        } catch (e) {
-          console.error("Error playing video on mount:", e);
-        }
-      }, 200);
-      return () => clearTimeout(id);
+    // playVideoGlobally already pauses every other player. pauseAllVideos()
+    // first would pause-then-play the same reel and crack the audio.
+    try {
+      globalVideoStore.playVideoGlobally(modalKey);
+    } catch (e) {
+      console.error("Error playing video:", e);
     }
-  }, [modalKey, isThisPlaying, userHasManuallyPaused, globalVideoStore]);
+    setMenuVisible(false);
+  }, [modalKey]);
 
   return {
     seekToPosition,

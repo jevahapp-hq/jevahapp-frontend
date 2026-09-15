@@ -8,6 +8,7 @@ import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../src/shared/utils/videoUrlManager";
 import { FittedMediaImage } from "../../../src/features/media/video-feed";
+import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { getBottomNavHeight } from "../../utils/responsiveOptimized";
 import { UserProfileCache } from "../../utils/cache/UserProfileCache";
@@ -16,7 +17,10 @@ import { ReelsMenu } from "./ReelsMenu";
 import { ReelsSpeakerInfo } from "./ReelsSpeakerInfo";
 import ReelsVideoPlayer from "./ReelsVideoPlayer";
 import type { VideoPlayer } from "expo-video";
-import { getReelsMediaFrame } from "../hooks/useReelsResponsive";
+import {
+  getReelsMediaFrame,
+  REELS_CONTENT_FIT,
+} from "../hooks/useReelsResponsive";
 
 export interface ReelsVideoItemProps {
   videoData: any;
@@ -159,9 +163,10 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   const isMuted = useGlobalVideoStore(
     (s) => s.mutedVideos[videoKey] ?? false
   );
-  // Mount the active reel plus the next one only — three live players crackle.
-  const shouldMountPlayer =
-    index === currentIndex_state || index === currentIndex_state + 1;
+  // Current playing + previous paused + next primed. Skipping the previous
+  // decoder is why scrolling up flashed the cover thumbnail.
+  const shouldMountPlayer = Math.abs(index - currentIndex_state) <= 1;
+  const lastFrame = useVideoFrameSnapshot(videoUrl);
 
   const posterFrame = getReelsMediaFrame(screenWidth, screenHeight);
   const posterUri = useMemo(() => {
@@ -210,7 +215,6 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
         height: screenHeight,
         width: screenWidth,
         backgroundColor: "#000",
-        overflow: "hidden",
       }}
     >
       {shouldMountPlayer ? (
@@ -242,16 +246,25 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
           style={{
             width: screenWidth,
             height: screenHeight,
+            maxWidth: screenWidth,
+            maxHeight: screenHeight,
             backgroundColor: "#000",
             overflow: "hidden",
           }}
         >
-          {posterUri ? (
+          {lastFrame ? (
+            <FittedMediaImage
+              source={lastFrame}
+              width={posterFrame.width}
+              height={posterFrame.height}
+              contentFit={REELS_CONTENT_FIT}
+            />
+          ) : posterUri ? (
             <FittedMediaImage
               uri={posterUri}
               width={posterFrame.width}
               height={posterFrame.height}
-              contentFit="cover"
+              contentFit={REELS_CONTENT_FIT}
             />
           ) : null}
         </View>

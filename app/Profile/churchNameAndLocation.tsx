@@ -1,6 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
-import axios from "axios";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
@@ -19,7 +17,7 @@ import AuthHeader from "../components/AuthHeader";
 import ProgressBar from "../components/ProgressBar";
 import type { SuggestSource } from "../hooks/useChurchSuggestions";
 import { useChurchSuggestions } from "../hooks/useChurchSuggestions";
-import { environmentManager } from "../utils/environmentManager";
+import { apiAxios } from "../utils/api";
 
 type Suggestion = {
   id: string;
@@ -30,8 +28,6 @@ type Suggestion = {
 
 function ChurchNameAndLocation() {
   const [search, setSearch] = useState("");
-  const API_BASE_URL = environmentManager.getCurrentUrl();
-  const [churches, setChurches] = useState<Suggestion[]>([]);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Suggestion[]>(
     []
   );
@@ -140,27 +136,12 @@ function ChurchNameAndLocation() {
     try {
       setLoading(true);
 
-      const token = await AsyncStorage.getItem("token");
-      // Replace with your actual auth token logic
-
-      // Create axios instance with timeout configuration
-      const axiosInstance = axios.create({
-        timeout: 15000, // 15 seconds timeout
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      const response = await apiAxios.post("/api/auth/complete-profile", {
+        location: selectedItem.name,
+        entityId: selectedItem.id,
+        entityType: selectedItem.type,
+        entitySource: selectedItem.source,
       });
-
-      const response = await axiosInstance.post(
-        `${API_BASE_URL}/api/auth/complete-profile`,
-        {
-          location: selectedItem.name,
-          entityId: selectedItem.id,
-          entityType: selectedItem.type,
-          entitySource: selectedItem.source,
-        }
-      );
 
       if (response.data.success) {
         router.push("/avatars/indexAvatar");

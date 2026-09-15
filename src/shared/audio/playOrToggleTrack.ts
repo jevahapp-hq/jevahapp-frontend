@@ -54,3 +54,36 @@ export async function pausePlaybackSession(): Promise<void> {
     await store.pause();
   }
 }
+
+/**
+ * Start (or keep) a track playing. Unlike playOrToggleTrack, the same
+ * already-playing id is left playing — used for feed scroll autoplay.
+ */
+export async function ensurePlayingTrack(
+  track: AudioTrack,
+  options?: { queue?: AudioTrack[] }
+): Promise<void> {
+  if (!track?.id || !track.audioUrl) return;
+  const store = useGlobalAudioPlayerStore.getState();
+  const queue = resolvePlaybackQueue(track, options?.queue);
+  const queueIndex = Math.max(0, queue.findIndex((t) => t.id === track.id));
+  useGlobalAudioPlayerStore.setState({
+    queue,
+    originalQueue: queue,
+    currentIndex: queueIndex,
+    isShuffled: false,
+  });
+
+  if (store.currentTrack?.id === track.id) {
+    if (!store.isPlaying) {
+      await store.play();
+    }
+    return;
+  }
+
+  await store.setTrack(track, true);
+  const next = useGlobalAudioPlayerStore.getState();
+  if (!next.isPlaying && next.soundInstance) {
+    await next.play();
+  }
+}

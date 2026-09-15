@@ -16,7 +16,8 @@ import {
 } from "@/store/useGlobalVideoStore";
 import { useReelsStore } from "@/store/useReelsStore";
 import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
-import { remapResumeFeedKey } from "../../../src/features/media/video-feed";
+import { remapResumeFeedKey, feedTabFromResumeKey } from "../../../src/features/media/video-feed";
+import { rememberHomeFeedCategory } from "../../../src/shared/media/homeFeedCategory";
 import { savePlayhead } from "../../../src/features/media/video-feed/playheadCache";
 import {
   fullscreenReelsCommentAnchor,
@@ -97,10 +98,7 @@ export function useReelsHandlers({
   setSuccessMessage,
   setShowSuccessCard,
 }: UseReelsHandlersParams) {
-  const handleBackNavigation = useCallback(() => {
-    triggerHapticFeedback();
-
-    // Persist active reel + playhead independently of fullscreen being open.
+  const persistFeedResumeFromReels = useCallback(() => {
     try {
       const reels = useReelsStore.getState();
       const activeIndex = Math.max(0, reels.currentIndex || 0);
@@ -127,28 +125,32 @@ export function useReelsHandlers({
           ? prev.positionMs
           : 0) ??
         0;
-      if (contentId) {
-        const feedKey = remapResumeFeedKey(prev?.feedKey, contentId);
-        reels.setResumePlayback({
-          contentId,
-          positionMs,
-          feedKey,
-          reelsIndex: activeIndex,
-          target: "feed",
-        });
-        const url =
-          (active as any)?.fileUrl ||
-          (active as any)?.playbackUrl ||
-          (active as any)?.hlsUrl;
-        if (typeof url === "string" && positionMs > 150) {
-          savePlayhead(url, positionMs / 1000);
-        }
+      if (!contentId) return;
+      const feedKey = remapResumeFeedKey(prev?.feedKey, contentId);
+      const tab = feedTabFromResumeKey(feedKey) || category;
+      if (tab) rememberHomeFeedCategory(tab);
+      reels.setResumePlayback({
+        contentId,
+        positionMs,
+        feedKey,
+        reelsIndex: activeIndex,
+        target: "feed",
+      });
+      const url =
+        (active as any)?.fileUrl ||
+        (active as any)?.playbackUrl ||
+        (active as any)?.hlsUrl;
+      if (typeof url === "string" && positionMs > 150) {
+        savePlayhead(url, positionMs / 1000);
       }
     } catch {
       // best-effort
     }
+  }, [category, contentIdForHooks, getVideoPositionMs, modalKey]);
 
-    // Prefer stack pop so the feed keeps scroll position / active video.
+  const handleBackNavigation = useCallback(() => {
+    triggerHapticFeedback();
+    persistFeedResumeFromReels();
     if (router.canGoBack?.()) {
       router.back();
       return;
@@ -184,9 +186,7 @@ export function useReelsHandlers({
     source,
     category,
     triggerHapticFeedback,
-    getVideoPositionMs,
-    modalKey,
-    contentIdForHooks,
+    persistFeedResumeFromReels,
   ]);
 
   const tryRefreshMediaUrl = useCallback(async (item: any): Promise<string | null> => {
@@ -417,11 +417,12 @@ export function useReelsHandlers({
 
   const handleReport = useCallback(() => {
     setMenuVisible(false);
-    setShowReportModal(true);
+    setTimeout(() => setShowReportModal(true), 300);
   }, [setMenuVisible, setShowReportModal]);
 
   return {
     handleBackNavigation,
+    persistFeedResumeFromReels,
     tryRefreshMediaUrl,
     handleLike,
     handleComment,

@@ -9,10 +9,9 @@ import {
   installFeedEventLifecycle,
   uninstallFeedEventLifecycle,
 } from "../../src/shared/feed";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import AuthGlassToastHost from "./auth/AuthGlassToastHost";
 import CommentModalV2 from "./CommentModalV2";
-import CopyrightFreeSongOverlayHost from "./CopyrightFreeSongOverlayHost";
-import FloatingAudioPlayer from "../../src/shared/components/FloatingAudioPlayer";
 import RootCreateFab from "./RootCreateFab";
 
 const SessionExpiredOverlay = React.lazy(
@@ -21,9 +20,18 @@ const SessionExpiredOverlay = React.lazy(
 const ServerUnavailableModalWrapper = React.lazy(
   () => import("./ServerUnavailableModalWrapper")
 );
+const CopyrightFreeSongOverlayHost = React.lazy(
+  () => import("./CopyrightFreeSongOverlayHost")
+);
+const FloatingAudioPlayer = React.lazy(
+  () => import("../../src/shared/components/FloatingAudioPlayer")
+);
 
 export default function DeferredRootOverlays() {
   const [ready, setReady] = useState(false);
+  const playerRequested = useCopyrightFreeOverlayStore(
+    (s) => s.surface === "full" && !!s.song
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -48,10 +56,14 @@ export default function DeferredRootOverlays() {
     <>
       <AuthGlassToastHost />
       <CommentModalV2 />
-      <CopyrightFreeSongOverlayHost />
-      <FloatingAudioPlayer />
+      {playerRequested || ready ? (
+        <Suspense fallback={null}>
+          <CopyrightFreeSongOverlayHost />
+        </Suspense>
+      ) : null}
       {ready ? (
         <Suspense fallback={null}>
+          <FloatingAudioPlayer />
           <SessionExpiredOverlay />
           <ServerUnavailableModalWrapper />
         </Suspense>

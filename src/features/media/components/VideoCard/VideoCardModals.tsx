@@ -6,8 +6,9 @@ import { DeleteMediaConfirmation } from "../../../../../app/components/DeleteMed
 import ContentActionModal from "../../../../shared/components/ContentActionModal";
 import MediaDetailsModal from "../../../../shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../../../shared/components/ReportMediaModal";
-import { getUploadedBy } from "../../../../shared/utils";
+import { getUploadedBy } from "../../../../shared/utils/mediaHelpers";
 import type { MediaItem } from "../../../../shared/types";
+import { getItemMediaId } from "../../../../../app/services/reportMediaId";
 
 export interface VideoCardModalsProps {
   isModalVisible: boolean;
@@ -91,7 +92,7 @@ export function VideoCardModals({
       <ReportMediaModal
         visible={showReportModal}
         onClose={() => setShowReportModal(false)}
-        mediaId={video._id || ""}
+        mediaId={getItemMediaId(video)}
         mediaTitle={video.title}
       />
       <MediaDetailsModal

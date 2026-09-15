@@ -16,7 +16,7 @@ import {
   useDownloadHandler,
 } from "../../../../../app/utils/downloadUtils";
 import type { ContentType, MediaItem } from "../../../../shared/types";
-import { detectMediaType } from "../../../../shared/utils";
+import { detectMediaType } from "../../../../shared/utils/mediaTypeDetection";
 import { playbackKeyToContentKey } from "../../video-feed";
 import { recordFeedAffinity } from "../utils/feedAffinityStore";
 import { buildReelsVideoList } from "../utils/buildReelsVideoList";

@@ -60,13 +60,16 @@ export async function storeSessionToken(token: string): Promise<void> {
 /**
  * Full local sign-out wipe (tokens + user blob).
  * Callers that also have Clerk should `signOut()` Clerk after this.
+ *
+ * Does not wait on network (feed-event flush is fire-and-forget) so the
+ * profile Logout button can leave the account immediately.
  */
 export async function clearBackendSession(): Promise<void> {
   try {
     const { flushFeedEvents, resetFeedSession } = await import(
       "../../src/shared/feed/feedRanker"
     );
-    await flushFeedEvents();
+    void flushFeedEvents();
     resetFeedSession();
   } catch {
     // continue

@@ -2,7 +2,7 @@
  * Shared PDF disk cache — used by PdfViewer and feed ahead-of-open warmups.
  * Caps last-N files so large ebooks don't fill the cache forever.
  */
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { PERF, recordSample } from "../../src/shared/utils/perfMarks";
 import { PERFORMANCE_FEATURES } from "../../src/shared/config/performance";
 

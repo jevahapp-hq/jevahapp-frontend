@@ -5,7 +5,7 @@ import {
   clearAuthorFetchFailures,
 } from "../../../../shared/author";
 import type { MediaItem } from "../../../../shared/types";
-import { getUserDisplayNameFromContent } from "../../../../shared/utils";
+import { getUserDisplayNameFromContent } from "../../../../shared/utils/contentHelpers";
 import { UserProfileCache } from "../../../../../app/utils/cache/UserProfileCache";
 
 type ProfileLike = {

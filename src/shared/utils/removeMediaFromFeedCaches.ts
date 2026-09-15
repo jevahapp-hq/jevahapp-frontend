@@ -55,6 +55,12 @@ export function removeMediaFromFeedCaches(
     { queryKey: ["all-content-infinite"] },
     stripInfiniteOrPage
   );
+  queryClient.setQueriesData({ queryKey: ["sermons"] }, stripInfiniteOrPage);
+  queryClient.setQueriesData({ queryKey: ["ebooks"] }, stripInfiniteOrPage);
+  queryClient.setQueriesData(
+    { queryKey: ["music-tracks"] },
+    stripInfiniteOrPage
+  );
 
   const cache = useContentCacheStore.getState().cache;
   for (const [key, page] of Object.entries(cache)) {
@@ -78,4 +84,7 @@ export function refreshFeedAfterDelete(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: ["all-content"] });
   void queryClient.invalidateQueries({ queryKey: ["default-content"] });
   void queryClient.invalidateQueries({ queryKey: ["all-content-infinite"] });
+  void queryClient.invalidateQueries({ queryKey: ["sermons"] });
+  void queryClient.invalidateQueries({ queryKey: ["ebooks"] });
+  void queryClient.invalidateQueries({ queryKey: ["music-tracks"] });
 }

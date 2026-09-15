@@ -9,16 +9,16 @@ interface FeedVideoSurfaceProps {
   height?: number;
   width?: number;
   /**
-   * Feed cards cover-fill the 400px box. Fullscreen (Reels) also cover-fills
-   * the phone viewport and clips overflow so media never paints off-screen.
+   * Feed cards and fullscreen Reels cover-fill their box.
    */
   contentFit?: "contain" | "cover";
 }
 
 /**
- * APK player: full thumbnail width, cover-fill. No opacity, overflow clip,
- * or extra surfaceType — those blank the picture while audio still plays.
- * Immediate parent stays transparent so Android SurfaceView can punch through.
+ * APK player: full thumbnail width, cover-fill.
+ * Do NOT use overflow clip, opacity, or absoluteFill on VideoView —
+ * those blank the picture on Android while audio still plays.
+ * Immediate parent stays transparent so SurfaceView can punch through.
  */
 export function FeedVideoSurface({
   player,

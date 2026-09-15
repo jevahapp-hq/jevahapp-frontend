@@ -9,19 +9,25 @@ import { View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { MediaItem } from "../../../shared/types";
+import { buildStableFeedMediaList } from "../../../shared/utils/buildStableFeedMediaList";
 import {
-  buildStableFeedMediaList,
-  filterContentByType,
   getContentKey,
   getTimeAgo,
   getUserAvatarFromContent,
-} from "../../../shared/utils";
+} from "../../../shared/utils/contentHelpers";
 import { detectMediaType, isAudioSermon } from "../../../shared/utils/mediaTypeDetection";
 import { mapMediaItemToTrack } from "../../../shared/audio/mapToAudioTrack";
-import { rememberSessionAudioQueue } from "../../../shared/audio/sessionAudioQueue";
+import {
+  rememberSessionAudioQueue,
+  rememberSermonAudioQueue,
+} from "../../../shared/audio/sessionAudioQueue";
+import { ensurePlayingTrack } from "../../../shared/audio/playOrToggleTrack";
 import { useMedia } from "../../../shared/hooks/useMedia";
-import { useDefaultContentQuery } from "../../../shared/media/useDefaultContentQuery";
+import { useTypedCatalogInfiniteQuery } from "../../../shared/media/useTypedCatalogInfiniteQuery";
+import { rememberHomeFeedCategory } from "../../../shared/media/homeFeedCategory";
 import { filterVisibleMedia } from "../../../shared/media/moderationVisibility";
+import { weaveCatalogIntoFeed } from "../../../shared/utils/weaveCatalogIntoFeed";
+import { useCopyrightFreeOverlayStore } from "@/store/useCopyrightFreeOverlayStore";
 import { feedQueryContentType } from "./hooks/useAllContentTikTokFeedSource";
 import {
   refreshFeedAfterDelete,
@@ -66,23 +72,9 @@ import {
 import type { AllContentTikTokProps, FeedRow } from "./types";
 import { buildFeedRows, indexMediaRows } from "./utils/buildFeedRows";
 import { scrollFeedToResume } from "./utils/scrollFeedToResume";
+import { warmVideoConnection } from "./utils/videoConnectionWarmer";
 
 export type { AllContentTikTokProps } from "./types";
-
-function uniqueByMediaId(lists: Array<MediaItem[] | undefined>): MediaItem[] {
-  const seen = new Set<string>();
-  const out: MediaItem[] = [];
-  for (const list of lists) {
-    if (!list?.length) continue;
-    for (const item of list) {
-      const id = String(item?._id || (item as any)?.id || item?.fileUrl || "");
-      if (id && seen.has(id)) continue;
-      if (id) seen.add(id);
-      if (item) out.push(item);
-    }
-  }
-  return out;
-}
 
 export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   contentType: activeTab = "ALL",
@@ -100,7 +92,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   const listWindow = getLiteListWindow();
   const maxPlayers = FEED_HARD_MAX_PLAYERS;
   const queryType = feedQueryContentType(activeTab);
-  const isTypedTab = queryType !== "ALL";
   const tabKind = String(activeTab).toLowerCase();
   const isEbookTab =
     tabKind === "e-books" ||
@@ -108,41 +99,31 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     tabKind === "ebooks" ||
     tabKind === "books";
   const isSermonTab = tabKind === "sermon" || tabKind === "teachings";
+  const isCatalogTab = isSermonTab || isEbookTab;
+  const isAllTab = tabKind === "all";
 
   const {
     allContent,
     defaultContent,
     loading,
-    error,
+    error: discoveryError,
     refreshAllContent,
     loadMoreContent,
     isLoadingMore,
     hasMoreDefaultPages,
   } = useMedia({
-    /**
-     * `/api/media/all-content` only filters videos | music | books | live.
-     * `contentType=sermon` is ignored and the API returns normal videos —
-     * those used to land on the SERMON chip unfiltered.
-     */
-    immediate: !isSermonTab,
-    contentType: queryType,
+    immediate: !isCatalogTab,
+    contentType: isCatalogTab ? "ALL" : queryType,
     useAuth: useAuthFeed,
   });
 
-  const sharedAll = useMedia({
-    immediate: isSermonTab || isEbookTab,
-    contentType: "ALL",
-    useAuth: useAuthFeed,
+  const sermonCatalog = useTypedCatalogInfiniteQuery({
+    kind: "sermon",
+    enabled: isSermonTab || isAllTab,
   });
-
-  const typedDefault = useDefaultContentQuery({
-    enabled: isSermonTab || isEbookTab,
-    contentType: isSermonTab ? "sermon" : "books",
-  });
-
-  const userDefault = useDefaultContentQuery({
-    enabled: isEbookTab,
-    contentType: "ALL",
+  const ebookCatalog = useTypedCatalogInfiniteQuery({
+    kind: "ebook",
+    enabled: isEbookTab || isAllTab,
   });
 
   const queryClient = useQueryClient();
@@ -153,9 +134,29 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         removeMediaFromFeedCaches(queryClient, id);
       }
       refreshFeedAfterDelete(queryClient);
+      if (isSermonTab) {
+        void sermonCatalog.refetch();
+        return;
+      }
+      if (isEbookTab) {
+        void ebookCatalog.refetch();
+        return;
+      }
       void refreshAllContent();
+      if (isAllTab) {
+        void sermonCatalog.refetch();
+        void ebookCatalog.refetch();
+      }
     },
-    [queryClient, refreshAllContent]
+    [
+      queryClient,
+      refreshAllContent,
+      isSermonTab,
+      isEbookTab,
+      isAllTab,
+      sermonCatalog.refetch,
+      ebookCatalog.refetch,
+    ]
   );
 
   const { isVisible: commentsVisible, isClosing: commentsClosing } =
@@ -221,7 +222,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }
   }, [commentsVisible, currentlyVisibleVideo]);
 
-  useAllContentTikTokLifecycle({
+  const { resumeCovered, revealAfterResume } = useAllContentTikTokLifecycle({
     pauseAllMedia,
     pauseAllAudio,
     setCurrentlyVisibleVideo,
@@ -229,9 +230,15 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     listRef,
     listDataRef,
     pendingResumeKeyRef,
+    isFeedActive,
   });
 
   useAllContentTikTokSocket(setSocketManager, setRealTimeCounts);
+
+  useEffect(() => {
+    if (!isFeedActive) return;
+    rememberHomeFeedCategory(String(activeTab || "ALL"));
+  }, [isFeedActive, activeTab]);
 
   /**
    * Feed visibility chokepoint. Unapproved content (`under_review`, `pending`,
@@ -244,34 +251,28 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
    * including the shared public seed.
    */
   const mediaList: MediaItem[] = useMemo(() => {
-    if (!isTypedTab) {
-      return filterVisibleMedia(
-        buildStableFeedMediaList(defaultContent, allContent),
-        currentUserId
-      );
+    if (isSermonTab) {
+      return filterVisibleMedia(sermonCatalog.items, currentUserId);
     }
-
-    const curated = uniqueByMediaId([
-      filterContentByType(allContent, activeTab),
-      filterContentByType(defaultContent, activeTab),
-      filterContentByType(typedDefault.defaultContent, activeTab),
-      isEbookTab
-        ? filterContentByType(userDefault.defaultContent, activeTab)
-        : [],
-      filterContentByType(sharedAll.allContent, activeTab),
-      filterContentByType(sharedAll.defaultContent, activeTab),
-    ]);
-    return filterVisibleMedia(curated, currentUserId);
+    if (isEbookTab) {
+      return filterVisibleMedia(ebookCatalog.items, currentUserId);
+    }
+    const discovery = buildStableFeedMediaList(defaultContent, allContent);
+    const mixed = isAllTab
+      ? weaveCatalogIntoFeed(discovery, [
+          ...sermonCatalog.items,
+          ...ebookCatalog.items,
+        ])
+      : discovery;
+    return filterVisibleMedia(mixed, currentUserId);
   }, [
-    isTypedTab,
+    isSermonTab,
     isEbookTab,
-    activeTab,
+    isAllTab,
+    sermonCatalog.items,
+    ebookCatalog.items,
     allContent,
     defaultContent,
-    typedDefault.defaultContent,
-    sharedAll.allContent,
-    sharedAll.defaultContent,
-    userDefault.defaultContent,
     currentUserId,
   ]);
 
@@ -284,6 +285,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
   } = useAllContentTikTokFeedData({
     mediaList,
     contentType: activeTab,
+    skipTypeFilter: isCatalogTab || isAllTab,
     setPreviouslyViewed,
     setIsLoadingContent,
   });
@@ -296,6 +298,12 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       .map((item) => mapMediaItemToTrack(item, "feed"))
       .filter((t): t is NonNullable<typeof t> => !!t);
     rememberSessionAudioQueue(tracks);
+    rememberSermonAudioQueue(
+      filteredMediaList
+        .filter((item) => isAudioSermon(item))
+        .map((item) => mapMediaItemToTrack(item, "feed"))
+        .filter((t): t is NonNullable<typeof t> => !!t)
+    );
   }, [filteredMediaList]);
 
   const {
@@ -326,6 +334,29 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     radius: getLitePlayerNeighborRadius(),
     idleOnly: true,
   });
+
+  const refreshFeed = useCallback(async () => {
+    if (isSermonTab) {
+      await sermonCatalog.refetch();
+      return;
+    }
+    if (isEbookTab) {
+      await ebookCatalog.refetch();
+      return;
+    }
+    await refreshAllContent();
+    if (isAllTab) {
+      void sermonCatalog.refetch();
+      void ebookCatalog.refetch();
+    }
+  }, [
+    isSermonTab,
+    isEbookTab,
+    isAllTab,
+    sermonCatalog.refetch,
+    ebookCatalog.refetch,
+    refreshAllContent,
+  ]);
 
   const {
     handleVideoTap,
@@ -359,7 +390,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     setSuccessMessage,
     setShowSuccessCard,
     setCurrentlyVisibleVideo,
-    refreshAllContent,
+    refreshAllContent: refreshFeed,
     setRefreshing,
     socketManager,
     toggleLike: toggleLike as any,
@@ -478,8 +509,53 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     if (index < 0) return;
     requestAnimationFrame(() => {
       scrollFeedToResume(listRef, listData, index);
+      revealAfterResume();
     });
-  }, [listData]);
+  }, [listData, revealAfterResume]);
+
+  const playAudioSermon = useCallback(
+    (item: MediaItem) => {
+      const track = mapMediaItemToTrack(item, "feed");
+      if (!track) return;
+      const queue = filteredMediaList
+        .filter((row) => isAudioSermon(row))
+        .map((row) => mapMediaItemToTrack(row, "feed"))
+        .filter((t): t is NonNullable<typeof t> => !!t);
+      void ensurePlayingTrack(track, { queue });
+      const idx = queue.findIndex((t) => t.id === track.id);
+      const upcoming = idx >= 0 ? queue[idx + 1] : undefined;
+      if (upcoming?.audioUrl) {
+        warmVideoConnection(upcoming.audioUrl);
+      }
+      const overlay = useCopyrightFreeOverlayStore.getState();
+      if (overlay.surface !== "full") return;
+      const thumb = item.imageUrl || item.thumbnailUrl;
+      overlay.setSong({
+        ...track,
+        _id: track.id,
+        fileUrl: track.audioUrl,
+        thumbnailUrl:
+          typeof thumb === "string"
+            ? thumb
+            : (thumb as { uri?: string })?.uri || track.thumbnailUrl,
+        contentType: item.contentType || "sermon",
+        source: "feed",
+      });
+      overlay.setQueue(
+        queue.map((t) => ({
+          id: t.id,
+          _id: t.id,
+          title: t.title,
+          artist: t.artist,
+          thumbnailUrl: t.thumbnailUrl,
+          audioUrl: t.audioUrl,
+          duration: t.duration,
+          source: t.source,
+        }))
+      );
+    },
+    [filteredMediaList]
+  );
 
   const { hasDeterminedVisibilityRef, viewabilityConfigCallbackPairs } =
     useFeedViewability({
@@ -491,6 +567,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
       pauseAllAudio,
       pauseMedia,
       playMedia,
+      playAudioSermon,
       setCurrentlyVisibleVideo,
       setFocusedFeedKey,
       pendingResumeKeyRef,
@@ -521,32 +598,54 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
 
   const handleEndReached = useCallback(() => {
     if (isSermonTab) {
-      if (sharedAll.isLoadingMore || !sharedAll.hasMoreDefaultPages) return;
-      void sharedAll.loadMoreContent();
+      if (sermonCatalog.isFetchingNextPage || !sermonCatalog.hasNextPage) return;
+      void sermonCatalog.fetchNextPage();
+      return;
+    }
+    if (isEbookTab) {
+      if (ebookCatalog.isFetchingNextPage || !ebookCatalog.hasNextPage) return;
+      void ebookCatalog.fetchNextPage();
       return;
     }
     if (isLoadingMore || !hasMoreDefaultPages) return;
     loadMoreContent();
+    if (isAllTab) {
+      if (sermonCatalog.hasNextPage && !sermonCatalog.isFetchingNextPage) {
+        void sermonCatalog.fetchNextPage();
+      }
+      if (ebookCatalog.hasNextPage && !ebookCatalog.isFetchingNextPage) {
+        void ebookCatalog.fetchNextPage();
+      }
+    }
   }, [
     isSermonTab,
-    sharedAll.isLoadingMore,
-    sharedAll.hasMoreDefaultPages,
-    sharedAll.loadMoreContent,
+    isEbookTab,
+    isAllTab,
+    sermonCatalog.isFetchingNextPage,
+    sermonCatalog.hasNextPage,
+    sermonCatalog.fetchNextPage,
+    ebookCatalog.isFetchingNextPage,
+    ebookCatalog.hasNextPage,
+    ebookCatalog.fetchNextPage,
     isLoadingMore,
     hasMoreDefaultPages,
     loadMoreContent,
   ]);
 
+  const error = isSermonTab
+    ? sermonCatalog.error
+    : isEbookTab
+      ? ebookCatalog.error
+      : discoveryError && !String(discoveryError).includes("Missing queryFn")
+        ? discoveryError
+        : null;
+
   const tabLoading =
     mediaList.length === 0 &&
     (isSermonTab
-      ? Boolean(sharedAll.loading || typedDefault.query.isPending)
+      ? sermonCatalog.isPending
       : isEbookTab
-        ? Boolean(
-            loading ||
-              typedDefault.query.isPending ||
-              userDefault.query.isPending
-          )
+        ? ebookCatalog.isPending
         : loading);
 
   if (!isFeedActive) {
@@ -573,6 +672,10 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             duration={3000}
           />
         )}
+        <View
+          style={{ flex: 1, opacity: resumeCovered ? 0 : 1 }}
+          pointerEvents={resumeCovered ? "none" : "auto"}
+        >
         <AllContentTikTokList
           listRef={listRef}
           listData={listData}
@@ -591,6 +694,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
           viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
           renderContentByType={renderContentByType}
         />
+        </View>
       </View>
     </ContentErrorBoundary>
   );

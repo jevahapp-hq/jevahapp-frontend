@@ -1,7 +1,7 @@
 // AccountScreen.tsx
 import { useClerk } from "@clerk/clerk-expo";
-import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccountHeader from "../components/account/AccountHeader";
@@ -13,8 +13,11 @@ import BottomNavOverlay from "../components/layout/BottomNavOverlay";
 import { useUserProfile } from "../hooks/useUserProfile";
 import EditProfileSlideOver from "../Profile/EditProfileSlideOver";
 import { navigateMainTab } from "../utils/navigation";
-import { useOptimizedButton } from "../utils/performance";
-import { clearBackendSession } from "../utils/sessionAuth";
+import {
+  clearBackendSession,
+  clearBackendSessionPresent,
+} from "../utils/sessionAuth";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 
 export default function AccountScreen() {
   const [activeTab, setActiveTab] = useState<string>("Account");
@@ -24,6 +27,12 @@ export default function AccountScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
   const { user, getAvatarUrl, getFullName, getUserSection, refreshUserProfile } = useUserProfile();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUserProfile();
+    }, [refreshUserProfile])
+  );
 
   const isAdminUser = useMemo(() => {
     const role = String(
@@ -35,7 +44,7 @@ export default function AccountScreen() {
   // Normalize null -> undefined for consumers expecting undefined
   const getAvatarUrlAsUndef = (u: any) => getAvatarUrl(u) ?? undefined;
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       {
         text: "Cancel",
@@ -44,15 +53,29 @@ export default function AccountScreen() {
       {
         text: "Logout",
         style: "destructive",
-        onPress: async () => {
+        onPress: () => {
           try {
-            await clearBackendSession();
             try {
-              await signOut();
+              useGlobalVideoStore.getState().pauseAllVideos();
             } catch {
-              // Email/password users may have no Clerk session
+              // no-op
             }
+            // Drop the sync session flag first so auth routes paint login
+            // immediately instead of waiting on Clerk / SecureStore / APIs.
+            clearBackendSessionPresent();
             router.replace("/auth/login");
+            void (async () => {
+              try {
+                await clearBackendSession();
+              } catch {
+                // already on login
+              }
+              try {
+                await signOut();
+              } catch {
+                // Email/password users may have no Clerk session
+              }
+            })();
           } catch (error) {
             console.error("Logout error:", error);
             Alert.alert("Error", "Failed to logout. Please try again.");
@@ -61,12 +84,6 @@ export default function AccountScreen() {
       },
     ]);
   };
-
-  // Use optimized button handler
-  const optimizedLogoutHandler = useOptimizedButton(handleLogout, {
-    debounceMs: 200,
-    key: "logout-button",
-  });
 
   const handleProfilePress = () => {
     setShowProfileModal(true);
@@ -118,7 +135,13 @@ export default function AccountScreen() {
               getAvatarUrl={getAvatarUrlAsUndef}
               getFullName={getFullName}
               onEdit={() => setIsEditOpen(true)}
-              onLogout={optimizedLogoutHandler}
+              onChangeAvatar={() =>
+                router.push({
+                  pathname: "/avatars/indexAvatar",
+                  params: { from: "profile" },
+                })
+              }
+              onLogout={handleLogout}
               onProfileUpdate={refreshUserProfile}
             />
 

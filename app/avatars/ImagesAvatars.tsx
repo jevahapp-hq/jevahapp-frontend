@@ -26,6 +26,7 @@ const Images = ({
   renderAvatarRow,
   uploadedImage,
   setUploadedImage,
+  onUseUploadedImage,
 }: RenderAvatarRowProps) => {
   const handleImageUpload = async (source: 'camera' | 'gallery') => {
     try {
@@ -78,24 +79,14 @@ const Images = ({
           );
           return;
         }
-        
-        // Validate file type
-        const fileExtension = uri.split(".").pop()?.toLowerCase();
-        const validExtensions = ["jpg", "jpeg", "png", "gif"];
-        
-        if (!fileExtension || !validExtensions.includes(fileExtension)) {
-          Alert.alert(
-            "Invalid File Type",
-            "Please select a JPEG, PNG, or GIF image."
-          );
-          return;
-        }
-        
+
+        // ImagePicker already filtered to images. Do not reject content://,
+        // HEIC, or URIs without a file extension — those are valid on device.
         setUploadedImage?.(uri);
         console.log("✅ Image selected successfully:", {
           uri,
           fileSize: asset.fileSize,
-          type: asset.type,
+          type: asset.mimeType || asset.type,
           width: asset.width,
           height: asset.height
         });
@@ -126,7 +117,13 @@ const Images = ({
             style={{ position: "absolute", bottom: 12, left: 0, right: 0 }}
             className="flex-row justify-around"
           >
-            <TouchableOpacity className="bg-white px-4 py-2 rounded-full border border-gray-300">
+            <TouchableOpacity
+              onPress={() => {
+                if (uploadedImage) setUploadedImage?.(uploadedImage);
+                onUseUploadedImage?.();
+              }}
+              className="bg-white px-4 py-2 rounded-full border border-gray-300"
+            >
               <Text className="text-black font-medium">Set as profile picture</Text>
             </TouchableOpacity>
             <TouchableOpacity

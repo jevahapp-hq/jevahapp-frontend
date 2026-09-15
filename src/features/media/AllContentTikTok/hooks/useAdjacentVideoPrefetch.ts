@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { detectNetworkQuality } from "../../../../../app/utils/videoOptimization";
 import { prefetchPdfUrls } from "../../../../../app/utils/pdfCache";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon } from "../../../../shared/utils";
+import { isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import { prefetchAudioUrls } from "../../../../shared/utils/audioPrefetch";
 import { PERFORMANCE_CONFIG } from "../../../../shared/config/performance";
 import { getLitePrefetchAhead, isLiteProfileActive } from "../../../../shared/lite/liteProfile";

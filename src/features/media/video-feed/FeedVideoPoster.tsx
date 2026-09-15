@@ -54,27 +54,15 @@ export function FeedVideoPoster({
   return (
     <View style={[styles.wrap, { height }]} collapsable={false}>
       {uri ? (
-        <>
-          {contentFit === "cover" ? (
-            <Image
-              source={{ uri }}
-              style={styles.tallerBackdrop}
-              contentFit="cover"
-              cachePolicy={cachePolicy}
-              recyclingKey={`${uri}-back`}
-              priority="high"
-            />
-          ) : null}
-          <Image
-            source={{ uri: raw || uri }}
-            style={styles.img}
-            contentFit={contentFit}
-            contentPosition="center"
-            cachePolicy={cachePolicy}
-            recyclingKey={raw || uri}
-            priority="high"
-          />
-        </>
+        <Image
+          source={{ uri: raw || uri }}
+          style={styles.img}
+          contentFit={contentFit}
+          contentPosition="center"
+          cachePolicy={cachePolicy}
+          recyclingKey={raw || uri}
+          priority="high"
+        />
       ) : null}
       {showGradients ? (
         <>
@@ -107,16 +95,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#1A0E0A",
   },
-  tallerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
-    transform: [{ scaleY: 1.18 }],
-  },
   img: {
     ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
   },
   topFade: {
     position: "absolute",

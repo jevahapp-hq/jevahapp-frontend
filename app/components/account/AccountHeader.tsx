@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 
 type AccountHeaderProps = {
@@ -20,6 +20,10 @@ export default function AccountHeader({
   const [avatarError, setAvatarError] = useState(false);
   const avatarUrl = user ? getAvatarUrl(user) ?? undefined : undefined;
 
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
+
   return (
     <View className="flex-row items-center justify-between w-full px-4 py-3 border-b border-gray-100">
       {/* Left Side - User Profile */}
@@ -31,6 +35,7 @@ export default function AccountHeader({
         <View className="relative">
           {user && avatarUrl && !avatarError ? (
             <Image
+              key={avatarUrl}
               source={{ uri: avatarUrl }}
               className="w-10 h-10 rounded-lg"
               style={{ borderWidth: 1, borderColor: "#E5E7EB" }}

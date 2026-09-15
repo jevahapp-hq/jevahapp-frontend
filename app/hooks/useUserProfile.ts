@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../utils/dataFetching";
+import { pickDisplayAvatarUrl } from "../utils/persistUserAvatar";
+import TokenUtils from "../utils/tokenUtils";
 
 // User type based on the new API response structure
 export type User = {
@@ -12,6 +14,7 @@ export type User = {
   email?: string;
   avatar?: string | null;
   avatarUpload?: string | null;
+  avatarUpdatedAt?: number | null;
   bio?: string | null;
   section?: string;
   role?: string;
@@ -34,12 +37,11 @@ export const useUserProfile = () => {
   useEffect(() => {
     const loadFromStorage = async () => {
       try {
-        const [storedUser, userToken, token] = await Promise.all([
+        const [storedUser, token] = await Promise.all([
           AsyncStorage.getItem("user"),
-          AsyncStorage.getItem("userToken"),
-          AsyncStorage.getItem("token"),
+          TokenUtils.getAuthToken(),
         ]);
-        setHasAuthToken(Boolean(userToken || token));
+        setHasAuthToken(Boolean(token));
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
           setInitialUser(parsedUser);
@@ -68,6 +70,24 @@ export const useUserProfile = () => {
         throw new Error("No user data received");
       }
 
+      let storedUser: User | null = null;
+      try {
+        const raw = await AsyncStorage.getItem("user");
+        if (raw) storedUser = JSON.parse(raw);
+      } catch {}
+
+      const incomingAvatar =
+        userData.user.avatar || userData.user.avatarUpload || null;
+      const localAvatar = storedUser?.avatar || storedUser?.avatarUpload || null;
+      const localIsFresh =
+        Boolean(localAvatar) &&
+        typeof storedUser?.avatarUpdatedAt === "number" &&
+        Date.now() - storedUser.avatarUpdatedAt < 120000;
+      const avatar =
+        localIsFresh && localAvatar && localAvatar !== incomingAvatar
+          ? localAvatar
+          : incomingAvatar || localAvatar || null;
+
       // Ensure section is set if missing and handle optional fields
       const userWithSection = {
         ...userData.user,
@@ -79,8 +99,11 @@ export const useUserProfile = () => {
         role: userData.user.role || "learner",
         isProfileComplete: userData.user.isProfileComplete || false,
         isEmailVerified: userData.user.isEmailVerified || false,
-        avatar: userData.user.avatar || null,
-        avatarUpload: userData.user.avatarUpload || null,
+        avatar,
+        avatarUpload: avatar,
+        avatarUpdatedAt: localIsFresh
+          ? storedUser?.avatarUpdatedAt
+          : storedUser?.avatarUpdatedAt || null,
         isOnline: userData.user.isOnline || false,
         createdAt: userData.user.createdAt || "",
         updatedAt: userData.user.updatedAt || "",
@@ -214,24 +237,20 @@ export const useUserProfile = () => {
   const updateUserProfile = useCallback((updatedUser: Partial<User>) => {
     if (finalUser) {
       const newUser = { ...finalUser, ...updatedUser };
-      // Update React Query cache
-      queryClient.setQueryData(["user-profile"], newUser);
-      // Update AsyncStorage
+      queryClient.setQueriesData({ queryKey: ["user-profile"] }, newUser);
       AsyncStorage.setItem("user", JSON.stringify(newUser));
     }
   }, [finalUser, queryClient]);
 
   const clearUserProfile = useCallback(async () => {
-    // Clear React Query cache
-    queryClient.setQueryData(["user-profile"], null);
+    queryClient.setQueriesData({ queryKey: ["user-profile"] }, null);
     queryClient.removeQueries({ queryKey: ["user-profile"] });
-    // Clear AsyncStorage
     await AsyncStorage.removeItem("user");
     await clearTokens();
   }, [queryClient]);
 
   const getAvatarUrl = useCallback((user: User) => {
-    return user.avatarUpload || user.avatar || null;
+    return pickDisplayAvatarUrl(user);
   }, []);
 
   const getFullName = useCallback((user: User) => {

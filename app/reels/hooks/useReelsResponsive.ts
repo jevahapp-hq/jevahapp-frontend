@@ -1,8 +1,11 @@
 import { Platform, Dimensions } from "react-native";
 
+/** Cover-fill the reel cell. Crop overflow so there is no gap at the top. */
+export const REELS_CONTENT_FIT = "cover" as const;
+
 /**
- * Fill the visible reel cell. Cover-fill the picture; clip leftover width
- * so sides never paint past the phone.
+ * Fill the visible reel cell edge-to-edge. Cover crops extra width/height
+ * instead of leaving a letterbox above the picture.
  */
 export function getReelsMediaFrame(width: number, height: number) {
   return {

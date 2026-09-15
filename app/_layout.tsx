@@ -15,7 +15,7 @@ import { Slot } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { BackHandler, Platform, Text, View } from "react-native";
+import { BackHandler, InteractionManager, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
@@ -43,6 +43,7 @@ import {
   subscribePersistedQueryCache,
   swrPersistedQueryCache,
 } from "../src/shared/cache/persistQueryClient";
+import { registerDefaultContentQueryDefaults } from "../src/shared/media/useDefaultContentQuery";
 import {
   allContentQueryKey,
   getFeedPageSize,
@@ -138,6 +139,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+registerDefaultContentQueryDefaults(queryClient);
 
 // Sync Lite mode + MMKV → React Query before first Home paint
 try {
@@ -296,31 +298,34 @@ export default function RootLayout() {
     };
   }, [isInitialized]);
 
-  // Library / downloads: start immediately so Library tab has disk items on tap.
+  // Library / downloads: after first paint so they do not compete with Home feed.
   useEffect(() => {
     if (!isInitialized) return;
     let cancelled = false;
-    void (async () => {
-      try {
-        if (!cancelled) await loadSavedItems();
-      } catch {}
-      try {
-        if (!cancelled) await loadDownloadedItems();
-      } catch {}
-      try {
-        if (!cancelled) {
-          await PerformanceOptimizer.getInstance().preloadCriticalData();
-        }
-      } catch {}
-      try {
-        const { preloadNavTapSound } = await import(
-          "../src/shared/utils/uiSounds"
-        );
-        preloadNavTapSound();
-      } catch {}
-    })();
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          if (!cancelled) await loadSavedItems();
+        } catch {}
+        try {
+          if (!cancelled) await loadDownloadedItems();
+        } catch {}
+        try {
+          if (!cancelled) {
+            await PerformanceOptimizer.getInstance().preloadCriticalData();
+          }
+        } catch {}
+        try {
+          const { preloadNavTapSound } = await import(
+            "../src/shared/utils/uiSounds"
+          );
+          preloadNavTapSound();
+        } catch {}
+      })();
+    });
     return () => {
       cancelled = true;
+      task.cancel();
     };
   }, [isInitialized, loadDownloadedItems, loadSavedItems]);
 

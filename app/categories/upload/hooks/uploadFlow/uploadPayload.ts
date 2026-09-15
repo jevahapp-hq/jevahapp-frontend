@@ -30,7 +30,7 @@ export function buildUploadPayload(params: {
   description: string;
   selectedType: string;
   selectedCategory: string;
-}) {
+}): Promise<FormData> {
   return buildUploadFormData(params);
 }
 

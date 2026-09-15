@@ -49,11 +49,20 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
       )?.[1] || 0
     );
   const rateLimited = allContentStatus === 429;
+  const catalogType = String(contentType || "ALL").toLowerCase();
+  const isTypedCatalog =
+    catalogType === "sermon" ||
+    catalogType === "teachings" ||
+    catalogType === "ebook" ||
+    catalogType === "ebooks" ||
+    catalogType === "e-books" ||
+    catalogType === "books";
   const typedList =
     String(contentType || "ALL").toUpperCase() !== "ALL";
   const shouldFetchDefault =
     immediate &&
     !rateLimited &&
+    !isTypedCatalog &&
     (typedList ||
       allContentQuery.isError ||
       (allContentQuery.isFetched && allContentEarly.length === 0));
@@ -98,7 +107,9 @@ export const useMedia = (options: UseMediaOptions = {}): UseMediaReturn => {
   const defaultContentError = defaultContentQuery.error
     ? (defaultContentQuery.error as Error).message
     : null;
-  const error = allContentError || defaultContentError;
+  const rawError = allContentError || defaultContentError;
+  const error =
+    rawError && !rawError.includes("Missing queryFn") ? rawError : null;
   const hasContent = hasAnyItems;
 
   const refreshAllContent = useCallback(async () => {

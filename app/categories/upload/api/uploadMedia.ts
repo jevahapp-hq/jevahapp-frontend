@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 import { API_BASE_URL } from "../constants";
 import type { MediaFile } from "../types";
 import { resolveUploadContentType } from "../utils/resolveUploadContentType";
+import { appendLocalFile, postMultipartForm } from "./appendLocalFile";
 
 export type BuildUploadFormDataParams = {
   file: MediaFile;
@@ -16,28 +17,27 @@ export type BuildUploadFormDataParams = {
   selectedCategory: string;
 };
 
-export function buildUploadFormData({
+export async function buildUploadFormData({
   file,
   thumbnail,
   title,
   description,
   selectedType,
   selectedCategory,
-}: BuildUploadFormDataParams): FormData {
+}: BuildUploadFormDataParams): Promise<FormData> {
   const formData = new FormData();
-  formData.append("file", {
+  await appendLocalFile(formData, "file", {
     uri: file.uri,
-    type: file.mimeType,
     name: file.name,
-    size: file.size,
-  } as any);
+    mimeType: file.mimeType,
+  });
 
   if (thumbnail) {
-    formData.append("thumbnail", {
+    await appendLocalFile(formData, "thumbnail", {
       uri: thumbnail.uri,
-      type: thumbnail.mimeType,
       name: thumbnail.name,
-    } as any);
+      mimeType: thumbnail.mimeType,
+    });
   }
 
   formData.append("title", title);
@@ -50,6 +50,10 @@ export function buildUploadFormData({
     console.warn(
       "⚠️ No file size available - this might cause upload issues"
     );
+  }
+
+  if (file.mimeType) {
+    formData.append("mimeType", file.mimeType);
   }
 
   // File MIME/extension + selected type — never title ("Book of Enoch" ≠ ebook)
@@ -84,17 +88,17 @@ export async function uploadMedia({
   uploadId,
   signal,
 }: UploadMediaParams): Promise<Response> {
-  return fetch(`${API_BASE_URL}/api/media/upload`, {
-    method: "POST",
-    headers: {
+  return postMultipartForm(
+    `${API_BASE_URL}/api/media/upload`,
+    formData,
+    {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
       "expo-platform": Platform.OS,
       "X-Upload-ID": uploadId,
     },
-    body: formData,
-    signal,
-  });
+    signal
+  );
 }
 
 export function getUploadTimeoutMs(mimeType?: string): number {

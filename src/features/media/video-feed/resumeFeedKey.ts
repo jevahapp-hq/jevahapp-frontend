@@ -26,6 +26,17 @@ export function remapResumeFeedKey(
   return `${previousFeedKey.slice(0, sep)}::${id}`;
 }
 
+/** Tab prefix from `ALL::id` / `videos::id` so back restores that category. */
+export function feedTabFromResumeKey(
+  feedKey?: string | null
+): string | null {
+  const key = String(feedKey || "").trim();
+  const sep = key.indexOf("::");
+  if (sep <= 0) return null;
+  const tab = key.slice(0, sep).trim();
+  return tab || null;
+}
+
 export function findMediaRowIndex(
   listData: ResumeFeedRow[] | undefined,
   resumeKey: string | null | undefined,

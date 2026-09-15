@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Image, Text, TouchableOpacity, View } from "react-native";
 import { useCreatorMe } from "../../hooks/useCreatorMe";
 import { apiClient } from "../../utils/dataFetching";
@@ -12,7 +12,8 @@ type ProfileSummaryProps = {
   getFullName: (user: any) => string;
   onEdit: () => void;
   onLogout: () => void;
-  onProfileUpdate?: () => void; // Callback to refresh profile after update
+  onProfileUpdate?: () => void;
+  onChangeAvatar?: () => void;
 };
 
 export default function ProfileSummary({
@@ -22,6 +23,7 @@ export default function ProfileSummary({
   onEdit,
   onLogout,
   onProfileUpdate,
+  onChangeAvatar,
 }: ProfileSummaryProps) {
   const router = useRouter();
   const [avatarError, setAvatarError] = useState(false);
@@ -30,6 +32,10 @@ export default function ProfileSummary({
   const { data: creatorMe, loading: creatorLoading } = useCreatorMe({
     enabled: !!user,
   });
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
 
   const handleAddBio = () => {
     Alert.prompt(
@@ -72,31 +78,48 @@ export default function ProfileSummary({
         {/* Left spacer - tiny nudge back left */}
         <View style={{ flex: 1.02 }} />
 
-        {/* Main Profile Picture - Moved further left */}
+        {/* Main Profile Picture - tap to change photo or avatar */}
         <View className="relative">
-          {user && avatarUrl && !avatarError ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              className="w-24 h-24 rounded-full"
-              style={{ borderWidth: 3, borderColor: "#E5E7EB" }}
-              onError={() => setAvatarError(true)}
-            />
-          ) : (
-            <View
-              className="w-24 h-24 rounded-full justify-center items-center"
-              style={{
-                borderWidth: 3,
-                borderColor: "#E5E7EB",
-                backgroundColor: "#F3F4F6",
-              }}
-            >
-              <Text className="text-gray-600 font-semibold text-3xl">
-                {user?.firstName?.[0]?.toUpperCase() ||
-                  user?.lastName?.[0]?.toUpperCase() ||
-                  "U"}
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onChangeAvatar}
+            disabled={!onChangeAvatar}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo or avatar"
+          >
+            {user && avatarUrl && !avatarError ? (
+              <Image
+                key={avatarUrl}
+                source={{ uri: avatarUrl }}
+                className="w-24 h-24 rounded-full"
+                style={{ borderWidth: 3, borderColor: "#E5E7EB" }}
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <View
+                className="w-24 h-24 rounded-full justify-center items-center"
+                style={{
+                  borderWidth: 3,
+                  borderColor: "#E5E7EB",
+                  backgroundColor: "#F3F4F6",
+                }}
+              >
+                <Text className="text-gray-600 font-semibold text-3xl">
+                  {user?.firstName?.[0]?.toUpperCase() ||
+                    user?.lastName?.[0]?.toUpperCase() ||
+                    "U"}
+                </Text>
+              </View>
+            )}
+            {onChangeAvatar ? (
+              <View
+                className="absolute bottom-0 right-0 bg-[#0A332D] rounded-full items-center justify-center"
+                style={{ width: 28, height: 28, borderWidth: 2, borderColor: "#FFFFFF" }}
+              >
+                <Ionicons name="camera" size={14} color="#FFFFFF" />
+              </View>
+            ) : null}
+          </TouchableOpacity>
         </View>
 
         {/* Right spacer - tiny increase to balance */}
@@ -124,6 +147,13 @@ export default function ProfileSummary({
         <Text className="text-2xl font-bold text-[#3B3B3B] mb-2">
           {user ? getFullName(user) : "Loading..."}
         </Text>
+        {onChangeAvatar ? (
+          <TouchableOpacity onPress={onChangeAvatar} className="mb-2">
+            <Text className="text-[#FEA74E] font-medium text-center">
+              Change photo or avatar
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
         {user?.bio ? (
           <View className="px-4 mb-2">

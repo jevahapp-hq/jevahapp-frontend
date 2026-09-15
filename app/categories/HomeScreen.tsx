@@ -1,7 +1,7 @@
 import BottomNav from "@/app/components/BottomNav";
 import { useLocalSearchParams } from "expo-router";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { InteractionManager, StyleSheet, View } from "react-native";
 import { useCommentModal } from "../context/CommentModalContext";
 import {
   releaseMiniPlayer,
@@ -10,21 +10,16 @@ import {
 import { hideAppSplash } from "../../src/shared/utils/appSplash";
 import { useNewUserLoginTour } from "../components/loginTour/useNewUserLoginTour";
 import LibraryTabSkeleton from "../screens/library/LibraryTabSkeleton";
-import BibleScreen from "../screens/BibleScreen";
-import CommunityScreen from "../screens/CommunityScreen";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
 import HomeTabContent from "./HomeTabContent";
-import {
-  prefetchHomeTabModules,
-  prefetchHomeTabModulesPromise,
-} from "../utils/prefetchHomeTabs";
+import { prefetchHomeTabModules } from "../utils/prefetchHomeTabs";
 
 const NewUserLoginTour = lazy(
   () => import("../components/loginTour/NewUserLoginTour")
 );
 const LibraryScreen = lazy(() => import("../screens/library/LibraryScreen"));
-
-prefetchHomeTabModules();
+const CommunityScreen = lazy(() => import("../screens/CommunityScreen"));
+const BibleScreen = lazy(() => import("../screens/BibleScreen"));
 
 const tabList = ["Home", "Community", "Library", "Bible"] as const;
 type MainShellTab = (typeof tabList)[number];
@@ -39,14 +34,19 @@ function paneStyle(active: boolean) {
   ];
 }
 
+function TabFallback() {
+  return <View style={styles.tabFallback} />;
+}
+
 /**
- * Keep visited tabs mounted. Inactive panes are translated off-screen
- * because VideoView still paints when opacity is 0.
+ * Keep visited tabs mounted so returning to Home/Community is instant.
+ * Inactive panes are translated off-screen because VideoView still paints
+ * when opacity is 0. Community / Library / Bible stay unmounted until first tap.
  */
 export default function HomeScreen() {
   const [selectedTab, setSelectedTab] = useState<MainShellTab>("Home");
   const [visitedTabs, setVisitedTabs] = useState<Set<MainShellTab>>(
-    () => new Set(["Home", "Community"])
+    () => new Set(["Home"])
   );
   const { isVisible: isCommentSheetOpen } = useCommentModal();
   const loginTour = useNewUserLoginTour();
@@ -68,11 +68,10 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    void prefetchHomeTabModulesPromise().then(() => {
-      setVisitedTabs((prev) =>
-        prev.has("Library") ? prev : new Set(prev).add("Library")
-      );
+    const task = InteractionManager.runAfterInteractions(() => {
+      prefetchHomeTabModules();
     });
+    return () => task.cancel();
   }, []);
 
   useEffect(() => {
@@ -93,9 +92,11 @@ export default function HomeScreen() {
             style={paneStyle(selectedTab === "Community")}
             collapsable={false}
           >
-            <ContentErrorBoundary>
-              <CommunityScreen embedded />
-            </ContentErrorBoundary>
+            <Suspense fallback={<TabFallback />}>
+              <ContentErrorBoundary>
+                <CommunityScreen embedded />
+              </ContentErrorBoundary>
+            </Suspense>
           </View>
         ) : null}
 
@@ -114,7 +115,9 @@ export default function HomeScreen() {
 
         {visitedTabs.has("Bible") ? (
           <View style={paneStyle(selectedTab === "Bible")} collapsable={false}>
-            <BibleScreen />
+            <Suspense fallback={<TabFallback />}>
+              <BibleScreen />
+            </Suspense>
           </View>
         ) : null}
       </View>
@@ -151,6 +154,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#FCFCFD" },
   tabHost: { flex: 1, backgroundColor: "#FCFCFD", overflow: "hidden" },
+  tabFallback: { flex: 1, backgroundColor: "#FCFCFD" },
   tabPane: {
     position: "absolute",
     top: 0,

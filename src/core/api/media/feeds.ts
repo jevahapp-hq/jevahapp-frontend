@@ -72,6 +72,42 @@ export async function getDefaultContent(
   );
 }
 
+export async function getSermons(options?: {
+  page?: number;
+  limit?: number;
+}): Promise<MediaApiResponse> {
+  return toMediaApiResponse(
+    await apiClient.get<any>(
+      API_CONFIG.ENDPOINTS.SERMONS,
+      buildListParams(options)
+    )
+  );
+}
+
+export async function getEbooks(options?: {
+  page?: number;
+  limit?: number;
+}): Promise<MediaApiResponse> {
+  return toMediaApiResponse(
+    await apiClient.get<any>(
+      API_CONFIG.ENDPOINTS.EBOOKS,
+      buildListParams(options)
+    )
+  );
+}
+
+export async function getMusicTracks(options?: {
+  page?: number;
+  limit?: number;
+}): Promise<MediaApiResponse> {
+  return toMediaApiResponse(
+    await apiClient.get<any>(
+      API_CONFIG.ENDPOINTS.MUSIC_TRACKS,
+      buildListParams(options)
+    )
+  );
+}
+
 export async function getContentById(
   contentId: string
 ): Promise<Result<MediaItem>> {

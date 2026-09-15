@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Dimensions, Image, Modal, Platform, ScrollVie
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { apiClient } from '../utils/dataFetching';
+import { persistUserAvatar } from '../utils/persistUserAvatar';
 import { getApiBaseUrl } from '../utils/api';
 import AuthHeader from '../components/AuthHeader';
 import * as ImagePicker from 'expo-image-picker';
@@ -232,6 +233,16 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
     }
   };
 
+  const openAvatarEditor = () => {
+    onClose();
+    setTimeout(() => {
+      router.push({
+        pathname: '/avatars/indexAvatar',
+        params: { from: 'profile' },
+      });
+    }, 180);
+  };
+
   const handleAvatarUpload = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -252,6 +263,11 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
         const response = await apiClient.uploadProfileAvatar(result.assets[0].uri);
 
         if (response.success) {
+          const nextUrl =
+            response.data?.avatarUpload ||
+            response.data?.avatar ||
+            result.assets[0].uri;
+          await persistUserAvatar(queryClient, nextUrl);
           await fetchSettingsConfig();
           await refreshUserProfile();
           Alert.alert('Success', 'Avatar updated successfully');
@@ -290,6 +306,7 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
     : 'User';
   const avatarUrl = config?.profileImage?.currentValue || 
                    config?.profileImage?.previewUrl || 
+                   user?.avatarUpload ||
                    user?.avatar || 
                    null;
 
@@ -317,6 +334,45 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
           {/* Content */}
           <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
             <View className="px-4 py-4 mt-8">
+              <View className="items-center mb-6">
+                <View className="w-28 h-28 rounded-xl overflow-hidden bg-gray-200 items-center justify-center relative">
+                  {updating.avatar ? (
+                    <View className="absolute inset-0 items-center justify-center bg-black/20 z-10">
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    </View>
+                  ) : null}
+                  {avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name="person" size={48} color="#9CA3AF" />
+                  )}
+                  <View className="absolute bottom-1 right-1">
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={openAvatarEditor}
+                      disabled={updating.avatar}
+                    >
+                      <View
+                        className="bg-white rounded-full p-1.5 flex-row items-center"
+                        style={{ shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6 }}
+                      >
+                        <Ionicons name="pencil-outline" size={12} color="#0A332D" />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={openAvatarEditor} className="mt-3" disabled={updating.avatar}>
+                  <Text className="text-[#0A332D] font-semibold">Change photo or avatar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleAvatarUpload} className="mt-1" disabled={updating.avatar}>
+                  <Text className="text-[#6B7280] text-xs">Or upload from gallery</Text>
+                </TouchableOpacity>
+              </View>
+
               {loading ? (
                 <View className="items-center justify-center py-20">
                   <ActivityIndicator size="large" color="#0A332D" />
@@ -324,42 +380,6 @@ export default function EditProfileSlideOver({ visible, onClose }: EditProfileSl
                 </View>
               ) : config ? (
                 <>
-                  {/* Avatar */}
-                  {config.profileImage && (
-                    <View className="items-center mb-6">
-                      <View className="w-28 h-28 rounded-xl overflow-hidden bg-gray-200 items-center justify-center relative">
-                        {updating.avatar ? (
-                          <View className="absolute inset-0 items-center justify-center bg-black/20">
-                            <ActivityIndicator size="small" color="#ffffff" />
-                          </View>
-                        ) : avatarUrl ? (
-                          <Image
-                            source={{ uri: avatarUrl }}
-                            className="w-full h-full"
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Ionicons name="person" size={48} color="#9CA3AF" />
-                        )}
-                        <View className="absolute bottom-1 right-1">
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={handleAvatarUpload}
-                            disabled={updating.avatar || !config.profileImage.enabled}
-                            style={{ opacity: config.profileImage.enabled ? 1 : 0.5 }}
-                          >
-                            <View
-                              className="bg-white rounded-full p-1.5 flex-row items-center"
-                              style={{ shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6 }}
-                            >
-                              <Ionicons name="pencil-outline" size={12} color="#0A332D" />
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                  )}
-
                   {/* Name Row */}
                   {config.name && (
                     <View

@@ -12,11 +12,17 @@ export const useVideoPlaybackControl = ({
    * pause() as a no-op so muted first-frame pre-roll can finish decoding.
    */
   playbackReady = true,
+  /**
+   * Reels owns play/mute itself. Dual sync (this hook + the reel surface)
+   * unmutes a playing decoder and cracks Android audio.
+   */
+  syncPlayback = true,
 }: {
   videoKey: string;
   videoRef: { current: any } | { current: VideoPlayer | null };
   enableAutoPlay?: boolean;
   playbackReady?: boolean;
+  syncPlayback?: boolean;
 }) => {
   const isPlaying = useGlobalVideoStore(
     (s) => s.playingVideos[videoKey] ?? false
@@ -72,11 +78,10 @@ export const useVideoPlaybackControl = ({
         if (!current) return;
         try {
           if (isExpoVideo) {
-            current.pause();
-            // Always silence non-active players — prevents echo when multiple
-            // feed panes or neighbors are mounted with the same content.
+            // Silence first, then pause — pausing an unmuted player pops.
             current.muted = true;
             current.volume = 0;
+            current.pause();
           } else {
             await current.pauseAsync();
           }
@@ -93,8 +98,13 @@ export const useVideoPlaybackControl = ({
             const current = videoRef.current;
             const muted =
               useGlobalVideoStore.getState().mutedVideos[videoKey] ?? false;
-            current.muted = muted;
-            current.volume = muted ? 0 : 1;
+            const targetVol = muted ? 0 : 1;
+            // Mute/volume before play — unmuting an already-playing
+            // decoder is what pops on Android.
+            if (current.muted !== muted) current.muted = muted;
+            if (Math.abs((Number(current.volume) || 0) - targetVol) > 0.02) {
+              current.volume = targetVol;
+            }
             if (!current.playing) current.play();
           }
         } catch {
@@ -153,7 +163,7 @@ export const useVideoPlaybackControl = ({
   // Direct imperative sync: if this is the playing video, play it; otherwise pause.
   // Skipped during pre-roll so neighbors can decode a frozen first frame.
   useEffect(() => {
-    if (!playbackReady) return;
+    if (!syncPlayback || !playbackReady) return;
 
     const p = videoRef.current;
     if (!p) return;
@@ -190,6 +200,7 @@ export const useVideoPlaybackControl = ({
     videoKey,
     videoRef,
     playbackReady,
+    syncPlayback,
     setOverlayVisible,
   ]);
 

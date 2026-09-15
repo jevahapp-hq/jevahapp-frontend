@@ -1,6 +1,7 @@
 import type { AudioTrack } from "@/store/audioPlayer/types";
 
 let remembered: AudioTrack[] = [];
+let rememberedSermons: AudioTrack[] = [];
 
 export function rememberSessionAudioQueue(tracks: AudioTrack[]): void {
   remembered = Array.isArray(tracks)
@@ -8,8 +9,18 @@ export function rememberSessionAudioQueue(tracks: AudioTrack[]): void {
     : [];
 }
 
+export function rememberSermonAudioQueue(tracks: AudioTrack[]): void {
+  rememberedSermons = Array.isArray(tracks)
+    ? tracks.filter((t) => !!t?.id && !!t.audioUrl)
+    : [];
+}
+
 export function getSessionAudioQueue(): AudioTrack[] {
   return remembered;
+}
+
+export function getSermonAudioQueue(): AudioTrack[] {
+  return rememberedSermons;
 }
 
 /** Prefer an explicit list, then the remembered session, else just this track. */

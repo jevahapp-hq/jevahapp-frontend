@@ -76,7 +76,6 @@ const ReelsView = () => {
             height: cellHeight,
             width: cellWidth,
             backgroundColor: "#000",
-            overflow: "hidden",
           }}
         >
           <ReelsVideoItem
@@ -184,11 +183,13 @@ const ReelsView = () => {
           offset: cellHeight * index,
           index,
         })}
-        // VideoView surfaces go black when Android detaches clipped cells.
+        // Keep previous + current + next cells attached. windowSize 2 only
+        // overscans half a viewport, so the previous full-screen reel was
+        // recycled and showed its thumbnail on the way back up.
         removeClippedSubviews={false}
-        initialNumToRender={1}
-        maxToRenderPerBatch={1}
-        windowSize={2}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={3}
         decelerationRate="fast"
         snapToInterval={cellHeight}
         snapToAlignment="start"
@@ -205,8 +206,13 @@ const ReelsView = () => {
         showDetailsModal={o.showDetailsModal}
         onBackPress={o.handlers.handleBackNavigation}
         onTabChange={(tab) => {
-          o.setActiveTab(tab);
           o.triggerHapticFeedback();
+          if (tab === "Home") {
+            o.handlers.handleBackNavigation();
+            return;
+          }
+          o.handlers.persistFeedResumeFromReels();
+          o.setActiveTab(tab);
           navigateMainTab(tab as any);
         }}
         onCloseDelete={o.closeDeleteModal}
@@ -243,12 +249,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#000",
-    overflow: "hidden",
   },
   list: {
     flex: 1,
     backgroundColor: "#000",
-    overflow: "hidden",
   },
 });
 

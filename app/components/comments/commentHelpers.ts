@@ -1,4 +1,4 @@
-import { formatTimeAgo } from "../../../src/shared/utils";
+import { formatTimeAgo } from "../../../src/shared/utils/contentHelpers";
 import { resolveUserAvatarUrl } from "../../utils/defaultUserAvatar";
 import type { CommentReply, CommentThreadItem } from "./types";
 

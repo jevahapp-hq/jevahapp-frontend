@@ -13,7 +13,7 @@ import {
   getTimeAgo as defaultGetTimeAgo,
   getUserAvatarFromContent as defaultGetAvatar,
   getUserDisplayNameFromContent as defaultGetName,
-} from "../../../../shared/utils";
+} from "../../../../shared/utils/contentHelpers";
 import {
   isUnderReview,
   shouldShowMediaActionsMenu,

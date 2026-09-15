@@ -54,12 +54,23 @@ export const detectMediaType = (item: MediaItem | null | undefined): MediaType =
   if (!item) return "unknown";
 
   const contentType = (item.contentType || "").toLowerCase();
+  const declaredMediaType = String(
+    (item as { mediaType?: string }).mediaType || ""
+  ).toLowerCase();
   const fileUrl = (item.fileUrl || "").toLowerCase();
+  const playbackUrl = String(
+    (item as { playbackUrl?: string }).playbackUrl || ""
+  ).toLowerCase();
+  const pdfUrl = String((item as { pdfUrl?: string }).pdfUrl || "").toLowerCase();
+  const urlBlob = `${fileUrl} ${playbackUrl} ${pdfUrl}`;
   const mimeType = (
     item.mimeType ||
     (item as { fileMimeType?: string }).fileMimeType ||
     ""
   ).toLowerCase();
+
+  if (declaredMediaType === "audio") return "audio";
+  if (declaredMediaType === "video") return "video";
 
   // Check MIME type first (most reliable)
   if (mimeType) {
@@ -78,10 +89,10 @@ export const detectMediaType = (item: MediaItem | null | undefined): MediaType =
   }
 
   // Check file extension
-  const hasVideoExtension = VIDEO_EXTENSIONS.some((ext) => fileUrl.includes(ext));
-  const hasAudioExtension = AUDIO_EXTENSIONS.some((ext) => fileUrl.includes(ext));
-  const hasEbookExtension = EBOOK_EXTENSIONS.some((ext) => fileUrl.includes(ext));
-  const hasGifExtension = fileUrl.includes(".gif");
+  const hasVideoExtension = VIDEO_EXTENSIONS.some((ext) => urlBlob.includes(ext));
+  const hasAudioExtension = AUDIO_EXTENSIONS.some((ext) => urlBlob.includes(ext));
+  const hasEbookExtension = EBOOK_EXTENSIONS.some((ext) => urlBlob.includes(ext));
+  const hasGifExtension = urlBlob.includes(".gif");
 
   if (hasGifExtension) return "gif";
   if (hasVideoExtension) return "video";
@@ -173,8 +184,39 @@ export const isGifContent = (item: MediaItem | null | undefined): boolean => {
 export const isAudioSermon = (item: MediaItem | null | undefined): boolean => {
   if (!item) return false;
   const contentType = (item.contentType || "").toLowerCase();
-  if (contentType !== "sermon" && contentType !== "devotional") return false;
+  if (
+    contentType !== "sermon" &&
+    contentType !== "devotional" &&
+    contentType !== "teachings"
+  ) {
+    return false;
+  }
+  const mediaType = String(
+    (item as { mediaType?: string }).mediaType || ""
+  ).toLowerCase();
+  if (mediaType === "audio") return true;
+  if (mediaType === "video") return false;
   return detectMediaType(item) === "audio";
+};
+
+/**
+ * VIDEO chip: clips and video sermons only — never audio sermons.
+ */
+export const belongsInVideoCategory = (
+  item: MediaItem | null | undefined
+): boolean => {
+  if (!item) return false;
+  if (isAudioSermon(item)) return false;
+  const itemType = (item.contentType || "").toLowerCase();
+  return (
+    itemType === "video" ||
+    itemType === "videos" ||
+    itemType === "gif" ||
+    itemType === "gifs" ||
+    itemType === "sermon" ||
+    itemType === "teachings" ||
+    itemType === "devotional"
+  );
 };
 
 /**
@@ -183,7 +225,18 @@ export const isAudioSermon = (item: MediaItem | null | undefined): boolean => {
 export const isVideoSermon = (item: MediaItem | null | undefined): boolean => {
   if (!item) return false;
   const contentType = (item.contentType || "").toLowerCase();
-  if (contentType !== "sermon" && contentType !== "devotional") return false;
+  if (
+    contentType !== "sermon" &&
+    contentType !== "devotional" &&
+    contentType !== "teachings"
+  ) {
+    return false;
+  }
+  const mediaType = String(
+    (item as { mediaType?: string }).mediaType || ""
+  ).toLowerCase();
+  if (mediaType === "video") return true;
+  if (mediaType === "audio") return false;
   return detectMediaType(item) === "video";
 };
 

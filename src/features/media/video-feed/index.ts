@@ -6,6 +6,7 @@ export {
   FEED_VIDEO_PLAYER_HEIGHT,
   FEED_VIDEO_ROW_SIZE,
   FEED_VIDEO_MIN_VIEW_MS,
+  FEED_AUDIO_MIN_VIEW_MS,
   FEED_VIDEO_VISIBLE_PERCENT,
   FEED_WARM_IDLE_MOUNT_COUNT,
   getFeedVideoRowSize,
@@ -15,6 +16,7 @@ export { FeedVideoSurface } from "./FeedVideoSurface";
 export { FittedMediaImage } from "./FittedMediaImage";
 export { fitRectInBox } from "./fitRectInBox";
 export {
+  feedTabFromResumeKey,
   findMediaRowIndex,
   playbackKeyToContentKey,
   remapResumeFeedKey,

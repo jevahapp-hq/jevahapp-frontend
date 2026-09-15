@@ -3,6 +3,7 @@
  */
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
+import { readHomeFeedCategory } from "../../../../../shared/media/homeFeedCategory";
 import type { MediaItem } from "../../../../../shared/types";
 
 export function useEbookOpen(
@@ -14,7 +15,7 @@ export function useEbookOpen(
   return useCallback(() => {
     try {
       const pdfUrl =
-        (ebook as any)?.fileUrl || (ebook as any)?.pdfUrl || "";
+        (ebook as any)?.pdfUrl || (ebook as any)?.fileUrl || "";
 
       if (typeof pdfUrl === "string" && pdfUrl.trim().length > 0) {
         const isValidUrl = /^(https?|file):\/\//.test(pdfUrl.trim());
@@ -26,6 +27,8 @@ export function useEbookOpen(
               ebookId: (ebook as any)?._id || (ebook as any)?.id || "",
               title: ebook.title || "Untitled",
               desc: (ebook as any)?.description || "",
+              from: "feed",
+              homeCategory: readHomeFeedCategory(),
             },
           });
           return;

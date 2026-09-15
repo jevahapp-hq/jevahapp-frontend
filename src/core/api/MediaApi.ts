@@ -21,6 +21,9 @@ class MediaApi {
   getAllContentPublic = feeds.getAllContentPublic;
   getAllContentWithAuth = feeds.getAllContentWithAuth;
   getDefaultContent = feeds.getDefaultContent;
+  getSermons = feeds.getSermons;
+  getEbooks = feeds.getEbooks;
+  getMusicTracks = feeds.getMusicTracks;
   getContentById = feeds.getContentById;
   getMediaById = feeds.getMediaById;
 

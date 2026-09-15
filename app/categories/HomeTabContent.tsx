@@ -8,6 +8,7 @@ import React, {
   type ReactNode,
 } from "react";
 import {
+  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +16,7 @@ import {
   View,
 } from "react-native";
 
-import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { AllContentTikTok } from "../../src/features/media/AllContentTikTok";
 import { FeedSkeletonStack } from "../../src/features/media/AllContentTikTok/components/FeedMediaCardSkeleton";
 import {
@@ -26,7 +27,12 @@ import {
 import Header from "../components/Header";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
 import { useAuth } from "../hooks/useAuth";
-import { prefetchHomeTabModulesPromise } from "../utils/prefetchHomeTabs";
+import {
+  readHomeFeedCategory,
+  rememberHomeFeedCategory,
+} from "../../src/shared/media/homeFeedCategory";
+import { useReelsStore } from "@/store/useReelsStore";
+import { feedTabFromResumeKey } from "../../src/features/media/video-feed";
 
 const Music = lazy(() => import("./music"));
 const Hymns = lazy(() => import("./hymns"));
@@ -34,10 +40,6 @@ const LiveComponent = lazy(() => import("./LiveComponent"));
 
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 const FEED_CATEGORIES = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
-const LAZY_CATEGORIES = ["MUSIC", "HYMNS", "LIVE"] as const;
-
-/** Native VideoView ignores opacity and transform — park with layout `left`. */
-const OFFSCREEN_X = 4000;
 
 function CategorySuspense({ children }: { children: ReactNode }) {
   return (
@@ -93,10 +95,6 @@ const mapContentTypeToCategory = (contentType: string): string => {
   return categories.includes(upper) ? upper : "ALL";
 };
 
-function paneStyle(active: boolean) {
-  return [styles.feedPane, active ? styles.feedPaneOn : styles.feedPaneOff];
-}
-
 export default function HomeTabContent({
   isTabActive = true,
 }: {
@@ -110,54 +108,107 @@ export default function HomeTabContent({
     : defaultCategory;
 
   const initialCategory = (() => {
+    const resumeTab = feedTabFromResumeKey(
+      useReelsStore.getState().resumePlayback?.feedKey
+    );
+    if (resumeTab) return mapContentTypeToCategory(resumeTab);
     if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
       return mapContentTypeToCategory(defaultCategoryValue);
     }
-    return "ALL";
+    return mapContentTypeToCategory(readHomeFeedCategory());
   })();
 
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const selectedRef = useRef(selectedCategory);
-  const [visitedFeedCategories, setVisitedFeedCategories] = useState<
-    Set<string>
-  >(() => {
-    const start = (FEED_CATEGORIES as readonly string[]).includes(
-      initialCategory
-    )
-      ? initialCategory
-      : "ALL";
-    return new Set([start]);
-  });
-  const [visitedLazyCategories, setVisitedLazyCategories] = useState<
-    Set<string>
-  >(() =>
-    (LAZY_CATEGORIES as readonly string[]).includes(initialCategory)
-      ? new Set([initialCategory])
-      : new Set()
-  );
+  const seededCategoryRef = useRef(false);
+  if (!seededCategoryRef.current) {
+    seededCategoryRef.current = true;
+    rememberHomeFeedCategory(mapCategoryToContentType(initialCategory));
+  }
   const scrollViewRef = useRef<ScrollView>(null);
+  const chipLayouts = useRef<Record<string, { x: number; width: number }>>(
+    {}
+  );
+  const lastAppliedParamRef = useRef(defaultCategoryValue);
   const chipRadius = getResponsiveBorderRadius("medium");
   const railPad = getResponsiveSpacing(16, 20, 24, 32);
 
-  const handleCategoryPress = useCallback((category: string) => {
-    if (category === selectedRef.current) return;
-    selectedRef.current = category;
-    setSelectedCategory(category);
-    if ((FEED_CATEGORIES as readonly string[]).includes(category)) {
-      setVisitedFeedCategories((prev) =>
-        prev.has(category) ? prev : new Set(prev).add(category)
-      );
-    }
-    if ((LAZY_CATEGORIES as readonly string[]).includes(category)) {
-      setVisitedLazyCategories((prev) =>
-        prev.has(category) ? prev : new Set(prev).add(category)
-      );
-    }
-  }, []);
+  const scrollChipIntoView = useCallback((category: string) => {
+    const run = () => {
+      const scrollView = scrollViewRef.current;
+      if (!scrollView) return;
+      const selectedIndex = categories.indexOf(category);
+      if (selectedIndex < 0) return;
+      const screenWidth = Dimensions.get("window").width;
+      const scrollViewWidth = screenWidth - railPad * 2;
+      const layout = chipLayouts.current[category];
+      if (layout) {
+        const buttonCenter = layout.x + layout.width / 2;
+        scrollView.scrollTo({
+          x: Math.max(0, buttonCenter - scrollViewWidth / 2),
+          animated: true,
+        });
+        return;
+      }
+      const buttonWidth = 100;
+      const buttonMargin = getResponsiveSpacing(4, 6, 8, 10) * 2;
+      const accumulatedWidth = selectedIndex * (buttonWidth + buttonMargin);
+      scrollView.scrollTo({
+        x: Math.max(
+          0,
+          accumulatedWidth - scrollViewWidth / 2 + buttonWidth / 2
+        ),
+        animated: true,
+      });
+    };
+    requestAnimationFrame(run);
+    setTimeout(run, 180);
+  }, [railPad]);
+
+  const applyCategory = useCallback(
+    (category: string) => {
+      rememberHomeFeedCategory(mapCategoryToContentType(category));
+      if (category !== selectedRef.current) {
+        selectedRef.current = category;
+        setSelectedCategory(category);
+      }
+      scrollChipIntoView(category);
+    },
+    [scrollChipIntoView]
+  );
+
+  const handleCategoryPress = useCallback(
+    (category: string) => {
+      if (category === selectedRef.current) {
+        scrollChipIntoView(category);
+        return;
+      }
+      applyCategory(category);
+    },
+    [applyCategory, scrollChipIntoView]
+  );
 
   useEffect(() => {
-    void prefetchHomeTabModulesPromise();
-  }, []);
+    if (!defaultCategoryValue || typeof defaultCategoryValue !== "string") {
+      return;
+    }
+    if (defaultCategoryValue === lastAppliedParamRef.current) return;
+    lastAppliedParamRef.current = defaultCategoryValue;
+    applyCategory(mapContentTypeToCategory(defaultCategoryValue));
+  }, [applyCategory, defaultCategoryValue]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isTabActive) return;
+      const resume = useReelsStore.getState().resumePlayback;
+      const fromReels =
+        resume?.target === "feed" || resume?.target === "reels";
+      const tab =
+        (fromReels ? feedTabFromResumeKey(resume?.feedKey) : null) ||
+        readHomeFeedCategory();
+      applyCategory(mapContentTypeToCategory(tab));
+    }, [applyCategory, isTabActive])
+  );
 
   return (
     <View style={styles.root}>
@@ -182,6 +233,12 @@ export default function HomeTabContent({
                   delayPressIn={0}
                   delayPressOut={0}
                   onPress={() => handleCategoryPress(category)}
+                  onLayout={(event) => {
+                    chipLayouts.current[category] = {
+                      x: event.nativeEvent.layout.x,
+                      width: event.nativeEvent.layout.width,
+                    };
+                  }}
                   style={{
                     marginHorizontal: getResponsiveSpacing(4, 6, 8, 10),
                     paddingHorizontal: getResponsiveSpacing(12, 16, 20, 24),
@@ -217,47 +274,33 @@ export default function HomeTabContent({
 
       <View style={styles.feed}>
         <View style={styles.feedHost}>
-          {FEED_CATEGORIES.filter((cat) => visitedFeedCategories.has(cat)).map(
-            (cat) => {
-              const active = selectedCategory === cat;
-              return (
-                <View key={cat} collapsable={false} style={paneStyle(active)}>
-                  <AllContentTikTok
-                    contentType={mapCategoryToContentType(cat)}
-                    useAuthFeed={isAuthenticated}
-                    isFeedActive={active && isTabActive}
-                    keepVideoDecoders={false}
-                  />
-                </View>
-              );
-            }
-          )}
+          {(FEED_CATEGORIES as readonly string[]).includes(selectedCategory) ? (
+            <View key={selectedCategory} collapsable={false} style={styles.feedActive}>
+              <AllContentTikTok
+                contentType={mapCategoryToContentType(selectedCategory)}
+                useAuthFeed={isAuthenticated}
+                isFeedActive={isTabActive}
+                keepVideoDecoders={false}
+              />
+            </View>
+          ) : null}
 
-          {visitedLazyCategories.has("MUSIC") ? (
-            <View
-              style={paneStyle(selectedCategory === "MUSIC")}
-              collapsable={false}
-            >
+          {selectedCategory === "MUSIC" ? (
+            <View style={styles.feedActive} collapsable={false}>
               <CategorySuspense>
                 <Music />
               </CategorySuspense>
             </View>
           ) : null}
-          {visitedLazyCategories.has("HYMNS") ? (
-            <View
-              style={paneStyle(selectedCategory === "HYMNS")}
-              collapsable={false}
-            >
+          {selectedCategory === "HYMNS" ? (
+            <View style={styles.feedActive} collapsable={false}>
               <CategorySuspense>
                 <Hymns />
               </CategorySuspense>
             </View>
           ) : null}
-          {visitedLazyCategories.has("LIVE") ? (
-            <View
-              style={paneStyle(selectedCategory === "LIVE")}
-              collapsable={false}
-            >
+          {selectedCategory === "LIVE" ? (
+            <View style={styles.feedActive} collapsable={false}>
               <CategorySuspense>
                 <LiveComponent />
               </CategorySuspense>
@@ -310,22 +353,7 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: "hidden",
   },
-  feedPane: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: "100%",
-  },
-  feedPaneOn: {
-    left: 0,
-    zIndex: 2,
-    elevation: 2,
-    opacity: 1,
-  },
-  feedPaneOff: {
-    left: OFFSCREEN_X,
-    zIndex: 0,
-    elevation: 0,
-    opacity: 0,
+  feedActive: {
+    flex: 1,
   },
 });

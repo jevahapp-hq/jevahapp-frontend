@@ -15,7 +15,7 @@ import { ModerationBadge } from "../../../../shared/components/ModerationBadge";
 import { VideoProgressBar } from "../../../../shared/components/VideoProgressBar";
 import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlaybackControl";
 import type { MediaItem } from "../../../../shared/types";
-import { isAudioSermon } from "../../../../shared/utils";
+import { isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import { useCommentModal } from "@/app/context/CommentModalContext";
 import {
   FEED_VIDEO_PLAYER_HEIGHT,
@@ -269,6 +269,9 @@ function VideoCardPlayerInner(
         if (!p.playing) return;
         const t = readPlayerCurrentTimeSec(p);
         if (t > 0.15) savePlayhead(videoUrl, t);
+        // Neighbor cards stay muted-playing until a frame is on the surface
+        // so scrolling onto them matches scrolling back (paused frame, not poster).
+        if (!firstFramePainted) return;
         p.pause();
         // Extracting a thumbnail on a live decoder hitches the video that
         // just became active. Wait until this player has been paused.
@@ -288,6 +291,7 @@ function VideoCardPlayerInner(
     shouldPlayThisVideo,
     isFeedActive,
     firstFrameReady,
+    firstFramePainted,
     player,
     isMuted,
     videoVolume,
@@ -468,10 +472,12 @@ function VideoCardPlayerInner(
         height: FEED_VIDEO_PLAYER_HEIGHT,
         width: "100%",
         backgroundColor: "#1A0E0A",
-        overflow: "hidden",
       }}
     >
-      <View style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}>
+      <View
+        collapsable={false}
+        style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}
+      >
           <FeedVideoSurface
             player={player}
             visible

@@ -32,7 +32,9 @@ export const MusicCard: React.FC<MusicCardProps> = ({
 }) => {
   const { showCommentModal, isVisible: commentsFocused } = useCommentModal();
   const contentId = audio._id || `music-${index}`;
-  const isSermon = audio.contentType === "sermon";
+  const isSermon = ["sermon", "teachings", "devotional"].includes(
+    String(audio.contentType || "").toLowerCase()
+  );
   const playerAnchorRef = useRef<View>(null);
 
   const chrome = useMediaCardChrome({
@@ -97,6 +99,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
           onSeekRelative={playback.seekBySeconds}
           onSeekToPercent={playback.onSeekToPercent}
           onPlayPress={() => void playback.handlePlayPress()}
+          onOpenPlayer={() => void playback.openFullPlayer()}
         />
       </View>
 

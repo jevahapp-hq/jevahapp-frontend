@@ -9,6 +9,8 @@ function mode(partial: Partial<AudioMode>): Partial<AudioMode> {
   };
 }
 
+let videoPlaybackModeReady = false;
+
 /**
  * Centralized audio configuration utility
  * Prevents audio session initialization errors by using correct constants
@@ -18,18 +20,18 @@ export const audioConfig = {
    * Configure audio session for video playback
    */
   async configureForVideoPlayback() {
+    if (videoPlaybackModeReady) return true;
     try {
-      console.log("🔊 Configuring audio session for video playback...");
-
       await setAudioModeAsync(
         mode({
           shouldPlayInBackground: false,
           playsInSilentMode: Platform.OS === "ios",
-          interruptionMode: "doNotMix",
+          // mixWithOthers: pausing a neighbor must not interrupt the
+          // active reel (doNotMix was cracking the speaker).
+          interruptionMode: "mixWithOthers",
         })
       );
-
-      console.log("✅ Audio session configured successfully for video playback");
+      videoPlaybackModeReady = true;
       return true;
     } catch (error) {
       console.error("❌ Failed to configure audio session for video playback:", error);
@@ -53,6 +55,7 @@ export const audioConfig = {
       );
 
       console.log("✅ Audio session configured successfully for music playback");
+      videoPlaybackModeReady = false;
       return true;
     } catch (error) {
       console.error("❌ Failed to configure audio session for music playback:", error);
@@ -76,6 +79,7 @@ export const audioConfig = {
       );
 
       console.log("✅ Audio session configured successfully for general use");
+      videoPlaybackModeReady = false;
       return true;
     } catch (error) {
       console.error("❌ Failed to configure audio session for general use:", error);
@@ -99,6 +103,7 @@ export const audioConfig = {
       );
 
       console.log("✅ Audio session reset successfully");
+      videoPlaybackModeReady = false;
       return true;
     } catch (error) {
       console.error("❌ Failed to reset audio session:", error);

@@ -1,3 +1,10 @@
+function firstArray(...candidates: unknown[]): any[] | undefined {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 /** Normalize varied backend list shapes into a single { media, total, ... } */
 export function parseMediaListPayload(response: any): {
   media: any[];
@@ -8,32 +15,43 @@ export function parseMediaListPayload(response: any): {
 } {
   const root = response?.data;
   // apiClient wraps JSON as { success, data: <body> }. Body may itself be
-  // { data: { media } }, { media }, { data: [...] }, or a bare array.
+  // { data: { media } }, { media }, { items }, { content }, { data: [...] },
+  // or a bare array.
   const body =
     root && typeof root === "object" && !Array.isArray(root) && "data" in root
       ? (root as any).data ?? root
       : root;
 
-  let mediaArr: any[] = [];
-  let pagination: any = null;
+  const pagination =
+    body?.pagination ||
+    body?.data?.pagination ||
+    root?.pagination ||
+    null;
 
-  if (Array.isArray(body)) {
-    mediaArr = body;
-  } else if (body?.media && Array.isArray(body.media)) {
-    mediaArr = body.media;
-    pagination = body.pagination;
-  } else if (body?.data?.media && Array.isArray(body.data.media)) {
-    mediaArr = body.data.media;
-    pagination = body.data?.pagination || body.pagination;
-  } else if (Array.isArray(body?.data)) {
-    mediaArr = body.data;
-    pagination = body.pagination;
-  } else if (Array.isArray(root)) {
-    mediaArr = root;
-  } else if (root?.media && Array.isArray(root.media)) {
-    mediaArr = root.media;
-    pagination = root.pagination;
-  }
+  let mediaArr =
+    firstArray(
+      body?.items,
+      body?.content,
+      body?.media,
+      body?.tracks,
+      body?.sermons,
+      body?.ebooks,
+      body?.books,
+      body?.data?.items,
+      body?.data?.content,
+      body?.data?.media,
+      body?.data?.tracks,
+      body?.data?.sermons,
+      body?.data?.ebooks,
+      body?.data?.books,
+      Array.isArray(body?.data) ? body.data : undefined,
+      Array.isArray(body) ? body : undefined,
+      root?.items,
+      root?.content,
+      root?.media,
+      root?.tracks,
+      Array.isArray(root) ? root : undefined
+    ) ?? [];
 
   // Merge recommendations.sections when main media is sparse
   const recommendations =

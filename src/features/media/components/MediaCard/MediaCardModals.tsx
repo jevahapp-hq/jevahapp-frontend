@@ -7,7 +7,8 @@ import ContentActionModal from "../../../../shared/components/ContentActionModal
 import MediaDetailsModal from "../../../../shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../../../shared/components/ReportMediaModal";
 import type { MediaItem } from "../../../../shared/types";
-import { getUploadedBy } from "../../../../shared/utils";
+import { getUploadedBy } from "../../../../shared/utils/mediaHelpers";
+import { getItemMediaId } from "../../../../../app/services/reportMediaId";
 
 export interface MediaCardModalsProps {
   item: MediaItem;
@@ -93,7 +94,7 @@ export function MediaCardModals({
       <ReportMediaModal
         visible={showReportModal}
         onClose={() => setShowReportModal(false)}
-        mediaId={item._id || ""}
+        mediaId={getItemMediaId(item)}
         mediaTitle={item.title}
       />
       <MediaDetailsModal

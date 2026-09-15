@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { getApiBaseUrl } from "../utils/api";
+import { pickAuthSession } from "../utils/pickAuthSession";
+import {
+  normalizeAuthEmail,
+  normalizeVerificationCode,
+} from "../utils/pendingSignup";
 
 class AuthService {
   private get baseURL(): string {
@@ -218,29 +223,21 @@ class AuthService {
         },
         credentials: "include",
         body: JSON.stringify({
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password: password,
           rememberMe,
         }),
       });
 
       const data = await response.json();
-      // console.log("✅ Login response:", data);
+      const { token, user } = pickAuthSession(data);
 
-      if (response.ok && data.token) {
+      if (response.ok && token) {
         const TokenUtils = (await import("../utils/tokenUtils")).default;
-        await TokenUtils.storeAuthToken(data.token);
+        await TokenUtils.storeAuthToken(token);
 
-        // Also store user data if available
-        if (data.user) {
-          // console.log("🔍 Login user data:", {
-          //   section: data.user.section,
-          //   sectionType: typeof data.user.section,
-          //   userKeys: Object.keys(data.user),
-          //   fullUserData: data.user,
-          // });
-          await AsyncStorage.setItem("user", JSON.stringify(data.user));
-          // console.log("💾 User data stored in AsyncStorage");
+        if (user) {
+          await AsyncStorage.setItem("user", JSON.stringify(user));
         }
 
         // Preload content for all categories in background for instant navigation
@@ -320,8 +317,12 @@ class AuthService {
       }
 
       return {
-        success: response.ok,
-        data,
+        success: !!(response.ok && token),
+        data: {
+          ...data,
+          token: token || data?.token,
+          user: user || data?.user,
+        },
         status: response.status,
       };
     } catch (error: any) {
@@ -353,12 +354,19 @@ class AuthService {
     try {
       // console.log("🔍 Registering new user:", userData.email);
 
+      const payload = {
+        ...userData,
+        email: String(userData?.email || "").trim().toLowerCase(),
+        firstName: String(userData?.firstName || "").trim(),
+        lastName: String(userData?.lastName || "").trim(),
+      };
+
       const response = await fetch(`${this.baseURL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -387,19 +395,11 @@ class AuthService {
       // console.log("🔍 Code length:", code.length);
       // console.log("🔍 API URL:", `${this.baseURL}/verify-email`);
 
-      // Normalize to avoid server mismatches
-      const normalizedEmail = (email || "").trim().toLowerCase();
-      const normalizedCode = (code || "")
-        .toString()
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, "")
-        .trim();
-      const requestBody: any = {
-        email: normalizedEmail,
-        code: normalizedCode,
-        verificationCode: normalizedCode, // some backends accept this key
+      // Backend contract: POST /verify-email { email, code }
+      const requestBody = {
+        email: normalizeAuthEmail(email),
+        code: normalizeVerificationCode(code),
       };
-      // console.log("🔍 Request body:", JSON.stringify(requestBody));
 
       const response = await fetch(`${this.baseURL}/verify-email`, {
         method: "POST",
@@ -411,11 +411,14 @@ class AuthService {
       });
 
       const data = await response.json();
-      // console.log("✅ Verify email response:", data);
+      const isSuccess = response.ok && data?.success !== false;
+      const session = pickAuthSession(data);
 
       return {
-        success: response.ok,
-        data,
+        success: isSuccess,
+        data: session.token
+          ? { ...data, token: session.token, user: session.user || data?.user }
+          : data,
         status: response.status,
       };
     } catch (error: any) {
@@ -444,7 +447,7 @@ class AuthService {
             "expo-platform": Platform.OS,
           },
           body: JSON.stringify({
-            email: email.trim(),
+            email: email.trim().toLowerCase(),
           }),
         }
       );

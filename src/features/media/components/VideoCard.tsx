@@ -4,7 +4,8 @@ import { View } from "react-native";
 import { useMediaDeletion } from "../../../shared/hooks";
 import { useContentActionModal } from "../../../shared/hooks/useContentActionModal";
 import { VideoCardProps } from "../../../shared/types";
-import { isAudioSermon, isValidUri } from "../../../shared/utils";
+import { isAudioSermon } from "../../../shared/utils/mediaTypeDetection";
+import { isValidUri } from "../../../shared/utils/contentHelpers";
 import {
   getBestVideoUrl,
   getVideoUrlFromMedia

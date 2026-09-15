@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { resolveMediaAudioUrl } from "../../../../shared/audio/mapToAudioTrack";
 import {
   detectMediaType,
   isAudioSermon,
-} from "../../../../shared/utils";
+} from "../../../../shared/utils/mediaTypeDetection";
 import {
   getBestVideoUrl,
   getVideoUrlFromMedia,
 } from "../../../../shared/utils/videoUrlManager";
 import {
   FEED_INITIAL_MOUNT_COUNT,
+  FEED_PRELOAD_NEIGHBOR_DISTANCE,
   FEED_PRELOAD_WARM_DISTANCE,
   FEED_WARM_IDLE_MOUNT_COUNT,
 } from "../../video-feed";
@@ -45,16 +47,60 @@ export function useFeedPlayerMounts(options: {
   );
   const visitOrderRef = useRef<string[]>([]);
 
+  const isFeedVideo = useCallback((item: MediaItem | undefined) => {
+    if (!item) return false;
+    if (isAudioSermon(item) || detectMediaType(item) !== "video") return false;
+    return true;
+  }, []);
+
   const warmSeqRange = useCallback((centerSeq: number, distance: number) => {
     for (let d = -distance; d <= distance; d++) {
       const item = mediaItemBySeqRef.current[centerSeq + d];
       if (!item) continue;
-      if (isAudioSermon(item) || detectMediaType(item) !== "video") continue;
+      if (isAudioSermon(item)) {
+        warmVideoConnection(resolveMediaAudioUrl(item));
+        continue;
+      }
+      if (!isFeedVideo(item)) continue;
       const rawUrl = getVideoUrlFromMedia(item);
       if (!rawUrl) continue;
       warmVideoConnection(getBestVideoUrl(rawUrl));
     }
-  }, [mediaItemBySeqRef]);
+  }, [isFeedVideo, mediaItemBySeqRef]);
+
+  const addVideoNeighbors = useCallback(
+    (
+      hot: Set<string>,
+      activeSeq: number,
+      keyBySeq: Record<number, string>
+    ) => {
+      const itemBySeq = mediaItemBySeqRef.current;
+      const distance = FEED_PRELOAD_NEIGHBOR_DISTANCE;
+      let behind = 0;
+      for (let seq = activeSeq - 1; seq >= 0 && behind < distance; seq--) {
+        const item = itemBySeq[seq];
+        if (!item) continue;
+        if (!isFeedVideo(item)) continue;
+        const key = keyBySeq[seq];
+        if (key) {
+          hot.add(key);
+          behind++;
+        }
+      }
+      let ahead = 0;
+      for (let seq = activeSeq + 1; ahead < distance; seq++) {
+        const item = itemBySeq[seq];
+        if (!item) break;
+        if (!isFeedVideo(item)) continue;
+        const key = keyBySeq[seq];
+        if (key) {
+          hot.add(key);
+          ahead++;
+        }
+      }
+    },
+    [isFeedVideo, mediaItemBySeqRef]
+  );
 
   useEffect(() => {
     const seqByKey = mediaSeqByKeyRef.current;
@@ -78,16 +124,21 @@ export function useFeedPlayerMounts(options: {
     ) {
       const activeSeq = seqByKey[currentlyVisibleVideo];
       hot.add(currentlyVisibleVideo);
-      // Keep the previous card mounted and paused so scrolling back shows
-      // the last frame, not the cover thumbnail.
-      const prev = keyBySeq[activeSeq - 1];
-      if (prev) hot.add(prev);
+      // Keep previous paused and next primed so both scroll directions
+      // show a decoded frame instead of the cover thumbnail.
+      addVideoNeighbors(hot, activeSeq, keyBySeq);
       warmSeqRange(activeSeq, FEED_PRELOAD_WARM_DISTANCE);
     } else if (!hasDeterminedVisibilityRef.current) {
-      const initial = FEED_INITIAL_MOUNT_COUNT;
-      for (let i = 0; i < initial; i++) {
+      let mounted = 0;
+      for (let i = 0; mounted < FEED_INITIAL_MOUNT_COUNT; i++) {
+        const item = mediaItemBySeqRef.current[i];
+        if (!item) break;
+        if (!isFeedVideo(item)) continue;
         const k = keyBySeq[i];
-        if (k) hot.add(k);
+        if (k) {
+          hot.add(k);
+          mounted++;
+        }
       }
       warmSeqRange(0, FEED_PRELOAD_WARM_DISTANCE);
     }
@@ -130,11 +181,14 @@ export function useFeedPlayerMounts(options: {
   }, [
     currentlyVisibleVideo,
     listData,
+    addVideoNeighbors,
+    isFeedVideo,
     warmSeqRange,
     isFeedActive,
     keepVideoDecoders,
     maxPlayers,
     hasDeterminedVisibilityRef,
+    mediaItemBySeqRef,
     mediaKeyBySeqRef,
     mediaSeqByKeyRef,
   ]);

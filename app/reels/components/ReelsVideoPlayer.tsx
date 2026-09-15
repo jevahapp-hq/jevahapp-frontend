@@ -14,12 +14,18 @@ import {
   useInstantFeedVideoPlayer,
 } from "../../../src/features/media/video-feed";
 import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
-import { seekPlayerToMs } from "../../../src/features/media/components/VideoCard/player/expoVideoAdapter";
-import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
+import {
+  captureVideoFrameSnapshot,
+  useVideoFrameSnapshot,
+} from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
+import { readPlayerCurrentTimeSec } from "../../../src/features/media/video-feed/safeVideoPlayer";
 import { useReelsStore } from "@/store/useReelsStore";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
-import { getReelsMediaFrame } from "../hooks/useReelsResponsive";
+import {
+  getReelsMediaFrame,
+  REELS_CONTENT_FIT,
+} from "../hooks/useReelsResponsive";
 
 interface ReelsVideoPlayerProps {
   videoKey: string;
@@ -67,7 +73,7 @@ const ReelsVideoPlayer = memo(
     globalVideoStore,
     showPauseOverlay,
     getResponsiveSize,
-    triggerHapticFeedback,
+    triggerHapticFeedback: _triggerHapticFeedback,
   }: ReelsVideoPlayerProps) => {
     const lastUpdateRef = useRef(0);
     const hasTrackedViewRef = useRef(false);
@@ -84,12 +90,8 @@ const ReelsVideoPlayer = memo(
      */
     const isActiveRef = useRef(isActive);
     isActiveRef.current = isActive;
-    const isPlayingRef = useRef(isPlaying);
-    isPlayingRef.current = isPlaying;
     const isDraggingRef = useRef(isDragging);
     isDraggingRef.current = isDragging;
-    const hapticRef = useRef(triggerHapticFeedback);
-    hapticRef.current = triggerHapticFeedback;
 
     /**
      * What we last pushed to the parent. Previously the effect compared against
@@ -104,7 +106,6 @@ const ReelsVideoPlayer = memo(
     const {
       player,
       firstFrameReady,
-      firstFramePainted,
       handleFirstFrameRender,
       freezeOnFirstFrame,
     } = useInstantFeedVideoPlayer({
@@ -121,6 +122,7 @@ const ReelsVideoPlayer = memo(
       videoKey,
       videoRef: playerRef,
       playbackReady: firstFrameReady,
+      syncPlayback: false,
     });
 
     const didApplyResumeRef = useRef(false);
@@ -143,17 +145,28 @@ const ReelsVideoPlayer = memo(
         return;
       }
       didApplyResumeRef.current = true;
-      void seekPlayerToMs(player, resume.positionMs).then((ok) => {
-        if (ok) {
-          setLocalPosition(resume.positionMs);
-          setVideoPosition(resume.positionMs);
+      try {
+        const wantMuted = isMuted;
+        const wantVol = isMuted ? 0 : videoVolume;
+        if (player.playing) {
+          player.muted = true;
+          player.volume = 0;
         }
-      });
+        player.currentTime = resume.positionMs / 1000;
+        setLocalPosition(resume.positionMs);
+        setVideoPosition(resume.positionMs);
+        player.muted = wantMuted;
+        player.volume = wantVol;
+      } catch {
+        didApplyResumeRef.current = false;
+      }
     }, [
       player,
       isActive,
       firstFrameReady,
       contentId,
+      isMuted,
+      videoVolume,
       setLocalPosition,
       setVideoPosition,
     ]);
@@ -176,38 +189,47 @@ const ReelsVideoPlayer = memo(
 
       const applyAudibleState = () => {
         try {
-          // Mute before any play() so a neighbor decoder cannot leak audio.
-          player.muted = !(isActive && isPlaying) || isMuted;
-          player.volume = isActive && isPlaying && !isMuted ? videoVolume : 0;
-          if (isActive && isPlaying) {
-            if (!player.playing) player.play();
+          const shouldHear = isActive && isPlaying;
+          if (!shouldHear) {
+            if (!player.muted) player.muted = true;
+            if ((Number(player.volume) || 0) !== 0) player.volume = 0;
+            if (player.playing) freezeOnFirstFrame();
             return;
           }
-          // Neighbors: decode one muted frame then freeze. Playing two
-          // audible (or racing) players is what made Reels crackle.
-          if (!firstFramePainted) {
-            if (!player.playing) player.play();
-            return;
+          const wantMuted = isMuted;
+          const wantVol = isMuted ? 0 : videoVolume;
+          // Set mute/volume while paused, then play once. Unmuting a
+          // decoder that is already playing is the Android crackle.
+          if (player.muted !== wantMuted) player.muted = wantMuted;
+          if (Math.abs((Number(player.volume) || 0) - wantVol) > 0.02) {
+            player.volume = wantVol;
           }
-          if (player.playing) freezeOnFirstFrame();
+          if (!player.playing) player.play();
         } catch {
           // no-op
         }
       };
 
       applyAudibleState();
-      // expo-video can re-apply the muted prime after play(); push volume again.
-      const frame = requestAnimationFrame(applyAudibleState);
-      return () => cancelAnimationFrame(frame);
     }, [
       player,
       isActive,
       isPlaying,
       isMuted,
       videoVolume,
-      firstFramePainted,
       freezeOnFirstFrame,
     ]);
+
+    // Snapshot the paused frame when leaving so the previous reel can show
+    // a still instead of a second VideoView (those punch through as black).
+    useEffect(() => {
+      if (!player || !videoUrl || isActive) return;
+      const t = readPlayerCurrentTimeSec(player);
+      const timeout = setTimeout(() => {
+        captureVideoFrameSnapshot(videoUrl, player, t > 0 ? t : undefined);
+      }, 200);
+      return () => clearTimeout(timeout);
+    }, [player, videoUrl, isActive]);
 
     useEffect(() => {
       if (!player) return;
@@ -299,13 +321,8 @@ const ReelsVideoPlayer = memo(
       });
 
       const endSub = player.addListener("playToEnd", () => {
-        hapticRef.current();
-        try {
-          player.currentTime = 0;
-          if (isActiveRef.current && isPlayingRef.current) player.play();
-        } catch {
-          // no-op
-        }
+        // loop={true} already restarts. Do not seek/play/haptic here —
+        // those crack the loop point.
       });
 
       return () => {
@@ -330,43 +347,36 @@ const ReelsVideoPlayer = memo(
     const surfaceStyle = {
       width: screenWidth,
       height: screenHeight,
-      overflow: "hidden" as const,
     };
+
+    const poster = (
+      <PosterLayer
+        posterUri={posterUri}
+        lastFrame={lastFrame}
+        width={mediaFrame.width}
+        height={mediaFrame.height}
+      />
+    );
 
     if (!player) {
       return (
         <View style={[styles.host, surfaceStyle]} collapsable={false}>
-          <PosterLayer
-            posterUri={posterUri}
-            lastFrame={lastFrame}
-            width={mediaFrame.width}
-            height={mediaFrame.height}
-          />
+          {poster}
         </View>
       );
     }
 
     return (
       <View style={[styles.host, surfaceStyle]} collapsable={false}>
-        <View
-          pointerEvents="none"
-          style={styles.mediaClip}
-        >
-          <PosterLayer
-            posterUri={posterUri}
-            lastFrame={lastFrame}
-            width={mediaFrame.width}
-            height={mediaFrame.height}
-          />
-          <FeedVideoSurface
-            player={player}
-            visible
-            height={mediaFrame.height}
-            width={mediaFrame.width}
-            contentFit="cover"
-            onFirstFrameRender={handleFirstFrameRender}
-          />
-        </View>
+        {poster}
+        <FeedVideoSurface
+          player={player}
+          visible
+          height={mediaFrame.height}
+          width={mediaFrame.width}
+          contentFit={REELS_CONTENT_FIT}
+          onFirstFrameRender={handleFirstFrameRender}
+        />
 
         {isActive && !isPlaying && (
           <View style={styles.overlay} pointerEvents="none">
@@ -419,7 +429,7 @@ function PosterLayer({
         source={lastFrame}
         width={width}
         height={height}
-        contentFit="cover"
+        contentFit={REELS_CONTENT_FIT}
       />
     );
   }
@@ -429,7 +439,7 @@ function PosterLayer({
         uri={posterUri}
         width={width}
         height={height}
-        contentFit="cover"
+        contentFit={REELS_CONTENT_FIT}
       />
     );
   }
@@ -440,13 +450,8 @@ export default ReelsVideoPlayer;
 
 const styles = StyleSheet.create({
   host: {
-    backgroundColor: "#000",
-    overflow: "hidden",
-  },
-  mediaClip: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: "transparent",
+    position: "relative",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

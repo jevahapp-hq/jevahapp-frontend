@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useMedia } from "../../../../shared/hooks/useMedia";
+import { useTypedCatalogInfiniteQuery } from "../../../../shared/media/useTypedCatalogInfiniteQuery";
 import { canViewerSeeMedia } from "../../../../shared/media/moderationVisibility";
 import type { ContentType, MediaItem } from "../../../../shared/types";
 import {
@@ -10,9 +11,8 @@ import {
 
 /**
  * ALL / VIDEO share the mixed discovery query (instant chip switch).
- * SERMON and E-BOOKS must hit the list API with their own type — For You
- * pages are video-heavy, so local filtering of ALL looks empty even when
- * the user has sermons and default-content ebooks.
+ * SERMON and E-BOOKS hit typed catalog endpoints so they never reuse a
+ * videos-only fetcher or a `default-content` key without a queryFn.
  */
 export function feedQueryContentType(tab: ContentType | "ALL"): ContentType | "ALL" {
   const t = String(tab || "ALL").toLowerCase();
@@ -28,6 +28,18 @@ export function feedQueryContentType(tab: ContentType | "ALL"): ContentType | "A
   return tab;
 }
 
+export function isTypedCatalogTab(tab: ContentType | "ALL"): boolean {
+  const t = String(tab || "ALL").toLowerCase();
+  return (
+    t === "sermon" ||
+    t === "teachings" ||
+    t === "e-books" ||
+    t === "ebook" ||
+    t === "ebooks" ||
+    t === "books"
+  );
+}
+
 export function useAllContentTikTokFeedSource(options: {
   activeTab: ContentType | "ALL";
   useAuthFeed: boolean;
@@ -37,11 +49,15 @@ export function useAllContentTikTokFeedSource(options: {
   const { activeTab, useAuthFeed, viewerId } = options;
   const queryClient = useQueryClient();
   const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+  const catalogTab = isTypedCatalogTab(activeTab);
+  const sermonTab =
+    String(activeTab).toLowerCase() === "sermon" ||
+    String(activeTab).toLowerCase() === "teachings";
 
   const {
     allContent,
     defaultContent,
-    error,
+    error: discoveryError,
     loading: feedLoading,
     refreshAllContent,
     getFilteredContent,
@@ -51,9 +67,14 @@ export function useAllContentTikTokFeedSource(options: {
     isFetchingNextPage,
     serverRanked,
   } = useMedia({
-    immediate: true,
-    contentType: feedQueryContentType(activeTab),
+    immediate: !catalogTab,
+    contentType: catalogTab ? "ALL" : feedQueryContentType(activeTab),
     useAuth: useAuthFeed,
+  });
+
+  const catalog = useTypedCatalogInfiniteQuery({
+    kind: sermonTab ? "sermon" : "ebook",
+    enabled: catalogTab,
   });
 
   const handleDeleteSuccess = useCallback(
@@ -69,42 +90,63 @@ export function useAllContentTikTokFeedSource(options: {
         removeMediaFromFeedCaches(queryClient, id);
       }
       refreshFeedAfterDelete(queryClient);
+      if (catalogTab) {
+        void catalog.refetch();
+        return;
+      }
       void refreshAllContent();
     },
-    [queryClient, refreshAllContent]
+    [queryClient, refreshAllContent, catalogTab, catalog.refetch]
   );
 
   const mediaList: MediaItem[] = useMemo(() => {
-    const sourceData = allContent.length > 0 ? allContent : defaultContent;
+    const sourceData = catalogTab
+      ? catalog.items
+      : allContent.length > 0
+        ? allContent
+        : defaultContent;
     if (!sourceData || !Array.isArray(sourceData)) return [];
 
-    /**
-     * Single chokepoint for feed visibility. Unapproved content is dropped for
-     * everyone except its uploader, who keeps seeing it so they can delete it.
-     *
-     * Nothing filtered on moderation state before this — the only gate was a
-     * per-card `rejected` check in ContentItemRenderer, so `under_review` and
-     * `pending` items rendered as normal cards for every user.
-     */
     return sourceData.filter((item) => {
       if (removedIds.has(String(item._id || (item as any).id || ""))) {
         return false;
       }
       return canViewerSeeMedia(item as any, viewerId);
     });
-  }, [allContent, defaultContent, removedIds, viewerId]);
+  }, [
+    catalogTab,
+    catalog.items,
+    allContent,
+    defaultContent,
+    removedIds,
+    viewerId,
+  ]);
+
+  const error = catalogTab
+    ? catalog.error
+    : discoveryError && !String(discoveryError).includes("Missing queryFn")
+      ? discoveryError
+      : null;
 
   return {
     mediaList,
     error,
-    feedLoading,
-    refreshAllContent,
+    feedLoading: catalogTab ? catalog.isPending : feedLoading,
+    refreshAllContent: catalogTab ? catalog.refetch : refreshAllContent,
     getFilteredContent,
-    hasContent,
-    loadMoreAllContent,
-    hasMorePages: Boolean(hasMorePages),
-    isFetchingNextPage: Boolean(isFetchingNextPage),
+    hasContent: catalogTab ? catalog.items.length > 0 : hasContent,
+    loadMoreAllContent: catalogTab
+      ? async () => {
+          if (catalog.hasNextPage && !catalog.isFetchingNextPage) {
+            await catalog.fetchNextPage();
+          }
+        }
+      : loadMoreAllContent,
+    hasMorePages: catalogTab ? catalog.hasNextPage : Boolean(hasMorePages),
+    isFetchingNextPage: catalogTab
+      ? catalog.isFetchingNextPage
+      : Boolean(isFetchingNextPage),
     handleDeleteSuccess,
-    serverRanked: Boolean(serverRanked),
+    serverRanked: catalogTab ? false : Boolean(serverRanked),
   };
 }

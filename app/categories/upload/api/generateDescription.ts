@@ -2,10 +2,12 @@
  * AI description generation API call
  */
 
+import { Platform } from "react-native";
 import { getApiBaseUrl } from "../../../utils/api";
 import TokenUtils from "../../../utils/tokenUtils";
 import { shouldAttachFileToAiDescription } from "../../../../src/shared/lite/liteProfile";
 import type { MediaFile } from "../types";
+import { appendLocalFile, postMultipartForm } from "./appendLocalFile";
 
 export type GenerateDescriptionParams = {
   title: string;
@@ -46,20 +48,19 @@ export async function generateDescription(
     );
   }
   if (attachFile && fileSizeMB <= 50) {
-    formData.append("file", {
+    await appendLocalFile(formData, "file", {
       uri: file.uri,
-      type: file.mimeType,
       name: file.name,
-      size: file.size,
-    } as any);
+      mimeType: file.mimeType,
+    });
   }
 
   if (thumbnail?.uri) {
-    formData.append("thumbnail", {
+    await appendLocalFile(formData, "thumbnail", {
       uri: thumbnail.uri,
-      type: thumbnail.mimeType || "image/jpeg",
       name: thumbnail.name || `thumbnail_${Date.now()}.jpg`,
-    } as any);
+      mimeType: thumbnail.mimeType || "image/jpeg",
+    });
   }
 
   console.log("📤 Sending AI description request with:", {
@@ -74,7 +75,9 @@ export async function generateDescription(
       : undefined,
   });
 
-  const headers: HeadersInit = {};
+  const headers: Record<string, string> = {
+    "expo-platform": Platform.OS,
+  };
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -83,11 +86,7 @@ export async function generateDescription(
   const apiUrl = `${getApiBaseUrl()}/api/media/generate-description`;
   console.log("🌐 API URL:", apiUrl);
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
+  const response = await postMultipartForm(apiUrl, formData, headers);
 
   console.log("📥 Response status:", response.status, response.statusText);
 

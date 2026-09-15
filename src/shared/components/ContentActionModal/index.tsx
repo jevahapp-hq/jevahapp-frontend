@@ -72,6 +72,18 @@ export default function ContentActionModal({
     requestClose();
   };
 
+  /** iOS cannot present a second RN Modal while this sheet is still open. */
+  const handleReportPress = () => {
+    requestClose();
+    setTimeout(() => {
+      try {
+        onReport?.();
+      } catch (error) {
+        console.error("ContentActionModal: report failed", error);
+      }
+    }, 300);
+  };
+
   if (!internalVisible) return null;
 
   return (
@@ -251,7 +263,7 @@ export default function ContentActionModal({
                     color={UI_CONFIG.COLORS.ERROR}
                   />
                 }
-                onPress={() => handleAction(onReport)}
+                onPress={handleReportPress}
               />
             )}
 

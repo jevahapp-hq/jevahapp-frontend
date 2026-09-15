@@ -54,6 +54,12 @@ export function applyMediaDescriptionToCaches(
     { queryKey: ["all-content-infinite"] },
     patchInfiniteOrPage
   );
+  queryClient.setQueriesData({ queryKey: ["sermons"] }, patchInfiniteOrPage);
+  queryClient.setQueriesData({ queryKey: ["ebooks"] }, patchInfiniteOrPage);
+  queryClient.setQueriesData(
+    { queryKey: ["music-tracks"] },
+    patchInfiniteOrPage
+  );
 
   const cache = useContentCacheStore.getState().cache;
   for (const [key, page] of Object.entries(cache)) {

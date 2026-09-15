@@ -5,6 +5,7 @@ import type { MediaItem } from "../../../shared/types";
 import {
   findMediaRowIndex,
   playbackKeyToContentKey,
+  feedTabFromResumeKey,
   remapResumeFeedKey,
   resolveFeedResumeKey,
 } from "./resumeFeedKey";
@@ -30,6 +31,13 @@ test("remapResumeFeedKey keeps the tab and retargets the exit video", () => {
   assert.equal(remapResumeFeedKey("videos::first", "second"), "videos::second");
   assert.equal(remapResumeFeedKey("first", "second"), "second");
   assert.equal(remapResumeFeedKey(undefined, "second"), undefined);
+});
+
+test("feedTabFromResumeKey reads the category prefix", () => {
+  assert.equal(feedTabFromResumeKey("ALL::abc"), "ALL");
+  assert.equal(feedTabFromResumeKey("videos::abc"), "videos");
+  assert.equal(feedTabFromResumeKey("abc"), null);
+  assert.equal(feedTabFromResumeKey(undefined), null);
 });
 
 test("findMediaRowIndex matches prefixed keys and raw ids", () => {

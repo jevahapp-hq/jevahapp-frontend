@@ -5,9 +5,15 @@ export {
   resolveMediaAudioUrl,
 } from "./mapToAudioTrack";
 export type { PlaybackSource } from "./mapToAudioTrack";
-export { pausePlaybackSession, playOrToggleTrack } from "./playOrToggleTrack";
 export {
+  ensurePlayingTrack,
+  pausePlaybackSession,
+  playOrToggleTrack,
+} from "./playOrToggleTrack";
+export {
+  getSermonAudioQueue,
   getSessionAudioQueue,
+  rememberSermonAudioQueue,
   rememberSessionAudioQueue,
   resolvePlaybackQueue,
 } from "./sessionAudioQueue";

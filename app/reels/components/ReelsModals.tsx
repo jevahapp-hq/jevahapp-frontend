@@ -7,6 +7,7 @@ import React from "react";
 import { View } from "react-native";
 import MediaDetailsModal from "../../../src/shared/components/MediaDetailsModal";
 import ReportMediaModal from "../../../src/shared/components/ReportMediaModal";
+import { getItemMediaId } from "../../services/reportMediaId";
 import { DeleteMediaConfirmation } from "../../components/DeleteMediaConfirmation";
 import BottomNavOverlay from "../../components/layout/BottomNavOverlay";
 import { useCommentModal } from "../../context/CommentModalContext";
@@ -87,7 +88,7 @@ export function ReelsModals({
       <ReportMediaModal
         visible={showReportModal}
         onClose={onCloseReport}
-        mediaId={currentVideo._id || ""}
+        mediaId={getItemMediaId(currentVideo)}
         mediaTitle={currentVideo.title || title}
       />
       <MediaDetailsModal

@@ -18,6 +18,7 @@ import {
 import AuthHeader from "../components/AuthHeader";
 import authService from "../services/authService";
 import VerifyEmail from "../components/auth/VerifyEmailSheet";
+import { setPendingSignup } from "../utils/pendingSignup";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp } = useSignUp();
@@ -109,10 +110,10 @@ export default function SignUpScreen() {
       console.log("🔍 Starting registration for:", emailAddress);
 
       const result = await authService.register({
-        email: emailAddress,
+        email: emailAddress.trim().toLowerCase(),
         password,
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
       });
 
       console.log("✅ Registration result:", result);
@@ -122,7 +123,13 @@ export default function SignUpScreen() {
           "../components/loginTour/loginTourStorage"
         );
         markLoginTourPending();
-        // Show success modal and proceed to verification
+        setPendingSignup({
+          email: emailAddress,
+          password,
+          firstName,
+          lastName,
+        });
+        // Register already emails the code — do not resend or the first code becomes invalid.
         setShowModal(true);
       } else {
         // Handle API error
@@ -149,21 +156,6 @@ export default function SignUpScreen() {
     setShowModal(false);
     setIsLoading(false);
   }, []);
-
-  const handleVerifySuccess = useCallback(() => {
-    setShowModal(false);
-    setIsLoading(false);
-    // Navigate to verification screen
-    router.push({
-      pathname: "/auth/codeVerification",
-      params: {
-        emailAddress,
-        firstName,
-        lastName,
-        password, // Include password for automatic login after verification
-      },
-    });
-  }, [router, emailAddress, firstName, lastName, password]);
 
   return (
     <View className="flex-1 bg-white">
@@ -384,11 +376,11 @@ export default function SignUpScreen() {
       <VerifyEmail
         visible={showModal}
         onClose={handleModalClose}
-        onVerify={handleVerifySuccess}
-        emailAddress={emailAddress}
+        emailAddress={emailAddress.trim().toLowerCase()}
         password={password}
-        firstName={firstName}
-        lastName={lastName}
+        firstName={firstName.trim()}
+        lastName={lastName.trim()}
+        codeAlreadySent
       />
     </View>
   );

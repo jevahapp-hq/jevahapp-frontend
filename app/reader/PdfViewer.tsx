@@ -1,18 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Platform,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Keyboard, Platform, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { TapGestureHandler } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
-import { ExtractionResult, pdfExtractor } from "../services/PdfTextExtractor";
+import { triggerHapticFeedback } from "../../src/shared/utils/haptics";
 import {
   ensurePdfCacheDir,
   evictOldPdfCache,
@@ -20,7 +14,15 @@ import {
   getPdfCachePath,
 } from "../utils/pdfCache";
 import { PERF, perfMark, perfMeasure } from "../../src/shared/utils/perfMarks";
+import {
+  pausePlaybackSession,
+  setMiniPlayerSuppression,
+} from "../../src/shared/audio";
 import { useEbookReaderViewTracking } from "./hooks/useEbookReaderViewTracking";
+import { usePdfChapterExtraction } from "./hooks/usePdfChapterExtraction";
+
+const EbookReadAloud = lazy(() => import("./EbookReadAloud"));
+const PdfJsExtractorWebView = lazy(() => import("./pdfText/PdfJsExtractorWebView"));
 
 // Decode URL-encoded text (like the %20 for spaces, %E2%80%99 for special chars)
 const decodeText = (text: string) => {
@@ -43,11 +45,15 @@ export default function PdfViewer() {
     ebookId: rawEbookId,
     title: rawTitle,
     desc: rawDesc,
+    from: rawFrom,
+    homeCategory: rawHomeCategory,
   } = useLocalSearchParams<{
     url?: string;
     ebookId?: string;
     title?: string;
     desc?: string;
+    from?: string;
+    homeCategory?: string;
   }>();
   // Decode URL parameters - expo-router may encode them
   const decodedUrl = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
@@ -67,7 +73,26 @@ export default function PdfViewer() {
   const ebookId = Array.isArray(rawEbookId) ? rawEbookId[0] : rawEbookId;
   const title = Array.isArray(rawTitle) ? rawTitle[0] : rawTitle;
   const desc = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
+  const from = Array.isArray(rawFrom) ? rawFrom[0] : rawFrom;
+  const homeCategory = Array.isArray(rawHomeCategory)
+    ? rawHomeCategory[0]
+    : rawHomeCategory;
   const ebookFirstPageMeasuredRef = useRef(false);
+
+  const handleReaderBack = useCallback(() => {
+    if (from === "downloads") {
+      router.replace("/downloads/DownloadsScreen");
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace({
+      pathname: "/categories/HomeScreen",
+      params: homeCategory ? { defaultCategory: homeCategory } : undefined,
+    });
+  }, [from, homeCategory, router]);
 
   // Log received params for debugging
   useEffect(() => {
@@ -129,74 +154,113 @@ export default function PdfViewer() {
     return null;
   });
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [extractionReady, setExtractionReady] = useState(false);
-  const [pageTexts, setPageTexts] = useState<string[]>([]);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [currentViewingPage, setCurrentViewingPage] = useState<number>(1);
+  const [listenMode, setListenMode] = useState(false);
+  const [listenStartPage, setListenStartPage] = useState(1);
+  const [audioStartPage, setAudioStartPage] = useState<number | null>(null);
+  const [pageInput, setPageInput] = useState("");
+  const [showDoubleTapHint, setShowDoubleTapHint] = useState(false);
+  const currentViewingPageRef = useRef(1);
+
+  const {
+    status: extractionStatus,
+    error: extractionError,
+    pdfBase64,
+    chapters,
+    extractedPages,
+    totalPages: extractedTotalPages,
+    handleExtractorMessage,
+    retry: retryExtraction,
+  } = usePdfChapterExtraction({
+    url,
+    localUri,
+    enabled: listenMode,
+  });
 
   useEbookReaderViewTracking({
     ebookId,
     currentPage: currentViewingPage,
-    totalPages,
+    totalPages: totalPages || extractedTotalPages,
   });
-  const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
-  const [extractionAttempted, setExtractionAttempted] = useState(false);
 
+  currentViewingPageRef.current = currentViewingPage;
 
-  // Comprehensive text extraction with multiple methods
-  const attemptComprehensiveExtraction = useCallback(async () => {
-    if (extractionAttempted || !url) return;
+  const markAudioStartPage = useCallback((page: number) => {
+    const n = Math.max(1, Math.round(Number(page)) || 1);
+    const capped = totalPages > 0 ? Math.min(n, totalPages) : n;
+    setAudioStartPage(capped);
+    setPageInput(String(capped));
+    setCurrentViewingPage(capped);
+    setShowDoubleTapHint(false);
+    triggerHapticFeedback("medium");
+  }, [totalPages]);
 
-    console.log('🔄 Starting comprehensive PDF text extraction...');
-    setExtractionAttempted(true);
+  const parseTypedPage = useCallback((): number | null => {
+    const n = parseInt(String(pageInput).replace(/[^\d]/g, ""), 10);
+    if (!Number.isFinite(n) || n < 1) return null;
+    return totalPages > 0 ? Math.min(n, totalPages) : n;
+  }, [pageInput, totalPages]);
 
-    try {
-      const result = await pdfExtractor.extractText({
-        url: url,
-        localPath: localUri || undefined,
-        enableServerFallback: true,
-        enableOCR: true,
-        timeoutMs: 15000, // 15 second timeout
-      });
+  const onNativeDoubleTap = useCallback(() => {
+    markAudioStartPage(currentViewingPageRef.current || 1);
+  }, [markAudioStartPage]);
 
-      console.log(`✅ Extraction completed using: ${result.method}`);
-      console.log(`📄 Extracted ${result.pages.length} pages of content`);
-
-      setExtractionResult(result);
-
-      if (result.success && result.pages.length > 0) {
-        setPageTexts(result.pages);
-        if (result.totalPages > 0) {
-          setTotalPages(result.totalPages);
-          console.log(`📚 Set total pages from extraction: ${result.totalPages}`);
+  const handlePdfWebViewMessage = useCallback(
+    (event: { nativeEvent: { data: string } }) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data || "{}");
+        if (data.type === "audioStartPage") {
+          markAudioStartPage(data.page || currentViewingPageRef.current || 1);
+          if (data.totalPages > 0) setTotalPages(data.totalPages);
+          return;
         }
-      } else {
-        console.log('⚠️ All extraction methods failed');
+        if (
+          data.type === "pageChange" ||
+          data.type === "pageUpdate" ||
+          data.type === "pageClick"
+        ) {
+          const pageNumber = data.page || 1;
+          setCurrentViewingPage(pageNumber);
+          if (data.totalPages > 0) setTotalPages(data.totalPages);
+        }
+      } catch {
+        // ignore malformed WebView messages
       }
-    } catch (error) {
-      console.error('❌ Comprehensive extraction failed:', error);
-      setExtractionResult({
-        success: false,
-        method: 'Failed',
-        pages: [],
-        totalPages: 0,
-        error: String(error)
-      });
+    },
+    [markAudioStartPage]
+  );
+
+  const onHeadsetPress = useCallback(() => {
+    if (listenMode) {
+      setListenMode(false);
+      return;
     }
-  }, [extractionAttempted, url, localUri]);
+    Keyboard.dismiss();
+    const typed = parseTypedPage();
+    const start = typed ?? audioStartPage;
+    if (!start) {
+      setShowDoubleTapHint(true);
+      return;
+    }
+    markAudioStartPage(start);
+    setListenStartPage(start);
+    setListenMode(true);
+  }, [listenMode, parseTypedPage, audioStartPage, markAudioStartPage]);
 
-
-
-  // Trigger comprehensive extraction when document is loaded
   useEffect(() => {
-    if ((localUri || fallbackUri) && !extractionAttempted && !loading) {
-      console.log('📚 Document loaded - starting comprehensive extraction...');
-      // Small delay to ensure document is fully loaded
-      setTimeout(() => {
-        attemptComprehensiveExtraction();
-      }, 2000);
+    setMiniPlayerSuppression("ebook-listen", listenMode);
+    if (listenMode) {
+      void pausePlaybackSession();
     }
-  }, [localUri, fallbackUri, extractionAttempted, loading, attemptComprehensiveExtraction]);
+    return () => setMiniPlayerSuppression("ebook-listen", false);
+  }, [listenMode]);
+
+  useEffect(() => {
+    if (extractedTotalPages > 0 && extractedTotalPages > totalPages) {
+      setTotalPages(extractedTotalPages);
+    }
+  }, [extractedTotalPages, totalPages]);
 
   // Debug page changes
   useEffect(() => {
@@ -380,17 +444,7 @@ export default function PdfViewer() {
         >
           <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
             <TouchableOpacity
-              onPress={() => {
-                const isLocalFile =
-                  typeof url === "string" &&
-                  (url.startsWith("file://") ||
-                    url.startsWith(FileSystem.documentDirectory || ""));
-                if (isLocalFile) {
-                  router.replace("/downloads/DownloadsScreen");
-                } else {
-                  router.back();
-                }
-              }}
+              onPress={handleReaderBack}
               style={{
                 width: 40,
                 height: 40,
@@ -417,7 +471,7 @@ export default function PdfViewer() {
             >
               {title || "PDF"}
             </Text>
-            {(totalPages > 0 || currentViewingPage > 0) && (
+            {(totalPages > 0 || currentViewingPage > 0 || listenMode) && (
               <Text
                 style={{
                   fontSize: 12,
@@ -427,17 +481,183 @@ export default function PdfViewer() {
                   marginTop: 2,
                 }}
               >
-                {totalPages > 0
+                {listenMode
+                  ? totalPages > 0
+                    ? `Chapter ${currentViewingPage} of ${totalPages}`
+                    : "Audio reading"
+                  : audioStartPage
+                  ? `Audio starts at page ${audioStartPage}`
+                  : totalPages > 0
                   ? `Page ${currentViewingPage} of ${totalPages}`
                   : `Page ${currentViewingPage}`}
               </Text>
             )}
           </View>
 
-          <View style={{ width: 40, height: 40 }} />
+          <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+            <TouchableOpacity
+              onPress={onHeadsetPress}
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 20,
+                backgroundColor: listenMode
+                  ? "#256E63"
+                  : audioStartPage
+                  ? "#256E63"
+                  : "#F3F4F6",
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel={listenMode ? "Show PDF" : "Listen to ebook"}
+            >
+              <Ionicons
+                name={listenMode ? "book-outline" : "headset-outline"}
+                size={20}
+                color={listenMode || audioStartPage ? "#FFFFFF" : "#3B3B3B"}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
       {/* Render PDF Viewer */}
+      {listenMode ? (
+        <Suspense
+          fallback={
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <ActivityIndicator size="large" color="#256E63" />
+            </View>
+          }
+        >
+          <EbookReadAloud
+            title={title ? decodeText(title) : undefined}
+            chapters={chapters}
+            totalPages={extractedTotalPages || totalPages}
+            extractedPages={extractedPages}
+            status={extractionStatus}
+            error={extractionError}
+            onRetry={retryExtraction}
+            onChapterChange={setCurrentViewingPage}
+            startChapterNumber={listenStartPage}
+          />
+        </Suspense>
+      ) : (
+        <View style={{ flex: 1 }}>
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                backgroundColor: audioStartPage
+                  ? "rgba(37, 110, 99, 0.12)"
+                  : showDoubleTapHint
+                  ? "rgba(223, 147, 14, 0.14)"
+                  : "#F8FAFC",
+                borderBottomWidth: 1,
+                borderBottomColor: "#E5E7EB",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: "PlusJakartaSans-Medium",
+                  color: audioStartPage ? "#256E63" : "#667085",
+                  marginBottom: 8,
+                }}
+              >
+                {audioStartPage
+                  ? `Audio will start from page ${audioStartPage}. Tap the headset to play.`
+                  : showDoubleTapHint
+                  ? "Type a page number (or double-tap the PDF), then tap the headset."
+                  : "Type a page number or double-tap the PDF, then tap the headset."}
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "PlusJakartaSans-SemiBold",
+                    color: "#256E63",
+                  }}
+                >
+                  Page
+                </Text>
+                <TextInput
+                  value={pageInput}
+                  onChangeText={(text) => {
+                    const digits = text.replace(/[^\d]/g, "");
+                    setPageInput(digits);
+                    setShowDoubleTapHint(false);
+                  }}
+                  onSubmitEditing={() => {
+                    const n = parseTypedPage();
+                    if (n != null) markAudioStartPage(n);
+                    Keyboard.dismiss();
+                  }}
+                  onBlur={() => {
+                    const n = parseTypedPage();
+                    if (n != null) markAudioStartPage(n);
+                  }}
+                  placeholder={totalPages > 0 ? `1–${totalPages}` : "e.g. 12"}
+                  placeholderTextColor="#98A2B3"
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  maxLength={4}
+                  selectTextOnFocus
+                  style={{
+                    minWidth: 72,
+                    height: 36,
+                    borderWidth: 1,
+                    borderColor: "#256E63",
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    textAlign: "center",
+                    fontSize: 16,
+                    fontFamily: "PlusJakartaSans-SemiBold",
+                    color: "#1F2937",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                />
+                {totalPages > 0 ? (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontFamily: "PlusJakartaSans-Regular",
+                      color: "#667085",
+                    }}
+                  >
+                    of {totalPages}
+                  </Text>
+                ) : null}
+                <TouchableOpacity
+                  onPress={() =>
+                    markAudioStartPage(Math.max(1, (parseTypedPage() || audioStartPage || 1) - 1))
+                  }
+                  style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+                >
+                  <Text style={{ color: "#256E63", fontSize: 18 }}>−</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() =>
+                    markAudioStartPage((parseTypedPage() || audioStartPage || 0) + 1)
+                  }
+                  style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+                >
+                  <Text style={{ color: "#256E63", fontSize: 18 }}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+        <TapGestureHandler
+          numberOfTaps={2}
+          maxDelayMs={400}
+          onActivated={onNativeDoubleTap}
+        >
+          <View style={{ flex: 1 }} collapsable={false}>
       {Platform.OS === "android" && url ? (
         // Android: Always use Google Docs viewer directly
         <View style={{ flex: 1 }}>
@@ -458,24 +678,7 @@ export default function PdfViewer() {
             androidLayerType="hardware"
             cacheEnabled={true}
             cacheMode="LOAD_DEFAULT"
-            onMessage={(event) => {
-              try {
-                const data = JSON.parse(event.nativeEvent.data || "{}");
-                console.log(`📨 Received Android message:`, data);
-
-                if (data.type === "pageChange") {
-                  const pageNumber = data.page || 1;
-                  const total = data.totalPages || 0;
-                  console.log(`📄 Page changed to ${pageNumber}/${total}`);
-                  setCurrentViewingPage(pageNumber);
-                  if (total > 0) {
-                    setTotalPages(total);
-                  }
-                }
-              } catch (e) {
-                console.error("❌ Error parsing Android WebView message:", e);
-              }
-            }}
+            onMessage={handlePdfWebViewMessage}
             onLoadStart={() => {
               console.log("🌐 Android: Google Docs viewer started loading");
               setLoading(true);
@@ -575,6 +778,28 @@ export default function PdfViewer() {
                 setTimeout(updatePage, 1000);
                 setTimeout(updatePage, 2500);
                 setInterval(updatePage, 3000);
+
+                let lastAudioTap = 0;
+                document.addEventListener('click', function() {
+                  const now = Date.now();
+                  const page = detectCurrentPage();
+                  currentPage = page;
+                  if (now - lastAudioTap < 400) {
+                    lastAudioTap = 0;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'audioStartPage',
+                      page: page,
+                      totalPages: totalPages
+                    }));
+                    return;
+                  }
+                  lastAudioTap = now;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'pageClick',
+                    page: page,
+                    totalPages: totalPages
+                  }));
+                }, true);
               })();
               true;
             `}
@@ -606,26 +831,7 @@ export default function PdfViewer() {
               scalesPageToFit
               showsHorizontalScrollIndicator={false}
               showsVerticalScrollIndicator={false}
-              onMessage={(event) => {
-                try {
-                  const data = JSON.parse(event.nativeEvent.data || "{}");
-                  console.log(`📨 Received message:`, data);
-
-                  if (data.type === "pageChange") {
-                    const pageNumber = data.page || 1;
-                    const total = data.totalPages || 102;
-                    setCurrentViewingPage(pageNumber);
-                    setTotalPages(total);
-                    console.log(`📄 Page changed to ${pageNumber}/${total}`);
-                  } else if (data.type === "pageUpdate") {
-                    const pageNumber = data.page || 1;
-                    const total = data.totalPages || 102;
-                    setCurrentViewingPage(pageNumber);
-                    setTotalPages(total);
-                    console.log(`📄 Page update to ${pageNumber}/${total}`);
-                  }
-                } catch (e) { }
-              }}
+              onMessage={handlePdfWebViewMessage}
               injectedJavaScript={`
             (function() {
               let lastTap = 0;
@@ -801,20 +1007,24 @@ export default function PdfViewer() {
                   let touchStartY = 0;
                   
                   function handlePageClick(e) {
-                    // Only process explicit taps, not scrolls
                     const now = Date.now();
-                    if (now - lastTap < 300) return; // Prevent double-tap
-                    
-                    // Check if this was a scroll gesture (movement > 10px)
                     const isScroll = Math.abs(e.clientY - touchStartY) > 10;
                     if (isScroll) {
                       console.log('🚫 Ignoring scroll gesture, not a tap');
                       return;
                     }
-                    
-                    lastTap = now;
-                    
+
                     const clickPage = detectCurrentPage();
+                    if (now - lastTap < 400) {
+                      lastTap = 0;
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'audioStartPage',
+                        page: clickPage,
+                        totalPages: totalPages
+                      }));
+                      return;
+                    }
+                    lastTap = now;
                     console.log('👆 TAP detected - page:', clickPage, 'clickY:', e.clientY);
                     
                     // Extract text from visible content
@@ -912,32 +1122,7 @@ export default function PdfViewer() {
               androidLayerType="hardware"
               cacheEnabled={true}
               cacheMode="LOAD_DEFAULT"
-              onMessage={(event) => {
-                try {
-                  const data = JSON.parse(event.nativeEvent.data || "{}");
-                  console.log(`📨 Received fallback message:`, data);
-
-                  if (data.type === "pageChange") {
-                    const pageNumber = data.page || 1;
-                    const total = data.totalPages || 0;
-                    console.log(`📄 Page changed to ${pageNumber}/${total}`);
-                    setCurrentViewingPage(pageNumber);
-                    if (total > 0) {
-                      setTotalPages(total);
-                    }
-                  } else if (data.type === "pageUpdate") {
-                    const pageNumber = data.page || 1;
-                    const total = data.totalPages || 0;
-                    console.log(`📄 Page update to ${pageNumber}/${total}`);
-                    setCurrentViewingPage(pageNumber);
-                    if (total > 0) {
-                      setTotalPages(total);
-                    }
-                  }
-                } catch (e) {
-                  console.error("❌ Error parsing WebView message:", e);
-                }
-              }}
+              onMessage={handlePdfWebViewMessage}
               injectedJavaScript={`
             (function() {
               let lastTap = 0;
@@ -1044,20 +1229,24 @@ export default function PdfViewer() {
                   let touchStartY = 0;
                   
                   function handlePageClick(e) {
-                    // Only process explicit taps, not scrolls
                     const now = Date.now();
-                    if (now - lastTap < 300) return; // Prevent double-tap
-                    
-                    // Check if this was a scroll gesture (movement > 10px)
                     const isScroll = Math.abs(e.clientY - touchStartY) > 10;
                     if (isScroll) {
                       console.log('🚫 Ignoring scroll gesture (fallback), not a tap');
                       return;
                     }
-                    
-                    lastTap = now;
-                    
+
                     const clickPage = detectCurrentPage();
+                    if (now - lastTap < 400) {
+                      lastTap = 0;
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'audioStartPage',
+                        page: clickPage,
+                        totalPages: totalPages
+                      }));
+                      return;
+                    }
+                    lastTap = now;
                     console.log('👆 TAP detected (fallback) - page:', clickPage, 'clickY:', e.clientY);
                     
                     // Send click message immediately
@@ -1174,19 +1363,20 @@ export default function PdfViewer() {
           )}
         </View>
       )}
+          </View>
+        </TapGestureHandler>
+        </View>
+      )}
 
-      {/* Ebook backend narration (TTS audio) */}
-      {/* 
-      {ebookId ? (
-        <EbookTtsPlayer
-          ebookId={ebookId}
-          title={title ? `Listen • ${title}` : "Listen"}
-          autoGenerate={true}
-        />
+      {listenMode ? (
+        <Suspense fallback={null}>
+          <PdfJsExtractorWebView
+            enabled
+            pdfBase64={pdfBase64}
+            onMessage={handleExtractorMessage}
+          />
+        </Suspense>
       ) : null}
-      */}
-
-      {/* Removed hidden extraction WebView to avoid any overlay */}
     </View>
   );
 }

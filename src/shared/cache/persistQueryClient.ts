@@ -134,7 +134,7 @@ export function swrPersistedQueryCache(
   hasSession: boolean
 ): void {
   void queryClient
-    .refetchQueries({ queryKey: ["default-content"] })
+    .refetchQueries({ queryKey: ["default-content"], type: "active" })
     .catch(() => {});
   if (!hasSession) return;
   void queryClient

@@ -12,6 +12,9 @@ function queryTypeFromKey(queryKey: readonly unknown[]): string {
   const root = String(queryKey[0] || "");
   if (root === "all-content") return String(queryKey[1] || "ALL");
   if (root === "default-content") return String(queryKey[3] || "ALL");
+  if (root === "sermons") return "sermon";
+  if (root === "ebooks") return "e-books";
+  if (root === "music-tracks") return "music";
   return "ALL";
 }
 
@@ -156,6 +159,16 @@ export function prependMediaToFeedCaches(
       mergeInfiniteOrPage(old, item)
     );
   }
+  for (const root of ["sermons", "ebooks", "music-tracks"] as const) {
+    for (const query of queryClient.getQueryCache().findAll({
+      queryKey: [root],
+    })) {
+      if (!itemBelongsInQuery(item, queryTypeFromKey(query.queryKey))) continue;
+      queryClient.setQueryData(query.queryKey, (old: any) =>
+        mergeInfiniteOrPage(old, item)
+      );
+    }
+  }
 
   const cache = useContentCacheStore.getState().cache;
   const touchKeys = new Set([
@@ -221,6 +234,18 @@ export function patchMediaInFeedCaches(
     { queryKey: ["all-content-infinite"] },
     (old: any) => patchInfiniteOrPage(old, id, patch)
   );
+  queryClient.setQueriesData(
+    { queryKey: ["sermons"] },
+    (old: any) => patchInfiniteOrPage(old, id, patch)
+  );
+  queryClient.setQueriesData(
+    { queryKey: ["ebooks"] },
+    (old: any) => patchInfiniteOrPage(old, id, patch)
+  );
+  queryClient.setQueriesData(
+    { queryKey: ["music-tracks"] },
+    (old: any) => patchInfiniteOrPage(old, id, patch)
+  );
 
   const cache = useContentCacheStore.getState().cache;
   for (const key of Object.keys(cache)) {
@@ -251,6 +276,18 @@ export function refreshFeedAfterUpload(queryClient: QueryClient): void {
   });
   void queryClient.invalidateQueries({
     queryKey: ["all-content-infinite"],
+    refetchType: "none",
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["sermons"],
+    refetchType: "none",
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["ebooks"],
+    refetchType: "none",
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["music-tracks"],
     refetchType: "none",
   });
 }

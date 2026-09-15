@@ -118,7 +118,7 @@ export function useUploadFlow(deps: UploadFlowDeps) {
         // no-op
       }
 
-      const formData = buildUploadPayload({
+      const formData = await buildUploadPayload({
         file,
         thumbnail,
         title,

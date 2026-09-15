@@ -1,4 +1,5 @@
-import { useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import {
     Image,
@@ -10,8 +11,6 @@ import {
     View,
 } from "react-native";
 
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ CORRECT
-import axios from "axios";
 import AuthHeader from "../components/AuthHeader";
 import FailureCard from "../components/failureCard";
 import ProgressBar from "../components/ProgressBar";
@@ -22,13 +21,19 @@ import Images from "./ImagesAvatars";
 import SlideUpSetProfileImageModal from "./SetProfileImageModal";
 
 import { Asset } from "expo-asset";
-import { environmentManager } from "../utils/environmentManager";
+import { apiAxios } from "../utils/api";
+import { uploadAvatar } from "../utils/api/client/avatarUpload";
+import { persistUserAvatar } from "../utils/persistUserAvatar";
+import TokenUtils from "../utils/tokenUtils";
 
 const avatarTabs = ["Cartoon", "Cute Avatars", "Images"];
 
 const AvatarSelection = () => {
   const router = useRouter();
-  const API_BASE_URL = environmentManager.getCurrentUrl();
+  const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
+  const fromProfile = fromParam === "profile" || fromParam === "edit";
   const [activeTab, setActiveTab] = useState("Cartoon");
   const [selectedAvatar, setSelectedAvatar] = useState<
     ImageSourcePropType | string | null
@@ -42,19 +47,32 @@ const AvatarSelection = () => {
   const dropdownAnim = useRef(new RNAnimated.Value(-200)).current;
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
+  const [failureText, setFailureText] = useState("Please select an avatar");
   const [isUploading, setIsUploading] = useState(false);
 
   const imageSize = 80;
   const FLOOR_Y = 280;
   const FINAL_REST_Y = 70;
 
+  const chosenAvatar = selectedAvatar || uploadedImage;
+
   const handleUseAvatar = () => {
+    if (!chosenAvatar) {
+      triggerBounceDrop("failure", "Please select an avatar");
+      return;
+    }
+    if (!selectedAvatar && uploadedImage) {
+      setSelectedAvatar(uploadedImage);
+    }
     setIsModalVisible(true);
   };
 
-  const triggerBounceDrop = (type: "success" | "failure") => {
+  const triggerBounceDrop = (type: "success" | "failure", message?: string) => {
     setShowSuccess(type === "success");
     setShowFailure(type === "failure");
+    if (type === "failure") {
+      setFailureText(message || "Please select an avatar");
+    }
 
     RNAnimated.timing(dropdownAnim, {
       toValue: FLOOR_Y,
@@ -69,7 +87,15 @@ const AvatarSelection = () => {
       }).start(() => {
         if (type === "success") {
           setTimeout(() => {
-            router.replace("/categories/HomeScreen");
+            if (fromProfile) {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/screens/AccountScreen");
+              }
+            } else {
+              router.replace("/categories/HomeScreen");
+            }
           }, 600);
         }
       });
@@ -98,97 +124,23 @@ const AvatarSelection = () => {
   //   }
   // };
 
-  const uploadAvatarToBackend = async (uri: string, token: string): Promise<string> => {
-    try {
-      const fileExtension = uri.split(".").pop()?.toLowerCase() || "jpg";
-      const mimeType = `image/${
-        fileExtension === "jpg" ? "jpeg" : fileExtension
-      }`;
-
-      const formData = new FormData();
-      formData.append("avatar", {
-        uri: uri,
-        name: `avatar.${fileExtension}`,
-        type: mimeType,
-      } as any);
-
-      console.log("📤 Uploading avatar to:", `${API_BASE_URL}/api/auth/avatar`);
-      console.log("📤 FormData:", formData);
-      console.log("🌐 Using environment:", environmentManager.getCurrentEnvironment());
-
-      // ✅ CORRECT ENDPOINT - matches your backend API documentation
-      const res = await fetch(
-        `${API_BASE_URL}/api/auth/avatar`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            // Don't set Content-Type for FormData - let the browser set it
-          },
-          body: formData,
-        }
-      );
-
-      console.log("📤 Upload response status:", res.status);
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("❌ Upload failed:", errorText);
-        console.error("🌐 API URL used:", `${API_BASE_URL}/api/auth/avatar`);
-        
-        // Handle specific error cases based on backend documentation
-        if (res.status === 400) {
-          throw new Error("Invalid image file. Please use JPEG, PNG, or GIF format.");
-        } else if (res.status === 401) {
-          throw new Error("Unauthorized. Please log in again.");
-        } else if (res.status === 413) {
-          throw new Error("File too large. Please choose a smaller image (max 5MB).");
-        } else if (res.status === 0 || res.statusText === 'Network Error') {
-          throw new Error("Network error. Please check your internet connection and try again.");
-        } else {
-          throw new Error(`Upload failed: ${res.status} - ${errorText}`);
-        }
-      }
-
-      const json = await res.json();
-      console.log("📤 Upload response:", json);
-
-      if (!json.success) {
-        throw new Error(json.message || "Failed to upload avatar");
-      }
-
-      // ✅ Return the avatarUrl from the data object as per backend API
-      return json.data.avatarUrl;
-    } catch (error) {
-      console.error("❌ Avatar upload error:", error);
-      throw error;
-    }
-  };
-
   const handleConfirm = async () => {
     setIsModalVisible(false);
     setIsUploading(true);
 
-    if (!selectedAvatar) {
+    const avatarToUpload = selectedAvatar || uploadedImage;
+    if (!avatarToUpload) {
       console.log("❌ No avatar selected");
       setIsUploading(false);
-      triggerBounceDrop("failure");
+      triggerBounceDrop("failure", "Please select an avatar");
       return;
     }
 
     try {
-      // ✅ Use correct token key
-      // Try multiple keys to maximize compatibility across flows
-      let token = await AsyncStorage.getItem("userToken");
-      if (!token) {
-        token = await AsyncStorage.getItem("token");
-      }
-      if (!token) {
-        token = await AsyncStorage.getItem("authToken");
-      }
+      const token = await TokenUtils.getAuthToken();
       if (!token) {
         console.log("❌ No user token found");
-        triggerBounceDrop("failure");
+        triggerBounceDrop("failure", "Please sign in again");
         return;
       }
 
@@ -196,12 +148,11 @@ const AvatarSelection = () => {
 
       let fileUri: string;
 
-      if (typeof selectedAvatar === "string") {
-        fileUri = selectedAvatar;
+      if (typeof avatarToUpload === "string") {
+        fileUri = avatarToUpload;
         console.log("📁 Using string URI:", fileUri);
       } else {
-        // Ensure it's a static resource (require)
-        const assetModule = selectedAvatar as number;
+        const assetModule = avatarToUpload as number;
         console.log("📁 Processing asset module:", assetModule);
 
         const asset = Asset.fromModule(assetModule);
@@ -214,63 +165,29 @@ const AvatarSelection = () => {
         console.log("📁 Asset URI resolved:", fileUri);
       }
 
-      console.log("🚀 Starting avatar upload...");
-      const avatarUrl = await uploadAvatarToBackend(fileUri, token);
+      const { avatarUrl } = await uploadAvatar(fileUri);
       console.log("✅ Avatar uploaded successfully:", avatarUrl);
-      
+
       setConfirmedAvatar(avatarUrl);
+      await persistUserAvatar(queryClient, avatarUrl);
 
-      // Update user profile with the new avatar URL
-      console.log("🔄 Updating user profile...");
-      console.log("🌐 Using environment:", environmentManager.getCurrentEnvironment());
-      
-      // Create axios instance with timeout configuration
-      const axiosInstance = axios.create({
-        timeout: 15000, // 15 seconds timeout
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const response = await axiosInstance.post(
-        `${API_BASE_URL}/api/auth/complete-profile`,
-        { avatar: avatarUrl } // ✅ Use 'avatar' field as per backend API
-      );
-
-      console.log("📤 Profile update response:", response.data);
-
-      if (response.data.success) {
-        setConfirmedAvatar(avatarUrl);
-        console.log("✅ Profile updated successfully");
-        
-        // Store the updated avatar URL in AsyncStorage for consistency
-        try {
-          const userRaw = await AsyncStorage.getItem("user");
-          if (userRaw) {
-            const user = JSON.parse(userRaw);
-            user.avatar = avatarUrl;
-            await AsyncStorage.setItem("user", JSON.stringify(user));
-            console.log("✅ User data updated in AsyncStorage");
-          }
-        } catch (storageError) {
-          console.warn("⚠️ Failed to update user data in AsyncStorage:", storageError);
-        }
-        
-        triggerBounceDrop("success");
-      } else {
-        console.log("❌ Profile update failed:", response.data);
-        triggerBounceDrop("failure");
+      try {
+        await apiAxios.post("/api/auth/complete-profile", {
+          avatar: avatarUrl,
+        });
+      } catch (profileError) {
+        console.warn("⚠️ complete-profile after avatar failed:", profileError);
       }
+
+      triggerBounceDrop("success");
     } catch (error: any) {
       console.error("❌ Avatar submission failed:", error);
-      
-      // Provide more specific error messages
+
       let errorMessage = "Avatar upload failed";
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        errorMessage = "Request timed out. Please try again.";
       } else if (error.response?.status === 401) {
-        errorMessage = "Authentication failed. Please login again.";
+        errorMessage = "Please sign in again";
       } else if (error.response?.status === 500) {
         errorMessage = "Server error. Please try again later.";
       } else if (error.response?.data?.message) {
@@ -278,9 +195,9 @@ const AvatarSelection = () => {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       console.error("❌ Error details:", errorMessage);
-      triggerBounceDrop("failure");
+      triggerBounceDrop("failure", errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -326,7 +243,7 @@ const AvatarSelection = () => {
       
 
       <View className="w-[370px]">
-        <AuthHeader title="Profile Setup" />
+        <AuthHeader title={fromProfile ? "Edit Avatar" : "Profile Setup"} />
       </View>
 
       {/* Success / Failure Card */}
@@ -336,14 +253,16 @@ const AvatarSelection = () => {
       >
         {showSuccess && <SuccessfulCard text="Avatar set successfully" />}
         {showFailure && (
-          <FailureCard text="Please select an avatar" onClose={hideDropdown} />
+          <FailureCard text={failureText} onClose={hideDropdown} />
         )}
       </RNAnimated.View>
 
       <View className="w-[333px] mt-3">
-        <ProgressBar currentStep={4} totalSteps={4} />
+        {!fromProfile && <ProgressBar currentStep={4} totalSteps={4} />}
         <Text className="text-[#1D2939] font-semibold mt-3">
-          Let&apos;s make this feel like home
+          {fromProfile
+            ? "Update your photo or pick a new avatar"
+            : "Let's make this feel like home"}
         </Text>
       </View>
 
@@ -396,6 +315,10 @@ const AvatarSelection = () => {
                 setUploadedImage(uri);
                 setSelectedAvatar(uri);
               }}
+              onUseUploadedImage={() => {
+                if (uploadedImage) setSelectedAvatar(uploadedImage);
+                setIsModalVisible(true);
+              }}
             />
           )}
         </View>
@@ -414,10 +337,16 @@ const AvatarSelection = () => {
             {isUploading ? "Uploading..." : "Use Avatar"}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity className="mt-6 items-center"
-         onPress={() => router.push("/categories/HomeScreen")}>
+        <TouchableOpacity
+          className="mt-6 items-center"
+          onPress={() =>
+            fromProfile
+              ? router.back()
+              : router.push("/categories/HomeScreen")
+          }
+        >
           <Text className="text-[#344054] text-[14px] font-jakarta-medium">
-            Skip this
+            {fromProfile ? "Cancel" : "Skip this"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -426,6 +355,7 @@ const AvatarSelection = () => {
         isVisible={isModalVisible}
         onConfirm={handleConfirm}
         onCancel={() => setIsModalVisible(false)}
+        isLoading={isUploading}
       />
     </View>
   );
