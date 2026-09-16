@@ -13,6 +13,16 @@ import {
 } from "react-native";
 import CommentIcon from "../../../../src/shared/components/CommentIcon";
 import { useAudioProgressForTrack } from "@/store/audioPlayer/audioProgressStore";
+import { useContentLikeState } from "../../../../src/shared/hooks/useContentLikeState";
+import { useContentSaveState } from "../../../../src/shared/hooks/useContentSaveState";
+import {
+  commentCountFromMetadata,
+  resolveCommentDisplayCount,
+} from "../../../../src/shared/media/engagementDisplay";
+import {
+  useContentCount,
+  useContentStats,
+} from "@/store/useInteractionStore";
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -47,8 +57,8 @@ export default function SermonAudioCard({
   sectionId,
   playingAudioId,
   contentStats,
-  userFavorites,
-  globalFavoriteCounts,
+  userFavorites: _userFavorites,
+  globalFavoriteCounts: _globalFavoriteCounts,
   modalVisible,
   comments,
   playAudio,
@@ -73,7 +83,16 @@ export default function SermonAudioCard({
   const sermonId = audio._id || modalKey;
   const isPlaying = playingAudioId === sermonId;
 
-  const contentId = audio._id || modalKey;
+  const contentId = String(audio._id || modalKey);
+  const like = useContentLikeState(contentId, audio);
+  const save = useContentSaveState(contentId, audio);
+  const liveStats = useContentStats(contentId);
+  const storeComments = useContentCount(contentId, "comments");
+  const commentCount = resolveCommentDisplayCount({
+    storeComments,
+    commentsConfirmed: liveStats?.commentsConfirmed,
+    fallback: commentCountFromMetadata(audio),
+  });
   const currentComments = comments[contentId] || [];
 
   const sampleComments = [
@@ -150,12 +169,12 @@ export default function SermonAudioCard({
             className="flex-col justify-center items-center"
           >
             <MaterialIcons
-              name={userFavorites[key] ? "favorite" : "favorite-border"}
+              name={like.liked ? "favorite" : "favorite-border"}
               size={30}
-              color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
+              color={like.liked ? "#D22A2A" : "#FFFFFF"}
             />
             <Text className="text-[10px] text-white font-jakarta-semibold">
-              {globalFavoriteCounts[key] || 0}
+              {like.likeCount}
             </Text>
           </TouchableOpacity>
           <View
@@ -171,11 +190,7 @@ export default function SermonAudioCard({
               size={30}
               color="white"
               showCount={true}
-              count={
-                stats.comment === 1
-                  ? (audio.comment ?? 0) + 1
-                  : audio.comment ?? 0
-              }
+              count={commentCount}
               layout="vertical"
               contentId={contentId}
             />
@@ -185,12 +200,12 @@ export default function SermonAudioCard({
             className="flex-col justify-center items-center mt-8"
           >
             <MaterialIcons
-              name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+              name={save.saved ? "bookmark" : "bookmark-border"}
               size={30}
-              color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
+              color={save.saved ? "#FEA74E" : "#FFFFFF"}
             />
             <Text className="text-[10px] text-white font-jakarta-semibold">
-              {stats.saved === 1 ? (audio.saved ?? 0) + 1 : audio.saved ?? 0}
+              {save.saveCount}
             </Text>
           </TouchableOpacity>
         </View>
@@ -320,12 +335,10 @@ export default function SermonAudioCard({
               onPress={() => handleSave(key, audio)}
             >
               <Text className="text-[#1D2939] font-jakarta ml-2">
-                {stats.saved === 1
-                  ? "Remove from Library"
-                  : "Save to Library"}
+                {save.saved ? "Remove from Library" : "Save to Library"}
               </Text>
               <MaterialIcons
-                name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                name={save.saved ? "bookmark" : "bookmark-border"}
                 size={22}
                 color="#1D2939"
               />

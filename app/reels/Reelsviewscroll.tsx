@@ -148,7 +148,7 @@ const ReelsView = () => {
           o.setHasError(false);
           o.setErrorMessage("");
         }}
-        onGoBack={() => o.router.back()}
+        onGoBack={o.handlers.handleBackNavigation}
       />
     );
   }
@@ -189,7 +189,7 @@ const ReelsView = () => {
         removeClippedSubviews={false}
         initialNumToRender={3}
         maxToRenderPerBatch={3}
-        windowSize={3}
+        windowSize={5}
         decelerationRate="fast"
         snapToInterval={cellHeight}
         snapToAlignment="start"

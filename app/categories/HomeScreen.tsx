@@ -50,10 +50,14 @@ export default function HomeScreen() {
   );
   const { isVisible: isCommentSheetOpen } = useCommentModal();
   const loginTour = useNewUserLoginTour();
-  const { default: defaultTabParamRaw } = useLocalSearchParams();
+  const { default: defaultTabParamRaw, defaultCategory: defaultCategoryParamRaw } =
+    useLocalSearchParams();
   const defaultTabParam = Array.isArray(defaultTabParamRaw)
     ? defaultTabParamRaw[0]
     : defaultTabParamRaw;
+  const defaultCategoryParam = Array.isArray(defaultCategoryParamRaw)
+    ? defaultCategoryParamRaw[0]
+    : defaultCategoryParamRaw;
 
   const handleTabChange = useCallback((tab: string) => {
     if (!tabList.includes(tab as MainShellTab)) return;
@@ -77,8 +81,12 @@ export default function HomeScreen() {
   useEffect(() => {
     if (defaultTabParam && tabList.includes(defaultTabParam as MainShellTab)) {
       handleTabChange(defaultTabParam);
+      return;
     }
-  }, [defaultTabParam, handleTabChange]);
+    if (defaultCategoryParam) {
+      handleTabChange("Home");
+    }
+  }, [defaultTabParam, defaultCategoryParam, handleTabChange]);
 
   return (
     <View style={styles.root} onLayout={hideAppSplash}>

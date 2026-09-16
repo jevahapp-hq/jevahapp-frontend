@@ -3,6 +3,7 @@ import type { MusicLane } from "../MusicLaneTabs";
 import type { DisplayMode } from "../types";
 import { MusicCatalogSkeleton } from "./MusicCatalogSkeleton";
 import { renderSongItem } from "./songItems";
+import { MUSIC_TILE_PAD } from "./songItems/songItemShared";
 
 type MusicSongsListProps = {
   songs: any[];
@@ -41,6 +42,8 @@ export function MusicSongsList({
   onRefresh,
   onLoadMoreArtists,
 }: MusicSongsListProps) {
+  const isTiled = displayMode === "grid" || displayMode === "small";
+
   return (
     <FlatList
       data={songs}
@@ -60,8 +63,12 @@ export function MusicSongsList({
       numColumns={
         displayMode === "grid" ? 2 : displayMode === "small" ? 3 : 1
       }
+      columnWrapperStyle={
+        isTiled ? { justifyContent: "space-between" } : undefined
+      }
       contentContainerStyle={{
         paddingBottom: 100, // Space for bottom nav
+        paddingHorizontal: isTiled ? MUSIC_TILE_PAD : 0,
       }}
       showsVerticalScrollIndicator={false}
       onRefresh={() =>

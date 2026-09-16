@@ -25,13 +25,14 @@ export const convertSignedToPublicUrl = (signedUrl: string): string => {
   }
 
   try {
-    const url = new URL(signedUrl);
+    const normalized = fixOverEncodedMediaUrl(signedUrl);
+    const url = new URL(normalized);
 
     // Check if it's a signed URL
     const isSignedUrl = url.searchParams.has('X-Amz-Algorithm');
 
     if (!isSignedUrl) {
-      return signedUrl; // Already a public URL
+      return normalized;
     }
 
     // Remove AWS signature parameters
@@ -137,12 +138,50 @@ export const analyzeVideoUrl = (url: string): VideoUrlInfo => {
   return result;
 };
 
+/**
+ * Backend/R2 keys with spaces are stored as `%20`, then encoded again as
+ * `%2520`. iOS requests the double-encoded path, R2 404s, and AVPlayer
+ * shows the default play/Q artwork while audio (or a damaged cache) plays.
+ *
+ * Only the pathname is undoubled — query strings (signed URLs) stay intact.
+ * Reconstruct via string concat: `URL.pathname =` re-encodes `%` and leaves
+ * `&` unescaped, both of which break these objects.
+ */
+const OVER_ENCODED_OCTET = /%25[0-9A-Fa-f]{2}/;
+
+export function fixOverEncodedMediaUrl(url: string): string {
+  if (!url || typeof url !== "string") return url;
+  if (url.startsWith("file://") || url.startsWith("/")) return url;
+
+  try {
+    const toParse = url.startsWith("//") ? `https:${url}` : url;
+    const parsed = new URL(toParse);
+    let path = parsed.pathname;
+    if (!OVER_ENCODED_OCTET.test(path)) return url;
+
+    let guard = 0;
+    while (OVER_ENCODED_OCTET.test(path) && guard < 3) {
+      path = path.replace(/%25([0-9A-Fa-f]{2})/g, "%$1");
+      guard += 1;
+    }
+
+    const next = `${parsed.origin}${path}${parsed.search}${parsed.hash}`;
+    return url.startsWith("//") ? next.replace(/^https:/, "") : next;
+  } catch {
+    return url;
+  }
+}
+
 export const getVideoUrlFromMedia = (media: any): string | null => {
-  const fileUrl =
-    typeof media?.fileUrl === "string" ? media.fileUrl.trim() : "";
-  const playbackUrl =
-    typeof media?.playbackUrl === "string" ? media.playbackUrl.trim() : "";
-  const hlsUrl = typeof media?.hlsUrl === "string" ? media.hlsUrl.trim() : "";
+  const fileUrl = fixOverEncodedMediaUrl(
+    typeof media?.fileUrl === "string" ? media.fileUrl.trim() : ""
+  );
+  const playbackUrl = fixOverEncodedMediaUrl(
+    typeof media?.playbackUrl === "string" ? media.playbackUrl.trim() : ""
+  );
+  const hlsUrl = fixOverEncodedMediaUrl(
+    typeof media?.hlsUrl === "string" ? media.hlsUrl.trim() : ""
+  );
 
   const notVideoUrl = (u: string) =>
     !!u && /\.(pdf|epub|mobi|mp3|wav|m4a|aac|ogg|flac|wma)(\?|#|$)/i.test(u);
@@ -234,6 +273,78 @@ export const getVideoSourceContentType = (
   return undefined;
 };
 
+export function isHlsVideoUrl(url: string | null | undefined): boolean {
+  return getVideoSourceContentType(url) === "hls";
+}
+
+function playerErrorText(error: unknown): string {
+  const chunks: string[] = [];
+  const walk = (value: unknown, depth: number) => {
+    if (value == null || depth > 5) return;
+    if (typeof value === "string" || typeof value === "number") {
+      chunks.push(String(value));
+      return;
+    }
+    if (typeof value !== "object") return;
+    const obj = value as Record<string, unknown>;
+    for (const key of [
+      "message",
+      "code",
+      "domain",
+      "localizedDescription",
+      "name",
+    ]) {
+      if (obj[key] != null) chunks.push(String(obj[key]));
+    }
+    if ("error" in obj) walk(obj.error, depth + 1);
+  };
+  walk(error, 0);
+  return chunks.join(" ");
+}
+
+/**
+ * iOS throws ExpoVideo.VideoCacheUnsupported for HLS (and some CDNs) when
+ * `useCaching` is true — the player never loads, so the reel stays black.
+ */
+export function isVideoCacheUnsupportedError(error: unknown): boolean {
+  return /VideoCacheUnsupported/i.test(playerErrorText(error));
+}
+
+/**
+ * 404 / damaged `expo-video-cache` entries: retry without cache (and after
+ * undoubling the path) instead of tearing down the VideoView.
+ */
+export function isRetryableVideoSourceError(error: unknown): boolean {
+  if (isVideoCacheUnsupportedError(error)) return true;
+  return /requested URL was not found|File Not Found|HTTP 404|Code=-1100|media may be damaged|expo-video-cache/i.test(
+    playerErrorText(error)
+  );
+}
+
+export type ExpoFeedVideoSource = {
+  uri: string;
+  useCaching: boolean;
+  contentType?: "hls" | "progressive";
+};
+
+/**
+ * Build an expo-video source. Never cache HLS on iOS — that throws
+ * VideoCacheUnsupported and the item fails to load.
+ */
+export function toExpoVideoSource(
+  uri: string | null | undefined,
+  options?: { useCaching?: boolean; mimeHint?: string | null }
+): ExpoFeedVideoSource | null {
+  if (!uri) return null;
+  const normalized = fixOverEncodedMediaUrl(uri);
+  const contentType = getVideoSourceContentType(normalized, options?.mimeHint);
+  const wantCache = options?.useCaching !== false;
+  const useCaching = wantCache && contentType !== "hls";
+  return contentType
+    ? { uri: normalized, useCaching, contentType }
+    : { uri: normalized, useCaching };
+}
+
 
 /**
  * Gets the best URL to use for video playback
@@ -246,32 +357,34 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
     return fallback;
   }
 
+  const normalizedUrl = fixOverEncodedMediaUrl(originalUrl.trim());
+
   // Handle local file URLs (downloaded content) - return immediately without validation
-  if (originalUrl.startsWith('file://') || originalUrl.startsWith('/')) {
-    urlLog(`📁 Using local file URL: ${originalUrl.substring(0, 100)}...`);
-    return originalUrl;
+  if (normalizedUrl.startsWith('file://') || normalizedUrl.startsWith('/')) {
+    urlLog(`📁 Using local file URL: ${normalizedUrl.substring(0, 100)}...`);
+    return normalizedUrl;
   }
 
-  const urlInfo = analyzeVideoUrl(originalUrl);
+  const urlInfo = analyzeVideoUrl(normalizedUrl);
 
   // If it's a signed URL, use the converted version
   if (urlInfo.isSignedUrl) {
     if (urlInfo.isExpired) {
-      console.warn(`⚠️ Signed URL appears expired: ${originalUrl.substring(0, 100)}...`);
+      console.warn(`⚠️ Signed URL appears expired: ${normalizedUrl.substring(0, 100)}...`);
       urlLog(`🔧 Using converted URL: ${urlInfo.convertedUrl.substring(0, 100)}...`);
       return urlInfo.convertedUrl;
     }
     // Signed URL is valid and NOT expired - use it as is!
-    return originalUrl;
+    return normalizedUrl;
   }
 
   // If it's already a public URL, use it
   if (urlInfo.isValid) {
-    return originalUrl;
+    return normalizedUrl;
   }
 
   // If invalid, use fallback
-  console.warn(`⚠️ Invalid URL, using fallback: ${originalUrl}`);
+  console.warn(`⚠️ Invalid URL, using fallback: ${normalizedUrl}`);
   return fallback;
 };
 
@@ -280,6 +393,16 @@ export const getBestVideoUrl = (originalUrl: string, fallbackUrl?: string): stri
  */
 export const handleVideoError = (error: any, videoUrl: string, videoTitle: string) => {
   const urlInfo = analyzeVideoUrl(videoUrl);
+
+  if (isRetryableVideoSourceError(error)) {
+    return {
+      isRetryable: true,
+      suggestedUrl: fixOverEncodedMediaUrl(videoUrl),
+      errorType: isVideoCacheUnsupportedError(error)
+        ? "cache_unsupported"
+        : "source_unavailable",
+    };
+  }
 
   console.error(`❌ Video error for ${videoTitle}:`, {
     error: error,

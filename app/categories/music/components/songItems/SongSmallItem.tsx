@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Text, TouchableOpacity, View } from "react-native";
-import { getThumbnailSource, type SongItemProps } from "./songItemShared";
+import { getThumbnailSource, musicTileWidth, type SongItemProps } from "./songItemShared";
 
 export function SongSmallItem({
   item,
@@ -9,7 +9,7 @@ export function SongSmallItem({
   screenWidth = 0,
 }: SongItemProps) {
   const thumbnailSource = getThumbnailSource(item.thumbnailUrl);
-  const itemWidth = (screenWidth - 48) / 3;
+  const itemWidth = musicTileWidth(screenWidth, 3);
 
   return (
     <TouchableOpacity
@@ -19,7 +19,7 @@ export function SongSmallItem({
         onPlayPress(item).catch((err) => console.warn("Play error:", err));
       }}
       activeOpacity={0.9}
-      style={{ width: itemWidth, marginBottom: 12, marginHorizontal: 4 }}
+      style={{ width: itemWidth, marginBottom: 12 }}
     >
       <View
         style={{

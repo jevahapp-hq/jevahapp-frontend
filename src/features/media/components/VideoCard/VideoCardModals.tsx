@@ -31,6 +31,7 @@ export interface VideoCardModalsProps {
   setShowReportModal: (v: boolean) => void;
   showDetailsModal: boolean;
   onDownload: (item: MediaItem) => void;
+  viewerId?: string | null;
 }
 
 export function VideoCardModals({
@@ -54,6 +55,7 @@ export function VideoCardModals({
   setShowReportModal,
   showDetailsModal,
   onDownload,
+  viewerId,
 }: VideoCardModalsProps) {
   if (!video) return null;
 
@@ -77,8 +79,9 @@ export function VideoCardModals({
         mediaId={video._id}
         uploadedBy={getUploadedBy(video)}
         mediaItem={video}
-        onDelete={isOwner ? handleDeletePress : undefined}
-        showDelete={isOwner}
+        viewerId={viewerId}
+        onDelete={handleDeletePress}
+        showDelete={isOwner ? true : undefined}
         onReport={() => setShowReportModal(true)}
       />
       <DeleteMediaConfirmation

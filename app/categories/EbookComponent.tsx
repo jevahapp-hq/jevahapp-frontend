@@ -16,6 +16,16 @@ import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
+import { resolveLikeSeed, useContentLikeState } from "../../src/shared/hooks/useContentLikeState";
+import { resolveSaveSeed, useContentSaveState } from "../../src/shared/hooks/useContentSaveState";
+import {
+  commentCountFromMetadata,
+  resolveCommentDisplayCount,
+} from "../../src/shared/media/engagementDisplay";
+import {
+  useContentCount,
+  useContentStats,
+} from "@/store/useInteractionStore";
 
 interface EbookItem {
   _id?: string;
@@ -36,6 +46,96 @@ interface EbookItem {
   onPress?: (() => void) | ((event: GestureResponderEvent) => void);
 }
 
+function EbookEngagementRow({
+  item,
+  contentId,
+  comments,
+  onLike,
+  onSave,
+  onDownload,
+  isDownloaded,
+}: {
+  item: EbookItem;
+  contentId: string;
+  comments: Record<string, any[]>;
+  onLike: () => void;
+  onSave: () => void;
+  onDownload: () => void;
+  isDownloaded: boolean;
+}) {
+  const like = useContentLikeState(contentId, item as any);
+  const save = useContentSaveState(contentId, item as any);
+  const liveStats = useContentStats(contentId);
+  const storeComments = useContentCount(contentId, "comments");
+  const commentCount = resolveCommentDisplayCount({
+    storeComments,
+    commentsConfirmed: liveStats?.commentsConfirmed,
+    fallback: commentCountFromMetadata(item),
+  });
+  const currentComments = comments[contentId] || [];
+  const formattedComments = currentComments.map((comment: any) => ({
+    id: comment.id,
+    userName: comment.username || "Anonymous",
+    avatar: comment.userAvatar || "",
+    timestamp: comment.timestamp,
+    comment: comment.comment,
+    likes: comment.likes || 0,
+    isLiked: comment.isLiked || false,
+  }));
+
+  return (
+    <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
+      <View className="flex-row items-center mr-6">
+        <MaterialIcons name="visibility" size={28} color="#98A2B3" />
+        <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
+          {item.views || 0}
+        </Text>
+      </View>
+      <TouchableOpacity onPress={onLike} className="flex-row items-center mr-6">
+        <MaterialIcons
+          name={like.liked ? "favorite" : "favorite-border"}
+          size={28}
+          color={like.liked ? "#D22A2A" : "#98A2B3"}
+        />
+        <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
+          {like.likeCount}
+        </Text>
+      </TouchableOpacity>
+      <View
+        className="flex-row items-center mr-6"
+        style={{ minHeight: 50, minWidth: 50, zIndex: 2 }}
+      >
+        <CommentIcon
+          comments={formattedComments}
+          size={28}
+          color="#98A2B3"
+          showCount={true}
+          count={commentCount}
+          layout="horizontal"
+          contentId={contentId}
+        />
+      </View>
+      <TouchableOpacity onPress={onSave} className="flex-row items-center mr-6">
+        <MaterialIcons
+          name={save.saved ? "bookmark" : "bookmark-border"}
+          size={28}
+          color={save.saved ? "#FEA74E" : "#98A2B3"}
+        />
+        <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
+          {save.saveCount}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity className="flex-row items-center" onPress={onDownload}>
+        <Ionicons
+          name={isDownloaded ? "checkmark-circle" : "download-outline"}
+          size={28}
+          color={isDownloaded ? "#256E63" : "#98A2B3"}
+        />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function EbookComponent() {
   const mediaStore = useMediaStore();
   const [modalVisible, setModalVisible] = useState<string | null>(null);
@@ -52,8 +152,8 @@ export default function EbookComponent() {
   
   // Interaction functionality
   const { showCommentModal } = useCommentModal();
-  const { comments, getContentStat, getContentCount } = useInteractionStore();
-  const { addToLibrary, removeFromLibrary, isItemSaved } = useLibraryStore();
+  const { comments } = useInteractionStore();
+  const { addToLibrary, removeFromLibrary } = useLibraryStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -66,8 +166,12 @@ export default function EbookComponent() {
   const getContentKey = (item: EbookItem) => item._id || item.fileUrl || item.title;
   
   const handleFavorite = async (key: string, item: EbookItem) => {
-    const contentId = item._id || key;
-    await useInteractionStore.getState().toggleLike(contentId, "ebook");
+    const contentId = String(item._id || key);
+    await useInteractionStore.getState().toggleLike(
+      contentId,
+      "ebook",
+      resolveLikeSeed(contentId, item as any)
+    );
   };
 
   const handleComment = (key: string, item: EbookItem) => {
@@ -86,19 +190,35 @@ export default function EbookComponent() {
   };
 
   const handleSave = async (key: string, item: EbookItem) => {
-    const contentKey = getContentKey(item);
-    if (isItemSaved(contentKey)) {
-      removeFromLibrary(contentKey);
-    } else {
-      addToLibrary({
-        id: contentKey,
-        title: item.title,
-        contentType: 'e-books',
-        fileUrl: item.fileUrl || '',
-        imageUrl: item.imageUrl,
-        speaker: item.speaker || item.uploadedBy || 'Unknown',
-        createdAt: item.createdAt,
-      });
+    const contentId = String(item._id || key);
+    const seed = resolveSaveSeed(contentId, item as any);
+    try {
+      const result = await useInteractionStore.getState().toggleSave(
+        contentId,
+        "ebook",
+        {
+          initialSaved: seed.initialSaved,
+          initialSaves: seed.initialSaves,
+        }
+      );
+      if (result?.authRequired) return;
+      const contentKey = getContentKey(item);
+      if (result.saved) {
+        addToLibrary({
+          id: contentId,
+          title: item.title,
+          contentType: "e-books",
+          fileUrl: item.fileUrl || "",
+          imageUrl: item.imageUrl,
+          speaker: item.speaker || item.uploadedBy || "Unknown",
+          createdAt: item.createdAt,
+        });
+      } else {
+        removeFromLibrary(contentId);
+        removeFromLibrary(contentKey);
+      }
+    } catch (error) {
+      console.error("Ebook save failed:", error);
     }
   };
 
@@ -408,79 +528,15 @@ export default function EbookComponent() {
                   />
                 </TouchableOpacity>
               </View>
-              {(() => {
-                const key = getContentKey(item);
-                const contentId = item._id || key;
-                const currentComments = comments[contentId] || [];
-                const commentCount = getContentCount(contentId, "comments") || item.comment || 0;
-                const formattedComments = currentComments.map((comment: any) => ({
-                  id: comment.id,
-                  userName: comment.username || 'Anonymous',
-                  avatar: comment.userAvatar || '',
-                  timestamp: comment.timestamp,
-                  comment: comment.comment,
-                  likes: comment.likes || 0,
-                  isLiked: comment.isLiked || false,
-                }));
-                return (
-                  <View className="flex-row mt-2 items-center justify-between pl-2 pr-8">
-                <View className="flex-row items-center mr-6">
-                  <MaterialIcons name="visibility" size={28} color="#98A2B3" />
-                <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
-                  {item.views || 0}
-                </Text>
-              </View>
-                <TouchableOpacity onPress={() => handleFavorite(key, item)} className="flex-row items-center mr-6">
-                  <MaterialIcons
-                    name={getContentStat(contentId, "liked") ? "favorite" : "favorite-border"}
-                    size={28}
-                    color={getContentStat(contentId, "liked") ? "#D22A2A" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
-                    {getContentCount(contentId, "likes") || item.favorite || 0}
-                  </Text>
-                </TouchableOpacity>
-                <View 
-                  className="flex-row items-center mr-6"
-                  style={{ 
-                    minHeight: 50,
-                    minWidth: 50,
-                    zIndex: 2
-                  }}
-                >
-                  <CommentIcon 
-                    comments={formattedComments}
-                    size={28}
-                    color="#98A2B3"
-                    showCount={true}
-                    count={commentCount}
-                    layout="horizontal"
-                    contentId={contentId}
-                  />
-                </View>
-                <TouchableOpacity onPress={() => handleSave(key, item)} className="flex-row items-center mr-6">
-                  <MaterialIcons
-                    name={isItemSaved(getContentKey(item)) ? "bookmark" : "bookmark-border"}
-                    size={28}
-                    color={isItemSaved(getContentKey(item)) ? "#FEA74E" : "#98A2B3"}
-                  />
-                  <Text className="text-[10px] text-gray-500 ml-1 font-jakarta">
-                    {getContentCount(contentId, "saves") || item.saved || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  className="flex-row items-center"
-                  onPress={() => handleDownloadPress(item)}
-                >
-                  <Ionicons 
-                    name={checkIfDownloaded(item._id || item.fileUrl || "") ? "checkmark-circle" : "download-outline"} 
-                    size={28} 
-                    color={checkIfDownloaded(item._id || item.fileUrl || "") ? "#256E63" : "#98A2B3"} 
-                  />
-                </TouchableOpacity>
-                  </View>
-                );
-              })()}
+              <EbookEngagementRow
+                item={item}
+                contentId={String(item._id || getContentKey(item))}
+                comments={comments}
+                onLike={() => handleFavorite(getContentKey(item), item)}
+                onSave={() => handleSave(getContentKey(item), item)}
+                onDownload={() => handleDownloadPress(item)}
+                isDownloaded={checkIfDownloaded(item._id || item.fileUrl || "")}
+              />
             </View>
           </View>
         ))}

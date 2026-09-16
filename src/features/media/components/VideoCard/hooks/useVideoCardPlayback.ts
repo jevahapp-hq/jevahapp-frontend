@@ -4,6 +4,7 @@ import contentInteractionAPI from "../../../../../../app/utils/contentInteractio
 import { useReelsStore } from "@/store/useReelsStore";
 import { setCachedDurationMs } from "../player/durationCache";
 import { getPlayerDurationMs, seekPlayerToMs } from "../player/expoVideoAdapter";
+import { isRetryableVideoSourceError } from "../../../../../shared/utils/videoUrlManager";
 
 export interface UseVideoCardPlaybackParams {
   isAudioSermon: boolean;
@@ -22,6 +23,8 @@ export interface UseVideoCardPlaybackParams {
    * local probe (`durationCache`) or the item's own metadata.
    */
   initialDurationMs?: number;
+  /** Called just before a feed-resume seek so the still can cover the shutter. */
+  onResumeSeek?: () => void;
 }
 
 const MIN_DURATION_MS = 100;
@@ -50,6 +53,7 @@ export function useVideoCardPlayback({
   storeRef,
   isMountedRef,
   initialDurationMs = 0,
+  onResumeSeek,
 }: UseVideoCardPlaybackParams) {
   const seedMs =
     Number.isFinite(initialDurationMs) && initialDurationMs > 0
@@ -67,6 +71,7 @@ export function useVideoCardPlayback({
   const setFailedVideoLoadRef = useRef(setFailedVideoLoad);
   const setVideoLoadedRef = useRef(setVideoLoaded);
   const setHasTrackedViewRef = useRef(setHasTrackedView);
+  const onResumeSeekRef = useRef(onResumeSeek);
 
   // Parent callbacks are not guaranteed to be referentially stable. Keeping
   // them in refs prevents playback state updates from tearing down and
@@ -75,6 +80,7 @@ export function useVideoCardPlayback({
   setFailedVideoLoadRef.current = setFailedVideoLoad;
   setVideoLoadedRef.current = setVideoLoaded;
   setHasTrackedViewRef.current = setHasTrackedView;
+  onResumeSeekRef.current = onResumeSeek;
 
   useEffect(() => {
     hasTrackedViewRef.current = hasTrackedView;
@@ -93,6 +99,7 @@ export function useVideoCardPlayback({
           .getState()
           .consumeResumePlayback(contentId, "feed");
         if (!resume || !(resume.positionMs > 400)) return;
+        onResumeSeekRef.current?.();
         void seekPlayerToMs(player, resume.positionMs).then((ok) => {
           if (!ok || !isMountedRef.current) return;
           lastPositionMsRef.current = resume.positionMs;
@@ -224,6 +231,7 @@ export function useVideoCardPlayback({
         if (!isMountedRef.current) return;
 
         if (status === "error") {
+          if (isRetryableVideoSourceError(error)) return;
           setFailedVideoLoadRef.current(true);
           handleVideoErrorRef.current(error ?? new Error("Video playback error"));
           return;
@@ -243,6 +251,7 @@ export function useVideoCardPlayback({
             .getState()
             .consumeResumePlayback(contentId, "feed");
           if (resume && resume.positionMs > 400) {
+            onResumeSeekRef.current?.();
             void seekPlayerToMs(player, resume.positionMs).then((ok) => {
               if (!ok || !isMountedRef.current) return;
               lastPositionMsRef.current = resume.positionMs;
@@ -346,6 +355,7 @@ export function useVideoCardPlayback({
           .getState()
           .consumeResumePlayback(contentId, "feed");
         if (resume && resume.positionMs > 400) {
+          onResumeSeekRef.current?.();
           void seekPlayerToMs(player, resume.positionMs).then((ok) => {
             if (!ok || !isMountedRef.current) return;
             lastPositionMsRef.current = resume.positionMs;

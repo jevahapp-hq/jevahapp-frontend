@@ -16,9 +16,14 @@ import {
 } from "@/store/useGlobalVideoStore";
 import { useReelsStore } from "@/store/useReelsStore";
 import { mapContentTypeForBackend } from "../../utils/engagementHelpers";
-import { remapResumeFeedKey, feedTabFromResumeKey } from "../../../src/features/media/video-feed";
-import { rememberHomeFeedCategory } from "../../../src/shared/media/homeFeedCategory";
+import {
+  ensureTabPrefixedFeedKey,
+  isHomeOriginReelsSource,
+  resolveReturnHomeCategory,
+} from "../../../src/features/media/video-feed";
+import { rememberHomeFeedCategory, readHomeFeedCategory } from "../../../src/shared/media/homeFeedCategory";
 import { savePlayhead } from "../../../src/features/media/video-feed/playheadCache";
+import { getBestVideoUrl } from "../../../src/shared/utils/videoUrlManager";
 import {
   fullscreenReelsCommentAnchor,
   type CommentMediaAnchor,
@@ -126,9 +131,20 @@ export function useReelsHandlers({
           : 0) ??
         0;
       if (!contentId) return;
-      const feedKey = remapResumeFeedKey(prev?.feedKey, contentId);
-      const tab = feedTabFromResumeKey(feedKey) || category;
-      if (tab) rememberHomeFeedCategory(tab);
+      const fromHome = isHomeOriginReelsSource(source);
+      const tab = fromHome
+        ? resolveReturnHomeCategory(
+            prev?.feedKey,
+            category,
+            readHomeFeedCategory()
+          )
+        : undefined;
+      const feedKey = ensureTabPrefixedFeedKey(
+        prev?.feedKey,
+        contentId,
+        tab
+      );
+      if (fromHome && tab) rememberHomeFeedCategory(tab);
       reels.setResumePlayback({
         contentId,
         positionMs,
@@ -140,53 +156,86 @@ export function useReelsHandlers({
         (active as any)?.fileUrl ||
         (active as any)?.playbackUrl ||
         (active as any)?.hlsUrl;
-      if (typeof url === "string" && positionMs > 150) {
-        savePlayhead(url, positionMs / 1000);
+      if (positionMs > 150) {
+        const variants = [
+          (active as any)?.fileUrl,
+          (active as any)?.playbackUrl,
+          (active as any)?.hlsUrl,
+        ].filter((u): u is string => typeof u === "string" && u.length > 0);
+        const seconds = positionMs / 1000;
+        for (const variant of variants) {
+          savePlayhead(variant, seconds);
+          savePlayhead(getBestVideoUrl(variant), seconds);
+        }
+        if (typeof url === "string") {
+          savePlayhead(url, seconds);
+        }
       }
     } catch {
       // best-effort
     }
-  }, [category, contentIdForHooks, getVideoPositionMs, modalKey]);
+  }, [category, contentIdForHooks, getVideoPositionMs, modalKey, source]);
+
+  const goHomeToCategory = useCallback(
+    (homeCategory: string) => {
+      rememberHomeFeedCategory(homeCategory);
+      router.replace({
+        pathname: "/categories/HomeScreen",
+        params: { default: "Home", defaultCategory: homeCategory },
+      });
+    },
+    [router]
+  );
 
   const handleBackNavigation = useCallback(() => {
     triggerHapticFeedback();
     persistFeedResumeFromReels();
+    const homeCategory = resolveReturnHomeCategory(
+      useReelsStore.getState().resumePlayback?.feedKey,
+      category,
+      readHomeFeedCategory()
+    );
+
+    if (source === "Downloads") {
+      if (router.canGoBack?.()) {
+        router.back();
+        return;
+      }
+      router.replace("/downloads/DownloadsScreen");
+      return;
+    }
+    if (source === "Library" || source === "AllLibrary") {
+      if (router.canGoBack?.()) {
+        router.back();
+        return;
+      }
+      router.replace("/screens/library/LibraryScreen");
+      return;
+    }
+    if (source === "ExploreSearch") {
+      if (router.canGoBack?.()) {
+        router.back();
+        return;
+      }
+      router.push("/ExploreSearch/ExploreSearch");
+      return;
+    }
+
+    // Home-origin content: pop back when Home is still on the stack so the
+    // category chip can restore without remounting the feed. Otherwise land
+    // on Home with that chip selected (bottom tab + category rail).
     if (router.canGoBack?.()) {
       router.back();
       return;
     }
-    if (source === "Downloads") {
-      router.replace("/downloads/DownloadsScreen");
-      return;
-    }
-    if (source === "AllContentTikTok") {
-      router.replace({
-        pathname: "/categories/HomeScreen",
-        params: { default: "Home", defaultCategory: category || "ALL" },
-      });
-      return;
-    }
-    if (source === "Library" || source === "AllLibrary") {
-      router.replace("/screens/library/LibraryScreen");
-      return;
-    }
-    if (source === "VideoComponent") router.push("/categories/VideoComponent");
-    else if (source === "SermonComponent") router.push("/categories/SermonComponent");
-    else if (source === "LiveComponent") router.push("/categories/LiveComponent");
-    else if (source === "ExploreSearch") router.push("/ExploreSearch/ExploreSearch");
-    else if (source === "HorizontalVideoSection") router.push("/");
-    else {
-      router.push({
-        pathname: "/categories/HomeScreen",
-        params: { default: "Home", defaultCategory: category || "ALL" },
-      });
-    }
+    goHomeToCategory(homeCategory);
   }, [
     router,
     source,
     category,
     triggerHapticFeedback,
     persistFeedResumeFromReels,
+    goHomeToCategory,
   ]);
 
   const tryRefreshMediaUrl = useCallback(async (item: any): Promise<string | null> => {
@@ -265,11 +314,7 @@ export function useReelsHandlers({
 
         const libraryId = contentIdForHooks || key;
         const seed = resolveSaveSeed(libraryId, currentVideo);
-        const currentlySaved =
-          seed.initialSaved ||
-          libraryStore.isItemSaved(libraryId) ||
-          libraryStore.isItemSaved(key);
-
+        const currentlySaved = seed.initialSaved;
         const nextSaved = !currentlySaved;
         setSuccessMessage(
           nextSaved ? "Saved to library!" : "Removed from library!"

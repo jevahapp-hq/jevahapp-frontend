@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { extractUploaderId as extractItemUploaderId } from "../../../src/shared/media/moderationVisibility";
 
 const OBJECT_ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
@@ -60,14 +61,8 @@ function extractUploaderId(
   uploadedBy: string | { _id: string } | undefined,
   mediaItem?: any
 ): string | "assume-owner" {
-  const populated = mediaItem?.uploadedBy;
-  if (
-    populated &&
-    typeof populated === "object" &&
-    (populated._id || populated.id)
-  ) {
-    return String(populated._id || populated.id).trim();
-  }
+  const fromItem = extractItemUploaderId(mediaItem);
+  if (fromItem) return fromItem;
 
   if (
     uploadedBy &&
@@ -87,16 +82,6 @@ function extractUploaderId(
     );
     return "assume-owner";
   }
-
-  if (typeof populated === "string") {
-    const trimmed = populated.trim();
-    if (isObjectId(trimmed)) return trimmed;
-    return "";
-  }
-
-  if (mediaItem?.author?._id) return String(mediaItem.author._id).trim();
-  if (mediaItem?.authorInfo?._id)
-    return String(mediaItem.authorInfo._id).trim();
 
   return "";
 }
@@ -137,7 +122,11 @@ export const isMediaOwner = async (
       !uploadedBy &&
       !mediaItem?.authorInfo?._id &&
       !mediaItem?.author?._id &&
-      !mediaItem?.uploadedBy
+      !mediaItem?.uploadedBy &&
+      !mediaItem?.userId &&
+      !mediaItem?.createdBy &&
+      !mediaItem?.ownerId &&
+      !mediaItem?.owner
     ) {
       console.log("❌ isMediaOwner: No uploadedBy or author info provided");
       return false;

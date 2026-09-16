@@ -18,7 +18,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UI_CONFIG } from "../../../src/shared/constants";
 import { useContentSaveState } from "../../../src/shared/hooks/useContentSaveState";
-import { useLibraryStore } from "@/store/useLibraryStore";
 
 interface ReelsMenuProps {
   visible: boolean;
@@ -96,10 +95,7 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
 
   const saveId = String(contentId || currentVideo?._id || currentVideo?.id || "");
   const save = useContentSaveState(saveId, currentVideo);
-  const librarySaved = useLibraryStore(
-    (s) => s.isItemSaved(saveId) || s.isItemSaved(modalKey)
-  );
-  const isSaved = save.saved || librarySaved;
+  const isSaved = save.saved;
 
   if (!mounted) return null;
 
@@ -287,7 +283,10 @@ export const ReelsMenu: React.FC<ReelsMenuProps> = ({
               <MenuItem
                 label="Delete"
                 icon="trash-outline"
-                onPress={onDelete}
+                onPress={() => {
+                  dismissInstant();
+                  setTimeout(() => onDelete(), 400);
+                }}
                 isDestructive
               />
             ) : (

@@ -130,7 +130,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         setShowDetailsModal={chrome.setShowDetailsModal}
         onSave={() => onSave(audio)}
         onDownload={() => onDownload(audio)}
-        isSaved={!!audio.saves || stats.userSaveState}
+        isSaved={stats.userSaveState}
         isDownloaded={false}
         handleDeletePress={chrome.handleDeletePress}
         showDelete={chrome.isOwner}
@@ -140,6 +140,7 @@ export const MusicCard: React.FC<MusicCardProps> = ({
         showReportModal={chrome.showReportModal}
         setShowReportModal={chrome.setShowReportModal}
         showDetailsModal={chrome.showDetailsModal}
+        viewerId={viewerId}
       />
     </MediaCardShell>
   );

@@ -44,6 +44,7 @@ export function createCommentActions(set: StoreSet, api: any) {
             shares: currentStats?.shares || 0,
             views: currentStats?.views || 0,
             comments: nextTotal,
+            commentsConfirmed: true,
             userInteractions: currentStats?.userInteractions || {
               liked: false,
               saved: false,
@@ -93,6 +94,7 @@ export function createCommentActions(set: StoreSet, api: any) {
             shares: currentStats?.shares || 0,
             views: currentStats?.views || 0,
             comments: total,
+            commentsConfirmed: true,
             userInteractions: currentStats?.userInteractions || {
               liked: false,
               saved: false,

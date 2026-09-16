@@ -5,6 +5,7 @@ import {
   resolveLikedFlag,
   resolveSavedFlag,
 } from "@/app/utils/contentInteractionPersist";
+import { mergeHydratedCount } from "@/shared/media/engagementToggle";
 import type { StoreGet, StoreSet } from "../types";
 
 export function createCacheActions(set: StoreSet, get: StoreGet) {
@@ -91,6 +92,10 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
           const cached = getCachedContentInteraction(contentId);
           const cacheIsFresh = isContentInteractionFresh(contentId);
           const existing = (next ?? state.contentStats)[contentId];
+          const hasActiveLike =
+            state.loadingInteraction[`${contentId}_like`] === true;
+          const hasActiveSave =
+            state.loadingInteraction[`${contentId}_save`] === true;
           const base: ContentStats =
             existing ??
             ({
@@ -108,30 +113,40 @@ export function createCacheActions(set: StoreSet, get: StoreGet) {
               },
             } as ContentStats);
 
-          const nextLikes =
-            cacheIsFresh && cached?.likes !== undefined
-              ? Math.max(0, cached.likes)
-              : Math.max(base.likes ?? 0, Number(likes) || 0);
-          const nextSaves =
-            cacheIsFresh && cached?.saves !== undefined
-              ? Math.max(0, cached.saves)
-              : Math.max(base.saves ?? 0, Number(saves) || 0);
-          const nextComments = Math.max(
-            base.comments ?? 0,
-            Number(comments) || 0,
-            Number(cached?.comments) || 0
-          );
+          const nextLikes = mergeHydratedCount({
+            hasActiveToggle: hasActiveLike,
+            existing: base.likes,
+            cached: cached?.likes,
+            cacheIsFresh,
+            incoming: likes,
+          });
+          const nextSaves = mergeHydratedCount({
+            hasActiveToggle: hasActiveSave,
+            existing: base.saves,
+            cached: cached?.saves,
+            cacheIsFresh,
+            incoming: saves,
+          });
+          const nextComments = existing?.commentsConfirmed
+            ? Math.max(0, existing.comments ?? 0)
+            : Math.max(
+                base.comments ?? 0,
+                Number(comments) || 0,
+                Number(cached?.comments) || 0
+              );
           const nextViews = Math.max(
             base.views ?? 0,
             Number(views) || 0,
             Number(cached?.views) || 0
           );
-          const nextLiked =
-            resolveLikedFlag(contentId, hasLiked) ??
-            base.userInteractions.liked;
-          const nextSaved =
-            resolveSavedFlag(contentId, hasBookmarked) ??
-            base.userInteractions.saved;
+          const nextLiked = hasActiveLike
+            ? base.userInteractions.liked
+            : resolveLikedFlag(contentId, hasLiked) ??
+              base.userInteractions.liked;
+          const nextSaved = hasActiveSave
+            ? base.userInteractions.saved
+            : resolveSavedFlag(contentId, hasBookmarked) ??
+              base.userInteractions.saved;
 
           if (
             existing &&

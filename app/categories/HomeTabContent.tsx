@@ -206,6 +206,7 @@ export default function HomeTabContent({
       const tab =
         (fromReels ? feedTabFromResumeKey(resume?.feedKey) : null) ||
         readHomeFeedCategory();
+      // applyCategory only remounts the feed when the chip actually changes.
       applyCategory(mapContentTypeToCategory(tab));
     }, [applyCategory, isTabActive])
   );

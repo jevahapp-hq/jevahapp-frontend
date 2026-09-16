@@ -222,7 +222,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     }
   }, [commentsVisible, currentlyVisibleVideo]);
 
-  const { resumeCovered, revealAfterResume } = useAllContentTikTokLifecycle({
+  useAllContentTikTokLifecycle({
     pauseAllMedia,
     pauseAllAudio,
     setCurrentlyVisibleVideo,
@@ -509,9 +509,8 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     if (index < 0) return;
     requestAnimationFrame(() => {
       scrollFeedToResume(listRef, listData, index);
-      revealAfterResume();
     });
-  }, [listData, revealAfterResume]);
+  }, [listData]);
 
   const playAudioSermon = useCallback(
     (item: MediaItem) => {
@@ -648,12 +647,22 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
         ? ebookCatalog.isPending
         : loading);
 
+  const resumeTarget = useReelsStore.getState().resumePlayback?.target;
+  const resumingFromFullscreen =
+    resumeTarget === "feed" || resumeTarget === "reels";
+
   if (!isFeedActive) {
     if (filteredMediaList.length === 0) {
       return <View style={{ flex: 1 }} />;
     }
   } else if (error && mediaList.length === 0 && !tabLoading) {
     return <ErrorState message={error} />;
+  }
+
+  // Returning from fullscreen must not swap a live feed for the skeleton
+  // (black → loading → white). Keep the host empty until cached rows exist.
+  if (filteredMediaList.length === 0 && resumingFromFullscreen) {
+    return <View style={{ flex: 1 }} />;
   }
 
   if (isFeedActive && filteredMediaList.length === 0 && tabLoading) {
@@ -672,10 +681,7 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
             duration={3000}
           />
         )}
-        <View
-          style={{ flex: 1, opacity: resumeCovered ? 0 : 1 }}
-          pointerEvents={resumeCovered ? "none" : "auto"}
-        >
+        <View style={{ flex: 1 }}>
         <AllContentTikTokList
           listRef={listRef}
           listData={listData}

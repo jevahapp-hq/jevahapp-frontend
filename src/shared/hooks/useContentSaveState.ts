@@ -11,11 +11,10 @@ import {
   isContentInteractionFresh,
   resolveSavedFlag,
 } from "../../../app/utils/contentInteractionPersist";
+import { pickLocalFirstCount } from "../media/engagementToggle";
 import {
-  useContentCount,
   useContentStats,
   useInteractionStore,
-  useUserInteraction,
 } from "@/store/useInteractionStore";
 
 export type SaveMetadataSource = {
@@ -59,27 +58,25 @@ export function resolveSaveSeed(
   const stats = useInteractionStore.getState().contentStats[contentId];
   const cached = getCachedContentInteraction(contentId);
   const cacheIsFresh = isContentInteractionFresh(contentId);
+  const storeSaved = stats?.userInteractions?.saved;
 
   const initialSaved = Boolean(
     resolveSavedFlag(
       contentId,
-      typeof stats?.userInteractions?.saved === "boolean"
-        ? stats.userInteractions.saved
-        : savedFromMetadata(item)
+      typeof storeSaved === "boolean" ? storeSaved : savedFromMetadata(item)
     )
   );
 
-  const initialSaves = Number(
-    stats?.saves ??
-      (cacheIsFresh ? cached?.saves : undefined) ??
-      saveCountFromMetadata(item)
-  );
+  const initialSaves = pickLocalFirstCount({
+    cachedCount: cached?.saves,
+    cacheIsFresh,
+    storeCount: stats?.saves,
+    fallbacks: [saveCountFromMetadata(item)],
+  });
 
   return {
     initialSaved,
-    initialSaves: Number.isFinite(initialSaves)
-      ? Math.max(0, initialSaves)
-      : 0,
+    initialSaves,
   };
 }
 
@@ -88,16 +85,13 @@ export function useContentSaveState(
   item?: SaveMetadataSource
 ): ContentSaveState {
   const liveStats = useContentStats(contentId);
-  const storeSaved = useUserInteraction(contentId, "saved");
-  const storeSaves = useContentCount(contentId, "saves");
-
   const liveSaved = liveStats?.userInteractions?.saved;
   const saved = Boolean(
     resolveSavedFlag(
       contentId,
       typeof liveSaved === "boolean"
         ? liveSaved
-        : storeSaved || savedFromMetadata(item)
+        : savedFromMetadata(item)
     )
   );
 
@@ -105,10 +99,12 @@ export function useContentSaveState(
   const cacheIsFresh = isContentInteractionFresh(contentId);
   const metadataCount = saveCountFromMetadata(item);
 
-  let saveCount =
-    cacheIsFresh && cached?.saves !== undefined
-      ? Math.max(0, cached.saves)
-      : Math.max(Number(storeSaves) || 0, metadataCount);
+  let saveCount = pickLocalFirstCount({
+    cachedCount: cached?.saves,
+    cacheIsFresh,
+    storeCount: liveStats?.saves,
+    fallbacks: [metadataCount],
+  });
 
   if (saved && saveCount < 1) saveCount = 1;
 

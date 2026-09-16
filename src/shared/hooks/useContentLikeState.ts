@@ -14,10 +14,10 @@ import {
   isContentInteractionFresh,
   resolveLikedFlag,
 } from "../../../app/utils/contentInteractionPersist";
+import { pickLocalFirstCount } from "../media/engagementToggle";
 import {
-  useContentCount,
+  useContentStats,
   useInteractionStore,
-  useUserInteraction,
 } from "@/store/useInteractionStore";
 
 /** Any shape carrying like metadata from a feed/reels payload. */
@@ -65,23 +65,26 @@ export function resolveLikeSeed(
   const stats = useInteractionStore.getState().contentStats[contentId];
   const cached = getCachedContentInteraction(contentId);
   const cacheIsFresh = isContentInteractionFresh(contentId);
+  const storeLiked = stats?.userInteractions?.liked;
+  const metadataLiked = likedFromMetadata(item);
 
   const initialLiked = Boolean(
     resolveLikedFlag(
       contentId,
-      stats?.userInteractions?.liked ?? likedFromMetadata(item)
+      typeof storeLiked === "boolean" ? storeLiked : metadataLiked
     )
   );
 
-  const initialLikes = Number(
-    stats?.likes ??
-      (cacheIsFresh ? cached?.likes : undefined) ??
-      likeCountFromMetadata(item)
-  );
+  const initialLikes = pickLocalFirstCount({
+    cachedCount: cached?.likes,
+    cacheIsFresh,
+    storeCount: stats?.likes,
+    fallbacks: [likeCountFromMetadata(item)],
+  });
 
   return {
     initialLiked,
-    initialLikes: Number.isFinite(initialLikes) ? Math.max(0, initialLikes) : 0,
+    initialLikes,
   };
 }
 
@@ -93,30 +96,31 @@ export function useContentLikeState(
   /** Extra count hint from a surface-local map, e.g. globalFavoriteCounts. */
   countHint?: number
 ): ContentLikeState {
-  const storeLiked = useUserInteraction(contentId, "liked");
-  const storeLikes = useContentCount(contentId, "likes");
-
+  const stats = useContentStats(contentId);
+  const storeLiked = stats?.userInteractions?.liked;
   const metadataLiked = likedFromMetadata(item);
   const metadataCount = likeCountFromMetadata(item);
 
   // Sticky local flag wins over a stale server `hasLiked: false`.
+  // Do not `||` a stored `false` into metadata — that blocks unlike.
   const liked = Boolean(
-    resolveLikedFlag(contentId, storeLiked || metadataLiked || likedHint)
+    resolveLikedFlag(
+      contentId,
+      typeof storeLiked === "boolean"
+        ? storeLiked
+        : metadataLiked ?? likedHint
+    )
   );
 
   const cached = getCachedContentInteraction(contentId);
   const cacheIsFresh = isContentInteractionFresh(contentId);
 
-  // A recently confirmed mutation beats stale feed metadata; outside that
-  // window show the highest total any source knows about.
-  let likeCount =
-    cacheIsFresh && cached?.likes !== undefined
-      ? Math.max(0, cached.likes)
-      : Math.max(
-          Number(storeLikes) || 0,
-          Number(countHint) || 0,
-          metadataCount
-        );
+  let likeCount = pickLocalFirstCount({
+    cachedCount: cached?.likes,
+    cacheIsFresh,
+    storeCount: stats?.likes,
+    fallbacks: [countHint, metadataCount],
+  });
 
   // A liked item can never legitimately read zero.
   if (liked && likeCount < 1) likeCount = 1;

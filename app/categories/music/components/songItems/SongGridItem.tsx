@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Text, TouchableOpacity, View } from "react-native";
-import { getThumbnailSource, type SongItemProps } from "./songItemShared";
+import { getThumbnailSource, musicTileWidth, type SongItemProps } from "./songItemShared";
 
 export function SongGridItem({
   item,
@@ -10,7 +10,7 @@ export function SongGridItem({
   screenWidth = 0,
 }: SongItemProps) {
   const thumbnailSource = getThumbnailSource(item.thumbnailUrl);
-  const cardWidth = (screenWidth - 48) / 2;
+  const cardWidth = musicTileWidth(screenWidth, 2);
 
   return (
     <TouchableOpacity
@@ -23,7 +23,6 @@ export function SongGridItem({
       style={{
         width: cardWidth,
         marginBottom: 16,
-        marginHorizontal: 4,
       }}
     >
       <View

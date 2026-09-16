@@ -81,13 +81,22 @@ export function applyLiveEngagementCounts(payload: LiveCountPayload | null | und
   }
 
   useInteractionStore.getState().mutateStats(String(payload.contentId), (s) => {
+    const id = String(payload.contentId);
+    const loading =
+      useInteractionStore.getState().loadingInteraction || {};
+    const likeInFlight = loading[`${id}_like`] === true;
+    const saveInFlight = loading[`${id}_save`] === true;
     const patch: Record<string, number> = {};
-    if (likes !== undefined && likes !== s.likes) patch.likes = likes;
+    if (!likeInFlight && likes !== undefined && likes !== s.likes) {
+      patch.likes = likes;
+    }
     if (comments !== undefined && comments !== s.comments) {
       patch.comments = comments;
     }
     if (views !== undefined && views !== s.views) patch.views = views;
-    if (saves !== undefined && saves !== s.saves) patch.saves = saves;
+    if (!saveInFlight && saves !== undefined && saves !== s.saves) {
+      patch.saves = saves;
+    }
     if (shares !== undefined && shares !== s.shares) patch.shares = shares;
     return patch;
   });

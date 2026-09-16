@@ -5,7 +5,9 @@ import { useInteractionStore } from "@/store/useInteractionStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
 import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
-import { persistStats, toggleFavorite } from "../../../utils/persistentStorage";
+import { persistStats } from "../../../utils/persistentStorage";
+import { resolveLikeSeed } from "../../../../src/shared/hooks/useContentLikeState";
+import { resolveSaveSeed } from "../../../../src/shared/hooks/useContentSaveState";
 
 interface UseSermonInteractionsParams {
   videoRefs: MutableRefObject<Record<string, any>>;
@@ -88,57 +90,80 @@ export function useSermonInteractions({
   };
 
   const handleSave = async (key: string, item: any) => {
-    const isSaved = contentStats[key]?.saved === 1;
+    try {
+      const contentId = String(item?._id || item?.id || key);
+      const seed = resolveSaveSeed(contentId, item);
+      const result = await useInteractionStore.getState().toggleSave(
+        contentId,
+        item.contentType || "media",
+        {
+          initialSaved: seed.initialSaved,
+          initialSaves: seed.initialSaves,
+        }
+      );
+      if (result?.authRequired) {
+        setModalVisible(null);
+        return;
+      }
 
-    if (!isSaved) {
-      const libraryItem = {
-        id: key,
-        contentType: item.contentType || "sermon",
-        fileUrl: item.fileUrl,
-        title: item.title,
-        speaker: item.speaker,
-        uploadedBy: item.uploadedBy,
-        description: item.description,
-        createdAt: item.createdAt || new Date().toISOString(),
-        speakerAvatar: item.speakerAvatar,
-        views: contentStats[key]?.views || item.views || 0,
-        sheared: contentStats[key]?.sheared || item.sheared || 0,
-        favorite: contentStats[key]?.favorite || item.favorite || 0,
-        comment: contentStats[key]?.comment || item.comment || 0,
-        saved: 1,
-        imageUrl: item.imageUrl,
-        thumbnailUrl:
-          item.contentType === "sermon"
-            ? item.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg"
-            : item.imageUrl || item.fileUrl,
-        originalKey: key,
-      };
+      if (result.saved) {
+        await libraryStore.addToLibrary({
+          id: contentId,
+          contentType: item.contentType || "sermon",
+          fileUrl: item.fileUrl,
+          title: item.title,
+          speaker: item.speaker,
+          uploadedBy: item.uploadedBy,
+          description: item.description,
+          createdAt: item.createdAt || new Date().toISOString(),
+          speakerAvatar: item.speakerAvatar,
+          views: contentStats[key]?.views || item.views || 0,
+          sheared: contentStats[key]?.sheared || item.sheared || 0,
+          favorite: result.totalLikes || item.favorite || 0,
+          comment: contentStats[key]?.comment || item.comment || 0,
+          saved: 1,
+          imageUrl: item.imageUrl,
+          thumbnailUrl:
+            item.contentType === "sermon"
+              ? item.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg"
+              : item.imageUrl || item.fileUrl,
+          originalKey: key,
+        });
+      } else {
+        await libraryStore.removeFromLibrary(contentId);
+        await libraryStore.removeFromLibrary(key);
+      }
 
-      await libraryStore.addToLibrary(libraryItem);
-    } else {
-      await libraryStore.removeFromLibrary(key);
+      setContentStats((prev) => {
+        const updated = {
+          ...prev,
+          [key]: {
+            ...prev[key],
+            saved: result.saved ? 1 : 0,
+          },
+        };
+        persistStats(updated);
+        return updated;
+      });
+    } catch (error) {
+      console.error("❌ Failed to toggle save:", error);
     }
-
-    setContentStats((prev) => {
-      const updated = {
-        ...prev,
-        [key]: {
-          ...prev[key],
-          saved: isSaved ? 0 : 1,
-        },
-      };
-      persistStats(updated);
-      return updated;
-    });
-
     setModalVisible(null);
   };
 
   const handleFavorite = async (key: string, item: any) => {
     try {
-      const { isUserFavorite, globalCount } = await toggleFavorite(key);
-      setUserFavorites((prev) => ({ ...prev, [key]: isUserFavorite }));
-      setGlobalFavoriteCounts((prev) => ({ ...prev, [key]: globalCount }));
+      const contentId = String(item?._id || item?.id || key);
+      const seed = resolveLikeSeed(contentId, item);
+      const result = await useInteractionStore
+        .getState()
+        .toggleLike(contentId, item.contentType || "media", seed);
+      if (result?.authRequired) return;
+      setUserFavorites((prev) => ({ ...prev, [key]: result.liked }));
+      setGlobalFavoriteCounts((prev) => ({
+        ...prev,
+        [key]: result.totalLikes,
+      }));
     } catch (error) {
       console.error(`❌ Failed to toggle favorite for ${item.title}:`, error);
     }

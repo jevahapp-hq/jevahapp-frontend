@@ -109,7 +109,7 @@ export function MediaCardFooter({
                 likeCount={likeCount}
                 likeColor={likeColor}
                 onLike={onLike}
-                commentCount={commentCount || item.comment || 0}
+                commentCount={commentCount}
                 onComment={() => onComment()}
                 saved={!!userSaveState}
                 saveCount={saveCount || 0}

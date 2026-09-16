@@ -37,6 +37,53 @@ export function feedTabFromResumeKey(
   return tab || null;
 }
 
+/**
+ * Keep `${tab}::id` so leaving Reels can restore the Home category chip.
+ * Bare keys (no prefix) get `tab` when one is known.
+ */
+export function ensureTabPrefixedFeedKey(
+  feedKey: string | undefined,
+  contentId: string,
+  tab?: string | null
+): string | undefined {
+  const id = String(contentId || "").trim();
+  const remapped = remapResumeFeedKey(feedKey, id) ?? (feedKey || undefined);
+  if (feedTabFromResumeKey(remapped)) return remapped;
+  const prefix = String(tab || "").trim();
+  if (prefix && id) return `${prefix}::${id}`;
+  return remapped || (id || undefined);
+}
+
+/** Category to re-select on Home after closing a viewer. */
+export function resolveReturnHomeCategory(
+  feedKey?: string | null,
+  category?: string | null,
+  stored?: string | null
+): string {
+  return (
+    feedTabFromResumeKey(feedKey) ||
+    String(category || "").trim() ||
+    String(stored || "").trim() ||
+    "ALL"
+  );
+}
+
+const HOME_ORIGIN_REELS_SOURCES = new Set([
+  "AllContentTikTok",
+  "VideoComponent",
+  "SermonComponent",
+  "LiveComponent",
+  "useVideoNavigation",
+  "HorizontalVideoSection",
+  "AccountScreen",
+]);
+
+/** True when Reels was opened from a Home category chip (not Library/Downloads). */
+export function isHomeOriginReelsSource(source?: string | null): boolean {
+  if (!source) return true;
+  return HOME_ORIGIN_REELS_SOURCES.has(source);
+}
+
 export function findMediaRowIndex(
   listData: ResumeFeedRow[] | undefined,
   resumeKey: string | null | undefined,

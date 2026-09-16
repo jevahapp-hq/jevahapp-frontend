@@ -29,6 +29,7 @@ export interface MediaCardModalsProps {
   showDetailsModal: boolean;
   /** Optional: close parent feed modal key */
   onParentModalClose?: () => void;
+  viewerId?: string | null;
 }
 
 export function MediaCardModals({
@@ -49,6 +50,7 @@ export function MediaCardModals({
   setShowReportModal,
   showDetailsModal,
   onParentModalClose,
+  viewerId,
 }: MediaCardModalsProps) {
   if (!item) return null;
 
@@ -79,8 +81,9 @@ export function MediaCardModals({
           (item as any).authorInfo?._id
         }
         mediaItem={item}
-        onDelete={showDelete ? handleDeletePress : undefined}
-        showDelete={showDelete}
+        viewerId={viewerId}
+        onDelete={handleDeletePress}
+        showDelete={showDelete ? true : undefined}
         onReport={() => setShowReportModal(true)}
       />
       <DeleteMediaConfirmation

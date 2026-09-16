@@ -1,13 +1,18 @@
 /**
- * Shared engagement stats for Music / Ebook cards (interaction store).
+ * Shared engagement stats for Music / Ebook cards (same read path as Video + Reels).
  */
+import { useContentLikeState } from "../../../../../shared/hooks/useContentLikeState";
+import { useContentSaveState } from "../../../../../shared/hooks/useContentSaveState";
+import {
+  commentCountFromMetadata,
+  resolveCommentDisplayCount,
+} from "../../../../../shared/media/engagementDisplay";
+import type { MediaItem } from "../../../../../shared/types";
 import {
   useContentCount,
   useContentStats,
-  useUserInteraction,
 } from "@/store/useInteractionStore";
 import { useHydrateContentStats } from "../../../../../shared/hooks/useHydrateContentStats";
-import type { MediaItem } from "../../../../../shared/types";
 
 export function useMediaCardStoreStats(
   contentId: string,
@@ -16,31 +21,29 @@ export function useMediaCardStoreStats(
 ) {
   const id = String(contentId || item._id || "unknown");
 
-  // Hooks must run unconditionally
   const stats = useContentStats(id);
   const viewCount = useContentCount(id, "views");
   const commentCount = useContentCount(id, "comments");
-  const saveCount = useContentCount(id, "saves");
-  const likeCount = useContentCount(id, "likes");
-  const userSaveState = useUserInteraction(id, "saved");
-  const userLikeState = useUserInteraction(id, "liked");
+  const like = useContentLikeState(id, item as any);
+  const save = useContentSaveState(id, item as any);
 
   useHydrateContentStats(id, contentType);
 
-  const feedComments = Number(
-    (item as any).commentCount ?? item.comments ?? item.comment ?? 0
+  const fallbackViewCount = Number(
+    (item as any).viewCount ?? (item as any).totalViews ?? item.views ?? 0
   );
 
   return {
-    viewCount: viewCount || item.views || 0,
-    // `0 || feed` kept stale badges after list returned empty — treat 0 as real.
-    commentCount: stats?.commentsConfirmed
-      ? Math.max(0, Number(stats.comments ?? 0))
-      : Math.max(Number(commentCount || 0), feedComments),
-    saveCount: saveCount || (item as any).saves || 0,
-    likeCount: likeCount || (item as any).likes || 0,
-    userSaveState: !!userSaveState,
-    userLikeState: !!userLikeState,
+    viewCount: Math.max(Number(viewCount) || 0, fallbackViewCount),
+    commentCount: resolveCommentDisplayCount({
+      storeComments: stats?.comments ?? commentCount,
+      commentsConfirmed: stats?.commentsConfirmed,
+      fallback: commentCountFromMetadata(item as any),
+    }),
+    saveCount: save.saveCount,
+    likeCount: like.likeCount,
+    userSaveState: save.saved,
+    userLikeState: like.liked,
     isLoadingStats: false,
   };
 }

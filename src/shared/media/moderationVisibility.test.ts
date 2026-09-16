@@ -55,6 +55,34 @@ test("delete is owner-only regardless of review status", () => {
   );
 });
 
+test("delete matches userId when uploadedBy is missing (lite / optimistic upload)", () => {
+  assert.equal(
+    canViewerDeleteMedia({ moderationStatus: "approved", userId: OWNER }, OWNER),
+    true
+  );
+  assert.equal(
+    canViewerDeleteMedia({ moderationStatus: "approved", userId: OWNER }, OTHER),
+    false
+  );
+  assert.equal(
+    canViewerDeleteMedia(
+      { moderationStatus: "under_review", createdBy: { _id: OWNER } },
+      OWNER
+    ),
+    true
+  );
+});
+
+test("delete matches uploaderId / user fields used on iOS lite payloads", () => {
+  assert.equal(
+    canViewerDeleteMedia(
+      { moderationStatus: "approved", uploaderId: OWNER },
+      OWNER
+    ),
+    true
+  );
+});
+
 test("strangers cannot see another user's under-review video", () => {
   assert.equal(canViewerSeeMedia(underReviewMine, OWNER), true);
   assert.equal(canViewerSeeMedia(underReviewMine, OTHER), false);

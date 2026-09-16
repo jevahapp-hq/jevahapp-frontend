@@ -10,6 +10,8 @@
  * than sailing through a `=== "under_review"` check.
  */
 
+import { extractAuthorId } from "../author/extractAuthorId";
+
 type Uploader =
   | string
   | { _id?: string; id?: string }
@@ -20,11 +22,12 @@ export type ModeratableItem = {
   moderationStatus?: string | null;
   uploadedBy?: Uploader;
   userId?: string | null;
+  createdBy?: Uploader;
+  ownerId?: string | null;
+  owner?: Uploader;
   author?: { _id?: string } | null;
   authorInfo?: { _id?: string } | null;
 } | null | undefined;
-
-const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 
 export function normalizeModerationStatus(
   value?: string | null
@@ -74,23 +77,11 @@ export function canViewerDeleteMedia(
 }
 
 /**
- * Uploader id, using the same precedence as `mediaDelete/ownership.ts`.
- * Returns null when it genuinely can't be determined.
+ * Uploader id — same extractor as author attribution so lite / optimistic
+ * uploads still resolve even when `uploadedBy` is a display name.
  */
 export function extractUploaderId(item: ModeratableItem): string | null {
-  if (!item) return null;
-
-  const uploadedBy = item.uploadedBy;
-  if (uploadedBy && typeof uploadedBy === "object") {
-    const id = uploadedBy._id || uploadedBy.id;
-    if (id) return String(id);
-  }
-  if (typeof uploadedBy === "string" && OBJECT_ID.test(uploadedBy.trim())) {
-    return uploadedBy.trim();
-  }
-  if (item.author?._id) return String(item.author._id);
-  if (item.authorInfo?._id) return String(item.authorInfo._id);
-  return null;
+  return extractAuthorId(item as any);
 }
 
 export function isUploadedByViewer(

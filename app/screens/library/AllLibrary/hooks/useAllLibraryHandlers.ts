@@ -10,6 +10,8 @@ import { useLibraryStore } from "@/store/useLibraryStore";
 import allMediaAPI from "../../../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../../../utils/downloadUtils";
 import { deriveVideoPosterUrl } from "../utils/libraryHelpers";
+import { resolveLikeSeed } from "@/shared/hooks/useContentLikeState";
+import { resolveSaveSeed } from "@/shared/hooks/useContentSaveState";
 
 interface UseAllLibraryHandlersProps {
   savedItems: any[];
@@ -132,7 +134,11 @@ export function useAllLibraryHandlers({
         );
       } else {
         try {
-          await toggleSave(itemId, "media");
+          await toggleSave(
+            itemId,
+            "media",
+            resolveSaveSeed(itemId, item)
+          );
 
           const videoSrc = item.mediaUrl || item.fileUrl || "";
           const thumbnailUrl =
@@ -191,7 +197,7 @@ export function useAllLibraryHandlers({
   const handleLike = useCallback(
     async (itemId: string) => {
       try {
-        await toggleLike(itemId, "media");
+        await toggleLike(itemId, "media", resolveLikeSeed(itemId));
       } catch {
         Alert.alert("Error", "Failed to like content");
       }

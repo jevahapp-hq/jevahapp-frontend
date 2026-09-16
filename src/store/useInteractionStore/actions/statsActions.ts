@@ -7,6 +7,7 @@ import {
   toBatchMetadataItem,
   type BatchMetadataItem,
 } from "@/app/utils/engagementHelpers";
+import { mergeHydratedCount } from "@/shared/media/engagementToggle";
 import type { StoreGet, StoreSet } from "../types";
 
 export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
@@ -38,14 +39,20 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
 
           const merged: ContentStats = {
             contentId,
-            likes:
-              cacheIsFresh && cached?.likes !== undefined
-                ? Math.max(0, cached.likes)
-                : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-            saves:
-              cacheIsFresh && cached?.saves !== undefined
-                ? Math.max(0, cached.saves)
-                : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+            likes: mergeHydratedCount({
+              hasActiveToggle: hasActiveLike,
+              existing: existing?.likes,
+              cached: cached?.likes,
+              cacheIsFresh,
+              incoming: stats.likes,
+            }),
+            saves: mergeHydratedCount({
+              hasActiveToggle: hasActiveSave,
+              existing: existing?.saves,
+              cached: cached?.saves,
+              cacheIsFresh,
+              incoming: stats.saves,
+            }),
             shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
             views: Math.max(existing?.views ?? 0, stats.views ?? 0),
             // List-confirmed total wins; otherwise heal toward metadata (can go down to 0)
@@ -123,17 +130,27 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
               const cached = getCachedContentInteraction(id);
               const cacheIsFresh =
                 !options?.forceRefresh && isContentInteractionFresh(id);
+              const hasActiveLike =
+                state.loadingInteraction[`${id}_like`] === true;
+              const hasActiveSave =
+                state.loadingInteraction[`${id}_save`] === true;
 
               merged[id] = {
                 contentId: id,
-                likes:
-                  cacheIsFresh && cached?.likes !== undefined
-                    ? Math.max(0, cached.likes)
-                    : Math.max(existing?.likes ?? 0, stats.likes ?? 0),
-                saves:
-                  cacheIsFresh && cached?.saves !== undefined
-                    ? Math.max(0, cached.saves)
-                    : Math.max(existing?.saves ?? 0, stats.saves ?? 0),
+                likes: mergeHydratedCount({
+                  hasActiveToggle: hasActiveLike,
+                  existing: existing?.likes,
+                  cached: cached?.likes,
+                  cacheIsFresh,
+                  incoming: stats.likes,
+                }),
+                saves: mergeHydratedCount({
+                  hasActiveToggle: hasActiveSave,
+                  existing: existing?.saves,
+                  cached: cached?.saves,
+                  cacheIsFresh,
+                  incoming: stats.saves,
+                }),
                 shares: Math.max(existing?.shares ?? 0, stats.shares ?? 0),
                 views: Math.max(
                   existing?.views ?? 0,
@@ -145,14 +162,16 @@ export function createStatsActions(set: StoreSet, get: StoreGet, api: any) {
                   : Math.max(0, stats.comments ?? 0),
                 commentsConfirmed: existing?.commentsConfirmed,
                 userInteractions: {
-                  liked:
-                    cacheIsFresh && cached?.liked !== undefined
+                  liked: hasActiveLike
+                    ? existing?.userInteractions?.liked ?? false
+                    : cacheIsFresh && cached?.liked !== undefined
                       ? cached.liked
                       : (stats.userInteractions?.liked ??
                         existing?.userInteractions?.liked ??
                         false),
-                  saved:
-                    cacheIsFresh && cached?.saved !== undefined
+                  saved: hasActiveSave
+                    ? existing?.userInteractions?.saved ?? false
+                    : cacheIsFresh && cached?.saved !== undefined
                       ? cached.saved
                       : (stats.userInteractions?.saved ??
                         existing?.userInteractions?.saved ??

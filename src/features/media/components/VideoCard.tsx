@@ -245,6 +245,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         setShowReportModal={setShowReportModal}
         showDetailsModal={showDetailsModal}
         onDownload={onDownload}
+        viewerId={viewerId}
       />
     </View>
   );

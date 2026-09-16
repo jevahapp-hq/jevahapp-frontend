@@ -246,15 +246,12 @@ export async function toggleLike(
       Number(result.data?.likeCount) > 0
     ) {
       // Valid IG semantics: I unliked / never liked, but others still have likes.
+      // Do not persist `liked` here — the store owns the heart and will keep
+      // optimistic state when this boolean is pre-toggle (backend bug).
       devLog(
         `ℹ️ Like response for ${contentId}: liked=false, likeCount=${result.data.likeCount} (global count; not a contradiction)`
       );
     }
-
-    void persistContentInteraction(contentId, {
-      liked,
-      likes: totalLikes,
-    });
 
     return { liked, totalLikes };
   } catch (error) {

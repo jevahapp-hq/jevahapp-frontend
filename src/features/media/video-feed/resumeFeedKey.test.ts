@@ -3,11 +3,14 @@ import { test } from "node:test";
 import type { FeedRow } from "../AllContentTikTok/types";
 import type { MediaItem } from "../../../shared/types";
 import {
+  ensureTabPrefixedFeedKey,
   findMediaRowIndex,
   playbackKeyToContentKey,
   feedTabFromResumeKey,
+  isHomeOriginReelsSource,
   remapResumeFeedKey,
   resolveFeedResumeKey,
+  resolveReturnHomeCategory,
 } from "./resumeFeedKey";
 
 function media(id: string, key = `ALL::${id}`): FeedRow {
@@ -38,6 +41,41 @@ test("feedTabFromResumeKey reads the category prefix", () => {
   assert.equal(feedTabFromResumeKey("videos::abc"), "videos");
   assert.equal(feedTabFromResumeKey("abc"), null);
   assert.equal(feedTabFromResumeKey(undefined), null);
+});
+
+test("ensureTabPrefixedFeedKey keeps or adds the category prefix", () => {
+  assert.equal(
+    ensureTabPrefixedFeedKey("sermon::first", "second", "ALL"),
+    "sermon::second"
+  );
+  assert.equal(
+    ensureTabPrefixedFeedKey("bare-id", "next", "videos"),
+    "videos::next"
+  );
+  assert.equal(
+    ensureTabPrefixedFeedKey(undefined, "abc", "e-books"),
+    "e-books::abc"
+  );
+  assert.equal(ensureTabPrefixedFeedKey(undefined, "abc"), "abc");
+});
+
+test("resolveReturnHomeCategory prefers feed tab, then category, then stored", () => {
+  assert.equal(
+    resolveReturnHomeCategory("sermon::abc", "videos", "ALL"),
+    "sermon"
+  );
+  assert.equal(resolveReturnHomeCategory("abc", "LIVE", "ALL"), "LIVE");
+  assert.equal(resolveReturnHomeCategory(undefined, "", "e-books"), "e-books");
+  assert.equal(resolveReturnHomeCategory(undefined, null, null), "ALL");
+});
+
+test("isHomeOriginReelsSource is true for Home category sources only", () => {
+  assert.equal(isHomeOriginReelsSource("AllContentTikTok"), true);
+  assert.equal(isHomeOriginReelsSource("SermonComponent"), true);
+  assert.equal(isHomeOriginReelsSource(undefined), true);
+  assert.equal(isHomeOriginReelsSource("AllLibrary"), false);
+  assert.equal(isHomeOriginReelsSource("Downloads"), false);
+  assert.equal(isHomeOriginReelsSource("ExploreSearch"), false);
 });
 
 test("findMediaRowIndex matches prefixed keys and raw ids", () => {

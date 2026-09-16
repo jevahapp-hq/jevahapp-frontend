@@ -11,16 +11,19 @@ export {
   FEED_WARM_IDLE_MOUNT_COUNT,
   getFeedVideoRowSize,
 } from "./feedVideoConfig";
-export { FeedVideoPoster, posterUriFromMedia } from "./FeedVideoPoster";
+export { FeedVideoPoster, FeedVideoStill, posterUriFromMedia } from "./FeedVideoPoster";
 export { FeedVideoSurface } from "./FeedVideoSurface";
 export { FittedMediaImage } from "./FittedMediaImage";
 export { fitRectInBox } from "./fitRectInBox";
 export {
+  ensureTabPrefixedFeedKey,
   feedTabFromResumeKey,
   findMediaRowIndex,
+  isHomeOriginReelsSource,
   playbackKeyToContentKey,
   remapResumeFeedKey,
   resolveFeedResumeKey,
+  resolveReturnHomeCategory,
 } from "./resumeFeedKey";
 export {
   findReelsIndexByContentId,
@@ -28,6 +31,7 @@ export {
   resolveReelsStartIndex,
 } from "./reelsStartIndex";
 export { videoKeyMatchesContentId } from "./videoPlayerKey";
+export { shouldHoldVideoStill } from "./shouldHoldVideoStill";
 export { useInstantFeedVideoPlayer } from "./useInstantFeedVideoPlayer";
 export {
   isVideoFullscreenActive,

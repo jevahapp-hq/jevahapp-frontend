@@ -6,6 +6,12 @@ import {
   RateLimitError,
 } from "@/app/utils/contentInteraction/errors";
 import { createGestureIdempotencyKey } from "@/app/utils/contentInteraction/idempotency";
+import {
+  baselineToggleCount,
+  baselineToggleFlag,
+  reconcileToggleCount,
+  reconcileToggleFlag,
+} from "@/shared/media/engagementToggle";
 import type { StoreGet, StoreSet } from "../types";
 
 export type ToggleLikeOptions = {
@@ -94,42 +100,42 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
       const generation = (likeGeneration.get(contentId) ?? 0) + 1;
       likeGeneration.set(contentId, generation);
 
+      const existingBefore = get().contentStats[contentId];
+      // Seed is the UI truth. A hydrated `liked: false` must not invert a tap
+      // on a heart that's red from sticky cache / metadata.
+      const baselineLiked = baselineToggleFlag(
+        options.initialLiked,
+        existingBefore?.userInteractions?.liked
+      );
+      const baselineLikes = baselineToggleCount(
+        options.initialLikes,
+        existingBefore?.likes
+      );
+
       const defaultStats: ContentStats = {
         contentId,
-        likes: Math.max(0, options.initialLikes ?? 0),
-        saves: 0,
-        shares: 0,
-        views: 0,
-        comments: 0,
+        likes: baselineLikes,
+        saves: existingBefore?.saves ?? 0,
+        shares: existingBefore?.shares ?? 0,
+        views: existingBefore?.views ?? 0,
+        comments: existingBefore?.comments ?? 0,
         userInteractions: {
-          liked: options.initialLiked ?? false,
-          saved: false,
-          shared: false,
-          viewed: false,
+          liked: baselineLiked,
+          saved: existingBefore?.userInteractions?.saved ?? false,
+          shared: existingBefore?.userInteractions?.shared ?? false,
+          viewed: existingBefore?.userInteractions?.viewed ?? false,
         },
       };
-
-      // Capture baseline before optimistic flip (needed for offline coalesce).
-      const baselineBefore = get().contentStats[contentId];
-      const baselineLiked = Boolean(
-        baselineBefore?.userInteractions?.liked ?? options.initialLiked ?? false
-      );
 
       set((state: any) => {
         const existing = state.contentStats[contentId];
         const s: ContentStats = existing
           ? {
               ...existing,
-              likes:
-                (existing.likes ?? 0) > 0
-                  ? existing.likes
-                  : Math.max(existing.likes ?? 0, options.initialLikes ?? 0),
+              likes: baselineLikes,
               userInteractions: {
                 ...existing.userInteractions,
-                liked:
-                  existing.userInteractions?.liked ??
-                  options.initialLiked ??
-                  false,
+                liked: baselineLiked,
               },
             }
           : defaultStats;
@@ -145,8 +151,9 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
               userInteractions: { ...s.userInteractions, liked },
             },
           },
-          // Heart is already flipped — don't hold the UI in a loading lock.
-          loadingInteraction: { ...state.loadingInteraction, [key]: false },
+          // Guard hydrate/socket until this gesture settles. The heart itself
+          // already flipped optimistically — this flag is not a UI lock.
+          loadingInteraction: { ...state.loadingInteraction, [key]: true },
         };
       });
 
@@ -185,26 +192,30 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
           };
         }
 
-        // Backend is source of truth after a successful HTTP response.
-        const liked = Boolean(result.liked);
-        if (
-          Boolean(optimistic?.userInteractions?.liked) !== liked &&
-          __DEV__
-        ) {
+        // Backend `liked` is intermittently pre-toggle. Keep the optimistic
+        // heart on mismatch; only adopt the server count when the flag agrees.
+        const optimisticLiked = Boolean(optimistic?.userInteractions?.liked);
+        const liked = reconcileToggleFlag({
+          optimistic: optimisticLiked,
+          server: result.liked,
+        });
+        const flagMismatch = liked !== Boolean(result.liked);
+        const nextLikes = reconcileToggleCount({
+          optimisticCount: optimistic?.likes ?? 0,
+          serverCount: result.totalLikes,
+          flagMismatch,
+        });
+        if (flagMismatch && __DEV__) {
           console.log(
-            `ℹ️ Like reconciled ${contentId}: optimistic=${Boolean(
-              optimistic?.userInteractions?.liked
-            )} → server=${liked} count=${result.totalLikes}`
+            `ℹ️ LIKE MISMATCH ${contentId}: optimistic=${optimisticLiked} server=${Boolean(
+              result.liked
+            )} count=${result.totalLikes}. Keeping optimistic liked.`
           );
         }
 
         set((state: any) => {
           const s = state.contentStats[contentId];
           if (!s) return state;
-          const serverTotal = Number(result.totalLikes);
-          const nextLikes = Number.isFinite(serverTotal)
-            ? Math.max(0, serverTotal)
-            : s.likes;
           return {
             contentStats: {
               ...state.contentStats,

@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { useReelsStore } from "@/store/useReelsStore";
 import {
   findMediaRowIndex,
@@ -10,7 +10,6 @@ import { scrollFeedToResume } from "../utils/scrollFeedToResume";
 
 const RESUME_SCROLL_DELAYS_MS = [0, 16, 48, 160, 400];
 const PENDING_RESUME_MS = 2500;
-const RESUME_REVEAL_MS = 180;
 
 export function useAllContentTikTokLifecycle(options: {
   pauseAllMedia: () => void;
@@ -38,18 +37,10 @@ export function useAllContentTikTokLifecycle(options: {
   /** Last feed video key before leaving (e.g. Reels) so we restore on return. */
   const resumeVideoKeyRef = useRef<string | null>(null);
   const resumeTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const [resumeCovered, setResumeCovered] = useState(false);
 
   const clearResumeTimers = useCallback(() => {
     resumeTimersRef.current.forEach((id) => clearTimeout(id));
     resumeTimersRef.current = [];
-  }, []);
-
-  const revealAfterResume = useCallback(() => {
-    const id = setTimeout(() => {
-      if (isMountedRef.current) setResumeCovered(false);
-    }, RESUME_REVEAL_MS);
-    resumeTimersRef.current.push(id);
   }, []);
 
   useEffect(() => {
@@ -92,7 +83,6 @@ export function useAllContentTikTokLifecycle(options: {
         }, delay);
         resumeTimersRef.current.push(id);
       }
-      revealAfterResume();
       return true;
     }
 
@@ -100,7 +90,6 @@ export function useAllContentTikTokLifecycle(options: {
     // effect can scroll once rows exist. Do not mark the first row visible.
     const pending = resumeKey || (resume?.contentId ? String(resume.contentId) : null);
     if (pending && pendingResumeKeyRef) pendingResumeKeyRef.current = pending;
-    if (!pending) setResumeCovered(false);
     return Boolean(pending);
   }, [
     listDataRef,
@@ -108,19 +97,16 @@ export function useAllContentTikTokLifecycle(options: {
     pendingResumeKeyRef,
     setCurrentlyVisibleVideo,
     clearResumeTimers,
-    revealAfterResume,
   ]);
 
   useFocusEffect(
     useCallback(() => {
       if (!isFeedActiveRef.current) {
-        setResumeCovered(false);
         return;
       }
       restoreFeedAfterFullscreen();
       const clearGuard = setTimeout(() => {
         if (pendingResumeKeyRef) pendingResumeKeyRef.current = null;
-        if (isMountedRef.current) setResumeCovered(false);
       }, PENDING_RESUME_MS);
 
       return () => {
@@ -134,12 +120,6 @@ export function useAllContentTikTokLifecycle(options: {
         }
         resumeVideoKeyRef.current =
           currentlyVisibleVideoRef?.current ?? resumeVideoKeyRef.current;
-        if (
-          isFeedActiveRef.current &&
-          useReelsStore.getState().resumePlayback?.target === "reels"
-        ) {
-          setResumeCovered(true);
-        }
         setCurrentlyVisibleVideo(null);
         pauseAllAudio();
       };
@@ -154,5 +134,5 @@ export function useAllContentTikTokLifecycle(options: {
     ])
   );
 
-  return { isMountedRef, restoreFeedAfterFullscreen, resumeCovered, revealAfterResume };
+  return { isMountedRef, restoreFeedAfterFullscreen };
 }

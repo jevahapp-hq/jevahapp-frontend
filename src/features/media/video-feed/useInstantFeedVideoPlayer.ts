@@ -3,6 +3,11 @@ import { useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPlayhead, savePlayhead } from "./playheadCache";
 import { readPlayerCurrentTimeSec, runWithLivePlayer } from "./safeVideoPlayer";
+import {
+  fixOverEncodedMediaUrl,
+  isRetryableVideoSourceError,
+  toExpoVideoSource,
+} from "../../../shared/utils/videoUrlManager";
 
 export interface UseInstantFeedVideoPlayerOptions {
   source: string | null;
@@ -24,8 +29,8 @@ export interface UseInstantFeedVideoPlayerOptions {
 
 /**
  * Pre-buffers muted; marks playback-ready on readyToPlay.
- * Hides the poster only after a real frame paints (onFirstFrameRender /
- * playhead moved) so the card never flashes black.
+ * Keeps a still over the VideoView until onFirstFrameRender (timeUpdate is
+ * only a delayed fallback) so the card never flashes black.
  */
 export function useInstantFeedVideoPlayer({
   source,
@@ -38,11 +43,18 @@ export function useInstantFeedVideoPlayer({
   const firstFrameReadyRef = useRef(false);
   const [firstFramePainted, setFirstFramePainted] = useState(false);
   const firstFramePaintedRef = useRef(false);
+  const [nativeFirstFrame, setNativeFirstFrame] = useState(false);
+  const nativeFirstFrameRef = useRef(false);
+  const paintInvalidatedRef = useRef(false);
   const isMountedRef = useRef(true);
   const loadedSourceRef = useRef<string | null>(null);
+  const paintFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const cacheBypassRef = useRef(false);
 
   const videoSource = useMemo(
-    () => (source ? { uri: source, useCaching: true } : null),
+    () => toExpoVideoSource(source),
     [source]
   );
 
@@ -79,21 +91,60 @@ export function useInstantFeedVideoPlayer({
   }, []);
 
   const markPainted = useCallback(() => {
+    if (paintFallbackTimeoutRef.current) {
+      clearTimeout(paintFallbackTimeoutRef.current);
+      paintFallbackTimeoutRef.current = null;
+    }
     if (!isMountedRef.current || firstFramePaintedRef.current) return;
     firstFramePaintedRef.current = true;
     setFirstFramePainted(true);
     markReady();
   }, [markReady]);
 
+  const markNativeFirstFrame = useCallback(() => {
+    if (!isMountedRef.current) return;
+    paintInvalidatedRef.current = false;
+    if (!nativeFirstFrameRef.current) {
+      nativeFirstFrameRef.current = true;
+      setNativeFirstFrame(true);
+    }
+    markPainted();
+  }, [markPainted]);
+
+  /**
+   * Cover the VideoView again after a seek or after the surface was hidden
+   * (Reels on top of the feed). readyToPlay stays true so playback does not
+   * stall waiting for a second prime.
+   */
+  const invalidateNativeFirstFrame = useCallback(() => {
+    if (paintFallbackTimeoutRef.current) {
+      clearTimeout(paintFallbackTimeoutRef.current);
+      paintFallbackTimeoutRef.current = null;
+    }
+    paintInvalidatedRef.current = true;
+    nativeFirstFrameRef.current = false;
+    firstFramePaintedRef.current = false;
+    setNativeFirstFrame(false);
+    setFirstFramePainted(false);
+  }, []);
+
   const resetReadiness = useCallback(() => {
+    if (paintFallbackTimeoutRef.current) {
+      clearTimeout(paintFallbackTimeoutRef.current);
+      paintFallbackTimeoutRef.current = null;
+    }
     firstFrameReadyRef.current = false;
     firstFramePaintedRef.current = false;
+    nativeFirstFrameRef.current = false;
+    paintInvalidatedRef.current = false;
     setFirstFrameReady(false);
     setFirstFramePainted(false);
+    setNativeFirstFrame(false);
   }, []);
 
   // Recycle: new URL on same cell.
   useEffect(() => {
+    cacheBypassRef.current = false;
     if (!player || !source) {
       loadedSourceRef.current = null;
       resetReadiness();
@@ -122,10 +173,13 @@ export function useInstantFeedVideoPlayer({
       return;
     }
 
+    const nextSource = toExpoVideoSource(source);
+    if (!nextSource) return;
+
     let cancelled = false;
     (async () => {
       try {
-        await player.replaceAsync({ uri: source, useCaching: true });
+        await player.replaceAsync(nextSource);
         if (cancelled || !isMountedRef.current) return;
         player.muted = true;
         player.volume = 0;
@@ -157,11 +211,48 @@ export function useInstantFeedVideoPlayer({
 
     let statusSub: { remove: () => void } | undefined;
     try {
-      statusSub = player.addListener("statusChange", ({ status }) => {
+      statusSub = player.addListener("statusChange", ({ status, error }) => {
         if (!isMountedRef.current) return;
         // Do NOT seek here. readyToPlay also fires after a rebuffer;
         // seeking back to a cached playhead mid-playback cracks audio.
-        if (status === "readyToPlay") markReady();
+        if (status === "readyToPlay") {
+          markReady();
+          return;
+        }
+        if (
+          (status === "error" || error) &&
+          isRetryableVideoSourceError(error) &&
+          source &&
+          !cacheBypassRef.current
+        ) {
+          cacheBypassRef.current = true;
+          const streamed = toExpoVideoSource(fixOverEncodedMediaUrl(source), {
+            useCaching: false,
+          });
+          if (!streamed) return;
+          resetReadiness();
+          void (async () => {
+            try {
+              await player.replaceAsync(streamed);
+              if (!isMountedRef.current) return;
+              player.muted = true;
+              player.volume = 0;
+              if (restorePlayhead) {
+                const saved = getPlayhead(source);
+                if (saved > 0.2) {
+                  try {
+                    player.currentTime = saved;
+                  } catch {
+                    // no-op
+                  }
+                }
+              }
+              if (mutedPrime) player.play();
+            } catch {
+              // no-op
+            }
+          })();
+        }
       });
     } catch {
       return;
@@ -181,7 +272,7 @@ export function useInstantFeedVideoPlayer({
         // no-op
       }
     };
-  }, [player, source, markReady]);
+  }, [player, source, markReady, resetReadiness, restorePlayhead, mutedPrime]);
 
   // One-shot muted prime until ready (no interval loop — that hung the JS thread).
   useEffect(() => {
@@ -215,8 +306,8 @@ export function useInstantFeedVideoPlayer({
       // Don't reveal a remounted player sitting at 0 while we still need to seek.
       if (saved > 0.5 && now < saved - 0.4) return;
     }
-    markPainted();
-  }, [markPainted, source, player, restorePlayhead]);
+    markNativeFirstFrame();
+  }, [markNativeFirstFrame, source, player, restorePlayhead]);
 
   useEffect(() => {
     if (!player || !source) return;
@@ -228,16 +319,21 @@ export function useInstantFeedVideoPlayer({
         if (firstFramePaintedRef.current) return;
         if (restorePlayhead) {
           const saved = getPlayhead(source);
-          if (saved > 0.5) {
-            if (currentTime >= saved - 0.4) markPainted();
-            else if (currentTime > 0.5 && currentTime < saved - 1) {
-              // Resume seek didn't apply; don't keep the poster up forever.
-              markPainted();
-            }
+          if (saved > 0.5 && currentTime < saved - 0.4) return;
+        }
+        // Decoder has time, but the SurfaceView can still be black. Wait a
+        // beat so the still stays up until a real frame can composite.
+        if (currentTime < 0.12 || paintFallbackTimeoutRef.current) return;
+        paintFallbackTimeoutRef.current = setTimeout(() => {
+          paintFallbackTimeoutRef.current = null;
+          // After a resume seek the SurfaceView often skips onFirstFrameRender.
+          // timeUpdate means the decoder has the target frame — uncover then.
+          if (paintInvalidatedRef.current && firstFrameReadyRef.current) {
+            markNativeFirstFrame();
             return;
           }
-        }
-        if (currentTime > 0.08) markPainted();
+          markPainted();
+        }, 180);
       });
     } catch {
       return;
@@ -249,12 +345,16 @@ export function useInstantFeedVideoPlayer({
         // no-op
       }
     };
-  }, [player, source, markPainted, restorePlayhead]);
+  }, [player, source, markPainted, markNativeFirstFrame, restorePlayhead]);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (paintFallbackTimeoutRef.current) {
+        clearTimeout(paintFallbackTimeoutRef.current);
+        paintFallbackTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -262,13 +362,17 @@ export function useInstantFeedVideoPlayer({
     player: source ? player : null,
     firstFrameReady,
     firstFramePainted,
+    nativeFirstFrame,
     handleFirstFrameRender,
     freezeOnFirstFrame,
+    invalidateNativeFirstFrame,
   } satisfies {
     player: VideoPlayer | null;
     firstFrameReady: boolean;
     firstFramePainted: boolean;
+    nativeFirstFrame: boolean;
     handleFirstFrameRender: () => void;
     freezeOnFirstFrame: () => void;
+    invalidateNativeFirstFrame: () => void;
   };
 }

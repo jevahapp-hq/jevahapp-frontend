@@ -8,6 +8,10 @@ import { useReelsStore } from "@/store/useReelsStore";
 import { MediaItem } from "../types/media";
 import { UserProfileCache } from "../utils/cache/UserProfileCache";
 import { getUserDisplayNameFromContent } from "../utils/userValidation";
+import { savePlayhead } from "../../src/features/media/video-feed/playheadCache";
+import { getBestVideoUrl } from "../../src/shared/utils/videoUrlManager";
+import { ensureTabPrefixedFeedKey, isHomeOriginReelsSource } from "../../src/features/media/video-feed";
+import { rememberHomeFeedCategory } from "../../src/shared/media/homeFeedCategory";
 
 interface VideoNavigationOptions {
   video: MediaItem;
@@ -101,7 +105,17 @@ export const useVideoNavigation = () => {
     feedKey: feedKeyOverride,
   }: VideoNavigationOptions) => {
     const contentId = String(video._id || (video as any).id || "").trim();
-    const feedKey = feedKeyOverride || getContentKey(video);
+    const rawFeedKey = feedKeyOverride || getContentKey(video);
+    const feedKey = isHomeOriginReelsSource(source)
+      ? ensureTabPrefixedFeedKey(
+          rawFeedKey,
+          contentId || getContentKey(video),
+          category
+        )
+      : rawFeedKey;
+    if (category && isHomeOriginReelsSource(source)) {
+      rememberHomeFeedCategory(category);
+    }
     const registeredKey =
       resolveRegisteredVideoKey(contentId) || feedKey || null;
     const snapshot = registeredKey
@@ -125,6 +139,19 @@ export const useVideoNavigation = () => {
         reelsIndex: index,
         target: "reels",
       });
+    }
+
+    const positionSec = snapshot && snapshot.currentMs > 150 ? snapshot.currentMs / 1000 : 0;
+    if (positionSec > 0) {
+      const variants = [
+        video.fileUrl,
+        (video as any).playbackUrl,
+        (video as any).hlsUrl,
+      ].filter((u): u is string => typeof u === "string" && u.length > 0);
+      for (const variant of variants) {
+        savePlayhead(variant, positionSec);
+        savePlayhead(getBestVideoUrl(variant), positionSec);
+      }
     }
 
     // Pause feed players without blocking navigation

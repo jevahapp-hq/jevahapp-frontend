@@ -12,7 +12,6 @@ import {
   useContentCount,
   useContentStats,
 } from "@/store/useInteractionStore";
-import { useLibraryStore } from "@/store/useLibraryStore";
 
 interface ReelsActionButtonsProps {
   videoKey: string;
@@ -76,10 +75,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
   const liveStats = useContentStats(contentId);
   const storeComments = useContentCount(contentId, "comments");
   const save = useContentSaveState(contentId, enrichedVideoData || video);
-  const librarySaved = useLibraryStore((s) =>
-    s.isItemSaved(contentId) || s.isItemSaved(videoKey) || s.isItemSaved(modalKey)
-  );
-  const isSaved = save.saved || librarySaved;
+  const isSaved = save.saved;
 
   const commentDisplayCount = useMemo(() => {
     return resolveCommentDisplayCount({

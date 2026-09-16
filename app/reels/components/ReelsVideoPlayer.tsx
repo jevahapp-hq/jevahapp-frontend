@@ -4,21 +4,23 @@
  */
 import { MaterialIcons } from "@expo/vector-icons";
 import type { VideoPlayer } from "expo-video";
-import { MutableRefObject, memo, useEffect, useRef } from "react";
+import { MutableRefObject, memo, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useVideoPlaybackControl } from "../../../src/shared/hooks/useVideoPlaybackControl";
-import { handleVideoError } from "../../../src/shared/utils/videoUrlManager";
+import { handleVideoError, isRetryableVideoSourceError } from "../../../src/shared/utils/videoUrlManager";
 import {
   FeedVideoSurface,
   FittedMediaImage,
+  shouldHoldVideoStill,
   useInstantFeedVideoPlayer,
 } from "../../../src/features/media/video-feed";
 import { setCachedDurationMs } from "../../../src/features/media/components/VideoCard/player/durationCache";
 import {
-  captureVideoFrameSnapshot,
+  snapshotPlayerFrame,
   useVideoFrameSnapshot,
 } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
 import { readPlayerCurrentTimeSec } from "../../../src/features/media/video-feed/safeVideoPlayer";
+import { FEED_VIDEO_START_POSITION_SECONDS } from "../../../src/features/media/video-feed/feedVideoConfig";
 import { useReelsStore } from "@/store/useReelsStore";
 import contentInteractionAPI from "../../utils/contentInteractionAPI";
 import { qualifiesPlaybackView } from "../../utils/contentInteraction/viewQualification";
@@ -106,8 +108,10 @@ const ReelsVideoPlayer = memo(
     const {
       player,
       firstFrameReady,
+      nativeFirstFrame,
       handleFirstFrameRender,
       freezeOnFirstFrame,
+      invalidateNativeFirstFrame,
     } = useInstantFeedVideoPlayer({
       source: videoUrl,
       loop: true,
@@ -126,13 +130,30 @@ const ReelsVideoPlayer = memo(
     });
 
     const didApplyResumeRef = useRef(false);
+    const [resumeSeekDone, setResumeSeekDone] = useState(false);
     useEffect(() => {
       didApplyResumeRef.current = false;
+      setResumeSeekDone(false);
     }, [contentId]);
 
-    // Continuity from feed: seek once when this reel becomes ready/active.
+    const pendingResume = useReelsStore((s) => s.resumePlayback);
+    const pendingResumeSec =
+      !resumeSeekDone &&
+      pendingResume?.target === "reels" &&
+      String(pendingResume.contentId) === String(contentId) &&
+      pendingResume.positionMs > 400
+        ? pendingResume.positionMs / 1000
+        : 0;
+    const holdStill = shouldHoldVideoStill({
+      nativeFirstFrame,
+      isSurfaceActive: isActive,
+      pendingResumeSec,
+    });
+
+    // Continuity from feed: wait for a painted frame, then seek. Uncovering
+    // the first t≈0 frame and seeking immediately is the fullscreen black flash.
     useEffect(() => {
-      if (!player || !isActive || !firstFrameReady || didApplyResumeRef.current) {
+      if (!player || !isActive || !nativeFirstFrame || didApplyResumeRef.current) {
         return;
       }
       const resume = useReelsStore.getState().resumePlayback;
@@ -142,9 +163,12 @@ const ReelsVideoPlayer = memo(
         String(resume.contentId) !== String(contentId) ||
         !(resume.positionMs > 400)
       ) {
+        didApplyResumeRef.current = true;
+        setResumeSeekDone(true);
         return;
       }
       didApplyResumeRef.current = true;
+      invalidateNativeFirstFrame();
       try {
         const wantMuted = isMuted;
         const wantVol = isMuted ? 0 : videoVolume;
@@ -157,18 +181,21 @@ const ReelsVideoPlayer = memo(
         setVideoPosition(resume.positionMs);
         player.muted = wantMuted;
         player.volume = wantVol;
+        setResumeSeekDone(true);
       } catch {
         didApplyResumeRef.current = false;
+        setResumeSeekDone(false);
       }
     }, [
       player,
       isActive,
-      firstFrameReady,
+      nativeFirstFrame,
       contentId,
       isMuted,
       videoVolume,
       setLocalPosition,
       setVideoPosition,
+      invalidateNativeFirstFrame,
     ]);
 
     useEffect(() => {
@@ -181,8 +208,9 @@ const ReelsVideoPlayer = memo(
       }
       return () => {
         delete videoRefs.current[videoKey];
+        snapshotPlayerFrame(videoUrl, playerRef.current);
       };
-    }, [player, videoKey, videoRefs]);
+    }, [player, videoKey, videoRefs, videoUrl]);
 
     useEffect(() => {
       if (!player) return;
@@ -193,7 +221,7 @@ const ReelsVideoPlayer = memo(
           if (!shouldHear) {
             if (!player.muted) player.muted = true;
             if ((Number(player.volume) || 0) !== 0) player.volume = 0;
-            if (player.playing) freezeOnFirstFrame();
+            if (player.playing && nativeFirstFrame) freezeOnFirstFrame();
             return;
           }
           const wantMuted = isMuted;
@@ -218,18 +246,25 @@ const ReelsVideoPlayer = memo(
       isMuted,
       videoVolume,
       freezeOnFirstFrame,
+      nativeFirstFrame,
     ]);
 
-    // Snapshot the paused frame when leaving so the previous reel can show
-    // a still instead of a second VideoView (those punch through as black).
+    // Snapshot the paused frame as soon as this reel is no longer active so
+    // scrolling back shows a still instead of a black VideoView.
     useEffect(() => {
-      if (!player || !videoUrl || isActive) return;
+      if (!player || !videoUrl || isActive || !nativeFirstFrame) return;
       const t = readPlayerCurrentTimeSec(player);
-      const timeout = setTimeout(() => {
-        captureVideoFrameSnapshot(videoUrl, player, t > 0 ? t : undefined);
-      }, 200);
-      return () => clearTimeout(timeout);
-    }, [player, videoUrl, isActive]);
+      snapshotPlayerFrame(
+        videoUrl,
+        player,
+        t > 0 ? t : FEED_VIDEO_START_POSITION_SECONDS
+      );
+    }, [player, videoUrl, isActive, nativeFirstFrame]);
+
+    useEffect(() => {
+      if (!player || !videoUrl || !nativeFirstFrame) return;
+      snapshotPlayerFrame(videoUrl, player);
+    }, [player, videoUrl, nativeFirstFrame]);
 
     useEffect(() => {
       if (!player) return;
@@ -251,6 +286,8 @@ const ReelsVideoPlayer = memo(
 
       const statusSub = player.addListener("statusChange", ({ status, error }) => {
         if (status === "error" || error) {
+          // HLS + useCaching throws on iOS; the player retries without cache.
+          if (isRetryableVideoSourceError(error)) return;
           handleVideoError(error as any, videoUrl, videoKey);
           globalVideoStore.pauseVideo(videoKey);
           return;
@@ -349,7 +386,7 @@ const ReelsVideoPlayer = memo(
       height: screenHeight,
     };
 
-    const poster = (
+    const still = (
       <PosterLayer
         posterUri={posterUri}
         lastFrame={lastFrame}
@@ -361,14 +398,14 @@ const ReelsVideoPlayer = memo(
     if (!player) {
       return (
         <View style={[styles.host, surfaceStyle]} collapsable={false}>
-          {poster}
+          {still}
         </View>
       );
     }
 
     return (
       <View style={[styles.host, surfaceStyle]} collapsable={false}>
-        {poster}
+        {still}
         <FeedVideoSurface
           player={player}
           visible
@@ -377,6 +414,16 @@ const ReelsVideoPlayer = memo(
           contentFit={REELS_CONTENT_FIT}
           onFirstFrameRender={handleFirstFrameRender}
         />
+        {holdStill ? (
+          <View style={styles.stillOverlay} pointerEvents="none">
+            <PosterLayer
+              posterUri={posterUri}
+              lastFrame={lastFrame}
+              width={mediaFrame.width}
+              height={mediaFrame.height}
+            />
+          </View>
+        ) : null}
 
         {isActive && !isPlaying && (
           <View style={styles.overlay} pointerEvents="none">
@@ -430,6 +477,7 @@ function PosterLayer({
         width={width}
         height={height}
         contentFit={REELS_CONTENT_FIT}
+        style={styles.stillFill}
       />
     );
   }
@@ -440,10 +488,11 @@ function PosterLayer({
         width={width}
         height={height}
         contentFit={REELS_CONTENT_FIT}
+        style={styles.stillFill}
       />
     );
   }
-  return null;
+  return <View style={[styles.stillFill, { width, height }]} />;
 }
 
 export default ReelsVideoPlayer;
@@ -453,10 +502,19 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     position: "relative",
   },
+  stillOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+    elevation: 4,
+    backgroundColor: "#000",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 10,
+  },
+  stillFill: {
+    backgroundColor: "#000",
   },
 });

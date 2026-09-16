@@ -11,6 +11,7 @@ export interface ContentActionModalProps {
   mediaId?: string;
   uploadedBy?: string | { _id: string };
   mediaItem?: any; // Full media item for ownership checking (optional)
+  viewerId?: string | null;
   onDelete?: () => void;
   showDelete?: boolean; // If provided, use it; otherwise check ownership internally
   // Report functionality props

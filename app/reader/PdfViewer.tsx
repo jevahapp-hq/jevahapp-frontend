@@ -20,6 +20,7 @@ import {
 } from "../../src/shared/audio";
 import { useEbookReaderViewTracking } from "./hooks/useEbookReaderViewTracking";
 import { usePdfChapterExtraction } from "./hooks/usePdfChapterExtraction";
+import { rememberHomeFeedCategory } from "../../src/shared/media/homeFeedCategory";
 
 const EbookReadAloud = lazy(() => import("./EbookReadAloud"));
 const PdfJsExtractorWebView = lazy(() => import("./pdfText/PdfJsExtractorWebView"));
@@ -80,6 +81,7 @@ export default function PdfViewer() {
   const ebookFirstPageMeasuredRef = useRef(false);
 
   const handleReaderBack = useCallback(() => {
+    if (homeCategory) rememberHomeFeedCategory(homeCategory);
     if (from === "downloads") {
       router.replace("/downloads/DownloadsScreen");
       return;
@@ -90,7 +92,10 @@ export default function PdfViewer() {
     }
     router.replace({
       pathname: "/categories/HomeScreen",
-      params: homeCategory ? { defaultCategory: homeCategory } : undefined,
+      params: {
+        default: "Home",
+        ...(homeCategory ? { defaultCategory: homeCategory } : {}),
+      },
     });
   }, [from, homeCategory, router]);
 

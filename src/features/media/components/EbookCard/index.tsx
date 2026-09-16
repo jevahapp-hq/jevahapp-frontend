@@ -86,7 +86,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         setShowDetailsModal={chrome.setShowDetailsModal}
         onSave={() => onSave(ebook)}
         onDownload={() => onDownload(ebook)}
-        isSaved={!!(ebook as any)?.saved || stats.userSaveState}
+        isSaved={stats.userSaveState}
         isDownloaded={checkIfDownloaded(ebook._id || ebook.fileUrl)}
         handleDeletePress={chrome.handleDeletePress}
         showDelete={chrome.isOwner}
@@ -96,6 +96,7 @@ export const EbookCard: React.FC<EbookCardProps> = ({
         showReportModal={chrome.showReportModal}
         setShowReportModal={chrome.setShowReportModal}
         showDetailsModal={chrome.showDetailsModal}
+        viewerId={viewerId}
       />
     </MediaCardShell>
   );

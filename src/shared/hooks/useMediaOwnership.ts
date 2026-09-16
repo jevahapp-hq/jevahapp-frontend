@@ -61,17 +61,17 @@ export const useMediaOwnership = ({
   }, [mediaItem, checkOwnership]);
 
   useEffect(() => {
-    if (viewerId) {
+    if (syncOwner) {
       setAsyncOwner(false);
       return;
     }
     if (checkOnModalOpen && isModalVisible) {
       void performOwnershipCheck();
     }
-  }, [isModalVisible, checkOnModalOpen, performOwnershipCheck, viewerId]);
+  }, [isModalVisible, checkOnModalOpen, performOwnershipCheck, syncOwner]);
 
   return {
-    isOwner: viewerId ? syncOwner : asyncOwner,
+    isOwner: syncOwner || asyncOwner,
     isLoading,
     checkOwnership: performOwnershipCheck,
   };

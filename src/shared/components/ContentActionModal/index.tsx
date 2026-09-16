@@ -35,6 +35,7 @@ export default function ContentActionModal({
   mediaId,
   uploadedBy,
   mediaItem,
+  viewerId,
   onDelete,
   showDelete,
   onReport,
@@ -48,19 +49,16 @@ export default function ContentActionModal({
     backdropStyle,
   } = useSheetTransition(isVisible, onClose);
 
-  const shouldCheckOwnership =
-    showDelete === undefined && (!!mediaItem || !!uploadedBy);
   const { isOwner: isOwnerFromHook } = useMediaOwnership({
     mediaItem: mediaItem || (uploadedBy ? { uploadedBy } : undefined),
-    isModalVisible:
-      internalVisible && onDelete !== undefined && shouldCheckOwnership,
-    checkOnModalOpen: shouldCheckOwnership,
+    isModalVisible: internalVisible,
+    checkOnModalOpen: true,
+    viewerId,
   });
 
-  const isOwner =
-    showDelete === true ? true : showDelete === false ? false : isOwnerFromHook;
+  const isOwner = showDelete === true || isOwnerFromHook;
 
-  const shouldShowDelete = isOwner;
+  const shouldShowDelete = Boolean(onDelete) && isOwner;
   const shouldShowReport = !isOwner;
 
   const handleAction = (action: () => void) => {
@@ -73,15 +71,15 @@ export default function ContentActionModal({
   };
 
   /** iOS cannot present a second RN Modal while this sheet is still open. */
-  const handleReportPress = () => {
+  const presentAfterSheetClose = (action?: () => void) => {
     requestClose();
     setTimeout(() => {
       try {
-        onReport?.();
+        action?.();
       } catch (error) {
-        console.error("ContentActionModal: report failed", error);
+        console.error("ContentActionModal: follow-up failed", error);
       }
-    }, 300);
+    }, 400);
   };
 
   if (!internalVisible) return null;
@@ -248,7 +246,7 @@ export default function ContentActionModal({
                     color={UI_CONFIG.COLORS.ERROR}
                   />
                 }
-                onPress={() => handleAction(onDelete)}
+                onPress={() => presentAfterSheetClose(onDelete)}
               />
             )}
 
@@ -263,7 +261,7 @@ export default function ContentActionModal({
                     color={UI_CONFIG.COLORS.ERROR}
                   />
                 }
-                onPress={handleReportPress}
+                onPress={() => presentAfterSheetClose(onReport)}
               />
             )}
 

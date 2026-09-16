@@ -110,7 +110,7 @@ export function VideoCardFooter({
               if (!userLikeState) setLikeBurstKey((k) => k + 1);
               onLike(contentKey, video);
             }}
-            commentCount={commentCount || video.comment || 0}
+            commentCount={commentCount}
             onComment={() => onComment(contentKey, video)}
             saved={!!userSaveState}
             saveCount={saveCount || 0}

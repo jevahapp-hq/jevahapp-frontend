@@ -5,15 +5,14 @@
 
 import { Share } from "react-native";
 import { MediaItem } from "../../../../src/shared/types";
+import { resolveLikeSeed } from "../../../../src/shared/hooks/useContentLikeState";
+import { resolveSaveSeed } from "../../../../src/shared/hooks/useContentSaveState";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { useInteractionStore } from "@/store/useInteractionStore";
 import contentInteractionAPI from "../../../utils/contentInteractionAPI";
 import { viewContentTypeForItem } from "../../../utils/contentInteraction/viewQualification";
 import { convertToDownloadableItem } from "../../../utils/downloadUtils";
-import {
-  persistStats,
-  persistViewed,
-  toggleFavorite,
-} from "../../../utils/persistentStorage";
+import { persistStats, persistViewed } from "../../../utils/persistentStorage";
 import { RecommendedItem, VideoCardData } from "../types";
 import { getVideoKey } from "../utils";
 
@@ -184,10 +183,42 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
 
   const handleSave = async (key: string, video: VideoCardData) => {
     try {
-      const isCurrentlyUserSaved = libraryStore.isItemSaved(key);
-      if (!isCurrentlyUserSaved) {
-        const libraryItem = {
-          id: key,
+      const contentId = String((video as any)._id || key);
+      const seed = resolveSaveSeed(contentId, video as any);
+      const result = await useInteractionStore.getState().toggleSave(
+        contentId,
+        (video as any).contentType || "media",
+        {
+          initialSaved: seed.initialSaved,
+          initialSaves: seed.initialSaves,
+        }
+      );
+      if (result?.authRequired) {
+        setModalVisible(null);
+        return;
+      }
+
+      setSuccessMessage(
+        result.saved ? "Saved to library!" : "Removed from library!"
+      );
+      setShowSuccessCard(true);
+      setVideoStats((prev) => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          totalSaves: result.totalSaves,
+          userSaved: result.saved,
+          saved: result.saved ? 1 : 0,
+          views: prev[key]?.views || (video as any).viewCount || 0,
+          sheared: prev[key]?.sheared || video.sheared || 0,
+          favorite: prev[key]?.favorite || video.favorite || 0,
+          comment: prev[key]?.comment || video.comment || 0,
+        },
+      }));
+
+      if (result.saved) {
+        await libraryStore.addToLibrary({
+          id: contentId,
           contentType: "videos",
           fileUrl: video.fileUrl,
           title: video.title,
@@ -200,75 +231,36 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
           favorite: videoStats[key]?.favorite || video.favorite || 0,
           comment: videoStats[key]?.comment || video.comment || 0,
           saved: 1,
-          thumbnailUrl: video.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg",
+          thumbnailUrl:
+            video.fileUrl.replace("/upload/", "/upload/so_1/") + ".jpg",
           originalKey: key,
-        };
-        await libraryStore.addToLibrary(libraryItem);
-        setSuccessMessage("Saved to library!");
-        setShowSuccessCard(true);
-        setVideoStats((prev) => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            totalSaves: ((prev[key] as any)?.totalSaves || video.saved || 0) + 1,
-            userSaved: true,
-            saved: 1,
-            views: prev[key]?.views || (video as any).viewCount || 0,
-            sheared: prev[key]?.sheared || video.sheared || 0,
-            favorite: prev[key]?.favorite || video.favorite || 0,
-            comment: prev[key]?.comment || video.comment || 0,
-          },
-        }));
+        });
       } else {
+        await libraryStore.removeFromLibrary(contentId);
         await libraryStore.removeFromLibrary(key);
-        setSuccessMessage("Removed from library!");
-        setShowSuccessCard(true);
-        setVideoStats((prev) => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            totalSaves: Math.max(((prev[key] as any)?.totalSaves || video.saved || 0) - 1, 0),
-            userSaved: false,
-            saved: 0,
-            views: prev[key]?.views || (video as any).viewCount || 0,
-            sheared: prev[key]?.sheared || video.sheared || 0,
-            favorite: prev[key]?.favorite || video.favorite || 0,
-            comment: prev[key]?.comment || video.comment || 0,
-          },
-        }));
-      }
-      try {
-        const result = await contentInteractionAPI.toggleSave(key, "videos");
-        setVideoStats((prev) => ({
-          ...prev,
-          [key]: { ...prev[key], totalSaves: result.totalSaves },
-        }));
-      } catch (apiError) {
-        console.warn("Backend sync failed:", apiError);
       }
     } catch (error) {
       console.error("Save operation failed:", error);
+      setSuccessMessage("Couldn't save — media may be unavailable");
+      setShowSuccessCard(true);
     }
     setModalVisible(null);
   };
 
   const handleLike = async (key: string, video: VideoCardData) => {
     try {
-      // 1. Local persistence update (legacy/local state)
-      const { isUserFavorite, globalCount } = await toggleFavorite(key);
-      setUserFavorites((prev) => ({ ...prev, [key]: isUserFavorite }));
-      setGlobalFavoriteCounts((prev) => ({ ...prev, [key]: globalCount }));
-
-      // 2. Backend sync via InteractionStore
-      const contentId = (video as any)._id || key;
+      const contentId = String((video as any)._id || key);
       const contentType = (video as any).contentType || "media";
-
-      try {
-        const { useInteractionStore } = require("@/store/useInteractionStore");
-        await useInteractionStore.getState().toggleLike(contentId, contentType);
-      } catch (storeError) {
-        console.warn("Backend like sync failed:", storeError);
-      }
+      const seed = resolveLikeSeed(contentId, video as any);
+      const result = await useInteractionStore
+        .getState()
+        .toggleLike(contentId, contentType, seed);
+      if (result?.authRequired) return;
+      setUserFavorites((prev) => ({ ...prev, [key]: result.liked }));
+      setGlobalFavoriteCounts((prev) => ({
+        ...prev,
+        [key]: result.totalLikes,
+      }));
     } catch (error) {
       console.error("Failed to toggle like:", error);
     }

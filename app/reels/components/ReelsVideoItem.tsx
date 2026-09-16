@@ -7,7 +7,7 @@ import {
 import Skeleton from "../../../src/shared/components/Skeleton/Skeleton";
 import { VideoProgressBar } from "../../../src/shared/components/VideoProgressBar/VideoProgressBar";
 import { getBestVideoUrl, getVideoUrlFromMedia } from "../../../src/shared/utils/videoUrlManager";
-import { FittedMediaImage } from "../../../src/features/media/video-feed";
+import { FittedMediaImage, posterUriFromMedia } from "../../../src/features/media/video-feed";
 import { useVideoFrameSnapshot } from "../../../src/features/media/video-feed/videoFrameSnapshotCache";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
 import { getBottomNavHeight } from "../../utils/responsiveOptimized";
@@ -169,16 +169,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
   const lastFrame = useVideoFrameSnapshot(videoUrl);
 
   const posterFrame = getReelsMediaFrame(screenWidth, screenHeight);
-  const posterUri = useMemo(() => {
-    const raw =
-      enriched?.thumbnailUrl ||
-      enriched?.coverImageUrl ||
-      enriched?.imageUrl ||
-      null;
-    if (typeof raw === "string") return raw;
-    if (raw && typeof raw === "object" && typeof raw.uri === "string") return raw.uri;
-    return null;
-  }, [enriched]);
+  const posterUri = useMemo(() => posterUriFromMedia(enriched), [enriched]);
 
   // Track if we should render skeletons
   const showSkeletons = isActive && (!isPlaying || !localDuration);
@@ -258,6 +249,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
               width={posterFrame.width}
               height={posterFrame.height}
               contentFit={REELS_CONTENT_FIT}
+              style={{ backgroundColor: "transparent" }}
             />
           ) : posterUri ? (
             <FittedMediaImage
@@ -265,6 +257,7 @@ export const ReelsVideoItem = memo((props: ReelsVideoItemProps) => {
               width={posterFrame.width}
               height={posterFrame.height}
               contentFit={REELS_CONTENT_FIT}
+              style={{ backgroundColor: "transparent" }}
             />
           ) : null}
         </View>

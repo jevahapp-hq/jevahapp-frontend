@@ -23,6 +23,7 @@ export interface MediaItem extends BaseEntity {
     avatar?: string;
     name?: string;
   };
+  userId?: string;
   description?: string;
   speakerAvatar?: string | number | { uri: string };
   views?: number;

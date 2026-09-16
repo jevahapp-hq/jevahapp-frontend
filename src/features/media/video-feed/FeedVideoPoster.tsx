@@ -5,26 +5,112 @@ import { FeedMediaTypeOverlay } from "../../../shared/components/FeedMediaTypeOv
 import { getLiteImageCachePolicy } from "../../../shared/lite/liteProfile";
 import type { MediaItem } from "../../../shared/types";
 import { optimizeImageUrl } from "../../../shared/utils/imageOptimizer";
+import { fixOverEncodedMediaUrl } from "../../../shared/utils/videoUrlManager";
 import { FEED_VIDEO_PLAYER_HEIGHT } from "./feedVideoConfig";
+import { useVideoFrameSnapshot } from "./videoFrameSnapshotCache";
+
+function isLikelyVideoUrl(url: string): boolean {
+  return /\.(mp4|mov|m4v|avi|mkv|m3u8|webm)(\?|#|$)/i.test(url);
+}
+
+function isLikelyImageUrl(url: string): boolean {
+  return (
+    /\.(jpg|jpeg|png|gif|webp|avif)(\?|#|$)/i.test(url) ||
+    url.toLowerCase().includes("/image/upload/")
+  );
+}
+
+function deriveCloudinaryPoster(videoUrl: string): string | null {
+  if (!videoUrl.includes("/upload/")) return null;
+  if (isLikelyImageUrl(videoUrl)) return videoUrl;
+  return videoUrl.replace("/upload/", "/upload/so_1/") + ".jpg";
+}
 
 function uriFrom(value: unknown): string | null {
   if (typeof value === "string") {
     const t = value.trim();
-    return t.startsWith("http") ? t : null;
+    if (!t.startsWith("http")) return null;
+    const fixed = fixOverEncodedMediaUrl(t);
+    if (isLikelyVideoUrl(fixed)) return deriveCloudinaryPoster(fixed);
+    return fixed;
   }
   if (value && typeof value === "object" && "uri" in value) {
     const u = String((value as { uri?: string }).uri || "").trim();
-    return u.startsWith("http") ? u : null;
+    if (!u.startsWith("http")) return null;
+    const fixed = fixOverEncodedMediaUrl(u);
+    if (isLikelyVideoUrl(fixed)) return deriveCloudinaryPoster(fixed);
+    return fixed;
   }
   return null;
 }
 
 export function posterUriFromMedia(item?: MediaItem | null): string | null {
   if (!item) return null;
+  const extras = item as MediaItem & {
+    thumbnail?: unknown;
+    coverImageUrl?: unknown;
+    coverImage?: unknown;
+    posterUrl?: unknown;
+    previewUrl?: unknown;
+  };
   return (
     uriFrom(item.thumbnailUrl) ||
+    uriFrom(extras.thumbnail) ||
     uriFrom(item.imageUrl) ||
-    null
+    uriFrom(extras.coverImageUrl) ||
+    uriFrom(extras.coverImage) ||
+    uriFrom(extras.posterUrl) ||
+    uriFrom(extras.previewUrl) ||
+    deriveCloudinaryPoster(
+      fixOverEncodedMediaUrl(
+        typeof item.fileUrl === "string" ? item.fileUrl : ""
+      )
+    ) ||
+    deriveCloudinaryPoster(
+      fixOverEncodedMediaUrl(
+        typeof (item as { playbackUrl?: string }).playbackUrl === "string"
+          ? String((item as { playbackUrl?: string }).playbackUrl)
+          : ""
+      )
+    )
+  );
+}
+
+/**
+ * Cover the decoder until a real frame paints: last paused frame if we have
+ * one, otherwise the server thumbnail. Used as the feed/Reels loading still.
+ */
+export function FeedVideoStill({
+  item,
+  url,
+  height = FEED_VIDEO_PLAYER_HEIGHT,
+  contentFit = "cover",
+}: {
+  item?: MediaItem | null;
+  url?: string | null;
+  height?: number;
+  contentFit?: "cover" | "contain";
+}) {
+  const snapshot = useVideoFrameSnapshot(url ?? null);
+  if (snapshot) {
+    return (
+      <Image
+        source={snapshot}
+        style={{ width: "100%", height }}
+        contentFit={contentFit}
+        cachePolicy={getLiteImageCachePolicy()}
+        priority="high"
+      />
+    );
+  }
+  return (
+    <FeedVideoPoster
+      item={item}
+      height={height}
+      contentFit={contentFit}
+      showBadge={false}
+      showGradients={false}
+    />
   );
 }
 

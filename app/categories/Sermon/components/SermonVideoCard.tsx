@@ -18,6 +18,16 @@ import {
   getUserDisplayNameFromContent,
 } from "../../../utils/userValidation";
 import { getTimeAgo } from "../utils";
+import { useContentLikeState } from "../../../../src/shared/hooks/useContentLikeState";
+import { useContentSaveState } from "../../../../src/shared/hooks/useContentSaveState";
+import {
+  commentCountFromMetadata,
+  resolveCommentDisplayCount,
+} from "../../../../src/shared/media/engagementDisplay";
+import {
+  useContentCount,
+  useContentStats,
+} from "@/store/useInteractionStore";
 
 export interface SermonVideoCardProps {
   video: any;
@@ -52,7 +62,7 @@ export default function SermonVideoCard({
   index,
   sectionId,
   contentStats,
-  userFavorites,
+  userFavorites: _userFavorites,
   globalFavoriteCounts,
   modalVisible,
   handleFavorite,
@@ -65,6 +75,16 @@ export default function SermonVideoCard({
   const modalKey = `${sectionId}-${index}`;
   const key = `${video.contentType}-${video._id || video.fileUrl || index}`;
   const stats = contentStats[key] || {};
+  const contentId = String(video._id || video.id || "");
+  const like = useContentLikeState(contentId, video);
+  const save = useContentSaveState(contentId, video);
+  const liveStats = useContentStats(contentId);
+  const storeComments = useContentCount(contentId, "comments");
+  const commentCount = resolveCommentDisplayCount({
+    storeComments,
+    commentsConfirmed: liveStats?.commentsConfirmed,
+    fallback: commentCountFromMetadata(video),
+  });
 
   const poster =
     typeof video.thumbnailUrl === "string" && video.thumbnailUrl
@@ -104,12 +124,12 @@ export default function SermonVideoCard({
               className="flex-col justify-center items-center"
             >
               <MaterialIcons
-                name={userFavorites[key] ? "favorite" : "favorite-border"}
+                name={like.liked ? "favorite" : "favorite-border"}
                 size={30}
-                color={userFavorites[key] ? "#D22A2A" : "#FFFFFF"}
+                color={like.liked ? "#D22A2A" : "#FFFFFF"}
               />
               <Text className="text-[10px] text-white font-jakarta-semibold">
-                {globalFavoriteCounts[key] || 0}
+                {like.likeCount}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -120,9 +140,7 @@ export default function SermonVideoCard({
             >
               <Ionicons name="chatbubble-sharp" size={30} color="white" />
               <Text className="text-[10px] text-white font-jakarta-semibold">
-                {stats.comment === 1
-                  ? (video.comment ?? 0) + 1
-                  : video.comment ?? 0}
+                {commentCount}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -130,14 +148,12 @@ export default function SermonVideoCard({
               className="flex-col justify-center items-center mt-6"
             >
               <MaterialIcons
-                name={stats.saved === 1 ? "bookmark" : "bookmark-border"}
+                name={save.saved ? "bookmark" : "bookmark-border"}
                 size={30}
-                color={stats.saved === 1 ? "#FEA74E" : "#FFFFFF"}
+                color={save.saved ? "#FEA74E" : "#FFFFFF"}
               />
               <Text className="text-[10px] text-white font-jakarta-semibold">
-                {stats.saved === 1
-                  ? (video.saved ?? 0) + 1
-                  : video.saved ?? 0}
+                {save.saveCount}
               </Text>
             </TouchableOpacity>
           </View>
@@ -234,9 +250,13 @@ export default function SermonVideoCard({
                 onPress={() => handleSave(modalKey, video)}
               >
                 <Text className="text-[#1D2939] font-jakarta ml-2">
-                  Save to Library
+                  {save.saved ? "Remove from Library" : "Save to Library"}
                 </Text>
-                <MaterialIcons name="bookmark-border" size={22} color="#1D2939" />
+                <MaterialIcons
+                  name={save.saved ? "bookmark" : "bookmark-border"}
+                  size={22}
+                  color="#1D2939"
+                />
               </TouchableOpacity>
             </View>
           </>

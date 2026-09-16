@@ -93,9 +93,17 @@ export async function flushLikeMutationQueue(
         await bumpQueuedLikeAttempt(item.contentId);
         const result = await postLikeOnce(ctx, item);
         await removeQueuedLike(item.contentId);
+        const liked =
+          typeof result.liked === "boolean" && result.liked !== item.targetLiked
+            ? item.targetLiked
+            : Boolean(result.liked);
+        const likes =
+          typeof result.liked === "boolean" && result.liked !== item.targetLiked
+            ? item.targetTotalLikes
+            : Number(result.totalLikes) || item.targetTotalLikes;
         void persistContentInteraction(item.contentId, {
-          liked: result.liked,
-          likes: result.totalLikes,
+          liked,
+          likes,
         });
         flushed += 1;
         devLog(

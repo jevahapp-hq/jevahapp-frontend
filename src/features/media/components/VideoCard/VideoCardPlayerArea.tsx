@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
 import type { VideoPlayer } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,10 +16,12 @@ import { useVideoPlaybackControl } from "../../../../shared/hooks/useVideoPlayba
 import type { MediaItem } from "../../../../shared/types";
 import { isAudioSermon } from "../../../../shared/utils/mediaTypeDetection";
 import { useCommentModal } from "@/app/context/CommentModalContext";
+import { useReelsStore } from "@/store/useReelsStore";
 import {
   FEED_VIDEO_PLAYER_HEIGHT,
-  FeedVideoPoster,
+  FeedVideoStill,
   FeedVideoSurface,
+  shouldHoldVideoStill,
   useInstantFeedVideoPlayer,
 } from "../../video-feed";
 import { normalizeDurationMs } from "../../../../shared/media/normalizeDurationMs";
@@ -30,12 +31,14 @@ import { useHealMissingDuration } from "./hooks/useHealMissingDuration";
 import { useVideoCardPlayback } from "./hooks/useVideoCardPlayback";
 import { useVideoCardSeek } from "./hooks/useVideoCardSeek";
 import { useVideoCardTapLogic } from "./hooks/useVideoCardTapLogic";
-import { captureVideoFrameSnapshot, useVideoFrameSnapshot } from "../../video-feed/videoFrameSnapshotCache";
+import { snapshotPlayerFrame } from "../../video-feed/videoFrameSnapshotCache";
 import { savePlayhead } from "../../video-feed/playheadCache";
 import {
   readPlayerCurrentTimeSec,
   runWithLivePlayer,
 } from "../../video-feed/safeVideoPlayer";
+import { FEED_VIDEO_START_POSITION_SECONDS } from "../../video-feed/feedVideoConfig";
+import { isRetryableVideoSourceError } from "../../../../shared/utils/videoUrlManager";
 
 export interface VideoCardPlayerAreaProps {
   video: MediaItem;
@@ -81,7 +84,6 @@ function VideoPlayerSlot({
   video?: MediaItem;
   url?: string | null;
 }) {
-  const snapshot = useVideoFrameSnapshot(url ?? null);
   return (
     <View
       collapsable={false}
@@ -91,15 +93,7 @@ function VideoPlayerSlot({
         backgroundColor: "#1A0E0A",
       }}
     >
-      {snapshot ? (
-        <Image
-          source={snapshot}
-          style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}
-          contentFit="cover"
-        />
-      ) : (
-        <FeedVideoPoster item={video} />
-      )}
+      <FeedVideoStill item={video} url={url} />
     </View>
   );
 }
@@ -180,7 +174,6 @@ function VideoCardPlayerInner(
   const [localPosition, setLocalPosition] = useState(0);
   const [localDuration, setLocalDuration] = useState(0);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const snapshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const storeRef = useRef<any>(null);
   const [hasTrackedView, setHasTrackedView] = useState(false);
@@ -205,7 +198,9 @@ function VideoCardPlayerInner(
     player,
     firstFrameReady,
     firstFramePainted,
+    nativeFirstFrame,
     handleFirstFrameRender,
+    invalidateNativeFirstFrame,
   } = useInstantFeedVideoPlayer({
     source: videoUrl,
     loop: true,
@@ -219,8 +214,6 @@ function VideoCardPlayerInner(
 
   videoRef.current = player;
 
-  const lastFrame = useVideoFrameSnapshot(videoUrl);
-
   const {
     isPlaying,
     toggle: togglePlayback,
@@ -231,6 +224,16 @@ function VideoCardPlayerInner(
     enableAutoPlay: false,
     playbackReady: firstFrameReady,
   });
+
+  const wasPlayingThisVideoRef = useRef(shouldPlayThisVideo);
+  useEffect(() => {
+    if (shouldPlayThisVideo && !wasPlayingThisVideoRef.current) {
+      // Surface was covered by Reels / another route. Require a new painted
+      // frame before uncovering — a stale nativeFirstFrame is a black decoder.
+      invalidateNativeFirstFrame();
+    }
+    wasPlayingThisVideoRef.current = shouldPlayThisVideo;
+  }, [shouldPlayThisVideo, invalidateNativeFirstFrame]);
 
   useEffect(() => {
     if (!player || isFeedActive) return;
@@ -247,10 +250,6 @@ function VideoCardPlayerInner(
     const audiblyActive = isFeedActive && shouldPlayThisVideo;
 
     if (audiblyActive) {
-      if (snapshotTimeoutRef.current) {
-        clearTimeout(snapshotTimeoutRef.current);
-        snapshotTimeoutRef.current = null;
-      }
       runWithLivePlayer(player, (p) => {
         const targetMuted = isMuted;
         const targetVol = isMuted ? 0 : videoVolume;
@@ -266,24 +265,20 @@ function VideoCardPlayerInner(
       runWithLivePlayer(player, (p) => {
         if (!p.muted) p.muted = true;
         if ((Number(p.volume) || 0) !== 0) p.volume = 0;
-        if (!p.playing) return;
         const t = readPlayerCurrentTimeSec(p);
         if (t > 0.15) savePlayhead(videoUrl, t);
-        // Neighbor cards stay muted-playing until a frame is on the surface
-        // so scrolling onto them matches scrolling back (paused frame, not poster).
-        if (!firstFramePainted) return;
-        p.pause();
-        // Extracting a thumbnail on a live decoder hitches the video that
-        // just became active. Wait until this player has been paused.
-        if (t > 1.5) {
-          if (snapshotTimeoutRef.current) {
-            clearTimeout(snapshotTimeoutRef.current);
-          }
-          const url = videoUrl;
-          snapshotTimeoutRef.current = setTimeout(() => {
-            snapshotTimeoutRef.current = null;
-            captureVideoFrameSnapshot(url, p, t);
-          }, 800);
+        // Neighbor / scrolled-away: freeze a real frame, then the still overlay
+        // covers the VideoView so scrolling up or down is never a black decoder.
+        if (p.playing) {
+          if (!firstFramePainted) return;
+          p.pause();
+        }
+        if (firstFramePainted && nativeFirstFrame) {
+          snapshotPlayerFrame(
+            videoUrl,
+            p,
+            t > 0 ? t : FEED_VIDEO_START_POSITION_SECONDS
+          );
         }
       });
     }
@@ -292,11 +287,17 @@ function VideoCardPlayerInner(
     isFeedActive,
     firstFrameReady,
     firstFramePainted,
+    nativeFirstFrame,
     player,
     isMuted,
     videoVolume,
     videoUrl,
   ]);
+
+  useEffect(() => {
+    if (!player || !nativeFirstFrame || !videoUrl) return;
+    snapshotPlayerFrame(videoUrl, player);
+  }, [player, nativeFirstFrame, videoUrl]);
 
   const showOverlayTemporarily = useCallback(() => {
     setShowOverlay(true);
@@ -330,6 +331,7 @@ function VideoCardPlayerInner(
     try {
       const sub = player.addListener("statusChange", ({ status, error }) => {
         if (status === "error" || error) {
+          if (isRetryableVideoSourceError(error)) return;
           setFailedVideoLoad(true);
         }
       });
@@ -346,6 +348,7 @@ function VideoCardPlayerInner(
   }, [player]);
 
   const handleVideoError = useCallback((error: unknown) => {
+    if (isRetryableVideoSourceError(error)) return;
     setFailedVideoLoad(true);
     if (__DEV__) {
       console.warn("[VideoCardPlayerArea] playback error", error);
@@ -389,6 +392,7 @@ function VideoCardPlayerInner(
     setHasTrackedView,
     storeRef,
     isMountedRef,
+    onResumeSeek: invalidateNativeFirstFrame,
   });
 
   /**
@@ -437,17 +441,29 @@ function VideoCardPlayerInner(
       hideOverlay,
     });
 
+  const paintedRef = useRef(false);
+  paintedRef.current = nativeFirstFrame;
+
   useEffect(() => {
     return () => {
       if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
-      if (snapshotTimeoutRef.current) clearTimeout(snapshotTimeoutRef.current);
       if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
+      if (!paintedRef.current) return;
+      snapshotPlayerFrame(videoUrl, videoRef.current);
     };
-  }, [tapTimeoutRef]);
+  }, [tapTimeoutRef, videoUrl]);
 
   const handleToggleMuteInternal = useCallback(() => {
     onToggleMute(key);
   }, [onToggleMute, key]);
+
+  const feedResume = useReelsStore((s) => s.resumePlayback);
+  const openFullscreen = useCallback(() => {
+    snapshotPlayerFrame(videoUrl, player);
+    const t = readPlayerCurrentTimeSec(player);
+    if (t > 0.15) savePlayhead(videoUrl, t);
+    onVideoTap(key, video, index);
+  }, [videoUrl, player, onVideoTap, key, video, index]);
 
   if (failedVideoLoad || !player) {
     return (
@@ -463,6 +479,17 @@ function VideoCardPlayerInner(
   }
 
   const showChrome = !hideChrome;
+  const pendingResumeSec =
+    feedResume?.target === "feed" &&
+    String(feedResume.contentId) === String(contentId) &&
+    feedResume.positionMs > 400
+      ? feedResume.positionMs / 1000
+      : 0;
+  const holdStill = shouldHoldVideoStill({
+    nativeFirstFrame,
+    isSurfaceActive: shouldPlayThisVideo,
+    pendingResumeSec,
+  });
 
   return (
     <View
@@ -483,7 +510,7 @@ function VideoCardPlayerInner(
             visible
             onFirstFrameRender={handleFirstFrameRender}
           />
-          {!firstFramePainted ? (
+          {holdStill ? (
             <View
               pointerEvents="none"
               style={{
@@ -493,21 +520,11 @@ function VideoCardPlayerInner(
                 right: 0,
                 bottom: 0,
                 zIndex: 2,
+                elevation: 4,
+                backgroundColor: "#1A0E0A",
               }}
             >
-              {lastFrame ? (
-                <Image
-                  source={lastFrame}
-                  style={{ width: "100%", height: FEED_VIDEO_PLAYER_HEIGHT }}
-                  contentFit="cover"
-                />
-              ) : (
-                <FeedVideoPoster
-                  item={video}
-                  showBadge={false}
-                  showGradients={false}
-                />
-              )}
+              <FeedVideoStill item={video} url={videoUrl} />
             </View>
           ) : null}
 
@@ -593,7 +610,7 @@ function VideoCardPlayerInner(
           {showChrome && (
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => onVideoTap(key, video, index)}
+              onPress={openFullscreen}
               style={{
                 position: "absolute",
                 top: 12,
