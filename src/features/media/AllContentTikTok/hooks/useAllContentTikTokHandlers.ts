@@ -64,17 +64,17 @@ export interface UseAllContentTikTokHandlersParams {
   refreshAllContent: () => Promise<void>;
   reshuffleFeed?: () => Promise<void>;
   setRefreshing: (v: boolean) => void;
-  toggleLike: (
+  toggleLike?: (
     contentId: string,
     contentType: string,
     options?: { initialLikes?: number; initialLiked?: boolean }
   ) => Promise<any>;
-  toggleSave: (
+  toggleSave?: (
     contentId: string,
     contentType: string,
     options?: { initialSaved?: boolean; initialSaves?: number }
   ) => Promise<{ saved: boolean; totalSaves: number; authRequired?: boolean } | void>;
-  recordShare: (contentId: string, contentType: string, shareMethod?: string) => Promise<void>;
+  recordShare?: (contentId: string, contentType: string, shareMethod?: string) => Promise<void>;
   loadDownloadedItems: () => Promise<void>;
 }
 
@@ -103,9 +103,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
     refreshAllContent,
     reshuffleFeed,
     setRefreshing,
-    toggleLike,
-    toggleSave,
-    recordShare,
     loadDownloadedItems,
   } = params;
 
@@ -215,7 +212,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         const contentType = item.contentType || "media";
         // Shared with Reels so both surfaces seed the optimistic flip
         // identically — see resolveLikeSeed.
-        const result = await toggleLike(
+        const result = await useInteractionStore.getState().toggleLike(
           contentId,
           contentType,
           resolveLikeSeed(contentId, item as any)
@@ -241,7 +238,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         console.error(`❌ Failed to toggle like for ${item.title}:`, error);
       }
     },
-    [toggleLike]
+    []
   );
 
   const handleComment = useCallback(
@@ -320,7 +317,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         setShowSuccessCard(true);
         setModalVisible(null);
 
-        const result = await toggleSave(contentId, contentType, {
+        const result = await useInteractionStore.getState().toggleSave(contentId, contentType, {
           initialSaved: seed.initialSaved,
           initialSaves: seed.initialSaves,
         });
@@ -384,7 +381,6 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
       }
     },
     [
-      toggleSave,
       getLikeCount,
       getCommentCount,
       libraryStore,
@@ -412,7 +408,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
 
         if (result.action === Share.sharedAction) {
           // Soft-fails on 404; never surfaces an error for dismiss/analytics miss
-          await recordShare(
+          void useInteractionStore.getState().recordShare(
             contentId,
             contentType,
             result.activityType || "generic"
@@ -433,7 +429,7 @@ export function useAllContentTikTokHandlers(params: UseAllContentTikTokHandlersP
         setModalVisible(null);
       }
     },
-    [recordShare, setModalVisible]
+    [setModalVisible]
   );
 
 

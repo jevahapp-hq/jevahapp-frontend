@@ -7,7 +7,10 @@ import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { Alert, Share } from "react-native";
 import allMediaAPI from "../../utils/allMediaAPI";
-import { ensureAuthenticatedForInteraction } from "../../utils/auth/requireAuthForInteraction";
+import {
+  isGuestForInteractionSync,
+  promptInteractionLogin,
+} from "../../utils/auth/requireAuthForInteraction";
 import { useInteractionStore } from "@/store/useInteractionStore";
 import {
   getVideoPlaybackSnapshot,
@@ -309,8 +312,10 @@ export function useReelsHandlers({
   const handleSave = useCallback(
     async (key: string) => {
       try {
-        const auth = await ensureAuthenticatedForInteraction({ action: "save" });
-        if (!auth.ok) return;
+        if (isGuestForInteractionSync()) {
+          promptInteractionLogin({ action: "save" });
+          return;
+        }
 
         const libraryId = contentIdForHooks || key;
         const seed = resolveSaveSeed(libraryId, currentVideo);

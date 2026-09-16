@@ -4,6 +4,7 @@ export { OptimizedImage } from "./OptimizedImage";
 // Shared UI components
 export { AvatarWithInitialFallback } from "./AvatarWithInitialFallback";
 export { AnimatedButton, type AnimatedButtonProps } from "./AnimatedButton";
+export { InstantPressable, type InstantPressableProps } from "./InstantPressable";
 
 // Existing components
 export { VideoCardSkeleton } from "./Skeleton/VideoCardSkeleton";

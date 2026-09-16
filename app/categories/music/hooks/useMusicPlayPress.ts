@@ -40,7 +40,7 @@ export function useMusicPlayPress(songs: any[]) {
 
       if (currentTrack?.id === song.id) {
         if (!globalIsPlaying) {
-          await togglePlayPause();
+          void togglePlayPause();
         }
         return;
       }
@@ -93,7 +93,7 @@ export function useMusicPlayPress(songs: any[]) {
         source: "music_for_you",
       });
 
-      await setTrack(
+      void setTrack(
         {
           id: song.id,
           title: song.title,

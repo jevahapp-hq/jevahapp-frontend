@@ -187,32 +187,41 @@ export function useAllContentTikTokFeedData(
   };
 }
 
-export function useContentStatsHelpers(contentStats: Record<string, any>) {
+export function useContentStatsHelpers(_contentStats?: Record<string, any>) {
   const getUserLikeState = useCallback(
     (contentId: string) =>
-      contentStats[contentId]?.userInteractions?.liked || false,
-    [contentStats]
+      Boolean(
+        useInteractionStore.getState().contentStats[contentId]?.userInteractions
+          ?.liked
+      ),
+    []
   );
 
   const getLikeCount = useCallback(
-    (contentId: string) => contentStats[contentId]?.likes || 0,
-    [contentStats]
+    (contentId: string) =>
+      useInteractionStore.getState().contentStats[contentId]?.likes || 0,
+    []
   );
 
   const getUserSaveState = useCallback(
     (contentId: string) =>
-      contentStats[contentId]?.userInteractions?.saved || false,
-    [contentStats]
+      Boolean(
+        useInteractionStore.getState().contentStats[contentId]?.userInteractions
+          ?.saved
+      ),
+    []
   );
 
   const getSaveCount = useCallback(
-    (contentId: string) => contentStats[contentId]?.saves || 0,
-    [contentStats]
+    (contentId: string) =>
+      useInteractionStore.getState().contentStats[contentId]?.saves || 0,
+    []
   );
 
   const getCommentCount = useCallback(
-    (contentId: string) => contentStats[contentId]?.comments || 0,
-    [contentStats]
+    (contentId: string) =>
+      useInteractionStore.getState().contentStats[contentId]?.comments || 0,
+    []
   );
 
   return {

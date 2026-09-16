@@ -1,7 +1,8 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Text, View } from "react-native";
 import { useContentSaveState } from "../../../src/shared/hooks/useContentSaveState";
+import { InstantPressable } from "../../../src/shared/components/InstantPressable";
 import {
   commentCountFromMetadata,
   resolveCommentDisplayCount,
@@ -115,7 +116,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
       />
 
       {/* Comment Button */}
-      <TouchableOpacity
+      <InstantPressable
         onPress={() => {
           triggerHapticFeedback();
           onComment(videoKey);
@@ -127,7 +128,6 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           minWidth: getTouchTargetSize(),
           minHeight: getTouchTargetSize(),
         }}
-        activeOpacity={0.7}
         accessibilityLabel="Add comment to this video"
         accessibilityRole="button"
       >
@@ -149,10 +149,10 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
         >
           {formatCount(commentDisplayCount)}
         </Text>
-      </TouchableOpacity>
+      </InstantPressable>
 
       {/* Save Button */}
-      <TouchableOpacity
+      <InstantPressable
         onPress={() => {
           triggerHapticFeedback();
           onSave(videoKey);
@@ -164,7 +164,6 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           minWidth: getTouchTargetSize(),
           minHeight: getTouchTargetSize(),
         }}
-        activeOpacity={0.7}
         accessibilityLabel={`${isSaved ? "Remove from" : "Save to"} library`}
         accessibilityRole="button"
       >
@@ -188,10 +187,10 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
             {formatCount(saveDisplayCount)}
           </Text>
         )}
-      </TouchableOpacity>
+      </InstantPressable>
 
       {/* Share Button */}
-      <TouchableOpacity
+      <InstantPressable
         onPress={() => {
           triggerHapticFeedback();
           onShare(videoKey);
@@ -203,7 +202,6 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
           minWidth: getTouchTargetSize(),
           minHeight: getTouchTargetSize(),
         }}
-        activeOpacity={0.7}
         accessibilityLabel="Share this video"
         accessibilityRole="button"
       >
@@ -223,7 +221,7 @@ export const ReelsActionButtons: React.FC<ReelsActionButtonsProps> = ({
             {formatCount(shareDisplayCount)}
           </Text>
         )}
-      </TouchableOpacity>
+      </InstantPressable>
     </View>
   );
 };

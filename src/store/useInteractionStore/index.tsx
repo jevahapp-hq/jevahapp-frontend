@@ -50,6 +50,20 @@ export const useInteractionStore = create<InteractionState>()(
   })
 );
 
+/** Stable action picks — never subscribe the whole store for a tap handler. */
+export const useToggleLike = () =>
+  useInteractionStore((state) => state.toggleLike);
+export const useToggleSave = () =>
+  useInteractionStore((state) => state.toggleSave);
+export const useRecordShare = () =>
+  useInteractionStore((state) => state.recordShare);
+export const useRecordView = () =>
+  useInteractionStore((state) => state.recordView);
+export const useAddComment = () =>
+  useInteractionStore((state) => state.addComment);
+export const useToggleCommentLike = () =>
+  useInteractionStore((state) => state.toggleCommentLike);
+
 export const useContentStats = (contentId: string) =>
   useInteractionStore((state) => state.contentStats[contentId]);
 

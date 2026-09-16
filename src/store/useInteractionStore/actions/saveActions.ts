@@ -1,15 +1,39 @@
 import type { ContentStats } from "@/app/utils/contentInteractionAPI";
-import { ensureAuthenticatedForInteraction } from "@/app/utils/auth/requireAuthForInteraction";
+import {
+  ensureAuthenticatedForInteraction,
+  isAuthenticatedForInteractionSync,
+  isGuestForInteractionSync,
+  promptInteractionLogin,
+} from "@/app/utils/auth/requireAuthForInteraction";
 import { persistContentInteraction } from "@/app/utils/contentInteractionPersist";
 import {
   baselineToggleCount,
   baselineToggleFlag,
+  reconcileToggleCount,
+  reconcileToggleFlag,
 } from "@/shared/media/engagementToggle";
 import type { ToggleSaveOptions } from "../types";
 import type { StoreGet, StoreSet } from "../types";
 
 /** Latest-wins: ignore stale API responses after rapid save/unsave. */
 const saveGeneration = new Map<string, number>();
+
+function rollbackOptimisticSave(
+  set: StoreSet,
+  contentId: string,
+  key: string,
+  previousStats: ContentStats | undefined
+) {
+  set((state: any) => {
+    const nextContentStats = { ...state.contentStats };
+    if (previousStats) nextContentStats[contentId] = previousStats;
+    else delete nextContentStats[contentId];
+    return {
+      contentStats: nextContentStats,
+      loadingInteraction: { ...state.loadingInteraction, [key]: false },
+    };
+  });
+}
 
 export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
   return {
@@ -29,91 +53,93 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
         previousStats?.saves
       );
 
-      const auth = await ensureAuthenticatedForInteraction({ action: "save" });
-      if (!auth.ok) {
+      if (isGuestForInteractionSync()) {
+        promptInteractionLogin({ action: "save" });
         return {
           saved: previousSaved,
           totalSaves: previousSaves,
           authRequired: true,
         };
       }
+      if (!isAuthenticatedForInteractionSync()) {
+        const auth = await ensureAuthenticatedForInteraction({ action: "save" });
+        if (!auth.ok) {
+          return {
+            saved: previousSaved,
+            totalSaves: previousSaves,
+            authRequired: true,
+          };
+        }
+      }
 
       const generation = (saveGeneration.get(contentId) ?? 0) + 1;
       saveGeneration.set(contentId, generation);
 
-      set((state: any) => ({
-        loadingInteraction: { ...state.loadingInteraction, [key]: true },
-      }));
+      const existingBefore = get().contentStats[contentId];
+      const baselineSaved = baselineToggleFlag(
+        options.initialSaved,
+        existingBefore?.userInteractions?.saved
+      );
+      const baselineSaves = baselineToggleCount(
+        options.initialSaves,
+        existingBefore?.saves
+      );
+
+      const defaultStats: ContentStats = {
+        contentId,
+        likes: existingBefore?.likes ?? options.initialLikes ?? 0,
+        saves: baselineSaves,
+        shares: existingBefore?.shares ?? options.initialShares ?? 0,
+        views: existingBefore?.views ?? options.initialViews ?? 0,
+        comments: existingBefore?.comments ?? options.initialComments ?? 0,
+        userInteractions: {
+          liked: existingBefore?.userInteractions?.liked ?? options.initialLiked ?? false,
+          saved: baselineSaved,
+          shared: existingBefore?.userInteractions?.shared ?? options.initialShared ?? false,
+          viewed: existingBefore?.userInteractions?.viewed ?? options.initialViewed ?? false,
+        },
+      };
+
+      set((state: any) => {
+        const existing = state.contentStats[contentId];
+        const s: ContentStats = existing
+          ? {
+              ...existing,
+              saves: baselineSaves,
+              userInteractions: {
+                ...existing.userInteractions,
+                saved: baselineSaved,
+              },
+            }
+          : defaultStats;
+
+        const saved = !s.userInteractions.saved;
+        const saves = Math.max(0, (s.saves || 0) + (saved ? 1 : -1));
+        return {
+          contentStats: {
+            ...state.contentStats,
+            [contentId]: {
+              ...s,
+              saves,
+              userInteractions: { ...s.userInteractions, saved },
+            },
+          },
+          loadingInteraction: { ...state.loadingInteraction, [key]: true },
+        };
+      });
+
+      const optimistic = get().contentStats[contentId];
+      if (optimistic) {
+        void persistContentInteraction(contentId, {
+          saves: optimistic.saves,
+          saved: optimistic.userInteractions?.saved,
+          likes: optimistic.likes,
+          comments: optimistic.comments,
+          views: optimistic.views,
+        });
+      }
 
       try {
-        set((state: any) => {
-          const existing = state.contentStats[contentId];
-          const currentlySaved = baselineToggleFlag(
-            options.initialSaved,
-            existing?.userInteractions?.saved
-          );
-          const baseSaves = baselineToggleCount(
-            options.initialSaves,
-            existing?.saves
-          );
-          const baseLikes = existing?.likes ?? options.initialLikes ?? 0;
-          const baseViews = existing?.views ?? options.initialViews ?? 0;
-          const baseComments = existing?.comments ?? options.initialComments ?? 0;
-          const baseShares = existing?.shares ?? options.initialShares ?? 0;
-          const baseLiked =
-            existing?.userInteractions?.liked ?? options.initialLiked ?? false;
-          const baseShared =
-            existing?.userInteractions?.shared ?? options.initialShared ?? false;
-          const baseViewed =
-            existing?.userInteractions?.viewed ?? options.initialViewed ?? false;
-
-          const nextSaved = !currentlySaved;
-          const nextSaves = Math.max(0, baseSaves + (nextSaved ? 1 : -1));
-
-          const baseStats: ContentStats =
-            existing ||
-            ({
-              contentId,
-              likes: baseLikes,
-              saves: baseSaves,
-              shares: baseShares,
-              views: baseViews,
-              comments: baseComments,
-              userInteractions: {
-                liked: baseLiked,
-                saved: currentlySaved,
-                shared: baseShared,
-                viewed: baseViewed,
-              },
-            } as ContentStats);
-
-          return {
-            contentStats: {
-              ...state.contentStats,
-              [contentId]: {
-                ...baseStats,
-                saves: nextSaves,
-                userInteractions: {
-                  ...baseStats.userInteractions,
-                  saved: nextSaved,
-                },
-              },
-            },
-            loadingInteraction: { ...state.loadingInteraction, [key]: true },
-          };
-        });
-
-        const optimistic = get().contentStats[contentId];
-        if (optimistic) {
-          void persistContentInteraction(contentId, {
-            saves: optimistic.saves,
-            saved: optimistic.userInteractions?.saved,
-            likes: optimistic.likes,
-            comments: optimistic.comments,
-            views: optimistic.views,
-          });
-        }
-
         const result = await api.toggleSave(contentId, contentType);
 
         if (saveGeneration.get(contentId) !== generation) {
@@ -123,40 +149,43 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
           };
         }
 
-        const saved = Boolean(result.saved);
-        const serverTotal = Number(result.totalSaves);
-        const nextSaves = Number.isFinite(serverTotal)
-          ? Math.max(0, serverTotal)
-          : optimistic?.saves ?? previousSaves;
+        if (result?.offlineQueued || result?.offlineCancelled) {
+          set((state: any) => ({
+            loadingInteraction: { ...state.loadingInteraction, [key]: false },
+          }));
+          return {
+            saved: Boolean(result.saved ?? optimistic?.userInteractions?.saved),
+            totalSaves: Number(result.totalSaves) || optimistic?.saves || previousSaves,
+          };
+        }
+
+        const optimisticSaved = Boolean(optimistic?.userInteractions?.saved);
+        const saved = reconcileToggleFlag({
+          optimistic: optimisticSaved,
+          server: result?.saved,
+        });
+        const flagMismatch = saved !== Boolean(result?.saved);
+        const nextSaves = reconcileToggleCount({
+          optimisticCount: optimistic?.saves ?? 0,
+          serverCount: result?.totalSaves,
+          flagMismatch,
+        });
 
         set((state: any) => {
-          const currentStats = state.contentStats[contentId];
-          const updatedStats: ContentStats = {
-            ...currentStats,
-            contentId,
-            likes: currentStats?.likes ?? options.initialLikes ?? 0,
-            saves: nextSaves,
-            shares: currentStats?.shares ?? options.initialShares ?? 0,
-            views: currentStats?.views ?? options.initialViews ?? 0,
-            comments: currentStats?.comments ?? options.initialComments ?? 0,
-            userInteractions: {
-              liked:
-                currentStats?.userInteractions?.liked ??
-                options.initialLiked ??
-                false,
-              saved,
-              shared:
-                currentStats?.userInteractions?.shared ??
-                options.initialShared ??
-                false,
-              viewed:
-                currentStats?.userInteractions?.viewed ??
-                options.initialViewed ??
-                false,
-            },
-          };
+          const s = state.contentStats[contentId];
+          if (!s) return state;
           return {
-            contentStats: { ...state.contentStats, [contentId]: updatedStats },
+            contentStats: {
+              ...state.contentStats,
+              [contentId]: {
+                ...s,
+                saves: nextSaves,
+                userInteractions: {
+                  ...s.userInteractions,
+                  saved,
+                },
+              },
+            },
             loadingInteraction: { ...state.loadingInteraction, [key]: false },
           };
         });
@@ -174,8 +203,8 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
           });
         }
         return {
-          saved: latest?.userInteractions?.saved ?? result.saved,
-          totalSaves: latest?.saves ?? result.totalSaves,
+          saved: latest?.userInteractions?.saved ?? saved,
+          totalSaves: latest?.saves ?? nextSaves,
         };
       } catch (error) {
         if (saveGeneration.get(contentId) !== generation) {
@@ -185,15 +214,7 @@ export function createSaveActions(set: StoreSet, get: StoreGet, api: any) {
           };
         }
         console.error("Error toggling save:", error);
-        set((state: any) => {
-          const nextContentStats = { ...state.contentStats };
-          if (previousStats) nextContentStats[contentId] = previousStats;
-          else delete nextContentStats[contentId];
-          return {
-            contentStats: nextContentStats,
-            loadingInteraction: { ...state.loadingInteraction, [key]: false },
-          };
-        });
+        rollbackOptimisticSave(set, contentId, key, previousStats);
         const rolledBack = get().contentStats[contentId];
         void persistContentInteraction(contentId, {
           saves: rolledBack?.saves ?? previousSaves,

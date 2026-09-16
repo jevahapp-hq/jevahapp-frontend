@@ -18,6 +18,8 @@ import { useLibraryStore } from "@/store/useLibraryStore";
 import { useMediaStore } from "@/store/useUploadStore";
 import { useReelsStore } from "@/store/useReelsStore";
 import { useVideoNavigation } from "../../hooks/useVideoNavigation";
+
+const EMPTY_COMMENTS: Record<string, any[]> = {};
 import {
   convertToDownloadableItem,
   useDownloadHandler,
@@ -46,7 +48,7 @@ export default function VideoComponent() {
   const libraryStore = useLibraryStore();
   const contentStats = useInteractionStore((s) => s.contentStats);
   const loadBatchContentStats = useInteractionStore((s) => s.loadBatchContentStats);
-  const { comments } = useInteractionStore();
+  const comments = EMPTY_COMMENTS;
   const { showCommentModal } = useCommentModal();
 
   const scrollViewRef = useRef<ScrollView>(null);

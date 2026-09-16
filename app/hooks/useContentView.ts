@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useInteractionStore } from '@/store/useInteractionStore';
+import { useRecordView } from '@/store/useInteractionStore';
 
 interface UseContentViewOptions {
   contentId: string;
@@ -16,7 +16,7 @@ export function useContentView({
   trackViewOnMount = false,
   trackViewOnVisibility = true,
 }: UseContentViewOptions) {
-  const { recordView } = useInteractionStore();
+  const recordView = useRecordView();
   const [hasTrackedView, setHasTrackedView] = useState(false);
   const [viewDuration, setViewDuration] = useState(0);
   const startTimeRef = useRef<number | null>(null);

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import contentInteractionAPI from '../utils/contentInteractionAPI';
-import { useInteractionStore } from '@/store/useInteractionStore';
+import { useToggleLike } from '@/store/useInteractionStore';
 
 export interface UseSocialActionsOptions {
   contentId: string;
@@ -19,7 +19,7 @@ export interface LikeState {
  * - Immutable state changes
  */
 export const useSocialActions = ({ contentId, contentType = 'media' }: UseSocialActionsOptions) => {
-  const { toggleLike: toggleLikeInStore } = useInteractionStore();
+  const toggleLikeInStore = useToggleLike();
 
   /**
    * Handle like with optimistic update and rollback

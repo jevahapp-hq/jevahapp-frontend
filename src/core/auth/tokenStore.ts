@@ -1,12 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cacheAuthToken, peekAuthToken } from "./tokenMemory";
+
+export { isValidJwtFormat } from "./jwtFormat";
 
 const SECURE_JWT_KEY = "jwt";
 const LEGACY_ASYNC_KEYS = ["userToken", "token"] as const;
-
-export function isValidJwtFormat(token: string): boolean {
-  if (!token || token.trim() === "") return false;
-  return token.split(".").length === 3;
-}
 
 async function secureStore() {
   return import("expo-secure-store");
@@ -17,11 +15,17 @@ async function secureStore() {
  * once, then deleted so they cannot land in Android Auto Backup.
  */
 export async function getAuthToken(): Promise<string | null> {
+  const cached = peekAuthToken();
+  if (cached !== undefined) return cached;
+
   try {
     const SecureStore = await secureStore();
     if (typeof SecureStore.getItemAsync === "function") {
       const secure = await SecureStore.getItemAsync(SECURE_JWT_KEY);
-      if (secure) return secure;
+      if (secure) {
+        cacheAuthToken(secure);
+        return secure;
+      }
     }
   } catch {
     // SecureStore unavailable (web / Expo Go quirks)
@@ -39,10 +43,12 @@ export async function getAuthToken(): Promise<string | null> {
     // ignore
   }
 
+  cacheAuthToken(null);
   return null;
 }
 
 export async function storeAuthToken(token: string): Promise<void> {
+  cacheAuthToken(token);
   const SecureStore = await secureStore();
   if (typeof SecureStore.setItemAsync !== "function") {
     throw new Error("SecureStore is unavailable; cannot persist auth token");
@@ -56,6 +62,7 @@ export async function storeAuthToken(token: string): Promise<void> {
 }
 
 export async function clearAuthTokens(): Promise<void> {
+  cacheAuthToken(null);
   try {
     const SecureStore = await secureStore();
     if (typeof SecureStore.deleteItemAsync === "function") {

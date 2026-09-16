@@ -60,7 +60,6 @@ import { useAuthorStoreVersion } from "../../../shared/author";
 import SocketManager from "../../../../app/services/SocketManager";
 import { useDownloadStore } from "@/store/useDownloadStore";
 import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
-import { useInteractionStore } from "@/store/useInteractionStore";
 import { useReelsStore } from "@/store/useReelsStore";
 import { useCommentModal } from "../../../../app/context/CommentModalContext";
 import {
@@ -73,6 +72,9 @@ import type { AllContentTikTokProps, FeedRow } from "./types";
 import { buildFeedRows, indexMediaRows } from "./utils/buildFeedRows";
 import { scrollFeedToResume } from "./utils/scrollFeedToResume";
 import { warmVideoConnection } from "./utils/videoConnectionWarmer";
+
+const EMPTY_STATS: Record<string, any> = {};
+const EMPTY_COMMENTS: Record<string, any[]> = {};
 
 export type { AllContentTikTokProps } from "./types";
 
@@ -192,9 +194,9 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     pauseAllAudio,
   });
 
-  const { comments } = useInteractionStore();
+  const comments = EMPTY_COMMENTS;
   const { loadDownloadedItems } = useDownloadStore();
-  const { contentStats, toggleLike, toggleSave } = useInteractionStore();
+  const contentStats = EMPTY_STATS;
 
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState<string | null>(null);
@@ -392,9 +394,6 @@ export const AllContentTikTok: React.FC<AllContentTikTokProps> = ({
     setCurrentlyVisibleVideo,
     refreshAllContent: refreshFeed,
     setRefreshing,
-    socketManager,
-    toggleLike: toggleLike as any,
-    toggleSave: toggleSave as any,
     loadDownloadedItems,
   });
 

@@ -6,6 +6,7 @@
  * a broken backend hasLiked:false wipes the red heart after ~10 minutes.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { trimInteractionMap } from "./contentInteractionPersistTrim";
 
 const KEY = "jevah_content_interaction_stats_v2";
 /** Counts / totals — short window so feed numbers can catch up */
@@ -29,6 +30,9 @@ export type PersistedContentInteraction = {
 
 type PersistedMap = Record<string, PersistedContentInteraction>;
 let memoryCache: PersistedMap = {};
+let diskHydrated = false;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+const PERSIST_DEBOUNCE_MS = 200;
 
 async function getUserScope(): Promise<string> {
   try {
@@ -64,9 +68,31 @@ async function writeMap(map: PersistedMap): Promise<void> {
   }
 }
 
+export { trimInteractionMap } from "./contentInteractionPersistTrim";
+
 export async function getPersistedContentInteractions(): Promise<PersistedMap> {
-  memoryCache = await readMap();
+  const disk = await readMap();
+  memoryCache = { ...disk, ...memoryCache };
+  diskHydrated = true;
   return memoryCache;
+}
+
+async function flushPersistedInteractions(): Promise<void> {
+  if (!diskHydrated) {
+    const disk = await readMap();
+    memoryCache = { ...disk, ...memoryCache };
+    diskHydrated = true;
+  }
+  memoryCache = trimInteractionMap(memoryCache);
+  await writeMap(memoryCache);
+}
+
+function schedulePersist(): void {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void flushPersistedInteractions();
+  }, PERSIST_DEBOUNCE_MS);
 }
 
 export function getCachedContentInteraction(
@@ -142,11 +168,5 @@ export async function persistContentInteraction(
     ...patch,
     updatedAt: Date.now(),
   };
-  const disk = await readMap();
-  const map = { ...disk, ...memoryCache };
-  const entries = Object.entries(map).sort(
-    (a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0)
-  );
-  const trimmed = Object.fromEntries(entries.slice(0, 400));
-  await writeMap(trimmed);
+  schedulePersist();
 }

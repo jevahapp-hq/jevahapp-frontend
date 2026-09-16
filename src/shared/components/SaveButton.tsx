@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
+import { Text, TouchableOpacity } from "react-native";
 import { mediaApi } from "../../core/api/MediaApi";
 import { formatCount } from "../utils/formatCount";
 
@@ -43,8 +43,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
   }, [initialSaved, initialSaveCount]);
 
   const toggleSave = useCallback(async () => {
-    if (loading || disabled) return;
-
+    if (disabled) return;
     setLoading(true);
     setError(null);
 
@@ -136,20 +135,17 @@ const SaveButton: React.FC<SaveButtonProps> = ({
   return (
     <TouchableOpacity
       onPress={toggleSave}
-      disabled={loading || disabled}
+      disabled={disabled}
+      delayPressIn={0}
       style={{
         flexDirection: "row",
         alignItems: "center",
-        opacity: loading || disabled ? 0.6 : 1,
+        opacity: disabled ? 0.6 : 1,
         padding: 4,
       }}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color={currentColor} />
-      ) : (
-        <Ionicons name={iconName as any} size={size} color={currentColor} />
-      )}
+      <Ionicons name={iconName as any} size={size} color={currentColor} />
 
       {showText && (
         <Text

@@ -1,6 +1,11 @@
 import type { ContentStats } from "@/app/utils/contentInteractionAPI";
 import { persistContentInteraction } from "@/app/utils/contentInteractionPersist";
-import { ensureAuthenticatedForInteraction } from "@/app/utils/auth/requireAuthForInteraction";
+import {
+  ensureAuthenticatedForInteraction,
+  isAuthenticatedForInteractionSync,
+  isGuestForInteractionSync,
+  promptInteractionLogin,
+} from "@/app/utils/auth/requireAuthForInteraction";
 import {
   isRateLimitError,
   RateLimitError,
@@ -78,13 +83,22 @@ export function createLikeActions(set: StoreSet, get: StoreGet, api: any) {
         };
       };
 
-      // Guests: prompt login and leave the heart untouched.
-      const auth = await ensureAuthenticatedForInteraction({
-        action: "like",
-        message: "Log in to like this and keep it across devices.",
-      });
-      if (!auth.ok) {
+      // Sync for logged-in users. Guests get the login sheet without a heart flip.
+      if (isGuestForInteractionSync()) {
+        promptInteractionLogin({
+          action: "like",
+          message: "Log in to like this and keep it across devices.",
+        });
         return { ...currentSnapshot(), authRequired: true };
+      }
+      if (!isAuthenticatedForInteractionSync()) {
+        const auth = await ensureAuthenticatedForInteraction({
+          action: "like",
+          message: "Log in to like this and keep it across devices.",
+        });
+        if (!auth.ok) {
+          return { ...currentSnapshot(), authRequired: true };
+        }
       }
 
       if (cooldownUntil > now) {

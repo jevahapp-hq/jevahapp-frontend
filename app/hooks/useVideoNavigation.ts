@@ -161,8 +161,7 @@ export const useVideoNavigation = () => {
       console.warn("Failed to pause videos before navigation", e);
     }
 
-    // Build list sync — navigate immediately (no await enrich)
-    const videoListForNavigation = allVideos.map((v, idx) =>
+    const mapOne = (v: MediaItem, idx: number) =>
       mapVideoForReels(
         v,
         idx,
@@ -170,14 +169,16 @@ export const useVideoNavigation = () => {
         getTimeAgo,
         contentStats,
         globalFavoriteCounts
-      )
-    );
+      );
 
-    reelsStore.setVideoList(videoListForNavigation);
+    const currentMapped = mapOne(video, index);
+    const quickList = allVideos.map((v, idx) =>
+      idx === index ? currentMapped : (v as any)
+    );
+    reelsStore.setVideoList(quickList);
     reelsStore.setCurrentIndex(index);
 
-    const currentItem =
-      videoListForNavigation[index] || videoListForNavigation[0];
+    const currentItem = currentMapped;
     if (!currentItem) return;
 
     const fallbackName = getDisplayName(video.speaker, video.uploadedBy);
@@ -218,15 +219,19 @@ export const useVideoNavigation = () => {
       return;
     }
 
-    void UserProfileCache.enrichContentArrayBatch(videoListForNavigation)
-      .then((enrichedList) => {
-        if (enrichedList && enrichedList.length > 0) {
-          reelsStore.setVideoList(enrichedList);
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to enrich content array in navigation:", err);
-      });
+    void Promise.resolve().then(() => {
+      const videoListForNavigation = allVideos.map(mapOne);
+      reelsStore.setVideoList(videoListForNavigation);
+      void UserProfileCache.enrichContentArrayBatch(videoListForNavigation)
+        .then((enrichedList) => {
+          if (enrichedList && enrichedList.length > 0) {
+            reelsStore.setVideoList(enrichedList);
+          }
+        })
+        .catch((err) => {
+          console.warn("Failed to enrich content array in navigation:", err);
+        });
+    });
   };
 
   return {

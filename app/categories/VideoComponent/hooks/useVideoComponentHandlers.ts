@@ -34,7 +34,7 @@ interface UseVideoComponentHandlersProps {
   libraryStore: any;
   globalVideoStore: any;
   showCommentModal: (comments: any[], contentId: string) => void;
-  comments: Record<string, any[]>;
+  comments?: Record<string, any[]>;
   handleDownload: (item: any) => Promise<{ success: boolean }>;
   checkIfDownloaded: (url: string) => boolean;
   loadDownloadedItems: () => Promise<void>;
@@ -64,7 +64,6 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
     libraryStore,
     globalVideoStore,
     showCommentModal,
-    comments,
     handleDownload,
     checkIfDownloaded,
     loadDownloadedItems,
@@ -268,28 +267,7 @@ export function useVideoComponentHandlers(props: UseVideoComponentHandlersProps)
 
   const handleComment = (key: string, video: VideoCardData) => {
     const contentId = key;
-    const currentComments = comments[contentId] || [];
-    const formattedComments = currentComments.map((comment: any) => ({
-      id: comment.id,
-      userName: comment.username || "Anonymous",
-      avatar: comment.userAvatar || "",
-      timestamp: comment.timestamp,
-      comment: comment.comment,
-      likes: comment.likes || 0,
-      isLiked: comment.isLiked || false,
-    }));
-    showCommentModal(formattedComments, contentId);
-    setVideoStats((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        comment: prev[key]?.comment === 1 ? 0 : 1,
-        views: prev[key]?.views || video.views || 0,
-        sheared: prev[key]?.sheared || video.sheared || 0,
-        favorite: prev[key]?.favorite || video.favorite || 0,
-        saved: prev[key]?.saved || video.saved || 0,
-      },
-    }));
+    showCommentModal([], contentId);
   };
 
   const getTimeAgo = (createdAt: string): string => {

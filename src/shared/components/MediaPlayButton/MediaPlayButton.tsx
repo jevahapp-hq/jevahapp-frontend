@@ -64,6 +64,8 @@ export const MediaPlayButton: React.FC<MediaPlayButtonProps> = ({
       <Pressable
         onPress={handlePress}
         disabled={disabled}
+        unstable_pressDelay={0}
+        android_disableSound
         hitSlop={{
           top: config.hitSlop,
           bottom: config.hitSlop,

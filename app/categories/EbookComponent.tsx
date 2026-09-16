@@ -13,6 +13,8 @@ import { useCommentModal } from "../context/CommentModalContext";
 import { useDownloadStore } from "@/store/useDownloadStore";
 import { useInteractionStore } from "@/store/useInteractionStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
+
+const EMPTY_COMMENTS: Record<string, any[]> = {};
 import { useMediaStore } from "@/store/useUploadStore";
 import { convertToDownloadableItem, useDownloadHandler } from "../utils/downloadUtils";
 import { getUserAvatarFromContent, getUserDisplayNameFromContent } from "../utils/userValidation";
@@ -152,7 +154,6 @@ export default function EbookComponent() {
   
   // Interaction functionality
   const { showCommentModal } = useCommentModal();
-  const { comments } = useInteractionStore();
   const { addToLibrary, removeFromLibrary } = useLibraryStore();
 
   useFocusEffect(
@@ -176,17 +177,7 @@ export default function EbookComponent() {
 
   const handleComment = (key: string, item: EbookItem) => {
     const contentId = item._id || key;
-    const currentComments = comments[contentId] || [];
-    const formattedComments = currentComments.map((comment: any) => ({
-      id: comment.id,
-      userName: comment.username || 'Anonymous',
-      avatar: comment.userAvatar || '',
-      timestamp: comment.timestamp,
-      comment: comment.comment,
-      likes: comment.likes || 0,
-      isLiked: comment.isLiked || false,
-    }));
-    showCommentModal(formattedComments, contentId);
+    showCommentModal([], contentId);
   };
 
   const handleSave = async (key: string, item: EbookItem) => {
@@ -531,7 +522,7 @@ export default function EbookComponent() {
               <EbookEngagementRow
                 item={item}
                 contentId={String(item._id || getContentKey(item))}
-                comments={comments}
+                comments={EMPTY_COMMENTS}
                 onLike={() => handleFavorite(getContentKey(item), item)}
                 onSave={() => handleSave(getContentKey(item), item)}
                 onDownload={() => handleDownloadPress(item)}

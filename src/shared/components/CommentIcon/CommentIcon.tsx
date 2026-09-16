@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Text, TouchableOpacity, ViewStyle } from "react-native";
+import { Text, ViewStyle } from "react-native";
 import { UI_CONFIG } from "../../constants";
 import { CommentIconProps } from "../../types/comment.types";
 import { triggerHapticFeedback } from "../../utils";
@@ -11,7 +11,7 @@ import {
     getResponsiveSpacing,
     getTouchTargetSize,
 } from "../../utils/responsive";
-import { AnimatedButton } from "../AnimatedButton";
+import { InstantPressable } from "../InstantPressable";
 
 // Re-export types for convenience
 export type { CommentIconProps } from "../../types/comment.types";
@@ -26,7 +26,7 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
   contentId,
   onPress,
   style,
-  useAnimatedButton = true,
+  useAnimatedButton: _useAnimatedButton = true,
   compact = false,
 }) => {
   const handlePress = () => {
@@ -80,14 +80,8 @@ export const CommentIcon: React.FC<CommentIconProps> = ({
       isVertical && color.toLowerCase() === "#ffffff" ? 2 : 0,
   };
 
-  const ButtonComponent = useAnimatedButton ? AnimatedButton : TouchableOpacity;
-  const buttonProps = useAnimatedButton
-    ? {}
-    : {
-        activeOpacity: 0.7,
-        delayPressIn: 0,
-        delayPressOut: 0,
-      };
+  const ButtonComponent = InstantPressable;
+  const buttonProps = {};
 
   return (
     <ButtonComponent

@@ -1,14 +1,15 @@
 import React from "react";
-import { TouchableOpacity, TouchableOpacityProps, ViewStyle } from "react-native";
+import { type ViewStyle } from "react-native";
+import { InstantPressable, type InstantPressableProps } from "../InstantPressable";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
 
-const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedPressable = Animated.createAnimatedComponent(InstantPressable);
 
-export interface AnimatedButtonProps extends Omit<TouchableOpacityProps, "style"> {
+export interface AnimatedButtonProps extends Omit<InstantPressableProps, "style"> {
   /**
    * Custom style for the button
    */
@@ -47,9 +48,8 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   disableAnimation = false,
   onPress,
   children,
-  activeOpacity = 1,
   ...props
-}) => {
+}: AnimatedButtonProps) => {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -70,14 +70,13 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   };
 
   return (
-    <AnimatedTouchableOpacity
+    <AnimatedPressable
       {...props}
       onPress={handlePress}
       style={[style, animatedStyle]}
-      activeOpacity={activeOpacity}
     >
       {children}
-    </AnimatedTouchableOpacity>
+    </AnimatedPressable>
   );
 };
 

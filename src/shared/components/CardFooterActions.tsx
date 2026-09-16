@@ -3,9 +3,10 @@
  */
 import React from "react";
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { AnimatedButton } from "./AnimatedButton";
 import { CommentIcon } from "./CommentIcon";
+import { InstantPressable } from "./InstantPressable";
 import { LikeHeartButton } from "./like";
 import SaveButton from "./SaveButton";
 import { CardFooterSkeleton } from "./Skeleton/CardFooterSkeleton";
@@ -103,7 +104,7 @@ function CardFooterActions({
             onSaveChange={() => onSave()}
           />
         ) : (
-          <TouchableOpacity
+          <InstantPressable
             onPress={onSave}
             style={styles.slotInner}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -118,7 +119,7 @@ function CardFooterActions({
             {saveCount > 0 ? (
               <Text style={styles.count}>{formatCount(saveCount)}</Text>
             ) : null}
-          </TouchableOpacity>
+          </InstantPressable>
         )}
       </View>
 

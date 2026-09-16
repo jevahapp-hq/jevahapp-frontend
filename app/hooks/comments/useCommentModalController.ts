@@ -13,7 +13,11 @@ import {
 import { MEDIA_PEEK_HEIGHT } from "../../components/commentSheetLayout";
 import { useCommentTyping } from "./useCommentTyping";
 import SocketManager from "../../services/SocketManager";
-import { useInteractionStore } from "@/store/useInteractionStore";
+import {
+  useAddComment,
+  useInteractionStore,
+  useToggleCommentLike,
+} from "@/store/useInteractionStore";
 import { getApiBaseUrl } from "../../utils/api";
 import contentInteractionAPI, {
   hydrateCommentsCacheFromDisk,
@@ -58,8 +62,8 @@ export function useCommentModalController(): CommentModalContextType {
   const [mediaScale, setMediaScale] = useState(1);
   const [showPeekHud, setShowPeekHud] = useState(true);
 
-  const { addComment: addCommentToStore, toggleCommentLike } =
-    useInteractionStore();
+  const addCommentToStore = useAddComment();
+  const toggleCommentLike = useToggleCommentLike();
   const socketManagerRef = useRef<SocketManager | null>(null);
   const currentUserIdRef = useRef<string>("");
   const currentUserFirstNameRef = useRef<string>("");

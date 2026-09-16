@@ -1,5 +1,5 @@
 import type { ContentStats } from "@/app/utils/contentInteractionAPI";
-import { ensureAuthenticatedForInteraction } from "@/app/utils/auth/requireAuthForInteraction";
+import { ensureAuthenticatedForInteraction, isAuthenticatedForInteractionSync } from "@/app/utils/auth/requireAuthForInteraction";
 import type { StoreSet } from "../types";
 
 const VIEW_RECORD_MIN_INTERVAL_MS = 2500;
@@ -13,10 +13,12 @@ export function createShareViewActions(set: StoreSet, api: any) {
       shareMethod: string = "generic"
     ) => {
       // Allow OS share for guests; only persist analytics when authenticated.
-      const auth = await ensureAuthenticatedForInteraction({
-        action: "share",
-        silent: true,
-      });
+      const auth = isAuthenticatedForInteractionSync()
+        ? { ok: true }
+        : await ensureAuthenticatedForInteraction({
+            action: "share",
+            silent: true,
+          });
       if (!auth.ok) return;
 
       try {

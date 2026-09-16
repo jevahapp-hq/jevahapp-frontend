@@ -13,12 +13,13 @@ interface UseSermonInteractionsParams {
   videoRefs: MutableRefObject<Record<string, any>>;
 }
 
+const EMPTY_COMMENTS: Record<string, any[]> = {};
+
 export function useSermonInteractions({
   videoRefs,
 }: UseSermonInteractionsParams) {
   const libraryStore = useLibraryStore();
   const { showCommentModal } = useCommentModal();
-  const { comments } = useInteractionStore();
 
   const [modalVisible, setModalVisible] = useState<string | null>(null);
   const [contentStats, setContentStats] = useState<Record<string, any>>({});
@@ -48,17 +49,7 @@ export function useSermonInteractions({
 
   const handleComment = (key: string, audio: any) => {
     const contentId = audio._id || key;
-    const currentComments = comments[contentId] || [];
-    const formattedComments = currentComments.map((comment: any) => ({
-      id: comment.id,
-      userName: comment.username || "Anonymous",
-      avatar: comment.userAvatar || "",
-      timestamp: comment.timestamp,
-      comment: comment.comment,
-      likes: comment.likes || 0,
-      isLiked: comment.isLiked || false,
-    }));
-    showCommentModal(formattedComments, contentId);
+    showCommentModal([], contentId);
   };
 
   const handleShare = async (key: string, item: any) => {
@@ -241,7 +232,7 @@ export function useSermonInteractions({
   };
 
   return {
-    comments,
+    comments: EMPTY_COMMENTS,
     showCommentModal,
     modalVisible,
     setModalVisible,

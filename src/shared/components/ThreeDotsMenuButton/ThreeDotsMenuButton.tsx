@@ -27,7 +27,7 @@ export const ThreeDotsMenuButton: React.FC<ThreeDotsMenuButtonProps> = ({
   const handlePress = () => {
     const now = Date.now();
     // Guard against accidental double delivery on some Android firmwares
-    if (now - lastPressAt.current < 350) return;
+    if (now - lastPressAt.current < 80) return;
     lastPressAt.current = now;
     onPress();
   };
@@ -46,6 +46,8 @@ export const ThreeDotsMenuButton: React.FC<ThreeDotsMenuButtonProps> = ({
         borderless: true,
         radius: 22,
       }}
+      unstable_pressDelay={0}
+      android_disableSound
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >

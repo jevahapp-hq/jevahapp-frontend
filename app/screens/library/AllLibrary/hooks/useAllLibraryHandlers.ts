@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, Animated, Share } from "react-native";
 import { useDeleteMedia } from "../../../../hooks/useDeleteMedia";
-import { useInteractionStore } from "@/store/useInteractionStore";
+import { useToggleLike, useToggleSave } from "@/store/useInteractionStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 import allMediaAPI from "../../../../utils/allMediaAPI";
 import { useDownloadHandler } from "../../../../utils/downloadUtils";
@@ -40,7 +40,8 @@ export function useAllLibraryHandlers({
 }: UseAllLibraryHandlersProps) {
   const router = useRouter();
   const libraryStore = useLibraryStore();
-  const { toggleLike, toggleSave } = useInteractionStore();
+  const toggleLike = useToggleLike();
+  const toggleSave = useToggleSave();
   const { handleDownload } = useDownloadHandler();
   const { deleteMediaItem, checkOwnership } = useDeleteMedia();
 

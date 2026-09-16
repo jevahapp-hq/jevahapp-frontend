@@ -88,7 +88,7 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
         overlay.open({ ...nowPlaying }, { queue: overlayQueue(queue) });
       }
     }
-    await playOrToggleTrack(track, { queue });
+    void playOrToggleTrack(track, { queue });
   }, [audio]);
 
   const openFullPlayer = useCallback(async () => {
@@ -104,7 +104,7 @@ export function useMusicCardPlayback(audio: MediaItem, index: number) {
       );
     }
     if (currentTrackId === audioId) return;
-    await playOrToggleTrack(track, { queue });
+    void playOrToggleTrack(track, { queue });
   }, [audio, audioId, currentTrackId]);
 
   const seekBySeconds = useCallback(

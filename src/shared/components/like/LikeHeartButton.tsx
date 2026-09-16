@@ -3,7 +3,8 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { InstantPressable } from "../InstantPressable";
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -62,7 +63,7 @@ export function LikeHeartButton({
   const isVertical = layout === "vertical";
 
   return (
-    <Pressable
+    <InstantPressable
       onPress={handlePress}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={[
@@ -109,7 +110,7 @@ export function LikeHeartButton({
           {formatCount(likeCount)}
         </Text>
       ) : null}
-    </Pressable>
+    </InstantPressable>
   );
 }
 

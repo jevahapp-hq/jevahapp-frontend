@@ -1,5 +1,8 @@
 import type { ContentStats } from "@/app/utils/contentInteractionAPI";
-import { ensureAuthenticatedForInteraction } from "@/app/utils/auth/requireAuthForInteraction";
+import {
+  ensureAuthenticatedForInteraction,
+  isAuthenticatedForInteractionSync,
+} from "@/app/utils/auth/requireAuthForInteraction";
 import type { StoreSet } from "../types";
 
 export function createCommentActions(set: StoreSet, api: any) {
@@ -10,9 +13,11 @@ export function createCommentActions(set: StoreSet, api: any) {
       contentType: string = "media",
       parentCommentId?: string
     ) => {
-      const auth = await ensureAuthenticatedForInteraction({
-        action: "comment",
-      });
+      const auth = isAuthenticatedForInteractionSync()
+        ? { ok: true }
+        : await ensureAuthenticatedForInteraction({
+            action: "comment",
+          });
       if (!auth.ok) {
         const err = new Error("Authentication required") as Error & {
           authRequired?: boolean;
@@ -117,21 +122,63 @@ export function createCommentActions(set: StoreSet, api: any) {
     },
 
     toggleCommentLike: async (commentId: string, contentId: string) => {
-      const auth = await ensureAuthenticatedForInteraction({ action: "like" });
+      const auth = isAuthenticatedForInteractionSync()
+        ? { ok: true }
+        : await ensureAuthenticatedForInteraction({ action: "like" });
       if (!auth.ok) return;
+
+      let rollback: { likes: number; isLiked: boolean } | null = null;
+      set((state: any) => {
+        const contentComments = state.comments[contentId] || [];
+        const updatedComments = contentComments.map((c: any) => {
+          if (c.id !== commentId) return c;
+          const liked = !Boolean(c.isLiked);
+          rollback = { likes: c.likes || 0, isLiked: Boolean(c.isLiked) };
+          return {
+            ...c,
+            isLiked: liked,
+            likes: Math.max(0, (c.likes || 0) + (liked ? 1 : -1)),
+          };
+        });
+        return {
+          comments: { ...state.comments, [contentId]: updatedComments },
+        };
+      });
 
       try {
         const result = await api.toggleCommentLike(commentId);
         set((state: any) => {
           const contentComments = state.comments[contentId] || [];
           const updatedComments = contentComments.map((c: any) =>
-            c.id === commentId ? { ...c, likes: result.totalLikes } : c
+            c.id === commentId
+              ? {
+                  ...c,
+                  likes:
+                    typeof result?.totalLikes === "number"
+                      ? result.totalLikes
+                      : c.likes,
+                }
+              : c
           );
           return {
             comments: { ...state.comments, [contentId]: updatedComments },
           };
         });
       } catch (error) {
+        if (rollback) {
+          const previous = rollback;
+          set((state: any) => {
+            const contentComments = state.comments[contentId] || [];
+            const updatedComments = contentComments.map((c: any) =>
+              c.id === commentId
+                ? { ...c, likes: previous.likes, isLiked: previous.isLiked }
+                : c
+            );
+            return {
+              comments: { ...state.comments, [contentId]: updatedComments },
+            };
+          });
+        }
         console.error("Error toggling comment like:", error);
       }
     },

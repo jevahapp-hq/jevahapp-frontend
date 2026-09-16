@@ -5,6 +5,7 @@
 import { useEffect } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import * as Network from "expo-network";
+import { getAuthToken } from "../../../src/core/auth/tokenStore";
 import { flushLikeMutationQueue } from "./likeFlush";
 import { getPersistedContentInteractions } from "../contentInteractionPersist";
 import { useInteractionStore } from "@/store/useInteractionStore";
@@ -45,6 +46,7 @@ async function flushSafely() {
  */
 export function useLikeQueueBootstrap() {
   useEffect(() => {
+    void getAuthToken();
     hydrateStatsFromDiskCache();
     void flushSafely();
 
