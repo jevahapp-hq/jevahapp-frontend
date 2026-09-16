@@ -146,7 +146,10 @@ module.exports = (() => {
 
   base.transformer = {
     ...transformer,
-    babelTransformerPath: require.resolve("react-native-svg-transformer"),
+    // Expo entry uses @expo/metro-config babel transformer (not RN's).
+    // The default entry pulls @react-native/metro-babel-transformer and can
+    // break EAS bundling (missing module / countLines errors).
+    babelTransformerPath: require.resolve("react-native-svg-transformer/expo"),
   };
 
   const srcBlock =

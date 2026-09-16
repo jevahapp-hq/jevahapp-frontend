@@ -69,7 +69,6 @@ export default {
     },
     android: {
       package: ANDROID_PACKAGE[appVariant],
-      edgeToEdgeEnabled: true,
       adaptiveIcon: {
         foregroundImage: "./assets/images/Jevah.png",
         backgroundColor: "#ffffff",
@@ -112,6 +111,8 @@ export default {
       "expo-asset",
       "expo-media-library",
       "expo-audio",
+      "expo-video",
+      "expo-web-browser",
       [
         "expo-splash-screen",
         {
@@ -133,6 +134,8 @@ export default {
             extraProguardRules: [
               "-keep class com.facebook.hermes.** { *; }",
               "-keep class com.facebook.jni.** { *; }",
+              "-keep class expo.modules.** { *; }",
+              "-dontwarn expo.modules.**",
             ].join("\n"),
           },
         },
