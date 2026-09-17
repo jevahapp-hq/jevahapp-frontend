@@ -5,14 +5,14 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { PERF, recordSample } from "../../src/shared/utils/perfMarks";
 import { PERFORMANCE_FEATURES } from "../../src/shared/config/performance";
+import { pdfCacheFileName } from "./pdfCachePath";
 
 const CACHE_DIR = () => `${FileSystem.cacheDirectory}pdf-cache`;
 const MAX_CACHED_PDFS = 8;
 const MIN_VALID_BYTES = 1000;
 
 export function getPdfCachePath(url: string): string {
-  const safe = encodeURIComponent(String(url || "").trim());
-  return `${CACHE_DIR()}/${safe}.pdf`;
+  return `${CACHE_DIR()}/${pdfCacheFileName(url)}`;
 }
 
 export async function ensurePdfCacheDir(): Promise<void> {
@@ -74,15 +74,13 @@ export async function evictOldPdfCache(
   }
 }
 
-/** Download (or no-op if cached) a PDF into disk cache. */
-export async function prefetchPdfUrl(
+/** Download (or no-op if cached) a PDF into a flat cache file. */
+export async function cachePdfUrl(
   url: string | null | undefined
 ): Promise<string | null> {
-  if (!PERFORMANCE_FEATURES.ENABLE_PDF_PREFETCH) return null;
   const trimmed = typeof url === "string" ? url.trim() : "";
   if (!trimmed || !/^https?:\/\//i.test(trimmed)) return null;
 
-  const started = Date.now();
   try {
     const hit = await getCachedPdfUri(trimmed);
     if (hit) return hit;
@@ -92,13 +90,25 @@ export async function prefetchPdfUrl(
     const result = await FileSystem.downloadAsync(trimmed, path);
     if (result.status >= 200 && result.status < 300) {
       await evictOldPdfCache();
-      recordSample(PERF.EBOOK_FIRST_PAGE + ".prefetch", Date.now() - started);
-      return path;
+      return result.uri || path;
     }
   } catch {
     // best-effort
   }
   return null;
+}
+
+/** Download (or no-op if cached) a PDF into disk cache. */
+export async function prefetchPdfUrl(
+  url: string | null | undefined
+): Promise<string | null> {
+  if (!PERFORMANCE_FEATURES.ENABLE_PDF_PREFETCH) return null;
+  const started = Date.now();
+  const path = await cachePdfUrl(url);
+  if (path) {
+    recordSample(PERF.EBOOK_FIRST_PAGE + ".prefetch", Date.now() - started);
+  }
+  return path;
 }
 
 export function prefetchPdfUrls(

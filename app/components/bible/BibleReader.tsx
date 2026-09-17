@@ -124,21 +124,23 @@ export default function BibleReader({
 
   useEffect(() => {
     if (initialVerses && initialVerses.length > 0) {
-      // Already fetched by the verse picker - show instantly, no refetch.
       setVerses(initialVerses);
       setLoading(false);
       setError(null);
     } else {
       loadVerses();
     }
-    // Stop any ongoing speech when chapter changes
+    autoPlayedForRef.current = null;
+    playbackOffsetRef.current = 0;
     const cleanup = () => {
       stop();
       setCurrentWordPosition(null);
     };
     return cleanup;
+    // Don't depend on initialVerses identity — a new array of the same
+    // chapter would stop TTS before autoplay can start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookName, chapterNumber, initialVerses]);
+  }, [bookName, chapterNumber]);
 
   // Scroll to the verse the user picked, once it's rendered.
   useEffect(() => {
@@ -182,10 +184,10 @@ export default function BibleReader({
     if (!initialVerseNumber || allWords.length === 0) return;
     const key = `${bookName}-${chapterNumber}-${initialVerseNumber}`;
     if (autoPlayedForRef.current === key) return;
-    autoPlayedForRef.current = key;
     const timeout = setTimeout(() => {
+      autoPlayedForRef.current = key;
       startReadingFromVerse(initialVerseNumber);
-    }, 400); // let the scroll-into-view settle first
+    }, 400);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allWords, initialVerseNumber, bookName, chapterNumber]);

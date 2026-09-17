@@ -88,19 +88,13 @@ function resolveClerkPublishableKey(): string | null {
       process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
       ""
   ).trim();
-  if (!key) return null;
-  if (!key.startsWith("pk_")) {
-    throw new Error(
-      "Invalid Clerk publishable key. Expected a key beginning with pk_test_ or pk_live_."
-    );
-  }
+  if (!key || !key.startsWith("pk_")) return null;
+  // Never throw at module load — a mismatch used to crash the APK before UI.
   if (
     process.env.EXPO_PUBLIC_CLERK_KEY_MODE === "live" &&
     !key.startsWith("pk_live_")
   ) {
-    throw new Error(
-      "This build requires a Clerk live publishable key (pk_live_), not pk_test_."
-    );
+    return null;
   }
   return key;
 }

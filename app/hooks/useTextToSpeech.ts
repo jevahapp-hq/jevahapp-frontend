@@ -1,6 +1,15 @@
 import * as Speech from "expo-speech";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
+import { useGlobalVideoStore } from "@/store/useGlobalVideoStore";
+import { pausePlaybackSession } from "../../src/shared/audio";
+import { audioConfig } from "../utils/audioConfig";
+import {
+  ANDROID_SPEECH_MAX_CHARS,
+  chunkWordsForSpeech,
+  splitWords,
+  type SpeechChunk,
+} from "../utils/chunkSpeechText";
 
 /**
  * Custom hook for Text-to-Speech functionality
@@ -86,141 +95,217 @@ export function useTextToSpeech(
   // Refs
   const currentTextRef = useRef<string>("");
   const isMountedRef = useRef(true);
+  const pausedRef = useRef(false);
+  const suppressStoppedRef = useRef(false);
+  const chunksRef = useRef<SpeechChunk[]>([]);
+  const chunkIndexRef = useRef(0);
+  const wordsRef = useRef<string[]>([]);
+  const utteranceRef = useRef(0);
+  const currentWordIndexRef = useRef(0);
+  const callbacksRef = useRef({
+    onStart,
+    onDone,
+    onStopped,
+    onError,
+    onProgress,
+  });
+  callbacksRef.current = {
+    onStart,
+    onDone,
+    onStopped,
+    onError,
+    onProgress,
+  };
+  const settingsRef = useRef({ language, pitch, rate, selectedVoice });
+  settingsRef.current = { language, pitch, rate, selectedVoice };
 
   // Calculate progress
   const progress = totalWords > 0 ? (currentWordIndex / totalWords) * 100 : 0;
 
-  // Speak text
+  const speakChunkAt = useCallback((index: number, generation: number) => {
+    if (!isMountedRef.current || generation !== utteranceRef.current) return;
+    if (pausedRef.current) return;
+
+    const chunks = chunksRef.current;
+    if (index >= chunks.length) {
+      setIsSpeaking(false);
+      setIsPaused(false);
+      setCurrentWordIndex(wordsRef.current.length);
+      callbacksRef.current.onDone?.();
+      return;
+    }
+
+    chunkIndexRef.current = index;
+    const chunk = chunks[index];
+    const { language: lang, pitch: p, rate: r, selectedVoice: voice } =
+      settingsRef.current;
+    const total = wordsRef.current.length;
+
+    Speech.speak(chunk.text, {
+      language: lang,
+      pitch: p,
+      rate: r,
+      voice,
+      onStart: () => {
+        console.log("▶️ Speech started");
+      },
+      onDone: () => {
+        if (!isMountedRef.current || generation !== utteranceRef.current) return;
+        if (pausedRef.current) return;
+        speakChunkAt(index + 1, generation);
+      },
+      onStopped: () => {
+        if (!isMountedRef.current || generation !== utteranceRef.current) return;
+        if (suppressStoppedRef.current) {
+          suppressStoppedRef.current = false;
+          return;
+        }
+        if (pausedRef.current) return;
+        setIsSpeaking(false);
+        setIsPaused(false);
+        callbacksRef.current.onStopped?.();
+      },
+      onError: (error) => {
+        console.error("❌ Speech error:", error);
+        if (generation !== utteranceRef.current) return;
+        setIsSpeaking(false);
+        setIsPaused(false);
+        callbacksRef.current.onError?.(error);
+      },
+      onBoundary: (event) => {
+        if (!isMountedRef.current || event.charIndex === undefined) return;
+        const textUpToNow = chunk.text.substring(0, event.charIndex);
+        const wordsSpoken = textUpToNow.split(/\s+/).filter(Boolean).length;
+        const currentWord = chunk.startWord + wordsSpoken;
+        currentWordIndexRef.current = currentWord;
+        setCurrentWordIndex(currentWord);
+        callbacksRef.current.onProgress?.({
+          currentWord,
+          totalWords: total,
+        });
+      },
+    });
+  }, []);
+
+  const startFromWord = useCallback(
+    async (startWord: number) => {
+      const words = wordsRef.current;
+      if (words.length === 0) return;
+      const offset = Math.max(0, Math.min(startWord, words.length - 1));
+      const remaining = words.slice(offset);
+      const maxChars =
+        Platform.OS === "android" ? ANDROID_SPEECH_MAX_CHARS : Number.MAX_SAFE_INTEGER;
+      chunksRef.current = chunkWordsForSpeech(remaining, maxChars).map(
+        (chunk) => ({
+          ...chunk,
+          startWord: chunk.startWord + offset,
+        })
+      );
+      chunkIndexRef.current = 0;
+      pausedRef.current = false;
+      setIsPaused(false);
+      setIsSpeaking(true);
+      const generation = ++utteranceRef.current;
+      speakChunkAt(0, generation);
+    },
+    [speakChunkAt]
+  );
+
   const speak = useCallback(
     async (text: string) => {
       try {
-        // Stop any ongoing speech
+        suppressStoppedRef.current = true;
         await Speech.stop();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        suppressStoppedRef.current = false;
+        try {
+          await pausePlaybackSession();
+        } catch {
+          // no-op
+        }
+        try {
+          useGlobalVideoStore.getState().pauseAllVideos?.();
+        } catch {
+          // no-op
+        }
+        try {
+          await audioConfig.configureForGeneralUse();
+        } catch {
+          // no-op
+        }
 
-        // Store text for reference
-        currentTextRef.current = text;
-        const words = text.split(/\s+/);
+        const words = splitWords(text);
+        currentTextRef.current = words.join(" ");
+        wordsRef.current = words;
+        currentWordIndexRef.current = 0;
         setTotalWords(words.length);
         setCurrentWordIndex(0);
+
+        if (words.length === 0) {
+          setIsSpeaking(false);
+          return;
+        }
 
         console.log(`🗣️ Starting speech: "${text.substring(0, 50)}..."`);
         console.log(`📊 Total words: ${words.length}`);
 
-        setIsSpeaking(true);
-        setIsPaused(false);
-        onStart?.();
-
-        // Speech options
-        const speechOptions: Speech.SpeechOptions = {
-          language,
-          pitch,
-          rate,
-          voice: selectedVoice,
-          onStart: () => {
-            console.log("▶️ Speech started");
-          },
-          onDone: () => {
-            if (isMountedRef.current) {
-              console.log("✅ Speech completed");
-              setIsSpeaking(false);
-              setIsPaused(false);
-              setCurrentWordIndex(totalWords);
-              onDone?.();
-            }
-          },
-          onStopped: () => {
-            if (isMountedRef.current) {
-              console.log("⏹️ Speech stopped");
-              setIsSpeaking(false);
-              setIsPaused(false);
-              onStopped?.();
-            }
-          },
-          onError: (error) => {
-            console.error("❌ Speech error:", error);
-            setIsSpeaking(false);
-            setIsPaused(false);
-            onError?.(error);
-          },
-          // Word boundary callback for progress tracking
-          onBoundary: (event) => {
-            if (isMountedRef.current && event.charIndex !== undefined) {
-              // Estimate word index from character index
-              const textUpToNow = text.substring(0, event.charIndex);
-              const wordsSpoken = textUpToNow.split(/\s+/).length;
-              setCurrentWordIndex(wordsSpoken);
-              onProgress?.({
-                currentWord: wordsSpoken,
-                totalWords: words.length,
-              });
-            }
-          },
-        };
-
-        await Speech.speak(text, speechOptions);
+        callbacksRef.current.onStart?.();
+        await startFromWord(0);
       } catch (error) {
         console.error("❌ Error in speak:", error);
         setIsSpeaking(false);
-        onError?.(error);
+        callbacksRef.current.onError?.(error);
       }
     },
-    [
-      language,
-      pitch,
-      rate,
-      selectedVoice,
-      totalWords,
-      onStart,
-      onDone,
-      onStopped,
-      onError,
-      onProgress,
-    ]
+    [startFromWord]
   );
 
-  // Pause speech
   const pause = useCallback(async () => {
     try {
+      pausedRef.current = true;
+      setIsPaused(true);
       if (Platform.OS === "android") {
-        // expo-speech pause is not supported on Android; gracefully fallback
-        setIsPaused(true);
-        console.log(
-          "⏸️ Pause not supported on Android - state flagged as paused"
-        );
+        suppressStoppedRef.current = true;
+        await Speech.stop();
+        setIsSpeaking(false);
+        console.log("⏸️ Speech paused (Android stop+resume)");
         return;
       }
       await Speech.pause();
-      setIsPaused(true);
       console.log("⏸️ Speech paused");
     } catch (error) {
       console.error("❌ Error pausing speech:", error);
     }
   }, []);
 
-  // Resume speech
   const resume = useCallback(async () => {
     try {
       if (Platform.OS === "android") {
-        // expo-speech resume is not supported on Android; simply clear paused state
-        setIsPaused(false);
-        console.log("▶️ Resume not supported on Android - state unpaused");
+        const resumeAt = Math.max(0, currentWordIndexRef.current);
+        console.log(`▶️ Resuming Android speech from word ${resumeAt}`);
+        await startFromWord(resumeAt);
         return;
       }
-      await Speech.resume();
+      pausedRef.current = false;
       setIsPaused(false);
+      await Speech.resume();
+      setIsSpeaking(true);
       console.log("▶️ Speech resumed");
     } catch (error) {
       console.error("❌ Error resuming speech:", error);
     }
-  }, []);
+  }, [startFromWord]);
 
-  // Stop speech
   const stop = useCallback(async () => {
     try {
+      pausedRef.current = false;
+      utteranceRef.current += 1;
+      suppressStoppedRef.current = true;
       await Speech.stop();
       setIsSpeaking(false);
       setIsPaused(false);
       setCurrentWordIndex(0);
+      currentWordIndexRef.current = 0;
       console.log("⏹️ Speech stopped");
     } catch (error) {
       console.error("❌ Error stopping speech:", error);

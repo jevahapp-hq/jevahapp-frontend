@@ -8,9 +8,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { triggerHapticFeedback } from "../../src/shared/utils/haptics";
 import {
+  cachePdfUrl,
   ensurePdfCacheDir,
   evictOldPdfCache,
-  getCachedPdfUri,
   getPdfCachePath,
 } from "../utils/pdfCache";
 import { PERF, perfMark, perfMeasure } from "../../src/shared/utils/perfMarks";
@@ -287,14 +287,8 @@ export default function PdfViewer() {
         setFallbackUri(docsUri);
         setLoading(false);
         setErrorText(null);
-        // Still warm disk cache in background for offline / iOS-parity reopen.
-        void getCachedPdfUri(trimmedUrl).then((hit) => {
-          if (!hit) {
-            void FileSystem.downloadAsync(trimmedUrl, getPdfCachePath(trimmedUrl))
-              .then(() => evictOldPdfCache())
-              .catch(() => {});
-          }
-        });
+        // Still warm disk cache in background for offline / listen mode.
+        void cachePdfUrl(trimmedUrl);
         return; // Exit early, don't run download logic
       }
     }

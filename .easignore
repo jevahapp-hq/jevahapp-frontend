@@ -9,3 +9,9 @@ coverage/
 *.log
 **/*.test.ts
 **/*.test.tsx
+
+# .easignore replaces .gitignore for the upload. Keep local secrets off the builder
+# or production-lite bakes pk_test_ and then crashes (CLERK_KEY_MODE=live).
+.env
+.env.*
+!.env.example

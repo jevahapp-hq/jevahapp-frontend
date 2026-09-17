@@ -27,12 +27,7 @@ import {
 import Header from "../components/Header";
 import { ContentErrorBoundary } from "../components/ContentErrorBoundary";
 import { useAuth } from "../hooks/useAuth";
-import {
-  readHomeFeedCategory,
-  rememberHomeFeedCategory,
-} from "../../src/shared/media/homeFeedCategory";
-import { useReelsStore } from "@/store/useReelsStore";
-import { feedTabFromResumeKey } from "../../src/features/media/video-feed";
+import { rememberHomeFeedCategory, readHomeFeedCategory } from "../../src/shared/media/homeFeedCategory";
 
 const Music = lazy(() => import("./music"));
 const Hymns = lazy(() => import("./hymns"));
@@ -40,6 +35,8 @@ const LiveComponent = lazy(() => import("./LiveComponent"));
 
 const categories = ["ALL", "LIVE", "HYMNS", "SERMON", "MUSIC", "E-BOOKS", "VIDEO"];
 const FEED_CATEGORIES = ["ALL", "SERMON", "VIDEO", "E-BOOKS"] as const;
+/** Native VideoView ignores opacity — park hidden feeds off-screen. */
+const OFFSCREEN_X = 4000;
 
 function CategorySuspense({ children }: { children: ReactNode }) {
   return (
@@ -108,10 +105,6 @@ export default function HomeTabContent({
     : defaultCategory;
 
   const initialCategory = (() => {
-    const resumeTab = feedTabFromResumeKey(
-      useReelsStore.getState().resumePlayback?.feedKey
-    );
-    if (resumeTab) return mapContentTypeToCategory(resumeTab);
     if (defaultCategoryValue && typeof defaultCategoryValue === "string") {
       return mapContentTypeToCategory(defaultCategoryValue);
     }
@@ -119,6 +112,13 @@ export default function HomeTabContent({
   })();
 
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  const [mountedFeeds, setMountedFeeds] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    if ((FEED_CATEGORIES as readonly string[]).includes(initialCategory)) {
+      initial.add(initialCategory);
+    }
+    return initial;
+  });
   const selectedRef = useRef(selectedCategory);
   const seededCategoryRef = useRef(false);
   if (!seededCategoryRef.current) {
@@ -189,6 +189,18 @@ export default function HomeTabContent({
   );
 
   useEffect(() => {
+    if (!(FEED_CATEGORIES as readonly string[]).includes(selectedCategory)) {
+      return;
+    }
+    setMountedFeeds((prev) => {
+      if (prev.has(selectedCategory)) return prev;
+      const next = new Set(prev);
+      next.add(selectedCategory);
+      return next;
+    });
+  }, [selectedCategory]);
+
+  useEffect(() => {
     if (!defaultCategoryValue || typeof defaultCategoryValue !== "string") {
       return;
     }
@@ -200,14 +212,9 @@ export default function HomeTabContent({
   useFocusEffect(
     useCallback(() => {
       if (!isTabActive) return;
-      const resume = useReelsStore.getState().resumePlayback;
-      const fromReels =
-        resume?.target === "feed" || resume?.target === "reels";
-      const tab =
-        (fromReels ? feedTabFromResumeKey(resume?.feedKey) : null) ||
-        readHomeFeedCategory();
-      // applyCategory only remounts the feed when the chip actually changes.
-      applyCategory(mapContentTypeToCategory(tab));
+      // Stored chip wins over a stale reels resume key (e.g. ALL::videoId
+      // leftover after the user opened an ebook).
+      applyCategory(mapContentTypeToCategory(readHomeFeedCategory()));
     }, [applyCategory, isTabActive])
   );
 
@@ -275,16 +282,28 @@ export default function HomeTabContent({
 
       <View style={styles.feed}>
         <View style={styles.feedHost}>
-          {(FEED_CATEGORIES as readonly string[]).includes(selectedCategory) ? (
-            <View key={selectedCategory} collapsable={false} style={styles.feedActive}>
-              <AllContentTikTok
-                contentType={mapCategoryToContentType(selectedCategory)}
-                useAuthFeed={isAuthenticated}
-                isFeedActive={isTabActive}
-                keepVideoDecoders={false}
-              />
-            </View>
-          ) : null}
+          {FEED_CATEGORIES.map((category) => {
+            if (!mountedFeeds.has(category)) return null;
+            const active = selectedCategory === category;
+            return (
+              <View
+                key={category}
+                collapsable={false}
+                pointerEvents={active ? "auto" : "none"}
+                style={[
+                  styles.feedPane,
+                  active ? styles.feedPaneOn : styles.feedPaneOff,
+                ]}
+              >
+                <AllContentTikTok
+                  contentType={mapCategoryToContentType(category)}
+                  useAuthFeed={isAuthenticated}
+                  isFeedActive={isTabActive && active}
+                  keepVideoDecoders={false}
+                />
+              </View>
+            );
+          })}
 
           {selectedCategory === "MUSIC" ? (
             <View style={styles.feedActive} collapsable={false}>
@@ -353,8 +372,27 @@ const styles = StyleSheet.create({
   feedHost: {
     flex: 1,
     overflow: "hidden",
+    backgroundColor: "#FCFCFD",
   },
   feedActive: {
     flex: 1,
+  },
+  feedPane: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: "100%",
+  },
+  feedPaneOn: {
+    left: 0,
+    zIndex: 2,
+    elevation: 2,
+    opacity: 1,
+  },
+  feedPaneOff: {
+    left: OFFSCREEN_X,
+    zIndex: 0,
+    elevation: 0,
+    opacity: 0,
   },
 });

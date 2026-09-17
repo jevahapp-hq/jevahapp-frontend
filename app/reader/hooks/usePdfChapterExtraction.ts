@@ -1,11 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ensurePdfCacheDir,
-  evictOldPdfCache,
-  getCachedPdfUri,
-  getPdfCachePath,
-} from "../../utils/pdfCache";
+import { cachePdfUrl, getCachedPdfUri } from "../../utils/pdfCache";
 import {
   EbookChapter,
   firstReadableChapter,
@@ -57,14 +52,11 @@ async function resolvePdfFile(
   const cached = await getCachedPdfUri(trimmed);
   if (cached) return cached;
 
-  await ensurePdfCacheDir();
-  const path = getPdfCachePath(trimmed);
-  const result = await FileSystem.downloadAsync(trimmed, path);
-  if (result.status < 200 || result.status >= 300 || !result.uri) {
+  const downloaded = await cachePdfUrl(trimmed);
+  if (!downloaded) {
     throw new Error("Could not download the PDF for audio reading");
   }
-  void evictOldPdfCache();
-  return result.uri;
+  return downloaded;
 }
 
 export function usePdfChapterExtraction({ url, localUri, enabled }: Options) {

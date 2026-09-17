@@ -173,11 +173,21 @@ export function FeedMediaCardSkeleton({
   );
 }
 
-export function FeedSkeletonStack({ count = 2 }: { count?: number }) {
+export function FeedSkeletonStack({
+  count = 2,
+  instant = true,
+}: {
+  count?: number;
+  instant?: boolean;
+}) {
   return (
     <View style={{ flex: 1, backgroundColor: PAGE_BG, paddingTop: 4 }}>
       {Array.from({ length: count }, (_, i) => (
-        <FeedMediaCardSkeleton key={i} delay={i * 70} />
+        <FeedMediaCardSkeleton
+          key={i}
+          delay={instant ? 0 : i * 70}
+          instant={instant}
+        />
       ))}
     </View>
   );

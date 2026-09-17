@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   InteractionManager,
   Pressable,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -18,7 +19,6 @@ import {
   getIconSize,
   getResponsiveShadow,
   getResponsiveSpacing,
-  getResponsiveTextStyle,
   JAKARTA,
 } from "../../utils/responsive";
 import { useGlobalAudioPlayerStore } from "@/store/useGlobalAudioPlayerStore";
@@ -34,12 +34,20 @@ interface BottomNavProps {
 /** Single icon family (Ionicons) — already loaded in root useFonts. */
 const tabConfig: Record<
   string,
-  { name: keyof typeof Ionicons.glyphMap; label: string }
+  {
+    outline: keyof typeof Ionicons.glyphMap;
+    filled: keyof typeof Ionicons.glyphMap;
+    label: string;
+  }
 > = {
-  Home: { name: "home-outline", label: "Home" },
-  Community: { name: "people-outline", label: "Community" },
-  Library: { name: "play-circle-outline", label: "Library" },
-  Bible: { name: "book-outline", label: "Bible" },
+  Home: { outline: "home-outline", filled: "home", label: "Home" },
+  Community: { outline: "people-outline", filled: "people", label: "Community" },
+  Library: {
+    outline: "play-circle-outline",
+    filled: "play-circle",
+    label: "Library",
+  },
+  Bible: { outline: "book-outline", filled: "book", label: "Bible" },
 };
 
 const TAB_ORDER = ["Home", "Community", "Library", "Bible"] as const;
@@ -136,8 +144,9 @@ export default function BottomNav({
     getResponsiveSpacing(16, 20, 24, 28);
 
   const renderTab = (tab: string) => {
-    const { name, label } = tabConfig[tab];
+    const { outline, filled, label } = tabConfig[tab];
     const isActive = selectedTab === tab;
+    const color = isActive ? "#256E63" : "#1D2939";
     return (
       <View key={tab} style={{ flex: 1 }}>
         <Pressable
@@ -151,14 +160,14 @@ export default function BottomNav({
             paddingHorizontal: tabPadH,
             paddingVertical: tabPadV,
             minHeight: 48,
-            opacity: pressed ? 0.7 : 1,
+            opacity: pressed ? 0.85 : 1,
           })}
         >
           <View style={{ alignItems: "center", justifyContent: "center" }}>
             <Ionicons
-              name={name}
-              size={getIconSize("medium")}
-              color={isActive ? "#256E63" : "#000"}
+              name={isActive ? filled : outline}
+              size={getIconSize("large")}
+              color={color}
             />
           </View>
           <View
@@ -169,18 +178,14 @@ export default function BottomNav({
             }}
           >
             <Text
-              style={[
-                getResponsiveTextStyle("caption"),
-                {
-                  fontFamily: JAKARTA.bold,
-                  color: isActive ? "#256E63" : "#000",
-                  textAlign: "center",
-                  flexShrink: 1,
-                },
-              ]}
+              style={{
+                fontFamily: JAKARTA.bold,
+                fontSize: 13,
+                lineHeight: 16,
+                color,
+                textAlign: "center",
+              }}
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
             >
               {label}
             </Text>
@@ -202,6 +207,8 @@ export default function BottomNav({
         paddingBottom: getResponsiveSpacing(8, 10, 12, 14),
         paddingHorizontal: getResponsiveSpacing(8, 12, 16, 20),
         backgroundColor: "white",
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: "#D0D5DD",
         flexDirection: "row",
         alignItems: "stretch",
         ...getResponsiveShadow(),
